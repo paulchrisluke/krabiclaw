@@ -101,7 +101,7 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.equal(jobs['e2e-representative']?.steps?.find(step => step.name === 'Build preview Worker'), undefined)
   assert.ok(jobs['e2e-representative']?.steps?.some(step => step.uses?.startsWith('actions/download-artifact@')))
 
-  assert.deepEqual(jobs['e2e-release-build']?.needs, ['typecheck', 'e2e-plan'])
+  assert.deepEqual(jobs['e2e-release-build']?.needs, ['e2e-plan'])
   assert.equal(jobs['e2e-release-build']?.steps?.filter(step => step.run === 'yarn build').length, 1)
 
   assert.equal(
@@ -132,28 +132,27 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.equal(release.concurrency?.queue, 'max')
   assert.equal(release.env?.STRIPE_WEBHOOK_SECRET, undefined)
   assert.equal(release.strategy?.['max-parallel'], 4)
-  assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.run, 'npx wrangler deploy --env "${{ matrix.lane }}" --strict')
+  assert.match(stepRun(release, 'Deploy exact Worker artifact'), /wrangler deploy --env "\$\{\{ matrix\.lane \}\}" --strict --secrets-file "\$secrets_file"/)
+  assert.equal(release.steps?.find(step => step.name === 'Sync isolated lane secrets'), undefined)
   assert.equal(release.steps?.find(step => step.name === 'Apply lane migrations')?.run, 'npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote')
   assert.equal(release.steps?.find(step => step.name === 'Sweep lane E2E artifacts')?.run, 'node --experimental-strip-types scripts/reset-e2e-artifacts.ts --env "${{ matrix.lane }}" --older-than-hours=0')
   assert.equal(release.steps?.find(step => step.name === 'Run isolated lane smoke')?.run, 'yarn test:e2e:lane-smoke')
   assert.equal(release.steps?.find(step => step.name === 'Run Playwright release shard')?.run, 'yarn test:e2e:full --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1')
   assert.ok(stepIndex(release, 'Run isolated lane smoke') < stepIndex(release, 'Run Playwright release shard'))
   assert.equal(release.steps?.find(step => step.name === 'Run full staging release qualification'), undefined)
-
-  for (const laneJob of [release]) {
-    assert.match(stepRun(laneJob, 'Generate ephemeral E2E credentials'), /E2E_DEV_ROUTE_SECRET=\$dev_route_secret/)
-    assert.match(stepRun(laneJob, 'Generate ephemeral E2E credentials'), /STRIPE_WEBHOOK_SECRET=\$stripe_webhook_secret/)
-    assert.match(stepRun(laneJob, 'Sync isolated lane secrets'), /put_secret E2E_DEV_ROUTE_SECRET "\$E2E_DEV_ROUTE_SECRET"/)
-    assert.match(stepRun(laneJob, 'Sync isolated lane secrets'), /put_secret STRIPE_WEBHOOK_SECRET "\$STRIPE_WEBHOOK_SECRET"/)
-    assert.equal(
-      laneJob.steps?.find(step => step.name === 'Sync isolated lane secrets')?.env?.E2E_DEV_ROUTE_SECRET_VALUE,
-      undefined,
-    )
-    assert.equal(
-      laneJob.steps?.find(step => step.name === 'Sync isolated lane secrets')?.env?.STRIPE_WEBHOOK_SECRET_VALUE,
-      undefined,
-    )
+  for (const job of [jobs['e2e-representative'], release]) {
+    assert.ok(job?.steps?.some(step => step.run === 'npx playwright install chromium'))
+    assert.equal(job?.steps?.some(step => step.run?.includes('playwright install --with-deps')), false)
   }
+
+  assert.match(stepRun(release, 'Generate ephemeral E2E credentials'), /E2E_DEV_ROUTE_SECRET=\$dev_route_secret/)
+  assert.match(stepRun(release, 'Generate ephemeral E2E credentials'), /STRIPE_WEBHOOK_SECRET=\$stripe_webhook_secret/)
+  assert.match(stepRun(release, 'Deploy exact Worker artifact'), /E2E_DEV_ROUTE_SECRET: \$e2e_dev_route/)
+  assert.match(stepRun(release, 'Deploy exact Worker artifact'), /STRIPE_WEBHOOK_SECRET: \$stripe_webhook/)
+  assert.doesNotMatch(
+    release.steps?.map(step => step.run || '').join('\n') || '',
+    /wrangler secret put/,
+  )
 
   assert.deepEqual(jobs['deploy-staging']?.needs, ['typecheck', 'e2e-plan'])
   assert.equal(jobs['deploy-staging']?.environment, 'staging')

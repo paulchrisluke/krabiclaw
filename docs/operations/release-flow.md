@@ -61,10 +61,13 @@ high-impact pull request to `staging`, and the ordinary `staging` to `main`
 release pull request, build the exact head once, upload that artifact, and
 deploy it to four fixed E2E environments. Each lane applies migrations, sweeps
 and seeds only its own resources, provisions ephemeral auth, refreshes its
-lane-specific AI Search instance, verifies the lane contract, and runs one
-Playwright shard with `workers=1`. Staging remains the stable human-review
-deployment for the candidate. Production may not be promoted until all four
-exact-head shards pass.
+lane-specific AI Search instance, verifies routing, dev-route access, credential
+login, active-organization selection, and session retrieval, and only then runs
+one Playwright shard with `workers=1`. Ephemeral auth provisioning clears the
+lane-local Better Auth JWKS rows whenever the lane secret rotates so retained
+encrypted signing keys cannot outlive their encryption secret. Staging remains
+the stable human-review deployment for the candidate. Production may not be
+promoted until all four exact-head shards pass.
 
 Cloudflare's documented primitives are named Wrangler environments and
 per-environment bindings ([Workers environments](https://developers.cloudflare.com/workers/wrangler/environments/),

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { loginAs } from './helpers/auth'
 import { devLoginHeaders, potteryHouseTestBaseUrl } from './test-env'
 
 test('lane-local runtime config, dev routes, and tenant aliases resolve against the lane resources', async ({ page, request, baseURL }) => {
@@ -32,4 +33,12 @@ test('lane-local runtime config, dev routes, and tenant aliases resolve against 
   expect(tenantUrl.hostname).toBe(`pottery-house-${lane}.krabiclaw.com`)
   const tenantResponse = await request.get(tenantUrl.toString())
   expect(tenantResponse.status()).toBeLessThan(400)
+
+  await loginAs(request, baseURL!)
+  const sessionResponse = await request.get(`${baseURL}/api/auth/get-session`)
+  expect(sessionResponse.status(), await sessionResponse.text()).toBe(200)
+  await expect(sessionResponse.json()).resolves.toMatchObject({
+    user: { id: 'user-e2e-demo-owner' },
+    session: { activeOrganizationId: 'org-demo' },
+  })
 })
