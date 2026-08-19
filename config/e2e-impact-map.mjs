@@ -75,7 +75,8 @@ export const IMPACT_GROUPS = [
       'pages/pricing.vue',
       'pages/schedule.vue',
       'pages/services/**',
-      'scripts/generate-blawby-ci-seed.ts',
+      'scripts/generate-ncls-seed.ts',
+      'seed-definitions/ncls.ts',
       'types/blawby.ts',
       'utils/blawby-*.ts'
     ],

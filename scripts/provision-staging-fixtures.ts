@@ -84,7 +84,7 @@ const generators = [
   ['demo', 'scripts/generate-demo-seed.ts'],
   ['pottery-house', 'scripts/generate-pottery-house-seed.ts'],
   ['kikuzuki', 'scripts/generate-kikuzuki-seed.ts'],
-  ['blawby', 'scripts/generate-blawby-ci-seed.ts'],
+  ['ncls', 'scripts/generate-ncls-seed.ts'],
 ] as const
 
 const tempDir = mkdtempSync(join(tmpdir(), 'krabiclaw-staging-fixtures-'))
