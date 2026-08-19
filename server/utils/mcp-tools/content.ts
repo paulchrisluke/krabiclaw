@@ -70,7 +70,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_page_content',
-      description: 'Replace a tenant page draft through the canonical editor. changes must include the complete typed blocks array plus any changed page metadata. Omitting existing block ids is destructive: include expected_document_updated_at, the exact removed_block_ids, and the confirmation_token returned by the canonical page read. Structured business data is edited through its own domain tool.',
+      description: 'Replace canonical tenant-page content through the editor. changes must include the complete typed blocks array plus any changed page metadata. Omitting existing block ids is destructive: include expected_document_updated_at, the exact removed_block_ids, and the confirmation_token returned by the canonical page read. Structured business data is edited through its own domain tool.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: true,
@@ -100,7 +100,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'get_tenant_page',
-      description: 'Get one canonical tenant-page variant, including its current draft revision timestamp and blocks.',
+      description: 'Get one canonical tenant-page variant, including its current document timestamp and blocks.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -126,7 +126,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_tenant_page_draft',
-      description: 'Update a canonical tenant-page draft with optimistic concurrency. Provide the complete blocks array and expected_document_updated_at from the last read. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
+      description: 'Update canonical tenant-page content with optimistic concurrency. Provide the complete blocks array and expected_document_updated_at from the last read. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: true,
@@ -143,7 +143,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'change_tenant_page_path',
-      description: 'Change a canonical tenant-page draft path. Publish the draft to activate the locale-scoped redirect; safe tenant-page redirect chains are flattened during publication.',
+      description: 'Change a canonical tenant-page path and immediately create its locale-scoped redirect. Safe tenant-page redirect chains are flattened during the update.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: true,
@@ -153,7 +153,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'get_professional_service_content',
-      description: 'Get structured Blawby/professional-service data for a site: offerings, compliance text, consultation settings, navigation, and theme tokens. Page composition is managed through the canonical Pages tools.',
+      description: 'Get structured Blawby/professional-service data for a site: offerings, compliance text, consultation settings, and theme tokens. Page composition is managed through the canonical Pages tools.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -164,10 +164,9 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
           offerings: { type: 'array', items: { type: 'object' } },
           compliance: { type: ['object', 'null'] },
           consultation: { type: 'object' },
-          navigation: { type: 'array', items: { type: 'object' } },
           themeTokens: { type: 'object' },
         },
-        required: ['offerings', 'consultation', 'navigation', 'themeTokens'],
+        required: ['offerings', 'consultation', 'themeTokens'],
       },
     }),
   siteTool({
@@ -214,7 +213,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
           },
         },
         consultation: { type: 'object' },
-        navigation: { type: 'array', items: { type: 'object' } },
         themeTokens: { type: 'object' },
       },
       outputSchema: {

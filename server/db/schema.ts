@@ -1824,7 +1824,9 @@ export const spent_subdomains = sqliteTable("spent_subdomains", {
 	site_id: text().notNull(),
 	successor_domain: text(),
 	spent_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("spent_subdomains_site_idx").on(table.site_id),
+]);
 
 export const site_entitlements = sqliteTable("site_entitlements", {
 	id: text().primaryKey(),
@@ -2392,7 +2394,7 @@ export const tenant_page_variants = sqliteTable("tenant_page_variants", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	page_id: text().notNull().references(() => tenant_pages.id, { onDelete: "cascade" } ),
 	locale: text().notNull(),
-	document_id: text().references(() => content_documents.id, { onDelete: "set null" } ),
+	document_id: text().notNull().references(() => content_documents.id, { onDelete: "cascade" } ),
 	path: text().notNull(),
 	title: text().notNull(),
 	summary: text(),

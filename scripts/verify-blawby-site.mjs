@@ -380,8 +380,6 @@ function validateArtifacts(checks, manifest) {
   )
   pushCheck(checks, Boolean(manifest.editSurfaceMatrix), 'Import manifest contains edit-surface matrix')
   pushCheck(checks, Boolean(manifest.intentionalDifferences), 'Import manifest contains intentional differences')
-  const navigationKeys = (manifest.navigation ?? []).map(item => `${item.area}:${item.label}:${item.url}`)
-  pushCheck(checks, new Set(navigationKeys).size === navigationKeys.length, 'Import manifest navigation has no duplicate rows')
   const redirectFromPaths = new Set((manifest.redirects ?? []).map(redirect => redirect.from_path))
   pushCheck(checks, redirectFromPaths.has('/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare'), 'Import manifest preserves the legacy divorce article URL')
   pushCheck(checks, redirectFromPaths.has('/article/writing-your-own-will-how-it-works-in-north-carolina'), 'Import manifest preserves the legacy will article URL')
@@ -584,10 +582,6 @@ function validateScreenshots(checks, evidenceDir, required) {
         pushCheck(checks, hasSections, `Section captures exist: ${source}/${route}-${viewport}`)
       }
     }
-    const hasMobileNavigationState = Boolean(manifest?.states?.some(state =>
-      state.route_name === 'home' && state.viewport === 'mobile' && state.name === 'mobile-navigation-open',
-    ))
-    pushCheck(checks, hasMobileNavigationState, `Mobile navigation state capture exists: ${source}`)
   }
 }
 

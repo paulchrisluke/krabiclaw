@@ -289,8 +289,7 @@ export const IMPACT_GROUPS = [
     ],
     specs: [
       'tests/e2e/onboarding-wizard.spec.ts',
-      'tests/e2e/site-creation.spec.ts',
-      'tests/e2e/site-settings.spec.ts'
+      'tests/e2e/site-creation.spec.ts'
     ]
   },
   {

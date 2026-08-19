@@ -193,7 +193,7 @@ function validateThemeTokens(value: unknown) {
 
 export function validateProfessionalServicePayload(body: ApiRecord) {
   if (Object.hasOwn(body, 'tenantPages')) {
-    validationError('Page authoring belongs to the site Pages manager. Professional-service mutations only accept offerings, compliance, consultation, navigation, and theme data.')
+    validationError('Page authoring belongs to the site Pages manager. Professional-service mutations only accept offerings, compliance, consultation, and theme data.')
   }
 }
 

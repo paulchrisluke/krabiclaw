@@ -415,18 +415,23 @@ async function attemptSiteUpdate(
   setParts.push('updated_at = ?', 'updated_by = ?')
   params.push(now, userId)
 
-  const result = await execute(db, `
+  const siteUpdate = {
+    sql: `
     UPDATE sites
     SET ${setParts.join(', ')}
     WHERE id = ? AND organization_id = ?
-  `, [...params, siteId, organizationId])
-
-  if (!result.success) {
-    throw new Error('Failed to update site settings')
+  `,
+    values: [...params, siteId, organizationId],
   }
 
-  if (updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain) {
-    await createSystemSubdomain(env, db, siteId, organizationId, subdomain)
+  const isRename = updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain
+  if (isRename) {
+    await createSystemSubdomain(env, db, siteId, organizationId, subdomain, { siteUpdate })
+  } else {
+    const result = await execute(db, siteUpdate.sql, siteUpdate.values)
+    if (!result.success) {
+      throw new Error('Failed to update site settings')
+    }
   }
 
   const settings = await loadSettingsPayload(db, organizationId, siteId)

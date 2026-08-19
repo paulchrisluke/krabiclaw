@@ -236,7 +236,10 @@ export async function createSystemSubdomain(
   db: D1Database,
   siteId: string,
   organizationId: string,
-  subdomain: string
+  subdomain: string,
+  options: {
+    siteUpdate?: { sql: string; values: unknown[] }
+  } = {},
 ): Promise<DomainRecord> {
   const now = new Date().toISOString()
   const domain = `${subdomain}.${platformHostname(env)}`
@@ -294,6 +297,10 @@ export async function createSystemSubdomain(
       sql: `UPDATE sites SET public_url = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
       values: [`https://${domain}`, now, siteId, organizationId],
     })
+  }
+
+  if (options.siteUpdate) {
+    stmts.push(options.siteUpdate)
   }
 
   await db.batch(stmts.map(s => db.prepare(s.sql).bind(...s.values)))

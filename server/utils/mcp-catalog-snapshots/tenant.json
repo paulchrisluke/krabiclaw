@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:a66f027e3a124d312031b8806708dc848a61f338285e3ed96e2f52289182beeb",
+  "fingerprint": "sha256:954ad68054220035f75891ad06aa3c6f3162b30f5f8c43702005115169d8ff45",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -4770,12 +4770,6 @@
           "consultation": {
             "type": "object"
           },
-          "navigation": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
-          },
           "offerings": {
             "items": {
               "type": "object"
@@ -4789,7 +4783,6 @@
         "required": [
           "offerings",
           "consultation",
-          "navigation",
           "themeTokens"
         ],
         "type": "object"
@@ -14591,12 +14584,6 @@
           },
           "consultation": {
             "type": "object"
-          },
-          "navigation": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
           },
           "offerings": {
             "items": {

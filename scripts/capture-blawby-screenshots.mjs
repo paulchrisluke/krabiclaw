@@ -368,24 +368,6 @@ try {
         })
       }
 
-      if (routeName === 'home' && viewportName === 'mobile') {
-        const mobileToggle = page.locator('button[aria-label*="Toggle" i]').first()
-        if (await mobileToggle.isVisible()) {
-          await mobileToggle.click()
-          await page.waitForTimeout(200)
-          const statePath = path.resolve(args.outDir, 'screenshots', args.source, 'states', 'home-mobile-navigation-open-mobile.png')
-          await fs.mkdir(path.dirname(statePath), { recursive: true })
-          await page.locator('header').first().screenshot({ path: statePath, animations: 'disabled' })
-          manifest.states.push({
-            route_name: routeName,
-            route: routeConfig.path,
-            viewport: viewportName,
-            name: 'mobile-navigation-open',
-            file: portablePath(args.outDir, statePath),
-          })
-          await mobileToggle.click()
-        }
-      }
     }
     await context.close()
   }

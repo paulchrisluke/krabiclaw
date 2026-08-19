@@ -90,6 +90,20 @@ test('rename spends the old host and disables its active row in one D1 batch', a
   assert.match(batches[0]![3]!.sql, /UPDATE sites SET public_url/)
 })
 
+test('rename includes the settings update in the subdomain handoff batch', async () => {
+  await createSystemSubdomain(env, db, 'site', 'org', 'new-name', {
+    siteUpdate: {
+      sql: 'UPDATE sites SET brand_name = ?, subdomain = ? WHERE id = ?',
+      values: ['New Name', 'new-name', 'site'],
+    },
+  })
+
+  assert.equal(batches.length, 1)
+  assert.equal(batches[0]?.length, 5)
+  assert.match(batches[0]![4]!.sql, /UPDATE sites SET brand_name/)
+  assert.deepEqual(batches[0]![4]!.values, ['New Name', 'new-name', 'site'])
+})
+
 test('a permanently spent host cannot be assigned again', async () => {
   spent = true
 

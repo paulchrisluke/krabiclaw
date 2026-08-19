@@ -4,6 +4,7 @@ CREATE TABLE `spent_subdomains` (
 	`successor_domain` text,
 	`spent_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL
 );--> statement-breakpoint
+CREATE INDEX `spent_subdomains_site_idx` ON `spent_subdomains` (`site_id`);--> statement-breakpoint
 
 DROP TABLE `business_location_translations`;--> statement-breakpoint
 DROP TABLE `menu_item_translations`;--> statement-breakpoint
@@ -58,7 +59,7 @@ CREATE TABLE `__new_tenant_page_variants` (
 	`site_id` text NOT NULL,
 	`page_id` text NOT NULL,
 	`locale` text NOT NULL,
-	`document_id` text,
+	`document_id` text NOT NULL,
 	`path` text NOT NULL,
 	`title` text NOT NULL,
 	`summary` text,
@@ -72,7 +73,7 @@ CREATE TABLE `__new_tenant_page_variants` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`page_id`) REFERENCES `__new_tenant_pages`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`document_id`) REFERENCES `content_documents`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`document_id`) REFERENCES `content_documents`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT `tenant_page_variants_path_check` CHECK(path LIKE '/%' AND path NOT LIKE '//%')
 );--> statement-breakpoint
 INSERT INTO `__new_tenant_page_variants`

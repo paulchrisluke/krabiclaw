@@ -53,11 +53,11 @@ test('dashboard changes restore the authenticated Pages lifecycle to preview cov
 
 test('changing an E2E spec always selects that exact deployed-preview spec', () => {
   const plan = selectPreviewE2e([
-    'tests/e2e/site-settings.spec.ts'
+    'tests/e2e/site-creation.spec.ts'
   ], allSpecs)
 
   assert.equal(plan.scope, 'affected')
-  assert.deepEqual(plan.specs, ['tests/e2e/site-settings.spec.ts'])
+  assert.deepEqual(plan.specs, ['tests/e2e/site-creation.spec.ts'])
 })
 
 test('schema, migration, Worker, and test-harness changes receive full coverage', () => {

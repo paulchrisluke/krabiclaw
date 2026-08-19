@@ -813,7 +813,7 @@ export async function updateTenantPageDraft(db: DbClient, variantId: string, inp
   if (!row.document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.document_id)
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
-  if (!input.data.expectedDocumentUpdatedAt || document.updated_at !== input.data.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
+  if (!input.data.expectedDocumentUpdatedAt || document.updated_at !== input.data.expectedDocumentUpdatedAt) conflict('Tenant page content was updated by another writer')
   const identity = await canonicalTenantPageIdentity(db, row, {
     pageType: input.data.pageType,
     recipe: input.data.recipe,
