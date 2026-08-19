@@ -14,24 +14,26 @@ function tomlString(value) {
 }
 
 function renderLane(lane) {
+  const normalizedLane = { ...lane }
   for (const field of ['name', 'hostname', 'databaseName', 'databaseId', 'queueName', 'deadLetterQueueName', 'bucketName', 'kvNamespaceId', 'searchInstanceId']) {
-    if (typeof lane[field] !== 'string' || !lane[field]) {
+    if (typeof lane[field] !== 'string' || !lane[field].trim()) {
       throw new Error(`E2E lane ${lane.name ?? '<unknown>'} is missing required field ${field}`)
     }
+    normalizedLane[field] = lane[field].trim()
   }
-  const env = `env.${tomlString(lane.name)}`
+  const env = `env.${tomlString(normalizedLane.name)}`
   const vars = {
     CF_SAAS_CNAME_TARGET: 'customers.krabiclaw.com',
-    BETTER_AUTH_URL: `https://${lane.hostname}`,
-    NUXT_PUBLIC_PLATFORM_DOMAIN: `https://${lane.hostname}`,
-    MEDIA_BASE_URL: `https://${lane.hostname}/__media`,
+    BETTER_AUTH_URL: `https://${normalizedLane.hostname}`,
+    NUXT_PUBLIC_PLATFORM_DOMAIN: `https://${normalizedLane.hostname}`,
+    MEDIA_BASE_URL: `https://${normalizedLane.hostname}/__media`,
     NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com',
-    NUXT_PUBLIC_APP_NAME: `KrabiClaw ${lane.name}`,
-    NUXT_PUBLIC_SITE_URL: `https://${lane.hostname}`,
-    NUXT_PUBLIC_HELP_URL: `https://${lane.hostname}/help`,
+    NUXT_PUBLIC_APP_NAME: `KrabiClaw ${normalizedLane.name}`,
+    NUXT_PUBLIC_SITE_URL: `https://${normalizedLane.hostname}`,
+    NUXT_PUBLIC_HELP_URL: `https://${normalizedLane.hostname}/help`,
     NUXT_PUBLIC_WHATSAPP_NUMBER: '16197200000',
-    AI_SEARCH_NAMESPACE: lane.searchInstanceId,
-    AI_SEARCH_INSTANCE_ID: lane.searchInstanceId,
+    AI_SEARCH_NAMESPACE: normalizedLane.searchInstanceId,
+    AI_SEARCH_INSTANCE_ID: normalizedLane.searchInstanceId,
     GA4_MEASUREMENT_ID: '',
     EMAIL_DELIVERY_MODE: 'log_only',
     WHATSAPP_DELIVERY_MODE: 'log_only',
@@ -42,7 +44,7 @@ function renderLane(lane) {
   return [
     `[${env}]`,
     'workers_dev = true',
-    `routes = [{ pattern = ${tomlString(`${lane.hostname}/*`)}, zone_name = "krabiclaw.com" }, { pattern = ${tomlString(`*-${lane.name}.krabiclaw.com/*`)}, zone_name = "krabiclaw.com" }]`,
+    `routes = [{ pattern = ${tomlString(`${normalizedLane.hostname}/*`)}, zone_name = "krabiclaw.com" }, { pattern = ${tomlString(`*-${normalizedLane.name}.krabiclaw.com/*`)}, zone_name = "krabiclaw.com" }]`,
     '',
     `[${env}.triggers]`,
     'crons = []',
@@ -52,8 +54,8 @@ function renderLane(lane) {
     '',
     `[[${env}.d1_databases]]`,
     'binding = "DB"',
-    `database_name = ${tomlString(lane.databaseName)}`,
-    `database_id = ${tomlString(lane.databaseId)}`,
+    `database_name = ${tomlString(normalizedLane.databaseName)}`,
+    `database_id = ${tomlString(normalizedLane.databaseId)}`,
     'migrations_dir = "migrations"',
     'remote = false',
     '',
@@ -71,21 +73,21 @@ function renderLane(lane) {
     '',
     `[[${env}.queues.producers]]`,
     'binding = "GUEST_DELIVERY_QUEUE"',
-    `queue = ${tomlString(lane.queueName)}`,
+    `queue = ${tomlString(normalizedLane.queueName)}`,
     '',
     `[[${env}.queues.consumers]]`,
-    `queue = ${tomlString(lane.queueName)}`,
-    `dead_letter_queue = ${tomlString(lane.deadLetterQueueName)}`,
+    `queue = ${tomlString(normalizedLane.queueName)}`,
+    `dead_letter_queue = ${tomlString(normalizedLane.deadLetterQueueName)}`,
     'max_retries = 5',
     '',
     `[[${env}.r2_buckets]]`,
     'binding = "MEDIA_BUCKET"',
-    `bucket_name = ${tomlString(lane.bucketName)}`,
+    `bucket_name = ${tomlString(normalizedLane.bucketName)}`,
     'remote = false',
     '',
     `[[${env}.kv_namespaces]]`,
     'binding = "SITE_CACHE"',
-    `id = ${tomlString(lane.kvNamespaceId)}`,
+    `id = ${tomlString(normalizedLane.kvNamespaceId)}`,
     'remote = false',
     '',
     `[${env}.ai]`,
@@ -94,7 +96,7 @@ function renderLane(lane) {
     '',
     `[[${env}.ai_search_namespaces]]`,
     'binding = "AI_SEARCH"',
-    `namespace = ${tomlString(lane.searchInstanceId)}`,
+    `namespace = ${tomlString(normalizedLane.searchInstanceId)}`,
     'remote = true',
     '',
     `[${env}.observability]`,

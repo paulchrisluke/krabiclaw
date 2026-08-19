@@ -17,7 +17,7 @@ type WorkflowJob = {
   if?: string
   needs?: string[]
   environment?: string
-  concurrency?: { group?: string; 'cancel-in-progress'?: boolean }
+  concurrency?: { group?: string; queue?: string; 'cancel-in-progress'?: boolean }
   strategy?: { 'max-parallel'?: number }
   env?: Record<string, string>
   steps?: WorkflowStep[]
@@ -121,6 +121,7 @@ test('each environment uses one normal Worker deploy before contract migrations 
 
   const release = jobs['e2e-release-qualification']!
   assert.equal(release.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
+  assert.equal(release.concurrency?.queue, 'max')
   assert.equal(release.strategy?.['max-parallel'], 4)
   assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.run, 'npx wrangler deploy --env "${{ matrix.lane }}" --strict')
   assert.equal(release.steps?.find(step => step.name === 'Apply lane migrations')?.run, 'npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote')
@@ -130,6 +131,7 @@ test('each environment uses one normal Worker deploy before contract migrations 
 
   const smoke = jobs['e2e-lane-smoke']!
   assert.equal(smoke.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
+  assert.equal(smoke.concurrency?.queue, 'max')
   assert.equal(
     smoke.steps?.find(step => step.name === 'Run isolated lane smoke')?.run,
     'yarn test:e2e:lane-smoke',
