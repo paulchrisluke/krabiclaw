@@ -31,7 +31,7 @@ const site: SiteRow = {
 }
 
 const calls: Array<{ query: string, params: unknown[] }> = []
-let queryResponder: (_query: string, _params: unknown[]) => SiteRow | null = () => null
+let queryResponder: (_query: string, _params: unknown[]) => unknown = () => null
 
 async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T | null> {
   calls.push({ query, params })
@@ -72,9 +72,10 @@ test('shared tenant hosts fail closed when site_domains has no active row', asyn
   const result = await resolveTenantSite('pottery-house.krabiclaw.com', {} as H3Event)
 
   assert.equal(result, null)
-  assert.equal(calls.length, 1)
+  assert.equal(calls.length, 2)
   assert.ok(calls.every(({ query }) => !query.includes('WHERE s.subdomain = ?')))
   assert.deepEqual(calls[0]?.params, ['pottery-house.krabiclaw.com'])
+  assert.deepEqual(calls[1]?.params, ['pottery-house.krabiclaw.com'])
 })
 
 test('shared and custom hosts resolve exclusively through active site_domains rows', async () => {
@@ -97,6 +98,62 @@ test('shared and custom hosts resolve exclusively through active site_domains ro
   )
   assert.equal(calls.length, 2)
   assert.ok(calls.every(({ query }) => !query.includes('WHERE s.subdomain = ?')))
+})
+
+test('spent subdomains resolve to their permanent redirect or gone outcome', async () => {
+  queryResponder = (query) => query.includes('FROM spent_subdomains')
+    ? { successor_domain: 'new-name.krabiclaw.com' }
+    : null
+
+  assert.deepEqual(
+    await resolveTenantSite('old-name.krabiclaw.com', {} as H3Event),
+    { spent: true, successorDomain: 'new-name.krabiclaw.com' },
+  )
+
+  queryResponder = (query) => query.includes('FROM spent_subdomains')
+    ? { successor_domain: null }
+    : null
+  assert.deepEqual(
+    await resolveTenantSite('closed-name.krabiclaw.com', {} as H3Event),
+    { spent: true, successorDomain: null },
+  )
+})
+
+test('spent subdomains redirect before unknown-tenant routing', async () => {
+  queryResponder = (query) => query.includes('FROM spent_subdomains')
+    ? { successor_domain: 'new-name.krabiclaw.com' }
+    : null
+  const event = {
+    path: '/menu?source=qr',
+    url: new URL('https://old-name.krabiclaw.com/menu?source=qr'),
+    context: {},
+    req: new Request('https://old-name.krabiclaw.com/menu?source=qr', {
+      headers: { host: 'old-name.krabiclaw.com' },
+    }),
+  } as unknown as H3Event
+
+  const response = await tenantResolution(event) as Response
+  assert.equal(response.status, 301)
+  assert.equal(response.headers.get('location'), 'https://new-name.krabiclaw.com/menu?source=qr')
+})
+
+test('spent subdomains without a successor return gone', async () => {
+  queryResponder = (query) => query.includes('FROM spent_subdomains')
+    ? { successor_domain: null }
+    : null
+  const event = {
+    path: '/',
+    url: new URL('https://closed-name.krabiclaw.com/'),
+    context: {},
+    req: new Request('https://closed-name.krabiclaw.com/', {
+      headers: { host: 'closed-name.krabiclaw.com' },
+    }),
+  } as unknown as H3Event
+
+  await assert.rejects(
+    () => tenantResolution(event),
+    (error: unknown) => Boolean(error && typeof error === 'object' && 'statusCode' in error && error.statusCode === 410),
+  )
 })
 
 test('localhost keeps explicit sites.subdomain development resolution', async () => {

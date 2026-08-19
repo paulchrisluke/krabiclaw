@@ -9,7 +9,7 @@ async function queryFirst(_db: unknown, query: string, params: unknown[]) {
 }
 
 mock.module('../../server/db/index.ts', {
-  exports: { queryFirst },
+  namedExports: { queryFirst },
 })
 
 const { buildOnboardingDraftPayload, upsertActiveOnboardingDraft } = await import('../../server/utils/onboarding-drafts.ts')

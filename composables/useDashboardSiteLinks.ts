@@ -56,9 +56,8 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       settingsGeneral: `${orgSettingsBase}/general`,
       settingsBilling: `${orgSettingsBase}/billing`,
       // Account-level (no slug)
-      account: `${base}/account/profile`,
-      accountAuthentication: `${base}/account/authentication`,
-      accountBillingItems: `${base}/account/billing-items`,
+      accountProfile: `${base}/account/profile`,
+      accountAuth: `${base}/account/authentication`,
     }
   })
 

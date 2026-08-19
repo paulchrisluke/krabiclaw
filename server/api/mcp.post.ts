@@ -289,7 +289,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
       let result: any;
       try {
         assertConversationalToolEnabled(toolName, cfEnv as ApiRecord);
-        result = await executeMcpToolCall(event, toolName, rawArgs);
+        result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
       } catch (toolError) {
         const mcpErr = asMcpError(toolError);
         if (mcpErr.kind === "protocol") {

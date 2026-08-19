@@ -23,7 +23,6 @@ export default defineHandler(async (event) => {
     messages?: ChowBotIncomingMessage[]
     currentPage?: string
     locationId?: string | null
-    forceSubdomainRegistrationFailure?: boolean
   }
 
   if (!body.siteId || !body.toolName) {
@@ -52,7 +51,6 @@ export default defineHandler(async (event) => {
     ),
     locationId: body.locationId ?? null,
     channel: 'dashboard',
-    forceSubdomainRegistrationFailure: body.forceSubdomainRegistrationFailure === true,
   })
 
   return jsonResponse({ result }, { status: 200 })

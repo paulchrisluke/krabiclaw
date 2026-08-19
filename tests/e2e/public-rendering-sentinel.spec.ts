@@ -67,7 +67,7 @@ function expectFinalOrigin(page: Page, baseURL: string, journeyName: string) {
   expect(new URL(page.url()).origin, `${journeyName} final origin`).toBe(new URL(baseURL).origin)
 }
 
-test('deployed tenant home navigation keeps real content and styles', async ({ page }) => {
+test('deployed tenant routes keep real content and styles', async ({ page }) => {
   for (const journey of journeys) {
     if (isProductionRun) {
       expect(journey.baseURL, `${journey.name} production URL`).toBe(journey.productionBaseURL)
@@ -81,9 +81,8 @@ test('deployed tenant home navigation keeps real content and styles', async ({ p
     await expect(page.locator(journey.shell)).toBeVisible()
     await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')
 
-    const link = page.locator(`a[href="${journey.link}"]`).first()
-    await expect(link, `${journey.name} ${journey.link} navigation`).toBeVisible()
-    await link.click()
+    const routeResponse = await page.goto(`${journey.baseURL}${journey.link}`, { waitUntil: 'load' })
+    expect(routeResponse?.status(), `${journey.name} ${journey.link}`).toBeLessThan(400)
 
     await expect(page).toHaveURL(new RegExp(`${journey.link}/?$`))
     expectFinalOrigin(page, journey.baseURL, journey.name)

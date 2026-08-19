@@ -13,7 +13,6 @@ import {
   renderCompiledPotteryHouseQaBlock,
   renderCompiledPotteryHousePostsBlock,
   renderCompiledPotteryHouseContentBlock,
-  renderCompiledPotteryHouseLocaleVariantsBlock,
   renderCompiledPotteryHouseBillingBlock,
   renderCompiledPotteryHouseBlogBlock,
 } from "../../seed-definitions/pottery-house.ts";
@@ -164,13 +163,11 @@ test("multi-locale tenant page seeds preserve source and translated variants", (
       id TEXT PRIMARY KEY,
       organization_id TEXT NOT NULL,
       site_id TEXT NOT NULL,
-      path TEXT NOT NULL,
       title TEXT NOT NULL,
       slug TEXT NOT NULL,
       page_type TEXT NOT NULL,
       recipe TEXT,
       summary TEXT,
-      status TEXT NOT NULL,
       sort_order INTEGER NOT NULL,
       source TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -179,19 +176,8 @@ test("multi-locale tenant page seeds preserve source and translated variants", (
       id TEXT PRIMARY KEY,
       owner_type TEXT NOT NULL,
       owner_id TEXT NOT NULL,
-      draft_revision_id TEXT,
-      published_revision_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );
-    CREATE TABLE content_revisions (
-      id TEXT PRIMARY KEY,
-      document_id TEXT NOT NULL,
-      snapshot_json TEXT NOT NULL,
-      body_markdown TEXT NOT NULL,
-      created_by TEXT,
-      label TEXT NOT NULL,
-      created_at TEXT NOT NULL
     );
     CREATE TABLE content_blocks (
       id TEXT PRIMARY KEY,
@@ -210,17 +196,14 @@ test("multi-locale tenant page seeds preserve source and translated variants", (
       site_id TEXT NOT NULL,
       page_id TEXT NOT NULL REFERENCES tenant_pages(id) ON DELETE CASCADE,
       locale TEXT NOT NULL,
-      draft_document_id TEXT,
-      published_revision_id TEXT,
-      published_path TEXT NOT NULL,
-      draft_path TEXT NOT NULL,
+      document_id TEXT,
+      path TEXT NOT NULL,
       title TEXT NOT NULL,
       summary TEXT,
       seo_title TEXT,
       seo_description TEXT,
       canonical_url TEXT,
       robots TEXT,
-      status TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -369,22 +352,15 @@ test("page locale rendering keeps only published localized fields and locales", 
   const variantIds = [...sql.matchAll(/tenant-page-site-locale-status-contract-home-(en|th|ja)/g)]
     .map((match) => match[1]);
   assert.deepEqual([...new Set(variantIds)], ["en", "th"]);
-  const thaiSnapshot = sql.match(/VALUES \('[^']+-th-revision', '[^']+-th-document', '(\{"schemaVersion":1,"metadata":\{"locale":"th".*?\})', '', NULL, 'Fixture tenant page'/s)?.[1];
-  assert.ok(thaiSnapshot);
-  assert.doesNotMatch(thaiSnapshot, /Source-only body/);
   assert.match(sql, /ภาษาไทย/);
   assert.doesNotMatch(sql, /Draft body must not publish/);
   assert.doesNotMatch(sql, /日本語/);
 });
 
-test("pottery house locale data block includes Thai content and location fields", () => {
-  const sql = renderCompiledPotteryHouseLocaleVariantsBlock();
+test("pottery house tenant pages include published Thai content", () => {
   const pages = renderCompiledPotteryHouseContentBlock();
 
-  assert.doesNotMatch(sql, /site_content_translations/);
-  assert.match(sql, /INSERT OR IGNORE INTO business_location_translations/);
   assert.match(pages, /ดินเผา ความสงบ และสถานที่ที่อยากกลับมา/);
-  assert.match(sql, /loc-pottery-beachfront/);
 });
 
 test("pottery house billing block includes ai credits and site billing state", () => {
@@ -428,15 +404,14 @@ test("pottery house stdout seed includes the complete billing block", () => {
   assert.match(sql, /-- END GENERATED: pottery_billing\s*$/);
 });
 
-test("pottery house blog block includes the canonical published content snapshot", () => {
+test("pottery house blog block includes canonical current content", () => {
   const sql = renderCompiledPotteryHouseBlogBlock();
 
   assert.match(sql, /INSERT OR REPLACE INTO content_documents/);
-  assert.match(sql, /INSERT OR REPLACE INTO content_revisions/);
+  assert.doesNotMatch(sql, /content_revisions|draft_revision_id|published_revision_id/);
   assert.match(sql, /INSERT OR REPLACE INTO content_blocks/);
   assert.match(sql, /tenant_blog/);
   assert.match(sql, /blog-pottery-group-bookings/);
-  assert.match(sql, /content-revision-pottery-group-bookings/);
   assert.match(sql, /'\/blog\/group-bookings-create-a-unique-pottery-experience-in-krabi'/);
 });
 

@@ -3,7 +3,7 @@
 
 import { HTTPError, defineHandler  } from 'nitro';
 import type { H3Event } from 'nitro';
-import { } from 'nitro/h3';
+import { redirect } from 'nitro/h3';
 import { queryFirst, type DbClient } from "~/server/db";
 import { TENANT_TYPES, type TenantType } from "~/utils/tenant-routing";
 import { cloudflareEnv, isInternalSelfFetch } from "../utils/api-response";
@@ -32,6 +32,17 @@ interface TenantSiteRow {
   logo_mime_type: string | null;
   favicon_url: string | null;
   vertical: string | null;
+}
+
+export interface SpentSubdomainResolution {
+  spent: true
+  successorDomain: string | null
+}
+
+function isSpentSubdomainResolution(
+  value: TenantSiteRow | SpentSubdomainResolution,
+): value is SpentSubdomainResolution {
+  return 'spent' in value
 }
 
 function setTenantType(event: H3Event, tenantType: TenantType) {
@@ -285,6 +296,13 @@ export default defineHandler(async (event) => {
   // Tenant site resolution
   const site = await resolveTenantSite(host, event);
 
+  if (site && isSpentSubdomainResolution(site)) {
+    if (site.successorDomain) {
+      return redirect(`https://${site.successorDomain}${url.pathname}${url.search}`, 301)
+    }
+    throw new HTTPError({ statusCode: 410, statusMessage: 'Gone' })
+  }
+
   // If site found, handle based on onboarding status
   if (site) {
     setResolvedTenantContext(event, site, host, site.canonical_domain || null)
@@ -299,7 +317,7 @@ export default defineHandler(async (event) => {
 export async function resolveTenantSite(
   host: string,
   event: Parameters<typeof cloudflareEnv>[0],
-): Promise<TenantSiteRow | null> {
+): Promise<TenantSiteRow | SpentSubdomainResolution | null> {
   const runtimeEnv = cloudflareEnv(event);
   const db = runtimeEnv.db;
   const hostname = hostnameOf(host);
@@ -326,7 +344,7 @@ export async function resolveTenantSite(
     );
   }
 
-  return (await queryFirst<TenantSiteRow>(
+  const site = await queryFirst<TenantSiteRow>(
     db,
     `
     SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
@@ -344,5 +362,15 @@ export async function resolveTenantSite(
     LIMIT 1
   `,
     [hostname],
-  )) ?? null;
+  )
+  if (site) return site
+
+  const spent = await queryFirst<{ successor_domain: string | null }>(
+    db,
+    'SELECT successor_domain FROM spent_subdomains WHERE domain = ? LIMIT 1',
+    [hostname],
+  )
+  return spent
+    ? { spent: true, successorDomain: spent.successor_domain }
+    : null
 }

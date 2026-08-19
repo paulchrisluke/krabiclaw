@@ -1,4 +1,4 @@
-import { expect, test, type Dialog } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { collectPageErrors } from './helpers'
 import { loginAsPage } from './helpers/auth'
 import { dashboardOrgHeaders } from './test-env'
@@ -225,21 +225,6 @@ test.describe('dashboard functional smoke', () => {
       expect(refreshed.status()).toBe(200)
       await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible({ timeout: 30_000 })
     }
-    const runPageAction = async (action: 'publish' | 'unpublish' | 'archive' | 'restore') => {
-      const actionResponse = page.waitForResponse(candidate => {
-        const url = new URL(candidate.url())
-        return candidate.request().method() === 'POST'
-          && url.pathname.startsWith(`${pagesCollectionPath}/`)
-          && url.pathname.endsWith(`/${action}`)
-      }, { timeout: 30_000 })
-      const refreshResponse = waitForPagesRefresh()
-      await page.getByRole('button', { name: action[0]!.toUpperCase() + action.slice(1), exact: true }).click()
-      const acted = await actionResponse
-      expect(acted.status()).toBe(200)
-      const refreshed = await refreshResponse
-      expect(refreshed.status()).toBe(200)
-    }
-
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const pageTitle = `E2E Pages ${suffix}`
     const dirtyTitle = `${pageTitle} dirty`
@@ -375,21 +360,11 @@ test.describe('dashboard functional smoke', () => {
     await saveDraft()
     await expect(page.getByRole('link', { name: 'Preview', exact: true })).toBeVisible()
 
-    // A dirty editor disables Preview and each destructive/status transition
-    // must preserve it when its discard dialog is declined.
+    // A dirty editor disables Preview and preserves its state when a duplicate
+    // transition is declined.
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill(dirtyTitle)
     await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Preview', exact: true })).toBeDisabled()
-    let discardPrompt = ''
-    const dirtyPublishDialog = page.waitForEvent('dialog').then(async dialog => {
-      discardPrompt = dialog.message()
-      await dialog.dismiss()
-    })
-    await page.getByRole('button', { name: 'Publish', exact: true }).click()
-    await dirtyPublishDialog
-    expect(discardPrompt).toBe('Discard unsaved page changes?')
-    await expect(page.getByRole('heading', { name: dirtyTitle, exact: true })).toBeVisible()
-
     const dirtyDuplicateDialog = page.waitForEvent('dialog').then(async dialog => {
       expect(dialog.message()).toBe('Discard unsaved page changes?')
       await dialog.dismiss()
@@ -403,43 +378,13 @@ test.describe('dashboard functional smoke', () => {
     await saveDraft()
 
     // Keep the responsive path in the same journey, then return to the
-    // desktop viewport for the status controls and preview assertion.
+    // desktop viewport for the preview assertion.
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(page.getByText('Blocks', { exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Preview', exact: true })).toBeVisible()
     await page.setViewportSize({ width: 1280, height: 800 })
 
-    const pageRow = () => page.locator('aside button').filter({ hasText: pageTitle })
-    const expectStatus = async (status: string) => await expect(pageRow().getByText(status, { exact: true })).toBeVisible()
-    await expectStatus('draft')
-
-    await runPageAction('publish')
-    await expectStatus('published')
-    await runPageAction('unpublish')
-    await expectStatus('draft')
-
-    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(dirtyTitle)
-    const dirtyArchiveDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
-    await page.getByRole('button', { name: 'Archive', exact: true }).click()
-    await dirtyArchiveDialog
-    await expect(page.getByRole('heading', { name: dirtyTitle, exact: true })).toBeVisible()
-    await expectStatus('draft')
-    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(pageTitle)
-    await saveDraft()
-
-    const archiveDialog = page.waitForEvent('dialog').then(async dialog => {
-      expect(dialog.message()).toBe('Archive this page? It will stop rendering publicly.')
-      await dialog.accept()
-    })
-    await runPageAction('archive')
-    await archiveDialog
-    await expectStatus('archived')
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
-    await expect(page.getByText('This page has publication history and cannot be deleted. Archive or replace it instead.', { exact: true })).toBeVisible()
-    await runPageAction('restore')
-    await expectStatus('draft')
-
-    // The saved draft preview must reflect the canonical title and block body.
+    // The saved preview must reflect the canonical title and block body.
     const previewHref = await page.getByRole('link', { name: 'Preview', exact: true }).getAttribute('href')
     expect(previewHref).toContain(`/preview/site/site-mcp-growth${pagePath}`)
     const preview = await page.context().newPage()
@@ -448,12 +393,6 @@ test.describe('dashboard functional smoke', () => {
     await expect(preview.locator('body')).toContainText(markdown)
     await expect(preview.getByRole('img', { name: mediaAlt, exact: true })).toBeVisible()
     await preview.close()
-
-    // A published page keeps its history and cannot be deleted, even after it
-    // is archived. Duplicate it to obtain a never-published draft whose delete
-    // path can be exercised without weakening that domain invariant.
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
-    await expect(page.getByText('This page has publication history and cannot be deleted. Archive or replace it instead.', { exact: true })).toBeVisible()
 
     const copyTitle = `${pageTitle} copy`
     const duplicateResponse = page.waitForResponse(candidate => (
@@ -468,52 +407,6 @@ test.describe('dashboard functional smoke', () => {
     const duplicateRefresh = await duplicateRefreshResponse
     expect(duplicateRefresh.status()).toBe(200)
     await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible({ timeout: 30_000 })
-    const copyRow = () => page.locator('aside button').filter({ hasText: copyTitle })
-    await expect(copyRow().getByText('draft', { exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeVisible()
-
-    const dirtyCopyTitle = `${copyTitle} dirty`
-    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(dirtyCopyTitle)
-    const dirtyDeleteDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
-    await page.getByRole('button', { name: 'Delete', exact: true }).click()
-    await dirtyDeleteDialog
-    await expect(page.getByRole('heading', { name: dirtyCopyTitle, exact: true })).toBeVisible()
-
-    const deletePrompts: string[] = []
-    let resolveDeleteDialogs!: () => void
-    let rejectDeleteDialogs!: (_error: unknown) => void
-    const deleteDialogs = new Promise<void>((resolve, reject) => {
-      resolveDeleteDialogs = resolve
-      rejectDeleteDialogs = reject
-    })
-    const acceptDeleteDialogs = async (dialog: Dialog) => {
-      try {
-        deletePrompts.push(dialog.message())
-        await dialog.accept()
-        if (deletePrompts.length === 2) resolveDeleteDialogs()
-      } catch (error) {
-        rejectDeleteDialogs(error)
-      }
-    }
-    page.on('dialog', acceptDeleteDialogs)
-    const deleteResponse = page.waitForResponse(candidate => {
-      const url = new URL(candidate.url())
-      return candidate.request().method() === 'DELETE'
-        && url.pathname.startsWith(`${pagesCollectionPath}/`)
-    }, { timeout: 30_000 })
-    const deleteRefreshResponse = waitForPagesRefresh()
-    await page.getByRole('button', { name: 'Delete', exact: true }).click()
-    await deleteDialogs
-    page.off('dialog', acceptDeleteDialogs)
-    expect(deletePrompts).toEqual([
-      'Discard unsaved page changes?',
-      'Delete this page and its revisions? This cannot be undone.',
-    ])
-    const deleted = await deleteResponse
-    expect(deleted.status()).toBe(200)
-    const deleteRefresh = await deleteRefreshResponse
-    expect(deleteRefresh.status()).toBe(200)
-    await expect(copyRow()).toHaveCount(0)
     expect(applicationErrors).toEqual([])
   })
 

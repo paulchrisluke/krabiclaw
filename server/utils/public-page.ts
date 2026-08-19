@@ -17,8 +17,6 @@ import {
   mapMenu,
   mapMenuItem,
   sortMenuItems,
-  normalizeSectionOrder,
-  parseStringArray,
 } from "~/server/utils/menu-management";
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
@@ -112,24 +110,9 @@ interface ReviewRow {
   created_at: string | null;
 }
 
-interface MenuTranslationRow {
-  menu_id: string;
-  name: string | null;
-  description: string | null;
-  section_order: string | null;
-}
 
-interface MenuItemTranslationRow {
-  menu_item_id: string;
-  section: string | null;
-  name: string | null;
-  description: string | null;
-  allergens: string | null;
-  ingredients: string | null;
-  dietary_notes: string | null;
-  preparation: string | null;
-  serving_note: string | null;
-}
+
+
 
 type MenuItemMediaRow = MediaAsset & { menu_item_id: string; sort_order: number };
 
@@ -417,11 +400,8 @@ async function loadPublicPageSource(
     idxReviewAggregate = -1,
     idxPhotos = -1,
     idxQa = -1;
-  let idxMenus = -1,
-    idxMenuItems = -1,
-    idxMenuItemMedia = -1,
-    idxMenuTranslations = -1,
-    idxMenuItemTranslations = -1;
+  let idxMenus = -1, idxMenuItems = -1, idxMenuItemMedia = -1;
+    
   let idxExperiencesList = -1,
     idxExperienceDetail = -1;
   let idxBlogList = -1,
@@ -436,13 +416,13 @@ async function loadPublicPageSource(
   const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId);
   if (needsLocations) idxLoc = shellIndexes.locations;
 
-  // Menu data for the requested scope (all published menus/items + translations)
+  // Menu data for the requested scope.
   if (includeMenu) {
     idxMenus = push(
-      `SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+      `SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
               created_at, updated_at, created_by, updated_by
        FROM menus
-       WHERE organization_id = ? AND site_id = ? AND status = 'published'`,
+       WHERE organization_id = ? AND site_id = ? AND is_visible = 1`,
       [orgId, siteId],
     );
 
@@ -458,7 +438,7 @@ async function loadPublicPageSource(
        JOIN menus m ON m.id = mi.menu_id
        LEFT JOIN media_assets ma_og ON mi.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
          AND ma_og.organization_id = m.organization_id AND ma_og.site_id = m.site_id
-       WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
+       WHERE m.organization_id = ? AND m.site_id = ? AND m.is_visible = 1
        ORDER BY mi.sort_order, mi.name`,
       [orgId, siteId],
     );
@@ -472,31 +452,12 @@ async function loadPublicPageSource(
          AND ma.organization_id = mim.organization_id
          AND ma.site_id = mim.site_id
          AND ma.status = 'active'
-       WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
+       WHERE m.organization_id = ? AND m.site_id = ? AND m.is_visible = 1
        ORDER BY mim.menu_item_id ASC, mim.sort_order ASC`,
       [orgId, siteId],
     );
 
-    if (locale) {
-      idxMenuTranslations = push(
-        `SELECT menu_id, name, description, section_order
-         FROM menu_translations
-         WHERE organization_id = ? AND site_id = ? AND locale = ? AND status = 'published'`,
-        [orgId, siteId, locale],
-      );
-
-      idxMenuItemTranslations = push(
-        `SELECT mit.menu_item_id, mit.section, mit.name, mit.description, mit.allergens,
-                mit.ingredients, mit.dietary_notes, mit.preparation, mit.serving_note
-         FROM menu_item_translations mit
-         JOIN menu_items mi ON mi.id = mit.menu_item_id
-         JOIN menus m ON m.id = mi.menu_id
-         WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
-           AND mit.locale = ? AND mit.status = 'published'`,
-        [orgId, siteId, locale],
-      );
-    }
-  }
+      }
 
   // Experiences remain route data. The page response also carries the shared
   // shell so the layout and route components consume one canonical resource.
@@ -609,7 +570,7 @@ async function loadPublicPageSource(
        LEFT JOIN user u ON u.id = p.author_id
        LEFT JOIN site_authors sa ON sa.id = p.site_author_id
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-       WHERE p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
+       WHERE (p.scheduled_for IS NULL OR p.scheduled_for <= datetime('now')) AND p.site_id = ? AND p.visibility = 'public'
        ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
        LIMIT ?`,
       [siteId, page === "home" ? 3 : 50],
@@ -628,7 +589,7 @@ async function loadPublicPageSource(
        LEFT JOIN site_authors sa ON sa.id = p.site_author_id
        LEFT JOIN media_assets sma ON sma.id = sa.image_asset_id AND sma.status = 'active'
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
-       WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
+       WHERE p.slug = ? AND p.site_id = ? AND (p.scheduled_for IS NULL OR p.scheduled_for <= datetime('now'))
        LIMIT 1`,
       [blogSlug, siteId],
     );
@@ -704,10 +665,8 @@ async function loadPublicPageSource(
       (batchResults[idxMenuItems] as { results: Record<string, unknown>[] })?.results ?? [];
     const menuItemMediaRows =
       (batchResults[idxMenuItemMedia] as { results: MenuItemMediaRow[] })?.results ?? [];
-    const menuTranslations =
-      (batchResults[idxMenuTranslations] as { results: MenuTranslationRow[] })?.results ?? [];
-    const menuItemTranslations =
-      (batchResults[idxMenuItemTranslations] as { results: MenuItemTranslationRow[] })?.results ?? [];
+    
+    
 
     let selectedMenuRow: Record<string, unknown> | null = null;
 
@@ -725,17 +684,9 @@ async function loadPublicPageSource(
     if (selectedMenuRow) {
       const menuId = selectedMenuRow.id as string;
       const mappedMenu = mapMenu(selectedMenuRow);
-      const menuTranslation = locale
-        ? menuTranslations.find((t) => t.menu_id === menuId)
-        : undefined;
-      const sectionOrder = menuTranslation?.section_order
-        ? normalizeSectionOrder(menuTranslation.section_order)
-        : (mappedMenu.section_order ?? []);
+      const sectionOrder = mappedMenu.section_order ?? [];
 
-      const itemTranslationsById = new Map(
-        menuItemTranslations.map((t) => [t.menu_item_id, t]),
-      );
-
+      
       const mediaByMenuItem = new Map<string, ResolvedMediaAsset[]>();
       for (const row of menuItemMediaRows) {
         const list = mediaByMenuItem.get(row.menu_item_id) ?? [];
@@ -756,37 +707,13 @@ async function loadPublicPageSource(
               thumbnail_url: media[0]?.thumbnail_url ?? null,
               kind: media[0]?.kind ?? null,
             };
-            const t = itemTranslationsById.get(item.id);
-            if (!t) return item;
-
-            return {
-              ...item,
-              section: t.section ?? item.section,
-              name: t.name ?? item.name,
-              description: t.description ?? item.description,
-              allergens:
-                t.allergens !== null
-                  ? parseStringArray(t.allergens)
-                  : item.allergens,
-              ingredients:
-                t.ingredients !== null
-                  ? parseStringArray(t.ingredients)
-                  : item.ingredients,
-              dietary_notes:
-                t.dietary_notes !== null
-                  ? parseStringArray(t.dietary_notes)
-                  : item.dietary_notes,
-              preparation: t.preparation ?? item.preparation,
-              serving_note: t.serving_note ?? item.serving_note,
-            };
+            return item;
           }),
         sectionOrder,
       );
 
       menuData = {
         ...mappedMenu,
-        name: menuTranslation?.name ?? mappedMenu.name,
-        description: menuTranslation?.description ?? mappedMenu.description,
         section_order: sectionOrder,
         items,
       };

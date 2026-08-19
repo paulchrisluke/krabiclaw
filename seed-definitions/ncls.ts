@@ -6121,7 +6121,36 @@ export const nclsFixture = {
     },
     {
       "table": "blog_post_redirects",
-      "rows": []
+      "rows": [
+        {
+          "id": "redirect-divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare",
+          "post_id": "blog_ncls_divorce-and-children-in-north-carolina",
+          "site_id": "site-ncls-blawby",
+          "old_slug": "divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare",
+          "created_at": "2024-03-08T00:00:00.000Z"
+        },
+        {
+          "id": "redirect-preparing-for-your-consultation",
+          "post_id": "blog_ncls_preparing-for-your-consultation-with-north-carolina-legal-services",
+          "site_id": "site-ncls-blawby",
+          "old_slug": "preparing-for-your-consultation",
+          "created_at": "2025-04-09T00:00:00.000Z"
+        },
+        {
+          "id": "redirect-property-division-in-north-carolina-divorce",
+          "post_id": "blog_ncls_property-division-in-north-carolina-divorce-protecting-whats-yours",
+          "site_id": "site-ncls-blawby",
+          "old_slug": "property-division-in-north-carolina-divorce",
+          "created_at": "2024-12-21T00:00:00.000Z"
+        },
+        {
+          "id": "redirect-writing-your-own-will-how-it-works-in-north-carolina",
+          "post_id": "blog_ncls_writing-your-own-will-how-it-works",
+          "site_id": "site-ncls-blawby",
+          "old_slug": "writing-your-own-will-how-it-works-in-north-carolina",
+          "created_at": "2024-02-07T00:00:00.000Z"
+        }
+      ]
     },
     {
       "table": "content_documents",

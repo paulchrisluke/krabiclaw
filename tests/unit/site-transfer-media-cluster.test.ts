@@ -232,7 +232,7 @@ function createSchema(db: Database.Database) {
     'site_authors', 'post_translations', 'post_media', 'reservation_slot_overrides',
     'reservation_submissions', 'booking_policies', 'review_requests', 'reviews', 'offerings',
     'site_link_pages', 'site_link_items', 'tenant_compliance', 'site_consultation_settings',
-    'site_theme_tokens', 'tenant_navigation_items', 'tenant_redirects', 'site_conversion_events',
+    'site_theme_tokens', 'tenant_redirects', 'site_conversion_events',
     'site_domain_events', 'site_domains', 'site_events', 'site_locales', 'work_requests',
   ]
   const retain = [

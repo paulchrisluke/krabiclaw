@@ -582,11 +582,11 @@ const settingsGroup = computed(() => {
       { label: 'Account', type: 'label' },
       { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: accountRouteQuery.value } },
       { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: accountRouteQuery.value } },
-      { label: 'Billing Items', icon: 'i-lucide-receipt', to: { path: '/dashboard/account/billing-items', query: accountRouteQuery.value } },
     ]
   }
   return []
 })
+
 
 const adminGroup = computed(() => [
   ...(dashboard.managedServiceEnabled.value ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin/work' }] : []),

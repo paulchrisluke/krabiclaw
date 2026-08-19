@@ -111,7 +111,6 @@ export async function seedNewSite(
       pageType: 'system' | 'recipe' | 'legal'
       recipe: string
       blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }>
-      publish: boolean
     }
     trustedSystemPage: boolean
   }> = []
@@ -136,7 +135,7 @@ export async function seedNewSite(
       trustedSystemPage: definition.pageType === 'system',
       data: {
         locale: 'en', path: definition.path, title: page,
-        pageType: definition.pageType, recipe: definition.recipe, blocks, publish: true,
+        pageType: definition.pageType, recipe: definition.recipe, blocks,
       },
     })
   }

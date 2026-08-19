@@ -7,9 +7,9 @@ export const MENUS_CHOWBOT_TOOLS: AiTool[] = [
   // own chat surface, so widget/upload host-specific tools stay excluded.
   ...MENUS_TOOLS.filter((tool) => !tool.uiResourceUri).map(chowbotToolFromMcp),
   // publish_menu has no MCP equivalent — it's a ChowBot-only ergonomic
-  // shortcut for update_menu({ status: 'published' }), which the shared
+  // shortcut for update_menu({ is_visible: true }), which the shared
   // executor already supports. Kept here rather than as an MCP tool since
-  // ChatGPT already has update_menu's status field for the same effect.
+  // ChatGPT already has update_menu's visibility field for the same effect.
   {
     name: "publish_menu",
     description: "Publish a menu so it appears on the live site.",

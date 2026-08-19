@@ -1,5 +1,5 @@
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
-import { createSystemSubdomain } from '~/server/utils/domains'
+import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
@@ -57,9 +57,6 @@ export interface SiteSettingsUpdateResult {
   data: Record<string, unknown>
 }
 
-interface SiteSettingsUpdateOptions {
-  forceSubdomainRegistrationFailure?: boolean
-}
 
 function buildSlug(value: string): string {
   return value
@@ -215,8 +212,7 @@ async function attemptSiteUpdate(
   organizationId: string,
   updates: UpdateSiteSettingsRequest,
   userId: string,
-  subdomain: string | null,
-  options: SiteSettingsUpdateOptions
+  subdomain: string | null
 ): Promise<SiteSettingsUpdateResult> {
   const setParts: string[] = []
   const params: Array<string | null> = []
@@ -419,50 +415,22 @@ async function attemptSiteUpdate(
   setParts.push('updated_at = ?', 'updated_by = ?')
   params.push(now, userId)
 
-  const result = await execute(db, `
+  const siteUpdate = {
+    sql: `
     UPDATE sites
     SET ${setParts.join(', ')}
     WHERE id = ? AND organization_id = ?
-  `, [...params, siteId, organizationId])
-
-  if (!result.success) {
-    throw new Error('Failed to update site settings')
+  `,
+    values: [...params, siteId, organizationId],
   }
 
-  if (updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain) {
-    try {
-      if (options.forceSubdomainRegistrationFailure) {
-        throw new Error('Forced subdomain registration failure for E2E')
-      }
-      await createSystemSubdomain(env, db, siteId, organizationId, subdomain)
-    } catch (subdomainErr) {
-      try {
-        await execute(db, `
-          UPDATE sites
-          SET brand_name = ?, subdomain = ?, updated_at = ?, updated_by = ?
-          WHERE id = ? AND organization_id = ?
-        `, [site.brand_name, site.subdomain, now, userId, siteId, organizationId])
-        console.error('updateSiteSettingsFields: createSystemSubdomain failed, rolled back', {
-          siteId,
-          subdomain,
-          err: subdomainErr,
-        })
-        return {
-          status: 400,
-          data: { error: 'Failed to register subdomain with Cloudflare. The rename was not applied.' },
-        }
-      } catch (rollbackErr) {
-        console.error('updateSiteSettingsFields: createSystemSubdomain failed AND rollback failed', {
-          siteId,
-          subdomain,
-          subdomainErr,
-          rollbackErr,
-        })
-        return {
-          status: 400,
-          data: { error: 'Rename was applied but subdomain registration with Cloudflare failed. Please contact support.' },
-        }
-      }
+  const isRename = updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain
+  if (isRename) {
+    await createSystemSubdomain(env, db, siteId, organizationId, subdomain, { siteUpdate })
+  } else {
+    const result = await execute(db, siteUpdate.sql, siteUpdate.values)
+    if (!result.success) {
+      throw new Error('Failed to update site settings')
     }
   }
 
@@ -483,8 +451,7 @@ export async function updateSiteSettingsFields(
   siteId: string,
   organizationId: string,
   updates: UpdateSiteSettingsRequest,
-  userId: string,
-  options: SiteSettingsUpdateOptions = {}
+  userId: string
 ): Promise<SiteSettingsUpdateResult> {
   if (Object.keys(updates).length === 0) {
     return {
@@ -536,6 +503,7 @@ export async function updateSiteSettingsFields(
         LIMIT 1
       `, [subdomain, siteId])
       if (existing) continue
+      if (await isSystemSubdomainSpent(env, db, subdomain)) continue
 
       try {
         return await attemptSiteUpdate(
@@ -546,8 +514,7 @@ export async function updateSiteSettingsFields(
           organizationId,
           updates,
           userId,
-          subdomain,
-          options
+          subdomain
         )
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -570,7 +537,6 @@ export async function updateSiteSettingsFields(
     organizationId,
     updates,
     userId,
-    null,
-    options
+    null
   )
 }

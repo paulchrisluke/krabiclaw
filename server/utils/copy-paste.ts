@@ -15,7 +15,7 @@ export type CopyEntityType =
 
 export interface CopyEntityConfig {
   type: CopyEntityType
-  include_translations?: boolean
+  
 }
 
 export interface CopyBatchInput {
@@ -186,10 +186,10 @@ export async function copyLocationBatch(
 
       switch (entityConfig.type) {
         case 'menus':
-          await copyMenus(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, entityConfig.include_translations)
+          await copyMenus(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
           break
         case 'menu_items':
-          await copyMenuItems(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, entityConfig.include_translations)
+          await copyMenuItems(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings)
           break
         case 'media_assets':
           await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
@@ -236,7 +236,6 @@ async function copyMenus(
   now: string,
   statements: BatchQuery[],
   manifest: CopyManifest,
-  includeTranslations = true,
 ) {
   const menus = await queryAll<{ id: string }>(
     db,
@@ -251,25 +250,12 @@ async function copyMenus(
 
     statements.push({
       query: `
-        INSERT INTO menus (id, organization_id, site_id, location_id, name, description, status, section_order, created_at, updated_at, created_by, updated_by)
-        SELECT ?, organization_id, ?, ?, name, description, status, section_order, ?, updated_at, created_by, updated_by
+        INSERT INTO menus (id, organization_id, site_id, location_id, name, description, is_visible, section_order, created_at, updated_at, created_by, updated_by)
+        SELECT ?, organization_id, ?, ?, name, description, is_visible, section_order, ?, updated_at, created_by, updated_by
         FROM menus WHERE id = ?
       `,
       params: [newId, siteId, targetLocationId, now, menu.id],
     })
-
-    if (includeTranslations) {
-      // SELECT can return multiple rows (one per locale) — generate a fresh id per row
-      // in SQL rather than binding a single crypto.randomUUID(), which would collide.
-      statements.push({
-        query: `
-          INSERT INTO menu_translations (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at, updated_at, updated_by)
-          SELECT lower(hex(randomblob(16))), organization_id, site_id, ?, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at, ?, updated_by
-          FROM menu_translations WHERE menu_id = ?
-        `,
-        params: [newId, now, menu.id],
-      })
-    }
 
     manifest.entities.menus.copied++
   }
@@ -285,7 +271,6 @@ async function copyMenuItems(
   statements: BatchQuery[],
   manifest: CopyManifest,
   idMappings: Record<string, string>,
-  includeTranslations = true,
 ) {
   const menuItems = await queryAll<{ id: string; menu_id: string }>(
     db,
@@ -327,19 +312,6 @@ async function copyMenuItems(
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [crypto.randomUUID(), organizationId, siteId, newId, newAssetId, media.sort_order, now, now],
-      })
-    }
-
-    if (includeTranslations) {
-      // SELECT can return multiple rows (one per locale) — generate a fresh id per row
-      // in SQL rather than binding a single crypto.randomUUID(), which would collide.
-      statements.push({
-        query: `
-          INSERT INTO menu_item_translations (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note, status, source_hash, translated_at, reviewed_at, updated_at, updated_by)
-          SELECT lower(hex(randomblob(16))), organization_id, site_id, ?, locale, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note, status, source_hash, translated_at, reviewed_at, ?, updated_by
-          FROM menu_item_translations WHERE menu_item_id = ?
-        `,
-        params: [newId, now, item.id],
       })
     }
 

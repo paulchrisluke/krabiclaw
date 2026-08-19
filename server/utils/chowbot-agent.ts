@@ -156,7 +156,6 @@ async function executeTool(
     channel?: "dashboard" | "whatsapp";
     sessionId?: string | null;
     pendingMedia?: { assetId: string; siteId: string };
-    forceSubdomainRegistrationFailure?: boolean;
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
@@ -276,10 +275,10 @@ async function executeTool(
     }
 
     case "publish_menu": {
-      // ChowBot-only ergonomic name — delegates to update_menu's status field.
+      // ChowBot-only ergonomic name for making a hidden menu visible again.
       return runMcpExecutorToolForChowbot(executorSite, "update_menu", {
         menu_id: input.menu_id,
-        status: "published",
+        is_visible: true,
       });
     }
 
@@ -568,12 +567,7 @@ async function executeTool(
     case "get_tenant_page":
     case "create_tenant_page":
     case "update_tenant_page_draft":
-    case "publish_tenant_page":
-    case "unpublish_tenant_page":
     case "change_tenant_page_path":
-    case "archive_tenant_page":
-    case "restore_tenant_page":
-    case "delete_tenant_page":
       return runMcpExecutorToolForChowbot(executorSite, name, input);
 
     case "get_page_fields": {
@@ -663,10 +657,6 @@ async function executeTool(
         orgId,
         { brand_name: input.brand_name },
         userId,
-        {
-          forceSubdomainRegistrationFailure:
-            ctx.forceSubdomainRegistrationFailure,
-        },
       );
       if (result.status >= 400) {
         return {
@@ -1005,7 +995,6 @@ export async function executeChowBotToolForTest(
     locationId?: string | null;
     channel?: "dashboard" | "whatsapp";
     pendingMedia?: { assetId: string; siteId: string };
-    forceSubdomainRegistrationFailure?: boolean;
   },
 ): Promise<ApiValue> {
   return executeTool(name, input, ctx);

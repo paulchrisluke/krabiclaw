@@ -70,7 +70,7 @@ test('every dashboard navbar delegates its leading slot to the shared resolver',
 
 test('account index returns to the workspace and detail pages return to account', () => {
   assert.match(read('pages/dashboard/account/index.vue'), /<DashboardNavbarLeading back-to-organization \/>/)
-  for (const page of ['profile.vue', 'authentication.vue', 'billing-items.vue']) {
+  for (const page of ['profile.vue', 'authentication.vue']) {
     assert.match(read(`pages/dashboard/account/${page}`), /:detail-to="accountIndexTo" detail-label="Account"/)
   }
 })

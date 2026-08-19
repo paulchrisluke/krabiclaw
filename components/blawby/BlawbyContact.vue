@@ -61,12 +61,14 @@
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { siteId } = useTenantSite()
-const { data, error } = await useBlawbyRoute('contact')
+const { data, error, shell } = await useBlawbyRoute('contact')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Contact content not found' })
-const { identity, consultation, compliance } = await useBlawbyShell()
+const identity = computed(() => shell.value.identity)
+const consultation = computed(() => shell.value.consultation)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {

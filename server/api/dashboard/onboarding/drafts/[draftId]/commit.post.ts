@@ -196,10 +196,10 @@ export default defineHandler(async (event) => {
       batchQueries.push({
         query: `
           INSERT INTO menus
-            (id, organization_id, site_id, location_id, name, status, created_at, updated_at, created_by, updated_by)
+            (id, organization_id, site_id, location_id, name, is_visible, created_at, updated_at, created_by, updated_by)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, params: [
-          payload.preview.menu.id, organizationId, siteId, locationRow.id, payload.preview.menu.name, payload.preview.menu.status, now, now, session.user.id, session.user.id, ], })
+          payload.preview.menu.id, organizationId, siteId, locationRow.id, payload.preview.menu.name, payload.preview.menu.status === 'published' ? 1 : 0, now, now, session.user.id, session.user.id, ], })
 
       for (const item of payload.preview.menu.items) {
         // Draft menu items are template boilerplate (e.g. "Sample Starter") the owner

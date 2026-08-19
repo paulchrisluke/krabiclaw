@@ -1,8 +1,7 @@
 import { queryFirst } from '~/server/db'
-import { userHasLinkedCustomers } from '~/server/utils/guest-claims'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 
-export type PostLoginDestination = '/account' | '/admin' | '/dashboard/onboarding' | `/dashboard/${string}`
+export type PostLoginDestination = '/admin' | '/dashboard/account' | `/dashboard/${string}`
 
 export interface PostLoginUser {
   id: string
@@ -26,6 +25,5 @@ export async function resolvePostLoginDestination(
 
   if (row) return `/dashboard/${encodeURIComponent(row.slug)}`
 
-  const isGuest = await userHasLinkedCustomers(db, user.id)
-  return isGuest ? '/account' : '/dashboard/onboarding'
+  return '/dashboard/account'
 }

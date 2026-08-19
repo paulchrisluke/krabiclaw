@@ -14,7 +14,6 @@ test('professional-services structured editor accepts business data without page
   assert.doesNotThrow(() => validateProfessionalServicePayload({
     offerings: [{ id: 'offering-1', name: 'Counsel', slug: 'counsel' }],
     consultation: { mode: 'native_disabled' },
-    navigation: [],
     themeTokens: {},
   }))
 })

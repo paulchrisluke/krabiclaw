@@ -9,13 +9,12 @@
          source in document order during SSR. -->
     <div id="blawby-portal-root" />
 
-    <BlawbyHeader :site="identity" :navigation="navigation" :consultation="consultation" />
+    <BlawbyHeader :site="identity" :consultation="consultation" />
     <main>
       <slot />
     </main>
     <BlawbyFooter
       :site="identity"
-      :navigation="navigation"
       :compliance="compliance"
       :offering-links="offeringLinks"
     />
@@ -49,7 +48,13 @@ useHead(() => ({
     : [],
 }))
 
-const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
+const target = resolveBlawbyRouteTarget(route.path, route.params)
+const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
+const identity = computed(() => document.value.shell.identity)
+const consultation = computed(() => document.value.shell.consultation)
+const compliance = computed(() => document.value.shell.compliance)
+const themeTokens = computed(() => document.value.shell.themeTokens)
+const offeringLinks = computed(() => document.value.shell.offeringLinks)
 provide('blawby-schema-context', { identity, compliance })
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })

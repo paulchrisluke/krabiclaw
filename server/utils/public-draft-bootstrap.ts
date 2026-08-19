@@ -114,7 +114,7 @@ export function buildPublicDraftBlawbyDocument(
         primary_location_address_street: primaryLocation?.address ?? null,
         primary_location_address_locality: primaryLocation?.city ?? null,
       },
-      navigation: [],
+
       consultation: {
         mode: 'native_disabled',
         cta_label: '',
@@ -157,7 +157,6 @@ export function buildPublicDraftBlawbyDocument(
             background: heroUrl ? { url: heroUrl } : null,
           },
         }],
-        published_revision_id: null,
         updated_at: heroContent?.updated_at || '',
       },
       offerings: [],

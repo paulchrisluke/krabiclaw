@@ -13,7 +13,6 @@ export const isBlawbyDocumentPayload = (value: unknown): value is BlawbyDocument
   && isRecord(value.shell)
   && isRecord(value.route)
   && isRecord(value.shell.identity)
-  && Array.isArray(value.shell.navigation)
   && isRecord(value.shell.consultation)
   && isRecord(value.shell.themeTokens)
   && Array.isArray(value.shell.offeringLinks)

@@ -1226,7 +1226,6 @@ export function renderCompiledPotteryHouseBlogBlock(): string {
   const publishedAt = '2026-07-08T00:00:00.000Z'
   const postId = 'blog-pottery-group-bookings'
   const documentId = 'content-document-pottery-group-bookings'
-  const revisionId = 'content-revision-pottery-group-bookings'
   const blockId = 'content-block-pottery-group-bookings'
   const body = `# Group Bookings Create a Unique Pottery Experience in Krabi
 
@@ -1240,7 +1239,6 @@ We can shape sessions around wheel throwing, handbuilding, glazing, or a slower 
 
 Our team can help organise group timing, capacity, and the right workshop format for your guests.`
   const blockData = { markdown: body, editor_mode: 'source' }
-  const snapshot = { blocks: [{ id: blockId, parent_block_id: null, type: 'markdown', position: 0, level: null, data: blockData, updated_at: publishedAt }] }
 
   return `-- BEGIN GENERATED: pottery_blog
 -- Tenant blog coverage for Pottery House Krabi parity checks.
@@ -1271,12 +1269,8 @@ VALUES (
 );
 
 INSERT OR REPLACE INTO content_documents
-  (id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at)
-VALUES (${sqlValue(documentId)}, 'tenant_blog', ${sqlValue(postId)}, ${sqlValue(revisionId)}, ${sqlValue(revisionId)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
-
-INSERT OR REPLACE INTO content_revisions
-  (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
-VALUES (${sqlValue(revisionId)}, ${sqlValue(documentId)}, ${sqlJson(snapshot)}, ${sqlValue(body)}, 'user-pottery-house', 'Seed import', ${sqlValue(publishedAt)});
+  (id, owner_type, owner_id, created_at, updated_at)
+VALUES (${sqlValue(documentId)}, 'tenant_blog', ${sqlValue(postId)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
 
 INSERT OR REPLACE INTO content_blocks
   (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
@@ -1295,34 +1289,6 @@ export function renderCompiledPotteryHouseContentBlock(): string {
     sqlValue,
     sqlJson,
   })
-}
-
-export function renderCompiledPotteryHouseLocaleVariantsBlock(): string {
-  const businessLocationTranslationRows = compiledPotteryHouseSeed.businessLocationTranslations
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(entry.organizationId),
-      sqlValue(entry.siteId),
-      sqlValue(entry.locationId),
-      sqlValue(entry.locale),
-      sqlValue(entry.title),
-      sqlValue(entry.address),
-      sqlValue(entry.city),
-      sqlValue(entry.description),
-      sqlValue(entry.shortDescription),
-      sqlValue(entry.status),
-      sqlValue(entry.sourceHash),
-      sqlValue(entry.translatedAt),
-      sqlValue(entry.reviewedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
-  return `-- BEGIN GENERATED: pottery_locale_variants
-INSERT OR IGNORE INTO business_location_translations
-  (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
-VALUES
-${businessLocationTranslationRows};
--- END GENERATED: pottery_locale_variants`
 }
 
 export function renderCompiledPotteryHouseBillingBlock(): string {

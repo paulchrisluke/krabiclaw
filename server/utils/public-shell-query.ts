@@ -54,7 +54,7 @@ export function appendPublicShellQueries(
               SELECT '__has_menu',
                      CAST(EXISTS(
                        SELECT 1 FROM menus
-                        WHERE organization_id = ? AND site_id = ? AND status = 'published'
+                        WHERE organization_id = ? AND site_id = ? AND is_visible = 1
                      ) AS TEXT)`, [organizationId, siteId, siteId, organizationId, siteId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM site_locales

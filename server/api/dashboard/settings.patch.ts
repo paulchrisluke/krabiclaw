@@ -5,27 +5,13 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isDemoOrg } from '~/server/utils/demo'
 import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import { HTTPError, defineHandler  } from 'nitro';
+import { defineHandler } from 'nitro'
 import {  readBody } from 'nitro/h3';
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = new TextEncoder().encode(a)
-  const right = new TextEncoder().encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
-
 export default defineHandler(async (event) => {
   const body = await readBody(event) as UpdateSiteSettingsRequest
-  const forceSubdomainRegistrationFailure = (event.req.headers.get('x-e2e-force-subdomain-failure')) === 'true'
 
   if (typeof body !== 'object' || body === null || Object.keys(body).length === 0) {
     return jsonResponse(
@@ -41,14 +27,6 @@ export default defineHandler(async (event) => {
   await assertSiteWideAccess(db, {
     memberId: organization.memberId, role: organization.role, organizationId: organization.id, siteId: site.id, })
 
-  if (forceSubdomainRegistrationFailure) {
-    const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
-    const expectedSecret = env.E2E_DEV_ROUTE_SECRET || ''
-    const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
-    if (!e2eOverride || !expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
-      throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
-    }
-  }
 
   try {
     const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
@@ -57,7 +35,7 @@ export default defineHandler(async (event) => {
     }
 
     const result = await updateSiteSettingsFields(
-      db, env, site.id, organization.id, body, session.user.id, { forceSubdomainRegistrationFailure }, )
+      db, env, site.id, organization.id, body, session.user.id, )
 
     return jsonResponse(result.data, { status: result.status })
   } catch (error) {

@@ -193,7 +193,7 @@ function validateThemeTokens(value: unknown) {
 
 export function validateProfessionalServicePayload(body: ApiRecord) {
   if (Object.hasOwn(body, 'tenantPages')) {
-    validationError('Page authoring belongs to the site Pages manager. Professional-service mutations only accept offerings, compliance, consultation, navigation, and theme data.')
+    validationError('Page authoring belongs to the site Pages manager. Professional-service mutations only accept offerings, compliance, consultation, and theme data.')
   }
 }
 
@@ -224,24 +224,7 @@ export async function upsertProfessionalServiceContent(
       validationError(`${field} must be an object.`)
     }
   }
-  const navigationItems = recordArray(data.navigation, 'navigation')
-  const providedNavigationIds = Array.from(new Set(
-    navigationItems
-      .map(item => cleanString(item.id, 80))
-      .filter(Boolean),
-  ))
 
-  if (providedNavigationIds.length) {
-    const foreignNavigation = await queryAll<{ id: string }>(db, `
-      SELECT id
-        FROM tenant_navigation_items
-       WHERE id IN (${providedNavigationIds.map(() => '?').join(',')})
-         AND (organization_id <> ? OR site_id <> ?)
-    `, [...providedNavigationIds, organizationId, siteId])
-    if (foreignNavigation.length) {
-      validationError('Navigation item ids must belong to the current site.')
-    }
-  }
 
   for (const item of recordArray(data.offerings, 'offerings')) {
     const id = cleanString(item.id, 80) || idWith('offering')
@@ -255,8 +238,8 @@ export async function upsertProfessionalServiceContent(
         (id, organization_id, site_id, location_id, name, slug, label, summary, short_description, body,
          features, faqs, cta_label, cta_url, thumbnail_asset_id, hero_image_asset_id,
          media_asset_ids, schema_type, seo_title, seo_description, canonical_path,
-         status, sort_order, featured, source, source_ref, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+         sort_order, featured, source, source_ref, updated_at, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON CONFLICT(organization_id, site_id, slug) DO UPDATE SET
         location_id = excluded.location_id, name = excluded.name, label = excluded.label,
         summary = excluded.summary, short_description = excluded.short_description, body = excluded.body,
@@ -265,7 +248,7 @@ export async function upsertProfessionalServiceContent(
         hero_image_asset_id = excluded.hero_image_asset_id, media_asset_ids = excluded.media_asset_ids,
         schema_type = excluded.schema_type, seo_title = excluded.seo_title,
         seo_description = excluded.seo_description, canonical_path = excluded.canonical_path,
-        status = excluded.status, sort_order = excluded.sort_order, featured = excluded.featured,
+        sort_order = excluded.sort_order, featured = excluded.featured,
         source = excluded.source, source_ref = excluded.source_ref, updated_at = CURRENT_TIMESTAMP,
         updated_by = excluded.updated_by
     `,
@@ -291,7 +274,6 @@ export async function upsertProfessionalServiceContent(
         cleanString(item.seo_title, 200) || null,
         cleanString(item.seo_description, 500) || null,
         requiredStoredPath(item.canonical_path, `offerings.${slug}.canonical_path`, 300),
-        requiredText(item.status, `offerings.${slug}.status`, 30),
         Number(item.sort_order ?? 0),
         item.featured ? 1 : 0,
         requiredText(item.source, `offerings.${slug}.source`, 80),
@@ -426,34 +408,7 @@ export async function upsertProfessionalServiceContent(
     written.themeTokens = 1
   }
 
-  for (const item of navigationItems) {
-    const id = cleanString(item.id, 80) || idWith('nav')
-    statements.push({
-      query: `
-      INSERT INTO tenant_navigation_items
-        (id, organization_id, site_id, area, label, url, item_type, sort_order, status, metadata_json, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        area = excluded.area, label = excluded.label, url = excluded.url, item_type = excluded.item_type,
-        sort_order = excluded.sort_order, status = excluded.status, metadata_json = excluded.metadata_json,
-        updated_at = CURRENT_TIMESTAMP, updated_by = excluded.updated_by
-    `,
-      params: [
-        id,
-        organizationId,
-        siteId,
-        requiredText(item.area, `navigation.${id}.area`, 30),
-        requiredText(item.label, `navigation.${id}.label`, 120),
-        safeStoredUrl(item.url, 500) || validationError(`navigation.${id}.url must be a valid URL.`),
-        requiredText(item.item_type, `navigation.${id}.item_type`, 40),
-        Number(item.sort_order ?? 0),
-        requiredText(item.status, `navigation.${id}.status`, 30),
-        json(strictJsonRecord(item.metadata, `navigation.${id}.metadata`)),
-        updatedBy,
-      ],
-    })
-    written.navigation = (written.navigation ?? 0) + 1
-  }
+
 
   if (statements.length) {
     await executeBatch(db, statements)

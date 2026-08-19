@@ -21,12 +21,13 @@
 <script setup lang="ts">
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
-const { data, error } = await useBlawbyRoute('blog')
+const { data, error, shell } = await useBlawbyRoute('blog')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Blog content not found' })
-const { identity, compliance } = await useBlawbyShell()
+const identity = computed(() => shell.value.identity)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {

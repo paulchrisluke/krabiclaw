@@ -24,7 +24,6 @@ function alphabeticSuffix() {
 
 async function saveLinksPage(request: APIRequestContext, baseURL: string, siteId: string, input: {
   title: string
-  status: 'draft' | 'published' | 'archived'
   robots?: string
   items: LinkItemInput[]
 }) {
@@ -32,7 +31,6 @@ async function saveLinksPage(request: APIRequestContext, baseURL: string, siteId
     data: {
       page: {
         title: input.title,
-        status: input.status,
         robots: input.robots ?? 'noindex,follow',
       },
       items: input.items.map((item, index) => ({
@@ -43,13 +41,12 @@ async function saveLinksPage(request: APIRequestContext, baseURL: string, siteId
     },
   })
   expect(response.status()).toBe(200)
-  return await response.json() as { page: { status: string }; items: Array<{ id: string; label: string }> }
+  return await response.json() as { page: { title: string }; items: Array<{ id: string; label: string }> }
 }
 
 async function resetLinksPage(request: APIRequestContext, baseURL: string, siteId: string, title = 'Links') {
   await saveLinksPage(request, baseURL, siteId, {
     title,
-    status: 'draft',
     items: [],
   })
 }
@@ -91,13 +88,12 @@ test.describe('tenant links page', () => {
 
       const editorState = await request.get(`${baseURL}/api/editor/sites/${DEMO_SITE_ID}/links-page`)
       expect(editorState.status()).toBe(200)
-      const editorBody = await editorState.json() as { page: { title: string; status: string }; items: Array<{ label: string; destination: string }> }
+      const editorBody = await editorState.json() as { page: { title: string }; items: Array<{ label: string; destination: string }> }
       expect(editorBody.page.title).toBe(dashboardTitle)
       expect(editorBody.items).toEqual(expect.arrayContaining([expect.objectContaining({ label: menuLabel, destination: '/menu' })]))
 
       const published = await saveLinksPage(request, baseURL!, DEMO_SITE_ID, {
         title: publicTitle,
-        status: 'published',
         items: [
           { label: bookingLabel, destination: '/links#featured-links' },
           { label: menuLabel, destination: '/menu' },
@@ -177,11 +173,10 @@ test.describe('tenant links page', () => {
 
       await saveLinksPage(request, baseURL!, DEMO_SITE_ID, {
         title: publicTitle,
-        status: 'draft',
-        items: [{ label: bookingLabel, destination: '/links#featured-links' }],
+        items: [],
       })
-      const draftResponse = await request.get(`${tenantBaseURL}/links`, { headers: tenantExtraHeaders })
-      expect(draftResponse.status()).toBe(404)
+      const emptyResponse = await request.get(`${tenantBaseURL}/links`, { headers: tenantExtraHeaders })
+      expect(emptyResponse.status()).toBe(404)
     } finally {
       await loginAs(request, baseURL!, DEMO_OWNER_USER_ID)
       await resetLinksPage(request, baseURL!, DEMO_SITE_ID, 'Ember & Slice')
@@ -205,10 +200,8 @@ test.describe('tenant links page', () => {
     try {
       const saved = await saveLinksPage(request, baseURL!, BLAWBY_SITE_ID, {
         title,
-        status: 'published',
         items: [{ label, destination: '/contact' }],
       })
-      expect(saved.page.status).toBe('published')
       expect(saved.items).toEqual(expect.arrayContaining([expect.objectContaining({ label })]))
       const publicApi = await request.get(`${baseURL}/api/public/sites/${BLAWBY_SITE_ID}/links-page`, {
         headers: blawbyExtraHeaders,

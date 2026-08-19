@@ -67,7 +67,7 @@ export default defineHandler(async (event) => {
             pageType: page?.page_type ?? null,
             recipe: page?.recipe ?? null,
             locale: page?.locale ?? null,
-            revisionId: page?.revision_id ?? null,
+            revisionId: null,
             referrer,
             userAgent,
             ipHash,

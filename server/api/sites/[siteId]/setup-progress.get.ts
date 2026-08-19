@@ -101,7 +101,7 @@ export default defineHandler(async (event) => {
       SELECT COUNT(mi.id) as count
       FROM menu_items mi
       JOIN menus m ON mi.menu_id = m.id
-      WHERE m.site_id = ? AND m.organization_id = ? AND m.status = 'published' AND mi.available = 1
+      WHERE m.site_id = ? AND m.organization_id = ? AND m.is_visible = 1 AND mi.available = 1
     `, [siteId, orgId])
     const menuItemCount = menuItemsResult?.count ?? 0
 
@@ -114,17 +114,14 @@ export default defineHandler(async (event) => {
       : { count: 0 }
     const photoCount = photoCountResult?.count ?? 0
 
-    // Check About page content
+        // Check About page content
     const aboutContent = await queryFirst<{ id: string }>(db, `
       SELECT v.id
       FROM tenant_page_variants v
-      JOIN content_revisions r ON r.id = v.published_revision_id
-      WHERE v.site_id = ? AND v.organization_id = ? AND v.published_path = '/about'
-        AND EXISTS (
-          SELECT 1 FROM json_each(json_extract(r.snapshot_json, '$.blocks')) block
-          WHERE json_extract(block.value, '$.type') = 'markdown'
-            AND length(COALESCE(json_extract(block.value, '$.data.markdown'), '')) > 0
-        )
+      JOIN content_blocks b ON b.document_id = v.document_id
+      WHERE v.site_id = ? AND v.organization_id = ? AND v.path = '/about'
+        AND b.type = 'markdown'
+        AND length(COALESCE(json_extract(b.data_json, '$.markdown'), '')) > 0
       LIMIT 1
     `, [siteId, orgId])
 

@@ -16,7 +16,6 @@ import {
   renderDemoExperienceSeedBlock,
   renderCompiledDemoContentBlock,
   renderCompiledDemoTenantPagesBlock,
-  renderCompiledDemoLocaleVariantsBlock,
   renderCompiledDemoBillingBlock,
 } from "../../seed-definitions/demo.ts";
 import { compileCuratedSiteFixture } from "../../seed-definitions/compile.ts";
@@ -238,15 +237,9 @@ test("demo content block delegates page composition to canonical tenant pages", 
   assert.ok(imagePayloads.every(payload => !("url" in payload)));
 });
 
-test("demo locale data block includes Thai fields for content, locations, and menus", () => {
-  const sql = renderCompiledDemoLocaleVariantsBlock();
+test("demo tenant pages include published Thai content", () => {
   const pages = renderCompiledDemoTenantPagesBlock();
 
-  assert.doesNotMatch(sql, /site_content_translations/);
-  assert.match(sql, /demo_locale_variants/);
-  assert.match(sql, /INSERT OR IGNORE INTO business_location_translations/);
-  assert.match(sql, /INSERT OR IGNORE INTO menu_translations/);
-  assert.match(sql, /INSERT OR IGNORE INTO menu_item_translations/);
   assert.match(pages, /ไฟฟืนและค่ำคืนในบรูคลิน/);
 });
 

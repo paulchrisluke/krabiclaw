@@ -17,7 +17,6 @@ import type {
   PublicCompliance,
   PublicComplianceContactPoint,
   PublicConsultationSettings,
-  PublicNavigationItem,
   PublicOffering,
   PublicOfferingFeature,
   PublicOfferingLink,
@@ -114,7 +113,6 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     canonical_path: typeof row.canonical_path === 'string' ? row.canonical_path : null,
-    status: String(row.status),
     sort_order: Number(row.sort_order ?? 0),
     featured: asBoolean(row.featured),
     // Real business_locations data for the offering's own location, when one
@@ -138,7 +136,7 @@ export async function listPublicOfferings(db: DbClient, siteId: string): Promise
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ? AND o.status = 'published'
+     WHERE o.site_id = ?
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
 
@@ -151,7 +149,7 @@ export async function listPublicOfferingLinks(db: DbClient, siteId: string): Pro
   const rows = await queryAll<ApiRecord>(db, `
     SELECT id, name, slug, canonical_path
       FROM offerings
-     WHERE site_id = ? AND status = 'published'
+     WHERE site_id = ?
      ORDER BY sort_order ASC, name ASC
   `, [siteId])
 
@@ -169,7 +167,7 @@ export async function listPublicOfferingSummaries(db: DbClient, siteId: string):
            thumb.public_url AS thumbnail_url, o.canonical_path, o.sort_order, o.featured
       FROM offerings o
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
-     WHERE o.site_id = ? AND o.status = 'published'
+     WHERE o.site_id = ?
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
   return rows.map(row => ({
@@ -230,7 +228,7 @@ export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ? AND o.slug = ? AND o.status = 'published'
+     WHERE o.site_id = ? AND o.slug = ?
      LIMIT 1
   `, [siteId, slug])
   if (!row) return null
@@ -253,7 +251,6 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
-    published_revision_id: page.published_revision_id,
     updated_at: page.updated_at,
   }))
 }
@@ -274,7 +271,6 @@ export async function getPublicTenantPageByPath(db: DbClient, siteId: string, pa
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
-    published_revision_id: page.published_revision_id,
     updated_at: page.updated_at,
   }
 }
@@ -370,23 +366,7 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
   }
 }
 
-export async function listPublicNavigationItems(db: DbClient, siteId: string): Promise<PublicNavigationItem[]> {
-  const rows = await queryAll<ApiRecord>(db, `
-    SELECT *
-      FROM tenant_navigation_items
-     WHERE site_id = ? AND status = 'active'
-     ORDER BY area ASC, sort_order ASC, label ASC
-  `, [siteId])
-  return rows.map(row => ({
-    id: String(row.id),
-    area: requiredText(row.area, `navigation ${row.id}.area`) as PublicNavigationItem['area'],
-    label: requiredText(row.label, `navigation ${row.id}.label`),
-    url: requiredText(row.url, `navigation ${row.id}.url`),
-    item_type: requiredText(row.item_type, `navigation ${row.id}.item_type`),
-    sort_order: Number(row.sort_order ?? 0),
-    metadata: row.metadata_json ? JSON.parse(row.metadata_json) as ApiRecord : {},
-  }))
-}
+
 
 export async function getPublicThemeTokens(db: DbClient, siteId: string, templateSlug = 'blawby'): Promise<ApiRecord> {
   const row = await queryFirst<{ tokens_json: string | null }>(db, `
@@ -428,9 +408,8 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
 }
 
 export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Promise<PublicBlawbyShellData> {
-  const [identity, navigation, consultation, compliance, themeTokens, offeringLinks] = await Promise.all([
+  const [identity, consultation, compliance, themeTokens, offeringLinks] = await Promise.all([
     getPublicBlawbyIdentity(db, siteId),
-    listPublicNavigationItems(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicThemeTokens(db, siteId),
@@ -441,7 +420,7 @@ export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Pr
     identity.banner_content = typeof (header as ApiRecord).banner_content === 'string' ? String((header as ApiRecord).banner_content) : null
     identity.banner_dismissible = asBoolean((header as ApiRecord).banner_dismissible)
   }
-  return { identity, navigation, consultation, compliance, themeTokens, offeringLinks }
+  return { identity, consultation, compliance, themeTokens, offeringLinks }
 }
 
 export async function getPublicBlawbyDocumentData(
@@ -620,15 +599,14 @@ export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boole
 }
 
 export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {
-  const [offerings, tenantPages, compliance, consultation, navigation, themeTokens] = await Promise.all([
+  const [offerings, tenantPages, compliance, consultation, themeTokens] = await Promise.all([
     listPublicOfferings(db, siteId),
     listPublicTenantPages(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicConsultationSettings(db, siteId),
-    listPublicNavigationItems(db, siteId),
     getPublicThemeTokens(db, siteId),
   ])
-  return { offerings, tenantPages, compliance, consultation, navigation, themeTokens }
+  return { offerings, tenantPages, compliance, consultation, themeTokens }
 }
 
 export async function recordSiteConversionEvent(db: DbClient, input: {

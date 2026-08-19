@@ -18,7 +18,7 @@ export interface PublicTenantPage {
   recipe: string | null
   locale: string
   blocks: TenantPageBlock[]
-  published_revision_id: string | null
+  
   updated_at: string
 }
 
@@ -56,7 +56,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
         SELECT id, name, label, summary, short_description, body, slug, canonical_path,
                thumbnail_asset_id, hero_image_asset_id, media_asset_ids
           FROM offerings
-         WHERE site_id = ? AND status = 'published'
+         WHERE site_id = ?
            ${hasOfferingSource ? '' : `AND id IN (${Array.from(offeringIds).map(() => '?').join(',')})`}
          ORDER BY sort_order ASC, name ASC
       `, [siteId, ...(hasOfferingSource ? [] : offeringIds)])
@@ -190,10 +190,10 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
   })
 }
 
-function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], preview: boolean): PublicTenantPage {
+function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPage {
   return {
     id: page.id,
-    path: preview ? page.draft_path : page.published_path,
+    path: page.path,
     title: page.title,
     summary: page.summary,
     seo_title: page.seo_title,
@@ -204,7 +204,6 @@ function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], preview: boolea
     recipe: page.recipe,
     locale: page.locale,
     blocks,
-    published_revision_id: page.published_revision_id,
     updated_at: page.updated_at,
   }
 }
@@ -219,18 +218,18 @@ export async function getPublicTenantPageForPath(
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
-  return mapPage(page, await hydrateBlocks(db, siteId, options.preview ? page.draft_path : page.published_path, page.blocks), Boolean(options.preview))
+  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks))
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {
   const row = await queryFirst<{ id: string } | null>(db, `
     SELECT v.id
       FROM tenant_page_variants v
-     WHERE v.site_id = ? AND (v.published_path = ? OR v.draft_path = ?)
+     WHERE v.site_id = ? AND v.path = ?
        AND (? IS NULL OR v.locale = ?)
      ORDER BY v.locale ASC
      LIMIT 1
-  `, [siteId, path, path, locale ?? null, locale ?? null])
+  `, [siteId, path, locale ?? null, locale ?? null])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Tenant page not found' })
   return row.id
 }

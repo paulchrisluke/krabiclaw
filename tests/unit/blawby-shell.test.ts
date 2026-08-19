@@ -35,7 +35,6 @@ test('Blawby shell query selects minimal offering links and excludes route bodie
   )
 
   assert.match(shellLoader, /getPublicBlawbyIdentity/)
-  assert.match(shellLoader, /listPublicNavigationItems/)
   assert.match(shellLoader, /getPublicConsultationSettings/)
   assert.match(shellLoader, /getPublicCompliance/)
   assert.match(shellLoader, /getPublicThemeTokens/)
@@ -63,7 +62,6 @@ test('Blawby shell has no runtime font or icon provider dependency', () => {
 test('public layouts use the shared SSR surface stylesheet contract', () => {
   const layouts = [
     ['access', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
-    ['account', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
     ['blog', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
     ['docs', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
     ['platform', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],

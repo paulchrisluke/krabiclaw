@@ -30,7 +30,7 @@ export interface BlogPost {
   featured_image?: { public_url?: string | null; kind?: string | null } | null
   edit_url?: string | null
   content_document?: {
-    document: { id: string; updated_at: string; draft_revision_id: string | null; published_revision_id: string | null }
+    document: { id: string; updated_at: string }
     blocks: BlogEditorBlock[]
   } | null
   editor_template?: 'saya' | 'blawby' | 'platform'

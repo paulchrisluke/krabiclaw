@@ -29,6 +29,36 @@ function renderRows(definition: NclsSeedTable, transform?: (_row: Record<string,
   }).join('\n')
 }
 
+function omitColumns(
+  row: Record<string, NclsSeedValue>,
+  columns: string[],
+): Record<string, NclsSeedValue> {
+  const omitted = new Set(columns)
+  return Object.fromEntries(Object.entries(row).filter(([column]) => !omitted.has(column)))
+}
+
+function canonicalPageVariant(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
+  const result = omitColumns(row, [
+    'draft_document_id',
+    'published_revision_id',
+    'published_path',
+    'draft_path',
+    'ever_published',
+    'status',
+  ])
+  result.document_id = row.draft_document_id ?? null
+  result.path = row.published_path ?? row.draft_path ?? '/'
+  return result
+}
+
+function canonicalTenantPage(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
+  return omitColumns(row, ['path', 'status'])
+}
+
+function canonicalOffering(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
+  return omitColumns(row, ['status'])
+}
+
 export function renderNclsFixtureSql(): string {
   const site = table('sites').rows[0]
   if (!site) throw new Error('NCLS fixture has no site row')
@@ -45,21 +75,14 @@ export function renderNclsFixtureSql(): string {
     'tenant_compliance',
     'site_consultation_settings',
     'site_theme_tokens',
-    'tenant_navigation_items',
     'location_qa',
     'reviews',
     'offerings',
-  ].map(name => renderRows(table(name))).filter(Boolean).join('\n\n')
+  ].map(name => renderRows(table(name), name === 'offerings' ? canonicalOffering : undefined)).filter(Boolean).join('\n\n')
 
   return `PRAGMA foreign_keys = ON;
 
 DELETE FROM content_blocks
- WHERE document_id IN (
-   SELECT id FROM content_documents
-    WHERE (owner_type = 'tenant_page' AND owner_id IN (SELECT id FROM tenant_page_variants WHERE site_id = ${sqlValue(nclsFixture.siteId)}))
-       OR (owner_type = 'tenant_blog' AND owner_id IN (SELECT id FROM blog_posts WHERE site_id = ${sqlValue(nclsFixture.siteId)}))
- );
-DELETE FROM content_revisions
  WHERE document_id IN (
    SELECT id FROM content_documents
     WHERE (owner_type = 'tenant_page' AND owner_id IN (SELECT id FROM tenant_page_variants WHERE site_id = ${sqlValue(nclsFixture.siteId)}))
@@ -101,17 +124,15 @@ UPDATE sites
        og_image_asset_id = ${sqlValue(site.og_image_asset_id ?? null)}
  WHERE id = ${sqlValue(nclsFixture.siteId)};
 
-${renderRows(table('tenant_pages'))}
+${renderRows(table('tenant_pages'), canonicalTenantPage)}
 
-${renderRows(table('blog_posts'))}
+${renderRows(table('blog_posts'), row => omitColumns(row, ['scheduled_revision_id']))}
 
-${renderRows(table('content_documents'))}
-
-${renderRows(table('content_revisions'))}
+${renderRows(table('content_documents'), row => omitColumns(row, ['draft_revision_id', 'published_revision_id']))}
 
 ${renderRows(table('content_blocks'))}
 
-${renderRows(table('tenant_page_variants'))}
+${renderRows(table('tenant_page_variants'), canonicalPageVariant)}
 
 ${renderRows(table('blog_post_redirects'))}
 

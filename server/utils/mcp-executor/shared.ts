@@ -1032,32 +1032,66 @@ export function workspaceLocationsPayload(
 }
 
 export async function mutationContextPayload(
-  site: {
-    db: D1Database;
-    userId: string;
-    siteId: string;
-    env?: { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string };
-  },
+  site: McpSiteContext,
   options: {
     organizationId?: string | null;
     locationId?: string | null;
   } = {},
 ) {
-  const workspace = await resolveMcpWorkspace(
-    site.db,
+  const context = await queryFirst<{
+    organization_id: string;
+    organization_name: string | null;
+    organization_slug: string | null;
+    site_id: string;
+    brand_name: string | null;
+    subdomain: string | null;
+    custom_domain: string | null;
+    public_url: string | null;
+    location_id: string | null;
+    location_slug: string | null;
+    location_title: string | null;
+  }>(site.db, `
+    SELECT o.id AS organization_id,
+           o.name AS organization_name,
+           o.slug AS organization_slug,
+           s.id AS site_id,
+           s.brand_name,
+           s.subdomain,
+           s.custom_domain,
+           s.public_url,
+           location.id AS location_id,
+           location.slug AS location_slug,
+           location.title AS location_title
+    FROM sites s
+    JOIN organization o ON o.id = s.organization_id
+    LEFT JOIN mcp_workspace_preferences preference
+      ON preference.user_id = ? AND preference.site_id = s.id
+    LEFT JOIN business_locations location
+      ON location.id = COALESCE(?, preference.location_id, s.primary_location_id)
+     AND location.organization_id = s.organization_id
+     AND location.site_id = s.id
+    WHERE s.id = ?
+      AND s.organization_id = ?
+    LIMIT 1
+  `, [
     site.userId,
-    {
-      organizationId: options.organizationId ?? null,
-      siteId: site.siteId,
-      locationId: options.locationId ?? null,
-    },
-  );
-  return workspaceContextPayload(
-    workspace.organization,
-    workspace.site,
-    workspace.location,
-    site.env,
-  );
+    options.locationId ?? null,
+    site.siteId,
+    options.organizationId ?? site.organizationId,
+  ]);
+  if (!context) throw new Error('MCP site context is unavailable.');
+  return {
+    organization_id: context.organization_id,
+    organization_name: context.organization_name,
+    organization_slug: context.organization_slug,
+    site_id: context.site_id,
+    site_name: context.brand_name ?? context.subdomain,
+    site_subdomain: context.subdomain,
+    site_public_url: resolveSitePublicOrigin(context, site.env),
+    location_id: context.location_id,
+    location_slug: context.location_slug,
+    location_title: context.location_title,
+  };
 }
 
 export async function resolveMenuLocationId(
@@ -1098,6 +1132,7 @@ export async function normalizeWorkspaceArguments(
   toolName: string,
   schema: Record<string, unknown>,
   rawArguments: Record<string, unknown>,
+  authenticatedUser?: McpUserContext,
 ) {
   const args = { ...rawArguments };
 
@@ -1123,7 +1158,7 @@ export async function normalizeWorkspaceArguments(
     return args;
   }
 
-  const user = await requireMcpUser(event);
+  const user = authenticatedUser ?? await requireMcpUser(event);
   let workspace;
   try {
     workspace = await resolveMcpWorkspace(

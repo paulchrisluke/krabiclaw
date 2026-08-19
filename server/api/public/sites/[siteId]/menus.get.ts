@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
     }
 
     const menu = await getActiveMenu(
-      db, site.organization_id, siteId, locationId, localeState.isSourceLocale ? undefined : localeState.effectiveLocale, )
+      db, site.organization_id, siteId, locationId, )
     
     if (!menu) {
       return jsonResponse({

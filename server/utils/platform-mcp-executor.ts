@@ -846,8 +846,6 @@ export async function executePlatformMcpToolCall(
           id: document.id,
           owner_type: document.owner_type,
           owner_id: document.owner_id,
-          draft_revision_id: document.draft_revision_id,
-          published_revision_id: document.published_revision_id,
           updated_at: document.updated_at,
         },
         blocks: await getContentOutline(user.db, document.id),
@@ -863,22 +861,16 @@ export async function executePlatformMcpToolCall(
         data: requiredObject(rawArguments, 'data'),
         parent_block_id: optionalNullableString(rawArguments, 'parent_block_id'),
         level: optionalNullableNumber(rawArguments, 'level'),
-        createdBy: user.userId,
-        label: 'MCP block append',
       })
     }
     case 'replace_content_block':
       return await replaceContentBlock(user.db, requiredString(rawArguments, 'block_id'), {
         expected_updated_at: requiredString(rawArguments, 'expected_updated_at'),
         data: requiredObject(rawArguments, 'data'),
-        createdBy: user.userId,
-        label: 'MCP block replace',
       })
     case 'delete_content_block':
       return await deleteContentBlock(user.db, requiredString(rawArguments, 'block_id'), {
         expected_updated_at: requiredString(rawArguments, 'expected_updated_at'),
-        createdBy: user.userId,
-        label: 'MCP block delete',
       })
     case 'render_content_preview': {
       const document = await resolveContentDocument(user.db, rawArguments)

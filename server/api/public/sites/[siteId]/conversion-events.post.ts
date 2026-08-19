@@ -59,7 +59,6 @@ export default defineHandler(async (event) => {
        WHERE li.id = ?
          AND li.site_id = ?
          AND li.status = 'active'
-         AND lp.status = 'published'
          AND lp.path = '/links'
        LIMIT 1
     `, [linkItemId, siteId])

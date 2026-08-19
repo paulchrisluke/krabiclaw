@@ -811,7 +811,7 @@ export function renderKikuzukiMenuBlock(): string {
       sqlValue(menu.locationId),
       sqlValue(menu.name),
       sqlValue(menu.description || null),
-      sqlValue(menu.status),
+      sqlValue(menu.status === 'published'),
       sqlJson(menu.sectionOrder.length > 0 ? menu.sectionOrder : null),
     ].join(', ')})`)
     .join(',\n')
@@ -854,7 +854,7 @@ ${menuItemMediaRows};`
     : ''
 
   return `-- BEGIN GENERATED: kikuzuki_menu
-INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, description, status, section_order)
+INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, description, is_visible, section_order)
 VALUES
 ${menuRows};
 

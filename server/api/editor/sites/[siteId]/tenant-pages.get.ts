@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
   const { db } = await requireSiteAccess(event, siteId)
   
   const pages = await listTenantPages(db, siteId)
-  return jsonResponse(pages.filter(page => page.status === 'published').map(page => ({ path: page.published_path, title: page.title })))
+  return jsonResponse(pages.map(page => ({ path: page.path, title: page.title })))
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

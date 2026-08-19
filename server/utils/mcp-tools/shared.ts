@@ -215,6 +215,7 @@ export const menuObject = {
     name: { type: 'string' },
     description: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
+    is_visible: { type: 'boolean' },
     sort_order: { type: 'number' },
     sections: {
       type: 'array',
@@ -1181,9 +1182,7 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'update_page_content',
   'create_tenant_page',
   'update_tenant_page_draft',
-  'publish_tenant_page',
   'change_tenant_page_path',
-  'restore_tenant_page',
   'update_professional_service_content',
   'update_booking_policy',
   'update_home_hero',
@@ -1220,9 +1219,6 @@ export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_experience',
   'delete_locale',
   'delete_domain',
-  'unpublish_tenant_page',
-  'archive_tenant_page',
-  'delete_tenant_page',
 ] as const
 
 export function buildToolAnnotationsByName() {

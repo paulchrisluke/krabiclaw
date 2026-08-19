@@ -320,11 +320,10 @@ const CONTENT_BLOCK_SCHEMA = {
 const CONTENT_BLOCK_WRITE_RESULT_SCHEMA = {
   type: 'object',
   properties: {
-    revision_id: { type: 'string' },
     body_markdown: { type: 'string' },
     blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
   },
-  required: ['revision_id', 'body_markdown', 'blocks'],
+  required: ['body_markdown', 'blocks'],
   additionalProperties: false,
 }
 
@@ -1276,11 +1275,9 @@ export const PLATFORM_INTERNAL_MCP_TOOLS: PlatformMcpToolDefinition[] = [
             id: { type: 'string' },
             owner_type: { type: 'string', enum: CONTENT_DOCUMENT_OWNER_TYPE_ENUM },
             owner_id: { type: 'string' },
-            draft_revision_id: NULLABLE_STRING,
-            published_revision_id: NULLABLE_STRING,
             updated_at: { type: 'string' },
           },
-          required: ['id', 'owner_type', 'owner_id', 'draft_revision_id', 'published_revision_id', 'updated_at'],
+          required: ['id', 'owner_type', 'owner_id', 'updated_at'],
           additionalProperties: false,
         },
         blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },

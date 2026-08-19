@@ -395,11 +395,6 @@ function applyLifecycle(lifecycle: BlogLifecycleState) {
       document: {
         ...post.value.content_document.document,
         updated_at: lifecycle.content_document_updated_at,
-        published_revision_id: lifecycle.status === 'published'
-          ? post.value.content_document.document.draft_revision_id
-          : lifecycle.status === 'draft'
-            ? null
-            : post.value.content_document.document.published_revision_id,
       },
     },
   }

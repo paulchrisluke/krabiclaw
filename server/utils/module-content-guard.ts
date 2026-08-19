@@ -53,7 +53,7 @@ async function orderingHasLiveData(db: DbClient, scope: ModuleContentGuardScope)
 
 async function servicesHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM offerings WHERE site_id = ? AND status = 'published' LIMIT 1
+    SELECT id FROM offerings WHERE site_id = ? LIMIT 1
   `, [scope.siteId])
   return Boolean(row)
 }

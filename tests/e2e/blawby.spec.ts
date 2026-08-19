@@ -267,24 +267,6 @@ test.describe('Blawby NCLS public site', () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow).toBeLessThanOrEqual(1)
 
-    const details = page.locator('details').filter({ has: page.locator('#blawby-mobile-nav') })
-    const menu = details.locator('summary[aria-label="Toggle navigation"]')
-    await menu.click()
-    await expect(details).toHaveAttribute('open', '')
-    await expect(page.locator('#blawby-mobile-nav')).toContainText('Services')
-  })
-
-  test('mobile Blawby navigation works before hydration', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page.route('**/_nuxt/*.js', route => route.abort())
-    const response = await page.goto(`${blawbyBaseURL}/`, { waitUntil: 'load' })
-    expect(response?.status()).toBeLessThan(400)
-
-    const details = page.locator('details').filter({ has: page.locator('#blawby-mobile-nav') })
-    await expect(page.locator('link[rel="stylesheet"][href*="blawby"]')).toHaveCount(1)
-    await details.locator('summary[aria-label="Toggle navigation"]').click()
-    await expect(details).toHaveAttribute('open', '')
-    await expect(page.locator('#blawby-mobile-nav')).toBeVisible()
   })
 
   test('pricing calculator follows imported threshold boundaries', async ({ page }) => {
@@ -312,8 +294,8 @@ test.describe('Blawby NCLS public site', () => {
   test('blog taxonomy filter changes the visible article set', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/blog`, { waitUntil: 'load' })
     await waitForHydration(page)
-    await page.getByRole('button', { name: 'Divorce', exact: true }).click()
-    await expect(page.locator('[data-parity-section="articles"]').getByRole('link')).toHaveCount(2)
+    await page.getByRole('button', { name: 'Family Law & Divorce', exact: true }).click()
+    await expect(page.locator('[data-parity-section="articles"]').getByRole('link')).toHaveCount(5)
   })
 
   test('professional contact requires explicit consent', async ({ request }) => {

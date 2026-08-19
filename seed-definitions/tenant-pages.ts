@@ -108,26 +108,20 @@ function renderPage(
   const pageId = `tenant-page-${siteId}-${pageKey}`
   const variantId = `${pageId}-${locale}`
   const documentId = `${variantId}-document`
-  const revisionId = `${variantId}-revision`
   const blocks = blockData(page, rows).map(block => ({ ...block, id: `${variantId}-${block.id}` }))
   const hero = rows.find(row => row.field === 'hero')
   const title = titleOverride ?? hero?.heroTitle ?? hero?.content ?? (page === 'home' ? 'Home' : page[0]!.toUpperCase() + page.slice(1))
-  const metadata = { schemaVersion: 1, metadata: { locale, path, title, summary: null, seoTitle: null, seoDescription: null, canonicalUrl: null, robots: null, pageType: pageTypeForPage(page), recipe: page }, blocks }
-  const body = blocks.map(block => block.type === 'markdown' ? String(block.data.markdown ?? '') : block.type === 'heading' ? `# ${String(block.data.text ?? '')}` : '').filter(Boolean).join('\n\n')
   const blockSql = blocks.map(block => `INSERT OR REPLACE INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at) VALUES (${sqlValue(block.id)}, ${sqlValue(documentId)}, NULL, ${sqlValue(block.type)}, ${block.position}, ${block.type === 'heading' ? 2 : 'NULL'}, ${sqlJson(block.data)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`).join('\n')
   const pageSql = includePageRecord
-    ? `INSERT OR REPLACE INTO tenant_pages (id, organization_id, site_id, path, title, slug, page_type, recipe, summary, status, sort_order, source, updated_at)
-VALUES (${sqlValue(pageId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(path)}, ${sqlValue(title)}, ${sqlValue(pageKey)}, ${sqlValue(pageTypeForPage(page))}, ${sqlValue(page)}, NULL, 'published', 0, 'fixture', CURRENT_TIMESTAMP);
+    ? `INSERT OR REPLACE INTO tenant_pages (id, organization_id, site_id, title, slug, page_type, recipe, summary, sort_order, source, updated_at)
+VALUES (${sqlValue(pageId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(title)}, ${sqlValue(pageKey)}, ${sqlValue(pageTypeForPage(page))}, ${sqlValue(page)}, NULL, 0, 'fixture', CURRENT_TIMESTAMP);
 `
     : ''
-  return `${pageSql}INSERT OR REPLACE INTO content_documents (id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at)
-VALUES (${sqlValue(documentId)}, 'tenant_page', ${sqlValue(variantId)}, ${sqlValue(revisionId)}, ${sqlValue(revisionId)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  return `${pageSql}INSERT OR REPLACE INTO content_documents (id, owner_type, owner_id, created_at, updated_at)
+VALUES (${sqlValue(documentId)}, 'tenant_page', ${sqlValue(variantId)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 DELETE FROM content_blocks WHERE document_id = ${sqlValue(documentId)};
-DELETE FROM content_revisions WHERE document_id = ${sqlValue(documentId)};
-INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
-VALUES (${sqlValue(revisionId)}, ${sqlValue(documentId)}, ${sqlJson(metadata)}, ${sqlValue(body)}, NULL, 'Fixture tenant page', CURRENT_TIMESTAMP);
-INSERT OR REPLACE INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, draft_document_id, published_revision_id, published_path, draft_path, title, summary, seo_title, seo_description, canonical_url, robots, status, created_at, updated_at)
-VALUES (${sqlValue(variantId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(pageId)}, ${sqlValue(locale)}, ${sqlValue(documentId)}, ${sqlValue(revisionId)}, ${sqlValue(path)}, ${sqlValue(path)}, ${sqlValue(title)}, NULL, NULL, NULL, NULL, NULL, 'published', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT OR REPLACE INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, document_id, path, title, summary, seo_title, seo_description, canonical_url, robots, created_at, updated_at)
+VALUES (${sqlValue(variantId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(pageId)}, ${sqlValue(locale)}, ${sqlValue(documentId)}, ${sqlValue(path)}, ${sqlValue(title)}, NULL, NULL, NULL, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 ${blockSql}`
 }
 
