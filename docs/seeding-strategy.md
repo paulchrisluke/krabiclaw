@@ -2,11 +2,11 @@
 
 ## Model
 
-Two sources of truth, one ephemeral execution format:
+Two sources of truth and one ephemeral execution format:
 
 1. **Typed TS fixtures** (`seed-definitions/`) — curated tenants and synthetic scenarios
 2. **Approved import manifests** (`client-imports/<slug>/`) — real client onboarding data
-3. **Generated SQL** — ephemeral apply artifact, never hand-maintained
+3. **Generated SQL** — ephemeral execution artifact, never a source of truth
 
 Schema DDL lives in `migrations/` and is applied by the environment's locked
 preview workflow before browser coverage. Seed data is entirely separate
@@ -31,7 +31,13 @@ No new tenant is introduced via a hand-authored SQL file. Ever.
 
 ## What belongs in a typed fixture
 
-Every `CuratedSiteDefinition` is the complete initial state for a tenant. This includes:
+Demo, Pottery House, and Kikuzuki use `CuratedSiteDefinition`. NCLS uses a
+typed `NclsFixtureDefinition` snapshot because its regression fixture mirrors
+the approved production public dataset rather than a reduced synthetic legal
+site. Both shapes must contain the complete state their deployed tests depend
+on. Do not replace the NCLS snapshot with a smaller hand-curated approximation.
+
+Complete fixture state includes:
 
 - site metadata, config, locales, domains
 - site logo asset linkage via `logo_asset_id` when a tenant has a logo
@@ -79,9 +85,9 @@ Schema DDL only: `CREATE TABLE`, `ALTER TABLE`, index definitions. Applied autom
 
 | Tenant        | Typed definition                    | Generator                        | Targets             | CI-reproducible |
 | ------------- | ----------------------------------- | -------------------------------- | ------------------- | --------------- |
-| Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | local / PR preview  | ✓               |
-| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | local / PR preview  | ✓               |
-| Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | local / PR preview  | ✓               |
+| Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | local / preview / staging | ✓          |
+| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | local / preview / staging | ✓          |
+| Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | local / preview / staging | ✓          |
 | NCLS          | `seed-definitions/ncls.ts`          | `generate-ncls-seed.ts`          | local / preview / staging | ✓          |
 
 All four tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.
@@ -108,21 +114,30 @@ the record; executable copies do not remain in the active repository.
 
 ## CI seeding
 
-Seeds run on every PR (preview) and once inside an explicitly dispatched,
-preview workflow. They are not conditional on file changes.
-The generate scripts run first, so the `.ts` fixture is the actual source of
-truth in CI — not committed SQL or a push-triggered shared-staging loop.
+Fixture provisioning runs before browser coverage in every environment where
+fixture-dependent tests execute. The generators run first, so the typed
+definitions are the source of truth in CI rather than committed SQL.
 
 | Trigger           | Environment  | What runs                                                                      |
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
 | PR opened/updated | `preview`    | generate and apply all four typed fixtures                                    |
 | Push to `staging` | `staging`    | migrate, sweep E2E artifacts, then generate and apply all four typed fixtures  |
+| `staging` to `main` PR opened/updated | `staging` | redeploy the exact head, then sweep and reapply all four fixtures before the full suite |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
-Scripts:
+Staging provisioning is intentionally destructive only for the protected,
+fixed fixture IDs. `scripts/provision-staging-fixtures.ts` refuses unexpected
+site ownership, records D1 time-travel information before applying anything,
+and validates all four sites afterward. It must never be pointed at production.
 
-- `yarn seed:kikuzuki` — local D1
-- `yarn seed:kikuzuki:preview` — preview D1 (CI)
+Commands and entry points:
+
+- `yarn seed:local` — apply all four fixtures to local D1
+- `yarn seed:pottery-local` — apply only Pottery House locally
+- `yarn seed:kikuzuki` — apply only Kikuzuki locally
+- `node --experimental-strip-types scripts/generate-ncls-seed.ts` — apply only NCLS locally
+- `scripts/provision-staging-fixtures.ts --staging` — CI-owned staging provisioning; do not run casually
+- Preview fixture application is CI-owned and uses the four generators in `.github/workflows/ci.yml`.
 
 ---
 
@@ -155,6 +170,9 @@ Demo, Pottery House, Kikuzuki, and NCLS follow the same ephemeral model: typed f
 - template work, seed edits, and onboarding changes must preserve the dashboard storage split:
   images via `/media/request-upload` -> Cloudflare Images
   videos/files via `/media/upload` -> Cloudflare R2
+- Demo, Pottery House, Kikuzuki, and NCLS are required fixtures in local,
+  preview, and staging browser lanes. Their absence is a provisioning failure,
+  not a reason to skip fixture-dependent coverage.
 
 ---
 
@@ -164,5 +182,5 @@ Demo, Pottery House, Kikuzuki, and NCLS follow the same ephemeral model: typed f
 - `client-intake/` — intake YAML inputs for real clients
 - `client-imports/<slug>/` — generated and approved onboarding artifacts
 - `migrations/` — schema DDL only, no data
-- `seeds/` — build outputs only, never edited directly; will be gitignored once clean
+- `seeds/` — ignored generated outputs only, never edited directly
 - `public/` — never store tenant-specific source media here

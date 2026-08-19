@@ -51,7 +51,9 @@ yarn install
 ```
 
 The repository uses Node.js 24.18.1. Use the exact version declared in
-`.nvmrc` before installing dependencies.
+`.nvmrc` before installing dependencies. When changing Node, follow the
+[Node runtime upgrade runbook](docs/operations/node-runtime-upgrades.md) so
+local development, CI, type definitions, and Worker builds move together.
 
 ### 2. Environment
 

@@ -21,8 +21,13 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 - Staging-only fixes are acceptable when they restore parity with the real deployed path:
   - idempotent remote seeds
   - build steps that do not depend on third-party network fetches
-  - per-spec timeout adjustments when the assertions are still required and the test is just longer on remote infrastructure
+  - environment routing, bindings, credentials, and fixture corrections proven
+    against the normal deployed Worker
 - Staging should not silently lose product coverage just to go green. If a test is removed, narrowed, or bypassed, document why it no longer represents intended production behavior.
+- Do not add or increase timeouts as the first response to a remote failure.
+  Locate the operation consuming the current budget, reproduce it through the
+  production build and normal Wrangler path, and fix the application, fixture,
+  or environment contract that was actually demonstrated.
 
 ## Better Auth fixture contract
 
@@ -79,12 +84,16 @@ staging tests use direct first-level aliases such as
 
 ## Triage checklist when CI fails but local passes
 
-1. Confirm `gh secret list` contains all expected secrets.
-2. Confirm workflow `env:` passes required secrets into the failing job.
-3. Confirm the failing user exists in `config/e2e-auth-fixtures.ts` and was provisioned after the curated seed.
-4. Confirm its declared organization/team membership matches the permission the test is proving.
-5. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
-6. Confirm production smoke targets are still intentionally active customer/platform domains.
+1. Confirm `node -v` exactly matches `.nvmrc`; a different runtime is not a valid local comparison.
+2. Confirm the local run used `yarn test:e2e:local`, the production build, `.output/server/index.mjs`, and normal local Wrangler.
+3. Confirm `gh secret list` contains all expected secrets.
+4. Confirm workflow `env:` passes required secrets into the failing job.
+5. Confirm the failing user exists in `config/e2e-auth-fixtures.ts` and was provisioned after the curated seed.
+6. Confirm its declared organization/team membership matches the permission the test is proving.
+7. Confirm Demo, Pottery House, Kikuzuki, and NCLS were provisioned from their current typed definitions. Missing required fixtures are failures, not skips.
+8. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
+9. Confirm the deployed test used the direct environment tenant alias and did not depend on `x-preview-tenant`.
+10. Confirm production smoke targets are still intentionally active customer/platform domains.
 
 ## PR execution and guardrails
 
@@ -99,5 +108,8 @@ staging tests use direct first-level aliases such as
 - The full `yarn test:e2e:full` suite runs on the exact staging head during the
   `staging` to `main` release PR. Production runs only the read-only public
   rendering sentinel.
-- CI defaults to two Playwright workers. Stateful notification, MCP, and client suites explicitly use one worker against shared remote D1.
-- The seed, migration, tool-parity, and script-syntax checks run together in one Node-only job, avoiding redundant dependency installations.
+- Preview and staging set one Playwright worker because their suites share one
+  remote D1 environment. Do not raise parallelism without first isolating the
+  mutable data each worker owns.
+- Seed, migration, and tool-parity checks run in the shared checks job, avoiding
+  redundant dependency installations.

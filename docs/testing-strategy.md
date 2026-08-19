@@ -25,14 +25,29 @@ The complete Playwright suite remains mandatory on the exact staging head of
 the `staging` to `main` release PR. This separates fast change feedback from
 exhaustive release qualification without reducing the production gate.
 
-## Current Inventory
+## Local and deployed parity
 
-As of the issue #418 audit on staging:
+Local browser results are meaningful only when they exercise the same product
+shape as CI: the exact Node version in `.nvmrc`, a frozen dependency install,
+fresh local migrations, all four required tenant fixtures, a production
+Nuxt/Nitro build, and `.output/server/index.mjs` through normal local Wrangler.
+`yarn test:e2e:local <specs>` owns that preparation. Do not substitute
+`nuxt dev`, a mock server, a header-only tenant shortcut, or a different Node
+runtime and call it CI parity.
 
-- `tests/unit`: 108 files before this pass.
-- `tests/e2e`: 32 Playwright specs.
-- `yarn test:unit` intentionally runs the whole unit glob.
-- PR and staging E2E run against deployed Cloudflare Workers, seeded D1, and real route behavior.
+Preview and staging then prove the environment-specific parts that local
+Wrangler cannot: the deployed Worker route, remote D1/R2/KV/AI/queue/DO
+bindings, direct tenant aliases, and real environment secrets. A local pass and
+a deployed pass are complementary evidence.
+
+All browser lanes treat console warnings, console errors, page errors,
+hydration mismatches, failed first-party assets, unexpected 4xx responses, and
+all 5xx responses as failures. Do not suppress those signals or increase a
+timeout before identifying what operation consumed the existing budget.
+
+Demo, Pottery House, Kikuzuki, and NCLS are required test data. Missing fixture
+data must fail preparation in local, preview, and staging; a fixture-dependent
+spec must not turn that absence into a skip.
 
 ## Taxonomy
 
@@ -72,6 +87,10 @@ yarn test:browser:dashboard
 ```
 
 Use `yarn test:unit` only when the PR risk calls for the full unit glob. Passing the whole unit suite is not enough to call a user-facing change validated.
+
+For a Node runtime upgrade, follow
+[the Node runtime upgrade runbook](operations/node-runtime-upgrades.md); its
+required full local Worker run is broader than these focused commands.
 
 ## First Reduction Pass
 

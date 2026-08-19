@@ -66,15 +66,23 @@ Fresh worktrees usually do not have `node_modules`.
 
 ## Local Runtime Baseline
 
-Before calling typecheck, lint, build, or Playwright blocked by the local environment, verify which Node runtime is executing the command:
+Before installing dependencies or running validation, read
+[the Node runtime upgrade runbook](../operations/node-runtime-upgrades.md) and
+verify that the active Node runtime exactly matches `.nvmrc`:
 
 ```bash
 which node
 node -v
+printf 'expected v%s\n' "$(tr -d '\n' < .nvmrc)"
 node -e "console.log(v8.getHeapStatistics().heap_size_limit)" -r v8
 ```
 
-Codex desktop sessions may inherit the machine's default shell `node` instead of the bundled workspace runtime. If `yarn typecheck` or `yarn lint` fails with V8 heap exhaustion or the process is killed without a product error, rerun with the bundled Codex Node runtime first and give Node enough heap:
+Do not run validation until the reported and expected versions match. Codex
+desktop sessions may inherit the machine's default shell `node` instead of the
+workspace runtime. A bundled runtime is usable only when its version also
+matches `.nvmrc`. If `yarn typecheck` or `yarn lint` then fails with V8 heap
+exhaustion or the process is killed without a product error, keep the exact
+runtime and give Node enough heap:
 
 ```bash
 PATH="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" \

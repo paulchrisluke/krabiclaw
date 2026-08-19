@@ -24,9 +24,11 @@ then builds, performs one normal Worker deploy, and uses native
 `wrangler d1 migrations apply`; Wrangler owns the applied-migration history.
 Runtime removals land before their contract migration so the environment never
 runs an older Worker against columns that have already been dropped.
-Preview fixtures are reset and seeded for PR isolation. Staging keeps its
-persistent fixtures and sweeps only disposable E2E artifacts. Production is
-never seeded by CI.
+Preview and staging both sweep disposable E2E artifacts and deterministically
+reapply Demo, Pottery House, Kikuzuki, and NCLS from their typed definitions
+before fixture-dependent browser coverage. Staging provisioning is limited to
+protected fixed IDs, refuses unexpected ownership, and records D1 time-travel
+information before applying the fixtures. Production is never seeded by CI.
 
 `config/e2e-impact-map.mjs` is the executable impact map. Documentation-only
 changes do not deploy a Worker. Narrow changes run the permanent core browser

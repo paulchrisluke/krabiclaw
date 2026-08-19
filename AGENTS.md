@@ -272,7 +272,13 @@ The contract is `docs/operations/release-flow.md`.
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
-Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every preview seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs before preview and staging browser coverage. For it to catch what a spec creates:
+Curated fixture data (Demo, Pottery House, Kikuzuki, NCLS, and MCP plan
+fixtures) is reset via fixed-ID `DELETE`-then-`INSERT` provisioning before
+fixture-dependent local, preview, and staging browser coverage—it never grows.
+Staging provisioning first verifies protected ownership and records D1
+time-travel information. Production is never seeded by CI. Anything else E2E
+specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs
+before preview and staging provisioning. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
