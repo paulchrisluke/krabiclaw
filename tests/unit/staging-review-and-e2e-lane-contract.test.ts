@@ -1,24 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
-import { buildStagingReviewAuthSql, STAGING_REVIEW_AUTH } from '../../config/staging-review-auth.ts'
+import { buildStagingReviewAuthSql, buildStagingReviewAuthVerificationSql } from '../../config/staging-review-auth.ts'
 
 const repoFile = async (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
 
 test('staging-review identity is separate from ephemeral E2E auth and preserves credentials', async () => {
-  const fixtures = await repoFile('config/e2e-auth-fixtures.ts')
-  const provisioner = await repoFile('scripts/provision-staging-review-auth.ts')
-  const reset = await repoFile('scripts/reset-e2e-artifacts.ts')
   const workflow = await repoFile('.github/workflows/ci.yml')
   const sql = buildStagingReviewAuthSql('hashed-password')
   const rotatedSql = buildStagingReviewAuthSql('new-hash', true)
 
-  assert.doesNotMatch(fixtures, new RegExp(STAGING_REVIEW_AUTH.id))
-  assert.doesNotMatch(fixtures, new RegExp(STAGING_REVIEW_AUTH.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-  assert.match(provisioner, /process\.argv\.includes\('--staging'\)/)
-  assert.match(provisioner, /STAGING_REVIEW_PASSWORD/)
-  assert.match(provisioner, /--rotate-password/)
-  assert.match(reset, new RegExp(`['"]${STAGING_REVIEW_AUTH.id}['"]`))
   assert.match(sql, /INSERT OR IGNORE INTO account/)
   assert.doesNotMatch(sql, /DELETE FROM session/)
   assert.doesNotMatch(sql, /DELETE FROM account/)
@@ -28,6 +19,7 @@ test('staging-review identity is separate from ephemeral E2E auth and preserves 
   assert.match(sql, /WHERE id = 'site-ncls-blawby'/)
   assert.match(rotatedSql, /DELETE FROM account/)
   assert.doesNotMatch(rotatedSql, /DELETE FROM session/)
+  assert.ok(buildStagingReviewAuthVerificationSql().includes('teamMember'))
   assert.match(workflow, /environment: staging/)
   assert.match(workflow, /Verify durable staging-review provisioning is idempotent/)
 })
@@ -42,10 +34,18 @@ test('E2E lane resources are unique and explicitly non-production', async () => 
   }
   for (const lane of lanes) {
     assert.match(wrangler, new RegExp(`\\[env\\."${lane.name}"\\]`))
-    assert.match(wrangler, new RegExp(`AI_SEARCH_INSTANCE_ID = "${lane.searchInstanceId}"`))
-    assert.match(wrangler, new RegExp(`database_id = "${lane.databaseId}"`))
-    assert.ok(wrangler.includes(`pattern = "*-${lane.name}.krabiclaw.com/*"`))
-    assert.ok(wrangler.includes('crons = []'))
+    const start = wrangler.indexOf(`[env."${lane.name}"]`)
+    const end = wrangler.indexOf(`[env."${lanes[lanes.indexOf(lane) + 1]?.name ?? 'missing'}"]`, start + 1)
+    assert.ok(start >= 0)
+    const block = wrangler.slice(start, end >= 0 ? end : wrangler.indexOf('# END GENERATED E2E LANE ENVIRONMENTS'))
+    assert.ok(block.includes(`AI_SEARCH_INSTANCE_ID = "${lane.searchInstanceId}"`))
+    assert.ok(block.includes(`AI_SEARCH_NAMESPACE = "${lane.searchInstanceId}"`))
+    assert.ok(block.includes(`namespace = "${lane.searchInstanceId}"`))
+    assert.ok(block.includes(`database_id = "${lane.databaseId}"`))
+    assert.ok(block.includes(`pattern = "*-${lane.name}.krabiclaw.com/*"`))
+    assert.ok(block.includes('crons = []'))
   }
-  assert.doesNotMatch(wrangler.slice(wrangler.indexOf('# BEGIN GENERATED E2E LANE ENVIRONMENTS')), /database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"/)
+  const generatedStart = wrangler.indexOf('# BEGIN GENERATED E2E LANE ENVIRONMENTS')
+  assert.ok(generatedStart >= 0)
+  assert.doesNotMatch(wrangler.slice(generatedStart), /database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"/)
 })

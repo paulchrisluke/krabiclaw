@@ -1,15 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { setupTenantHeaders, tenantBaseURL, tenantExtraHeaders } from './helpers'
-import { isEnvironmentPlatformHost } from '../../server/utils/tenant-hosts'
+import { isNonIndexableHost } from '../../server/utils/seo-policy'
 
 function isNonProductionHost(value: string): boolean {
-  const host = new URL(value).hostname
-  return host === 'local.krabiclaw.com'
-    || host === 'preview.krabiclaw.com'
-    || host === 'staging.krabiclaw.com'
-    || isEnvironmentPlatformHost(host)
-    || host.endsWith('.pages.dev')
-    || host.endsWith('.workers.dev')
+  return isNonIndexableHost(new URL(value).hostname)
 }
 
 test.describe('platform SEO contracts', () => {

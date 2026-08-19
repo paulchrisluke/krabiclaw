@@ -11,6 +11,9 @@ const isPreview = process.argv.includes('--preview')
 const isStaging = process.argv.includes('--staging')
 const environmentIndex = process.argv.indexOf('--env')
 const explicitEnvironment = environmentIndex === -1 ? null : process.argv[environmentIndex + 1] ?? null
+if (environmentIndex !== -1 && (!explicitEnvironment || explicitEnvironment.startsWith('--'))) {
+  throw new Error('--env requires a configured E2E lane name.')
+}
 const e2eEnvironmentNames = new Set<string>(
   JSON.parse(readFileSync(join(process.cwd(), 'config/e2e-lanes.json'), 'utf8')).map((lane: { name: string }) => lane.name),
 )

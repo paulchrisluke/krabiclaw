@@ -18,6 +18,7 @@ type WorkflowJob = {
   needs?: string[]
   environment?: string
   concurrency?: { group?: string; 'cancel-in-progress'?: boolean }
+  strategy?: { 'max-parallel'?: number }
   env?: Record<string, string>
   steps?: WorkflowStep[]
 }
@@ -118,6 +119,7 @@ test('each environment uses one normal Worker deploy before contract migrations 
 
   const release = jobs['e2e-release-qualification']!
   assert.equal(release.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
+  assert.equal(release.strategy?.['max-parallel'], 4)
   assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.run, 'npx wrangler deploy --env "${{ matrix.lane }}" --strict')
   assert.equal(release.steps?.find(step => step.name === 'Apply lane migrations')?.run, 'npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote')
   assert.equal(release.steps?.find(step => step.name === 'Sweep lane E2E artifacts')?.run, 'node --experimental-strip-types scripts/reset-e2e-artifacts.ts --env "${{ matrix.lane }}" --older-than-hours=0')
@@ -139,6 +141,8 @@ test('each environment uses one normal Worker deploy before contract migrations 
     'node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging',
   )
   assert.equal(stepRun(jobs['deploy-staging']!, 'Verify durable staging-review login'), 'yarn test:e2e:staging-review')
+  assert.equal(stepRun(jobs['deploy-staging']!, 'Provision staging E2E auth fixtures'), 'node --experimental-strip-types scripts/provision-e2e-auth.ts --staging')
+  assert.ok(stepIndex(jobs['deploy-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['deploy-staging']!, 'Provision staging E2E auth fixtures'))
   assert.equal(stepRun(jobs['deploy-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
   assert.equal(stepRun(jobs['deploy-staging']!, 'Run affected staging browser coverage'), 'yarn test:e2e:preview:selected')
 

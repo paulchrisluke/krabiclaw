@@ -14,6 +14,11 @@ function tomlString(value) {
 }
 
 function renderLane(lane) {
+  for (const field of ['name', 'hostname', 'databaseName', 'databaseId', 'queueName', 'deadLetterQueueName', 'bucketName', 'kvNamespaceId', 'searchInstanceId']) {
+    if (typeof lane[field] !== 'string' || !lane[field]) {
+      throw new Error(`E2E lane ${lane.name ?? '<unknown>'} is missing required field ${field}`)
+    }
+  }
   const env = `env.${tomlString(lane.name)}`
   const vars = {
     CF_SAAS_CNAME_TARGET: 'customers.krabiclaw.com',
@@ -25,7 +30,7 @@ function renderLane(lane) {
     NUXT_PUBLIC_SITE_URL: `https://${lane.hostname}`,
     NUXT_PUBLIC_HELP_URL: `https://${lane.hostname}/help`,
     NUXT_PUBLIC_WHATSAPP_NUMBER: '16197200000',
-    AI_SEARCH_NAMESPACE: 'default',
+    AI_SEARCH_NAMESPACE: lane.searchInstanceId,
     AI_SEARCH_INSTANCE_ID: lane.searchInstanceId,
     GA4_MEASUREMENT_ID: '',
     EMAIL_DELIVERY_MODE: 'log_only',
@@ -89,7 +94,7 @@ function renderLane(lane) {
     '',
     `[[${env}.ai_search_namespaces]]`,
     'binding = "AI_SEARCH"',
-    'namespace = "default"',
+    `namespace = ${tomlString(lane.searchInstanceId)}`,
     'remote = true',
     '',
     `[${env}.observability]`,

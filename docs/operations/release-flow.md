@@ -5,7 +5,7 @@ Cloudflare Workers, and four fixed release-E2E Workers.
 
 | Git event | Worker | Validation |
 | --- | --- | --- |
-| Pull request to `staging` | `krabiclaw-preview` | Core plus affected Playwright coverage selected from the diff |
+| Pull request to `staging` | `krabiclaw-preview`, `krabiclaw-e2e-1`, `krabiclaw-e2e-2` | Core plus affected Playwright coverage on preview and concurrent two-lane smoke |
 | Push to `staging` | `krabiclaw-staging` | Core plus affected Playwright coverage selected from the pushed commits |
 | `staging` to `main` pull request | `krabiclaw-e2e-1` through `krabiclaw-e2e-4` | Four isolated Playwright shards |
 | Push to `main` | `krabiclaw` | Read-only production browser smoke |

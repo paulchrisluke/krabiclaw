@@ -8,8 +8,11 @@ import { join, resolve } from 'node:path'
 const environmentIndex = process.argv.indexOf('--env')
 const explicitEnvironment = environmentIndex === -1 ? null : process.argv[environmentIndex + 1] ?? null
 const e2eEnvironmentNames = new Set<string>(
-  JSON.parse(readFileSync(join(process.cwd(), 'config/e2e-lanes.json'), 'utf8')).map((lane: { name: string }) => lane.name),
+  JSON.parse(readFileSync(resolve(import.meta.dirname, '../config/e2e-lanes.json'), 'utf8')).map((lane: { name: string }) => lane.name),
 )
+if (process.argv.includes('--staging') && environmentIndex !== -1) {
+  throw new Error('Choose only one of --staging or --env <e2e-lane>.')
+}
 const targetEnvironment = process.argv.includes('--staging') ? 'staging' : explicitEnvironment
 
 if (!targetEnvironment || targetEnvironment === 'preview' || targetEnvironment !== 'staging' && !e2eEnvironmentNames.has(targetEnvironment)) {

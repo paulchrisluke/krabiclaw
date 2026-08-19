@@ -235,13 +235,15 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix: ${{ fromJSON(needs.e2e-lane-plan.outputs.matrix) }}
     concurrency:
       group: release-qualification-e2e-${{ matrix.lane }}
       cancel-in-progress: false
+    environment: ${{ matrix.lane }}
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: ${{ matrix.url }}
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
@@ -251,7 +253,7 @@ jobs:
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: ${{ matrix.url }}
       E2E_ALLOW_DEV_ROUTES: "true"
-      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
+      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET }}
       MCP_CREDENTIAL_LOGIN: "1"
       MCP_CIMD_CLIENT_URL: ${{ matrix.url }}/api/auth/oauth2/test-client-metadata
       MCP_PRIVATE_CIMD_CLIENT_URL: ${{ matrix.url }}/api/auth/oauth2/test-private-client-metadata
@@ -287,13 +289,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          E2E_DEV_ROUTE_SECRET_VALUE: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-          PREVIEW_SECRET_VALUE: ${{ secrets.PREVIEW_SECRET_STAGING }}
-          EMAIL_REPLY_SECRET_VALUE: ${{ secrets.EMAIL_REPLY_SECRET_STAGING }}
-          EMAIL_INBOUND_SECRET_VALUE: ${{ secrets.EMAIL_INBOUND_SECRET_STAGING }}
+          E2E_DEV_ROUTE_SECRET_VALUE: ${{ secrets.E2E_DEV_ROUTE_SECRET }}
+          PREVIEW_SECRET_VALUE: ${{ secrets.PREVIEW_SECRET }}
+          EMAIL_REPLY_SECRET_VALUE: ${{ secrets.EMAIL_REPLY_SECRET }}
+          EMAIL_INBOUND_SECRET_VALUE: ${{ secrets.EMAIL_INBOUND_SECRET }}
           PLATFORM_SEARCH_REINDEX_SECRET_VALUE: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
           STRIPE_SECRET_KEY_VALUE: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-          STRIPE_WEBHOOK_SECRET_VALUE: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+          STRIPE_WEBHOOK_SECRET_VALUE: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           put_secret() {
@@ -366,9 +368,10 @@ jobs:
     concurrency:
       group: release-qualification-e2e-${{ matrix.lane }}
       cancel-in-progress: false
+    environment: ${{ matrix.lane }}
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: ${{ matrix.url }}
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
@@ -378,7 +381,7 @@ jobs:
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: ${{ matrix.url }}
       E2E_ALLOW_DEV_ROUTES: "true"
-      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
+      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET }}
       PLAYWRIGHT_PREVIEW_URL: ${{ matrix.url }}
       PLAYWRIGHT_WORKERS: "1"
     steps:
@@ -411,13 +414,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          E2E_DEV_ROUTE_SECRET_VALUE: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-          PREVIEW_SECRET_VALUE: ${{ secrets.PREVIEW_SECRET_STAGING }}
-          EMAIL_REPLY_SECRET_VALUE: ${{ secrets.EMAIL_REPLY_SECRET_STAGING }}
-          EMAIL_INBOUND_SECRET_VALUE: ${{ secrets.EMAIL_INBOUND_SECRET_STAGING }}
+          E2E_DEV_ROUTE_SECRET_VALUE: ${{ secrets.E2E_DEV_ROUTE_SECRET }}
+          PREVIEW_SECRET_VALUE: ${{ secrets.PREVIEW_SECRET }}
+          EMAIL_REPLY_SECRET_VALUE: ${{ secrets.EMAIL_REPLY_SECRET }}
+          EMAIL_INBOUND_SECRET_VALUE: ${{ secrets.EMAIL_INBOUND_SECRET }}
           PLATFORM_SEARCH_REINDEX_SECRET_VALUE: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
           STRIPE_SECRET_KEY_VALUE: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-          STRIPE_WEBHOOK_SECRET_VALUE: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+          STRIPE_WEBHOOK_SECRET_VALUE: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           put_secret() {
@@ -537,6 +540,22 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node --experimental-strip-types scripts/provision-staging-fixtures.ts --staging
+      - name: Generate ephemeral E2E credentials
+        shell: bash
+        run: |
+          auth_secret="$(openssl rand -base64 32)"
+          password="$(openssl rand -hex 32)Aa1!"
+          echo "::add-mask::$auth_secret"
+          echo "::add-mask::$password"
+          {
+            echo "BETTER_AUTH_SECRET=$auth_secret"
+            echo "E2E_TEST_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
+      - name: Provision staging E2E auth fixtures
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --staging
       - name: Refresh staging AI Search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}

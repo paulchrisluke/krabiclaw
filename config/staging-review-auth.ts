@@ -48,3 +48,14 @@ ${credential}
 ${organizations}
 ${teams}`
 }
+
+export function buildStagingReviewAuthVerificationSql() {
+  const siteIds = STAGING_REVIEW_AUTH.siteIds.map(sqlString).join(', ')
+  return `
+SELECT s.id AS site_id, s.team_id, t.id AS team_row_id, tm.userId AS team_member_user_id
+FROM sites s
+LEFT JOIN team t ON t.id = s.team_id
+LEFT JOIN teamMember tm ON tm.teamId = s.team_id AND tm.userId = ${sqlString(STAGING_REVIEW_AUTH.id)}
+WHERE s.id IN (${siteIds})
+ORDER BY s.id;`
+}

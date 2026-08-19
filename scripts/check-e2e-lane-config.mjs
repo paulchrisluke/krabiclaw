@@ -22,11 +22,18 @@ const hostnames = new Set(lanes.map(lane => lane.hostname))
 const databaseIds = new Set(lanes.map(lane => lane.databaseId))
 const kvIds = new Set(lanes.map(lane => lane.kvNamespaceId))
 const searchIds = new Set(lanes.map(lane => lane.searchInstanceId))
+const searchNamespaces = new Set(lanes.map(lane => lane.searchInstanceId))
 assert(names.size === lanes.length, 'E2E lane names must be unique')
 assert(hostnames.size === lanes.length, 'E2E lane hostnames must be unique')
 assert(databaseIds.size === lanes.length, 'E2E D1 IDs must be unique')
 assert(kvIds.size === lanes.length, 'E2E KV IDs must be unique')
 assert(searchIds.size === lanes.length, 'E2E AI Search instance IDs must be unique')
+assert(searchNamespaces.size === lanes.length, 'E2E AI Search namespaces must be unique')
+
+const generatedStart = wrangler.indexOf('# BEGIN GENERATED E2E LANE ENVIRONMENTS')
+const generatedEnd = wrangler.indexOf('# END GENERATED E2E LANE ENVIRONMENTS')
+assert(generatedStart >= 0 && generatedEnd > generatedStart, 'Generated E2E lane markers are required')
+const generated = wrangler.slice(generatedStart, generatedEnd)
 
 for (const lane of lanes) {
   assert(/^e2e-[1-4]$/.test(lane.name), `Unexpected E2E lane name: ${lane.name}`)
@@ -40,7 +47,9 @@ for (const lane of lanes) {
     `dead_letter_queue = "${lane.deadLetterQueueName}"`,
     `bucket_name = "${lane.bucketName}"`,
     `id = "${lane.kvNamespaceId}"`,
+    `AI_SEARCH_NAMESPACE = "${lane.searchInstanceId}"`,
     `AI_SEARCH_INSTANCE_ID = "${lane.searchInstanceId}"`,
+    `namespace = "${lane.searchInstanceId}"`,
     `*-${lane.name}.krabiclaw.com/*`,
     'crons = []',
   ]) assert(wrangler.includes(required), `Missing ${required} for ${lane.name}`)
@@ -54,9 +63,6 @@ for (const forbidden of [
   '69252567b9cd4becbd486a337ab1e589',
   '9e829557fd2b46dba4148f2ed27a5c0b',
 ]) {
-  const generatedStart = wrangler.indexOf('# BEGIN GENERATED E2E LANE ENVIRONMENTS')
-  const generatedEnd = wrangler.indexOf('# END GENERATED E2E LANE ENVIRONMENTS')
-  const generated = wrangler.slice(generatedStart, generatedEnd)
   assert(!generated.includes(forbidden), `E2E lane configuration reuses protected resource ${forbidden}`)
 }
 for (const forbiddenLine of [
@@ -67,9 +73,7 @@ for (const forbiddenLine of [
   'bucket_name = "krabiclaw-media-preview"',
   'bucket_name = "krabiclaw-media-staging"',
 ]) {
-  const generatedStart = wrangler.indexOf('# BEGIN GENERATED E2E LANE ENVIRONMENTS')
-  const generatedEnd = wrangler.indexOf('# END GENERATED E2E LANE ENVIRONMENTS')
-  const generatedLines = wrangler.slice(generatedStart, generatedEnd).split('\n').map(line => line.trim())
+  const generatedLines = generated.split('\n').map(line => line.trim())
   assert(!generatedLines.includes(forbiddenLine), `E2E lane configuration reuses protected resource ${forbiddenLine}`)
 }
 

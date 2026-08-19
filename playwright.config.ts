@@ -54,6 +54,12 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: '**/release-lane-smoke.spec.ts',
+      use: { ...devices['Desktop Chrome'] }
+    },
+    {
+      name: 'lane-smoke',
+      testMatch: '**/release-lane-smoke.spec.ts',
       use: { ...devices['Desktop Chrome'] }
     }
   ]

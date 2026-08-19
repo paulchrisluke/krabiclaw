@@ -20,7 +20,7 @@ test('local Worker serves the platform origin without host overrides', async ({ 
 
 test('deployed platform home keeps the normal Nuxt runtime contract', async ({ page, baseURL }) => {
   const hostname = baseURL ? new URL(baseURL).hostname : ''
-  test.skip(!baseURL?.includes('workers.dev') && !isEnvironmentPlatformHost(hostname), 'Requires a deployed Worker')
+  test.skip(!hostname.endsWith('.workers.dev') && !isEnvironmentPlatformHost(hostname), 'Requires a deployed Worker')
   const errors = collectPageErrors(page)
   const response = await page.goto(baseURL!, { waitUntil: 'load' })
   expect(response?.status()).toBeLessThan(400)

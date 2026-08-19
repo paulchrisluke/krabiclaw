@@ -17,10 +17,11 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   fans the same artifact out to four isolated deployed Workers. Each lane runs
   one Playwright shard with `workers=1`; all four shards are required before
   production promotion.
-- Pull requests to `staging` build the exact Worker once and run a real smoke
-  against `e2e-1` and `e2e-2` concurrently. This exercises lane-local host
-  aliases, `/api/dev` access, migrations, fixtures, auth, search, and D1 state
-  before the four-shard release gate.
+- Pull requests to `staging` build the exact Worker once, deploy preview plus
+  `krabiclaw-e2e-1` and `krabiclaw-e2e-2`, and run a real two-lane smoke
+  concurrently. This exercises lane-local host aliases, `/api/dev` access,
+  migrations, fixtures, auth, search, and D1 state before the four-shard release
+  gate.
 - A push to `main` deploys production normally, applies migrations, and then
   runs read-only public browser smoke. There is no scheduled release lane.
 
