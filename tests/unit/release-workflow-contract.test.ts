@@ -141,8 +141,14 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.ok(stepIndex(smoke, 'Deploy exact Worker artifact') < stepIndex(smoke, 'Run isolated lane smoke'))
 
   for (const laneJob of [release, smoke]) {
+    assert.match(stepRun(laneJob, 'Generate ephemeral E2E credentials'), /E2E_DEV_ROUTE_SECRET=\$dev_route_secret/)
     assert.match(stepRun(laneJob, 'Generate ephemeral E2E credentials'), /STRIPE_WEBHOOK_SECRET=\$stripe_webhook_secret/)
+    assert.match(stepRun(laneJob, 'Sync isolated lane secrets'), /put_secret E2E_DEV_ROUTE_SECRET "\$E2E_DEV_ROUTE_SECRET"/)
     assert.match(stepRun(laneJob, 'Sync isolated lane secrets'), /put_secret STRIPE_WEBHOOK_SECRET "\$STRIPE_WEBHOOK_SECRET"/)
+    assert.equal(
+      laneJob.steps?.find(step => step.name === 'Sync isolated lane secrets')?.env?.E2E_DEV_ROUTE_SECRET_VALUE,
+      undefined,
+    )
     assert.equal(
       laneJob.steps?.find(step => step.name === 'Sync isolated lane secrets')?.env?.STRIPE_WEBHOOK_SECRET_VALUE,
       undefined,
