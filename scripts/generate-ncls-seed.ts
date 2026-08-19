@@ -51,6 +51,14 @@ function canonicalPageVariant(row: Record<string, NclsSeedValue>): Record<string
   return result
 }
 
+function canonicalTenantPage(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
+  return omitColumns(row, ['path', 'status'])
+}
+
+function canonicalOffering(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
+  return omitColumns(row, ['status'])
+}
+
 export function renderNclsFixtureSql(): string {
   const site = table('sites').rows[0]
   if (!site) throw new Error('NCLS fixture has no site row')
@@ -70,7 +78,7 @@ export function renderNclsFixtureSql(): string {
     'location_qa',
     'reviews',
     'offerings',
-  ].map(name => renderRows(table(name))).filter(Boolean).join('\n\n')
+  ].map(name => renderRows(table(name), name === 'offerings' ? canonicalOffering : undefined)).filter(Boolean).join('\n\n')
 
   return `PRAGMA foreign_keys = ON;
 
@@ -116,7 +124,7 @@ UPDATE sites
        og_image_asset_id = ${sqlValue(site.og_image_asset_id ?? null)}
  WHERE id = ${sqlValue(nclsFixture.siteId)};
 
-${renderRows(table('tenant_pages'))}
+${renderRows(table('tenant_pages'), canonicalTenantPage)}
 
 ${renderRows(table('blog_posts'), row => omitColumns(row, ['scheduled_revision_id']))}
 
