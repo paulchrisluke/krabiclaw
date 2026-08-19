@@ -5,7 +5,8 @@ Cloudflare Workers, and four fixed release-E2E Workers.
 
 | Git event | Worker | Validation |
 | --- | --- | --- |
-| Pull request to `staging` | `krabiclaw-preview`, `krabiclaw-e2e-1`, `krabiclaw-e2e-2` | Core plus affected Playwright coverage on preview and concurrent two-lane smoke |
+| Ordinary/affected pull request to `staging` | `krabiclaw-preview` | Core plus affected Playwright coverage selected from the pull request |
+| High-impact pull request to `staging` | `krabiclaw-preview`, `krabiclaw-e2e-1` through `krabiclaw-e2e-4` | Small deployed-preview contract smoke plus the complete Playwright inventory across four isolated shards |
 | Push to `staging` | `krabiclaw-staging` | Core plus affected Playwright coverage selected from the pushed commits |
 | `staging` to `main` pull request | `krabiclaw-e2e-1` through `krabiclaw-e2e-4` | Four isolated Playwright shards |
 | Push to `main` | `krabiclaw` | Read-only production browser smoke |
@@ -21,8 +22,9 @@ with its own deployed Worker and mutable Cloudflare resources. These direct
 hosts are the browser and manual-QA contract; deployed checks do not select
 tenants through request headers.
 
-The checks job runs the repository's migration lint once. Each deployment job
-then builds, performs one normal Worker deploy, and uses native
+The checks job runs the repository's migration lint once. Pull-request browser
+jobs share one exact-head Worker artifact. Each deployment job performs one
+normal Worker deploy and uses native
 `wrangler d1 migrations apply`; Wrangler owns the applied-migration history.
 Runtime removals land before their contract migration so the environment never
 runs an older Worker against columns that have already been dropped.
@@ -34,9 +36,8 @@ E2E. Staging provisioning is limited to protected fixed IDs, refuses unexpected
 ownership, and records D1 time-travel information before applying the fixtures.
 Production is never seeded by CI. Pushes to staging retain the conditional
 OAuth/MCP smoke and core-plus-affected Playwright coverage against the stable
-staging Worker; the two-lane smoke on implementation PRs that require deployed
-coverage proves the isolated E2E host/resource contract before the four-lane
-release gate.
+staging Worker. Staging remains the human-review environment and is never used
+as destructive release-E2E scratch space.
 
 The durable staging-review identity is `staging-review@staging.krabiclaw.test`.
 Its password is maintained in the team password manager and mirrored to the
@@ -49,18 +50,21 @@ stores and run the provisioner with `--rotate-password`.
 
 `config/e2e-impact-map.mjs` is the executable impact map. Documentation-only
 changes do not deploy a Worker. Narrow changes run the permanent core browser
-sentinels plus the mapped subsystem specs. Schema, migration, Worker, test
-harness, and unclassified runtime changes fail safe to the full suite. Changing
-an E2E spec always selects that exact spec.
+sentinels plus the mapped subsystem specs on preview. Schema, migration,
+Worker, test-harness, and unclassified runtime changes fail safe to the full
+suite: preview runs only its small deployed contract smoke while the complete,
+unchanged browser inventory runs across all four isolated lanes. Changing an
+E2E spec always selects that exact spec.
 
-The full suite is a release-candidate gate rather than a tax on every staging
-commit. Opening or updating the ordinary `staging` to `main` pull request builds
-the exact candidate once, uploads that artifact, and deploys it to four fixed
-E2E environments. Each lane applies migrations, sweeps and seeds only its own
-resources, provisions ephemeral auth, refreshes its lane-specific AI Search
-instance, and runs one Playwright shard with `workers=1`. Staging remains the
-stable human-review deployment for the candidate. Production may not be
-promoted until all four exact-head shards pass.
+The full suite is parallel infrastructure, not a serial preview tax. A
+high-impact pull request to `staging`, and the ordinary `staging` to `main`
+release pull request, build the exact head once, upload that artifact, and
+deploy it to four fixed E2E environments. Each lane applies migrations, sweeps
+and seeds only its own resources, provisions ephemeral auth, refreshes its
+lane-specific AI Search instance, verifies the lane contract, and runs one
+Playwright shard with `workers=1`. Staging remains the stable human-review
+deployment for the candidate. Production may not be promoted until all four
+exact-head shards pass.
 
 Cloudflare's documented primitives are named Wrangler environments and
 per-environment bindings ([Workers environments](https://developers.cloudflare.com/workers/wrangler/environments/),

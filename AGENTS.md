@@ -236,12 +236,13 @@ Four environment gates exist in `.github/workflows/ci.yml`:
 
 ### Required PR lane
 
-Runs checks, builds for preview, and may migrate, seed, and deploy only the
-isolated preview environment. Shared staging and production are never changed
-by a feature PR. Permanent core sentinels plus the specs selected from
-`config/e2e-impact-map.mjs` run against the deployed preview. High-impact and
-unclassified runtime changes fail safe to full coverage; documentation-only
-changes skip Worker deployment.
+Runs checks and builds one exact-head Worker artifact. Shared staging and
+production are never changed by a feature PR. Narrow changes run permanent core
+sentinels plus the specs selected from `config/e2e-impact-map.mjs` against
+preview. High-impact and unclassified runtime changes keep preview to its small
+deployed contract smoke and run the complete browser inventory concurrently
+across the four isolated E2E lanes. Documentation-only changes skip Worker
+deployment.
 
 ### Staging lane
 

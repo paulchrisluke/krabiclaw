@@ -71,14 +71,14 @@ test('one CI workflow owns preview, staging, release-lane, and production lifecy
   assert.deepEqual(document.on?.push?.branches, ['main', 'staging'])
   assert.ok(jobs['e2e-plan'])
   assert.ok(jobs['e2e-representative'])
-  assert.ok(jobs['e2e-lane-smoke'])
+  assert.equal(jobs['e2e-lane-smoke'], undefined)
   assert.ok(jobs['deploy-staging'])
   assert.match(jobs['deploy-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
   assert.match(jobs['e2e-lane-plan']?.if || '', /github\.base_ref == 'main'/)
-  assert.match(jobs['e2e-lane-plan']?.if || '', /needs\.e2e-plan\.outputs\.run_preview == 'true'/)
+  assert.match(jobs['e2e-lane-plan']?.if || '', /needs\.e2e-plan\.outputs\.run_full_lanes == 'true'/)
   assert.match(jobs['e2e-release-build']?.if || '', /needs\.e2e-plan\.outputs\.run_preview == 'true'/)
   assert.match(jobs['e2e-release-qualification']?.if || '', /github\.head_ref == 'staging'/)
-  assert.match(jobs['e2e-lane-smoke']?.if || '', /github\.base_ref == 'staging'/)
+  assert.match(jobs['e2e-release-qualification']?.if || '', /needs\.e2e-plan\.outputs\.run_full_lanes == 'true'/)
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
@@ -95,6 +95,14 @@ test('each environment uses one normal Worker deploy before contract migrations 
     jobs['e2e-representative']?.env?.PLAYWRIGHT_PREVIEW_URL,
     'https://preview.krabiclaw.com',
   )
+  assert.equal(jobs['e2e-representative']?.env?.E2E_SELECTION_SCOPE, '${{ needs.e2e-plan.outputs.preview_scope }}')
+  assert.equal(jobs['e2e-representative']?.env?.E2E_SELECTED_SPECS, '${{ needs.e2e-plan.outputs.preview_specs }}')
+  assert.deepEqual(jobs['e2e-representative']?.needs, ['typecheck', 'e2e-plan', 'e2e-release-build'])
+  assert.equal(jobs['e2e-representative']?.steps?.find(step => step.name === 'Build preview Worker'), undefined)
+  assert.ok(jobs['e2e-representative']?.steps?.some(step => step.uses?.startsWith('actions/download-artifact@')))
+
+  assert.deepEqual(jobs['e2e-release-build']?.needs, ['typecheck', 'e2e-plan'])
+  assert.equal(jobs['e2e-release-build']?.steps?.filter(step => step.run === 'yarn build').length, 1)
 
   assert.equal(
     stepRun(jobs['e2e-representative']!, 'Deploy preview Worker'),
@@ -127,20 +135,12 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.run, 'npx wrangler deploy --env "${{ matrix.lane }}" --strict')
   assert.equal(release.steps?.find(step => step.name === 'Apply lane migrations')?.run, 'npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote')
   assert.equal(release.steps?.find(step => step.name === 'Sweep lane E2E artifacts')?.run, 'node --experimental-strip-types scripts/reset-e2e-artifacts.ts --env "${{ matrix.lane }}" --older-than-hours=0')
+  assert.equal(release.steps?.find(step => step.name === 'Run isolated lane smoke')?.run, 'yarn test:e2e:lane-smoke')
   assert.equal(release.steps?.find(step => step.name === 'Run Playwright release shard')?.run, 'yarn test:e2e:full --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1')
+  assert.ok(stepIndex(release, 'Run isolated lane smoke') < stepIndex(release, 'Run Playwright release shard'))
   assert.equal(release.steps?.find(step => step.name === 'Run full staging release qualification'), undefined)
 
-  const smoke = jobs['e2e-lane-smoke']!
-  assert.equal(smoke.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
-  assert.equal(smoke.concurrency?.queue, 'max')
-  assert.equal(smoke.env?.STRIPE_WEBHOOK_SECRET, undefined)
-  assert.equal(
-    smoke.steps?.find(step => step.name === 'Run isolated lane smoke')?.run,
-    'yarn test:e2e:lane-smoke',
-  )
-  assert.ok(stepIndex(smoke, 'Deploy exact Worker artifact') < stepIndex(smoke, 'Run isolated lane smoke'))
-
-  for (const laneJob of [release, smoke]) {
+  for (const laneJob of [release]) {
     assert.match(stepRun(laneJob, 'Generate ephemeral E2E credentials'), /E2E_DEV_ROUTE_SECRET=\$dev_route_secret/)
     assert.match(stepRun(laneJob, 'Generate ephemeral E2E credentials'), /STRIPE_WEBHOOK_SECRET=\$stripe_webhook_secret/)
     assert.match(stepRun(laneJob, 'Sync isolated lane secrets'), /put_secret E2E_DEV_ROUTE_SECRET "\$E2E_DEV_ROUTE_SECRET"/)

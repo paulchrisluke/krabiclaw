@@ -18,6 +18,16 @@ const STAGING_ONLY_SPECS = new Set(['tests/e2e/staging-review-auth.spec.ts'])
 const normalize = value => value.replaceAll('\\', '/').replace(/^\.\//, '')
 const matchesAny = (file, patterns) => patterns.some(pattern => matchesGlob(file, pattern))
 
+function withExecutionRouting(plan) {
+  const runFullLanes = plan.scope === 'full'
+  return {
+    ...plan,
+    runFullLanes,
+    previewScope: runFullLanes ? 'core' : plan.scope,
+    previewSpecs: runFullLanes ? [] : plan.specs,
+  }
+}
+
 export function listE2eSpecs() {
   const directory = fileURLToPath(new URL('../tests/e2e/', import.meta.url))
   return readdirSync(directory)
@@ -32,26 +42,26 @@ export function selectPreviewE2e(changedFiles, allSpecs = listE2eSpecs()) {
   const runtimeFiles = files.filter(file => !matchesAny(file, NON_RUNTIME_PATTERNS) && !STAGING_ONLY_SPECS.has(file))
 
   if (runtimeFiles.length === 0) {
-    return {
+    return withExecutionRouting({
       runPreview: false,
       scope: 'none',
       groups: [],
       specs: [],
       changedFiles: files,
       unclassifiedFiles: []
-    }
+    })
   }
 
   const highImpactFiles = runtimeFiles.filter(file => matchesAny(file, HIGH_IMPACT_PATTERNS))
   if (highImpactFiles.length > 0) {
-    return {
+    return withExecutionRouting({
       runPreview: true,
       scope: 'full',
       groups: ['full-runtime'],
       specs: [...allSpecs].sort(),
       changedFiles: files,
       unclassifiedFiles: []
-    }
+    })
   }
 
   const selectedGroups = IMPACT_GROUPS.filter(group =>
@@ -64,14 +74,14 @@ export function selectPreviewE2e(changedFiles, allSpecs = listE2eSpecs()) {
   const unclassifiedFiles = runtimeFiles.filter(file => !classifiedFiles.has(file))
 
   if (unclassifiedFiles.length > 0) {
-    return {
+    return withExecutionRouting({
       runPreview: true,
       scope: 'full',
       groups: ['unclassified-runtime'],
       specs: [...allSpecs].sort(),
       changedFiles: files,
       unclassifiedFiles
-    }
+    })
   }
 
   const specs = [...new Set([
@@ -79,14 +89,14 @@ export function selectPreviewE2e(changedFiles, allSpecs = listE2eSpecs()) {
     ...selectedGroups.flatMap(group => group.specs)
   ])].sort()
 
-  return {
+  return withExecutionRouting({
     runPreview: true,
     scope: specs.length > 0 ? 'affected' : 'core',
     groups: selectedGroups.map(group => group.id),
     specs,
     changedFiles: files,
     unclassifiedFiles: []
-  }
+  })
 }
 
 export function changedFilesBetween(base, head, cwd) {
@@ -107,9 +117,12 @@ function argument(name) {
 function writeGithubOutputs(path, plan) {
   appendFileSync(path, [
     `run_preview=${plan.runPreview}`,
+    `run_full_lanes=${plan.runFullLanes}`,
     `scope=${plan.scope}`,
+    `preview_scope=${plan.previewScope}`,
     `groups=${plan.groups.join(',')}`,
     `specs=${plan.specs.join(',')}`,
+    `preview_specs=${plan.previewSpecs.join(',')}`,
     ''
   ].join('\n'))
 }
@@ -121,6 +134,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === normalize(process.argv
   const plan = selectPreviewE2e(changedFilesBetween(base, head))
 
   console.log(`Preview E2E scope: ${plan.scope}`)
+  console.log(`Preview execution scope: ${plan.previewScope}`)
+  console.log(`Full isolated lanes: ${plan.runFullLanes}`)
   console.log(`Changed files: ${plan.changedFiles.length}`)
   console.log(`Impact groups: ${plan.groups.join(', ') || 'none'}`)
   console.log(`Selected specs: ${plan.specs.join(', ') || 'core only'}`)

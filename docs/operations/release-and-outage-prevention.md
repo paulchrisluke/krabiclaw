@@ -35,7 +35,9 @@ inspection once to determine ownership, then report the actual result.
    `staging`. Split work only when the changes are independently releasable.
 2. Run focused validation locally. CI owns the environment-specific build,
    preview deployment, permanent core sentinels, and affected E2E coverage
-   selected from `config/e2e-impact-map.mjs`.
+   selected from `config/e2e-impact-map.mjs`. High-impact changes keep preview
+   to its deployed contract smoke and run the complete inventory concurrently
+   across the four isolated E2E lanes.
 3. When preview deploys, test the affected customer journey immediately.
 4. Merge to `staging` after required PR checks and preview validation pass.
 5. When staging deploys, begin credentialed MCP and tenant browser validation
