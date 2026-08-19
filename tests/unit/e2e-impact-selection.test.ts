@@ -24,6 +24,15 @@ test('documentation-only changes do not deploy a preview Worker', () => {
   assert.deepEqual(plan.specs, [])
 })
 
+test('staging-review auth changes do not enter ordinary preview coverage', () => {
+  const plan = selectPreviewE2e(['tests/e2e/staging-review-auth.spec.ts'], allSpecs)
+
+  assert.equal(plan.runPreview, false)
+  assert.equal(plan.scope, 'none')
+  assert.deepEqual(plan.specs, [])
+  assert.equal(allSpecs.includes('tests/e2e/staging-review-auth.spec.ts'), false)
+})
+
 test('a Saya presentation change runs only the relevant public tenant specs', () => {
   const plan = selectPreviewE2e([
     'components/saya/SayaHeader.vue'

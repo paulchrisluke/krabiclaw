@@ -9,6 +9,8 @@ import {
   NON_RUNTIME_PATTERNS
 } from '../config/e2e-impact-map.mjs'
 
+const STAGING_ONLY_SPECS = new Set(['tests/e2e/staging-review-auth.spec.ts'])
+
 const normalize = value => value.replaceAll('\\', '/').replace(/^\.\//, '')
 const matchesAny = (file, patterns) => patterns.some(pattern => matchesGlob(file, pattern))
 
@@ -16,13 +18,14 @@ export function listE2eSpecs() {
   const directory = fileURLToPath(new URL('../tests/e2e/', import.meta.url))
   return readdirSync(directory)
     .filter(file => file.endsWith('.spec.ts'))
+    .filter(file => !STAGING_ONLY_SPECS.has(`tests/e2e/${file}`))
     .map(file => `tests/e2e/${file}`)
     .sort()
 }
 
 export function selectPreviewE2e(changedFiles, allSpecs = listE2eSpecs()) {
   const files = [...new Set(changedFiles.map(normalize).filter(Boolean))].sort()
-  const runtimeFiles = files.filter(file => !matchesAny(file, NON_RUNTIME_PATTERNS))
+  const runtimeFiles = files.filter(file => !matchesAny(file, NON_RUNTIME_PATTERNS) && !STAGING_ONLY_SPECS.has(file))
 
   if (runtimeFiles.length === 0) {
     return {

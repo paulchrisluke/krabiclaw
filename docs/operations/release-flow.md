@@ -34,8 +34,9 @@ E2E. Staging provisioning is limited to protected fixed IDs, refuses unexpected
 ownership, and records D1 time-travel information before applying the fixtures.
 Production is never seeded by CI. Pushes to staging retain the conditional
 OAuth/MCP smoke and core-plus-affected Playwright coverage against the stable
-staging Worker; the two-lane smoke on implementation PRs proves the isolated
-E2E host/resource contract before the four-lane release gate.
+staging Worker; the two-lane smoke on implementation PRs that require deployed
+coverage proves the isolated E2E host/resource contract before the four-lane
+release gate.
 
 The durable staging-review identity is `staging-review@staging.krabiclaw.test`.
 Its password is maintained in the team password manager and mirrored to the

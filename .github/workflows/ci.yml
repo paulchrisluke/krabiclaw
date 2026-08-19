@@ -174,8 +174,9 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
       && (
         (github.base_ref == 'main' && github.head_ref == 'staging')
-        || github.base_ref == 'staging'
+        || (github.base_ref == 'staging' && needs.e2e-plan.outputs.run_preview == 'true')
       )
+    needs: e2e-plan
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -200,9 +201,9 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
       && (
         (github.base_ref == 'main' && github.head_ref == 'staging')
-        || github.base_ref == 'staging'
+        || (github.base_ref == 'staging' && needs.e2e-plan.outputs.run_preview == 'true')
       )
-    needs: [typecheck, e2e-lane-plan]
+    needs: [typecheck, e2e-plan, e2e-lane-plan]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -230,7 +231,7 @@ jobs:
       && github.base_ref == 'main'
       && github.head_ref == 'staging'
       && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [typecheck, e2e-lane-plan, e2e-release-build]
+    needs: [typecheck, e2e-plan, e2e-lane-plan, e2e-release-build]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -239,6 +240,7 @@ jobs:
       matrix: ${{ fromJSON(needs.e2e-lane-plan.outputs.matrix) }}
     concurrency:
       group: release-qualification-e2e-${{ matrix.lane }}
+      queue: max
       cancel-in-progress: false
     environment: ${{ matrix.lane }}
     env:
@@ -359,7 +361,8 @@ jobs:
       github.event_name == 'pull_request'
       && github.base_ref == 'staging'
       && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [typecheck, e2e-lane-plan, e2e-release-build]
+      && needs.e2e-plan.outputs.run_preview == 'true'
+    needs: [typecheck, e2e-plan, e2e-lane-plan, e2e-release-build]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -367,6 +370,7 @@ jobs:
       matrix: ${{ fromJSON(needs.e2e-lane-plan.outputs.matrix) }}
     concurrency:
       group: release-qualification-e2e-${{ matrix.lane }}
+      queue: max
       cancel-in-progress: false
     environment: ${{ matrix.lane }}
     env:

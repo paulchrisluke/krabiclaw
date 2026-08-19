@@ -75,6 +75,8 @@ test('one CI workflow owns preview, staging, release-lane, and production lifecy
   assert.ok(jobs['deploy-staging'])
   assert.match(jobs['deploy-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
   assert.match(jobs['e2e-lane-plan']?.if || '', /github\.base_ref == 'main'/)
+  assert.match(jobs['e2e-lane-plan']?.if || '', /needs\.e2e-plan\.outputs\.run_preview == 'true'/)
+  assert.match(jobs['e2e-release-build']?.if || '', /needs\.e2e-plan\.outputs\.run_preview == 'true'/)
   assert.match(jobs['e2e-release-qualification']?.if || '', /github\.head_ref == 'staging'/)
   assert.match(jobs['e2e-lane-smoke']?.if || '', /github\.base_ref == 'staging'/)
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
@@ -145,6 +147,9 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.ok(stepIndex(jobs['deploy-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['deploy-staging']!, 'Provision staging E2E auth fixtures'))
   assert.equal(stepRun(jobs['deploy-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
   assert.equal(stepRun(jobs['deploy-staging']!, 'Run affected staging browser coverage'), 'yarn test:e2e:preview:selected')
+  const playwrightConfig = await repoFile('playwright.config.ts')
+  assert.match(playwrightConfig, /PLAYWRIGHT_STAGING_REVIEW/)
+  assert.match(playwrightConfig, /PLAYWRIGHT_LANE_SMOKE/)
 
   const productionMigrations = stepRun(jobs['deploy-production']!, 'Apply production migrations')
   assert.equal(productionMigrations, 'npx wrangler d1 migrations apply DB --remote')

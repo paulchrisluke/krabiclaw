@@ -5,6 +5,8 @@ const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 const port = 3000
 const baseURL = previewUrl || 'http://localhost:3000'
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
+const laneSmokeEnabled = process.env.PLAYWRIGHT_LANE_SMOKE === 'true'
+const stagingReviewEnabled = process.env.PLAYWRIGHT_STAGING_REVIEW === 'true'
 const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
 const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
 
@@ -54,12 +56,17 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: '**/release-lane-smoke.spec.ts',
+      testIgnore: ['**/release-lane-smoke.spec.ts', '**/staging-review-auth.spec.ts'],
       use: { ...devices['Desktop Chrome'] }
     },
     {
       name: 'lane-smoke',
-      testMatch: '**/release-lane-smoke.spec.ts',
+      testMatch: laneSmokeEnabled ? '**/release-lane-smoke.spec.ts' : '**/release-lane-smoke.disabled.spec.ts',
+      use: { ...devices['Desktop Chrome'] }
+    },
+    {
+      name: 'staging-review',
+      testMatch: stagingReviewEnabled ? '**/staging-review-auth.spec.ts' : '**/staging-review-auth.disabled.spec.ts',
       use: { ...devices['Desktop Chrome'] }
     }
   ]

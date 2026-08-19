@@ -81,6 +81,7 @@ assert(workflow.includes('fromJSON(needs.e2e-lane-plan.outputs.matrix)'), 'Relea
 assert(workflow.includes('--shard=${{ matrix.shard }}/${{ matrix.total }}'), 'Release qualification must use Playwright sharding')
 assert(workflow.includes('--workers=1'), 'Each E2E shard must run one Playwright worker')
 assert(workflow.includes('release-qualification-e2e-${{ matrix.lane }}'), 'Each E2E lane must have a lane-specific concurrency lock')
+assert(workflow.includes('queue: max'), 'E2E lane concurrency must retain queued required checks')
 assert(workflow.includes('e2e-lane-smoke'), 'Pull requests to staging must run the two-lane E2E smoke')
 assert(!authFixtures.includes('user-staging-review'), 'Durable staging-review identity must not be an E2E fixture')
 assert(resetScript.includes("'user-staging-review'"), 'E2E artifact reset must explicitly protect the staging-review identity')
