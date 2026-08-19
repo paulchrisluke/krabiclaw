@@ -60,7 +60,7 @@
     "db:generate": "drizzle-kit generate",
     "seed:demo:generate": "node --experimental-strip-types scripts/generate-demo-seed.ts --stdout > /dev/null && node --experimental-strip-types scripts/generate-demo-bundle.ts",
     "seed:demo:preview": "node --experimental-strip-types scripts/generate-demo-seed.ts --preview",
-    "seed:local": "node --experimental-strip-types scripts/generate-demo-seed.ts && node --experimental-strip-types scripts/generate-pottery-house-seed.ts && node --experimental-strip-types scripts/generate-kikuzuki-seed.ts && node --experimental-strip-types scripts/generate-blawby-ci-seed.ts --local",
+    "seed:local": "node --experimental-strip-types scripts/generate-demo-seed.ts && node --experimental-strip-types scripts/generate-pottery-house-seed.ts && node --experimental-strip-types scripts/generate-kikuzuki-seed.ts && node --experimental-strip-types scripts/generate-ncls-seed.ts",
     "seed:pottery:generate": "node --experimental-strip-types scripts/generate-pottery-house-seed.ts --stdout > /dev/null",
     "seed:pottery:preview": "node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview",
     "seed:pottery-local": "node --experimental-strip-types scripts/generate-pottery-house-seed.ts",

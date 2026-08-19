@@ -23,7 +23,7 @@ seed-definitions/kikuzuki.ts      ← source of truth
 ↓ yarn seed:kikuzuki               generate → /tmp/kikuzuki.sql → wrangler d1 execute → discard
 ```
 
-A maintained SQL seed file is a half-truth: it looks authoritative but isn't. The typed TS definition is. Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: generate SQL to `/tmp`, apply it with wrangler, and discard it immediately. `seeds/*.sql` is no longer a source-of-truth path for curated tenants.
+A maintained SQL seed file is a half-truth: it looks authoritative but isn't. The typed TS definition is. Demo, Pottery House, Kikuzuki, and NCLS all follow the same ephemeral model: generate SQL to `/tmp`, apply it with wrangler, and discard it immediately. `seeds/*.sql` is no longer a source-of-truth path for curated tenants.
 
 No new tenant is introduced via a hand-authored SQL file. Ever.
 
@@ -82,8 +82,9 @@ Schema DDL only: `CREATE TABLE`, `ALTER TABLE`, index definitions. Applied autom
 | Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | local / PR preview  | ✓               |
 | Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | local / PR preview  | ✓               |
 | Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | local / PR preview  | ✓               |
+| NCLS          | `seed-definitions/ncls.ts`          | `generate-ncls-seed.ts`          | local / preview / staging | ✓          |
 
-All three tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.
+All four tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.
 
 ### Kikuzuki media
 
@@ -114,8 +115,8 @@ truth in CI — not committed SQL or a push-triggered shared-staging loop.
 
 | Trigger           | Environment  | What runs                                                                      |
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
-| PR opened/updated | `preview`    | generate demo + pottery house → apply SQL; generate kikuzuki → apply ephemeral |
-| Push to `staging` | `staging` | migrations and E2E artifact sweep; persistent fixtures are not reseeded |
+| PR opened/updated | `preview`    | generate and apply all four typed fixtures                                    |
+| Push to `staging` | `staging`    | migrate, sweep E2E artifacts, then generate and apply all four typed fixtures  |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
 Scripts:
@@ -143,33 +144,9 @@ Approved import replay (`client:replay`) is the standard path for re-seeding any
 
 ---
 
-## Tenant transfer: curated fixture → real client
-
-Kikuzuki and Pottery House currently live on the curated-fixture path (typed `seed-definitions/*.ts` + ephemeral generator + CI reseed), but both are real businesses and the eventual goal is to hand them off as independent client-owned sites. This is the runbook for that handoff — it does not exist yet for either tenant, so do this when the actual transfer happens, not before.
-
-### Why this matters
-
-Curated tenant seeds support local and preview databases only. Production and
-staging deployment jobs never seed curated client data. `business_locations`,
-`media_assets`, `menus`, `sites`, and `site_domains` use `INSERT OR REPLACE` in
-the generated SQL, so applying those fixtures to a client environment would
-silently clobber client edits.
-
-Preview seeding targets `krabiclaw-db-preview`, which is separate from production. Staging fixtures persist across deploys; only throwaway `e2e-` artifacts are swept before the staging suite.
-
-### Steps to take at transfer time
-
-1. **Pull the tenant out of CI seeding.** Delete its preview seed line from `.github/workflows/ci.yml`. Continuing to reseed preview with a fixture that no longer reflects the live site's real state is misleading, not just unnecessary.
-2. **Replace its E2E coverage.** Either retire the assertions that depended on the seeded fixture, point them at the pinned read-only production telemetry lane, or stand up a fresh synthetic tenant to cover the feature being tested (e.g. the second-location flow) without depending on a tenant that now has real client edits.
-3. **Delete the fixture generator after handoff.** Git retains its history;
-   inactive executable copies do not stay in the active repository.
-4. **Treat the tenant like any other client from this point on.** Future changes flow only through the dashboard/MCP/API. If you ever need to bulk-restore or clone its state, build a `client:import` manifest from the live site and use `client:replay` — never resurrect the old typed fixture.
-
----
-
 ## Guardrails
 
-Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed fixture -> generated SQL in `/tmp` -> `wrangler d1 execute` -> discard.
+Demo, Pottery House, Kikuzuki, and NCLS follow the same ephemeral model: typed fixture -> generated SQL in `/tmp` -> `wrangler d1 execute` -> discard.
 
 - `seeds/*.sql` is gitignored and should stay empty for curated tenant seeds
 - `lint-seeds.mjs` fails CI if a new `seeds/*.sql` appears that is not a declared generated output
