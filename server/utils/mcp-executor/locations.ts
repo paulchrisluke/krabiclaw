@@ -3,9 +3,8 @@ import { copyLocationBatch, type CopyEntityType } from '~/server/utils/copy-past
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createLocation, deleteLocation, syncLocationWhatsAppAccess, updateLocation, type LocationRecord } from '~/server/utils/location-management'
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
-import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requiredString, requiredStringArray, workspaceContextPayload, workspaceLocationsPayload } from './shared'
+import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requiredString, requiredStringArray, workspaceLocationsPayload } from './shared'
 import { queryFirst } from '~/server/db'
 
 // MCP's create_location/update_location tools write notification_phone
@@ -61,11 +60,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
     case "get_location":
       {
         const locationId = requiredString(args, "location_id");
-        const workspace = await resolveMcpWorkspace(
-          site.db,
-          site.userId,
-          { siteId: site.siteId, locationId },
-        );
         return {
           location: await getLocationForMcp(
           site.db,
@@ -73,7 +67,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           site.siteId,
             locationId,
           ),
-          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location, site.env),
+          context: await mutationContextPayload(site, { locationId }),
         };
       }
     case "create_location": {

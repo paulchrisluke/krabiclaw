@@ -354,8 +354,9 @@ export async function requireMcpSite(
   event: H3Event,
   siteId: string,
   minimumRole: McpToolRole = 'editor',
+  authenticatedUser?: McpUserContext,
 ): Promise<McpSiteContext> {
-  const user = await requireMcpUser(event)
+  const user = authenticatedUser ?? await requireMcpUser(event)
 
   type MemberSiteRow = { id: string; organization_id: string; role: string; member_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }
   const memberSiteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>

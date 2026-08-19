@@ -294,8 +294,8 @@ test.describe('Blawby NCLS public site', () => {
   test('blog taxonomy filter changes the visible article set', async ({ page }) => {
     await page.goto(`${blawbyBaseURL}/blog`, { waitUntil: 'load' })
     await waitForHydration(page)
-    await page.getByRole('button', { name: 'Divorce', exact: true }).click()
-    await expect(page.locator('[data-parity-section="articles"]').getByRole('link')).toHaveCount(2)
+    await page.getByRole('button', { name: 'Family Law & Divorce', exact: true }).click()
+    await expect(page.locator('[data-parity-section="articles"]').getByRole('link')).toHaveCount(5)
   })
 
   test('professional contact requires explicit consent', async ({ request }) => {

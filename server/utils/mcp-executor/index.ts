@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { getMcpTool } from '~/server/utils/mcp-tools'
-import { requireMcpSite, requireMcpUser } from '~/server/utils/mcp-auth'
+import { requireMcpSite, requireMcpUser, type McpUserContext } from '~/server/utils/mcp-auth'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -72,6 +72,7 @@ export async function executeMcpToolCall(
   event: H3Event,
   toolName: string,
   rawArguments: Record<string, unknown>,
+  authenticatedUser?: McpUserContext,
 ) {
   const tool = getMcpTool(toolName);
   if (!tool) {
@@ -90,12 +91,13 @@ export async function executeMcpToolCall(
     toolName,
     tool.inputSchema,
     rawArguments,
+    authenticatedUser,
   );
 
   validateRequiredArguments(tool.inputSchema, normalizedArguments);
 
   if (toolName === "list_sites") {
-    const user = await requireMcpUser(event);
+    const user = authenticatedUser ?? await requireMcpUser(event);
     const userRecord = await queryFirst<{
       id: string;
       email: string | null;
@@ -142,7 +144,7 @@ export async function executeMcpToolCall(
   }
 
   if (toolName === "get_current_user") {
-    const user = await requireMcpUser(event);
+    const user = authenticatedUser ?? await requireMcpUser(event);
     const currentUser = await queryFirst<{
       id: string;
       email: string | null;
@@ -175,7 +177,7 @@ export async function executeMcpToolCall(
   }
 
   if (toolName === "get_workspace_context") {
-    const user = await requireMcpUser(event);
+    const user = authenticatedUser ?? await requireMcpUser(event);
     const workspace = await resolveMcpWorkspace(
       user.db,
       user.userId,
@@ -190,7 +192,7 @@ export async function executeMcpToolCall(
   }
 
   if (toolName === "set_workspace_context") {
-    const user = await requireMcpUser(event);
+    const user = authenticatedUser ?? await requireMcpUser(event);
     const organizationId = optionalString(normalizedArguments, "organization_id");
     const siteId = optionalString(normalizedArguments, "site_id");
     const locationId = optionalString(normalizedArguments, "location_id");
@@ -242,7 +244,7 @@ export async function executeMcpToolCall(
   }
 
   if (toolName === "import_from_maps") {
-    const user = await requireMcpUser(event);
+    const user = authenticatedUser ?? await requireMcpUser(event);
     const apiKey = (user.env as Record<string, unknown>)
       .GOOGLE_PLACES_API_KEY as string | undefined;
     if (!apiKey)
@@ -341,7 +343,7 @@ export async function executeMcpToolCall(
   }
 
   if (toolName === "show_generated_images") {
-    await requireMcpUser(event);
+    if (!authenticatedUser) await requireMcpUser(event);
     const raw = objectArray(normalizedArguments.images, "images");
     if (raw.length === 0) {
       throw mcpProtocolError(
@@ -372,7 +374,7 @@ export async function executeMcpToolCall(
     const rawSiteId = optionalString(normalizedArguments, "site_id");
     const rawTargetForName = optionalString(normalizedArguments, "target");
     if (rawTargetForName && rawSiteId) {
-      activeSiteContext = await requireMcpSite(event, rawSiteId, "editor");
+      activeSiteContext = await requireMcpSite(event, rawSiteId, "editor", authenticatedUser);
       const siteRow = await queryFirst<{ brand_name: string | null; subdomain: string | null }>(
         activeSiteContext.db,
         `
@@ -433,7 +435,7 @@ export async function executeMcpToolCall(
   }
 
   if (toolName === "create_site") {
-    const user = await requireMcpUser(event);
+    const user = authenticatedUser ?? await requireMcpUser(event);
     const result = await runSiteCreation(user.env, user.db, user.userId, {
       name: requiredString(normalizedArguments, "name"),
       subdomain: requiredString(normalizedArguments, "subdomain"),
@@ -456,33 +458,19 @@ export async function executeMcpToolCall(
   }
 
   const siteId = requiredString(normalizedArguments, "site_id");
-  const site = await requireMcpSite(event, siteId, tool.minimumRole);
+  const site = await requireMcpSite(event, siteId, tool.minimumRole, authenticatedUser);
   const args = omit(normalizedArguments, ["site_id"]);
-  const explicitSiteId = optionalString(rawArguments, "site_id");
   const explicitLocationId = optionalString(rawArguments, "location_id");
-
-  if (explicitSiteId || explicitLocationId) {
-    let workspace;
-    try {
-      workspace = await resolveMcpWorkspace(
-        site.db,
-        site.userId,
-        {
-          siteId: site.siteId,
-          locationId: explicitLocationId,
-          requireSite: true,
-          requireLocation: Boolean(explicitLocationId),
-        },
-      );
-    } catch (error) {
-      rethrowWorkspaceError(error);
+  if (explicitLocationId) {
+    const location = await queryFirst<{ id: string }>(site.db, `
+      SELECT id
+      FROM business_locations
+      WHERE id = ? AND organization_id = ? AND site_id = ?
+      LIMIT 1
+    `, [explicitLocationId, site.organizationId, site.siteId]);
+    if (!location) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, "Location not found for this site.");
     }
-    await upsertMcpWorkspacePreference(site.db, {
-      userId: site.userId,
-      organizationId: workspace.site?.organization_id ?? site.organizationId,
-      siteId: workspace.site?.id ?? site.siteId,
-      locationId: workspace.location?.id ?? null,
-    });
   }
 
   if (
