@@ -33,6 +33,15 @@ test('staging-review auth changes do not enter ordinary preview coverage', () =>
   assert.equal(allSpecs.includes('tests/e2e/staging-review-auth.spec.ts'), false)
 })
 
+test('lane smoke changes run through the dedicated project rather than Chromium selection', () => {
+  const plan = selectPreviewE2e(['tests/e2e/release-lane-smoke.spec.ts'], allSpecs)
+
+  assert.equal(plan.runPreview, true)
+  assert.equal(plan.scope, 'full')
+  assert.equal(plan.specs.includes('tests/e2e/release-lane-smoke.spec.ts'), false)
+  assert.equal(allSpecs.includes('tests/e2e/release-lane-smoke.spec.ts'), false)
+})
+
 test('a Saya presentation change runs only the relevant public tenant specs', () => {
   const plan = selectPreviewE2e([
     'components/saya/SayaHeader.vue'

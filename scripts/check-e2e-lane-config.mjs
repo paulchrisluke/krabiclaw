@@ -38,6 +38,7 @@ const generated = wrangler.slice(generatedStart, generatedEnd)
 for (const lane of lanes) {
   assert(/^e2e-[1-4]$/.test(lane.name), `Unexpected E2E lane name: ${lane.name}`)
   assert(lane.hostname === `${lane.name}.krabiclaw.com`, `Unexpected hostname for ${lane.name}`)
+  assert(/^[a-z0-9](?:[a-z0-9-]{0,26}[a-z0-9])?$/.test(lane.searchInstanceId), `AI Search namespace for ${lane.name} must be 1-28 lowercase alphanumeric or hyphen characters`)
   assert(!wrangler.includes(`[env.${lane.name}]`), `Lane ${lane.name} must use a quoted Wrangler environment key`)
   assert(wrangler.includes(`[env."${lane.name}"]`), `Missing Wrangler environment ${lane.name}`)
   for (const required of [

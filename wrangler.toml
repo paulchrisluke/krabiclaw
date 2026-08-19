@@ -1,7 +1,7 @@
 name = "krabiclaw"
 main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
-compatibility_flags = ["nodejs_compat_v2", "global_fetch_strictly_public"]
+compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env", "global_fetch_strictly_public"]
 
 [placement]
 mode = "smart"
@@ -338,8 +338,8 @@ NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-1"
 NUXT_PUBLIC_SITE_URL = "https://e2e-1.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://e2e-1.krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
-AI_SEARCH_NAMESPACE = "krabiclaw-platform-knowledge-e2e-1"
-AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-1"
+AI_SEARCH_NAMESPACE = "krabiclaw-e2e-search-1"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-e2e-search-1"
 GA4_MEASUREMENT_ID = ""
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
@@ -390,7 +390,7 @@ remote = true
 
 [[env."e2e-1".ai_search_namespaces]]
 binding = "AI_SEARCH"
-namespace = "krabiclaw-platform-knowledge-e2e-1"
+namespace = "krabiclaw-e2e-search-1"
 remote = true
 
 [env."e2e-1".observability]
@@ -412,8 +412,8 @@ NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-2"
 NUXT_PUBLIC_SITE_URL = "https://e2e-2.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://e2e-2.krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
-AI_SEARCH_NAMESPACE = "krabiclaw-platform-knowledge-e2e-2"
-AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-2"
+AI_SEARCH_NAMESPACE = "krabiclaw-e2e-search-2"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-e2e-search-2"
 GA4_MEASUREMENT_ID = ""
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
@@ -464,7 +464,7 @@ remote = true
 
 [[env."e2e-2".ai_search_namespaces]]
 binding = "AI_SEARCH"
-namespace = "krabiclaw-platform-knowledge-e2e-2"
+namespace = "krabiclaw-e2e-search-2"
 remote = true
 
 [env."e2e-2".observability]
@@ -486,8 +486,8 @@ NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-3"
 NUXT_PUBLIC_SITE_URL = "https://e2e-3.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://e2e-3.krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
-AI_SEARCH_NAMESPACE = "krabiclaw-platform-knowledge-e2e-3"
-AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-3"
+AI_SEARCH_NAMESPACE = "krabiclaw-e2e-search-3"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-e2e-search-3"
 GA4_MEASUREMENT_ID = ""
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
@@ -538,7 +538,7 @@ remote = true
 
 [[env."e2e-3".ai_search_namespaces]]
 binding = "AI_SEARCH"
-namespace = "krabiclaw-platform-knowledge-e2e-3"
+namespace = "krabiclaw-e2e-search-3"
 remote = true
 
 [env."e2e-3".observability]
@@ -560,8 +560,8 @@ NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-4"
 NUXT_PUBLIC_SITE_URL = "https://e2e-4.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://e2e-4.krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
-AI_SEARCH_NAMESPACE = "krabiclaw-platform-knowledge-e2e-4"
-AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-4"
+AI_SEARCH_NAMESPACE = "krabiclaw-e2e-search-4"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-e2e-search-4"
 GA4_MEASUREMENT_ID = ""
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
@@ -612,7 +612,7 @@ remote = true
 
 [[env."e2e-4".ai_search_namespaces]]
 binding = "AI_SEARCH"
-namespace = "krabiclaw-platform-knowledge-e2e-4"
+namespace = "krabiclaw-e2e-search-4"
 remote = true
 
 [env."e2e-4".observability]

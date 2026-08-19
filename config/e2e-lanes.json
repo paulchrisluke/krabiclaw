@@ -8,7 +8,7 @@
     "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-1-dlq",
     "bucketName": "krabiclaw-media-e2e-1",
     "kvNamespaceId": "aeff0c0382b04c96ba6e65d8a01342a1",
-    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-1"
+    "searchInstanceId": "krabiclaw-e2e-search-1"
   },
   {
     "name": "e2e-2",
@@ -19,7 +19,7 @@
     "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-2-dlq",
     "bucketName": "krabiclaw-media-e2e-2",
     "kvNamespaceId": "9599b7a8e0f845acaa0fc387a462b2ce",
-    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-2"
+    "searchInstanceId": "krabiclaw-e2e-search-2"
   },
   {
     "name": "e2e-3",
@@ -30,7 +30,7 @@
     "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-3-dlq",
     "bucketName": "krabiclaw-media-e2e-3",
     "kvNamespaceId": "7150b86da6d244e39dee78dcaac04e41",
-    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-3"
+    "searchInstanceId": "krabiclaw-e2e-search-3"
   },
   {
     "name": "e2e-4",
@@ -41,6 +41,6 @@
     "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-4-dlq",
     "bucketName": "krabiclaw-media-e2e-4",
     "kvNamespaceId": "920e73cbfe8c4da288c72349343acd06",
-    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-4"
+    "searchInstanceId": "krabiclaw-e2e-search-4"
   }
 ]

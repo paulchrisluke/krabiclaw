@@ -1,10 +1,26 @@
 import { expect, test } from '@playwright/test'
 import { devLoginHeaders, potteryHouseTestBaseUrl } from './test-env'
 
-test('lane-local dev routes and tenant aliases resolve against the lane resources', async ({ request, baseURL }) => {
+test('lane-local runtime config, dev routes, and tenant aliases resolve against the lane resources', async ({ page, request, baseURL }) => {
   const platformUrl = new URL(baseURL!)
   const lane = platformUrl.hostname.split('.')[0]
   expect(lane).toMatch(/^e2e-[1-4]$/)
+
+  const platformResponse = await page.goto(baseURL!)
+  expect(platformResponse?.status()).toBeLessThan(400)
+  const runtimeConfig = await page.evaluate(() => {
+    const nuxt = (window as typeof window & {
+      __NUXT__?: { config?: { public?: Record<string, unknown> } }
+    }).__NUXT__
+    return nuxt?.config?.public
+  })
+  expect(runtimeConfig).toMatchObject({
+    platformDomain: platformUrl.origin,
+    freeSiteDomain: 'https://krabiclaw.com',
+    appName: `KrabiClaw ${lane}`,
+    siteUrl: platformUrl.origin,
+    helpUrl: `${platformUrl.origin}/help`,
+  })
 
   const billingState = await request.get(
     `${baseURL}/api/dev/billing-state?organization_id=org-pottery-house`,

@@ -122,6 +122,7 @@ test('each environment uses one normal Worker deploy before contract migrations 
   const release = jobs['e2e-release-qualification']!
   assert.equal(release.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
   assert.equal(release.concurrency?.queue, 'max')
+  assert.equal(release.env?.STRIPE_WEBHOOK_SECRET, undefined)
   assert.equal(release.strategy?.['max-parallel'], 4)
   assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.run, 'npx wrangler deploy --env "${{ matrix.lane }}" --strict')
   assert.equal(release.steps?.find(step => step.name === 'Apply lane migrations')?.run, 'npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote')
@@ -132,11 +133,21 @@ test('each environment uses one normal Worker deploy before contract migrations 
   const smoke = jobs['e2e-lane-smoke']!
   assert.equal(smoke.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
   assert.equal(smoke.concurrency?.queue, 'max')
+  assert.equal(smoke.env?.STRIPE_WEBHOOK_SECRET, undefined)
   assert.equal(
     smoke.steps?.find(step => step.name === 'Run isolated lane smoke')?.run,
     'yarn test:e2e:lane-smoke',
   )
   assert.ok(stepIndex(smoke, 'Deploy exact Worker artifact') < stepIndex(smoke, 'Run isolated lane smoke'))
+
+  for (const laneJob of [release, smoke]) {
+    assert.match(stepRun(laneJob, 'Generate ephemeral E2E credentials'), /STRIPE_WEBHOOK_SECRET=\$stripe_webhook_secret/)
+    assert.match(stepRun(laneJob, 'Sync isolated lane secrets'), /put_secret STRIPE_WEBHOOK_SECRET "\$STRIPE_WEBHOOK_SECRET"/)
+    assert.equal(
+      laneJob.steps?.find(step => step.name === 'Sync isolated lane secrets')?.env?.STRIPE_WEBHOOK_SECRET_VALUE,
+      undefined,
+    )
+  }
 
   assert.deepEqual(jobs['deploy-staging']?.needs, ['typecheck', 'e2e-plan'])
   assert.equal(jobs['deploy-staging']?.environment, 'staging')
@@ -201,11 +212,11 @@ test('Cloudflare credentials stay scoped to mutation steps', async () => {
   }
 })
 
-test('Worker egress uses Cloudflare strict-public fetch for CIMD resolution', async () => {
+test('Worker runtime injects bindings into Nitro and uses strict-public fetch for CIMD resolution', async () => {
   const wrangler = await repoFile('wrangler.toml')
   assert.match(
     wrangler,
-    /^compatibility_flags = \["nodejs_compat_v2", "global_fetch_strictly_public"\]$/m,
+    /^compatibility_flags = \["nodejs_compat", "nodejs_compat_populate_process_env", "global_fetch_strictly_public"\]$/m,
   )
 })
 

@@ -9,6 +9,10 @@ import {
   NON_RUNTIME_PATTERNS
 } from '../config/e2e-impact-map.mjs'
 
+const ORDINARY_PROJECT_EXCLUDED_SPECS = new Set([
+  'tests/e2e/release-lane-smoke.spec.ts',
+  'tests/e2e/staging-review-auth.spec.ts'
+])
 const STAGING_ONLY_SPECS = new Set(['tests/e2e/staging-review-auth.spec.ts'])
 
 const normalize = value => value.replaceAll('\\', '/').replace(/^\.\//, '')
@@ -18,7 +22,7 @@ export function listE2eSpecs() {
   const directory = fileURLToPath(new URL('../tests/e2e/', import.meta.url))
   return readdirSync(directory)
     .filter(file => file.endsWith('.spec.ts'))
-    .filter(file => !STAGING_ONLY_SPECS.has(`tests/e2e/${file}`))
+    .filter(file => !ORDINARY_PROJECT_EXCLUDED_SPECS.has(`tests/e2e/${file}`))
     .map(file => `tests/e2e/${file}`)
     .sort()
 }
