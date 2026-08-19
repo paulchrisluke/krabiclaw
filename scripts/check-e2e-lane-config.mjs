@@ -41,6 +41,7 @@ for (const lane of lanes) {
     `bucket_name = "${lane.bucketName}"`,
     `id = "${lane.kvNamespaceId}"`,
     `AI_SEARCH_INSTANCE_ID = "${lane.searchInstanceId}"`,
+    `*-${lane.name}.krabiclaw.com/*`,
     'crons = []',
   ]) assert(wrangler.includes(required), `Missing ${required} for ${lane.name}`)
 }
@@ -75,7 +76,8 @@ for (const forbiddenLine of [
 assert(workflow.includes('fromJSON(needs.e2e-lane-plan.outputs.matrix)'), 'Release qualification must use the canonical lane matrix')
 assert(workflow.includes('--shard=${{ matrix.shard }}/${{ matrix.total }}'), 'Release qualification must use Playwright sharding')
 assert(workflow.includes('--workers=1'), 'Each E2E shard must run one Playwright worker')
-assert(workflow.includes('release-qualification-e2e-lanes'), 'E2E lane pool must have a shared concurrency lock')
+assert(workflow.includes('release-qualification-e2e-${{ matrix.lane }}'), 'Each E2E lane must have a lane-specific concurrency lock')
+assert(workflow.includes('e2e-lane-smoke'), 'Pull requests to staging must run the two-lane E2E smoke')
 assert(!authFixtures.includes('user-staging-review'), 'Durable staging-review identity must not be an E2E fixture')
 assert(resetScript.includes("'user-staging-review'"), 'E2E artifact reset must explicitly protect the staging-review identity')
 assert(reviewProvisioner.includes("process.argv.includes('--staging')"), 'Staging-review provisioning must require --staging')

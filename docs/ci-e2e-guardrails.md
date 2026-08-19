@@ -9,12 +9,18 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   Pages lifecycle, and authenticated inbox hydration. The executable impact map
   adds the Playwright specs affected by the PR diff.
 - A push to `staging` deploys the stable staging Worker normally, applies
-  migrations, provisions deterministic review fixtures, and restores the durable
-  staging-review identity. It does not reset the human-review database for E2E.
+  migrations, provisions deterministic review fixtures, restores the durable
+  staging-review identity idempotently, runs the conditional OAuth/MCP smoke,
+  and runs core plus affected browser coverage. It does not reset the
+  human-review database for E2E.
 - The ordinary `staging` to `main` pull request builds its exact head once and
   fans the same artifact out to four isolated deployed Workers. Each lane runs
   one Playwright shard with `workers=1`; all four shards are required before
   production promotion.
+- Pull requests to `staging` build the exact Worker once and run a real smoke
+  against `e2e-1` and `e2e-2` concurrently. This exercises lane-local host
+  aliases, `/api/dev` access, migrations, fixtures, auth, search, and D1 state
+  before the four-shard release gate.
 - A push to `main` deploys production normally, applies migrations, and then
   runs read-only public browser smoke. There is no scheduled release lane.
 

@@ -4,6 +4,7 @@ import {
   deriveSubdomain,
   environmentTenantAliasHostname,
   environmentTenantAliasSlug,
+  isEnvironmentPlatformHost,
   getFreeSiteDomain,
   getPlatformHtmlCacheHosts,
   getPlatformHosts,
@@ -28,6 +29,11 @@ const localEnv: TenantHostEnv = {
 const stagingEnv: TenantHostEnv = {
   NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com',
   NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://staging.krabiclaw.com',
+}
+
+const e2eEnv: TenantHostEnv = {
+  NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com',
+  NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://e2e-2.krabiclaw.com',
 }
 
 const portedCustomEnv: TenantHostEnv = {
@@ -139,6 +145,9 @@ test('preview contexts include platform hosts, direct tenant aliases, and raw sh
   assert.equal(isPreviewContext('demo.local.krabiclaw.com'), false)
   assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
   assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('e2e-1.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('e2e-4.krabiclaw.com:443'), true)
+  assert.equal(isEnvironmentPlatformHost('e2e-2.krabiclaw.com'), true)
   assert.equal(isPreviewContext('pottery-house-preview.krabiclaw.com'), true)
   assert.equal(isPreviewContext('pottery-house-staging.krabiclaw.com'), true)
   assert.equal(isPreviewContext('preview.customer.com'), false)
@@ -155,7 +164,7 @@ test('tenant headers are confined to local and raw workers.dev shared hosts', ()
   assert.equal(usesTenantHeader('pottery-house-staging.krabiclaw.com'), false)
 })
 
-test('environment tenant aliases use first-level preview and staging hostnames', () => {
+test('environment tenant aliases use first-level preview, staging, and E2E hostnames', () => {
   assert.equal(
     environmentTenantAliasHostname('staging.krabiclaw.com', 'pottery-house'),
     'pottery-house-staging.krabiclaw.com',
@@ -164,11 +173,19 @@ test('environment tenant aliases use first-level preview and staging hostnames',
     environmentTenantAliasHostname('preview.krabiclaw.com', 'ncls'),
     'ncls-preview.krabiclaw.com',
   )
+  assert.equal(
+    environmentTenantAliasHostname('e2e-2.krabiclaw.com', 'pottery-house'),
+    'pottery-house-e2e-2.krabiclaw.com',
+  )
   assert.equal(environmentTenantAliasHostname('krabiclaw.com', 'ncls'), '')
   assert.equal(environmentTenantAliasHostname('staging.krabiclaw.com', '../ncls'), '')
 
   assert.equal(
     environmentTenantAliasSlug('pottery-house-staging.krabiclaw.com', stagingEnv),
+    'pottery-house',
+  )
+  assert.equal(
+    environmentTenantAliasSlug('pottery-house-e2e-2.krabiclaw.com', e2eEnv),
     'pottery-house',
   )
   assert.equal(environmentTenantAliasSlug('staging.krabiclaw.com', stagingEnv), '')

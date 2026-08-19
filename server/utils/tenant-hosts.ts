@@ -11,8 +11,9 @@ const PAGES_DEV_HOST = 'krabiclaw.pages.dev'
 
 // CI runs Playwright against the one preview Worker's canonical workers.dev host.
 const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
-const ENVIRONMENT_PLATFORM_HOST_PATTERN = /^(preview|staging)\.(.+)$/
-const ENVIRONMENT_TENANT_ALIAS_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?-(?:preview|staging)\.krabiclaw\.com$/
+const ENVIRONMENT_PLATFORM_HOST_PATTERN = /^(preview|staging|e2e-[1-4])\.krabiclaw\.com$/
+const ENVIRONMENT_HOST_PATTERN = /^(preview|staging|e2e-[1-4])\.(.+)$/
+const ENVIRONMENT_TENANT_ALIAS_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?-(?:preview|staging|e2e-[1-4])\.krabiclaw\.com$/
 const TENANT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
 // Strip protocol, path, and port so config values (which may be
@@ -66,9 +67,15 @@ export function isEnvironmentTenantAliasHost(host: string): boolean {
   )
 }
 
+export function isEnvironmentPlatformHost(host: string): boolean {
+  return ENVIRONMENT_PLATFORM_HOST_PATTERN.test(
+    hostnameOf(host).toLowerCase().replace(/\.$/, ''),
+  )
+}
+
 export function environmentTenantAliasHostname(platformHost: string, tenantSlug: string): string {
   const hostname = hostnameOf(platformHost).toLowerCase().replace(/\.$/, '')
-  const match = hostname.match(ENVIRONMENT_PLATFORM_HOST_PATTERN)
+  const match = hostname.match(ENVIRONMENT_HOST_PATTERN)
   if (!match || !TENANT_SLUG_PATTERN.test(tenantSlug)) return ''
 
   const [, environment, rootDomain] = match
@@ -79,7 +86,7 @@ export function environmentTenantAliasHostname(platformHost: string, tenantSlug:
 export function environmentTenantAliasSlug(host: string, env: TenantHostEnv): string {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
   const platformHost = normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN).toLowerCase()
-  const match = platformHost.match(ENVIRONMENT_PLATFORM_HOST_PATTERN)
+  const match = platformHost.match(ENVIRONMENT_HOST_PATTERN)
   if (!match) return ''
 
   const [, environment, rootDomain] = match
@@ -92,8 +99,8 @@ export function environmentTenantAliasSlug(host: string, env: TenantHostEnv): st
 }
 
 // Only hosts that cannot express tenant identity in their hostname use the
-// test-only x-preview-tenant header. Deployed preview and staging use direct
-// first-level tenant aliases instead.
+// test-only x-preview-tenant header. Deployed preview, staging, and E2E lanes
+// use direct first-level tenant aliases instead.
 export function usesTenantHeader(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
   if (hostname === 'localhost' || hostname === '127.0.0.1') return true
@@ -108,7 +115,7 @@ export function isPreviewContext(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
   if (hostname === 'localhost' || hostname === '127.0.0.1') return true
   if (hostname === 'local.krabiclaw.com') return true
-  if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
+  if (isEnvironmentPlatformHost(hostname)) return true
   if (isEnvironmentTenantAliasHost(hostname)) return true
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }

@@ -72,10 +72,11 @@ test('local tunnel and raw workers.dev hosts stay shared with explicit tenant he
   }
 })
 
-test('deployed preview and staging use direct tenant aliases without headers', () => {
+test('deployed preview, staging, and E2E lanes use direct tenant aliases without headers', () => {
   for (const [origin, environment] of [
     ['https://preview.krabiclaw.com', 'preview'],
     ['https://staging.krabiclaw.com', 'staging'],
+    ['https://e2e-2.krabiclaw.com', 'e2e-2'],
   ]) {
     withPreviewUrl(origin, () => {
       assert.equal(tenantTestBaseUrl(), `https://demo-${environment}.krabiclaw.com`)

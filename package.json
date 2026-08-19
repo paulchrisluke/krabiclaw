@@ -34,6 +34,8 @@
     "test:browser:smoke": "playwright test tests/e2e/smoke.spec.ts --project=chromium --workers=1",
     "test:browser:dashboard": "playwright test tests/e2e/dashboard.spec.ts --project=chromium --workers=1",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.ts",
+    "test:e2e:lane-smoke": "playwright test tests/e2e/release-lane-smoke.spec.ts --project=chromium --workers=1",
+    "test:e2e:staging-review": "playwright test tests/e2e/staging-review-auth.spec.ts --project=chromium --workers=1",
     "test:e2e:public-rendering": "playwright test tests/e2e/public-rendering-sentinel.spec.ts",
     "test:e2e:auth": "playwright test tests/e2e/local-access.spec.ts tests/e2e/oauth-discovery.spec.ts",
     "test:e2e:access-local": "playwright test tests/e2e/local-access.spec.ts tests/e2e/site-transfer.spec.ts tests/e2e/oauth-discovery.spec.ts --project=chromium --workers=1",

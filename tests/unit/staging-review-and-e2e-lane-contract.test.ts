@@ -9,6 +9,7 @@ test('staging-review identity is separate from ephemeral E2E auth and preserves 
   const fixtures = await repoFile('config/e2e-auth-fixtures.ts')
   const provisioner = await repoFile('scripts/provision-staging-review-auth.ts')
   const reset = await repoFile('scripts/reset-e2e-artifacts.ts')
+  const workflow = await repoFile('.github/workflows/ci.yml')
   const sql = buildStagingReviewAuthSql('hashed-password')
   const rotatedSql = buildStagingReviewAuthSql('new-hash', true)
 
@@ -27,6 +28,8 @@ test('staging-review identity is separate from ephemeral E2E auth and preserves 
   assert.match(sql, /WHERE id = 'site-ncls-blawby'/)
   assert.match(rotatedSql, /DELETE FROM account/)
   assert.doesNotMatch(rotatedSql, /DELETE FROM session/)
+  assert.match(workflow, /environment: staging/)
+  assert.match(workflow, /Verify durable staging-review provisioning is idempotent/)
 })
 
 test('E2E lane resources are unique and explicitly non-production', async () => {
@@ -41,6 +44,7 @@ test('E2E lane resources are unique and explicitly non-production', async () => 
     assert.match(wrangler, new RegExp(`\\[env\\."${lane.name}"\\]`))
     assert.match(wrangler, new RegExp(`AI_SEARCH_INSTANCE_ID = "${lane.searchInstanceId}"`))
     assert.match(wrangler, new RegExp(`database_id = "${lane.databaseId}"`))
+    assert.ok(wrangler.includes(`pattern = "*-${lane.name}.krabiclaw.com/*"`))
     assert.ok(wrangler.includes('crons = []'))
   }
   assert.doesNotMatch(wrangler.slice(wrangler.indexOf('# BEGIN GENERATED E2E LANE ENVIRONMENTS')), /database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"/)

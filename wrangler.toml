@@ -323,7 +323,7 @@ enabled = true
 # Generated from config/e2e-lanes.json; edit the canonical definition instead.
 [env."e2e-1"]
 workers_dev = true
-routes = [{ pattern = "e2e-1.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+routes = [{ pattern = "e2e-1.krabiclaw.com/*", zone_name = "krabiclaw.com" }, { pattern = "*-e2e-1.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
 
 [env."e2e-1".triggers]
 crons = []
@@ -397,7 +397,7 @@ remote = true
 enabled = false
 [env."e2e-2"]
 workers_dev = true
-routes = [{ pattern = "e2e-2.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+routes = [{ pattern = "e2e-2.krabiclaw.com/*", zone_name = "krabiclaw.com" }, { pattern = "*-e2e-2.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
 
 [env."e2e-2".triggers]
 crons = []
@@ -471,7 +471,7 @@ remote = true
 enabled = false
 [env."e2e-3"]
 workers_dev = true
-routes = [{ pattern = "e2e-3.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+routes = [{ pattern = "e2e-3.krabiclaw.com/*", zone_name = "krabiclaw.com" }, { pattern = "*-e2e-3.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
 
 [env."e2e-3".triggers]
 crons = []
@@ -545,7 +545,7 @@ remote = true
 enabled = false
 [env."e2e-4"]
 workers_dev = true
-routes = [{ pattern = "e2e-4.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+routes = [{ pattern = "e2e-4.krabiclaw.com/*", zone_name = "krabiclaw.com" }, { pattern = "*-e2e-4.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
 
 [env."e2e-4".triggers]
 crons = []

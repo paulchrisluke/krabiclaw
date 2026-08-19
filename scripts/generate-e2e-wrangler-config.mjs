@@ -37,7 +37,7 @@ function renderLane(lane) {
   return [
     `[${env}]`,
     'workers_dev = true',
-    `routes = [{ pattern = ${tomlString(`${lane.hostname}/*`)}, zone_name = "krabiclaw.com" }]`,
+    `routes = [{ pattern = ${tomlString(`${lane.hostname}/*`)}, zone_name = "krabiclaw.com" }, { pattern = ${tomlString(`*-${lane.name}.krabiclaw.com/*`)}, zone_name = "krabiclaw.com" }]`,
     '',
     `[${env}.triggers]`,
     'crons = []',

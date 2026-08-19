@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors, expectHealthyPage, setupTenantHeaders, tenantBaseURL, tenantExtraHeaders } from './helpers'
 import { loginAs } from './helpers/auth'
+import { isEnvironmentPlatformHost } from '../../server/utils/tenant-hosts'
 
 test('platform home renders', async ({ page, baseURL }) => {
   const errors = collectPageErrors(page)
@@ -18,7 +19,8 @@ test('local Worker serves the platform origin without host overrides', async ({ 
 })
 
 test('deployed platform home keeps the normal Nuxt runtime contract', async ({ page, baseURL }) => {
-  test.skip(!baseURL?.includes('workers.dev') && !baseURL?.includes('staging.'), 'Requires a deployed Worker')
+  const hostname = baseURL ? new URL(baseURL).hostname : ''
+  test.skip(!baseURL?.includes('workers.dev') && !isEnvironmentPlatformHost(hostname), 'Requires a deployed Worker')
   const errors = collectPageErrors(page)
   const response = await page.goto(baseURL!, { waitUntil: 'load' })
   expect(response?.status()).toBeLessThan(400)

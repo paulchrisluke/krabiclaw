@@ -4,11 +4,15 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const lanes = JSON.parse(readFileSync(resolve(import.meta.dirname, '../config/e2e-lanes.json'), 'utf8'))
+const requestedLimit = Number.parseInt(process.env.E2E_LANE_LIMIT ?? '', 10)
+const selectedLanes = Number.isInteger(requestedLimit) && requestedLimit > 0
+  ? lanes.slice(0, requestedLimit)
+  : lanes
 const matrix = {
-  include: lanes.map((lane, index) => ({
+  include: selectedLanes.map((lane, index) => ({
     lane: lane.name,
     shard: index + 1,
-    total: lanes.length,
+    total: selectedLanes.length,
     hostname: lane.hostname,
     url: `https://${lane.hostname}`,
   })),

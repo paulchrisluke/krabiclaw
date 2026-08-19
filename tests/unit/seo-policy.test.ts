@@ -117,6 +117,7 @@ test('preview and deployment-provider hosts are globally non-indexable', () => {
     'local.krabiclaw.com',
     'preview.krabiclaw.com',
     'staging.krabiclaw.com',
+    'e2e-1.krabiclaw.com',
     'pottery-house-preview.krabiclaw.com',
     'pottery-house-staging.krabiclaw.com',
     'krabiclaw.pages.dev',

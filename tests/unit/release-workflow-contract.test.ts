@@ -16,6 +16,8 @@ type WorkflowStep = {
 type WorkflowJob = {
   if?: string
   needs?: string[]
+  environment?: string
+  concurrency?: { group?: string; 'cancel-in-progress'?: boolean }
   env?: Record<string, string>
   steps?: WorkflowStep[]
 }
@@ -68,10 +70,12 @@ test('one CI workflow owns preview, staging, release-lane, and production lifecy
   assert.deepEqual(document.on?.push?.branches, ['main', 'staging'])
   assert.ok(jobs['e2e-plan'])
   assert.ok(jobs['e2e-representative'])
+  assert.ok(jobs['e2e-lane-smoke'])
   assert.ok(jobs['deploy-staging'])
   assert.match(jobs['deploy-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
   assert.match(jobs['e2e-lane-plan']?.if || '', /github\.base_ref == 'main'/)
   assert.match(jobs['e2e-release-qualification']?.if || '', /github\.head_ref == 'staging'/)
+  assert.match(jobs['e2e-lane-smoke']?.if || '', /github\.base_ref == 'staging'/)
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
@@ -113,11 +117,30 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.ok(stepIndex(jobs['deploy-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['deploy-staging']!, 'Provision durable staging-review identity'))
 
   const release = jobs['e2e-release-qualification']!
+  assert.equal(release.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
   assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.run, 'npx wrangler deploy --env "${{ matrix.lane }}" --strict')
   assert.equal(release.steps?.find(step => step.name === 'Apply lane migrations')?.run, 'npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote')
   assert.equal(release.steps?.find(step => step.name === 'Sweep lane E2E artifacts')?.run, 'node --experimental-strip-types scripts/reset-e2e-artifacts.ts --env "${{ matrix.lane }}" --older-than-hours=0')
   assert.equal(release.steps?.find(step => step.name === 'Run Playwright release shard')?.run, 'yarn test:e2e:full --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1')
   assert.equal(release.steps?.find(step => step.name === 'Run full staging release qualification'), undefined)
+
+  const smoke = jobs['e2e-lane-smoke']!
+  assert.equal(smoke.concurrency?.group, 'release-qualification-e2e-${{ matrix.lane }}')
+  assert.equal(
+    smoke.steps?.find(step => step.name === 'Run isolated lane smoke')?.run,
+    'yarn test:e2e:lane-smoke',
+  )
+  assert.ok(stepIndex(smoke, 'Deploy exact Worker artifact') < stepIndex(smoke, 'Run isolated lane smoke'))
+
+  assert.deepEqual(jobs['deploy-staging']?.needs, ['typecheck', 'e2e-plan'])
+  assert.equal(jobs['deploy-staging']?.environment, 'staging')
+  assert.equal(
+    stepRun(jobs['deploy-staging']!, 'Verify durable staging-review provisioning is idempotent'),
+    'node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging',
+  )
+  assert.equal(stepRun(jobs['deploy-staging']!, 'Verify durable staging-review login'), 'yarn test:e2e:staging-review')
+  assert.equal(stepRun(jobs['deploy-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
+  assert.equal(stepRun(jobs['deploy-staging']!, 'Run affected staging browser coverage'), 'yarn test:e2e:preview:selected')
 
   const productionMigrations = stepRun(jobs['deploy-production']!, 'Apply production migrations')
   assert.equal(productionMigrations, 'npx wrangler d1 migrations apply DB --remote')
@@ -132,13 +155,15 @@ test('each environment uses one normal Worker deploy before contract migrations 
   )
 })
 
-test('preview and staging route direct first-level tenant aliases to their Workers', async () => {
+test('preview, staging, and E2E lanes route direct first-level tenant aliases to their Workers', async () => {
   const wrangler = await repoFile('wrangler.toml')
   const preview = tomlSection(wrangler, 'env.preview')
   const staging = tomlSection(wrangler, 'env.staging')
+  const e2e1 = tomlSection(wrangler, 'env."e2e-1"')
 
   assert.match(preview, /pattern = "\*-preview\.krabiclaw\.com\/\*"/)
   assert.match(staging, /pattern = "\*-staging\.krabiclaw\.com\/\*"/)
+  assert.match(e2e1, /pattern = "\*-e2e-1\.krabiclaw\.com\/\*"/)
 })
 
 test('preview core protects authenticated hydration and Pages manager regressions', async () => {

@@ -5,7 +5,7 @@ export const tenantBaseURL = tenantTestBaseUrl()
 export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
 export const blawbyBaseURL = blawbyTestBaseUrl()
 // Extra headers for tenant tests against local or raw *.workers.dev hosts.
-// Deployed preview and staging tenant tests use direct environment aliases.
+// Deployed preview, staging, and E2E lane tests use direct environment aliases.
 // Apply via test.use({ extraHTTPHeaders: tenantExtraHeaders }) in each describe
 // block that navigates to a tenant URL (not the platform/dashboard describes).
 export const tenantExtraHeaders = tenantTestExtraHeaders()
