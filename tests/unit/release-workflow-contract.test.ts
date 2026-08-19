@@ -200,11 +200,21 @@ test('preview core protects authenticated hydration and Pages manager regression
   }
   const core = packageDocument.scripts?.['test:e2e:preview:core'] || ''
 
-  assert.match(core, /tests\/e2e\/smoke\.spec\.ts/)
-  assert.match(core, /tests\/e2e\/dashboard-api\.spec\.ts/)
+  assert.match(core, /yarn test:e2e:preview:contract/)
   assert.match(core, /Pages manager runs one typed-block and custom-page lifecycle tracer journey/)
   assert.match(core, /owner can send a reservation email reply from the deep-linked dashboard inbox/)
   assert.equal(packageDocument.scripts?.['test:e2e:representative'], 'yarn test:e2e:preview:core')
+})
+
+test('high-impact preview contract stays small while full lanes own lifecycle coverage', async () => {
+  const packageDocument = JSON.parse(await repoFile('package.json')) as {
+    scripts?: Record<string, string>
+  }
+  const contract = packageDocument.scripts?.['test:e2e:preview:contract'] || ''
+
+  assert.match(contract, /tests\/e2e\/smoke\.spec\.ts/)
+  assert.match(contract, /tests\/e2e\/dashboard-api\.spec\.ts/)
+  assert.doesNotMatch(contract, /reply-threading|dashboard\.spec/)
 })
 
 test('Cloudflare credentials stay scoped to mutation steps', async () => {

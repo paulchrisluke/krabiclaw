@@ -23,7 +23,7 @@ function withExecutionRouting(plan) {
   return {
     ...plan,
     runFullLanes,
-    previewScope: runFullLanes ? 'core' : plan.scope,
+    previewScope: runFullLanes ? 'contract' : plan.scope,
     previewSpecs: runFullLanes ? [] : plan.specs,
   }
 }

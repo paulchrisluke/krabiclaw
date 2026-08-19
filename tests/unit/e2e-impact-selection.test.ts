@@ -36,13 +36,13 @@ test('staging-review auth changes do not enter ordinary preview coverage', () =>
   assert.equal(allSpecs.includes('tests/e2e/staging-review-auth.spec.ts'), false)
 })
 
-test('lane smoke changes route preview to core and the full inventory to isolated lanes', () => {
+test('lane smoke changes route preview to contract smoke and the full inventory to isolated lanes', () => {
   const plan = selectPreviewE2e(['tests/e2e/release-lane-smoke.spec.ts'], allSpecs)
 
   assert.equal(plan.runPreview, true)
   assert.equal(plan.runFullLanes, true)
   assert.equal(plan.scope, 'full')
-  assert.equal(plan.previewScope, 'core')
+  assert.equal(plan.previewScope, 'contract')
   assert.deepEqual(plan.previewSpecs, [])
   assert.equal(plan.specs.includes('tests/e2e/release-lane-smoke.spec.ts'), false)
   assert.equal(allSpecs.includes('tests/e2e/release-lane-smoke.spec.ts'), false)
@@ -98,7 +98,7 @@ test('schema, migration, Worker, and test-harness changes receive full coverage'
     const plan = selectPreviewE2e([path], allSpecs)
     assert.equal(plan.scope, 'full', path)
     assert.equal(plan.runFullLanes, true, path)
-    assert.equal(plan.previewScope, 'core', path)
+    assert.equal(plan.previewScope, 'contract', path)
     assert.deepEqual(plan.previewSpecs, [], path)
     assert.deepEqual(plan.specs, allSpecs, path)
   }
@@ -111,7 +111,7 @@ test('an unclassified application source file fails safe to full coverage', () =
 
   assert.equal(plan.scope, 'full')
   assert.equal(plan.runFullLanes, true)
-  assert.equal(plan.previewScope, 'core')
+  assert.equal(plan.previewScope, 'contract')
   assert.deepEqual(plan.previewSpecs, [])
   assert.deepEqual(plan.groups, ['unclassified-runtime'])
   assert.deepEqual(plan.unclassifiedFiles, ['server/utils/new-cross-cutting-runtime.ts'])

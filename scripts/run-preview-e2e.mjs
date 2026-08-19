@@ -12,7 +12,7 @@ for (const spec of selectedSpecs) {
 }
 
 const selectionScope = process.env.E2E_SELECTION_SCOPE || 'affected'
-if (!['core', 'affected', 'full'].includes(selectionScope)) {
+if (!['contract', 'core', 'affected', 'full'].includes(selectionScope)) {
   throw new Error(`Refusing invalid E2E selection scope: ${selectionScope}`)
 }
 if (selectionScope === 'full' && selectedSpecs.length === 0) {
@@ -25,7 +25,10 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
-if (selectionScope !== 'full') {
+if (selectionScope === 'contract') {
+  run('yarn', ['test:e2e:preview:contract'])
+}
+else if (selectionScope !== 'full') {
   run('yarn', ['test:e2e:preview:core'])
 }
 
