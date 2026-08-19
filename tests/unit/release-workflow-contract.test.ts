@@ -152,6 +152,9 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.match(stepRun(release, 'Deploy exact Worker artifact'), /BETTER_AUTH_SECRET/)
   assert.match(stepRun(release, 'Deploy exact Worker artifact'), /E2E_DEV_ROUTE_SECRET: \$e2e_dev_route/)
   assert.match(stepRun(release, 'Deploy exact Worker artifact'), /STRIPE_WEBHOOK_SECRET: \$stripe_webhook/)
+  assert.match(stepRun(release, 'Deploy exact Worker artifact'), /all\(\.\[\]; type == "string" and length > 0\)/)
+  assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.env?.EMAIL_REPLY_SECRET_VALUE, '${{ secrets.EMAIL_REPLY_SECRET_PREVIEW }}')
+  assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.env?.EMAIL_INBOUND_SECRET_VALUE, '${{ secrets.EMAIL_INBOUND_SECRET_PREVIEW }}')
   assert.doesNotMatch(stepRun(release, 'Deploy exact Worker artifact'), /BETTER_AUTH_SECRET: \$/)
   assert.doesNotMatch(
     release.steps?.map(step => step.run || '').join('\n') || '',

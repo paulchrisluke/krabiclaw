@@ -298,8 +298,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PREVIEW_SECRET_VALUE: ${{ secrets.PREVIEW_SECRET }}
-          EMAIL_REPLY_SECRET_VALUE: ${{ secrets.EMAIL_REPLY_SECRET }}
-          EMAIL_INBOUND_SECRET_VALUE: ${{ secrets.EMAIL_INBOUND_SECRET }}
+          EMAIL_REPLY_SECRET_VALUE: ${{ secrets.EMAIL_REPLY_SECRET_PREVIEW }}
+          EMAIL_INBOUND_SECRET_VALUE: ${{ secrets.EMAIL_INBOUND_SECRET_PREVIEW }}
           PLATFORM_SEARCH_REINDEX_SECRET_VALUE: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
           STRIPE_SECRET_KEY_VALUE: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
         run: |
@@ -326,6 +326,7 @@ jobs:
               STRIPE_SECRET_KEY: $stripe,
               STRIPE_WEBHOOK_SECRET: $stripe_webhook
             }' > "$secrets_file"
+          jq -e 'all(.[]; type == "string" and length > 0)' "$secrets_file" >/dev/null
           chmod 600 "$secrets_file"
           npx wrangler deploy --env "${{ matrix.lane }}" --strict --secrets-file "$secrets_file"
       - name: Apply lane migrations
