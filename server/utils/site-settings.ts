@@ -326,17 +326,17 @@ async function attemptSiteUpdate(
   }
   for (const key of ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'] as const) {
     if (updates[key] === undefined) continue
-    const value = updates[key]
-    if (value) {
+    const trimmed = updates[key]?.trim() || null
+    if (trimmed) {
       try {
-        const url = new URL(value)
+        const url = new URL(trimmed)
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol')
       } catch {
         return { status: 400, data: { error: `Invalid URL for ${key.replace('social_', '').replace('_url', '')}` } }
       }
     }
     setParts.push(`${key} = ?`)
-    params.push(value ?? null)
+    params.push(trimmed)
   }
   if (updates.feature_overrides !== undefined) {
     let newDelta: CmsCapabilityOverrideDelta | null = null

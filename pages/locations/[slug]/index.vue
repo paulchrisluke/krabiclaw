@@ -545,7 +545,10 @@ useTenantSocialMetadata(() => ({
 useSchemaOrg([
   computed(() => {
     const loc = location.value
-    if (!loc) return {}
+    // nuxt-schema-org's own UnheadSchemaOrg plugin explicitly filters out non-object and null
+    // nodes before building the graph, so undefined is the correct, filtered "no schema" value
+    // here — the vendored UseSchemaOrgInput type just doesn't include it in its union.
+    if (!loc) return undefined as unknown as Record<string, unknown>
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
