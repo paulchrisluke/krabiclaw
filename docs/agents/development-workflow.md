@@ -42,8 +42,9 @@ deployed browser gate or the incident rules in that document.
   Documentation-only changes skip Worker deployment.
 - Do not broaden a narrow PR to unrelated browser suites merely to appear safe.
   Do not narrow the map to make a failing required journey disappear.
-- The exact `staging` head runs the complete suite when the `staging` to `main`
-  release PR opens or updates. That full qualification remains mandatory before
+- Every push to `staging` runs the complete suite against that exact SHA. The
+  `staging` to `main` release PR reuses those checks without another deployment
+  or qualification cycle. That full qualification remains mandatory before
   production promotion.
 
 ## Local Dependencies

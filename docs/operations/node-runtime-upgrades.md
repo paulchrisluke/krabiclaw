@@ -58,9 +58,9 @@ them with a Node upgrade; those require their own demonstrated reason.
    account limit.
 6. Open a ready pull request to `staging`. The deployed preview must pass its
    full selected coverage on the exact PR head; a local pass alone is not enough.
-7. After merge, require the exact staging deployment and browser lane to pass.
-   The updated `staging` to `main` PR must then pass the complete exact-head
-   release qualification before production promotion.
+7. After merge, require the exact staging deployment and complete browser
+   qualification to pass. The updated `staging` to `main` PR reuses those
+   exact-head checks before production promotion.
 
 ## Failure handling
 

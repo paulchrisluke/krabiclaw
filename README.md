@@ -142,10 +142,10 @@ Deployment follows the branches in `.github/workflows/ci.yml`:
 
 1. Runtime pull requests deploy the isolated preview Worker and run permanent
    core plus diff-selected affected E2E coverage.
-2. Merges to `staging` deploy the staging Worker, apply staging migrations, and
-   run the same core plus affected coverage.
-3. The `staging` to `main` release PR runs the full Playwright suite against its
-   exact staging head.
+2. Merges to `staging` deploy the staging Worker once, apply staging migrations,
+   provision fixtures/auth once, and run the full Playwright suite with two workers.
+3. The `staging` to `main` release PR reuses the checks attached to its exact
+   staging head without another deployment or test cycle.
 4. A reviewed `staging` to `main` merge deploys the production Worker, applies
    production migrations, and runs read-only production browser smoke.
 

@@ -27,6 +27,7 @@ import {
 import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
+import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -135,6 +136,8 @@ export interface CloudflareEnv {
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_VERIFY_TOKEN?: string
   WHATSAPP_BUSINESS_ACCOUNT_ID?: string
+  E2E_ALLOW_DEV_ROUTES?: string
+  E2E_DEV_ROUTE_SECRET?: string
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
@@ -152,6 +155,18 @@ export interface CloudflareEnv {
   GUEST_DELIVERY_QUEUE?: Queue
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
+}
+
+export function shouldBypassE2eAuthRateLimit(
+  env: Pick<CloudflareEnv, 'E2E_ALLOW_DEV_ROUTES' | 'E2E_DEV_ROUTE_SECRET'>,
+  request: Request,
+): boolean {
+  if (env.E2E_ALLOW_DEV_ROUTES !== 'true') return false
+  const expectedSecret = env.E2E_DEV_ROUTE_SECRET?.trim() ?? ''
+  const providedSecret = request.headers.get('x-dev-route-secret') ?? ''
+  return !!expectedSecret
+    && !!providedSecret
+    && timingSafeEqualText(providedSecret, expectedSecret)
 }
 
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
@@ -190,14 +205,18 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
   for (const origin of [authOrigin, platformOrigin, freeSiteOrigin, wildcardOrigin(freeSiteOrigin)]) {
     if (origin) origins.add(origin)
   }
-  if (import.meta.dev) {
+  if (import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true') {
     const port = env.PORT || '3000'
-    origins.add(`http://localhost:${port}`)
-    origins.add(`http://127.0.0.1:${port}`)
-    origins.add(`http://*.localhost:${port}`)
+    if (import.meta.dev) {
+      origins.add(`http://localhost:${port}`)
+      origins.add(`http://127.0.0.1:${port}`)
+      origins.add(`http://*.localhost:${port}`)
+    }
 
     return (request?: Request) => {
-      const requestOrigin = localDevelopmentOrigin(request?.headers.get('origin') ?? undefined)
+      const requestOrigin = request && (import.meta.dev || shouldBypassE2eAuthRateLimit(env, request))
+        ? localDevelopmentOrigin(request.headers.get('origin') ?? undefined)
+        : null
       return requestOrigin ? [...origins, requestOrigin] : [...origins]
     }
   }
@@ -222,6 +241,13 @@ export function createAuth(env: CloudflareEnv) {
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
+    rateLimit: {
+      customRules: {
+        '/sign-in/*': (request, currentRule) => shouldBypassE2eAuthRateLimit(env, request)
+          ? false
+          : currentRule,
+      },
+    },
     database: drizzleAdapter(db, {
       provider: 'sqlite',
       schema,

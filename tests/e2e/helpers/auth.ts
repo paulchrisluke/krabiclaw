@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 import { findE2eAuthFixture } from '../../../config/e2e-auth-fixtures'
-import { dashboardOrgHeaders } from '../test-env'
+import { dashboardOrgHeaders, devLoginHeaders } from '../test-env'
 
 export async function loginAs(request: APIRequestContext, baseURL: string, userId?: string) {
   const fixture = findE2eAuthFixture(userId)
@@ -14,7 +14,8 @@ export async function loginAs(request: APIRequestContext, baseURL: string, userI
     : new URL(process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || target.origin).origin
   const res = await request.post(`${baseURL}/api/auth/sign-in/email`, {
     maxRetries: 0,
-    headers: { origin },
+    timeout: 15_000,
+    headers: { origin, ...devLoginHeaders() },
     data: {
       email: fixture.email,
       password,

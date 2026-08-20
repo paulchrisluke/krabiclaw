@@ -15,7 +15,8 @@ type WorkflowStep = {
 
 type WorkflowJob = {
   if?: string
-  needs?: string[]
+  needs?: string | string[]
+  environment?: string
   env?: Record<string, string>
   steps?: WorkflowStep[]
 }
@@ -68,14 +69,15 @@ test('one CI workflow owns preview, staging, and production lifecycle gates', as
   assert.deepEqual(document.on?.push?.branches, ['main', 'staging'])
   assert.ok(jobs['e2e-plan'])
   assert.ok(jobs['e2e-representative'])
-  assert.match(jobs['e2e-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
-  assert.match(jobs['e2e-staging']?.if || '', /github\.base_ref == 'main'/)
-  assert.match(jobs['e2e-staging']?.if || '', /github\.head_ref == 'staging'/)
+  assert.equal(jobs['e2e-staging']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/staging'")
+  assert.match(jobs.typecheck?.if || '', /github\.base_ref == 'main'/)
+  assert.match(jobs.typecheck?.if || '', /github\.head_ref == 'staging'/)
+  assert.match(jobs['e2e-plan']?.if || '', /github\.base_ref == 'main'/)
+  assert.match(jobs['e2e-plan']?.if || '', /github\.head_ref == 'staging'/)
+  assert.equal(jobs['e2e-staging']?.environment, undefined)
+  assert.equal(jobs['e2e-staging']?.env?.PLAYWRIGHT_WORKERS, '2')
   const stagingCheckout = jobs['e2e-staging']?.steps?.find(step => step.uses?.startsWith('actions/checkout@'))
-  assert.equal(
-    stagingCheckout?.with?.ref,
-    "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
-  )
+  assert.equal(stagingCheckout?.with?.ref, '${{ github.sha }}')
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
@@ -122,8 +124,18 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures'))
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
-  assert.equal(stepRun(jobs['e2e-staging']!, 'Run affected staging browser coverage'), 'yarn test:e2e:preview:selected')
-  assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging release qualification'), 'yarn test:e2e:full')
+  assert.equal(
+    jobs['e2e-staging']?.steps?.find(step => step.name === 'Run affected staging browser coverage'),
+    undefined,
+  )
+  const fullStagingStep = jobs['e2e-staging']?.steps?.find(step => step.name === 'Run full staging release qualification')
+  assert.equal(fullStagingStep?.run, 'yarn test:e2e:full')
+  assert.equal(fullStagingStep?.env?.PLAYWRIGHT_STAGING_REVIEW, 'true')
+  assert.equal(fullStagingStep?.env?.STAGING_REVIEW_PASSWORD, '${{ secrets.STAGING_REVIEW_PASSWORD }}')
+  assert.equal(
+    jobs['e2e-staging']?.steps?.filter(step => step.name === 'Provision staging Better Auth fixtures').length,
+    1,
+  )
 
   const productionMigrations = stepRun(jobs['deploy-production']!, 'Apply production migrations')
   assert.equal(productionMigrations, 'npx wrangler d1 migrations apply DB --remote')

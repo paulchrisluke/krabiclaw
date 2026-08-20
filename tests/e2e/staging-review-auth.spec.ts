@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { STAGING_REVIEW_AUTH } from '../../config/staging-review-auth'
+import { devLoginHeaders } from './test-env'
 
 test('durable staging-review credentials remain usable for every review tenant', async ({ request, baseURL }) => {
   const password = process.env.STAGING_REVIEW_PASSWORD
@@ -10,7 +11,8 @@ test('durable staging-review credentials remain usable for every review tenant',
   for (const [index, organizationId] of STAGING_REVIEW_AUTH.organizationIds.entries()) {
     const siteId = STAGING_REVIEW_AUTH.siteIds[index]!
     const signIn = await request.post(`${baseURL}/api/auth/sign-in/email`, {
-      headers: { origin },
+      timeout: 15_000,
+      headers: { origin, ...devLoginHeaders() },
       data: { email: STAGING_REVIEW_AUTH.email, password, rememberMe: false },
     })
     expect(signIn.status(), await signIn.text()).toBe(200)

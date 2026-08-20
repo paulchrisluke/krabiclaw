@@ -17,7 +17,9 @@ concurrency:
 jobs:
   typecheck:
     name: Checks
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: >-
+      github.event_name == 'push'
+      || !(github.base_ref == 'main' && github.head_ref == 'staging')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -37,7 +39,9 @@ jobs:
 
   e2e-plan:
     name: Plan affected browser coverage
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/staging')
+    if: >-
+      github.event_name == 'pull_request'
+      && !(github.base_ref == 'main' && github.head_ref == 'staging')
     runs-on: ubuntu-latest
     outputs:
       run_preview: ${{ steps.plan.outputs.run_preview }}
@@ -198,18 +202,10 @@ jobs:
 
   e2e-staging:
     name: Deploy and test staging
-    if: >-
-      (github.event_name == 'push'
-      && github.ref == 'refs/heads/staging'
-      && needs.e2e-plan.outputs.run_preview == 'true')
-      || (github.event_name == 'pull_request'
-      && github.base_ref == 'main'
-      && github.head_ref == 'staging'
-      && github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [typecheck, e2e-plan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment: staging
     concurrency:
       group: staging-deployment
       cancel-in-progress: false
@@ -230,14 +226,12 @@ jobs:
       MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
       MCP_PRIVATE_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
       PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
-      E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
-      E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
+      PLAYWRIGHT_WORKERS: "2"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.1"
@@ -300,28 +294,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
         run: node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging
-      - name: Verify durable staging-review provisioning is idempotent
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
-        run: node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging
-      - name: Verify durable staging-review login
-        env:
-          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
-        run: yarn test:e2e:staging-review
       - name: Run OAuth bearer MCP smoke
-        if: >-
-          github.event_name == 'pull_request'
-          || needs.e2e-plan.outputs.scope == 'full'
-          || contains(needs.e2e-plan.outputs.groups, 'auth-access')
-          || contains(needs.e2e-plan.outputs.groups, 'mcp-chowbot')
         run: yarn test:mcp
-      - name: Run affected staging browser coverage
-        if: github.event_name == 'push'
-        run: yarn test:e2e:preview:selected
       - name: Run full staging release qualification
-        if: github.event_name == 'pull_request'
+        env:
+          PLAYWRIGHT_STAGING_REVIEW: "true"
+          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
         run: yarn test:e2e:full
       - name: Upload staging Playwright report
         if: failure()

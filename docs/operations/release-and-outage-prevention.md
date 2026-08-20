@@ -39,9 +39,10 @@ inspection once to determine ownership, then report the actual result.
 3. When preview deploys, test the affected customer journey immediately.
 4. Merge to `staging` after required PR checks and preview validation pass.
 5. When staging deploys, begin credentialed MCP and tenant browser validation
-   immediately while its core and affected staging suites continue.
-6. Open or update the ordinary `staging` to `main` pull request. Its exact
-   staging head must pass the complete staging Playwright release qualification.
+   immediately while its complete two-worker Playwright qualification runs.
+6. Open or update the ordinary `staging` to `main` pull request. It reuses the
+   completed checks attached to that exact staging SHA without another deploy,
+   provisioning pass, or CI qualification cycle.
 7. Promote only after the full release qualification, required checks, and
    scoped customer validation pass.
 8. After production deploys, repeat the affected read-only customer journeys

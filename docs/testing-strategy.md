@@ -9,8 +9,8 @@ KrabiClaw treats browser and E2E validation as the product gate. Unit tests, lin
 
 ## CI feedback loop
 
-Pull requests and staging pushes use `config/e2e-impact-map.mjs` to select
-browser coverage from the actual diff. Every deployed preview runs a small
+Pull requests use `config/e2e-impact-map.mjs` to select browser coverage from
+the actual diff. Every deployed preview runs a small
 permanent core, including authenticated dashboard Pages and inbox hydration
 regressions, followed by the affected subsystem specs. A narrow Saya
 presentation change therefore runs Saya/public tenant coverage without paying
@@ -21,9 +21,9 @@ unclassified application-runtime changes run the full inventory. Any changed
 E2E spec selects itself. Documentation-only changes do not deploy a Worker.
 Selection behavior is protected by unit and workflow-contract tests.
 
-The complete Playwright suite remains mandatory on the exact staging head of
-the `staging` to `main` release PR. This separates fast change feedback from
-exhaustive release qualification without reducing the production gate.
+The complete Playwright suite remains mandatory on every exact staging push
+SHA. The `staging` to `main` release PR consumes those checks without starting
+another deployment or qualification cycle.
 
 ## Local and deployed parity
 

@@ -246,15 +246,16 @@ changes skip Worker deployment.
 ### Staging lane
 
 Runs on pushes to `staging`. It deploys the staging Worker normally, applies
-pending migrations, sweeps disposable E2E artifacts, and runs permanent core
-plus affected Playwright coverage against `staging.krabiclaw.com`.
+pending migrations, sweeps disposable E2E artifacts, provisions fixtures and
+auth once, and runs the complete Playwright suite with two workers against
+`staging.krabiclaw.com`.
 
 ### Staging release-qualification lane
 
-Runs when the ordinary `staging` to `main` pull request opens or updates. It
-rebuilds and deploys that exact staging head, provisions deterministic fixtures,
-and runs the complete Playwright suite. Production promotion is blocked until
-this exact-head qualification is green.
+The ordinary `staging` to `main` pull request reuses the checks already attached
+to its exact staging SHA. It does not deploy, reprovision fixtures, or start a
+second qualification cycle. Production promotion is blocked until the exact
+staging SHA is green.
 
 ### Production lane
 

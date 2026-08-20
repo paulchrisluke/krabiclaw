@@ -9,10 +9,10 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   Pages lifecycle, and authenticated inbox hydration. The executable impact map
   adds the Playwright specs affected by the PR diff.
 - A push to `staging` deploys the staging Worker normally, applies migrations,
-  and runs the same core-plus-affected selection against that deployment.
-- The ordinary `staging` to `main` pull request rebuilds and deploys its exact
-  staging head, then runs the full Playwright release qualification. The full
-  suite is required before production promotion, not after every staging commit.
+  provisions fixtures and auth once, and runs the full Playwright inventory in
+  one invocation with two workers.
+- The ordinary `staging` to `main` pull request does not deploy or rerun CI. It
+  consumes the required checks already attached to the exact staging SHA.
 - A push to `main` deploys production normally, applies migrations, and then
   runs read-only public browser smoke. There is no scheduled release lane.
 
@@ -43,7 +43,7 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   test password is stored in the repository.
 - `staging-review@staging.krabiclaw.test` is a separate durable human-review
   identity. Its stable password is delivered to the staging job through the
-  `STAGING_REVIEW_PASSWORD` GitHub Environment secret and is never derived from
+  repository Actions secret `STAGING_REVIEW_PASSWORD` and is never derived from
   `E2E_TEST_PASSWORD` or registered in `E2E_AUTH_FIXTURES`.
 - Staging provisioning restores the review identity's editor and site-team
   memberships after fixture reseeding without changing its credential or
@@ -55,7 +55,10 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 - `/api/dev/login` does not exist. Tests and scripts must never mint sessions,
   sign cookies, or auto-create users through an application route.
 - `E2E_ALLOW_DEV_ROUTES` and `E2E_DEV_ROUTE_SECRET` protect read-only fixture
-  inspection and deterministic trigger routes. They are not authentication.
+  inspection and deterministic trigger routes. A timing-safe match on the
+  `x-dev-route-secret` header also disables only the credential sign-in rate
+  limit and admits loopback origins for the production-built local harness;
+  it never creates an identity or session.
 - In CI override mode, the dev-route secret is sent only through the
   `x-dev-route-secret` header, never a query parameter.
 
@@ -98,7 +101,7 @@ staging tests use direct first-level aliases such as
 4. Confirm workflow `env:` passes required secrets into the failing job.
 5. Confirm the failing user exists in `config/e2e-auth-fixtures.ts` and was provisioned after the curated seed.
 6. Confirm its declared organization/team membership matches the permission the test is proving.
-7. For human staging review, confirm the `staging` GitHub Environment contains `STAGING_REVIEW_PASSWORD` and the durable smoke can access Pottery House, Kikuzuki, and NCLS.
+7. For human staging review, confirm the repository Actions secrets contain `STAGING_REVIEW_PASSWORD` and the durable smoke can access Pottery House, Kikuzuki, and NCLS.
 8. Confirm Demo, Pottery House, Kikuzuki, and NCLS were provisioned from their current typed definitions. Missing required fixtures are failures, not skips.
 9. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
 10. Confirm the deployed test used the direct environment tenant alias and did not depend on `x-preview-tenant`.
@@ -114,11 +117,10 @@ staging tests use direct first-level aliases such as
   full inventory, and documentation-only changes skip Worker deployment.
 - Required preview coverage is the permanent core plus every spec selected by
   that impact map. Reporting only the core check is not affected-flow evidence.
-- The full `yarn test:e2e:full` suite runs on the exact staging head during the
-  `staging` to `main` release PR. Production runs only the read-only public
-  rendering sentinel.
-- Preview and staging set one Playwright worker because their suites share one
-  remote D1 environment. Do not raise parallelism without first isolating the
-  mutable data each worker owns.
+- The full `yarn test:e2e:full` suite runs once on every push to `staging`. The
+  `staging` to `main` release PR reuses those exact-SHA checks. Production runs
+  only the read-only public rendering sentinel.
+- Preview uses one Playwright worker. Full staging qualification uses two; its
+  tests and cleanup contract must continue to prevent mutable fixture conflicts.
 - Seed, migration, and tool-parity checks run in the shared checks job, avoiding
   redundant dependency installations.

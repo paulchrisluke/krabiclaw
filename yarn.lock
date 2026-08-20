@@ -7655,17 +7655,17 @@ nth-check@^2.1.1:
   dependencies:
     boolbase "^1.0.0"
 
-nuxt-schema-org@^6.2.9:
-  version "6.2.9"
-  resolved "https://registry.yarnpkg.com/nuxt-schema-org/-/nuxt-schema-org-6.2.9.tgz#6437d119c5974a9fce02a2023f229692c25d3eb0"
-  integrity sha512-YC0E2zStImEN0Ut7ZgnbdzTq/Go/W11USQBbo9Ac3GT3ALFDtxJ8HPuDePQDDIKeNI5Qtfz2nSPEhTSG5q6t/Q==
+nuxt-schema-org@^6.0.4:
+  version "6.0.4"
+  resolved "https://registry.npmjs.org/nuxt-schema-org/-/nuxt-schema-org-6.0.4.tgz"
+  integrity sha512-QyDq1TRAkcRV6yh3P3eVA3PtaaxCAnAlfAyYCbKLam1nIBcayxi7xST/NMVlCVfdCQalgwexbuWXg/fE+OJnqA==
   dependencies:
-    "@nuxt/kit" "^4.5.2"
-    defu "^6.1.7"
-    nuxt-site-config "^4.2.1"
-    nuxtseo-shared "^5.3.12"
-    pkg-types "^2.3.1"
-    ufo "^1.6.4"
+    "@nuxt/kit" "^4.4.2"
+    "@unhead/schema-org" "^2.1.12"
+    defu "^6.1.4"
+    nuxt-site-config "^4.0.6"
+    nuxtseo-layer-devtools "^0.5.1"
+    nuxtseo-shared "^0.9.0"
 
 nuxt-site-config-kit@4.2.2:
   version "4.2.2"
@@ -10045,7 +10045,7 @@ vue-tsc@^3.2.9:
     "@volar/typescript" "2.4.28"
     "@vue/language-core" "3.2.9"
 
-vue@^3.4.16, vue@^3.4.5, vue@^3.5.40, vue@^3.5.41:
+vue@^3.4.16, vue@^3.4.5, vue@^3.5.40:
   version "3.5.41"
   resolved "https://registry.yarnpkg.com/vue/-/vue-3.5.41.tgz#8864bddfe59ce128a28c9bad219cd9248916af73"
   integrity sha512-2laE0p+aK+/AOPG/XL/WepOs/GlK755LJ1XECi9kDUrz1FKNw8rb2Xzlw9JS1rqEV55nb0ttsKxVlTCcd+R5cg==
@@ -10055,6 +10055,17 @@ vue@^3.4.16, vue@^3.4.5, vue@^3.5.40, vue@^3.5.41:
     "@vue/runtime-dom" "3.5.41"
     "@vue/server-renderer" "3.5.41"
     "@vue/shared" "3.5.41"
+
+vue@^3.5.33:
+  version "3.5.33"
+  resolved "https://registry.npmjs.org/vue/-/vue-3.5.33.tgz"
+  integrity sha512-1AgChhx5w3ALgT4oK3acm2Es/7jyZhWSVUfs3rOBlGQC0rjEDkS7G4lWlJJGGNQD+BV3reCwbQrOe1mPNwKHBQ==
+  dependencies:
+    "@vue/compiler-dom" "3.5.33"
+    "@vue/compiler-sfc" "3.5.33"
+    "@vue/runtime-dom" "3.5.33"
+    "@vue/server-renderer" "3.5.33"
+    "@vue/shared" "3.5.33"
 
 w3c-keyname@^2.2.0:
   version "2.2.8"

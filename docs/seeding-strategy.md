@@ -122,7 +122,7 @@ definitions are the source of truth in CI rather than committed SQL.
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
 | PR opened/updated | `preview`    | generate and apply all four typed fixtures                                    |
 | Push to `staging` | `staging`    | migrate, sweep E2E artifacts, then generate and apply all four typed fixtures  |
-| `staging` to `main` PR opened/updated | `staging` | redeploy the exact head, then sweep and reapply all four fixtures before the full suite |
+| `staging` to `main` PR opened/updated | none | reuse checks attached to the exact staging SHA; no deployment or seed |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
 Staging provisioning is intentionally destructive only for the protected,

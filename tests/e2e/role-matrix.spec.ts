@@ -1,6 +1,5 @@
 import { expect, request as playwrightRequest, test, type APIRequestContext } from '@playwright/test'
-import { ensureSite } from './helpers/ensure-site'
-import { inviteAndAcceptMember, loginAs } from './helpers/auth'
+import { loginAs } from './helpers/auth'
 
 type RoleUser = {
   id: string
@@ -8,13 +7,18 @@ type RoleUser = {
 }
 
 type RoleRequests = Record<RoleUser['role'], APIRequestContext>
-const OWNER_USER_ID = 'user-e2e-role-owner'
+const SITE_ID = 'site-demo'
+const ROLE_USERS: Record<RoleUser['role'], string> = {
+  owner: 'user-e2e-demo-owner',
+  admin: 'user-e2e-role-admin',
+  editor: 'user-e2e-role-editor',
+  member: 'user-e2e-role-member',
+}
 
 test.describe('role permission matrix', () => {
   test.describe.configure({ mode: 'serial' })
 
   let baseUrl: string
-  let siteId: string
   let roleRequests: RoleRequests
   const requestContexts: APIRequestContext[] = []
 
@@ -28,44 +32,9 @@ test.describe('role permission matrix', () => {
   test.beforeAll(async ({ baseURL }) => {
     test.setTimeout(120_000)
     baseUrl = baseURL!
-    const ownerRequest = await authenticatedRequest(OWNER_USER_ID)
-    const [sessionRes, contextRes] = await Promise.all([
-      ownerRequest.get(`${baseUrl}/api/auth/get-session`),
-      ownerRequest.get(`${baseUrl}/api/dashboard/context`),
-    ])
-    expect(sessionRes.status()).toBe(200)
-    const session = await sessionRes.json() as { user?: { id?: string } }
-    expect(session.user?.id).toEqual(expect.any(String))
-
-    expect(contextRes.status()).toBe(200)
-    const context = await contextRes.json() as { site?: { id?: string | null } }
-    siteId = await ensureSite(ownerRequest, baseUrl, context.site?.id ?? null)
-    const siteResponse = await ownerRequest.get(`${baseUrl}/api/sites/${siteId}`)
-    expect(siteResponse.status()).toBe(200)
-    const organizationId = ((await siteResponse.json()) as { organization_id?: string }).organization_id
-    expect(organizationId).toEqual(expect.any(String))
-
-    for (const fixture of [
-      { userId: 'user-e2e-role-admin', role: 'admin' as const },
-      { userId: 'user-e2e-role-editor', role: 'editor' as const, siteId },
-      { userId: 'user-e2e-role-member', role: 'member' as const },
-    ]) {
-      await loginAs(ownerRequest, baseUrl, OWNER_USER_ID)
-      await inviteAndAcceptMember(ownerRequest, baseUrl, {
-        ...fixture,
-        organizationId: organizationId!,
-      })
-    }
-    await loginAs(ownerRequest, baseUrl, OWNER_USER_ID)
-
-    const adminRequest = await authenticatedRequest('user-e2e-role-admin')
-    const editorRequest = await authenticatedRequest('user-e2e-role-editor')
-    const memberRequest = await authenticatedRequest('user-e2e-role-member')
-    roleRequests = {
-      owner: ownerRequest,
-      admin: adminRequest,
-      editor: editorRequest,
-      member: memberRequest,
+    roleRequests = {} as RoleRequests
+    for (const [role, userId] of Object.entries(ROLE_USERS) as Array<[RoleUser['role'], string]>) {
+      roleRequests[role] = await authenticatedRequest(userId)
     }
   })
 
@@ -76,22 +45,22 @@ test.describe('role permission matrix', () => {
   test('content permissions by role', async () => {
     test.setTimeout(60_000)
 
-    const originalPages = await roleRequests.owner.get(`${baseUrl}/api/editor/sites/${siteId}/pages`)
+    const originalPages = await roleRequests.owner.get(`${baseUrl}/api/editor/sites/${SITE_ID}/pages`)
     expect(originalPages.status()).toBe(200)
     const home = ((await originalPages.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(page => page.path === '/')
     expect(home?.id).toEqual(expect.any(String))
-    const originalDetail = await roleRequests.owner.get(`${baseUrl}/api/editor/sites/${siteId}/pages/${home!.id}`)
+    const originalDetail = await roleRequests.owner.get(`${baseUrl}/api/editor/sites/${SITE_ID}/pages/${home!.id}`)
     expect(originalDetail.status()).toBe(200)
     const originalBody = await originalDetail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } }
 
     const contentUpdateStatus = async (request: APIRequestContext) => {
-      const pages = await request.get(`${baseUrl}/api/editor/sites/${siteId}/pages`)
+      const pages = await request.get(`${baseUrl}/api/editor/sites/${SITE_ID}/pages`)
       if (pages.status() !== 200) return pages
-      const detail = await request.get(`${baseUrl}/api/editor/sites/${siteId}/pages/${home!.id}`)
+      const detail = await request.get(`${baseUrl}/api/editor/sites/${SITE_ID}/pages/${home!.id}`)
       if (detail.status() !== 200) return detail
       const body = await detail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
       const blocks = body.page.blocks.map(block => block.type === 'hero' ? { ...block, data: { ...block.data, title: `Role matrix ${Date.now()}` } } : block)
-      return request.patch(`${baseUrl}/api/editor/sites/${siteId}/pages/${home!.id}`, {
+      return request.patch(`${baseUrl}/api/editor/sites/${SITE_ID}/pages/${home!.id}`, {
         data: { blocks, expectedDocumentUpdatedAt: body.page.document.updated_at },
       })
     }
@@ -106,10 +75,10 @@ test.describe('role permission matrix', () => {
       await assertRole('editor', 200)
       await assertRole('member', 403)
     } finally {
-      const latestDetail = await roleRequests.owner.get(`${baseUrl}/api/editor/sites/${siteId}/pages/${home!.id}`)
+      const latestDetail = await roleRequests.owner.get(`${baseUrl}/api/editor/sites/${SITE_ID}/pages/${home!.id}`)
       expect(latestDetail.status()).toBe(200)
       const latestBody = await latestDetail.json() as { page: { document: { updated_at: string } } }
-      const restored = await roleRequests.owner.patch(`${baseUrl}/api/editor/sites/${siteId}/pages/${home!.id}`, {
+      const restored = await roleRequests.owner.patch(`${baseUrl}/api/editor/sites/${SITE_ID}/pages/${home!.id}`, {
         data: { blocks: originalBody.page.blocks, expectedDocumentUpdatedAt: latestBody.page.document.updated_at },
       })
       expect(restored.status()).toBe(200)
@@ -120,7 +89,7 @@ test.describe('role permission matrix', () => {
     test.setTimeout(60_000)
 
     const createDraftPost = async (title: string) => {
-      const res = await roleRequests.owner.post(`${baseUrl}/api/editor/sites/${siteId}/posts`, {
+      const res = await roleRequests.owner.post(`${baseUrl}/api/editor/sites/${SITE_ID}/posts`, {
         data: {
           title,
           body: `Body for ${title}`,
@@ -133,14 +102,14 @@ test.describe('role permission matrix', () => {
     }
 
     const updatePostAs = async (role: RoleUser['role'], postId: string, expectedStatus: number) => {
-      const res = await roleRequests[role].patch(`${baseUrl}/api/editor/sites/${siteId}/posts/${postId}`, {
+      const res = await roleRequests[role].patch(`${baseUrl}/api/editor/sites/${SITE_ID}/posts/${postId}`, {
         data: { title: `Updated ${Date.now()}` },
       })
       expect(res.status()).toBe(expectedStatus)
     }
 
     const deletePostAs = async (role: RoleUser['role'], postId: string, expectedStatus: number) => {
-      const res = await roleRequests[role].delete(`${baseUrl}/api/editor/sites/${siteId}/posts/${postId}`)
+      const res = await roleRequests[role].delete(`${baseUrl}/api/editor/sites/${SITE_ID}/posts/${postId}`)
       expect(res.status()).toBe(expectedStatus)
     }
 
@@ -170,7 +139,7 @@ test.describe('role permission matrix', () => {
       })(),
     ])
 
-    expect((await roleRequests.owner.delete(`${baseUrl}/api/editor/sites/${siteId}/posts/${editorPostId}`)).status()).toBe(200)
-    expect((await roleRequests.owner.delete(`${baseUrl}/api/editor/sites/${siteId}/posts/${memberPostId}`)).status()).toBe(200)
+    expect((await roleRequests.owner.delete(`${baseUrl}/api/editor/sites/${SITE_ID}/posts/${editorPostId}`)).status()).toBe(200)
+    expect((await roleRequests.owner.delete(`${baseUrl}/api/editor/sites/${SITE_ID}/posts/${memberPostId}`)).status()).toBe(200)
   })
 })

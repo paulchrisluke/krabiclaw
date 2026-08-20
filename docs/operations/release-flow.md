@@ -6,8 +6,8 @@ Cloudflare Workers.
 | Git event | Worker | Validation |
 | --- | --- | --- |
 | Pull request to `staging` | `krabiclaw-preview` | Core plus affected Playwright coverage selected from the diff |
-| Push to `staging` | `krabiclaw-staging` | Core plus affected Playwright coverage selected from the pushed commits |
-| `staging` to `main` pull request | `krabiclaw-staging` | Full Playwright release qualification |
+| Push to `staging` | `krabiclaw-staging` | Full Playwright qualification with two workers |
+| `staging` to `main` pull request | None | Reuses required checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | Read-only production browser smoke |
 
 Each deployment is a normal `wrangler deploy` to its environment. Cloudflare
@@ -32,8 +32,8 @@ information before applying the fixtures. Production is never seeded by CI.
 
 Staging also provisions the durable human-review identity
 `staging-review@staging.krabiclaw.test` after the curated fixtures. Its password
-comes from the `STAGING_REVIEW_PASSWORD` secret in the `staging` GitHub
-Environment. Ordinary provisioning restores editor and site-team memberships
+comes from the repository Actions secret named `STAGING_REVIEW_PASSWORD`.
+Ordinary provisioning restores editor and site-team memberships
 for Pottery House, Kikuzuki, and NCLS without rotating the password or deleting
 sessions. Rotation is explicit and separate from ephemeral E2E credentials.
 
@@ -43,11 +43,12 @@ sentinels plus the mapped subsystem specs. Schema, migration, Worker, test
 harness, and unclassified runtime changes fail safe to the full suite. Changing
 an E2E spec always selects that exact spec.
 
-The full suite is a release-candidate gate rather than a tax on every staging
-commit. Opening or updating the ordinary `staging` to `main` pull request
-rebuilds and deploys its exact staging head, provisions deterministic fixtures,
-and runs the complete suite against `staging.krabiclaw.com`. Production may not
-be promoted until that exact-head qualification passes.
+Every push to `staging` performs one build, one deployment, one fixture and auth
+provisioning sequence, and one complete Playwright invocation with two workers
+against `staging.krabiclaw.com`. The ordinary `staging` to `main` pull request
+does not deploy, reprovision, or rerun qualification; it consumes the required
+checks already attached to that exact staging SHA. Production may not be
+promoted until that exact-SHA qualification passes.
 
 Releases enter staging and production through reviewed branch merges. During an
 outage, use Cloudflare's deployment history without changing D1 data, then
