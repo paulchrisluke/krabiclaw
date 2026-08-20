@@ -32,31 +32,25 @@ export const getConfig = async (
     [organizationId, siteId],
   )
   const config = Object.fromEntries((results ?? []).map(r => [r.key, r.value])) as SiteConfig
-  // Social profiles are derived from the ordered Links manager. Legacy site_config
-  // values are deliberately ignored so there is only one writable source.
-  delete config.social_facebook
-  delete config.social_instagram
-  delete config.social_tiktok
-  const links = await queryAll<{ destination: string }>(
+  // Social profiles are real site-scope columns — the single writable source (see sites.
+  // social_facebook_url / social_instagram_url / social_tiktok_url). They are never derived
+  // from the links manager: a link's destination and the footer's social icon are unrelated.
+  const site = await queryFirst<{
+    social_facebook_url: string | null
+    social_instagram_url: string | null
+    social_tiktok_url: string | null
+  }>(
     db,
-    `SELECT li.destination
-       FROM site_link_items li
-       JOIN site_link_pages lp ON lp.id = li.link_page_id AND lp.site_id = li.site_id
-      WHERE li.site_id = ? AND li.status = 'active'
-      ORDER BY li.sort_order ASC, li.created_at ASC`,
-    [siteId],
+    `SELECT social_facebook_url, social_instagram_url, social_tiktok_url
+       FROM sites WHERE id = ? AND organization_id = ?`,
+    [siteId, organizationId],
   )
-  for (const link of links) {
-    try {
-      const url = new URL(link.destination)
-      const host = url.hostname.replace(/^www\./, '')
-      if (!config.social_facebook && host.endsWith('facebook.com')) config.social_facebook = url.toString()
-      if (!config.social_instagram && host.endsWith('instagram.com')) config.social_instagram = url.toString()
-      if (!config.social_tiktok && host.endsWith('tiktok.com')) config.social_tiktok = url.toString()
-    } catch {
-      // Relative and non-http links are valid link items but are not social profiles.
-    }
-  }
+  if (site?.social_facebook_url) config.social_facebook = site.social_facebook_url
+  else delete config.social_facebook
+  if (site?.social_instagram_url) config.social_instagram = site.social_instagram_url
+  else delete config.social_instagram
+  if (site?.social_tiktok_url) config.social_tiktok = site.social_tiktok_url
+  else delete config.social_tiktok
   return config
 }
 
