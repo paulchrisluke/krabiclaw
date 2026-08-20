@@ -209,6 +209,7 @@ jobs:
     needs: [typecheck, e2e-plan]
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    environment: staging
     concurrency:
       group: staging-deployment
       cancel-in-progress: false
@@ -293,6 +294,22 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node --experimental-strip-types scripts/provision-e2e-auth.ts --staging
+      - name: Provision durable staging-review identity
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
+        run: node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging
+      - name: Verify durable staging-review provisioning is idempotent
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
+        run: node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging
+      - name: Verify durable staging-review login
+        env:
+          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
+        run: yarn test:e2e:staging-review
       - name: Run OAuth bearer MCP smoke
         if: >-
           github.event_name == 'pull_request'

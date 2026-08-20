@@ -30,6 +30,13 @@ before fixture-dependent browser coverage. Staging provisioning is limited to
 protected fixed IDs, refuses unexpected ownership, and records D1 time-travel
 information before applying the fixtures. Production is never seeded by CI.
 
+Staging also provisions the durable human-review identity
+`staging-review@staging.krabiclaw.test` after the curated fixtures. Its password
+comes from the `STAGING_REVIEW_PASSWORD` secret in the `staging` GitHub
+Environment. Ordinary provisioning restores editor and site-team memberships
+for Pottery House, Kikuzuki, and NCLS without rotating the password or deleting
+sessions. Rotation is explicit and separate from ephemeral E2E credentials.
+
 `config/e2e-impact-map.mjs` is the executable impact map. Documentation-only
 changes do not deploy a Worker. Narrow changes run the permanent core browser
 sentinels plus the mapped subsystem specs. Schema, migration, Worker, test

@@ -41,6 +41,14 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   the same in their GitHub Actions job, mask it immediately, provision it after
   the curated seed, and expose it only to that run's Playwright process. No
   test password is stored in the repository.
+- `staging-review@staging.krabiclaw.test` is a separate durable human-review
+  identity. Its stable password is delivered to the staging job through the
+  `STAGING_REVIEW_PASSWORD` GitHub Environment secret and is never derived from
+  `E2E_TEST_PASSWORD` or registered in `E2E_AUTH_FIXTURES`.
+- Staging provisioning restores the review identity's editor and site-team
+  memberships after fixture reseeding without changing its credential or
+  deleting sessions. Password rotation is an explicit operator action through
+  `scripts/provision-staging-review-auth.ts --staging --rotate-password`.
 - Authenticated tests use `loginAs()` to call Better Auth's email sign-in API.
   If the fixture declares a membership, the helper then calls Better Auth's
   organization `set-active` endpoint; it never writes a session cookie itself.
@@ -90,10 +98,11 @@ staging tests use direct first-level aliases such as
 4. Confirm workflow `env:` passes required secrets into the failing job.
 5. Confirm the failing user exists in `config/e2e-auth-fixtures.ts` and was provisioned after the curated seed.
 6. Confirm its declared organization/team membership matches the permission the test is proving.
-7. Confirm Demo, Pottery House, Kikuzuki, and NCLS were provisioned from their current typed definitions. Missing required fixtures are failures, not skips.
-8. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
-9. Confirm the deployed test used the direct environment tenant alias and did not depend on `x-preview-tenant`.
-10. Confirm production smoke targets are still intentionally active customer/platform domains.
+7. For human staging review, confirm the `staging` GitHub Environment contains `STAGING_REVIEW_PASSWORD` and the durable smoke can access Pottery House, Kikuzuki, and NCLS.
+8. Confirm Demo, Pottery House, Kikuzuki, and NCLS were provisioned from their current typed definitions. Missing required fixtures are failures, not skips.
+9. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
+10. Confirm the deployed test used the direct environment tenant alias and did not depend on `x-preview-tenant`.
+11. Confirm production smoke targets are still intentionally active customer/platform domains.
 
 ## PR execution and guardrails
 
