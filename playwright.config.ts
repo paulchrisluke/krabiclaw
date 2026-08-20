@@ -5,9 +5,11 @@ const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 const port = 3000
 const baseURL = previewUrl || 'http://localhost:3000'
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
-const stagingReviewEnabled = process.env.PLAYWRIGHT_STAGING_REVIEW === 'true'
 const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
 const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
+const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`
+const optionalWorkerVars = ['CF_ACCOUNT_ID', 'CLOUDFLARE_IMAGES_API_TOKEN', 'CLOUDFLARE_IMAGES_VARIANT_BASE']
+  .flatMap(name => process.env[name] ? ['--var', `${name}:${shellQuote(process.env[name]!)}`] : [])
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
   process.env.E2E_TEST_PASSWORD = randomBytes(32).toString('hex')
@@ -45,6 +47,7 @@ const localWorkerCommand = [
   '--var NUXT_PUBLIC_APP_NAME:KrabiClaw',
   `--var NUXT_PUBLIC_SITE_URL:http://localhost:${port}`,
   `--var NUXT_PUBLIC_HELP_URL:http://localhost:${port}/help`,
+  ...optionalWorkerVars,
 ].join(' ')
 
 export default defineConfig({
@@ -81,16 +84,5 @@ export default defineConfig({
     stdout: captureServerLogs ? 'pipe' : 'ignore',
     stderr: captureServerLogs ? 'pipe' : 'ignore'
   },
-  projects: [
-    {
-      name: 'chromium',
-      testIgnore: '**/staging-review-auth.spec.ts',
-      use: { ...devices['Desktop Chrome'] }
-    },
-    {
-      name: 'staging-review',
-      testMatch: stagingReviewEnabled ? '**/staging-review-auth.spec.ts' : '**/staging-review-auth.disabled.spec.ts',
-      use: { ...devices['Desktop Chrome'] }
-    }
-  ]
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
 })

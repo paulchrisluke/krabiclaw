@@ -29,7 +29,8 @@ As of 2026-07-10:
 | Client MCP | 117 | 103 | Feature-flagged groups hidden (social/OAuth publishing 7, domains 5, managed service 2 = 14). Manual locale tools are visible by default. Raw/default counts include the Agent Skill guidance tools for blog and image workflows |
 | ChowBot | 87 | 85 | Same feature-flag policy for social/OAuth publishing and managed service; manual locale tools are visible by default and WhatsApp-specific tools remain ChowBot-only |
 
-Counts are checked by `yarn lint:tool-parity` (`scripts/lint-tool-parity.mjs`), which also verifies tool names stay in sync across definitions, executor dispatch, the confirm-required set, and feature-gate groups — update this table whenever those counts drift.
+These counts are documentation only. ChowBot is not part of release qualification;
+tenant MCP catalog validation is owned by `yarn mcp:catalog`.
 
 ## Feature-Flagged Groups
 
@@ -65,10 +66,10 @@ These groups are hidden by default on both conversational surfaces where present
 
 Before merging surface changes:
 
-1. Run `yarn test:unit`.
-2. Run `yarn typecheck`.
-3. Confirm no removed tool names remain in code or docs with `rg`.
-4. In staging, call `tools/list` and confirm default counts are lower than the raw registries.
+1. Run `yarn mcp:catalog`.
+2. Run the tenant MCP Playwright inventory.
+3. Confirm no removed MCP tool names remain in code or docs with `rg`.
+4. In preview, call `tools/list` and verify tenant-scoped discovery.
 5. In ChatGPT, reconnect the KrabiClaw connector and smoke-test:
    - update a menu item
    - update homepage content or hero image

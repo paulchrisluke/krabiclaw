@@ -114,21 +114,18 @@ the record; executable copies do not remain in the active repository.
 
 ## CI seeding
 
-Fixture provisioning runs before browser coverage in every environment where
-fixture-dependent tests execute. The generators run first, so the typed
-definitions are the source of truth in CI rather than committed SQL.
+Fixture provisioning runs only for local and disposable preview write coverage.
+The generators run first, so typed definitions remain the source of truth.
 
 | Trigger           | Environment  | What runs                                                                      |
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
 | PR opened/updated | `preview`    | generate and apply all four typed fixtures                                    |
-| Push to `staging` | `staging`    | migrate, sweep E2E artifacts, then generate and apply all four typed fixtures  |
+| Push to `staging` | `staging`    | migrations only; no sweep or seed                                               |
 | `staging` to `main` PR opened/updated | none | reuse checks attached to the exact staging SHA; no deployment or seed |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
-Staging provisioning is intentionally destructive only for the protected,
-fixed fixture IDs. `scripts/provision-staging-fixtures.ts` refuses unexpected
-site ownership, records D1 time-travel information before applying anything,
-and validates all four sites afterward. It must never be pointed at production.
+Staging and production customer data are never reseeded by CI. Their tenant
+checks are read-only.
 
 Commands and entry points:
 
@@ -136,7 +133,6 @@ Commands and entry points:
 - `yarn seed:pottery-local` — apply only Pottery House locally
 - `yarn seed:kikuzuki` — apply only Kikuzuki locally
 - `node --experimental-strip-types scripts/generate-ncls-seed.ts` — apply only NCLS locally
-- `scripts/provision-staging-fixtures.ts --staging` — CI-owned staging provisioning; do not run casually
 - Preview fixture application is CI-owned and uses the four generators in `.github/workflows/ci.yml`.
 
 ---

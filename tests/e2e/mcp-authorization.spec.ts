@@ -1,7 +1,7 @@
 import { expect, test, request as playwrightRequest, type APIRequestContext } from '@playwright/test'
-import { inviteAndAcceptMember, loginAs } from './helpers/auth'
+import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID } from './helpers/plan-fixtures'
-import { mcpRequest, ensureSite, getSiteOrg, loginAsFreshMcpUser } from './helpers/mcp'
+import { mcpRequest, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (authorization/isolation tests) — see
 // helpers/mcp.ts for why. This group covers role-based tool visibility,
@@ -10,17 +10,8 @@ import { mcpRequest, ensureSite, getSiteOrg, loginAsFreshMcpUser } from './helpe
 
 test.describe('stateless MCP server', () => {
   test('site-scoped tool visibility follows current roles', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
-    await loginAsFreshMcpUser(request, baseURL!, 'visibility')
-    const siteId = await ensureSite(request, baseURL!)
-    const organizationId = await getSiteOrg(request, baseURL!, siteId)
-    const editor = await inviteAndAcceptMember(request, baseURL!, {
-      userId: 'user-e2e-mcp-editor-a',
-      organizationId,
-      role: 'editor',
-      siteId,
-    })
-    await loginAs(request, baseURL!, editor.id)
+    await loginAs(request, baseURL!, 'user-e2e-pottery-editor')
+    const siteId = 'site-pottery-house'
 
     const listForSite = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -167,17 +158,8 @@ test.describe('stateless MCP server', () => {
   })
 
   test('an editor cannot see or use reply_to_review through MCP', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
-    await loginAsFreshMcpUser(request, baseURL!, 'editor-owner')
-    const siteId = await ensureSite(request, baseURL!)
-    const organizationId = await getSiteOrg(request, baseURL!, siteId)
-    const editor = await inviteAndAcceptMember(request, baseURL!, {
-      userId: 'user-e2e-mcp-editor-b',
-      organizationId,
-      role: 'editor',
-      siteId,
-    })
-    await loginAs(request, baseURL!, editor.id)
+    await loginAs(request, baseURL!, 'user-e2e-pottery-editor')
+    const siteId = 'site-pottery-house'
 
     const editorTools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',

@@ -174,7 +174,7 @@ test.describe('stateless MCP server', () => {
     }
   })
 
-  test('tenant blog tools write the same canonical block document as the dashboard', async ({ request, baseURL }) => {
+  test('tenant blog tools preserve the canonical block document', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_FREE_USER_ID)
     const siteId = 'site-mcp-free'
@@ -239,11 +239,13 @@ test.describe('stateless MCP server', () => {
       expect(updatedPost.document_updated_at).toEqual(expect.any(String))
       expect(updatedPost.document_updated_at).not.toBe(readPost.document_updated_at)
 
-      const dashboardRead = await request.get(`${baseURL}/api/editor/sites/${siteId}/blog/${postId}`)
-      expect(dashboardRead.status()).toBe(200)
-      const dashboardBody = await dashboardRead.json() as { post: { content_document: { blocks: Array<{ type: string; data: Record<string, unknown> }> } } }
-      expect(dashboardBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
-      expect(dashboardBody.post.content_document.blocks[0]?.data.text).toBe('Edited through MCP')
+      const updatedRead = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_blog_post', args: { site_id: siteId, post_id: postId },
+      })
+      expect(updatedRead.status()).toBe(200)
+      const updatedReadPost = mcpData<{ post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await updatedRead.json()).post
+      expect(updatedReadPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
+      expect(updatedReadPost.content_blocks[0]?.data.text).toBe('Edited through MCP')
 
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
@@ -278,13 +280,19 @@ test.describe('stateless MCP server', () => {
       expect(malformedUpdateBody.result?.isError).toBe(true)
       expect(malformedUpdateBody.result?.content?.[0]?.text).toContain('body')
 
-      const dashboardReadAfterRejectedUpdate = await request.get(`${baseURL}/api/editor/sites/${siteId}/blog/${postId}`)
-      expect(dashboardReadAfterRejectedUpdate.status()).toBe(200)
-      const dashboardBodyAfterRejectedUpdate = await dashboardReadAfterRejectedUpdate.json() as typeof dashboardBody
-      expect(dashboardBodyAfterRejectedUpdate.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
-      expect(dashboardBodyAfterRejectedUpdate.post.content_document.blocks[0]?.data.text).toBe('Edited through MCP')
+      const readAfterRejectedUpdate = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_blog_post', args: { site_id: siteId, post_id: postId },
+      })
+      const unchangedPost = mcpData<{ post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await readAfterRejectedUpdate.json()).post
+      expect(unchangedPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
+      expect(unchangedPost.content_blocks[0]?.data.text).toBe('Edited through MCP')
     } finally {
-      if (postId) await request.delete(`${baseURL}/api/editor/sites/site-mcp-free/blog/${postId}`)
+      if (postId) {
+        const cleanup = await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'delete_blog_post', args: { site_id: siteId, post_id: postId },
+        })
+        expect(cleanup.status()).toBe(200)
+      }
     }
   })
 

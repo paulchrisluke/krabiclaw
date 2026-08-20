@@ -5,10 +5,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Sweeps rows that Playwright E2E specs leave behind on preview/staging, so scheduled tasks and
-// manual queries against these environments don't scan an ever-growing table. Two categories:
+// Sweeps rows that Playwright E2E specs leave behind on local/preview disposable data.
 //
-// 1. Every non-fixture organization. Preview/staging never hold legitimate customer data -
+// 1. Every non-fixture organization. Preview never holds legitimate customer data -
 //    everything in `organization` is either one of the fixed, named seed fixtures below (reset
 //    on every run by generate-*-seed.ts) or E2E-test-created throwaway state, so "not a known
 //    fixture" is sufficient to mark an org disposable - no naming-convention/pattern matching on
@@ -24,23 +23,23 @@ import { join } from 'node:path'
 //    child tables - except notification_events, whose organization_id/site_id columns are
 //    ON DELETE SET NULL rather than CASCADE, so it's swept explicitly before the org delete.
 //
-// 2. Guest-submitted rows against the *persistent* Pottery House and demo fixtures (bookings,
+// 2. Guest-submitted rows against persistent customer fixtures (bookings,
 //    contact forms, reservations) - these specs already mark every guest email
 //    '...@playwright.example', so they're swept by that marker instead, since there's no
-//    throwaway org/site to cascade from. Every one of these queries scopes to the two known
+//    throwaway org/site to cascade from. Every one of these queries scopes to known
 //    fixture site/org IDs FIRST, before the LIKE pattern - contact_submissions,
 //    experience_bookings, and reservation_submissions all already carry a site_id-leading index
 //    (idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site)
 //    and notifications an organization_id-leading one (notifications_organization_created_at_idx) - but a bare
 //    `email LIKE '%@playwright.example'` with no site/org filter can't use any of them (leading
 //    wildcard forces a full scan regardless), which is what still exceeded D1's CPU budget on
-//    staging even after category 1 was fixed to be cheap.
+//    preview even after category 1 was fixed to be cheap.
 //
 // Age-guarded (default 2 hours) as a practical safety margin, not a hard guarantee: rows created
 // by an in-flight run are always fresher than the cutoff, so a run has to be stuck for the full
 // window before its own data becomes sweepable by a concurrent run against the same shared
-// preview/staging DB (CI's concurrency group is per-PR, so multiple PRs' e2e-smoke runs can be
-// in flight at once). Observed e2e-smoke runtime is well under an hour; if that ever changes,
+// preview DB (CI serializes the shared preview deployment, but cancelled runs still leave data).
+// If runtime changes materially,
 // raise --older-than-hours to match rather than treating 2h as untouchable. For category 1, the
 // guard is "does this org own any site created after the cutoff" rather than checking every
 // site's age individually - an org that's still actively being built by an in-flight test run
@@ -64,20 +63,17 @@ const FIXTURE_ORG_IDS = [
   'org-ncls-blawby',
 ]
 
-// The only two fixtures guest-booking/contact specs target: Pottery House (notifications.spec.ts,
-// pottery-house.spec.ts) and demo (reply-threading.spec.ts, public.spec.ts) - lets category 2
-// scope by an indexed column before the unindexable email LIKE pattern. Update this list if a
-// future spec targets a different fixture (grep tests/e2e/*.spec.ts for '@playwright.example' to
-// find every spec that needs to stay covered).
-const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-demo']
-const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-demo']
+// The customer fixtures targeted by tenant-guest-journeys.spec.ts. Scoping by
+// indexed site/org columns keeps the email marker queries bounded.
+const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-kikuzuki', 'site-ncls-blawby']
+const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-kikuzuki', 'org-ncls-blawby']
 
 // Site-transfer E2E creates throwaway `e2e-*` sites in the protected fixture
 // organizations, then moves them between those organizations. They must be
 // swept by site ID rather than by deleting the fixture organizations/users.
 // Retained/audit tables are explicit because their site foreign keys are often
 // SET NULL (or intentionally polymorphic), so deleting the site alone would
-// leave rows behind in the shared preview/staging database.
+// leave rows behind in the shared preview database.
 const E2E_FIXTURE_SITE_RETAINED_TABLES = [
   'ai_usage_log',
   'usage_events',
@@ -120,25 +116,22 @@ const FIXTURE_USER_IDS = [
   'user-pottery-house',
   'user-kikuzuki',
   'user-ncls-blawby',
-  // Durable human staging-review identity; never eligible for E2E user cleanup.
-  'user-staging-review',
 ]
 
-const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 const isStdout = process.argv.includes('--stdout')
 
-if (isStaging && isPreview) {
-  console.error('Only one of --staging or --preview may be provided.')
+if (process.argv.includes('--staging') || process.argv.includes('--remote')) {
+  console.error('E2E cleanup supports only local and preview disposable data.')
   process.exit(1)
 }
 
 // Intentionally no standalone --remote: this script targets non-fixture organizations through
 // the fixed fixture allowlist and age guard, plus guest rows marked '@playwright.example'. That
 // scope is meaningless against production, so it must always be explicitly scoped to --preview
-// or --staging (or default to --local for testing the emitted SQL against a local D1 file).
-const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : '--local'
-const remoteFlag = isStaging || isPreview ? '--remote' : ''
+// or default to --local for testing the emitted SQL against a local D1 file.
+const envFlag = isPreview ? '--env preview' : '--local'
+const remoteFlag = isPreview ? '--remote' : ''
 
 const ageArg = process.argv.find((arg) => arg.startsWith('--older-than-hours='))
 const olderThanHours = ageArg ? Number(ageArg.split('=')[1]) : 2
@@ -220,7 +213,7 @@ const eligibleUserIds = `
   LIMIT ${batchSize}
 `
 
-const sql = `-- Sweeps E2E-generated rows from preview/staging so they don't accumulate forever.
+const sql = `-- Sweeps E2E-generated rows from local/preview so they don't accumulate forever.
 -- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
 -- '@playwright.example' guest-email marker that tests/e2e specs already use. Curated fixtures
 -- (Pottery House, Kikuzuki, demo, MCP plan fixtures, NCLS/Blawby) are untouched - they live under
@@ -277,7 +270,7 @@ WHERE site_id IN (${eligibleE2eFixtureSiteIds});
 DELETE FROM sites
 WHERE id IN (${eligibleE2eFixtureSiteIds});
 
--- Category 2: guest-submitted rows on the persistent Pottery House/demo fixtures, marked by
+-- Category 2: guest-submitted rows on persistent customer fixtures, marked by
 -- email. Every query below filters by the known fixture site_id/organization_id FIRST - via
 -- idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site,
 -- and notifications_organization_created_at_idx (see comment above) - so the

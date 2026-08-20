@@ -1,55 +1,40 @@
 # Release flow
 
-KrabiClaw uses one branch-driven GitHub Actions workflow and three independent
-Cloudflare Workers.
+KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare
+Workers.
 
-| Git event | Worker | Validation |
+| Git event | Worker | Release-blocking validation |
 | --- | --- | --- |
-| Pull request to `staging` | `krabiclaw-preview` | Core plus affected Playwright coverage selected from the diff |
-| Push to `staging` | `krabiclaw-staging` | Full Playwright qualification with two workers |
-| `staging` to `main` pull request | None | Reuses required checks attached to the exact staging SHA |
-| Push to `main` | `krabiclaw` | Read-only production browser smoke |
+| Pull request to `staging` | `krabiclaw-preview` when affected | Tenant rendering/navigation plus affected guest or tenant MCP journeys |
+| Push to `staging` | `krabiclaw-staging` | Read-only rendering on Pottery House, Kikuzuki, and NCLS aliases; read-only tenant MCP OAuth/content smoke |
+| `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
+| Push to `main` | `krabiclaw` | Read-only rendering/navigation on all three customer custom domains |
 
-Each deployment is a normal `wrangler deploy` to its environment. Cloudflare
-retains ordinary deployment history.
+Each environment receives one normal `wrangler deploy`. Preview may apply its
+disposable fixtures and run writes. Staging applies migrations but never sweeps,
+reseeds customers, provisions E2E identities, or performs guest/MCP writes.
+Production is never seeded or mutated by test automation.
 
-The platform uses `preview.krabiclaw.com` and `staging.krabiclaw.com`. Public
-tenant verification uses `<subdomain>-preview.krabiclaw.com` and
-`<subdomain>-staging.krabiclaw.com`, routed to the same environment Worker.
-These direct hosts are the browser and manual-QA contract; deployed checks do
-not select tenants through request headers.
+The only release-qualified surfaces are:
 
-The checks job runs the repository's migration lint once. Each deployment job
-then builds, performs one normal Worker deploy, and uses native
-`wrangler d1 migrations apply`; Wrangler owns the applied-migration history.
-Runtime removals land before their contract migration so the environment never
-runs an older Worker against columns that have already been dropped.
-Preview and staging both sweep disposable E2E artifacts and deterministically
-reapply Demo, Pottery House, Kikuzuki, and NCLS from their typed definitions
-before fixture-dependent browser coverage. Staging provisioning is limited to
-protected fixed IDs, refuses unexpected ownership, and records D1 time-travel
-information before applying the fixtures. Production is never seeded by CI.
+- Pottery House, Kikuzuki, and NCLS public rendering and navigation;
+- Pottery experience booking and contact, plus Kikuzuki reservation;
+- tenant MCP OAuth, isolation, reads, writes, content, and media.
 
-Staging also provisions the durable human-review identity
-`staging-review@staging.krabiclaw.test` after the curated fixtures. Its password
-comes from the repository Actions secret named `STAGING_REVIEW_PASSWORD`.
-Ordinary provisioning restores editor and site-team memberships
-for Pottery House, Kikuzuki, and NCLS without rotating the password or deleting
-sessions. Rotation is explicit and separate from ephemeral E2E credentials.
+Admin, dashboard, CMS/editor, ChowBot, billing/back-office, staging-review,
+site-administration, platform marketing, and platform MCP behavior are not
+release-qualified surfaces. Their failures do not receive synthetic browser
+coverage in the release workflow.
 
-`config/e2e-impact-map.mjs` is the executable impact map. Documentation-only
-changes do not deploy a Worker. Narrow changes run the permanent core browser
-sentinels plus the mapped subsystem specs. Schema, migration, Worker, test
-harness, and unclassified runtime changes fail safe to the full suite. Changing
-an E2E spec always selects that exact spec.
+`config/e2e-impact-map.mjs` has exactly three groups: `tenant-public`,
+`guest-journeys`, and `tenant-mcp`. Documentation-only changes skip preview.
+High-impact and unclassified runtime changes run the complete retained eight-file
+inventory; narrower changes run tenant public coverage plus affected groups.
 
-Every push to `staging` performs one build, one deployment, one fixture and auth
-provisioning sequence, and one complete Playwright invocation with two workers
-against `staging.krabiclaw.com`. The ordinary `staging` to `main` pull request
-does not deploy, reprovision, or rerun qualification; it consumes the required
-checks already attached to that exact staging SHA. Production may not be
-promoted until that exact-SHA qualification passes.
+Preview writes use fixed customer/MCP fixtures and `@playwright.example` guest
+identities. `scripts/reset-e2e-artifacts.ts` supports only local and preview
+disposable data. Staging and production verification is read-only.
 
 Releases enter staging and production through reviewed branch merges. During an
-outage, use Cloudflare's deployment history without changing D1 data, then
-repair the source through the normal `staging` to `main` flow.
+outage, restore the last known-good Worker from Cloudflare deployment history
+without changing D1 data, then repair the source through the normal branch flow.
