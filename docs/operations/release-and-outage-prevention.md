@@ -20,9 +20,9 @@ neither must wait for the other to begin.
 
 Validation follows product risk:
 
-1. Test the affected authenticated flow or tenant journey first.
-2. Check representative client sites before platform marketing routes.
-3. Run the exhaustive tenant route matrix only for shared renderer, routing,
+1. Test the affected tenant journey first.
+2. Check all three customer sites for shared public changes.
+3. Expand the retained tenant matrix only for shared renderer, routing,
    theme, content-model, or destructive content-migration changes.
 
 A reproducible first-party failure blocks promotion. An operator-closed tab or
@@ -34,16 +34,16 @@ inspection once to determine ownership, then report the actual result.
 1. Keep one coherent bugfix or feature in one ready pull request targeting
    `staging`. Split work only when the changes are independently releasable.
 2. Run focused validation locally. CI owns the environment-specific build,
-   preview deployment, permanent core sentinels, and affected E2E coverage
+   preview deployment, tenant rendering/navigation, and affected E2E coverage
    selected from `config/e2e-impact-map.mjs`.
 3. When preview deploys, test the affected customer journey immediately.
 4. Merge to `staging` after required PR checks and preview validation pass.
-5. When staging deploys, begin credentialed MCP and tenant browser validation
-   immediately while its complete two-worker Playwright qualification runs.
+5. When staging deploys, begin read-only MCP and tenant browser validation
+   immediately.
 6. Open or update the ordinary `staging` to `main` pull request. It reuses the
    completed checks attached to that exact staging SHA without another deploy,
    provisioning pass, or CI qualification cycle.
-7. Promote only after the full release qualification, required checks, and
+7. Promote only after the retained release qualification, required checks, and
    scoped customer validation pass.
 8. After production deploys, repeat the affected read-only customer journeys
    and production smoke. Use an explicit canary identity for any production
@@ -56,8 +56,8 @@ version identifiers.
 ## Browser and MCP verification
 
 Use the browser state appropriate to the behavior. Anonymous public routes may
-use a fresh context. Dashboard, OAuth, and MCP checks must use a credentialed
-test account; rendering the login page does not validate authentication.
+use a fresh context. OAuth and MCP checks must use a credentialed tenant account;
+rendering the login page does not validate authentication.
 
 For an auth or MCP change, exercise the deployed flow end to end:
 
@@ -72,9 +72,9 @@ For an auth or MCP change, exercise the deployed flow end to end:
 For affected tenant routes, verify the final URL, tenant identity, visible copy,
 first-party media, primary navigation and calls to action, console errors,
 failed first-party requests, hydration errors, blank sections, and late content
-disappearance. Mutating form and booking interactions belong on preview or
-staging fixtures. Production checks stay read-only unless a dedicated canary is
-explicitly authorized.
+disappearance. Mutating form, booking, and MCP interactions belong only on local
+or preview disposable data. Staging and production checks stay read-only unless
+a dedicated canary is explicitly authorized.
 
 The representative client order is:
 
@@ -82,9 +82,9 @@ The representative client order is:
    reservations.
 2. Kikuzuki: home, menu and items, locations, and reservations.
 3. NCLS: home, services and details, pricing, articles, contact, and schedule.
-4. Demo fixtures needed by the affected feature.
-5. A minimal set of affected platform, authentication, help, docs, or legal
-   routes.
+
+Platform marketing, dashboard, CMS, ChowBot, billing, site administration, and
+platform MCP are outside the release-qualified scope.
 
 For a shared renderer, routing, theme, content-model, or destructive
 content-migration change, expand that representative set to every published

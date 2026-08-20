@@ -12,7 +12,7 @@ const SETTINGS_DOMAIN_TOOL_NAMES = new Set(['get_dashboard_link'])
 // (mcp-tools/media.ts) used to be hand-written here too, duplicating what's
 // now properly derived in chowbot-tools/sites.ts and chowbot-tools/media.ts
 // respectively — two chowbot-tools files each registering the same tool
-// name, which lint-tool-parity.mjs's cross-file duplicate check now catches.
+// name.
 export const SETTINGS_CHOWBOT_TOOLS: AiTool[] = [
   // ── Dashboard links ────────────────────────────────────────────────────────
   ...SETTINGS_TOOLS.filter((tool) => SETTINGS_DOMAIN_TOOL_NAMES.has(tool.name)).map(chowbotToolFromMcp),

@@ -19,7 +19,6 @@ export const EXPERIENCES_CHOWBOT_TOOLS: AiTool[] = [
   // get_experience_availability, set_experience_slot_override, and
   // list_experience_slot_overrides have no MCP_TOOLS definition — they're
   // executor-only (see mcp-executor/experiences.ts and
-  // scripts/lint-tool-parity.mjs's MCP_EXECUTOR_ONLY_ALLOWLIST /
   // docs/tool-parity.md's "ChowBot-only" table). runMcpExecutorToolForChowbot
   // requires a real MCP_TOOLS entry to read minimumRole/requiredEntitlement
   // from, so these three stay as their own chowbot-agent.ts case bodies

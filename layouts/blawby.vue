@@ -9,7 +9,7 @@
          source in document order during SSR. -->
     <div id="blawby-portal-root" />
 
-    <BlawbyHeader :site="identity" :consultation="consultation" />
+    <BlawbyHeader :site="identity" :consultation="consultation" :page-links="pageLinks" />
     <main>
       <slot />
     </main>
@@ -17,6 +17,7 @@
       :site="identity"
       :compliance="compliance"
       :offering-links="offeringLinks"
+      :page-links="pageLinks"
     />
     <ConsentBanner variant="blawby" privacy-path="/policies/privacy" />
   </div>
@@ -50,11 +51,13 @@ useHead(() => ({
 
 const target = resolveBlawbyRouteTarget(route.path, route.params)
 const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
+provide('blawby-document', document)
 const identity = computed(() => document.value.shell.identity)
 const consultation = computed(() => document.value.shell.consultation)
 const compliance = computed(() => document.value.shell.compliance)
 const themeTokens = computed(() => document.value.shell.themeTokens)
 const offeringLinks = computed(() => document.value.shell.offeringLinks)
+const pageLinks = computed(() => document.value.shell.pageLinks)
 provide('blawby-schema-context', { identity, compliance })
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })

@@ -128,6 +128,7 @@ export function buildPublicDraftBlawbyDocument(
       compliance: null,
       themeTokens: brandColor ? { primary: brandColor } : {},
       offeringLinks: [],
+      pageLinks: [],
     },
     route: {
       recipe: 'home',

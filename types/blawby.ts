@@ -42,6 +42,12 @@ export interface PublicOfferingLink {
   canonical_path: string
 }
 
+export interface PublicBlawbyPageLink {
+  id: string
+  path: string
+  title: string
+}
+
 export interface PublicOfferingSummary {
   id: string
   name: string
@@ -229,6 +235,7 @@ export interface PublicBlawbyShellData {
   compliance: PublicCompliance | null
   themeTokens: ApiRecord
   offeringLinks: PublicOfferingLink[]
+  pageLinks: PublicBlawbyPageLink[]
 }
 
 export interface PublicBlawbyData {

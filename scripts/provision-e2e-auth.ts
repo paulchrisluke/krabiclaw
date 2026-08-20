@@ -47,6 +47,11 @@ ON CONFLICT(id) DO UPDATE SET
   role = excluded.role,
   updatedAt = unixepoch();
 
+UPDATE user
+SET phoneNumber = ${fixture.phoneNumber ? sqlString(fixture.phoneNumber) : 'NULL'},
+    phoneNumberVerified = ${fixture.phoneNumber ? '1' : '0'}
+WHERE id = ${sqlString(fixture.id)};
+
 DELETE FROM session WHERE userId = ${sqlString(fixture.id)};
 DELETE FROM teamMember WHERE userId = ${sqlString(fixture.id)};
 DELETE FROM member WHERE userId = ${sqlString(fixture.id)};

@@ -25,7 +25,18 @@
           </NuxtLink>
         </div>
 
-        <div class="flex items-center font-semibold uppercase">
+        <div class="flex items-center gap-x-1 font-semibold uppercase md:gap-x-6">
+          <div class="hidden text-[var(--blawby-primary)] md:block">
+            <NuxtLink
+              v-for="item in headerItems"
+              :key="item.id"
+              :to="item.path"
+              class="inline-block rounded-lg px-2 py-1 text-sm no-underline transition hover:text-[var(--blawby-accent-strong)]"
+            >
+              {{ item.label }}
+            </NuxtLink>
+          </div>
+
           <BlawbyButton
             :to="consultation.schedule_path"
             @click="trackConsultation"
@@ -36,6 +47,29 @@
             <span>{{ headerCtaLabel }}</span>
           </BlawbyButton>
 
+          <details ref="mobileNavDetails" class="relative -mr-1 md:hidden" @toggle="syncMobileNavState">
+            <summary
+              class="relative z-10 flex size-8 list-none items-center justify-center text-[var(--blawby-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] [&::-webkit-details-marker]:hidden"
+              aria-label="Toggle navigation"
+            >
+              <svg class="size-4 overflow-visible stroke-current" viewBox="0 0 14 14" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path :class="mobileOpen ? 'scale-90 opacity-0' : ''" class="origin-center transition" d="M0 1H14M0 7H14M0 13H14" />
+                <path :class="mobileOpen ? '' : 'scale-90 opacity-0'" class="origin-center transition" d="M2 2L12 12M12 2L2 12" />
+              </svg>
+            </summary>
+            <div class="absolute right-0 top-full mt-4 w-[min(20rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5">
+              <NuxtLink
+                v-for="item in headerItems"
+                :key="item.id"
+                :to="item.path"
+                class="block w-full p-2 no-underline"
+                @click="closeMobileNav"
+              >
+                {{ item.label }}
+              </NuxtLink>
+            </div>
+          </details>
+
         </div>
       </nav>
     </div>
@@ -44,11 +78,12 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicBlawbyIdentity, PublicConsultationSettings } from '~/types/blawby'
+import type { PublicBlawbyIdentity, PublicBlawbyPageLink, PublicConsultationSettings } from '~/types/blawby'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
   consultation: PublicConsultationSettings
+  pageLinks: PublicBlawbyPageLink[]
 }>()
 
 const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
@@ -58,6 +93,25 @@ const logoUrl = computed(() => props.site.logo_url || null)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')
+const navLabels: Record<string, string> = {
+  '/services': 'Services', '/pricing': 'Pricing', '/about': 'About',
+  '/contact': 'Contact', '/blog': 'Blog', '/donate': 'Donate',
+}
+const headerOrder = Object.keys(navLabels)
+const headerItems = computed(() => {
+  const byPath = new Map(props.pageLinks.map(item => [item.path, item]))
+  return headerOrder.flatMap(path => {
+    const item = byPath.get(path)
+    return item ? [{ ...item, label: navLabels[path]! }] : []
+  })
+})
+const mobileOpen = ref(false)
+const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
+function syncMobileNavState(event: Event) { mobileOpen.value = (event.currentTarget as HTMLDetailsElement).open }
+function closeMobileNav() {
+  mobileOpen.value = false
+  if (mobileNavDetails.value) mobileNavDetails.value.open = false
+}
 function trackConsultation() {
   trackConsultationClick('header', route.path, props.consultation.schedule_path)
 }

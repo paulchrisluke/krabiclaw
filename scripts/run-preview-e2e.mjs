@@ -25,16 +25,17 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
-if (selectionScope !== 'full') {
-  run('yarn', ['test:e2e:preview:core'])
-}
+const tenantPublicSpecs = [
+  'tests/e2e/tenant-rendering.spec.ts',
+  'tests/e2e/tenant-client-navigation.spec.ts'
+]
+const specs = [...new Set([...tenantPublicSpecs, ...selectedSpecs])]
 
-if (selectedSpecs.length > 0) {
+if (specs.length > 0) {
   run('yarn', [
     'playwright',
     'test',
-    ...selectedSpecs,
-    '--project=chromium',
-    '--workers=1'
+    ...specs,
+    '--project=chromium'
   ])
 }

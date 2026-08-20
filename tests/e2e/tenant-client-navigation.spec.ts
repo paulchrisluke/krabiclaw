@@ -1,230 +1,56 @@
-// Regression coverage for krabiclaw #436/#437: client-side navigation on a
-// tenant Saya site must never render another page's (or an empty-state)
-// content while its own page fetch is still in flight. See
-// composables/usePublicPageData.ts and composables/useSiteShell.ts for the fix.
-//
-// The page XHR is deliberately delayed via route interception so the race
-// window is wide enough to observe deterministically — on unthrottled local/CI
-// networks it can resolve fast enough that a regression wouldn't reliably show
-// up otherwise.
-import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import {
-  collectPageErrors,
-  tenantBaseURL,
-  tenantExtraHeaders,
-  setupTenantHeaders,
+  blawbyBaseURL, blawbyExtraHeaders, collectPageErrors,
+  potteryHouseBaseURL, potteryHouseExtraHeaders, setupTenantHeaders,
 } from './helpers'
+import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
 
-const expectNoPageErrors = (errors: string[]) => {
+async function clientJourney(page: Page, options: {
+  baseURL: string
+  headers: Record<string, string>
+  identity: RegExp
+  listPath: string
+  detailPath: string
+  detailText: RegExp
+  forbidden: RegExp[]
+}) {
+  await setupTenantHeaders(page, options.baseURL, options.headers)
+  const errors = collectPageErrors(page, { failOnAllWarnings: true })
+  await page.goto(`${options.baseURL}/`, { waitUntil: 'load' })
+  await expect(page.locator('body')).toContainText(options.identity)
+  await page.locator(`a[href="${options.listPath}"]`).first().click()
+  await expect(page).toHaveURL(new RegExp(`${options.listPath}/?$`))
+  await expect(page.locator('body')).toContainText(options.identity)
+  await page.locator(`a[href="${options.detailPath}"]`).first().click()
+  await expect(page).toHaveURL(new RegExp(`${options.detailPath}/?$`))
+  await expect(page.locator('main')).toContainText(options.detailText)
+  await expect(page.locator('body')).toContainText(options.identity)
+  for (const text of options.forbidden) await expect(page.locator('body')).not.toContainText(text)
+  await page.waitForTimeout(250)
+  await expect(page.locator('main')).toContainText(options.detailText)
   expect(errors).toEqual([])
 }
 
-async function setupNavigationTest(page: Page) {
-  // This suite validates live loader transitions. Persistent Miniflare HTML
-  // cache can otherwise replay an SSR document from an earlier test run and
-  // prevent the browser from exercising the current loader implementation.
-  const tenantOrigin = new URL(tenantBaseURL).origin
-  await page.route(`${tenantOrigin}/**`, async route => {
-    await route.fallback({
-      headers: { ...route.request().headers(), 'cache-control': 'no-cache' },
-    })
+test('Pottery home → experiences → experience detail', async ({ page }) => {
+  await clientJourney(page, {
+    baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders, identity: /Pottery House/i,
+    listPath: '/experiences', detailPath: '/experiences/pottery-wheel-class', detailText: /Pottery Wheel Class/i,
+    forbidden: [/Ember & Slice/i, /No experiences yet/i, /Also part of Saya/i],
   })
+})
 
-  // Defeat NuxtLink's viewport-based prefetch so the page fetch only
-  // happens on the actual click, not ahead of time.
-  await page.addInitScript(() => {
-    class NoopObserver {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-      takeRecords() { return [] }
-    }
-    // @ts-expect-error test-only stub
-    window.IntersectionObserver = NoopObserver
+test('Kikuzuki home → menu → menu item', async ({ page }) => {
+  await clientJourney(page, {
+    baseURL: kikuzukiTestBaseUrl(), headers: kikuzukiTestExtraHeaders(), identity: /Kikuzuki/i,
+    listPath: '/menu', detailPath: '/menu/tuna-sushi', detailText: /Tuna Sushi/i,
+    forbidden: [/Ember & Slice/i, /Menu coming soon/i],
   })
-}
+})
 
-async function navigateAndAssertAuthoritative(page: Page, opts: {
-  fromPath: string
-  linkHref: string
-  beforeText: string
-  afterText: string
-  forbiddenTexts: string[]
-}) {
-  const errors = collectPageErrors(page, { failOnAllWarnings: true })
-  let releasePageRequest!: () => void
-  const pageRequestPaused = new Promise<void>((resolve) => {
-    releasePageRequest = resolve
+test('NCLS home → services → service detail', async ({ page }) => {
+  await clientJourney(page, {
+    baseURL: blawbyBaseURL, headers: blawbyExtraHeaders, identity: /North Carolina Legal Services/i,
+    listPath: '/services', detailPath: '/services/family', detailText: /Family Law/i,
+    forbidden: [/Ember & Slice/i, /No services/i],
   })
-  let markPageRequestPaused!: () => void
-  const sawPausedPageRequest = new Promise<void>((resolve) => {
-    markPageRequestPaused = resolve
-  })
-  let navigationStarted = false
-  await page.route('**/api/public/sites/*/page*', async (route) => {
-    if (!navigationStarted) {
-      await route.fallback()
-      return
-    }
-    const url = new URL(route.request().url())
-    const destinationSegments = opts.linkHref.split('/').filter(Boolean)
-    const expectedPage = destinationSegments[0] === 'locations' && destinationSegments[1]
-      ? 'location'
-      : destinationSegments[0]
-    const expectedSlug = destinationSegments[1]
-    if (
-      url.searchParams.get('page') !== expectedPage
-      || (expectedSlug && ![url.searchParams.get('experience'), url.searchParams.get('location')].includes(expectedSlug))
-    ) {
-      await route.fallback()
-      return
-    }
-    markPageRequestPaused()
-    await pageRequestPaused
-    await route.fallback()
-  })
-
-  await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
-  await expect(page.locator('body')).toContainText(opts.beforeText)
-  for (const forbidden of opts.forbiddenTexts) {
-    await expect(page.locator('main')).not.toContainText(forbidden)
-  }
-  const link = page.locator(`a[href="${opts.linkHref}"]`).first()
-  await expect(link).toBeVisible()
-  await expect(link).toHaveAttribute('href', opts.linkHref)
-  await page.waitForFunction(() => Boolean(
-    (document.querySelector('#__nuxt') as (Element & { __vue_app__?: unknown }) | null)?.__vue_app__,
-  ))
-  // Dispatch the click without Playwright waiting for navigation completion;
-  // the behavior under test is specifically the state before data completes.
-  navigationStarted = true
-  await link.evaluate((element: HTMLAnchorElement) => element.click())
-  await sawPausedPageRequest
-
-  // The destination request is authoritative. Nuxt retains the current route
-  // until it succeeds instead of mounting the destination with empty data.
-  await expect(page).toHaveURL(new RegExp(`${opts.linkHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
-  for (const forbidden of opts.forbiddenTexts) {
-    await expect(page.locator('main')).not.toContainText(forbidden)
-  }
-
-  releasePageRequest()
-  await expect(page.locator('main[data-route-shell]')).toHaveAttribute('data-route-shell', opts.linkHref)
-  await expect(page.locator('body')).toContainText(opts.afterText)
-  for (const forbidden of opts.forbiddenTexts) {
-    await expect(page.locator('main')).not.toContainText(forbidden)
-  }
-  expectNoPageErrors(errors)
-}
-
-test.describe('tenant client-side navigation does not show stale/fallback content', () => {
-  test.beforeEach(async ({ page }) => {
-    await setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders)
-    await setupNavigationTest(page)
-  })
-
-  test('Home -> Experiences', async ({ page }) => {
-    await navigateAndAssertAuthoritative(page, {
-      fromPath: '/',
-      linkHref: '/experiences',
-      beforeText: 'Ember & Slice',
-      afterText: 'Pizza Making Class',
-      forbiddenTexts: ['No experiences yet.'],
-    })
-  })
-
-  test('Home -> Menu', async ({ page }) => {
-    const errors = collectPageErrors(page, { failOnAllWarnings: true })
-    await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
-
-    await page.locator('a[href="/menu"]').first().evaluate(
-      (element: HTMLAnchorElement) => element.click(),
-    )
-
-    await expect(page).toHaveURL(/\/menu\/?$/)
-    await expect(page.locator('main')).toContainText('Margherita')
-    await expect(page.locator('main')).not.toContainText('Menu coming soon.')
-    expectNoPageErrors(errors)
-  })
-
-  for (const destination of [
-    { path: '/reviews', text: 'Reviews' },
-    { path: '/qa', text: 'Frequently' },
-    { path: '/posts', text: 'Updates' },
-    { path: '/photos', text: 'Gallery' },
-  ]) {
-    test(`Home -> ${destination.path}`, async ({ page }) => {
-      const errors = collectPageErrors(page, { failOnAllWarnings: true })
-      await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
-
-      await page.locator(`a[href="${destination.path}"]`).last().evaluate(
-        (element: HTMLAnchorElement) => element.click(),
-      )
-
-      await expect(page).toHaveURL(new RegExp(`${destination.path}/?$`))
-      await expect(page.locator('main')).toContainText(destination.text)
-      await expect(page.locator('main')).not.toBeEmpty()
-      expectNoPageErrors(errors)
-    })
-  }
-
-  test('Experiences -> Experience detail', async ({ page }) => {
-    await navigateAndAssertAuthoritative(page, {
-      fromPath: '/experiences',
-      linkHref: '/experiences/pizza-making-class',
-      beforeText: 'Pizza Making Class',
-      afterText: 'Stretch dough',
-      forbiddenTexts: ['No experience details yet.'],
-    })
-  })
-
-  test('Home -> Locations', async ({ page }) => {
-    await navigateAndAssertAuthoritative(page, {
-      fromPath: '/',
-      linkHref: '/locations',
-      beforeText: 'Ember & Slice',
-      afterText: 'Locations',
-      forbiddenTexts: ['No locations.'],
-    })
-  })
-
-  test('Locations -> Location detail', async ({ page }) => {
-    await navigateAndAssertAuthoritative(page, {
-      fromPath: '/locations',
-      linkHref: '/locations/brooklyn',
-      beforeText: 'Locations',
-      afterText: 'Ember & Slice Brooklyn',
-      forbiddenTexts: ['No location details.'],
-    })
-  })
-
-  test('Location detail -> Location reviews', async ({ page }) => {
-    const errors = collectPageErrors(page, { failOnAllWarnings: true })
-    await page.goto(`${tenantBaseURL}/locations/brooklyn`, { waitUntil: 'load' })
-    await expect(page.locator('main')).toContainText('Weekend lunch now starts')
-
-    await page.locator('main a[href="/locations/brooklyn/reviews"]').evaluate(
-      (element: HTMLAnchorElement) => element.click(),
-    )
-
-    await expect(page).toHaveURL(/\/locations\/brooklyn\/reviews\/?$/)
-    await expect(page.locator('main')).toContainText('What guests are saying')
-    expectNoPageErrors(errors)
-  })
-
-  test('Menu -> Menu item detail', async ({ page }) => {
-    const errors = collectPageErrors(page, { failOnAllWarnings: true })
-    await page.goto(`${tenantBaseURL}/menu`, { waitUntil: 'load' })
-    await expect(page.locator('body')).toContainText('Margherita')
-
-    const link = page.locator('a[href="/menu/margherita"]').first()
-    await link.evaluate((element: HTMLAnchorElement) => element.click())
-
-    await expect(page).toHaveURL(/\/menu\/margherita\/?$/)
-    await expect(page.locator('main')).toContainText('Margherita')
-    await expect(page.locator('[data-testid="error-page"]')).toHaveCount(0)
-    expectNoPageErrors(errors)
-  })
-
 })

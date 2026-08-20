@@ -6,6 +6,7 @@ import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
+import { listPublishedTenantPagePaths } from '~/server/utils/tenant-pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
 import type {
   PublicBlawbyData,
@@ -33,6 +34,11 @@ function asBoolean(value: unknown) {
 function requiredText(value: unknown, field: string): string {
   if (typeof value === 'string' && value.trim()) return value.trim()
   throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
+}
+
+export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown): string {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  return `/article/${requiredText(slug, 'article.slug')}`
 }
 
 type OfferingRow = ApiRecord & {
@@ -206,7 +212,7 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     author_image: typeof row.author_image === 'string' ? row.author_image : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: requiredText(row.canonical_url, `article ${row.id}.canonical_url`),
+    canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
     featured_image: typeof row.public_url === 'string' && row.public_url
       ? {
           public_url: row.public_url,
@@ -408,19 +414,27 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
 }
 
 export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Promise<PublicBlawbyShellData> {
-  const [identity, consultation, compliance, themeTokens, offeringLinks] = await Promise.all([
+  const [identity, consultation, compliance, themeTokens, offeringLinks, pageLinks] = await Promise.all([
     getPublicBlawbyIdentity(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicThemeTokens(db, siteId),
     listPublicOfferingLinks(db, siteId),
+    listPublishedTenantPagePaths(db, siteId),
   ])
   const header = compliance?.metadata?.header
   if (header && typeof header === 'object') {
     identity.banner_content = typeof (header as ApiRecord).banner_content === 'string' ? String((header as ApiRecord).banner_content) : null
     identity.banner_dismissible = asBoolean((header as ApiRecord).banner_dismissible)
   }
-  return { identity, consultation, compliance, themeTokens, offeringLinks }
+  return {
+    identity,
+    consultation,
+    compliance,
+    themeTokens,
+    offeringLinks,
+    pageLinks: pageLinks.map(page => ({ id: page.id, path: page.path, title: page.title })),
+  }
 }
 
 export async function getPublicBlawbyDocumentData(
@@ -522,7 +536,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: requiredText(row.canonical_url, `article ${row.id}.canonical_url`),
+    canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     robots: typeof row.robots === 'string' ? row.robots : null,
