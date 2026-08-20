@@ -51,6 +51,7 @@ useHead(() => ({
 
 const target = resolveBlawbyRouteTarget(route.path, route.params)
 const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
+provide('blawby-document', document)
 const identity = computed(() => document.value.shell.identity)
 const consultation = computed(() => document.value.shell.consultation)
 const compliance = computed(() => document.value.shell.compliance)
