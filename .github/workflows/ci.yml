@@ -126,7 +126,7 @@ jobs:
       MCP_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-client-metadata
       MCP_PRIVATE_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
       PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
+      PLAYWRIGHT_WORKERS: "2"
       E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
       E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
     steps:

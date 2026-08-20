@@ -102,6 +102,7 @@ export async function useBlawbyDocument(
     {
       server: options.server ?? true,
       lazy: options.lazy ?? false,
+      dedupe: 'defer',
       getCachedData(cacheKey) {
         return useNuxtApp().payload.data[cacheKey] as BlawbyDocumentPayload | undefined
       },

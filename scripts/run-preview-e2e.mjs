@@ -36,7 +36,6 @@ if (specs.length > 0) {
     'playwright',
     'test',
     ...specs,
-    '--project=chromium',
-    '--workers=1'
+    '--project=chromium'
   ])
 }

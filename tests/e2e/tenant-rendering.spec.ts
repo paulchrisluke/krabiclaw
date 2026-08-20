@@ -145,22 +145,25 @@ test('NCLS exposes header, footer, pricing, article, contact, taxonomy, and dona
     await expect(page.locator('header').getByRole('link', { name: label, exact: true })).toBeVisible()
   for (const label of ['Family law', 'Request a Consultation', 'About', 'Privacy'])
     await expect(page.locator('footer').getByRole('link', { name: label, exact: true })).toBeVisible()
-  for (const journey of [
+  await Promise.all([
     { path: '/pricing', text: /pricing|income|calculator/i },
     { path: '/article/writing-your-own-will-how-it-works', text: /will|North Carolina/i },
     { path: '/contact', text: /contact|message/i },
     { path: '/schedule', text: /consultation|schedule/i },
     { path: '/blog', text: /blog|legal/i },
     { path: '/donate', text: /donate|support/i },
-  ]) {
+  ].map(async (journey) => {
     const routePage = await context.newPage()
-    await setupTenantHeaders(routePage, blawbyBaseURL, blawbyExtraHeaders)
-    const errors = collectPageErrors(routePage, { failOnAllWarnings: true })
-    const response = await routePage.goto(`${blawbyBaseURL}${journey.path}`, { waitUntil: 'load' })
-    expect(response?.status(), journey.path).toBeLessThan(400)
-    await routePage.waitForTimeout(250)
-    expect(errors, journey.path).toEqual([])
-    await expect(routePage.locator('main')).toContainText(journey.text)
-    await routePage.close()
-  }
+    try {
+      await setupTenantHeaders(routePage, blawbyBaseURL, blawbyExtraHeaders)
+      const errors = collectPageErrors(routePage, { failOnAllWarnings: true })
+      const response = await routePage.goto(`${blawbyBaseURL}${journey.path}`, { waitUntil: 'load' })
+      expect(response?.status(), journey.path).toBeLessThan(400)
+      await routePage.waitForTimeout(250)
+      expect(errors, journey.path).toEqual([])
+      await expect(routePage.locator('main')).toContainText(journey.text)
+    } finally {
+      await routePage.close()
+    }
+  }))
 })
