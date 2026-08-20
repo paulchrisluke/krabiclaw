@@ -102,6 +102,13 @@
                 </p>
           </NuxtLink>
 
+          <div class="site-card flex flex-col gap-3">
+            <div class="flex items-baseline justify-between gap-3"><p class="text-[15px] font-semibold text-highlighted">Social profiles</p><p class="text-[13px] text-muted">{{ socialAddedCount }} of {{ socialRows.length }} added</p></div>
+            <div class="space-y-1">
+              <EditorFieldRow v-for="row in socialRows" :key="row.key" :label="row.label" :filled="row.added" @click="openSocialField(row.key)" />
+            </div>
+          </div>
+
           <NuxtLink v-for="hero in heroCards" :key="hero.label" :to="`${siteDashboardPath}/pages`" class="site-card group block">
               <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0">
@@ -155,6 +162,16 @@
       <div v-if="publicSiteUrl" class="pointer-events-none fixed inset-x-0 bottom-20 z-20 flex justify-center px-4 md:bottom-5">
         <UButton :to="publicSiteUrl" target="_blank" icon="i-lucide-external-link" label="View site" class="pointer-events-auto rounded-full px-5 shadow-lg" />
       </div>
+
+      <SingleFieldEditor
+        v-if="socialEditorField"
+        v-model:open="socialEditorOpen"
+        :label="socialEditorField.label"
+        :value="settings?.[socialEditorField.key] ?? ''"
+        kind="url"
+        :placeholder="socialEditorField.placeholder"
+        :save="saveSocialField"
+      />
     </template>
   </UDashboardPanel>
 </template>
@@ -170,7 +187,7 @@ useSeoMeta({ title: 'My site | KrabiClaw', robots: 'noindex, nofollow' })
 
 interface Location { id: string; slug: string; title: string; city: string | null; is_primary: boolean; hero_url: string | null; address: { addressLines?: string[] } | null }
 interface HomeResponse { locations: Location[]; events: unknown[]; operations: { openThreads: number; unreadThreads: number; reservations: number; experienceBookings: number } }
-interface Settings { brand_name: string | null; brand_description: string | null; brand_color: string; logo_url: string | null; theme: string; custom_domain_status: string; public_url: string | null }
+interface Settings { brand_name: string | null; brand_description: string | null; brand_color: string; logo_url: string | null; theme: string; custom_domain_status: string; public_url: string | null; social_facebook_url: string | null; social_instagram_url: string | null; social_tiktok_url: string | null }
 interface PageSummary { id: string; title: string; path: string; status: string; recipe: string | null; blocks?: unknown[] }
 interface MediaAsset { id: string; public_url: string; thumbnail_url: string | null }
 interface LinkItem { id: string; label: string; destination: string; status: string }
@@ -221,7 +238,7 @@ const { data: home, pending } = await useAsyncData(`site-index-home-${siteId}`, 
     validate: (value): value is HomeResponse => isRecord(value) && Array.isArray(value.locations) && isRecord(value.operations),
   })
 })
-const { data: supporting, pending: supportingPending, error } = await useAsyncData(`site-index-support-${siteId}`, async () => {
+const { data: supporting, pending: supportingPending, error, refresh: refreshSupporting } = await useAsyncData(`site-index-support-${siteId}`, async () => {
   const [settingsResponse, pagesResponse, mediaResponse, linksResponse] = await Promise.all([
     dashboardApi<{ settings: Settings }>('/api/dashboard/settings', { validate: (value): value is { settings: Settings } => isRecord(value) && isRecord(value.settings) }),
     dashboardApi<{ pages: PageSummary[] }>(`/api/editor/sites/${siteId}/pages`, { validate: (value): value is { pages: PageSummary[] } => isRecord(value) && Array.isArray(value.pages) }),
@@ -245,6 +262,36 @@ const tourLocations = computed(() => {
   return primary ? [others[0], primary, others[1]].filter((location): location is Location => Boolean(location)) : locations.value.slice(0, 3)
 })
 const openSiteTasks = computed(() => settings.value?.custom_domain_status === 'active' ? 0 : 1)
+const SOCIAL_FIELDS = [
+  { key: 'social_facebook_url', label: 'Facebook', placeholder: 'https://facebook.com/...' },
+  { key: 'social_instagram_url', label: 'Instagram', placeholder: 'https://instagram.com/...' },
+  { key: 'social_tiktok_url', label: 'TikTok', placeholder: 'https://tiktok.com/@...' },
+] as const
+const socialRows = computed(() => SOCIAL_FIELDS.map(field => ({
+  key: field.key,
+  label: field.label,
+  added: Boolean(settings.value?.[field.key]),
+})))
+const socialAddedCount = computed(() => socialRows.value.filter(row => row.added).length)
+const socialEditingKey = ref<typeof SOCIAL_FIELDS[number]['key'] | null>(null)
+const socialEditorOpen = computed({
+  get: () => socialEditingKey.value !== null,
+  set: (isOpen: boolean) => { if (!isOpen) socialEditingKey.value = null },
+})
+const socialEditorField = computed(() => SOCIAL_FIELDS.find(field => field.key === socialEditingKey.value))
+function openSocialField(key: typeof SOCIAL_FIELDS[number]['key']) {
+  socialEditingKey.value = key
+}
+async function saveSocialField(value: string) {
+  const key = socialEditingKey.value
+  if (!key) return
+  await dashboardApi('/api/dashboard/settings', {
+    method: 'PATCH',
+    body: { [key]: value || null },
+    validate: (v): v is { success: boolean } => isRecord(v) && typeof v.success === 'boolean',
+  })
+  await refreshSupporting()
+}
 const brandCover = computed(() => locations.value.find(item => item.is_primary)?.hero_url || media.value[0]?.public_url || '')
 const siteDomain = computed(() => dashboard.site.value?.custom_domain || dashboard.site.value?.public_url || '')
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')

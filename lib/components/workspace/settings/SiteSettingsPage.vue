@@ -30,21 +30,6 @@
         </UCard>
 
         <UCard>
-          <template #header>
-            <div>
-              <h2 class="font-semibold text-highlighted">Social profiles</h2>
-              <p class="mt-1 text-sm text-muted">Brand-level accounts shown in the site footer. A location's own Facebook, Instagram and TikTok links live on that location's settings instead.</p>
-            </div>
-          </template>
-          <div class="grid gap-5 sm:grid-cols-3">
-            <UFormField label="Facebook"><UInput v-model="form.social_facebook_url" type="url" placeholder="https://facebook.com/..." /></UFormField>
-            <UFormField label="Instagram"><UInput v-model="form.social_instagram_url" type="url" placeholder="https://instagram.com/..." /></UFormField>
-            <UFormField label="TikTok"><UInput v-model="form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." /></UFormField>
-          </div>
-          <template #footer><div class="flex justify-end"><UButton icon="i-lucide-check" :loading="savingGroup === 'social'" @click="saveSiteSettings('social')">Save social profiles</UButton></div></template>
-        </UCard>
-
-        <UCard>
           <NuxtLink :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/domains`" class="group flex items-center justify-between gap-4">
             <div>
               <h2 class="font-semibold text-highlighted">Domains</h2>
@@ -150,9 +135,6 @@ interface SiteSettingsResponse {
   robots?: string | null
   google_analytics_measurement_id?: string | null
   google_site_verification?: string | null
-  social_facebook_url?: string | null
-  social_instagram_url?: string | null
-  social_tiktok_url?: string | null
 }
 
 interface FacebookConnectionStatus {
@@ -195,7 +177,7 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 const loading = ref(true)
-const savingGroup = ref<'brand' | 'business' | 'analytics' | 'social' | null>(null)
+const savingGroup = ref<'brand' | 'business' | 'analytics' | null>(null)
 const loadError = ref<string | null>(null)
 const savingNotifications = ref(false)
 const connectingFacebook = ref(false)
@@ -208,7 +190,6 @@ const form = reactive({
   default_currency: DEFAULT_CURRENCY as CurrencyCode,
   canonical_url: '', robots: '',
   google_analytics_measurement_id: '', google_site_verification: '',
-  social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
@@ -233,9 +214,6 @@ function fillForm(settings: SiteSettingsResponse) {
   form.robots = settings.robots ?? ''
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
-  form.social_facebook_url = settings.social_facebook_url ?? ''
-  form.social_instagram_url = settings.social_instagram_url ?? ''
-  form.social_tiktok_url = settings.social_tiktok_url ?? ''
 }
 
 interface SettingsPageResource {
@@ -317,16 +295,14 @@ async function load() {
   }
 }
 
-async function saveSiteSettings(group: 'brand' | 'business' | 'analytics' | 'social') {
+async function saveSiteSettings(group: 'brand' | 'business' | 'analytics') {
   const requestedSiteSlug = route.params.siteSlug
   savingGroup.value = group
   const body = group === 'brand'
     ? { brand_name: form.brand_name, brand_description: form.brand_description, logo_url: form.logo_url, contact_email: form.contact_email, brand_color: form.brand_color }
     : group === 'business'
       ? { default_currency: form.default_currency }
-      : group === 'social'
-        ? { social_facebook_url: form.social_facebook_url || null, social_instagram_url: form.social_instagram_url || null, social_tiktok_url: form.social_tiktok_url || null }
-        : { canonical_url: form.canonical_url, robots: form.robots, google_analytics_measurement_id: form.google_analytics_measurement_id, google_site_verification: form.google_site_verification }
+      : { canonical_url: form.canonical_url, robots: form.robots, google_analytics_measurement_id: form.google_analytics_measurement_id, google_site_verification: form.google_site_verification }
   try {
     const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
       method: 'PATCH',
@@ -335,7 +311,7 @@ async function saveSiteSettings(group: 'brand' | 'business' | 'analytics' | 'soc
     })
     if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
-    toast.add({ description: `${group === 'brand' ? 'Brand' : group === 'business' ? 'Business information' : group === 'social' ? 'Social profiles' : 'Analytics'} saved`, color: 'success' })
+    toast.add({ description: `${group === 'brand' ? 'Brand' : group === 'business' ? 'Business information' : 'Analytics'} saved`, color: 'success' })
     await dashboard.refresh()
   } catch (error) {
     toast.add({ description: errorMessage(error, 'Failed to save site settings'), color: 'error' })
