@@ -2032,6 +2032,11 @@ export const sites = sqliteTable("sites", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
+	// Brand-level social profiles, rendered in the site footer only. Distinct from a location's
+	// own facebook_url/instagram_url/tiktok_url on business_locations — the two never merge.
+	social_facebook_url: text(),
+	social_instagram_url: text(),
+	social_tiktok_url: text(),
 	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
 	// layered additively/subtractively on top of the vertical's own module defaults — NULL means

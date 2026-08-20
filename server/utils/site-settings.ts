@@ -47,6 +47,9 @@ interface FullSiteRow extends SiteSettingsRow {
   canonical_url: string | null
   robots: string | null
   og_image_asset_id: string | null
+  social_facebook_url: string | null
+  social_instagram_url: string | null
+  social_tiktok_url: string | null
   feature_overrides: string | null
   created_at: string
   updated_at: string
@@ -76,6 +79,7 @@ export async function loadSettingsPayload(
            primary_location_id, public_url, custom_domain_status, default_currency,
            brand_name, brand_description, logo_url, logo_asset_id, contact_email,
            seo_title, seo_description, canonical_url, robots, og_image_asset_id,
+           social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, settings, last_published_at, created_at, updated_at,
            vertical, theme_id
     FROM sites
@@ -124,6 +128,9 @@ export async function loadSettingsPayload(
     canonical_url: updatedSite.canonical_url,
     robots: updatedSite.robots,
     og_image_asset_id: updatedSite.og_image_asset_id,
+    social_facebook_url: updatedSite.social_facebook_url,
+    social_instagram_url: updatedSite.social_instagram_url,
+    social_tiktok_url: updatedSite.social_tiktok_url,
     feature_overrides: parseCmsFeatureOverrideDelta(updatedSite.feature_overrides),
     toggleable_features: toggleableFeatures,
     effective_features: effectiveFeatures,
@@ -316,6 +323,20 @@ async function attemptSiteUpdate(
   if (updates.robots !== undefined) {
     setParts.push('robots = ?')
     params.push(updates.robots ?? null)
+  }
+  for (const key of ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'] as const) {
+    if (updates[key] === undefined) continue
+    const value = updates[key]
+    if (value) {
+      try {
+        const url = new URL(value)
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol')
+      } catch {
+        return { status: 400, data: { error: `Invalid URL for ${key.replace('social_', '').replace('_url', '')}` } }
+      }
+    }
+    setParts.push(`${key} = ?`)
+    params.push(value ?? null)
   }
   if (updates.feature_overrides !== undefined) {
     let newDelta: CmsCapabilityOverrideDelta | null = null

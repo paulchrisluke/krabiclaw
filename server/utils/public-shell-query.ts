@@ -132,6 +132,11 @@ export function buildPublicShellPayload(
   if (site.seo_description) config.seo_description = site.seo_description
   if (site.canonical_url) config.canonical_url = site.canonical_url
   if (site.robots) config.robots = site.robots
+  // Real, writable site-scope columns — the single source for footer social icons. Never
+  // derived from site_link_items (a link's destination and a footer profile are unrelated).
+  if (site.social_facebook_url) config.social_facebook = site.social_facebook_url
+  if (site.social_instagram_url) config.social_instagram = site.social_instagram_url
+  if (site.social_tiktok_url) config.social_tiktok = site.social_tiktok_url
 
   const primary = rawLocations.find(location => location.is_primary) ?? rawLocations[0] ?? null
   const verifiedLocations = rawLocations.filter(

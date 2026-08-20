@@ -545,7 +545,7 @@ useTenantSocialMetadata(() => ({
 useSchemaOrg([
   computed(() => {
     const loc = location.value
-    if (!loc) return undefined
+    if (!loc) return {}
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,

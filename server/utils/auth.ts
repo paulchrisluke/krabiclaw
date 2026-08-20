@@ -7,7 +7,7 @@ import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
 import type { GenericEndpointContext } from '@better-auth/core'
-import type { H3Event } from 'nitro';
+import { HTTPError, type H3Event } from 'nitro';
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
@@ -205,6 +205,7 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
 }
 
 export function createAuth(env: CloudflareEnv) {
+  if (!env?.DB) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const d1 = unwrapInstrumentedD1(env.DB)
 
   const cached = authCache.get(d1)

@@ -25,6 +25,9 @@ export interface PublicBase {
     robots: string | null
     source_locale: string | null
     default_timezone: string | null
+    social_facebook_url: string | null
+    social_instagram_url: string | null
+    social_tiktok_url: string | null
   }
 }
 
@@ -56,6 +59,7 @@ export function loadPublicBase(
                 json_extract(s.settings, '$.favicon_url') AS favicon_url,
                 ma_og.public_url AS og_image_url,
                 s.seo_title, s.seo_description, s.canonical_url, s.robots,
+                s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
                 (SELECT sl.locale
                    FROM site_locales sl
                   WHERE sl.organization_id = s.organization_id

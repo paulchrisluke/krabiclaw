@@ -92,7 +92,7 @@ const sayaCoreManagers: readonly CmsManagerCapability[] = [
   { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
   { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
   { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
-  { key: 'site.settings', id: 'settings', label: 'Brand, navigation, footer & SEO', section: 'site', route: 'settings', scope: 'site' },
+  { key: 'site.settings', id: 'settings', label: 'Brand', section: 'site', route: 'settings', scope: 'site' },
   { key: 'location.settings', id: 'settings', label: 'Location settings', section: 'site', route: ':location/settings', scope: 'location' },
 ]
 
@@ -143,7 +143,7 @@ const blawbyTemplateCatalog: CmsTemplateCatalog = {
     { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
     { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
     { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
-    { key: 'site.settings', id: 'settings', label: 'Brand, navigation, footer & SEO', section: 'site', route: 'settings', scope: 'site' },
+    { key: 'site.settings', id: 'settings', label: 'Brand', section: 'site', route: 'settings', scope: 'site' },
     { key: 'location.settings', id: 'settings', label: 'Location settings', section: 'site', route: ':location/settings', scope: 'location' },
   ],
   locationVocabularyDefault: 'office/service area',
