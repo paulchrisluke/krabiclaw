@@ -15,6 +15,13 @@ disposable fixtures and run writes. Staging applies migrations but never sweeps,
 reseeds customers, provisions E2E identities, or performs guest/MCP writes.
 Production is never seeded or mutated by test automation.
 
+Production deployment and verification are separate jobs in the same workflow.
+The deploy job builds once, performs the single Wrangler deployment, applies
+migrations, and refreshes search. The verification job waits until all three
+custom domains expose that exact Nuxt build and its referenced assets, then runs
+read-only browser coverage. Retrying a failed verification job never redeploys
+production.
+
 The only release-qualified surfaces are:
 
 - Pottery House, Kikuzuki, and NCLS public rendering and navigation;

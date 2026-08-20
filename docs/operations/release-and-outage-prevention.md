@@ -49,6 +49,12 @@ inspection once to determine ownership, then report the actual result.
    and production smoke. Use an explicit canary identity for any production
    action that writes or sends notifications.
 
+Production deployment and verification remain separate jobs. Verification
+must confirm that customer-domain HTML, Nuxt build metadata, and referenced
+assets have converged on the exact deployed build before browser coverage
+starts. Retry only the verification job after a verification failure; do not
+redeploy a healthy production Worker to repeat browser checks.
+
 GitHub workflow runs and Cloudflare's native deployment history are sufficient
 release evidence. Do not invent a second mapping between Git commits and Worker
 version identifiers.

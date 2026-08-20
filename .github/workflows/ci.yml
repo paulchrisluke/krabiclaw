@@ -282,11 +282,13 @@ jobs:
           if-no-files-found: ignore
 
   deploy-production:
-    name: Deploy and test production
+    name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      nuxt_build_id: ${{ steps.nuxt_build.outputs.id }}
     concurrency:
       group: production-deployment
       cancel-in-progress: false
@@ -301,8 +303,6 @@ jobs:
       NUXT_PUBLIC_HELP_URL: https://krabiclaw.com/help
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: https://krabiclaw.com
-      PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -312,9 +312,13 @@ jobs:
           node-version: "24.18.1"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
       - name: Build production Worker
         run: yarn build
+      - name: Capture Nuxt build ID
+        id: nuxt_build
+        run: |
+          build_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(".output/public/_nuxt/builds/latest.json", "utf8")).id')"
+          printf 'id=%s\n' "$build_id" >> "$GITHUB_OUTPUT"
       - name: Deploy production Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -325,12 +329,50 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 migrations apply DB --remote
-      - name: Run read-only production tenant rendering
-        run: yarn test:e2e:tenant-rendering
       - name: Refresh production search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
         run: yarn ai-search:sync:prod
+
+  verify-production:
+    name: Verify production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_APP_NAME: KrabiClaw
+      NUXT_PUBLIC_SITE_URL: https://krabiclaw.com
+      NUXT_PUBLIC_HELP_URL: https://krabiclaw.com/help
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
+      BETTER_AUTH_URL: https://krabiclaw.com
+      PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
+      PLAYWRIGHT_WORKERS: "1"
+      EXPECTED_NUXT_BUILD_ID: ${{ needs.deploy-production.outputs.nuxt_build_id }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.1"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for production assets to converge
+        run: >-
+          node scripts/wait-for-nuxt-deployment.mjs
+          https://www.potteryhousekrabi.com
+          https://www.kikuzuki-thailand.com
+          https://www.northcarolinalegalservices.org
+      - name: Run read-only production tenant rendering
+        run: yarn test:e2e:tenant-rendering
       - name: Upload production Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
