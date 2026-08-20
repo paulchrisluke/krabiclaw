@@ -69,6 +69,15 @@ jobs:
     needs: e2e-plan
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_PLATFORM_DOMAIN: https://preview.krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_APP_NAME: KrabiClaw
+      NUXT_PUBLIC_SITE_URL: https://preview.krabiclaw.com
+      NUXT_PUBLIC_HELP_URL: https://preview.krabiclaw.com/help
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
+      BETTER_AUTH_URL: https://preview.krabiclaw.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
