@@ -180,6 +180,16 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
   return rows
 }
 
+export function parseStoredExperienceTimeSlots(value: unknown): string[] | null {
+  if (value == null || value === '') return null;
+  const parsed = JSON.parse(String(value));
+  if (parsed === null) return null;
+  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience time slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+  }
+  return parsed;
+}
+
 function parseExperienceRow(row: Record<string, unknown>): Experience {
   const parseStringArr = (value: unknown): string[] => {
     if (typeof value === "string" && value) {
@@ -202,12 +212,7 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   const isStringArray = (value: unknown): value is string[] =>
     Array.isArray(value) && value.every((item) => typeof item === "string");
 
-  let time_slots: string[] | null = null;
-  if (row.time_slots != null && row.time_slots !== '') {
-    const parsed = JSON.parse(String(row.time_slots));
-    if (!isStringArray(parsed)) throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience time slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
-    time_slots = parsed;
-  }
+  const time_slots = parseStoredExperienceTimeSlots(row.time_slots);
 
   let recurring_slots: Partial<Record<string, string[]>> | null = null;
   if (row.recurring_slots != null && row.recurring_slots !== '') {

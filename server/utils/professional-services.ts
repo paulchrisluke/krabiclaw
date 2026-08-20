@@ -35,6 +35,11 @@ function requiredText(value: unknown, field: string): string {
   throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
 }
 
+export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown): string {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  return `/article/${requiredText(slug, 'article.slug')}`
+}
+
 type OfferingRow = ApiRecord & {
   features: string | null
   faqs: string | null
@@ -206,7 +211,7 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     author_image: typeof row.author_image === 'string' ? row.author_image : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: requiredText(row.canonical_url, `article ${row.id}.canonical_url`),
+    canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
     featured_image: typeof row.public_url === 'string' && row.public_url
       ? {
           public_url: row.public_url,
@@ -522,7 +527,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: requiredText(row.canonical_url, `article ${row.id}.canonical_url`),
+    canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     robots: typeof row.robots === 'string' ? row.robots : null,
