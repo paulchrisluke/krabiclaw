@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, request as playwrightRequest, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 import { devLoginHeaders } from "./test-env";
 import { ensureSite } from "./helpers/ensure-site";
@@ -34,61 +34,22 @@ test.describe("mcp tools", () => {
   test.describe.configure({ mode: "serial" });
 
   test("delete_post allows owner, admin, and editor through MCP tool path", async ({
-    request,
     baseURL,
   }) => {
-    test.setTimeout(120_000);
-
-    const freshUserId = await loginAsFreshChowbotUser(
-      request,
-      baseURL!,
-      "delete-post",
-    );
-
-    const sessionRes = await request.get(`${baseURL}/api/auth/get-session`);
-    expect(sessionRes.status()).toBe(200);
-    const session = (await sessionRes.json()) as { user?: { id?: string } };
-    const ownerUserId = session.user?.id;
-    expect(ownerUserId).toBe(freshUserId);
-
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
-    expect(contextRes.status()).toBe(200);
-    const context = (await contextRes.json()) as {
-      organization?: { id?: string };
-      site?: { id?: string | null };
+    const siteId = "site-demo";
+    const users = {
+      owner: "user-e2e-demo-owner",
+      admin: "user-e2e-role-admin",
+      editor: "user-e2e-role-editor",
+    } as const;
+    const requests = {
+      owner: await playwrightRequest.newContext(),
+      admin: await playwrightRequest.newContext(),
+      editor: await playwrightRequest.newContext(),
     };
-    const siteId = await ensureSite(
-      request,
-      baseURL!,
-      context.site?.id ?? null,
-    );
-
-    const contextAfterSiteRes = await request.get(
-      `${baseURL}/api/dashboard/context`,
-    );
-    expect(contextAfterSiteRes.status()).toBe(200);
-    const contextAfterSite = (await contextAfterSiteRes.json()) as {
-      organization?: { id?: string };
-    };
-    const organizationId = contextAfterSite.organization?.id;
-    expect(organizationId).toEqual(expect.any(String));
-
-    const admin = await inviteAndAcceptMember(request, baseURL!, {
-      userId: "user-e2e-chowbot-admin",
-      organizationId: organizationId!,
-      role: "admin",
-    });
-    await loginAs(request, baseURL!, ownerUserId!);
-    const editor = await inviteAndAcceptMember(request, baseURL!, {
-      userId: "user-e2e-chowbot-editor",
-      organizationId: organizationId!,
-      role: "editor",
-      siteId,
-    });
 
     const createDraftPost = async (title: string) => {
-      await loginAs(request, baseURL!, ownerUserId!);
-      const res = await request.post(
+      const res = await requests.owner.post(
         `${baseURL}/api/editor/sites/${siteId}/posts`,
         {
           data: { title, body: `Body for ${title}` },
@@ -100,9 +61,11 @@ test.describe("mcp tools", () => {
       return body.post!.id!;
     };
 
-    const execDeletePostTool = async (userId: string, postId: string) => {
-      await loginAs(request, baseURL!, userId);
-      const res = await request.post(`${baseURL}/api/dev/mcp-tool`, {
+    const execDeletePostTool = async (
+      role: keyof typeof requests,
+      postId: string,
+    ) => {
+      const res = await requests[role].post(`${baseURL}/api/dev/mcp-tool`, {
         headers: devLoginHeaders(),
         data: {
           siteId,
@@ -116,23 +79,29 @@ test.describe("mcp tools", () => {
       }>;
     };
 
-    const ownerPostId = await createDraftPost(`Owner MCP delete ${Date.now()}`);
-    const ownerDelete = await execDeletePostTool(ownerUserId!, ownerPostId);
-    expect(ownerDelete.result).toEqual(
-      expect.objectContaining({ post_id: ownerPostId, deleted: true }),
-    );
+    try {
+      for (const [role, userId] of Object.entries(users)) {
+        await loginAs(
+          requests[role as keyof typeof requests],
+          baseURL!,
+          userId,
+        );
+      }
 
-    const adminPostId = await createDraftPost(`Admin MCP delete ${Date.now()}`);
-    const adminDelete = await execDeletePostTool(admin.id, adminPostId);
-    expect(adminDelete.result).toEqual(
-      expect.objectContaining({ post_id: adminPostId, deleted: true }),
-    );
-
-    const editorPostId = await createDraftPost(`Editor MCP delete ${Date.now()}`);
-    const editorDelete = await execDeletePostTool(editor.id, editorPostId);
-    expect(editorDelete.result).toEqual(
-      expect.objectContaining({ post_id: editorPostId, deleted: true }),
-    );
+      for (const role of Object.keys(users) as Array<keyof typeof users>) {
+        const postId = await createDraftPost(
+          `${role} MCP delete ${Date.now()}`,
+        );
+        const deletion = await execDeletePostTool(role, postId);
+        expect(deletion.result).toEqual(
+          expect.objectContaining({ post_id: postId, deleted: true }),
+        );
+      }
+    } finally {
+      await Promise.all(
+        Object.values(requests).map((request) => request.dispose()),
+      );
+    }
   });
 
   test("location update and Q&A tools use the canonical write path end-to-end", async ({

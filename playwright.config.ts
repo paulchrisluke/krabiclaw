@@ -16,7 +16,36 @@ if (!previewUrl) {
   process.env.E2E_DEV_ROUTE_SECRET = localDevRouteSecret
 }
 
-const localWorkerCommand = `corepack yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port ${port} --var E2E_ALLOW_DEV_ROUTES:true --var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`
+const localWorkerEnvironment = [
+  'EMAIL_DELIVERY_MODE=log_only',
+  'WHATSAPP_DELIVERY_MODE=log_only',
+  'DISCORD_DELIVERY_MODE=log_only',
+  `BETTER_AUTH_URL=http://localhost:${port}`,
+  `NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:${port}`,
+  `NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:${port}`,
+  'NUXT_PUBLIC_APP_NAME=KrabiClaw',
+  `NUXT_PUBLIC_SITE_URL=http://localhost:${port}`,
+  `NUXT_PUBLIC_HELP_URL=http://localhost:${port}/help`,
+].join(' ')
+
+const localWorkerCommand = [
+  localWorkerEnvironment,
+  'corepack yarn wrangler dev .output/server/index.mjs',
+  '--assets .output/public',
+  '--local',
+  `--port ${port}`,
+  '--var E2E_ALLOW_DEV_ROUTES:true',
+  `--var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`,
+  '--var EMAIL_DELIVERY_MODE:log_only',
+  '--var WHATSAPP_DELIVERY_MODE:log_only',
+  '--var DISCORD_DELIVERY_MODE:log_only',
+  `--var BETTER_AUTH_URL:http://localhost:${port}`,
+  `--var NUXT_PUBLIC_PLATFORM_DOMAIN:http://localhost:${port}`,
+  `--var NUXT_PUBLIC_FREE_SITE_DOMAIN:http://localhost:${port}`,
+  '--var NUXT_PUBLIC_APP_NAME:KrabiClaw',
+  `--var NUXT_PUBLIC_SITE_URL:http://localhost:${port}`,
+  `--var NUXT_PUBLIC_HELP_URL:http://localhost:${port}/help`,
+].join(' ')
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -45,7 +74,7 @@ export default defineConfig({
   webServer: previewUrl ? undefined : {
     command: localPrepared
       ? localWorkerCommand
-      : `corepack yarn e2e:local:prepare && ${localWorkerCommand}`,
+      : `${localWorkerEnvironment} corepack yarn e2e:local:prepare && ${localWorkerCommand}`,
     url: `http://localhost:${port}/`,
     reuseExistingServer: false,
     timeout: localPrepared ? 180_000 : 600_000,
