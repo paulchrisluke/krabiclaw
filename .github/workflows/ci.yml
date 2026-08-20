@@ -316,7 +316,9 @@ jobs:
         run: yarn build
       - name: Capture Nuxt build ID
         id: nuxt_build
-        run: echo "id=$(node -p \"JSON.parse(require('fs').readFileSync('.output/public/_nuxt/builds/latest.json', 'utf8')).id\")" >> "$GITHUB_OUTPUT"
+        run: |
+          build_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(".output/public/_nuxt/builds/latest.json", "utf8")).id')"
+          printf 'id=%s\n' "$build_id" >> "$GITHUB_OUTPUT"
       - name: Deploy production Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
