@@ -263,9 +263,11 @@ staging SHA is green.
 
 ### Production lane
 
-Runs on pushes to `main`. It deploys the production Worker normally, applies
-pending migrations, and runs read-only rendering/navigation against the three
-customer custom domains.
+Runs on pushes to `main`. One job deploys the production Worker normally,
+applies pending migrations, and refreshes search. A dependent verification job
+waits for the exact Nuxt build and assets to converge across the three customer
+custom domains, then runs read-only rendering/navigation. Retrying verification
+must not redeploy production.
 
 The contract is `docs/operations/release-flow.md`.
 
