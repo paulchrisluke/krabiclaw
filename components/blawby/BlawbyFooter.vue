@@ -20,7 +20,7 @@
             <h3 class="text-sm font-semibold leading-6 text-white">Services</h3>
             <ul class="mt-6 space-y-4" role="list">
               <li v-for="offering in offeringLinks" :key="offering.id">
-                <NuxtLink :to="offering.canonical_path" class="text-sm leading-6 text-gray-300 no-underline hover:text-white">
+                <NuxtLink :to="offering.canonical_path" class="blawby-footer-link text-sm leading-6 no-underline">
                   {{ offering.name }}
                 </NuxtLink>
               </li>
@@ -30,7 +30,7 @@
             <h3 class="text-sm font-semibold leading-6 text-white">{{ group.label }}</h3>
             <ul class="mt-6 space-y-4" role="list">
               <li v-for="item in group.items" :key="item.id">
-                <NuxtLink :to="item.path" class="text-sm leading-6 text-gray-300 no-underline hover:text-white">{{ item.label }}</NuxtLink>
+                <NuxtLink :to="item.path" class="blawby-footer-link text-sm leading-6 no-underline">{{ item.label }}</NuxtLink>
               </li>
             </ul>
           </div>
@@ -81,3 +81,13 @@ const footerGroups = computed(() => [
   { label: 'Legal', items: linksFor(['/policies/privacy', '/policies/terms', '/third-party-notices']) },
 ])
 </script>
+
+<style scoped>
+.blawby-footer-link {
+  color: #d1d5db;
+}
+
+.blawby-footer-link:hover {
+  color: #fff;
+}
+</style>
