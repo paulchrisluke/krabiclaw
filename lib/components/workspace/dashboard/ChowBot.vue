@@ -203,6 +203,7 @@
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
+import { getErrorMessage } from '~/utils/errors'
 import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
@@ -479,7 +480,7 @@ async function handleSetupMessage(text: string) {
       await sendMessage(setupPromptForSource())
     }
   } catch (error) {
-    updateSetupLastMessage(error instanceof Error ? error.message : 'Could not create the workspace.', true)
+    updateSetupLastMessage(getErrorMessage(error, 'Could not create the workspace.'), true)
   } finally {
     creatingRestaurant.value = false
   }

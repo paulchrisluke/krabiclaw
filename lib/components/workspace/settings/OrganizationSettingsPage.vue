@@ -48,6 +48,7 @@
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
+import { getErrorMessage } from '~/utils/errors'
 
 const route = useRoute()
 const router = useRouter()
@@ -93,7 +94,7 @@ async function save() {
     name.value = dashboard.organization.value?.name ?? name.value.trim()
     toast.add({ description: 'Organization updated', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update organization', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to update organization'), color: 'error' })
   } finally {
     saving.value = false
   }

@@ -72,6 +72,8 @@
 // the save bar (Cancel, then Save — a near-white pill once dirty, a greyed chip otherwise) is
 // the field editor's own, not the shell's. See Editor - Shell and Card Stack.dc.html and
 // KcFieldEditor.dc.html directly — do not re-derive this from prose describing them.
+import { getErrorMessage } from '~/utils/errors'
+
 type FieldKind = 'text' | 'url' | 'textarea' | 'number'
 
 interface Step {
@@ -181,7 +183,7 @@ async function advance() {
     emit('update:open', false)
   } catch (error) {
     saveState.value = 'failed'
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to save'
+    errorMessage.value = getErrorMessage(error, 'Failed to save')
   } finally {
     if (saveState.value === 'saving') saveState.value = 'idle'
   }

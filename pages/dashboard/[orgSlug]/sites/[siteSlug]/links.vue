@@ -119,6 +119,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.links' })
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
@@ -302,9 +304,7 @@ async function save() {
     savedSnapshot.value = serializeState()
     toast.add({ description: 'Links page saved', color: 'success' })
   } catch (error) {
-    errorMessage.value = error instanceof ApiClientError
-      ? error.message
-      : error instanceof Error ? error.message : 'Unable to save links page'
+    errorMessage.value = getErrorMessage(error, 'Unable to save links page')
     toast.add({ description: errorMessage.value, color: 'error' })
   } finally {
     saving.value = false

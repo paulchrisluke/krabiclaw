@@ -160,6 +160,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
@@ -351,9 +353,7 @@ async function addDomain() {
       addError.value = ''
     } else {
       liveCutoverWarning.value = null
-      addError.value = typeof data.error === 'string'
-        ? data.error
-        : error instanceof Error ? error.message : 'Failed to add domain'
+      addError.value = typeof data.error === 'string' ? data.error : getErrorMessage(error, 'Failed to add domain')
     }
   } finally {
     adding.value = false

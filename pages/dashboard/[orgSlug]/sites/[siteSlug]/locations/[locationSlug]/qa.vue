@@ -83,6 +83,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.qa' })
 
@@ -155,7 +157,7 @@ async function loadQa() {
     if (!qaResource.value) throw new Error('Q&A response unavailable')
     qaRows.value = qaResource.value.qa
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load Q&A'
+    loadError.value = getErrorMessage(error, 'Failed to load Q&A')
   } finally {
     loading.value = false
   }
@@ -200,7 +202,7 @@ async function saveQa() {
     resetForm()
     await loadQa()
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to save Q&A', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to save Q&A'), color: 'error' })
   } finally {
     saving.value = false
   }
@@ -218,7 +220,7 @@ async function updateQa(item: QaRow, body: ApiRecord, successMessage: string) {
     toast.add({ description: successMessage, color: 'success' })
     await loadQa()
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update Q&A', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to update Q&A'), color: 'error' })
   }
 }
 
@@ -249,7 +251,7 @@ async function moveQa(item: QaRow, direction: -1 | 1) {
     toast.add({ description: 'Q&A reordered', color: 'success' })
     await loadQa()
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to reorder Q&A', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to reorder Q&A'), color: 'error' })
   }
 }
 
@@ -266,7 +268,7 @@ async function deleteQa(item: QaRow) {
     qaRows.value = qaRows.value.filter(row => row.id !== item.id)
     toast.add({ description: 'Q&A deleted', color: 'neutral' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to delete Q&A', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to delete Q&A'), color: 'error' })
   } finally {
     deletingId.value = null
   }

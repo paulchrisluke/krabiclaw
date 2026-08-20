@@ -74,6 +74,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.ordering' })
 
@@ -170,7 +172,7 @@ async function loadOrder() {
       }
     }))
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load ordering links'
+    loadError.value = getErrorMessage(error, 'Failed to load ordering links')
   } finally {
     loading.value = false
   }
@@ -192,7 +194,7 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
     })
     toast.add({ description: 'Ordering links saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to save ordering links', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to save ordering links'), color: 'error' })
   } finally {
     savingId.value = null
   }

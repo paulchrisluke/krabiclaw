@@ -44,6 +44,7 @@
 <script setup lang="ts">
 import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
 import { useChowBot } from '~/composables/useChowBot'
+import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -98,7 +99,7 @@ const loadConversation = async () => {
     conversationTitle.value = conversation.title
   } catch (error) {
     if (sequence !== loadSequence) return
-    loadError.value = error instanceof Error ? error.message : 'The conversation could not be loaded.'
+    loadError.value = getErrorMessage(error, 'The conversation could not be loaded.')
   } finally {
     if (sequence === loadSequence) isLoading.value = false
   }

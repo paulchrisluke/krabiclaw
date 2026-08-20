@@ -119,6 +119,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
 
@@ -194,8 +196,8 @@ async function loadPhotos() {
     })
     assets.value = res.media
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load photos'
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load photos', color: 'error' })
+    loadError.value = getErrorMessage(error, 'Failed to load photos')
+    toast.add({ description: getErrorMessage(error, 'Failed to load photos'), color: 'error' })
   } finally {
     loading.value = false
   }
@@ -264,7 +266,7 @@ async function uploadSelectedFile(file: File, poster: File | null = null, existi
     }
     await loadPhotos()
   } catch (error) {
-    toast.add({ description: uploadError.value ?? (error instanceof Error ? error.message : 'Failed to upload file'), color: 'error' })
+    toast.add({ description: uploadError.value ?? getErrorMessage(error, 'Failed to upload file'), color: 'error' })
   }
 }
 
@@ -278,7 +280,7 @@ async function loadAttachableMedia() {
     })
     attachableAssets.value = res.media.filter(asset => asset.location_id !== locationId.value)
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load media library', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to load media library'), color: 'error' })
   } finally {
     attachLoading.value = false
   }
@@ -301,7 +303,7 @@ async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: st
     await loadPhotos()
     return true
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update photo', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to update photo'), color: 'error' })
     return false
   }
 }
@@ -353,7 +355,7 @@ const { data: photosResource, pending: photosPending, error: photosError } = awa
 watch([photosResource, photosPending, photosError], ([resource, pending, error]) => {
   loading.value = pending
   if (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load photos'
+    loadError.value = getErrorMessage(error, 'Failed to load photos')
     return
   }
   if (resource) {

@@ -116,6 +116,7 @@
 
 <script setup lang="ts">
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { getErrorMessage } from '~/utils/errors'
 
 const dashboardApi = useDashboardApi()
 
@@ -195,14 +196,6 @@ const form = reactive({
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
 const hasFacebookAccess = computed(() => dashboard.site.value?.plan === 'growth')
 
-function errorMessage(error: unknown, fallback: string) {
-  if (error && typeof error === 'object' && 'data' in error) {
-    const data = (error as { data?: { error?: string } }).data
-    if (data?.error) return data.error
-  }
-  return error instanceof Error ? error.message : fallback
-}
-
 function fillForm(settings: SiteSettingsResponse) {
   form.brand_name = settings.brand_name ?? ''
   form.brand_description = settings.brand_description ?? ''
@@ -269,7 +262,7 @@ const {
 watch([settingsResource, settingsPending, settingsResourceError], ([resource, pending, error]) => {
   loading.value = pending
   if (error) {
-    loadError.value = errorMessage(error, 'Failed to load site settings')
+    loadError.value = getErrorMessage(error, 'Failed to load site settings')
     return
   }
   if (!resource) return
@@ -289,7 +282,7 @@ async function load() {
     await refreshSettingsResource()
     if (settingsResourceError.value) throw settingsResourceError.value
   } catch (error) {
-    loadError.value = errorMessage(error, 'Failed to load site settings')
+    loadError.value = getErrorMessage(error, 'Failed to load site settings')
   } finally {
     loading.value = false
   }
@@ -314,7 +307,7 @@ async function saveSiteSettings(group: 'brand' | 'business' | 'analytics') {
     toast.add({ description: `${group === 'brand' ? 'Brand' : group === 'business' ? 'Business information' : 'Analytics'} saved`, color: 'success' })
     await dashboard.refresh()
   } catch (error) {
-    toast.add({ description: errorMessage(error, 'Failed to save site settings'), color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to save site settings'), color: 'error' })
   } finally {
     savingGroup.value = null
   }
@@ -340,7 +333,7 @@ async function saveNotifications() {
     notificationChannels.value = response.notifications.channels
     toast.add({ description: 'Notification settings saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: errorMessage(error, 'Failed to save notification settings'), color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to save notification settings'), color: 'error' })
   } finally {
     savingNotifications.value = false
   }
@@ -371,7 +364,7 @@ async function startFacebookConnect() {
     }
     window.location.href = parsed.toString()
   } catch (error) {
-    toast.add({ description: errorMessage(error, 'Failed to connect Facebook'), color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to connect Facebook'), color: 'error' })
     connectingFacebook.value = false
   }
 }

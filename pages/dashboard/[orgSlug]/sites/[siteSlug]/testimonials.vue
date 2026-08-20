@@ -72,6 +72,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
@@ -188,7 +190,7 @@ async function save() {
     await refresh()
     toast.add({ description: 'Testimonial saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to save testimonial', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to save testimonial'), color: 'error' })
   } finally {
     saving.value = false
   }

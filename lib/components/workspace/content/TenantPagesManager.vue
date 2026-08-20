@@ -143,6 +143,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
+import { getErrorMessage } from '~/utils/errors'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import { canProceedWithTenantPageTransition, createTenantPageLocaleRevertGuard, createTenantPageRequestGate, previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 
@@ -256,7 +257,7 @@ async function loadPages() {
     if (!locales.value.includes(locale.value)) locale.value = localeResponse.source_locale
     if (pages.value.length && !selected.value) await selectPage(pages.value[0]!.id)
   } catch (error) {
-    if (requestGate.isCurrent(requestToken)) loadError.value = error instanceof Error ? error.message : 'Unable to load pages'
+    if (requestGate.isCurrent(requestToken)) loadError.value = getErrorMessage(error, 'Unable to load pages')
   } finally {
     if (requestGate.isCurrent(requestToken)) {
       loading.value = false
@@ -281,7 +282,7 @@ async function selectPage(id: string) {
     selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1
     dirty.value = false
   } catch (error) {
-    if (requestGate.isCurrent(requestToken)) pageLoadError.value = error instanceof Error ? error.message : 'Unable to load page'
+    if (requestGate.isCurrent(requestToken)) pageLoadError.value = getErrorMessage(error, 'Unable to load page')
   } finally {
     if (requestGate.isCurrent(requestToken)) {
       hydrating.value = false
@@ -405,7 +406,7 @@ async function save() {
     dirty.value = false
     toast.add({ title: 'Saved', description: 'Page saved.', color: 'success' })
   } catch (error) {
-    editorError.value = error instanceof Error ? error.message : 'Unable to save page'
+    editorError.value = getErrorMessage(error, 'Unable to save page')
   } finally { busy.value = null }
 }
 

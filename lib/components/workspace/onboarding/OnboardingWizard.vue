@@ -301,6 +301,7 @@
 import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
 import { DEFAULT_CURRENCY } from '~/shared/currencies'
+import { getErrorMessage } from '~/utils/errors'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
@@ -1132,7 +1133,7 @@ async function saveActiveDraft(options: { silent?: boolean } = {}) {
     emit('draft-saved', draftPreviewPayload.value)
     return true
   } catch (error) {
-    importError.value = error instanceof Error ? error.message : 'Failed to save your preview draft. Please try again.'
+    importError.value = getErrorMessage(error, 'Failed to save your preview draft. Please try again.')
     return false
   } finally {
     if (!options.silent) importing.value = false
@@ -1270,7 +1271,7 @@ async function commitDraft() {
     importedSiteSlug.value = res.siteSlug ?? props.existingSiteSlug ?? null
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (error) {
-    importError.value = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
+    importError.value = getErrorMessage(error, 'Something went wrong. Please try again.')
     step.value = 'location'
   } finally {
     importing.value = false

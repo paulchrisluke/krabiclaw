@@ -180,6 +180,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
@@ -266,7 +268,7 @@ const { data: analyticsResource, pending: analyticsPending, error: analyticsReso
 watch([analyticsResource, analyticsPending, analyticsResourceError], ([resource, pending, error]) => {
   loading.value = pending
   if (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
+    loadError.value = getErrorMessage(error, 'Failed to load analytics')
     return
   }
   if (resource) {
@@ -328,8 +330,8 @@ async function loadAnalytics() {
       validate: isAnalyticsResponse,
     })
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load analytics', color: 'error' })
+    loadError.value = getErrorMessage(error, 'Failed to load analytics')
+    toast.add({ description: getErrorMessage(error, 'Failed to load analytics'), color: 'error' })
   } finally {
     loading.value = false
   }

@@ -265,7 +265,7 @@ async function save() {
     await refresh()
     toast.add({ description: 'Site Q&A saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to save Q&A', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to save Q&A'), color: 'error' })
   } finally {
     saving.value = false
   }

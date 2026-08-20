@@ -127,6 +127,8 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
+
 type DraftUploadedImage = {
   draftAssetId: string
   cloudflareImageId: string
@@ -233,7 +235,7 @@ async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {
     const status = fetchError.status ?? fetchError.statusCode
     uploadError.value = status === 503 && apiMessage === 'Cloudflare Images not configured'
       ? 'Image upload is not configured for this server. Restart dev with the project environment loaded, then try again.'
-      : apiMessage || (error instanceof Error ? error.message : 'Upload failed.')
+      : apiMessage || getErrorMessage(error, 'Upload failed.')
   } finally {
     if (target === 'logo') logoUploading.value = false
     else heroUploading.value = false

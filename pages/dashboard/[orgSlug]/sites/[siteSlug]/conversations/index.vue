@@ -69,6 +69,7 @@
 
 <script setup lang="ts">
 import { useChowBotHistory } from '~/composables/useChowBotHistory'
+import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -96,7 +97,7 @@ const loadConversations = async () => {
   try {
     await chowBotHistory.load(siteId)
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'The conversation list could not be loaded.'
+    loadError.value = getErrorMessage(error, 'The conversation list could not be loaded.')
   } finally {
     isLoading.value = false
   }

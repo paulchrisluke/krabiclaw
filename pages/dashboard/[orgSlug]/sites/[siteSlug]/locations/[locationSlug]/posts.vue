@@ -254,7 +254,7 @@ const loadPosts = async () => {
     posts.value = res.posts ?? []
   } catch (error) {
     if (generation === postsLoadGeneration) {
-      postsLoadError.value = error instanceof Error ? error.message : 'Failed to load posts'
+      postsLoadError.value = getErrorMessage(error, 'Failed to load posts')
       toast.add({ description: postsLoadError.value, color: 'error' })
     }
   } finally {
@@ -293,7 +293,7 @@ const { data: postsResource, pending: postsPending, error: postsResourceError } 
 watch([postsResource, postsPending, postsResourceError], ([resource, pending, error]) => {
   loading.value = pending
   if (error) {
-    const message = error instanceof Error ? error.message : 'Failed to load posts'
+    const message = getErrorMessage(error, 'Failed to load posts')
     postsLoadError.value = message
     facebookLoadError.value = message
     return

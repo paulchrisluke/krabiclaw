@@ -491,7 +491,7 @@ async function loadThreads() {
   } catch (error) {
     if (requestToken !== threadsRequestToken) return
     threadsError.value = error
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox threads', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to load inbox threads'), color: 'error' })
   } finally {
     if (requestToken === threadsRequestToken) loadingThreads.value = false
   }
@@ -513,7 +513,7 @@ async function loadThreadDetail(threadId: string) {
   } catch (error) {
     if (requestToken !== detailRequestToken) return
     detailError.value = error
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load thread', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to load thread'), color: 'error' })
   } finally {
     if (requestToken === detailRequestToken) loadingDetail.value = false
   }
@@ -541,7 +541,7 @@ async function sendReply() {
     toast.add({ description: 'Reply sent', color: 'success' })
     await refreshThread(props.threadId)
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to send reply', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to send reply'), color: 'error' })
   } finally {
     replySaving.value = false
   }
@@ -571,7 +571,7 @@ async function runOperationalAction(action: string) {
     toast.add({ description: `${meta.label} applied`, color: 'success' })
     await refreshThread(threadId)
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : `Failed to ${meta.label.toLowerCase()}`, color: 'error' })
+    toast.add({ description: getErrorMessage(error, `Failed to ${meta.label.toLowerCase()}`), color: 'error' })
   } finally {
     operationActionPending.value = null
   }
@@ -599,7 +599,7 @@ async function retryDelivery(deliveryId: string) {
     clearAttemptMapKey(retryAttemptKeys, attemptName)
     await refreshThread(threadId)
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Retry failed', color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Retry failed'), color: 'error' })
   } finally {
     retryingDeliveryId.value = null
   }
