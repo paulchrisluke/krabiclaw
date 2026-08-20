@@ -2,14 +2,14 @@
 /**
  * End-to-end OAuth + MCP smoke test.
  *
- * Against staging (default): does a full headless PKCE flow through a seeded
- * Better Auth credential account, so no browser is needed.
+ * Without credentials, validates discovery and unauthenticated challenges.
+ * With MCP_CREDENTIAL_LOGIN=1, performs a full headless tenant PKCE flow.
  *
  * Against production: expects a Bearer JWT in the MCP_BEARER_TOKEN env var
  * (the one ChatGPT received), or skips the token-gated checks.
  *
  * Usage:
- *   yarn test:mcp                              # staging, fully headless
+ *   yarn test:mcp                              # staging, read-only discovery
  *   yarn test:mcp:prod                         # prod, discovery + unauth only
  *   MCP_BEARER_TOKEN=eyJ... yarn test:mcp:prod # prod, full flow
  */

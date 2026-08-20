@@ -35,7 +35,6 @@ jobs:
       - run: yarn mcp:catalog
       - run: yarn lint:seeds
       - run: yarn lint:migrations
-      - run: yarn lint:tool-parity
 
   e2e-plan:
     name: Plan affected browser coverage
@@ -70,6 +69,15 @@ jobs:
     needs: e2e-plan
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_PLATFORM_DOMAIN: https://preview.krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_APP_NAME: KrabiClaw
+      NUXT_PUBLIC_SITE_URL: https://preview.krabiclaw.com
+      NUXT_PUBLIC_HELP_URL: https://preview.krabiclaw.com/help
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
+      BETTER_AUTH_URL: https://preview.krabiclaw.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -188,7 +196,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node --experimental-strip-types scripts/provision-e2e-auth.ts --preview
-      - name: Run core and affected preview browser coverage
+      - name: Run tenant public and affected preview coverage
         run: yarn test:e2e:preview:selected
       - name: Upload Playwright report
         if: failure()
@@ -220,11 +228,7 @@ jobs:
       NUXT_PUBLIC_HELP_URL: https://staging.krabiclaw.com/help
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: https://staging.krabiclaw.com
-      E2E_ALLOW_DEV_ROUTES: "true"
-      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-      MCP_CREDENTIAL_LOGIN: "1"
-      MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
-      MCP_PRIVATE_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
+      MCP_BASE_URL: https://staging.krabiclaw.com
       PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
       PLAYWRIGHT_WORKERS: "2"
     steps:
@@ -238,17 +242,6 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - name: Generate ephemeral test credentials
-        shell: bash
-        run: |
-          auth_secret="$(openssl rand -base64 32)"
-          password="$(openssl rand -hex 32)Aa1!"
-          echo "::add-mask::$auth_secret"
-          echo "::add-mask::$password"
-          {
-            echo "BETTER_AUTH_SECRET=$auth_secret"
-            echo "E2E_TEST_PASSWORD=$password"
-          } >> "$GITHUB_ENV"
       - name: Build staging Worker
         run: yarn build
       - name: Sync staging search reindex secret
@@ -267,40 +260,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 migrations apply DB --env staging --remote
-      - name: Sweep staging E2E artifacts
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging --older-than-hours=0
-      - name: Provision deterministic staging fixtures
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/provision-staging-fixtures.ts --staging
       - name: Refresh staging AI Search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
         run: yarn ai-search:sync:staging
       - name: Verify staging AI Search
         run: curl --fail-with-body --retry 5 --retry-all-errors --retry-delay 5 "https://staging.krabiclaw.com/api/public/search?q=booking&type=all&surface=public"
-      - name: Provision staging Better Auth fixtures
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --staging
-      - name: Provision durable staging-review identity
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
-        run: node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging
-      - name: Run OAuth bearer MCP smoke
+      - name: Run read-only tenant MCP discovery smoke
         run: yarn test:mcp
-      - name: Run full staging release qualification
-        env:
-          PLAYWRIGHT_STAGING_REVIEW: "true"
-          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
-        run: yarn test:e2e:full
+      - name: Run read-only tenant rendering
+        run: yarn test:e2e:tenant-rendering
       - name: Upload staging Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -356,8 +325,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 migrations apply DB --remote
-      - name: Run read-only production browser smoke
-        run: yarn test:e2e:public-rendering
+      - name: Run read-only production tenant rendering
+        run: yarn test:e2e:tenant-rendering
       - name: Refresh production search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}

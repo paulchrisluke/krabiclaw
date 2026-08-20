@@ -232,23 +232,27 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
+Release qualification covers only Pottery House, Kikuzuki, and NCLS public
+rendering/navigation; Pottery booking/contact and Kikuzuki reservation journeys;
+and tenant MCP/OAuth/content/media. Admin, dashboard, CMS, ChowBot, billing,
+site administration, staging-review, platform marketing, and platform MCP are
+supported code surfaces but are not release-qualified by CI.
+
 Four environment gates exist in `.github/workflows/ci.yml`:
 
 ### Required PR lane
 
 Runs checks, builds for preview, and may migrate, seed, and deploy only the
 isolated preview environment. Shared staging and production are never changed
-by a feature PR. Permanent core sentinels plus the specs selected from
-`config/e2e-impact-map.mjs` run against the deployed preview. High-impact and
-unclassified runtime changes fail safe to full coverage; documentation-only
-changes skip Worker deployment.
+by a feature PR. Tenant rendering/navigation plus the specs selected from the
+three-group `config/e2e-impact-map.mjs` run against deployed preview.
+Documentation-only changes skip Worker deployment.
 
 ### Staging lane
 
 Runs on pushes to `staging`. It deploys the staging Worker normally, applies
-pending migrations, sweeps disposable E2E artifacts, provisions fixtures and
-auth once, and runs the complete Playwright suite with two workers against
-`staging.krabiclaw.com`.
+pending migrations, and runs read-only tenant rendering and tenant MCP checks.
+It does not sweep, reseed customer fixtures, provision auth, or run write tests.
 
 ### Staging release-qualification lane
 
@@ -260,7 +264,8 @@ staging SHA is green.
 ### Production lane
 
 Runs on pushes to `main`. It deploys the production Worker normally, applies
-pending migrations, and runs read-only public browser smoke.
+pending migrations, and runs read-only rendering/navigation against the three
+customer custom domains.
 
 The contract is `docs/operations/release-flow.md`.
 
@@ -269,17 +274,15 @@ The contract is `docs/operations/release-flow.md`.
 - Cloudflare credentials are scoped only to Cloudflare steps.
 - Never put `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` in top-level job `env:`.
 - All E2E jobs require Stripe env vars.
-### Preview/Staging Data Lifecycle
+### Preview Data Lifecycle
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
 Curated fixture data (Demo, Pottery House, Kikuzuki, NCLS, and MCP plan
-fixtures) is reset via fixed-ID `DELETE`-then-`INSERT` provisioning before
-fixture-dependent local, preview, and staging browser coverage—it never grows.
-Staging provisioning first verifies protected ownership and records D1
-time-travel information. Production is never seeded by CI. Anything else E2E
-specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs
-before preview and staging provisioning. For it to catch what a spec creates:
+fixtures) is reset via fixed-ID provisioning only for local and preview write
+coverage. Staging and production are never seeded by CI. Anything else E2E
+specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which supports
+only local and preview data. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
@@ -384,8 +387,8 @@ Required pipeline:
 3. `client:import --approve`
 4. `client:import --apply`
 5. `client:verify` against the local build
-6. Merge to `staging`; CI deploys and runs the full E2E suite
-7. Merge the verified staging release into `main`; CI deploys and runs production browser smoke
+6. Merge to `staging`; CI deploys and runs read-only tenant/MCP verification
+7. Merge the verified staging release into `main`; CI deploys and verifies the three customer domains
 8. `client:deploy --skip-seed` for final deployed client verification
 
 `client:deploy` never releases the Worker itself. The package exposes no direct

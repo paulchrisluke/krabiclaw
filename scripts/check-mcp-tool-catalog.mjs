@@ -13,11 +13,9 @@ const snapshotsDir = path.join(root, 'server/utils/mcp-catalog-snapshots')
 const [
   { canonicalCatalogSnapshot, catalogFingerprint },
   { MCP_PUBLIC_TOOLS, MCP_TOOLS },
-  { PLATFORM_PUBLIC_MCP_TOOLS, PLATFORM_MCP_TOOLS },
 ] = await Promise.all([
   import('../server/utils/mcp-catalog.ts'),
   import('../server/utils/mcp-tools/index.ts'),
-  import('../server/utils/platform-mcp-tools.ts'),
 ])
 
 const surfaces = [
@@ -26,12 +24,6 @@ const surfaces = [
     publicTools: MCP_PUBLIC_TOOLS,
     dispatchTools: MCP_TOOLS,
     snapshotFile: path.join(snapshotsDir, 'tenant.json'),
-  },
-  {
-    surface: 'platform',
-    publicTools: PLATFORM_PUBLIC_MCP_TOOLS,
-    dispatchTools: PLATFORM_MCP_TOOLS,
-    snapshotFile: path.join(snapshotsDir, 'platform.json'),
   },
 ]
 

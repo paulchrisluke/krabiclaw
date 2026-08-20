@@ -85,8 +85,10 @@
 </template>
 
 <script setup lang="ts">
-const { data, error } = await useBlawbyDocument('home', null, { server: true, lazy: false })
-if (error.value) throw error.value
+import type { BlawbyDocumentPayload } from '~/composables/useBlawbyDocument'
+
+const data = inject<Ref<BlawbyDocumentPayload>>('blawby-document')
+if (!data) throw createError({ statusCode: 500, statusMessage: 'Blawby document context is unavailable' })
 if (!data.value?.route.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
 const identity = computed(() => data.value!.shell.identity)
 const consultation = computed(() => data.value!.shell.consultation)

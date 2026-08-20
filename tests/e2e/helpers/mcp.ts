@@ -106,13 +106,6 @@ export async function ensureSite(request: APIRequestContext, baseURL: string) {
   return siteId
 }
 
-export async function getSiteOrg(request: APIRequestContext, baseURL: string, siteId: string) {
-  const res = await request.get(`${baseURL}/api/sites/${siteId}`)
-  if (res.status() !== 200) console.error(await res.text()); expect(res.status()).toBe(200)
-  const body = await res.json() as { organization_id: string }
-  return body.organization_id
-}
-
 export async function ensureLocation(request: APIRequestContext, baseURL: string, siteId: string) {
   const locations = await mcpRequest(request, baseURL, {
     method: 'tools/call',

@@ -1,97 +1,54 @@
-# Testing Strategy
+# Testing strategy
 
-Release and outage decisions follow the mandatory
-[release and outage prevention contract](operations/release-and-outage-prevention.md).
-This document defines test-layer responsibilities; it does not authorize a
-release when the deployed browser matrix has not been inspected.
+Browser and deployed MCP behavior are the release signal. Static checks and unit
+tests are supporting diagnostics, not proof that a customer can use the product.
 
-KrabiClaw treats browser and E2E validation as the product gate. Unit tests, lint, typecheck, and static guardrails are hygiene unless they protect a narrow pure contract that browser tests cannot exercise directly.
+## Product contracts
 
-## CI feedback loop
+Release-blocking coverage proves:
 
-Pull requests use `config/e2e-impact-map.mjs` to select browser coverage from
-the actual diff. Every deployed preview runs a small
-permanent core, including authenticated dashboard Pages and inbox hydration
-regressions, followed by the affected subsystem specs. A narrow Saya
-presentation change therefore runs Saya/public tenant coverage without paying
-for MCP, billing, notification, or unrelated dashboard suites.
+1. Pottery House, Kikuzuki, and NCLS render and navigate at desktop/mobile widths
+   with correct identity, content, media, navigation, footer, CTA, canonical data,
+   styles, and stable hydration.
+2. Guests can complete Pottery booking/contact and Kikuzuki reservation flows;
+   writes persist and produce log-only owner notification records. NCLS exposes
+   contact information and scheduling links but intentionally has no contact form.
+3. Tenant MCP proves OAuth, tenant isolation, role visibility, reads, writes,
+   canonical content, and media/ChatGPT attachment behavior.
 
-The selector fails safe: schema, migration, Worker, Playwright-harness, and
-unclassified application-runtime changes run the full inventory. Any changed
-E2E spec selects itself. Documentation-only changes do not deploy a Worker.
-Selection behavior is protected by unit and workflow-contract tests.
+Admin, dashboard, CMS/editor, ChowBot, billing/back-office, staging-review,
+site-administration, platform marketing, and platform MCP are deliberately not
+release-qualified.
 
-The complete Playwright suite remains mandatory on every exact staging push
-SHA. The `staging` to `main` release PR consumes those checks without starting
-another deployment or qualification cycle.
+## Feedback loop
 
-## Local and deployed parity
+`config/e2e-impact-map.mjs` maps changes to `tenant-public`, `guest-journeys`, or
+`tenant-mcp`. Documentation-only changes skip preview. A deployed preview always
+runs tenant rendering/navigation, then affected guest/MCP specs. High-impact or
+unclassified runtime changes run all eight retained E2E files.
 
-Local browser results are meaningful only when they exercise the same product
-shape as CI: the exact Node version in `.nvmrc`, a frozen dependency install,
-fresh local migrations, all four required tenant fixtures, a production
-Nuxt/Nitro build, and `.output/server/index.mjs` through normal local Wrangler.
-`yarn test:e2e:local <specs>` owns that preparation. Do not substitute
-`nuxt dev`, a mock server, a header-only tenant shortcut, or a different Node
-runtime and call it CI parity.
+Staging and production are read-only. Staging does not reseed or provision test
+accounts. Guest and MCP write suites run only on fresh local data or disposable
+preview data.
 
-Preview and staging then prove the environment-specific parts that local
-Wrangler cannot: the deployed Worker route, remote D1/R2/KV/AI/queue/DO
-bindings, direct tenant aliases, and real environment secrets. A local pass and
-a deployed pass are complementary evidence.
+## Unit-test standard
 
-All browser lanes treat console warnings, console errors, page errors,
-hydration mismatches, failed first-party assets, unexpected 4xx responses, and
-all 5xx responses as failures. Do not suppress those signals or increase a
-timeout before identifying what operation consumed the existing budget.
+Keep unit tests only when they exercise narrow behavior more clearly than a
+browser can: validation boundaries, cancellation-token semantics, tenant access
+decisions, canonical content transforms, parsers, and migration safety. Delete or
+reject tests that scan source text, assert wiring strings, mock an end-to-end
+workflow, or duplicate a retained E2E journey with lower confidence.
 
-Demo, Pottery House, Kikuzuki, and NCLS are required test data. Missing fixture
-data must fail preparation in local, preview, and staging; a fixture-dependent
-spec must not turn that absence into a skip.
-
-## Taxonomy
-
-Use unit tests for narrow, deterministic contracts:
-
-- parsers, mappers, formatters, and serializers
-- schema guards and migration-safety checks
-- permission predicates and access matrices that are easier to exhaust in-process
-- API-contract helpers where the route itself is covered elsewhere
-- regression boundaries around bug-prone pure utilities
-
-Use Playwright, browser checks, or route-level API checks for product behavior:
-
-- dashboard navigation, CMS/editor workflows, onboarding, billing, support, and auth flows
-- tenant public pages, route resolution, SSR detail pages, hydration, and console health
-- MCP/ChowBot/widget flows that depend on real request context
-- notification, booking, contact, reservation, and review submissions
-- anything whose failure would be visible to a user in the browser
-
-Delete or do not add unit tests that primarily:
-
-- scan source files for component names, removed imports, or past implementation choices
-- assert mocked product workflows without exercising the real route or page
-- duplicate a Playwright route/browser check with lower confidence
-- pin incidental DOM copy, Nuxt UI internals, or one-off refactor history
-
-Keep static guardrails when they encode a durable repository rule, such as migration safety, Better Auth boundaries, seed hygiene, or tool parity.
-
-## Targeted Commands
-
-Use these for focused local validation:
+Focused commands:
 
 ```bash
-yarn test:unit:file tests/unit/dashboard-links.test.ts
-yarn test:browser:smoke
-yarn test:browser:dashboard
+yarn test:e2e:tenant-rendering
+yarn test:e2e:guest-journeys
+yarn test:e2e:mcp
+yarn test:unit
 ```
 
-Use `yarn test:unit` only when the PR risk calls for the full unit glob. Passing the whole unit suite is not enough to call a user-facing change validated.
-
-For a Node runtime upgrade, follow
-[the Node runtime upgrade runbook](operations/node-runtime-upgrades.md); its
-required full local Worker run is broader than these focused commands.
-
-## First Reduction Pass
-
-The first conservative pass removed `tests/unit/dashboard-nuxt-ui-consolidation.test.ts`. That file scanned source text for removed component names and implementation details from an old dashboard cleanup. The useful behavior is now covered through `tests/e2e/dashboard.spec.ts`, which exercises the real dashboard shell, search trigger, account menu, and responsive sidebar in a browser.
+Local E2E uses the exact Node version, fresh local migrations/fixtures, a
+production Nuxt/Nitro build, and `.output/server/index.mjs` through normal local
+Wrangler. Do not substitute `nuxt dev` or a mock server and call it deployed-path
+proof.

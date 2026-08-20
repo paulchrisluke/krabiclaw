@@ -102,12 +102,16 @@ export async function useBlawbyDocument(
     {
       server: options.server ?? true,
       lazy: options.lazy ?? false,
+      dedupe: 'defer',
       getCachedData(cacheKey) {
         return useNuxtApp().payload.data[cacheKey] as BlawbyDocumentPayload | undefined
       },
     },
   )
 
+  if (!asyncData.data.value && (asyncData.status.value === 'idle' || asyncData.status.value === 'pending')) {
+    await asyncData.execute({ dedupe: 'defer' })
+  }
   if (asyncData.error.value) throw asyncData.error.value
   if (!asyncData.data.value && options.server !== false) {
     throw createError({ statusCode: 500, statusMessage: 'Blawby document data was not returned' })

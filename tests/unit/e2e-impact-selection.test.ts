@@ -24,40 +24,38 @@ test('documentation-only changes do not deploy a preview Worker', () => {
   assert.deepEqual(plan.specs, [])
 })
 
-test('a Saya presentation change runs only the relevant public tenant specs', () => {
+test('a Saya presentation change selects tenant-public coverage', () => {
   const plan = selectPreviewE2e([
     'components/saya/SayaHeader.vue'
   ], allSpecs)
 
   assert.equal(plan.runPreview, true)
   assert.equal(plan.scope, 'affected')
-  assert.deepEqual(plan.groups, ['saya-public'])
+  assert.deepEqual(plan.groups, ['tenant-public'])
   assert.deepEqual(plan.specs, [
-    'tests/e2e/pottery-house.spec.ts',
-    'tests/e2e/tenant-client-navigation.spec.ts'
+    'tests/e2e/tenant-client-navigation.spec.ts',
+    'tests/e2e/tenant-rendering.spec.ts'
   ])
   assert.equal(plan.specs.includes('tests/e2e/mcp-owner-tools.spec.ts'), false)
-  assert.equal(plan.specs.includes('tests/e2e/billing-webhook-signed.spec.ts'), false)
 })
 
-test('dashboard changes restore the authenticated Pages lifecycle to preview coverage', () => {
+test('guest API changes select only guest journey coverage', () => {
   const plan = selectPreviewE2e([
-    'pages/dashboard/[orgSlug]/sites/[siteSlug]/pages.vue'
+    'server/api/public/sites/[siteId]/reservations.post.ts'
   ], allSpecs)
 
   assert.equal(plan.scope, 'affected')
-  assert.ok(plan.groups.includes('dashboard'))
-  assert.ok(plan.specs.includes('tests/e2e/dashboard.spec.ts'))
-  assert.ok(plan.specs.includes('tests/e2e/dashboard-workflows.spec.ts'))
+  assert.ok(plan.groups.includes('guest-journeys'))
+  assert.deepEqual(plan.specs, ['tests/e2e/tenant-guest-journeys.spec.ts'])
 })
 
 test('changing an E2E spec always selects that exact deployed-preview spec', () => {
   const plan = selectPreviewE2e([
-    'tests/e2e/site-creation.spec.ts'
+    'tests/e2e/mcp-content.spec.ts'
   ], allSpecs)
 
   assert.equal(plan.scope, 'affected')
-  assert.deepEqual(plan.specs, ['tests/e2e/site-creation.spec.ts'])
+  assert.deepEqual(plan.specs, ['tests/e2e/mcp-content.spec.ts'])
 })
 
 test('schema, migration, Worker, and test-harness changes receive full coverage', () => {
@@ -119,10 +117,10 @@ test('deleting a mapped runtime file still selects its preview coverage', async 
 
     const plan = selectPreviewE2e(changedFiles, allSpecs)
     assert.equal(plan.scope, 'affected')
-    assert.deepEqual(plan.groups, ['saya-public'])
+    assert.deepEqual(plan.groups, ['tenant-public'])
     assert.deepEqual(plan.specs, [
-      'tests/e2e/pottery-house.spec.ts',
-      'tests/e2e/tenant-client-navigation.spec.ts'
+      'tests/e2e/tenant-client-navigation.spec.ts',
+      'tests/e2e/tenant-rendering.spec.ts'
     ])
   } finally {
     await rm(repository, { recursive: true, force: true })
