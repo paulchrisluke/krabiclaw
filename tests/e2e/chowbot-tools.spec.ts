@@ -80,13 +80,15 @@ test.describe("mcp tools", () => {
     };
 
     try {
-      for (const [role, userId] of Object.entries(users)) {
-        await loginAs(
-          requests[role as keyof typeof requests],
-          baseURL!,
-          userId,
-        );
-      }
+      await Promise.all(
+        Object.entries(users).map(([role, userId]) =>
+          loginAs(
+            requests[role as keyof typeof requests],
+            baseURL!,
+            userId,
+          ),
+        ),
+      );
 
       for (const role of Object.keys(users) as Array<keyof typeof users>) {
         const postId = await createDraftPost(
