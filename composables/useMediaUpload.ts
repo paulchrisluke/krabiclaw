@@ -1,3 +1,5 @@
+import { getErrorMessage } from '~/utils/errors'
+
 export const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const VIDEO_MAX_SIZE_BYTES = 50 * 1024 * 1024
 
@@ -17,21 +19,6 @@ export interface MediaUploadResult {
   kind: 'image' | 'video'
   publicUrl?: string | null
   thumbnailUrl?: string | null
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const errorMessage = (data as Record<string, unknown>).error
-      if (typeof errorMessage === 'string' && errorMessage) return errorMessage
-    }
-
-    const message = (error as Record<string, unknown>).message
-    if (typeof message === 'string' && message) return message
-  }
-
-  return fallback
 }
 
 function operationAndCleanupError(

@@ -165,7 +165,7 @@ interface RawPlace {
 }
 
 // business_locations is source-locale (English) only — no locale column exists on it,
-// unlike business_location_translations. languageCode=en on both API calls is the real
+// languageCode=en on both API calls is the real
 // fix; this only guards against Google still returning script-mismatched text (e.g. a
 // component Google won't localize) so it never lands silently in that table.
 const NON_LATIN_SCRIPT_RE = /[฀-๿一-鿿぀-ヿ가-힯؀-ۿЀ-ӿ]/
@@ -221,7 +221,7 @@ function normalizeDetail(place: RawPlace): Omit<PlaceDetails, 'photos'> & { rawP
     openingHours: place.regularOpeningHours?.weekdayDescriptions ?? null,
     reviews: (place.reviews ?? []).map(r => ({
       reviewId: r.name ?? '',
-      authorName: r.authorAttribution?.displayName ?? 'Anonymous',
+      authorName: r.authorAttribution?.displayName ?? '',
       authorPhotoUrl: r.authorAttribution?.photoUri ?? null,
       rating: Math.round(r.rating ?? 0),
       text: r.text?.text ?? null,

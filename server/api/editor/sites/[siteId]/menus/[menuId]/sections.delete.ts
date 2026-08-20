@@ -16,7 +16,7 @@ interface MenuRow {
   location_id: string | null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const menuId = getRouterParam(event, 'menuId')
   const query = getQuery(event)
@@ -67,12 +67,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: menu.location_id,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: menu.location_id, })
 
     const deleted = await deleteMenuSection(db, site.organization_id, siteId, menuId, section)
 
@@ -81,9 +76,7 @@ export default defineEventHandler(async (event) => {
     }
 
     return jsonResponse({
-      success: true,
-      section,
-      deleted
+      success: true, section, deleted
     })
   } catch (error) {
     rethrowHttpError(error)
@@ -94,3 +87,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to delete menu section' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

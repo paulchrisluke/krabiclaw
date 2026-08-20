@@ -1,19 +1,24 @@
 // Tenant resolution middleware for KrabiClaw SaaS
 // Determines if request is for platform or tenant site
 
-import { defineEventHandler, getRequestURL, getHeader, type H3Event } from "h3";
-import { queryFirst } from "~/server/db";
+import { HTTPError, defineHandler  } from 'nitro';
+import type { H3Event } from 'nitro';
+import { redirect } from 'nitro/h3';
+import { queryFirst, type DbClient } from "~/server/db";
 import { TENANT_TYPES, type TenantType } from "~/utils/tenant-routing";
 import { cloudflareEnv, isInternalSelfFetch } from "../utils/api-response";
 import {
+  environmentTenantAliasSlug,
   getFreeSiteDomain,
   hostnameOf,
   isPlatformHost,
-  isPreviewContext,
+  usesTenantHeader,
+  type TenantHostEnv,
 } from "../utils/tenant-hosts";
 import { verifyScopedPreviewToken } from "../utils/preview-token";
 import { isPlatformPath } from "~/utils/platform-routes";
 import { parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
+import { resolvePublicTemplate } from "~/utils/template-registry";
 
 interface TenantSiteRow {
   id: string;
@@ -29,6 +34,17 @@ interface TenantSiteRow {
   vertical: string | null;
 }
 
+export interface SpentSubdomainResolution {
+  spent: true
+  successorDomain: string | null
+}
+
+function isSpentSubdomainResolution(
+  value: TenantSiteRow | SpentSubdomainResolution,
+): value is SpentSubdomainResolution {
+  return 'spent' in value
+}
+
 function setTenantType(event: H3Event, tenantType: TenantType) {
   event.context.tenantType = tenantType;
 }
@@ -37,7 +53,75 @@ function normalizedPath(pathname: string) {
   return pathname === "/" ? "/" : pathname.replace(/\/$/, "");
 }
 
-export default defineEventHandler(async (event) => {
+function requireTenantMetadata(site: Pick<TenantSiteRow, 'theme_id' | 'vertical' | 'brand_name'>, source: string) {
+  const themeId = site.theme_id?.trim()
+  const vertical = site.vertical?.trim()
+  const brandName = site.brand_name?.trim()
+  if (!themeId || !vertical || !brandName) {
+    throw new HTTPError({
+      statusCode: 500,
+      statusMessage: `Tenant ${source} is missing canonical identity or template metadata`,
+      data: { code: 'TENANT_METADATA_INCOMPLETE' },
+    })
+  }
+  return { themeId, vertical, brandName }
+}
+
+async function resolveRegisteredSubdomainSite(
+  db: DbClient,
+  env: TenantHostEnv,
+  tenantSlug: string,
+): Promise<TenantSiteRow | null> {
+  const tenantDomain = `${tenantSlug}.${getFreeSiteDomain(env)}`
+  return await queryFirst<TenantSiteRow>(
+    db,
+    `
+      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
+             canonical.domain AS canonical_domain,
+             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
+             ma.mime_type AS logo_mime_type,
+             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
+      FROM sites s
+      JOIN site_domains requested
+        ON requested.site_id = s.id
+       AND requested.type = 'subdomain'
+       AND requested.status = 'active'
+      LEFT JOIN site_domains canonical
+        ON canonical.site_id = s.id
+       AND canonical.role = 'canonical'
+       AND canonical.status = 'active'
+      LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
+      WHERE requested.domain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+      LIMIT 1
+    `,
+    [tenantDomain],
+  )
+}
+
+function setResolvedTenantContext(
+  event: H3Event,
+  site: TenantSiteRow,
+  host: string,
+  canonicalDomain: string | null,
+) {
+  const metadata = requireTenantMetadata(site, site.id)
+  event.context.siteId = site.id
+  event.context.organizationId = site.organization_id
+  event.context.themeId = metadata.themeId
+  event.context.onboardingStatus = site.onboarding_status
+  setTenantType(event, TENANT_TYPES.TENANT)
+  event.context.tenantHost = hostnameOf(host)
+  event.context.canonicalDomain = canonicalDomain
+  event.context.site = {
+    brand_name: metadata.brandName,
+    logo_url: site.logo_url || null,
+    logo_mime_type: site.logo_mime_type || null,
+    favicon_url: site.favicon_url || null,
+    vertical: metadata.vertical,
+  }
+}
+
+export default defineHandler(async (event) => {
   // Nested self-fetches (i18n/icon/internal API calls during SSR) never carry
   // tenant context downstream handlers rely on — the real inbound request
   // already resolved tenant type/host before triggering these. Skip the DB
@@ -46,69 +130,44 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  const url = getRequestURL(event);
+  const url = event.url;
   const tenantPath = normalizedPath(url.pathname);
   // Public site APIs carry an explicit site ID and resolve that site through
   // their canonical service. Host-based tenant resolution would duplicate the
   // same database lookup without adding an authorization boundary.
   if (tenantPath.startsWith("/api/public/sites/")) return;
-  const host = getHeader(event, "host") || "";
+  const host = (event.req.headers.get("host")) || "";
   const env = cloudflareEnv(event);
 
-  // Shared local, preview, and staging hosts carry tenant identity in a header.
-  // Production custom domains never match this host boundary.
-  if (isPreviewContext(host)) {
-    const previewSlug = getHeader(event, "x-preview-tenant");
+  // Local and raw workers.dev hosts cannot express tenant identity in their
+  // hostname, so their test harness carries it explicitly. Deployed preview and
+  // staging use direct environment aliases below.
+  if (usesTenantHeader(host)) {
+    const previewSlug = (event.req.headers.get("x-preview-tenant"));
     if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
       const db = env.db;
       if (db) {
-        const tenantDomain = `${previewSlug}.${getFreeSiteDomain(env)}`;
-        const site = await queryFirst<TenantSiteRow>(
-          db,
-          `
-          SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
-                 canonical.domain AS canonical_domain,
-                 s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
-                 ma.mime_type AS logo_mime_type,
-                 json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
-          FROM sites s
-          JOIN site_domains requested
-            ON requested.site_id = s.id
-           AND requested.type = 'subdomain'
-           AND requested.status = 'active'
-          LEFT JOIN site_domains canonical
-            ON canonical.site_id = s.id
-           AND canonical.role = 'canonical'
-           AND canonical.status = 'active'
-          LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-          WHERE requested.domain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
-          LIMIT 1
-        `,
-          [tenantDomain],
-        );
+        const site = await resolveRegisteredSubdomainSite(db, env, previewSlug)
         if (site) {
-          event.context.siteId = site.id;
-          event.context.organizationId = site.organization_id;
-          event.context.themeId = site.theme_id;
-          event.context.onboardingStatus = site.onboarding_status;
-          setTenantType(event, TENANT_TYPES.TENANT);
-          event.context.tenantHost = host.split(":")[0];
-          // Preview/staging tenant access intentionally stays on the current
-          // host because nested tenant subdomains are unavailable there. If we
-          // carry through the DB canonical domain, tenant-routing can 301 to a
-          // localhost or production tenant host and break CI navigation.
-          event.context.canonicalDomain = host.split(":")[0];
-          event.context.site = {
-            brand_name: site.brand_name || null,
-            logo_url: site.logo_url || null,
-            logo_mime_type: site.logo_mime_type || null,
-            favicon_url: site.favicon_url || null,
-            vertical: site.vertical || "restaurant",
-          };
+          setResolvedTenantContext(event, site, host, hostnameOf(host))
           return;
         }
       }
     }
+  }
+
+  const aliasSlug = environmentTenantAliasSlug(host, env)
+  if (aliasSlug) {
+    const site = env.db
+      ? await resolveRegisteredSubdomainSite(env.db, env, aliasSlug)
+      : null
+    if (site) {
+      setResolvedTenantContext(event, site, host, hostnameOf(host))
+      return
+    }
+    setTenantType(event, TENANT_TYPES.TENANT_404)
+    event.context.siteId = null
+    return
   }
 
   // Platform-hosted preview routes: /preview/site/[siteId]/...
@@ -149,17 +208,18 @@ export default defineEventHandler(async (event) => {
         [previewSiteId],
       );
       if (previewSite) {
+        const metadata = requireTenantMetadata(previewSite, previewSite.id)
         event.context.siteId = previewSite.id;
         event.context.organizationId = previewSite.organization_id;
-        event.context.themeId = previewSite.theme_id;
+        event.context.themeId = metadata.themeId;
         event.context.onboardingStatus = previewSite.onboarding_status;
         setTenantType(event, TENANT_TYPES.TENANT);
         event.context.site = {
-          brand_name: previewSite.brand_name || null,
+          brand_name: metadata.brandName,
           logo_url: previewSite.logo_url || null,
           logo_mime_type: previewSite.logo_mime_type || null,
           favicon_url: previewSite.favicon_url || null,
-          vertical: previewSite.vertical || "restaurant",
+          vertical: metadata.vertical,
         };
         return;
       }
@@ -202,15 +262,19 @@ export default defineEventHandler(async (event) => {
         );
         if (isAuthorized) {
           const payload = parseOnboardingDraftPayload(previewDraft.payload_json);
+          const template = resolvePublicTemplate({ vertical: previewDraft.vertical });
+          if (!template) {
+            throw new HTTPError({ statusCode: 500, statusMessage: 'Draft preview has no supported template', data: { code: 'DRAFT_TEMPLATE_MISSING' } })
+          }
           event.context.draftId = previewDraft.id;
           setTenantType(event, TENANT_TYPES.TENANT);
-          event.context.themeId = "saya-theme-v1";
+          event.context.themeId = template.themeId;
           event.context.onboardingStatus = "active";
           event.context.site = {
             brand_name: previewDraft.name || null,
             logo_url: payload.preview.config.logo_url || null,
             favicon_url: null,
-            vertical: previewDraft.vertical || "restaurant",
+            vertical: previewDraft.vertical,
           };
           return;
         }
@@ -232,22 +296,16 @@ export default defineEventHandler(async (event) => {
   // Tenant site resolution
   const site = await resolveTenantSite(host, event);
 
+  if (site && isSpentSubdomainResolution(site)) {
+    if (site.successorDomain) {
+      return redirect(`https://${site.successorDomain}${url.pathname}${url.search}`, 301)
+    }
+    throw new HTTPError({ statusCode: 410, statusMessage: 'Gone' })
+  }
+
   // If site found, handle based on onboarding status
   if (site) {
-    event.context.siteId = site.id;
-    event.context.organizationId = site.organization_id;
-    event.context.themeId = site.theme_id;
-    event.context.onboardingStatus = site.onboarding_status;
-    setTenantType(event, TENANT_TYPES.TENANT);
-    event.context.tenantHost = host.split(":")[0];
-    event.context.canonicalDomain = site.canonical_domain || null;
-    event.context.site = {
-      brand_name: site.brand_name || null,
-      logo_url: site.logo_url || null,
-      logo_mime_type: site.logo_mime_type || null,
-      favicon_url: site.favicon_url || null,
-      vertical: site.vertical || "restaurant",
-    };
+    setResolvedTenantContext(event, site, host, site.canonical_domain || null)
     return;
   }
 
@@ -259,7 +317,7 @@ export default defineEventHandler(async (event) => {
 export async function resolveTenantSite(
   host: string,
   event: Parameters<typeof cloudflareEnv>[0],
-): Promise<TenantSiteRow | null> {
+): Promise<TenantSiteRow | SpentSubdomainResolution | null> {
   const runtimeEnv = cloudflareEnv(event);
   const db = runtimeEnv.db;
   const hostname = hostnameOf(host);
@@ -286,7 +344,7 @@ export async function resolveTenantSite(
     );
   }
 
-  return (await queryFirst<TenantSiteRow>(
+  const site = await queryFirst<TenantSiteRow>(
     db,
     `
     SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
@@ -304,5 +362,15 @@ export async function resolveTenantSite(
     LIMIT 1
   `,
     [hostname],
-  )) ?? null;
+  )
+  if (site) return site
+
+  const spent = await queryFirst<{ successor_domain: string | null }>(
+    db,
+    'SELECT successor_domain FROM spent_subdomains WHERE domain = ? LIMIT 1',
+    [hostname],
+  )
+  return spent
+    ? { spent: true, successorDomain: spent.successor_domain }
+    : null
 }

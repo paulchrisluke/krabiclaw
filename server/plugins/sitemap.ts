@@ -1,6 +1,6 @@
 import type { SitemapUrlInput } from '#sitemap/types'
-import { getRequestURL } from 'h3'
-import { defineNitroPlugin } from 'nitropack/runtime'
+
+import { definePlugin } from 'nitro';
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
@@ -16,14 +16,9 @@ interface SitemapEntry {
 
 async function listPublishedTenantSitemapPages(db: DbClient, siteId: string) {
   return await queryAll<{ path: string | null; lastmod: string | null; robots: string | null }>(db, `
-    SELECT json_extract(r.snapshot_json, '$.metadata.path') AS path,
-           COALESCE(r.published_at, r.created_at) AS lastmod,
-           json_extract(r.snapshot_json, '$.metadata.robots') AS robots
+    SELECT v.path, v.updated_at AS lastmod, v.robots
       FROM tenant_page_variants v
-      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.draft_document_id
-     WHERE v.site_id = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
-       AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale
-       AND json_extract(r.snapshot_json, '$.metadata.path') IS NOT NULL
+     WHERE v.site_id = ?
      ORDER BY lastmod ASC, path ASC
   `, [siteId])
 }
@@ -37,7 +32,7 @@ function addUniqueEntries(target: SitemapUrlInput[], entries: SitemapEntry[]) {
   }
 }
 
-export default defineNitroPlugin((nitroApp) => {
+export default definePlugin((nitroApp) => {
   // Runtime endpoint sources are intentionally discarded. They are fetched as
   // synthetic internal requests, which do not inherit the original tenant
   // context or Cloudflare bindings. The input hook below works on the real
@@ -48,7 +43,7 @@ export default defineNitroPlugin((nitroApp) => {
 
   nitroApp.hooks.hook('sitemap:input', async (ctx) => {
     const event = ctx.event
-    const hostname = getRequestURL(event).hostname
+    const hostname = event.url.hostname
     if (isNonIndexableHost(hostname)) {
       ctx.urls.length = 0
       return
@@ -71,14 +66,13 @@ export default defineNitroPlugin((nitroApp) => {
           db,
           `SELECT slug, category, updated_at
            FROM platform_docs
-           WHERE status = 'published'
-             AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
+           WHERE robots IS NULL OR robots NOT LIKE '%noindex%'`,
         ),
         queryAll<ApiRecord>(
           db,
           `SELECT slug, category, updated_at
            FROM blog_posts
-           WHERE status = 'published'
+           WHERE (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
              AND site_id IS NULL
              AND visibility = 'public'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
@@ -144,7 +138,7 @@ export default defineNitroPlugin((nitroApp) => {
         queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `
           SELECT slug, canonical_path, updated_at
             FROM offerings
-           WHERE site_id = ? AND status = 'published'
+           WHERE site_id = ? AND (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
            ORDER BY sort_order ASC, name ASC
         `, [siteId]),
         listPublishedTenantSitemapPages(db, siteId),
@@ -153,7 +147,7 @@ export default defineNitroPlugin((nitroApp) => {
           `SELECT slug, updated_at
            FROM blog_posts
            WHERE site_id = ?
-             AND status = 'published'
+             AND (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
              AND visibility = 'public'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
           [siteId],
@@ -200,7 +194,7 @@ export default defineNitroPlugin((nitroApp) => {
          FROM menu_items mi
          JOIN menus m ON m.id = mi.menu_id
          WHERE m.site_id = ?
-           AND m.status = 'published'
+           AND m.is_visible = 1
            AND (mi.robots IS NULL OR mi.robots NOT LIKE '%noindex%')`,
         [siteId],
       ),

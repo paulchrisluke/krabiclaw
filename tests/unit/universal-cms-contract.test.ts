@@ -12,7 +12,7 @@ test('the dashboard exposes one site-scoped Pages manager for every template', (
   assert.match(linksSource, /paths\.value\.pages/)
 })
 
-test('the Pages manager owns the complete block lifecycle', () => {
+test('the Pages manager owns the complete current-content lifecycle', () => {
   for (const pattern of [
     /Add block/,
     /Duplicate block/,
@@ -20,16 +20,20 @@ test('the Pages manager owns the complete block lifecycle', () => {
     /Move block up/,
     /Move block down/,
     /Preview/,
-    /Publish/,
-    /Unpublish/,
-    /Archive/,
-    /Restore/,
+    />Save</,
   ]) assert.match(managerSource, pattern)
+  assert.doesNotMatch(managerSource, /Publish|Unpublish|Archive|Restore/)
   assert.match(managerSource, /expectedDocumentUpdatedAt/)
   assert.match(managerSource, /TenantPageBlockEditor/)
   assert.match(managerSource, /draggable="true"/)
   assert.doesNotMatch(managerSource, /Block data JSON/)
   assert.doesNotMatch(managerSource, /blockJson/)
+})
+
+test('the Pages manager previews against the Worker serving the dashboard', () => {
+  assert.match(managerSource, /const platformOrigin = useRequestURL\(\)\.origin/)
+  assert.match(managerSource, /`\$\{platformOrigin\}\/preview\/site\//)
+  assert.doesNotMatch(managerSource, /config\.public\.(?:platformDomain|freeSiteDomain)/)
 })
 
 test('legacy field-based dashboard editor paths are not referenced', () => {

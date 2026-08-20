@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import test from 'node:test'
 
 import {
@@ -42,4 +43,14 @@ test('Kikuzuki billing block seeds canonical Better Auth and app projections', (
   assert.match(sql, /INSERT OR REPLACE INTO site_billing/)
   assert.match(sql, /INSERT OR REPLACE INTO site_entitlements/)
   assert.match(sql, /'sent-site-kikuzuki-managed_service'/)
+})
+
+test('Kikuzuki stdout seed includes the complete billing block', () => {
+  const sql = execFileSync(
+    process.execPath,
+    ['--experimental-strip-types', 'scripts/generate-kikuzuki-seed.ts', '--stdout'],
+    { encoding: 'utf8' },
+  )
+
+  assert.match(sql, /-- END GENERATED: kikuzuki_billing\s*$/)
 })

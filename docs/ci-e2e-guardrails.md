@@ -4,10 +4,15 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 ## Tier intent
 
-- The required PR lane builds for and deploys only isolated preview. Its
-  representative suite covers public routing and dashboard API behavior.
+- The required PR lane builds for and deploys only isolated preview. Permanent
+  core sentinels cover public routing, dashboard API behavior, the authenticated
+  Pages lifecycle, and authenticated inbox hydration. The executable impact map
+  adds the Playwright specs affected by the PR diff.
 - A push to `staging` deploys the staging Worker normally, applies migrations,
-  and then runs the full Playwright suite against that deployment.
+  provisions fixtures and auth once, and runs the full Playwright inventory in
+  one invocation with two workers.
+- The ordinary `staging` to `main` pull request does not deploy or rerun CI. It
+  consumes the required checks already attached to the exact staging SHA.
 - A push to `main` deploys production normally, applies migrations, and then
   runs read-only public browser smoke. There is no scheduled release lane.
 
@@ -16,8 +21,13 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 - Staging-only fixes are acceptable when they restore parity with the real deployed path:
   - idempotent remote seeds
   - build steps that do not depend on third-party network fetches
-  - per-spec timeout adjustments when the assertions are still required and the test is just longer on remote infrastructure
+  - environment routing, bindings, credentials, and fixture corrections proven
+    against the normal deployed Worker
 - Staging should not silently lose product coverage just to go green. If a test is removed, narrowed, or bypassed, document why it no longer represents intended production behavior.
+- Do not add or increase timeouts as the first response to a remote failure.
+  Locate the operation consuming the current budget, reproduce it through the
+  production build and normal Wrangler path, and fix the application, fixture,
+  or environment contract that was actually demonstrated.
 
 ## Better Auth fixture contract
 
@@ -31,13 +41,24 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   the same in their GitHub Actions job, mask it immediately, provision it after
   the curated seed, and expose it only to that run's Playwright process. No
   test password is stored in the repository.
+- `staging-review@staging.krabiclaw.test` is a separate durable human-review
+  identity. Its stable password is delivered to the staging job through the
+  repository Actions secret `STAGING_REVIEW_PASSWORD` and is never derived from
+  `E2E_TEST_PASSWORD` or registered in `E2E_AUTH_FIXTURES`.
+- Staging provisioning restores the review identity's editor and site-team
+  memberships after fixture reseeding without changing its credential or
+  deleting sessions. Password rotation is an explicit operator action through
+  `scripts/provision-staging-review-auth.ts --staging --rotate-password`.
 - Authenticated tests use `loginAs()` to call Better Auth's email sign-in API.
   If the fixture declares a membership, the helper then calls Better Auth's
   organization `set-active` endpoint; it never writes a session cookie itself.
 - `/api/dev/login` does not exist. Tests and scripts must never mint sessions,
   sign cookies, or auto-create users through an application route.
 - `E2E_ALLOW_DEV_ROUTES` and `E2E_DEV_ROUTE_SECRET` protect read-only fixture
-  inspection and deterministic trigger routes. They are not authentication.
+  inspection and deterministic trigger routes. A timing-safe match on the
+  `x-dev-route-secret` header also disables only the credential sign-in rate
+  limit and admits loopback origins for the production-built local harness;
+  it never creates an identity or session.
 - In CI override mode, the dev-route secret is sent only through the
   `x-dev-route-secret` header, never a query parameter.
 
@@ -63,28 +84,43 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 - `[ai]`
 
 Local Playwright runs build the production bundle and start it with
-`wrangler dev --local`. The launcher sets `--local-upstream localhost:<port>`;
+`wrangler dev --local` with the built Nitro Worker at
+`.output/server/index.mjs`;
 without it Wrangler derives the upstream from the production route and rewrites
-local `Host` and same-origin `Origin` headers to `krabiclaw.com`. Local tenant
-tests use the same shared-host `x-preview-tenant` routing contract as preview
-and staging.
+local `Host` and same-origin `Origin` headers to `krabiclaw.com`. Local and raw
+`workers.dev` tenant tests carry `x-preview-tenant`; deployed preview and
+staging tests use direct first-level aliases such as
+`pottery-house-preview.krabiclaw.com` and
+`pottery-house-staging.krabiclaw.com`.
 
 ## Triage checklist when CI fails but local passes
 
-1. Confirm `gh secret list` contains all expected secrets.
-2. Confirm workflow `env:` passes required secrets into the failing job.
-3. Confirm the failing user exists in `config/e2e-auth-fixtures.ts` and was provisioned after the curated seed.
-4. Confirm its declared organization/team membership matches the permission the test is proving.
-5. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
-6. Confirm production smoke targets are still intentionally active customer/platform domains.
+1. Confirm `node -v` exactly matches `.nvmrc`; a different runtime is not a valid local comparison.
+2. Confirm the local run used `yarn test:e2e:local`, the production build, `.output/server/index.mjs`, and normal local Wrangler.
+3. Confirm `gh secret list` contains all expected secrets.
+4. Confirm workflow `env:` passes required secrets into the failing job.
+5. Confirm the failing user exists in `config/e2e-auth-fixtures.ts` and was provisioned after the curated seed.
+6. Confirm its declared organization/team membership matches the permission the test is proving.
+7. For human staging review, confirm the repository Actions secrets contain `STAGING_REVIEW_PASSWORD` and the durable smoke can access Pottery House, Kikuzuki, and NCLS.
+8. Confirm Demo, Pottery House, Kikuzuki, and NCLS were provisioned from their current typed definitions. Missing required fixtures are failures, not skips.
+9. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
+10. Confirm the deployed test used the direct environment tenant alias and did not depend on `x-preview-tenant`.
+11. Confirm production smoke targets are still intentionally active customer/platform domains.
 
 ## PR execution and guardrails
 
 - Draft pull requests do not deploy or run remote E2E. Marking a PR ready, or pushing a new commit after it is ready, starts the preview deployment and smoke suite.
 - PR descriptions must include filled `Browser:` and `Static:` validation lines. `Browser` is for Playwright, CI E2E, or manual browser evidence; `Static` is for unit, lint, typecheck, build, and guardrail evidence.
 - Preview seeds are generated into one SQL bundle and applied with one remote D1 operation. The bundle remains idempotent and uses the same real preview D1, migration flow, fixed secrets, and deployed Worker as before.
-- Required preview coverage is one representative browser suite.
-- The full `yarn test:e2e:full` suite runs after every successful staging
-  deployment. Production runs only the read-only public rendering sentinel.
-- CI defaults to two Playwright workers. Stateful notification, MCP, and client suites explicitly use one worker against shared remote D1.
-- The seed, migration, tool-parity, and script-syntax checks run together in one Node-only job, avoiding redundant dependency installations.
+- `config/e2e-impact-map.mjs` maps product paths to explicit specs. A changed
+  E2E spec selects itself, high-impact and unclassified runtime paths select the
+  full inventory, and documentation-only changes skip Worker deployment.
+- Required preview coverage is the permanent core plus every spec selected by
+  that impact map. Reporting only the core check is not affected-flow evidence.
+- The full `yarn test:e2e:full` suite runs once on every push to `staging`. The
+  `staging` to `main` release PR reuses those exact-SHA checks. Production runs
+  only the read-only public rendering sentinel.
+- Preview uses one Playwright worker. Full staging qualification uses two; its
+  tests and cleanup contract must continue to prevent mutable fixture conflicts.
+- Seed, migration, and tool-parity checks run in the shared checks job, avoiding
+  redundant dependency installations.

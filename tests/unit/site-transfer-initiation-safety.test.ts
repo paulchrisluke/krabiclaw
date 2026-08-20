@@ -20,6 +20,7 @@ let remainingMarker: { status: string; custom_domains_removed_at: string | null 
 mock.module('../../server/utils/api-response.ts', {
   namedExports: {
     cloudflareEnv: () => ({ DB: fakeDb, NUXT_PUBLIC_PLATFORM_DOMAIN: 'krabiclaw.com' }),
+    readRequiredBody: async () => ({ email: 'recipient@example.com', plan: 'growth' }),
     jsonResponse: (body: Record<string, unknown>, options: { status?: number } = {}): JsonResult => ({
       body,
       status: options.status ?? 200,
@@ -128,7 +129,7 @@ test.beforeEach(() => {
 })
 
 function invoke() {
-  return handler({ params: { siteId: 'site-source' } })
+  return handler({ context: { params: { siteId: 'site-source' } } })
 }
 
 test('platform control-plane access without exact tenant membership is rejected', async () => {

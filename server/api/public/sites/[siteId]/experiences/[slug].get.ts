@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachAvailabilitySummaries, getExperienceBySlug } from '~/server/utils/experiences'
 import { queryFirst } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   if (!siteId || !slug) return jsonResponse({ error: 'siteId and slug required' }, { status: 400 })
@@ -23,3 +23,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ experience })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

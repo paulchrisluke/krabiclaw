@@ -31,9 +31,6 @@
       <!-- Main pricing table component -->
       <div class="relative bg-elevated/20 backdrop-blur-md border border-default/50 rounded-[32px] p-6 sm:p-10 shadow-2xl transition-all duration-500 hover:shadow-primary/5">
         <BillingPricingTable v-if="plans" :plans="plans" />
-        <div v-else class="rounded-2xl border border-default bg-elevated p-6 text-center text-muted" aria-busy="true">
-          Loading pricing plans…
-        </div>
       </div>
 
       <!-- FAQ Section -->

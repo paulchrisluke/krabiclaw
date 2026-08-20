@@ -1,7 +1,7 @@
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
-import { platformHostnameFallback, type DomainEnv } from '~/server/utils/domains'
+import { platformHostname, type DomainEnv } from '~/server/utils/domains'
 
 export { normalizePostSlug, postPublicPath }
 
@@ -243,7 +243,7 @@ async function resolveSitePublicOrigin(db: DbClient, siteId: string, env: Domain
   const publicUrl = site?.public_url?.trim().replace(/\/$/, '')
   if (publicUrl) return publicUrl
   const subdomain = site?.subdomain?.trim()
-  return subdomain ? `https://${subdomain}.${platformHostnameFallback(env)}` : null
+  return subdomain ? `https://${subdomain}.${platformHostname(env)}` : null
 }
 
 async function allocatePostSlug(db: DbClient, siteId: string, source: string, excludePostId?: string) {
@@ -343,7 +343,7 @@ function postMediaInsertQueries(
   }))
 }
 
-async function syncPostCoverMedia(
+export async function syncPostCoverMedia(
   db: DbClient,
   organizationId: string,
   siteId: string,
@@ -352,31 +352,23 @@ async function syncPostCoverMedia(
 ) {
   if (coverAssetId) await requireActiveMediaAsset(db, organizationId, siteId, coverAssetId, 'image_asset_id')
 
-  await execute(
-    db,
-    `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ? AND role = 'cover'`,
-    [postId, organizationId, siteId],
-  )
-
-  if (!coverAssetId) return
-
-  // Check if cover with same media_asset_id already exists to avoid unique index conflict
-  const existingCover = await queryFirst<{ id: string }>(
-    db,
-    `SELECT id FROM post_media WHERE post_id = ? AND media_asset_id = ? AND role = 'cover' LIMIT 1`,
-    [postId, coverAssetId],
-  )
-  if (existingCover) return
-
   const now = new Date().toISOString()
-  await execute(
-    db,
-    `
-      INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'cover', 0, NULL, NULL, ?, ?)
-    `,
-    [crypto.randomUUID(), organizationId, siteId, postId, coverAssetId, now, now],
-  )
+  const queries: BatchQuery[] = [{
+    query: `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ? AND role = 'cover'`,
+    params: [postId, organizationId, siteId],
+  }]
+
+  if (coverAssetId) {
+    queries.push({
+      query: `
+        INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'cover', 0, NULL, NULL, ?, ?)
+      `,
+      params: [crypto.randomUUID(), organizationId, siteId, postId, coverAssetId, now, now],
+    })
+  }
+
+  await executeBatch(db, queries)
 }
 
 async function getPostMediaByPostIds(db: DbClient, postIds: string[]) {
@@ -406,8 +398,8 @@ async function getPostMediaByPostIds(db: DbClient, postIds: string[]) {
   return byPost
 }
 
-function publicMediaFromRows(rows: PostMediaItem[] | undefined, fallback?: PublishedPostRow | Post): PublicPostMedia[] {
-  const media = (rows ?? [])
+function publicMediaFromRows(rows: PostMediaItem[] | undefined): PublicPostMedia[] {
+  return (rows ?? [])
     .filter((row) => row.public_url && (row.kind === 'image' || row.kind === 'video'))
     .map((row) => ({
       id: row.id,
@@ -421,17 +413,6 @@ function publicMediaFromRows(rows: PostMediaItem[] | undefined, fallback?: Publi
       width: row.width ?? null,
       height: row.height ?? null,
     }))
-  if (media.length > 0 || !fallback?.public_url || (fallback.kind !== 'image' && fallback.kind !== 'video')) return media
-  return [{
-    mediaAssetId: fallback.image_asset_id ?? undefined,
-    url: fallback.public_url,
-    thumbnailUrl: fallback.thumbnail_url ?? null,
-    kind: fallback.kind === 'video' ? 'video' : 'image',
-    role: 'cover',
-    alt: fallback.title ?? null,
-    width: 'width' in fallback ? fallback.width ?? null : null,
-    height: 'height' in fallback ? fallback.height ?? null : null,
-  }]
 }
 
 function attachPostPublicFields<T extends Post>(
@@ -441,7 +422,7 @@ function attachPostPublicFields<T extends Post>(
 ): T {
   const slug = post.slug ?? post.id
   const publicPath = postPublicPath(slug)
-  const media = publicMediaFromRows(mediaRows, post)
+  const media = publicMediaFromRows(mediaRows)
   return {
     ...post,
     slug,
@@ -455,7 +436,7 @@ function attachPostPublicFields<T extends Post>(
 function formatPublishedPost(row: PublishedPostRow, mediaRows: PostMediaItem[] | undefined, origin: string | null): PublishedPostSummary {
   const slug = row.slug ?? row.id
   const publicPath = postPublicPath(slug)
-  const media = publicMediaFromRows(mediaRows, row)
+  const media = publicMediaFromRows(mediaRows)
   return {
     id: row.id,
     slug,

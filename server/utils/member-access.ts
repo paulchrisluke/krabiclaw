@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrgAdapter } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -112,7 +114,7 @@ export function isOperationalRole(role: string): boolean {
 
 export function assertOrganizationAccess(role: string): void {
   if (!isOrganizationWideRole(role)) {
-    throw createError({ statusCode: 403, message: 'Organization-level access required' })
+    throw new HTTPError({ statusCode: 403, message: 'Organization-level access required' })
   }
 }
 
@@ -380,7 +382,7 @@ export function canScopedRoleUseDashboardPath(pathname: string): boolean {
 
 export function assertDashboardPathPermission(role: string, pathname: string): void {
   if (isScopedRole(role) && !canScopedRoleUseDashboardPath(pathname)) {
-    throw createError({ statusCode: 403, message: 'This role cannot perform that dashboard action' })
+    throw new HTTPError({ statusCode: 403, message: 'This role cannot perform that dashboard action' })
   }
 }
 
@@ -402,7 +404,7 @@ export async function listResourceTeamAccess(db: DbClient, memberId: string): Pr
 
 export async function resolveDashboardSiteAccess(db: DbClient, input: MemberAccessPrincipal): Promise<DashboardSiteAccess> {
   if (isOrganizationWideRole(input.role)) return 'organization'
-  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
   const siteAccess = await queryFirst<{ id: string }>(db, `
     SELECT tm.id
     FROM member m
@@ -417,7 +419,7 @@ export async function resolveDashboardSiteAccess(db: DbClient, input: MemberAcce
 /** Site-wide management access: site settings, blog, localized content, professional-services, analytics, domains, contact-submissions inbox, and any menu/media/review/QA row whose own location_id is null. */
 export async function assertSiteWideAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   if (isOrganizationWideRole(input.role)) return
-  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
 
   const scope = await queryFirst<{ id: string }>(db, `
     SELECT tm.id
@@ -427,13 +429,13 @@ export async function assertSiteWideAccess(db: DbClient, input: MemberAccessPrin
     WHERE m.id = ? AND m.organizationId = ?
     LIMIT 1
   `, [input.siteId, input.memberId, input.organizationId])
-  if (!scope) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+  if (!scope) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 }
 
 /** Location management access: org-wide roles, a site-wide-scoped editor, or an editor scoped to this exact location. */
 export async function assertLocationAccess(db: DbClient, input: MemberAccessPrincipal & { locationId: string }): Promise<void> {
   if (isOrganizationWideRole(input.role)) return
-  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
 
   const scope = await queryFirst<{ id: string }>(db, `
     SELECT tm.id
@@ -444,7 +446,7 @@ export async function assertLocationAccess(db: DbClient, input: MemberAccessPrin
     WHERE m.id = ? AND m.organizationId = ?
     LIMIT 1
   `, [input.siteId, input.locationId, input.memberId, input.organizationId])
-  if (!scope) throw createError({ statusCode: 404, message: 'Resource not found' })
+  if (!scope) throw new HTTPError({ statusCode: 404, message: 'Resource not found' })
 }
 
 /** A resource that may or may not belong to one location (e.g. a menu/media/review row) — dispatches to assertSiteWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the TARGET ROW's location_id, never a caller-supplied param, since the row itself is the source of truth for its own scope. */
@@ -458,7 +460,7 @@ export async function assertResourceAccess(db: DbClient, input: MemberAccessPrin
 /** Minimal site-context/discovery access: org-wide roles, or ANY scope row at all for this site — enough to resolve site metadata and navigate to the caller's own location(s). Never grants access to full site settings or other locations' data; callers must still trim their response to what the caller's own scope allows. */
 export async function assertSiteContextAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   if (isOrganizationWideRole(input.role)) return
-  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
 
   const scope = await queryFirst<{ id: string }>(db, `
     SELECT tm.id
@@ -469,13 +471,13 @@ export async function assertSiteContextAccess(db: DbClient, input: MemberAccessP
     WHERE m.id = ? AND m.organizationId = ?
     LIMIT 1
   `, [input.siteId, input.memberId, input.organizationId])
-  if (!scope) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+  if (!scope) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 }
 
 /** Returns null for org-wide roles or site-team editors (unrestricted at this site), or the list of location ids a location-team editor may reach. */
 export async function listAccessibleLocationIds(db: DbClient, input: MemberAccessPrincipal): Promise<string[] | null> {
   if (isOrganizationWideRole(input.role)) return null
-  if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })
+  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
 
   const siteAccess = await queryFirst<{ id: string }>(db, `
     SELECT tm.id

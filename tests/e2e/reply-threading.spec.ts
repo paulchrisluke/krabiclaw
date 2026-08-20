@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test'
+import { expect, test, type APIRequestContext, type CDPSession } from '@playwright/test'
 import { collectPageErrors, tenantBaseURL } from './helpers'
 import { loginAsPage } from './helpers/auth'
 import { devLoginHeaders } from './test-env'
@@ -9,6 +9,7 @@ const demoExperience = demoFixture.experiences[0]!
 const demoOrgSlug = demoFixture.site.slug
 const demoSiteSlug = demoFixture.site.subdomain
 const demoLocationSlug = demoFixture.locations[0]!.slug
+const hydrationMismatchWarning = 'Hydration completed but contains mismatches.'
 
 const devHeaders = () => devLoginHeaders() ?? {}
 
@@ -85,6 +86,26 @@ async function waitForReplyNotification(
   }
 
   throw new Error(`Timed out waiting for notification template ${template}`)
+}
+
+function waitForInboxWebSocketHandshake(cdp: CDPSession, siteId: string) {
+  const requestIds = new Set<string>()
+  return new Promise<number>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Timed out waiting for the authenticated inbox WebSocket handshake for ${siteId}`))
+    }, 30_000)
+
+    cdp.on('Network.webSocketCreated', (event) => {
+      if (event.url.includes(`/api/dashboard/sites/${encodeURIComponent(siteId)}/guest-inbox/socket`)) {
+        requestIds.add(event.requestId)
+      }
+    })
+    cdp.on('Network.webSocketHandshakeResponseReceived', (event) => {
+      if (!requestIds.has(event.requestId)) return
+      clearTimeout(timeout)
+      resolve(event.response.status)
+    })
+  })
 }
 
 test.describe('reply threading', () => {
@@ -233,15 +254,17 @@ test.describe('reply threading', () => {
   })
 
   test('owner can send a reservation email reply from the deep-linked dashboard inbox', async ({ page, request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
 
     const futureDate = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
     const since = new Date().toISOString()
     const guestEmail = `owner-reply-${Date.now()}@playwright.example`
     const replyBody = `Thanks for your reservation. We have you down for 7:00 PM. Ref ${Date.now()}`
 
-    const createRes = await request.post(`${tenantBaseURL}/api/public/sites/${demoSiteId}/reservations`, {
-      data: {
+    const createRes = await fetch(`${tenantBaseURL}/api/public/sites/${demoSiteId}/reservations`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
         name: 'Owner Reply Flow Test',
         email: guestEmail,
         phone: '+14155552673',
@@ -250,9 +273,10 @@ test.describe('reply threading', () => {
         guests: '2',
         requests: 'Window seat if possible',
         location_id: 'loc-demo',
-      },
+      }),
+      signal: AbortSignal.timeout(30_000),
     })
-    expect(createRes.status()).toBe(201)
+    expect(createRes.status).toBe(201)
     const createBody = await createRes.json() as { id: string }
 
     const ownerNotifications = await waitForReplyNotification(
@@ -266,20 +290,28 @@ test.describe('reply threading', () => {
     expect(ownerNotificationPayload.deep_link).toContain(`/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/locations/${demoLocationSlug}/inbox/`)
     expect(ownerNotificationPayload.deep_link).not.toContain('?thread=')
 
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     await loginAsPage(page, baseURL!, 'user-e2e-demo-owner')
 
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Network.enable')
+    const inboxWebSocketHandshake = waitForInboxWebSocketHandshake(cdp, demoSiteId)
     const inboxUrl = `${baseURL}/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/locations/${demoLocationSlug}/inbox`
+    const inboxManifestResponse = page.waitForResponse(response => response.url().includes('/_nuxt/builds/meta/'))
     const inboxResponse = await page.goto(inboxUrl, { waitUntil: 'load' })
     expect(inboxResponse?.status()).toBeLessThan(400)
+    await expect(inboxWebSocketHandshake).resolves.toBe(101)
 
     await expect(page.locator('body')).toContainText('Inbox')
     const threadLink = page.getByRole('link', { name: /Owner Reply Flow Test/ }).first()
     await expect(threadLink).toBeVisible()
     const threadHref = await threadLink.getAttribute('href')
     expect(threadHref).toBeTruthy()
+    expect((await inboxManifestResponse).status()).toBe(200)
+    const threadManifestResponse = page.waitForResponse(response => response.url().includes('/_nuxt/builds/meta/'))
     const threadResponse = await page.goto(new URL(threadHref!, baseURL).toString(), { waitUntil: 'load' })
     expect(threadResponse?.status()).toBeLessThan(400)
+    expect((await threadManifestResponse).status()).toBe(200)
     await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/)
     await expect(page.locator('[data-guest-thread-inbox-hydrated="true"]')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Owner Reply Flow Test' })).toBeVisible()
@@ -291,12 +323,15 @@ test.describe('reply threading', () => {
     const sendReplyButton = page.getByRole('button', { name: 'Send reply' })
     await expect(sendReplyButton).toBeVisible()
     await expect(sendReplyButton).toBeEnabled()
-    const sendReplyBox = await sendReplyButton.boundingBox()
-    expect(sendReplyBox).not.toBeNull()
-    await page.mouse.click(
-      sendReplyBox!.x + sendReplyBox!.width / 2,
-      sendReplyBox!.y + sendReplyBox!.height / 2,
+    const replyResponsePromise = page.waitForResponse(
+      response => response.request().method() === 'POST'
+        && response.url().includes(`/api/dashboard/sites/${demoSiteId}/guest-threads/`)
+        && response.url().endsWith('/operations/reply'),
+      { timeout: 30_000 },
     )
+    await sendReplyButton.click()
+    const replyResponse = await replyResponsePromise
+    expect(replyResponse.status()).toBe(200)
 
     await expect(page.locator('body')).toContainText('Reply sent')
     await expect(page.locator('body')).toContainText(replyBody)
@@ -310,7 +345,29 @@ test.describe('reply threading', () => {
     )
     expect(messages.some((row) => row.body === replyBody)).toBe(true)
 
-    const appErrors = errors.filter((error) => !error.includes('Hydration completed but contains mismatches.'))
-    expect(appErrors).toEqual([])
+    const reconnectHandshake = waitForInboxWebSocketHandshake(cdp, demoSiteId)
+    await page.evaluate(() => {
+      Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+      window.dispatchEvent(new Event('offline'))
+    })
+    await page.waitForTimeout(250)
+    const reconnectRefresh = page.waitForResponse(
+      response => response.request().method() === 'GET'
+        && response.url().includes(`/api/dashboard/sites/${demoSiteId}/guest-threads/`),
+      { timeout: 30_000 },
+    )
+    await page.evaluate(() => {
+      Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+      window.dispatchEvent(new Event('online'))
+    })
+    await expect(reconnectHandshake).resolves.toBe(101)
+    expect((await reconnectRefresh).status()).toBe(200)
+    await expect(page.locator('[data-guest-thread-inbox-hydrated="true"]')).toBeVisible()
+
+    expect(
+      errors.filter(error => error.includes(hydrationMismatchWarning)),
+      `Authenticated dashboard hydration warning: ${hydrationMismatchWarning}`,
+    ).toEqual([])
+    expect(errors).toEqual([])
   })
 })

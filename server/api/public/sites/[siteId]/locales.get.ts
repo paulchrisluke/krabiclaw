@@ -1,16 +1,15 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listSiteLocales, type SiteLocale } from '~/server/utils/site-locales'
+import { listSiteLocales } from '~/server/utils/site-locales'
 
 interface PublicLocale {
   code: string
   display_name: string | null
   is_source: boolean
   status: 'draft' | 'published' | 'disabled'
-  fallback_enabled: boolean
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
 
@@ -31,16 +30,10 @@ export default defineEventHandler(async (event) => {
   const publicLocales: PublicLocale[] = locales
     .filter(locale => locale.is_source || locale.status === 'published')
     .map(locale => ({
-      code: locale.locale,
-      display_name: locale.label,
-      is_source: locale.is_source,
-      status: locale.status,
-      fallback_enabled: locale.fallback_enabled,
-    }))
+      code: locale.locale, display_name: locale.label, is_source: locale.is_source, status: locale.status, }))
 
   return jsonResponse({
-    success: true,
-    source_locale,
-    locales: publicLocales,
-  })
+    success: true, source_locale, locales: publicLocales, })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

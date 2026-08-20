@@ -14,11 +14,14 @@ import platformLogoBase64 from '~/server/assets/platform-logo'
 // server/assets/platform-logo.ts. Resolve the platform's own logo from the bundled asset
 // instead of going through fetchImageAsDataUri whenever the URL points at that file, so the
 // brand mark on platform-template cards never depends on that self-fetch succeeding.
-function resolveLogoDataUri(logoUrl: string | null | undefined): Promise<string | null> {
+function resolveLogoDataUri(
+  logoUrl: string | null | undefined,
+  platformDomain?: string,
+): Promise<string | null> {
   if (logoUrl) {
     try {
       const url = new URL(logoUrl)
-      const platformDomain = process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com'
+      if (!platformDomain) return fetchImageAsDataUri(logoUrl, { timeoutMs: 4000 })
       const platformOrigin = platformDomain.startsWith('http') ? platformDomain : `https://${platformDomain}`
       if (url.pathname === '/krabi-claw-logo.png' && url.origin === new URL(platformOrigin).origin) {
         return Promise.resolve(`data:image/png;base64,${platformLogoBase64}`)
@@ -96,6 +99,7 @@ export interface RenderOgImageDeps {
    */
   webpDecoderWasmModule?: WebAssembly.Module
   pngEncoderWasmModule?: WebAssembly.Module
+  platformDomain?: string
 }
 
 /** Renders one OG image payload to real, decodable 1200×630 PNG bytes. */
@@ -115,7 +119,7 @@ export async function renderOgImagePng(
       timeoutMs: 4000,
       acceptedContentTypes: ['image/png', 'image/jpeg', 'image/webp'],
     }),
-    resolveLogoDataUri(payload.logoUrl),
+    resolveLogoDataUri(payload.logoUrl, deps.platformDomain),
     fetchImageAsDataUri(payload.faviconUrl, { timeoutMs: 4000 }),
   ])
 

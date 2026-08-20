@@ -4,7 +4,7 @@ import { BLAWBY_ROUTE_RECIPES, type BlawbyRouteRecipe } from '~/types/blawby'
 
 const RECIPES = new Set(BLAWBY_ROUTE_RECIPES)
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const query = getQuery(event)
   const recipe = typeof query.recipe === 'string' ? query.recipe as BlawbyRouteRecipe : null
@@ -34,3 +34,6 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, statusCode, code, message)
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

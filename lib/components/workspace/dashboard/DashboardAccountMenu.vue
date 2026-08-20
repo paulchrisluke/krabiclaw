@@ -11,16 +11,16 @@
       class="dashboard-account-menu-button w-full min-w-0 cursor-pointer hover:text-highlighted"
       :class="collapsed ? 'justify-center' : 'justify-between'"
       :ui="{ base: 'min-w-0 w-full items-center px-2 py-1.5', trailingIcon: 'text-dimmed ms-auto' }"
-      :avatar="{ src: sessionData?.user?.image ?? undefined, alt: sessionData?.user?.name || 'User avatar', size: 'sm' }"
-      :label="collapsed ? undefined : sessionData?.user?.name"
+      :avatar="{ src: renderedUser?.image ?? undefined, alt: renderedUser?.name || 'User avatar', size: 'sm' }"
+      :label="collapsed ? undefined : renderedUser?.name"
       :trailing-icon="collapsed ? undefined : 'i-lucide-ellipsis'"
       data-testid="dashboard-account-menu-button"
     />
 
     <template #content-top>
       <div class="flex flex-col px-2.5 py-2">
-        <span class="text-sm font-semibold text-highlighted truncate">{{ sessionData?.user?.name || 'User' }}</span>
-        <span class="text-xs text-muted truncate mt-0.5">{{ sessionData?.user?.email }}</span>
+        <span class="text-sm font-semibold text-highlighted truncate">{{ renderedUser?.name || 'User' }}</span>
+        <span class="text-xs text-muted truncate mt-0.5">{{ renderedUser?.email }}</span>
       </div>
     </template>
 
@@ -78,7 +78,7 @@
       color="neutral"
       variant="ghost"
       square
-      :avatar="{ src: sessionData?.user?.image ?? undefined, alt: sessionData?.user?.name || 'User avatar', size: 'sm' }"
+      :avatar="{ src: renderedUser?.image ?? undefined, alt: renderedUser?.name || 'User avatar', size: 'sm' }"
       aria-label="Open account menu"
       @click="mobileOpen = true"
     />
@@ -90,7 +90,7 @@
     >
       <template #content>
         <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-accented" />
-        <div class="mb-3 px-3"><p class="font-semibold text-highlighted">{{ sessionData?.user?.name || 'User' }}</p><p class="truncate text-sm text-muted">{{ sessionData?.user?.email }}</p></div>
+        <div class="mb-3 px-3"><p class="font-semibold text-highlighted">{{ renderedUser?.name || 'User' }}</p><p class="truncate text-sm text-muted">{{ renderedUser?.email }}</p></div>
         <nav class="divide-y divide-default border-y border-default">
           <NuxtLink :to="profileTo" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-user" class="size-5" /><span>Profile</span><UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-dimmed" /></NuxtLink>
           <div class="mobile-account-row"><span>Theme</span><div class="ml-auto flex gap-1"><UButton v-for="pref in ['system', 'light', 'dark'] as const" :key="pref" :icon="getThemeIcon(pref)" square size="xs" color="neutral" :variant="preference === pref ? 'soft' : 'ghost'" :aria-label="`${pref} theme`" @click="setPreference(pref)" /></div></div>
@@ -110,12 +110,14 @@ import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 
 defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
 
-const { data: sessionData, signOut } = useAuth()
+const { sessionData } = await useAuthSession()
+const { signOut } = useAuth()
 const route = useRoute()
 const dashboard = useDashboardSite()
 const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
 const mobileOpen = ref(false)
+const renderedUser = computed(() => sessionData.value?.user ?? null)
 const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed((): Record<string, string> => {
   const organization = dashboard.organization.value
   if (!organization?.slug) return {}
@@ -138,7 +140,7 @@ const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 async function checkPlatformStatus() {
   try {
     // Use $fetch for platform health check (not dashboard-scoped API traffic)
-    const res = await $fetch<{ status: string }>('/api/health')
+    const res = await $fetch<{ status: string }, string>('/api/health')
     platformStatus.value = res.status === 'ok' ? 'normal' : 'error'
   } catch (err) {
     console.error('Failed to fetch platform status:', err)

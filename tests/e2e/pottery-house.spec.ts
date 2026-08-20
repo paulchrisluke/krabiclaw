@@ -42,6 +42,16 @@ test.describe('pottery house public site', () => {
     await expectHealthyPage(page, errors)
   })
 
+  test('experience-site reservation redirect preserves the selected locale', async ({ page }) => {
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
+    const response = await page.goto(`${potteryHouseBaseURL}/reservations?locale=th`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page).toHaveURL(`${potteryHouseBaseURL}/experiences?locale=th`)
+    await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+    await expectHealthyPage(page, errors)
+  })
+
   for (const route of routes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)
@@ -92,6 +102,7 @@ test.describe('pottery house public site', () => {
     }])
 
     await page.setViewportSize({ width: 1280, height: 900 })
+    const membershipManifestResponse = page.waitForResponse(response => response.url().includes('/_nuxt/builds/meta/'))
     await page.goto(`${potteryHouseBaseURL}/experiences/${monthlyMembership.slug}`, { waitUntil: 'domcontentloaded' })
 
     const desktopInquiryCta = page.locator('[data-experience-cta="desktop"]')
@@ -105,8 +116,11 @@ test.describe('pottery house public site', () => {
     await expect(mobileInquiryCta.getByRole('link', { name: 'Contact Us' })).toHaveAttribute('href', expectedContactHref)
     await expect(page.locator('[data-experience-cta]:visible')).toHaveCount(1)
 
+    expect((await membershipManifestResponse).status()).toBe(200)
+    const wheelClassManifestResponse = page.waitForResponse(response => response.url().includes('/_nuxt/builds/meta/'))
     await page.goto(`${potteryHouseBaseURL}/experiences/${wheelClass.slug}`, { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle')
+    expect((await wheelClassManifestResponse).status()).toBe(200)
     const mobileBookableCta = page.locator('[data-experience-cta="mobile"]')
     await expect(mobileBookableCta.getByRole('button', { name: 'Book a class' })).toBeVisible()
     await expect(page.locator('[data-experience-cta]:visible')).toHaveCount(1)

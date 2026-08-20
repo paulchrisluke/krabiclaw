@@ -30,7 +30,7 @@ function toArrayBuffer(data: Uint8Array): ArrayBuffer {
   return data.slice().buffer
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const assetId = getRouterParam(event, 'assetId')
   if (!siteId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -47,20 +47,12 @@ export default defineEventHandler(async (event) => {
 
   try {
     const asset = await queryFirst<MediaAssetSiteRow>(
-      db,
-      `SELECT id, site_id, organization_id, location_id, kind FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`,
-      [assetId, siteId],
-    )
+      db, `SELECT id, site_id, organization_id, location_id, kind FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`, [assetId, siteId], )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.kind !== 'video') return jsonResponse({ error: 'Poster images can only be added to videos' }, { status: 400 })
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: asset.location_id,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: asset.location_id, })
 
     const formData = await readMultipartFormData(event)
     if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
@@ -85,24 +77,16 @@ export default defineEventHandler(async (event) => {
     }
 
     const thumbnailUrl = await replaceVideoPoster(db, env, {
-      assetId,
-      siteId,
-      userId: session.user.id,
-      buffer: toArrayBuffer(posterPart.data),
-      filename,
-      contentType: detectedContentType,
-    })
+      assetId, siteId, userId: session.user.id, buffer: toArrayBuffer(posterPart.data), filename, contentType: detectedContentType, })
 
     return jsonResponse({ id: assetId, thumbnailUrl })
   } catch (error) {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown poster upload error')
     console.error('media_poster_upload_failed', {
-      siteId,
-      assetId,
-      userId: session.user.id,
-      error: normalizedError.message,
-    })
+      siteId, assetId, userId: session.user.id, error: normalizedError.message, })
     return jsonResponse({ error: 'Failed to upload poster image' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readMultipartFormData  } from 'nitro/h3';

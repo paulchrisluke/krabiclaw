@@ -9,7 +9,6 @@ type Store = {
   components: Row[]
   contentDocuments: Row[]
   contentBlocks: Row[]
-  contentRevisions: Row[]
   batches: Query[][]
   cleanupAttempts: number
   failQueryMatching?: string | null
@@ -19,7 +18,6 @@ type Store = {
 const DOC_ID = 'doc-1'
 const DOCUMENT_ID = 'content-document-1'
 const OLD_COMPONENT_ID = 'component-old'
-const OLD_REVISION_ID = 'revision-old'
 
 Object.assign(globalThis, {
   createError(input: { statusCode: number; statusMessage: string; cause?: unknown }) {
@@ -71,8 +69,6 @@ function createStore(): Store {
       id: DOCUMENT_ID,
       owner_type: 'platform_doc',
       owner_id: DOC_ID,
-      draft_revision_id: OLD_REVISION_ID,
-      published_revision_id: null,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
     }],
@@ -87,16 +83,6 @@ function createStore(): Store {
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
     }],
-    contentRevisions: [{
-      id: OLD_REVISION_ID,
-      document_id: DOCUMENT_ID,
-      snapshot_json: JSON.stringify({ blocks: [] }),
-      body_markdown: 'Original body.',
-      created_by: 'user-1',
-      label: 'Original revision',
-      created_at: '2026-01-01T00:00:00.000Z',
-      published_at: null,
-    }],
     batches: [],
     cleanupAttempts: 0,
   }
@@ -108,7 +94,6 @@ function dataSnapshot(store: Store) {
     components: store.components,
     contentDocuments: store.contentDocuments,
     contentBlocks: store.contentBlocks,
-    contentRevisions: store.contentRevisions,
   })
 }
 
@@ -127,12 +112,7 @@ function applyPlatformDocUpdate(store: Store, query: string, params: unknown[]) 
     const field = assignment.split('=')[0]?.trim()
     if (!field) continue
     if (/= NULL$/i.test(assignment)) doc[field] = null
-    else if (assignment.includes('(SELECT r.body_markdown')) {
-      const documentId = params[paramIndex++]
-      const document = store.contentDocuments.find(row => row.id === documentId)
-      const revision = store.contentRevisions.find(row => row.id === document?.draft_revision_id)
-      doc[field] = revision?.body_markdown ?? null
-    } else {
+    else {
       doc[field] = params[paramIndex++]
     }
   }
@@ -146,7 +126,7 @@ function applyQuery(store: Store, item: Query) {
   if (sql.startsWith('UPDATE platform_docs')) return applyPlatformDocUpdate(store, sql, params)
   if (sql.startsWith('INSERT INTO content_documents')) {
     const [id, owner_type, owner_id, created_at, updated_at] = params
-    store.contentDocuments.push({ id, owner_type, owner_id, draft_revision_id: null, published_revision_id: null, created_at, updated_at })
+    store.contentDocuments.push({ id, owner_type, owner_id, created_at, updated_at })
     return { meta: { changes: 1 } }
   }
   if (sql.startsWith('DELETE FROM platform_content_components')) {
@@ -170,26 +150,10 @@ function applyQuery(store: Store, item: Query) {
     store.contentBlocks.push({ id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at })
     return { meta: { changes: 1 } }
   }
-  if (sql.startsWith('INSERT INTO content_revisions')) {
-    const [id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at] = params
-    store.contentRevisions.push({ id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at })
-    return { meta: { changes: 1 } }
-  }
-  if (sql.startsWith('UPDATE content_documents SET draft_revision_id')) {
+  if (sql.startsWith('UPDATE content_documents SET updated_at = ?')) {
     const documentId = params.at(-1)
     const document = store.contentDocuments.find(row => row.id === documentId)
-    if (!document) return { meta: { changes: 0 } }
-    if (sql.includes('published_revision_id = ?')) {
-      Object.assign(document, { draft_revision_id: params[0], published_revision_id: params[1], updated_at: params[2] })
-    } else {
-      Object.assign(document, { draft_revision_id: params[0], updated_at: params[1] })
-    }
-    return { meta: { changes: 1 } }
-  }
-  if (sql.startsWith('UPDATE content_documents SET published_revision_id = NULL')) {
-    const documentId = params.at(-1)
-    const document = store.contentDocuments.find(row => row.id === documentId)
-    if (document) Object.assign(document, { published_revision_id: null, updated_at: params[0] })
+    if (document) Object.assign(document, { updated_at: params[0] })
     return { meta: { changes: document ? 1 : 0 } }
   }
   if (sql.startsWith('DELETE FROM content_documents')) {
@@ -278,7 +242,7 @@ const { createPlatformDoc, updatePlatformDoc } = await import('../../server/util
 test('a failed platform-doc update leaves metadata, components, and canonical content unchanged', async () => {
   const store = createStore()
   const before = dataSnapshot(store)
-  store.failQueryMatching = 'INSERT INTO content_revisions'
+  store.failQueryMatching = 'INSERT INTO content_blocks'
 
   await assert.rejects(() => updatePlatformDoc(store as unknown as D1Database, DOC_ID, {
     body: 'Replacement body.',
@@ -300,8 +264,7 @@ test('a create rollback failure surfaces both the sync and cleanup errors after 
   store.components = []
   store.contentDocuments = []
   store.contentBlocks = []
-  store.contentRevisions = []
-  store.failQueryMatching = 'INSERT INTO content_revisions'
+  store.failQueryMatching = 'INSERT INTO content_blocks'
   store.failCleanup = true
 
   await assert.rejects(
@@ -312,7 +275,7 @@ test('a create rollback failure surfaces both the sync and cleanup errors after 
     (error: unknown) => {
       assert.ok(error instanceof AggregateError)
       assert.deepEqual(error.errors.map(item => (item as Error).message), [
-        'forced batch failure: INSERT INTO content_revisions',
+        'forced batch failure: INSERT INTO content_blocks',
         'forced cleanup failure',
       ])
       return true

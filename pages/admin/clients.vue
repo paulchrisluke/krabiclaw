@@ -45,7 +45,7 @@
                   <UBadge :label="planLabel(client.plan)" :color="planColor(client.plan)" variant="soft" size="xs" />
                 </div>
                 <p class="text-sm text-muted">
-                  <span v-if="client.subdomain">{{ client.subdomain }}.krabiclaw.com</span>
+                  <span v-if="client.subdomain">{{ client.subdomain }}</span>
                   <span v-else class="italic opacity-50">No subdomain</span>
                   <template v-if="client.source_locale"> · {{ client.source_locale }}</template>
                 </p>
@@ -310,6 +310,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/utils/formatters'
 import { getErrorMessage } from '~/utils/errors'
 import { NEW_SALE_PAID_PLAN_IDS } from '~/shared/billing-model'
 

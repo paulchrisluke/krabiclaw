@@ -1,5 +1,7 @@
+import { defineHandler } from 'nitro';
 // POST /api/contact - Platform contact form submission via Resend
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { hashEmail, isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { execute } from '~/server/db'
 import { notifyPlatformContactSubmitted } from '~/server/utils/notifications'
@@ -23,17 +25,14 @@ const hashIp = async (ip: string) => {
 }
 
 function getClientIp(event: ApiValue): string {
-  const rawForwardedFor = event.node.req.headers['x-forwarded-for']
-  const forwardedFor = Array.isArray(rawForwardedFor)
-    ? rawForwardedFor.join(',')
-    : String(rawForwardedFor || '')
+  const forwardedFor = (event.req.headers.get('x-forwarded-for')) || ''
 
   const firstForwardedIp = forwardedFor
-    .split(',')
+    .split(', ')
     .map((part: string) => part.trim())
     .find(Boolean)
 
-  return firstForwardedIp || event.node.req.socket.remoteAddress || 'unknown'
+  return firstForwardedIp || (event.req.headers.get('cf-connecting-ip')) || 'unknown'
 }
 
 async function incrementRateLimit(db: D1Database, key: string, limit: number, expireMs: number): Promise<boolean> {
@@ -49,7 +48,7 @@ async function incrementRateLimit(db: D1Database, key: string, limit: number, ex
   return Boolean(result?.success && result?.meta?.changes)
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   let body: {
     name?: string
     email?: string
@@ -61,7 +60,7 @@ export default defineEventHandler(async (event) => {
     suggested_summary?: string | null
     agent_metadata_json?: string | Record<string, unknown> | null
   }
-  try { body = await readBody(event) } catch {
+  try { body = await readRequiredBody<{ name?: string; email?: string; topic?: string | null; message?: string; consent?: boolean; source?: string | null; route_context?: string | null; suggested_summary?: string | null; agent_metadata_json?: string | Record<string, unknown> | null }>(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
@@ -179,9 +178,7 @@ export default defineEventHandler(async (event) => {
     if (db) {
       try {
         await execute(
-          db,
-          `INSERT INTO platform_contact_submissions (id, name, email, topic, message, source, route_context, suggested_summary, agent_metadata_json, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, name, email, normalizedTopic, message, source, routeContext, suggestedSummary, agentMetadataJson, 'new', ipHash, now]
+          db, `INSERT INTO platform_contact_submissions (id, name, email, topic, message, source, route_context, suggested_summary, agent_metadata_json, status, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [id, name, email, normalizedTopic, message, source, routeContext, suggestedSummary, agentMetadataJson, 'new', ipHash, now]
         )
       } catch (err) {
         console.error('Failed to store contact submission:', err)
@@ -191,15 +188,7 @@ export default defineEventHandler(async (event) => {
 
     try {
       await notifyPlatformContactSubmitted(env, db, {
-        contactId: id,
-        guestName: name,
-        email,
-        subject: normalizedTopic,
-        message,
-        source,
-        routeContext,
-        suggestedSummary,
-      })
+        contactId: id, guestName: name, email, subject: normalizedTopic, message, source, routeContext, suggestedSummary, })
     } catch (err) {
       console.error('Contact notification failed:', err)
     }

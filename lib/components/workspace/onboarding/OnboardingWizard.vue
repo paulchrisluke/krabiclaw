@@ -616,7 +616,7 @@ const workspaceEntryPath = computed(() => {
 })
 
 const freeSiteHost = computed(() => {
-  const raw = String(config.public.freeSiteDomain || config.public.platformDomain || '').trim()
+  const raw = String(config.public.freeSiteDomain || '').trim()
   if (!raw) return ''
   try {
     return new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).host.replace(/\/$/, '')
@@ -626,17 +626,17 @@ const freeSiteHost = computed(() => {
 })
 const draftReadyDomain = computed(() => {
   const candidate = draftPreviewPayload.value?.subdomainCandidate
-  return candidate && freeSiteHost.value ? `${candidate}.${freeSiteHost.value}` : 'your preview site'
+  return candidate && freeSiteHost.value ? `${candidate}.${freeSiteHost.value}` : ''
 })
 const draftReadyThumbnailUrl = computed(() => brandDraftForm.heroPreviewUrl || brandDraftForm.logoPreviewUrl || '')
 const draftReadyInitials = computed(() => {
-  const source = detailsForm.name || draftPreviewPayload.value?.draftName || 'Site'
+  const source = detailsForm.name || draftPreviewPayload.value?.draftName || ''
   return source
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase() ?? '')
-    .join('') || 'S'
+    .join('')
 })
 
 function pushUser(text: string) {

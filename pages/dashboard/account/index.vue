@@ -37,6 +37,5 @@ const organizationQuery = computed(() => ({
 const items = computed(() => [
   { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: organizationQuery.value } },
   { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: organizationQuery.value } },
-  { label: 'Billing Items', icon: 'i-lucide-receipt', to: { path: '/dashboard/account/billing-items', query: organizationQuery.value } },
 ])
 </script>

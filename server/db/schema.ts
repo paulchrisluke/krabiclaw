@@ -107,27 +107,6 @@ export const ai_usage_log = sqliteTable("ai_usage_log", {
 	index("ai_usage_log_organization_id_idx").on(table.organization_id),
 ]);
 
-export const business_location_translations = sqliteTable("business_location_translations", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
-	locale: text().notNull(),
-	title: text(),
-	address: text(),
-	city: text(),
-	description: text(),
-	short_description: text(),
-	status: text().default("draft").notNull(),
-	source_hash: text(),
-	translated_at: text(),
-	reviewed_at: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-}, (table) => [
-	unique("business_location_translations_organization_id_site_id_location_id_locale_unique").on(table.organization_id, table.site_id, table.location_id, table.locale),
-]);
-
 export const business_locations = sqliteTable("business_locations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -704,31 +683,6 @@ export const teamMember = sqliteTable("teamMember", {
 	index("teamMember_userId_idx").on(table.userId),
 ]);
 
-export const menu_item_translations = sqliteTable("menu_item_translations", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	menu_item_id: text().notNull().references(() => menu_items.id, { onDelete: "cascade" } ),
-	locale: text().notNull(),
-	section: text(),
-	name: text(),
-	description: text(),
-	allergens: text(),
-	ingredients: text(),
-	dietary_notes: text(),
-	preparation: text(),
-	serving_note: text(),
-	status: text().default("draft").notNull(),
-	source_hash: text(),
-	translated_at: text(),
-	reviewed_at: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-}, (table) => [
-	unique("menu_item_translations_organization_id_site_id_menu_item_id_locale_unique").on(table.organization_id, table.site_id, table.menu_item_id, table.locale),
-	index("menu_item_translations_menu_item_id_idx").on(table.menu_item_id),
-]);
-
 export const menu_items = sqliteTable("menu_items", {
 	id: text().primaryKey(),
 	menu_id: text().notNull().references(() => menus.id, { onDelete: "cascade" } ),
@@ -792,26 +746,6 @@ export const menu_item_media = sqliteTable("menu_item_media", {
 	index("menu_item_media_site_menu_item_idx").on(table.site_id, table.menu_item_id),
 ]);
 
-export const menu_translations = sqliteTable("menu_translations", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	menu_id: text().notNull().references(() => menus.id, { onDelete: "cascade" } ),
-	locale: text().notNull(),
-	name: text(),
-	description: text(),
-	section_order: text(),
-	status: text().default("draft").notNull(),
-	source_hash: text(),
-	translated_at: text(),
-	reviewed_at: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-}, (table) => [
-	unique("menu_translations_organization_id_site_id_menu_id_locale_unique").on(table.organization_id, table.site_id, table.menu_id, table.locale),
-	index("menu_translations_menu_id_idx").on(table.menu_id),
-]);
-
 export const menus = sqliteTable("menus", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -819,7 +753,7 @@ export const menus = sqliteTable("menus", {
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
 	name: text().notNull(),
 	description: text(),
-	status: text().default("draft").notNull(),
+	is_visible: integer().default(1).notNull(),
 	section_order: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1125,7 +1059,7 @@ export const onboarding_drafts = sqliteTable("onboarding_drafts", {
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
 	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
 	name: text().notNull(),
-	vertical: text().default("restaurant").notNull(),
+	vertical: text().notNull(),
 	subdomain_candidate: text(),
 	source_type: text().notNull(),
 	status: text().default("active").notNull(),
@@ -1189,7 +1123,6 @@ export const blog_posts = sqliteTable("blog_posts", {
 	published_at: text(),
 	first_published_at: text(),
 	scheduled_for: text(),
-	scheduled_revision_id: text(),
 	slug_manually_overridden: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1287,27 +1220,6 @@ export const post_channel_jobs = sqliteTable("post_channel_jobs", {
 	uniqueIndex("post_channel_jobs_post_channel_unique").on(table.post_id, table.channel),
 	// WHERE post_id = ? in post-management.ts and mcp-executor/posts.ts (publish status checks).
 	index("post_channel_jobs_post_id_idx").on(table.post_id),
-]);
-
-export const post_translations = sqliteTable("post_translations", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	post_id: text().notNull().references(() => posts.id, { onDelete: "cascade" } ),
-	locale: text().notNull(),
-	title: text(),
-	body: text(),
-	event_title: text(),
-	offer_terms: text(),
-	status: text().default("draft").notNull(),
-	source_hash: text(),
-	translated_at: text(),
-	reviewed_at: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-}, (table) => [
-	unique("post_translations_organization_id_site_id_post_id_locale_unique").on(table.organization_id, table.site_id, table.post_id, table.locale),
-	index("post_translations_post_id_idx").on(table.post_id),
 ]);
 
 export const posts = sqliteTable("posts", {
@@ -1642,7 +1554,6 @@ export const offerings = sqliteTable("offerings", {
 	seo_title: text(),
 	seo_description: text(),
 	canonical_path: text(),
-	status: text().default("draft").notNull(),
 	sort_order: integer().default(0).notNull(),
 	featured: integer().default(0).notNull(),
 	source: text().default("manual").notNull(),
@@ -1652,15 +1563,13 @@ export const offerings = sqliteTable("offerings", {
 	updated_by: text(),
 }, (table) => [
 	unique("offerings_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
-	index("offerings_site_status_sort_idx").on(table.site_id, table.status, table.sort_order),
-	check("offerings_status_check", sql`status IN ('draft', 'published', 'archived')`),
+	index("offerings_site_sort_idx").on(table.site_id, table.sort_order),
 ]);
 
 export const tenant_pages = sqliteTable("tenant_pages", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	path: text().notNull(),
 	title: text().notNull(),
 	slug: text(),
 	page_type: text().default("custom").notNull(),
@@ -1670,7 +1579,6 @@ export const tenant_pages = sqliteTable("tenant_pages", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	status: text().default("draft").notNull(),
 	sort_order: integer().default(0).notNull(),
 	source: text().default("manual").notNull(),
 	source_ref: text(),
@@ -1678,10 +1586,7 @@ export const tenant_pages = sqliteTable("tenant_pages", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 }, (table) => [
-	unique("tenant_pages_organization_id_site_id_path_unique").on(table.organization_id, table.site_id, table.path),
-	index("tenant_pages_site_status_sort_idx").on(table.site_id, table.status, table.sort_order),
-	check("tenant_pages_path_check", sql`path LIKE '/%'`),
-	check("tenant_pages_status_check", sql`status IN ('draft', 'published', 'archived')`),
+	index("tenant_pages_site_sort_idx").on(table.site_id, table.sort_order),
 ]);
 
 export const site_link_pages = sqliteTable("site_link_pages", {
@@ -1690,7 +1595,6 @@ export const site_link_pages = sqliteTable("site_link_pages", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ).unique(),
 	path: text().default("/links").notNull(),
 	title: text().notNull(),
-	status: text().default("draft").notNull(),
 	robots: text().default("noindex,follow").notNull(),
 	seo_title: text(),
 	seo_description: text(),
@@ -1699,9 +1603,8 @@ export const site_link_pages = sqliteTable("site_link_pages", {
 	updated_by: text(),
 }, (table) => [
 	unique("site_link_pages_organization_id_site_id_path_unique").on(table.organization_id, table.site_id, table.path),
-	index("site_link_pages_site_status_idx").on(table.site_id, table.status),
+	index("site_link_pages_site_idx").on(table.site_id),
 	check("site_link_pages_path_check", sql`path LIKE '/%' AND path NOT LIKE '//%'`),
-	check("site_link_pages_status_check", sql`status IN ('draft', 'published', 'archived')`),
 	check("site_link_pages_robots_check", sql`robots IN ('index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow')`),
 ]);
 
@@ -1758,10 +1661,10 @@ export const site_consultation_settings = sqliteTable("site_consultation_setting
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ).unique(),
 	mode: text().default("external_url").notNull(),
-	cta_label: text().default("Book a consultation").notNull(),
+	cta_label: text().notNull(),
 	external_url: text(),
-	schedule_path: text().default("/schedule").notNull(),
-	confirmation_path: text().default("/contact/confirmed").notNull(),
+	schedule_path: text().notNull(),
+	confirmation_path: text().notNull(),
 	tracking_enabled: integer().default(1).notNull(),
 	metadata_json: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1790,26 +1693,7 @@ export const site_theme_tokens = sqliteTable("site_theme_tokens", {
 	index("site_theme_tokens_organization_id_idx").on(table.organization_id),
 ]);
 
-export const tenant_navigation_items = sqliteTable("tenant_navigation_items", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	area: text().default("header").notNull(),
-	label: text().notNull(),
-	url: text().notNull(),
-	item_type: text().default("internal").notNull(),
-	sort_order: integer().default(0).notNull(),
-	status: text().default("active").notNull(),
-	metadata_json: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-}, (table) => [
-	index("tenant_navigation_items_site_area_sort_idx").on(table.site_id, table.area, table.sort_order),
-	check("tenant_navigation_items_area_check", sql`area IN ('header', 'footer', 'legal', 'social')`),
-	check("tenant_navigation_items_status_check", sql`status IN ('active', 'hidden')`),
-	index("tenant_navigation_items_organization_id_idx").on(table.organization_id),
-]);
+
 
 export const tenant_redirects = sqliteTable("tenant_redirects", {
 	id: text().primaryKey(),
@@ -1935,6 +1819,15 @@ export const site_domains = sqliteTable("site_domains", {
 	index("site_domains_org_site_idx").on(table.organization_id, table.site_id),
 ]);
 
+export const spent_subdomains = sqliteTable("spent_subdomains", {
+	domain: text().primaryKey(),
+	site_id: text().notNull(),
+	successor_domain: text(),
+	spent_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("spent_subdomains_site_idx").on(table.site_id),
+]);
+
 export const site_entitlements = sqliteTable("site_entitlements", {
 	id: text().primaryKey(),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
@@ -1972,7 +1865,6 @@ export const site_locales = sqliteTable("site_locales", {
 	label: text(),
 	is_source: numeric().default(sql`false`).notNull(),
 	status: text().default("draft").notNull(),
-	fallback_enabled: numeric().default(sql`1`).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
@@ -2140,6 +2032,11 @@ export const sites = sqliteTable("sites", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
+	// Brand-level social profiles, rendered in the site footer only. Distinct from a location's
+	// own facebook_url/instagram_url/tiktok_url on business_locations — the two never merge.
+	social_facebook_url: text(),
+	social_instagram_url: text(),
+	social_tiktok_url: text(),
 	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
 	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
@@ -2472,8 +2369,6 @@ export const content_documents = sqliteTable("content_documents", {
 	id: text().primaryKey(),
 	owner_type: text().notNull(),
 	owner_id: text().notNull(),
-	draft_revision_id: text(),
-	published_revision_id: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
@@ -2498,47 +2393,29 @@ export const content_blocks = sqliteTable("content_blocks", {
 	index("content_blocks_parent_idx").on(table.parent_block_id),
 ]);
 
-export const content_revisions = sqliteTable("content_revisions", {
-	id: text().primaryKey(),
-	document_id: text().notNull().references(() => content_documents.id, { onDelete: "cascade" } ),
-	snapshot_json: text().notNull(),
-	body_markdown: text().notNull(),
-	created_by: text().references(() => user.id, { onDelete: "set null" } ),
-	label: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	published_at: text(),
-}, (table) => [
-	index("content_revisions_document_created_idx").on(table.document_id, table.created_at),
-]);
-
 export const tenant_page_variants = sqliteTable("tenant_page_variants", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	page_id: text().notNull().references(() => tenant_pages.id, { onDelete: "cascade" } ),
 	locale: text().notNull(),
-	draft_document_id: text().references(() => content_documents.id, { onDelete: "set null" } ),
-	published_revision_id: text().references(() => content_revisions.id, { onDelete: "set null" } ),
-	ever_published: integer().default(0).notNull(),
-	published_path: text().notNull(),
-	draft_path: text().notNull().default("/"),
+	document_id: text().notNull().references(() => content_documents.id, { onDelete: "cascade" } ),
+	path: text().notNull(),
 	title: text().notNull(),
 	summary: text(),
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	status: text().default("draft").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 }, (table) => [
 	unique("tenant_page_variants_page_locale_unique").on(table.page_id, table.locale),
-	unique("tenant_page_variants_site_locale_path_unique").on(table.site_id, table.locale, table.published_path),
-	index("tenant_page_variants_site_status_path_idx").on(table.site_id, table.status, table.published_path),
+	unique("tenant_page_variants_site_locale_path_unique").on(table.site_id, table.locale, table.path),
+	index("tenant_page_variants_site_path_idx").on(table.site_id, table.path),
 	index("tenant_page_variants_page_idx").on(table.page_id),
-	check("tenant_page_variants_path_check", sql`published_path LIKE '/%' AND published_path NOT LIKE '//%'`),
-	check("tenant_page_variants_status_check", sql`status IN ('draft', 'published', 'archived')`),
+	check("tenant_page_variants_path_check", sql`path LIKE '/%' AND path NOT LIKE '//%'`),
 ]);
 
 export const public_resource_cache_invalidations = sqliteTable("public_resource_cache_invalidations", {

@@ -1,9 +1,9 @@
-import { getRouterParam } from 'h3'
+import { getRouterParam } from 'nitro/h3';
 import { execute, queryFirst } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
 import { getNotificationAccess } from '~/server/utils/notification-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const notificationId = getRouterParam(event, 'notificationId')?.trim()
   if (!notificationId) return jsonResponse({ error: 'Notification id is required' }, { status: 400 })
 
@@ -23,3 +23,4 @@ export default defineEventHandler(async (event) => {
   `, [notificationId, access.userId, new Date().toISOString()])
   return jsonResponse({ success: true })
 })
+import { defineHandler } from 'nitro';

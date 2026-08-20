@@ -120,6 +120,8 @@ const FIXTURE_USER_IDS = [
   'user-pottery-house',
   'user-kikuzuki',
   'user-ncls-blawby',
+  // Durable human staging-review identity; never eligible for E2E user cleanup.
+  'user-staging-review',
 ]
 
 const isStaging = process.argv.includes('--staging')

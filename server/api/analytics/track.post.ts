@@ -6,15 +6,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { execute, queryFirst } from '~/server/db'
 import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import {
-  getCloudflareGeo,
-  getOrCreateSessionId,
-  getOrCreateVisitorId,
-  hashIp,
-  insertPageviewEvent,
-  insertPlatformPageviewEvent,
-  isTrackablePath,
-  resolvePageviewTenantPageIdentity,
-  resolveLocationIdFromPath
+  getCloudflareGeo, getOrCreateSessionId, getOrCreateVisitorId, hashIp, insertPageviewEvent, insertPlatformPageviewEvent, isTrackablePath, resolvePageviewTenantPageIdentity, resolveLocationIdFromPath
 } from '~/server/utils/pageview-tracking'
 import { normalizeLocale } from '~/server/utils/site-i18n'
 import { isPlatformPath } from '~/utils/platform-routes'
@@ -37,7 +29,7 @@ const MAX_UA_LEN = 1024
 const RATE_LIMIT_MAX = 120
 const RATE_LIMIT_WINDOW_SECONDS = 60
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
 
@@ -50,8 +42,7 @@ export default defineEventHandler(async (event) => {
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return jsonResponse(
-        { error: 'Invalid analytics payload' },
-        { status: 400 }
+        { error: 'Invalid analytics payload' }, { status: 400 }
       )
     }
 
@@ -63,8 +54,7 @@ export default defineEventHandler(async (event) => {
       const parsed = Number(rawDuration)
       if (!Number.isFinite(parsed) || parsed < 0) {
         return jsonResponse(
-          { error: 'durationSeconds must be a non-negative number' },
-          { status: 400 }
+          { error: 'durationSeconds must be a non-negative number' }, { status: 400 }
         )
       }
       durationSeconds = parsed
@@ -88,8 +78,7 @@ export default defineEventHandler(async (event) => {
 
     if ((!isPlatform && !siteId) || !pagePath) {
       return jsonResponse(
-        { error: 'Missing required fields: siteId (or platform), pagePath' },
-        { status: 400 }
+        { error: 'Missing required fields: siteId (or platform), pagePath' }, { status: 400 }
       )
     }
 
@@ -108,8 +97,7 @@ export default defineEventHandler(async (event) => {
       (userAgent && userAgent.length > MAX_UA_LEN)
     ) {
       return jsonResponse(
-        { error: 'One or more fields exceed maximum allowed length' },
-        { status: 400 }
+        { error: 'One or more fields exceed maximum allowed length' }, { status: 400 }
       )
     }
 
@@ -119,8 +107,7 @@ export default defineEventHandler(async (event) => {
 
       if (!site) {
         return jsonResponse(
-          { error: 'Site not found' },
-          { status: 404 }
+          { error: 'Site not found' }, { status: 404 }
         )
       }
     }
@@ -139,26 +126,20 @@ export default defineEventHandler(async (event) => {
         count = CASE
           WHEN COALESCE(rate_limits.expires_at, '') <= excluded.updated_at THEN 1
           ELSE rate_limits.count + 1
-        END,
-        updated_at = excluded.updated_at,
-        expires_at = CASE
+        END, updated_at = excluded.updated_at, expires_at = CASE
           WHEN COALESCE(rate_limits.expires_at, '') <= excluded.updated_at THEN excluded.expires_at
           ELSE rate_limits.expires_at
         END
     `, [rateKey, now, windowEndsAt])
 
     const rateState = await queryFirst<ApiRecord>(
-      db,
-      `SELECT count, expires_at FROM rate_limits WHERE key = ? LIMIT 1`,
-      [rateKey],
-    )
+      db, `SELECT count, expires_at FROM rate_limits WHERE key = ? LIMIT 1`, [rateKey], )
 
     const currentCount = Number(rateState?.count || 0)
     const expiresAt = typeof rateState?.expires_at === 'string' ? rateState.expires_at : ''
     if (currentCount > RATE_LIMIT_MAX && expiresAt > now) {
       return jsonResponse(
-        { error: 'Too many requests' },
-        { status: 429 }
+        { error: 'Too many requests' }, { status: 429 }
       )
     }
 
@@ -192,36 +173,13 @@ export default defineEventHandler(async (event) => {
 
     if (isPlatform) {
       await insertPlatformPageviewEvent(db, {
-        pagePath,
-        referrer: referrer || null,
-        userAgent: userAgent || null,
-        ipHash,
-        sessionId,
-        visitorId,
-        country: geo.country || null,
-        region: geo.region || null,
-        city: geo.city || null
+        pagePath, referrer: referrer || null, userAgent: userAgent || null, ipHash, sessionId, visitorId, country: geo.country || null, region: geo.region || null, city: geo.city || null
       })
     } else {
       const locationId = await resolveLocationIdFromPath(db, siteId, pagePath)
       const page = await resolvePageviewTenantPageIdentity(db, siteId, pagePath, locale)
       await insertPageviewEvent(db, {
-        siteId,
-        locationId,
-        pagePath,
-        pageId: page?.page_id ?? null,
-        pageType: page?.page_type ?? null,
-        recipe: page?.recipe ?? null,
-        locale: page?.locale ?? null,
-        revisionId: page?.revision_id ?? null,
-        referrer: referrer || null,
-        userAgent: userAgent || null,
-        ipHash,
-        sessionId,
-        visitorId,
-        country: geo.country || null,
-        region: geo.region || null,
-        city: geo.city || null
+        siteId, locationId, pagePath, pageId: page?.page_id ?? null, pageType: page?.page_type ?? null, recipe: page?.recipe ?? null, locale: page?.locale ?? null, revisionId: null, referrer: referrer || null, userAgent: userAgent || null, ipHash, sessionId, visitorId, country: geo.country || null, region: geo.region || null, city: geo.city || null
       })
     }
 
@@ -230,8 +188,9 @@ export default defineEventHandler(async (event) => {
     const err = error instanceof Error ? error : new Error(String(error))
     console.error('Analytics track error:', err.message)
     return jsonResponse(
-      { error: 'Failed to log pageview' },
-      { status: 500 }
+      { error: 'Failed to log pageview' }, { status: 500 }
     )
   }
 })
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

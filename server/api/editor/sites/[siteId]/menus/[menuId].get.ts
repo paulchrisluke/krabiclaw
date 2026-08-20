@@ -2,7 +2,7 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { loadDashboardMenu } from '~/server/utils/dashboard-editor-resources'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const menuId = getRouterParam(event, 'menuId')
 
@@ -18,3 +18,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to get menu' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

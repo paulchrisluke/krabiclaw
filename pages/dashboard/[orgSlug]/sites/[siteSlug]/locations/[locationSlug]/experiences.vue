@@ -358,6 +358,7 @@ import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
+import { getErrorMessage } from '~/utils/errors'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
@@ -642,7 +643,7 @@ async function submitCoverPoster(poster: File | null) {
     coverPosterPromptOpen.value = false
     toast.add({ description: 'Poster image added.', color: 'success' })
   } catch (error) {
-    toast.add({ description: getApiErrorMessage(error, 'Failed to add poster image.'), color: 'error' })
+    toast.add({ description: getErrorMessage(error, 'Failed to add poster image.'), color: 'error' })
   } finally {
     posterUploading.value = false
   }
@@ -810,17 +811,11 @@ async function save() {
     sliderOpen.value = false
     await loadExperiences()
   } catch (error) {
-    const message = getApiErrorMessage(error, 'Failed to save experience.')
+    const message = getErrorMessage(error, 'Failed to save experience.')
     toast.add({ description: message, color: 'error' })
   } finally {
     saving.value = false
   }
-}
-
-function getApiErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiClientError) return error.message
-  if (error instanceof Error && error.message.trim()) return error.message
-  return fallback
 }
 
 // ── Delete ────────────────────────────────────────────────

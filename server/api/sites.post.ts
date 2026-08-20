@@ -1,4 +1,5 @@
-import { appendResponseHeader, defineEventHandler, getHeaders, readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { appendResponseHeader,  readBody } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
@@ -12,7 +13,7 @@ interface SetActiveOrganizationApi {
   }): Promise<Response>
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const body = await readBody<{ name?: string; subdomain?: string; vertical?: string }>(event)
   const name = body?.name?.trim()
   const subdomain = body?.subdomain?.trim()
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event) => {
   const activateOrganization = async (organizationId: string) => {
     const response = await activeOrganizationApi.setActiveOrganization({
       body: { organizationId },
-      headers: getHeaders(event) as HeadersInit,
+      headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit,
       asResponse: true,
     })
     if (!response.ok) {

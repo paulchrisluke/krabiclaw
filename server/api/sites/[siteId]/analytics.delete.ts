@@ -1,10 +1,11 @@
 // DELETE /api/sites/[siteId]/analytics - Clear site-wide analytics data
 import { jsonResponse } from '~/server/utils/api-response'
-import { defineEventHandler, getRouterParam, getQuery } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, getQuery } from 'nitro/h3';
 import { execute } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
 
   if (!siteId) {

@@ -12,6 +12,7 @@ test('platform admin enters and exits a client workspace through Better Auth imp
 
   const errors = collectPageErrors(page)
   const adminUserId = 'user-e2e-platform-admin'
+  const adminUserEmail = 'platform-admin@playwright.example'
 
   await loginAsPage(page, baseURL!, adminUserId)
   await page.goto(`${baseURL}/api/post-login`, { waitUntil: 'load' })
@@ -44,10 +45,15 @@ test('platform admin enters and exits a client workspace through Better Auth imp
   await expect(page).toHaveURL(/\/admin\/users$/)
   await expect(page.getByText(/Impersonating/)).toHaveCount(0)
 
-  const adminUsers = await page.request.get(`${baseURL}/api/admin/users`)
+  const adminUsers = await page.request.get(
+    `${baseURL}/api/admin/users?q=${encodeURIComponent(adminUserEmail)}`,
+  )
   expect(adminUsers.status()).toBe(200)
-  const adminUsersBody = await adminUsers.json() as { users?: Array<{ id?: string }> }
-  expect(adminUsersBody.users?.some(user => user.id === adminUserId)).toBe(true)
+  const adminUsersBody = await adminUsers.json() as { users?: Array<{ id?: string; email?: string }> }
+  expect(adminUsersBody.users).toContainEqual(expect.objectContaining({
+    id: adminUserId,
+    email: adminUserEmail,
+  }))
   await expect(page.locator('body')).not.toContainText('Failed to load users')
 
   await page.goto(`${baseURL}/admin/clients`, { waitUntil: 'load' })

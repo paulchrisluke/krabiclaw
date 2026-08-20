@@ -5,7 +5,9 @@ export interface DashboardNotificationLinkEnv {
 }
 
 export function getPlatformDomain(env: DashboardNotificationLinkEnv): string {
-  return (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const domain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!domain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
 export interface SiteLocationSlugs {
@@ -20,29 +22,25 @@ export async function resolveSiteLocationSlugs(
   db: DbClient,
   opts: { organizationId: string; siteId: string; locationId?: string | null },
 ): Promise<SiteLocationSlugs | null> {
-  try {
-    const site = await queryFirst<{ org_slug: string; site_slug: string | null }>(db, `
+  const site = await queryFirst<{ org_slug: string; site_slug: string | null }>(db, `
       SELECT o.slug AS org_slug, s.subdomain AS site_slug
       FROM organization o
       JOIN sites s ON s.organization_id = o.id
       WHERE o.id = ? AND s.id = ?
       LIMIT 1
     `, [opts.organizationId, opts.siteId])
-    if (!site?.site_slug) return null
+  if (!site?.site_slug) return null
 
-    let locationSlug: string | null = null
-    if (opts.locationId) {
-      const location = await queryFirst<{ slug: string }>(db, `
+  let locationSlug: string | null = null
+  if (opts.locationId) {
+    const location = await queryFirst<{ slug: string }>(db, `
         SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
       `, [opts.locationId, opts.siteId])
-      locationSlug = location?.slug ?? null
-      if (!locationSlug) return null
-    }
-
-    return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
-  } catch {
-    return null
+    locationSlug = location?.slug ?? null
+    if (!locationSlug) return null
   }
+
+  return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
 }
 
 export function composeOwnerThreadInboxUrl(

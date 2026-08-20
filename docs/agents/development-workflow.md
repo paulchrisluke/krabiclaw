@@ -30,6 +30,23 @@ deployed browser gate or the incident rules in that document.
 - Treat CodeRabbit rate limiting as a blocked/pending review state, never as success. A status like "review rate limited" means the review did not happen yet, usually because too many PRs or commits are competing for CodeRabbit at once.
 - When CodeRabbit is rate limited, do not push empty commits or ask for manual re-reviews. Reduce the active review queue where possible, wait for the cooldown window, then check once after about 20 minutes.
 
+### CI scope
+
+- `config/e2e-impact-map.mjs` is the executable source of truth for affected
+  preview and staging browser coverage. Do not rely on a prose claim that a
+  journey was affected; update the map when a new subsystem or dependency edge
+  is introduced.
+- Every runtime PR runs permanent core sentinels against a real preview Worker,
+  then every mapped spec. A changed Playwright spec always runs itself.
+- High-impact and unclassified runtime paths fail safe to the full inventory.
+  Documentation-only changes skip Worker deployment.
+- Do not broaden a narrow PR to unrelated browser suites merely to appear safe.
+  Do not narrow the map to make a failing required journey disappear.
+- Every push to `staging` runs the complete suite against that exact SHA. The
+  `staging` to `main` release PR reuses those checks without another deployment
+  or qualification cycle. That full qualification remains mandatory before
+  production promotion.
+
 ## Local Dependencies
 
 Fresh worktrees usually do not have `node_modules`.
@@ -50,15 +67,23 @@ Fresh worktrees usually do not have `node_modules`.
 
 ## Local Runtime Baseline
 
-Before calling typecheck, lint, build, or Playwright blocked by the local environment, verify which Node runtime is executing the command:
+Before installing dependencies or running validation, read
+[the Node runtime upgrade runbook](../operations/node-runtime-upgrades.md) and
+verify that the active Node runtime exactly matches `.nvmrc`:
 
 ```bash
 which node
 node -v
+printf 'expected v%s\n' "$(tr -d '\n' < .nvmrc)"
 node -e "console.log(v8.getHeapStatistics().heap_size_limit)" -r v8
 ```
 
-Codex desktop sessions may inherit the machine's default shell `node` instead of the bundled workspace runtime. If `yarn typecheck` or `yarn lint` fails with V8 heap exhaustion or the process is killed without a product error, rerun with the bundled Codex Node runtime first and give Node enough heap:
+Do not run validation until the reported and expected versions match. Codex
+desktop sessions may inherit the machine's default shell `node` instead of the
+workspace runtime. A bundled runtime is usable only when its version also
+matches `.nvmrc`. If `yarn typecheck` or `yarn lint` then fails with V8 heap
+exhaustion or the process is killed without a product error, keep the exact
+runtime and give Node enough heap:
 
 ```bash
 PATH="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" \
@@ -106,11 +131,11 @@ What each step prevents:
 
 If a browser test fails in a fresh worktree, check these setup symptoms first:
 
-- `Process from config.webServer was not able to start`: run
-  `yarn e2e:local:server --port 3000` visibly and read the startup error.
+- `Process from config.webServer was not able to start`: run the documented
+  preparation and built-Worker command visibly — `yarn e2e:local:prepare && yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000` — and read the startup error.
 - Better Auth reports `Invalid origin: http://krabiclaw.com` for a localhost
-  request: Wrangler was started without the local-upstream override and derived
-  its upstream from the production route.
+  request: stop the Worker and restart the documented command
+  `yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000`; do not repair this by changing application auth allowlists or by adding a production-origin override to `.env`.
 - Better Auth returns `Failed to decrypt private key`: the local Worker and D1
   JWKS used different `BETTER_AUTH_SECRET` values. Use one Wrangler-native
   `.dev.vars` or `.env` value.
@@ -174,12 +199,24 @@ yarn test:e2e:local tests/e2e/example.spec.ts --project=chromium --workers=1
 ```
 
 Wrangler loads the repository's native local variable source for Worker
-bindings. The launcher supplies only explicit local URLs and log-only delivery
-modes; it does not parse or mutate `.env` from Playwright.
+bindings. Playwright does not parse or mutate `.env`.
 
 If an authenticated dashboard E2E reaches the right page but API calls return 500, check the response body before changing UI selectors. Missing local env such as `PREVIEW_SECRET` is a setup issue, not an app contract failure.
 
 If Nuxt or Playwright cannot bind a local loopback port in the sandbox, verify no process is listening on that port, then rerun the exact same command with approval/outside the sandbox before declaring the E2E blocked. A sandbox socket failure is not evidence of a product regression.
+
+For manual browser inspection after a build, use the documented built-Worker
+command:
+
+```bash
+yarn build
+yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000
+```
+
+Local tenant identity is carried by `x-preview-tenant` on the shared
+`localhost` origin. For example, Blawby uses `x-preview-tenant: ncls` and its
+menu routes are expected to return 404 because the service vertical has no
+Saya menu module.
 
 ## Review Hygiene
 

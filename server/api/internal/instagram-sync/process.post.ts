@@ -1,20 +1,16 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
-  getFacebookPagesConnection,
-  getLinkedInstagramAccount,
-  syncInstagramPosts,
-  syncFacebookPosts,
-} from '~/server/utils/facebook-pages'
+  getFacebookPagesConnection, getLinkedInstagramAccount, syncInstagramPosts, syncFacebookPosts, } from '~/server/utils/facebook-pages'
 import { queryAll } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const secret = typeof env.CRON_SECRET === 'string' ? env.CRON_SECRET : ''
   if (secret) {
-    const authorization = getHeader(event, 'authorization') || ''
+    const authorization = (event.req.headers.get('authorization')) || ''
     if (authorization !== `Bearer ${secret}`) {
       return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -30,8 +26,7 @@ export default defineEventHandler(async (event) => {
     }
   } catch (error) {
     return jsonResponse({
-      error: 'Invalid JSON request body',
-      details: error instanceof Error ? error.message : String(error)
+      error: 'Invalid JSON request body', details: error instanceof Error ? error.message : String(error)
     }, { status: 400 })
   }
 
@@ -71,13 +66,7 @@ export default defineEventHandler(async (event) => {
       const fbConnection = await getFacebookPagesConnection(env, connection.organization_id, connection.site_id)
       if (!fbConnection || !fbConnection.encrypted_page_token || !fbConnection.facebook_page_id) {
         results.push({
-          siteId: connection.site_id,
-          organizationId: connection.organization_id,
-          success: 0,
-          errors: 0,
-          skipped: 0,
-          error: 'No valid Facebook connection or page selected',
-        })
+          siteId: connection.site_id, organizationId: connection.organization_id, success: 0, errors: 0, skipped: 0, error: 'No valid Facebook connection or page selected', })
         continue
       }
 
@@ -86,12 +75,7 @@ export default defineEventHandler(async (event) => {
       let fbPlatformErrors = 0
       try {
         fbResult = await syncFacebookPosts(
-          env,
-          connection.organization_id,
-          connection.site_id,
-          fbConnection.encrypted_page_token,
-          fbConnection.facebook_page_id,
-          limit
+          env, connection.organization_id, connection.site_id, fbConnection.encrypted_page_token, fbConnection.facebook_page_id, limit
         )
       } catch (fbErr) {
         console.error('Facebook sync failed for site:', connection.site_id, fbErr)
@@ -106,12 +90,7 @@ export default defineEventHandler(async (event) => {
       if (igUserId) {
         try {
           igResult = await syncInstagramPosts(
-            env,
-            connection.organization_id,
-            connection.site_id,
-            fbConnection.encrypted_page_token,
-            igUserId,
-            limit
+            env, connection.organization_id, connection.site_id, fbConnection.encrypted_page_token, igUserId, limit
           )
         } catch (igErr) {
           console.error('Instagram sync failed for site:', connection.site_id, igErr)
@@ -122,23 +101,11 @@ export default defineEventHandler(async (event) => {
       }
 
       results.push({
-        siteId: connection.site_id,
-        organizationId: connection.organization_id,
-        success: fbResult.success + igResult.success,
-        errors: fbResult.errors + igResult.errors + fbPlatformErrors + igPlatformErrors,
-        skipped: fbResult.skipped + igResult.skipped + igPlatformSkipped,
-        ...(fbPlatformErrors + igPlatformErrors > 0 ? { error: 'Platform-level sync error' } : {}),
-      })
+        siteId: connection.site_id, organizationId: connection.organization_id, success: fbResult.success + igResult.success, errors: fbResult.errors + igResult.errors + fbPlatformErrors + igPlatformErrors, skipped: fbResult.skipped + igResult.skipped + igPlatformSkipped, ...(fbPlatformErrors + igPlatformErrors > 0 ? { error: 'Platform-level sync error' } : {}), })
     } catch (err) {
       console.error('Social sync failed for site:', connection.site_id, err)
       results.push({
-        siteId: connection.site_id,
-        organizationId: connection.organization_id,
-        success: 0,
-        errors: 1,
-        skipped: 0,
-        error: err instanceof Error ? err.message : 'Unknown error',
-      })
+        siteId: connection.site_id, organizationId: connection.organization_id, success: 0, errors: 1, skipped: 0, error: err instanceof Error ? err.message : 'Unknown error', })
     }
   }
 
@@ -147,13 +114,8 @@ export default defineEventHandler(async (event) => {
   const totalSkipped = results.reduce((sum, r) => sum + r.skipped, 0)
 
   return jsonResponse({
-    success: true,
-    summary: {
-      totalSites: results.length,
-      totalSuccess,
-      totalErrors,
-      totalSkipped,
-    },
-    results,
-  })
+    success: true, summary: {
+      totalSites: results.length, totalSuccess, totalErrors, totalSkipped, }, results, })
 })
+import { defineHandler } from 'nitro';
+import {  readBody  } from 'nitro/h3';

@@ -1,14 +1,23 @@
 name = "krabiclaw"
-main = "workers/app-entry.ts"
+main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat_v2", "global_fetch_strictly_public"]
+
+[placement]
+mode = "smart"
 
 [assets]
 directory = ".output/public"
 
+[dev]
+host = "localhost:3000"
+port = 3000
+local_protocol = "http"
+upstream_protocol = "http"
+
 [triggers]
-# Every expression is dispatched by workers/app-entry.ts. Keep this list in
-# sync with SCHEDULED_TASKS in server/scheduled-tasks.ts.
+# Every expression is dispatched through Nitro's cloudflare:scheduled hook.
+# Keep this list in sync with SCHEDULED_TASKS in server/scheduled-tasks.ts.
 crons = ["*/5 * * * *", "*/2 * * * *", "*/10 * * * *", "0 3 * * *", "0 4 * * *", "0 0 * * SUN", "0 * * * *"]
 
 [[routes]]
@@ -115,7 +124,7 @@ remote = false
 
 [ai]
 binding = "AI"
-remote = false
+remote = true
 
 [[ai_search_namespaces]]
 binding = "AI_SEARCH"
@@ -139,7 +148,8 @@ enabled = true
 workers_dev = true
 preview_urls = true
 routes = [
-  { pattern = "preview.krabiclaw.com/*", zone_name = "krabiclaw.com" }
+  { pattern = "preview.krabiclaw.com/*", zone_name = "krabiclaw.com" },
+  { pattern = "*-preview.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
 
 # Top-level [triggers] crons are inherited by named environments unless
@@ -210,7 +220,7 @@ remote = false
 
 [env.preview.ai]
 binding = "AI"
-remote = false
+remote = true
 
 [[env.preview.ai_search_namespaces]]
 binding = "AI_SEARCH"
@@ -220,14 +230,14 @@ remote = true
 [env.preview.observability]
 enabled = false
 
-# Stable staging environment — uses dedicated non-production data/resources and
-# a fixed platform host for manual QA. NUXT_PUBLIC_FREE_SITE_DOMAIN is krabiclaw.com
-# (same as preview) because *.staging.krabiclaw.com is not covered by the zone's
-# wildcard TLS cert (Free plan, one level only). Tenant sites created from staging
-# get *.krabiclaw.com URLs (production-style); E2E tests access them via x-preview-tenant.
+# Stable staging environment — uses dedicated non-production data/resources.
+# Tenant aliases stay at the first subdomain level (for example,
+# pottery-house-staging.krabiclaw.com), which is covered by the zone certificate.
+# The more-specific environment route wins over production's broad wildcard.
 [env.staging]
 routes = [
-  { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" }
+  { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" },
+  { pattern = "*-staging.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
 
 # See env.preview.triggers above — same rationale, same fix.
@@ -294,7 +304,7 @@ remote = false
 
 [env.staging.ai]
 binding = "AI"
-remote = false
+remote = true
 
 [[env.staging.ai_search_namespaces]]
 binding = "AI_SEARCH"

@@ -124,7 +124,7 @@ const {
 } = await import('../../server/utils/platform-mcp-executor.ts?platform-blog-lifecycle-test')
 
 const event = {
-  context: {
+  runtime: {
     cloudflare: {
       env: { BETTER_AUTH_URL: 'https://krabiclaw.com' },
     },

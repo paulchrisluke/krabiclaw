@@ -1,4 +1,5 @@
-import { setResponseStatus, type H3Event } from 'h3'
+import type { H3Event } from 'nitro';
+import { setResponseStatus } from 'nitro/h3';
 import { MCP_ERROR, mcpFailure, type JsonRpcId, type McpErrorShape } from '~/server/utils/mcp-protocol'
 import { setMcpAuthChallenge } from '~/server/utils/mcp-route-helpers'
 

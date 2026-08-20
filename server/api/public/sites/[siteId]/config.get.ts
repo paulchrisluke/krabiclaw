@@ -3,7 +3,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getConfig } from '~/server/utils/site-config'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   
   if (!siteId) {
@@ -30,15 +30,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const config = {
-      ...await getConfig(db, site.organization_id, site.id),
-      default_currency: site.default_currency || 'THB',
-    }
+      ...await getConfig(db, site.organization_id, site.id), default_currency: site.default_currency || 'THB', }
     return jsonResponse({
-      success: true,
-      config
+      success: true, config
     })
   } catch (error) {
     console.error('Failed to get site config:', error)
     return jsonResponse({ error: 'Failed to get site config' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

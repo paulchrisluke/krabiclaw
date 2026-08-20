@@ -69,16 +69,26 @@ test.describe('review contract regressions', () => {
     const reviewId = reviews[0]!.id
 
     // Owner can reply
+    const ownerReply = `E2E owner reply ${Date.now()}`
     const ownerReplyRes = await request.patch(
       `${baseURL}/api/editor/sites/${DEMO_SITE_ID}/reviews/${reviewId}`,
       {
         headers: tenantExtraHeaders,
-        data: { owner_reply: `E2E owner reply ${Date.now()}` },
+        data: { owner_reply: ownerReply },
+        maxRetries: 1,
       },
     )
     expect(ownerReplyRes.status()).toBe(200)
     const ownerBody = await ownerReplyRes.json() as { updated: boolean }
     expect(ownerBody.updated).toBe(true)
+
+    const persistedReviewsRes = await request.get(
+      `${baseURL}/api/sites/${DEMO_SITE_ID}/locations/${DEMO_LOCATION_ID}/reviews`,
+      { headers: tenantExtraHeaders, maxRetries: 1 },
+    )
+    expect(persistedReviewsRes.status()).toBe(200)
+    const persistedReviewsBody = await persistedReviewsRes.json() as { reviews: Array<{ id: string; owner_reply: string | null }> }
+    expect(persistedReviewsBody.reviews.find(review => review.id === reviewId)?.owner_reply).toBe(ownerReply)
 
     // Editor cannot reply — editor is not in the ['owner', 'admin'] access list
     await loginAs(request, baseURL!, 'user-e2e-demo-editor')

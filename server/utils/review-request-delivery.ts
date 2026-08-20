@@ -17,7 +17,9 @@ interface ReviewRequestDeliveryEnv {
 }
 
 function platformDomain(env: ReviewRequestDeliveryEnv): string {
-  return (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const configured = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!configured) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  return configured.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
 function siteBaseUrl(env: ReviewRequestDeliveryEnv, context: ReviewBookingContext): string {
@@ -25,7 +27,7 @@ function siteBaseUrl(env: ReviewRequestDeliveryEnv, context: ReviewBookingContex
   if (publicUrl) return publicUrl
   const subdomain = context.site_subdomain?.trim()
   if (subdomain) return `https://${subdomain}.${platformDomain(env)}`
-  return `https://${platformDomain(env)}`
+  throw new Error('Site public URL or subdomain is required')
 }
 
 function bookingLabel(context: ReviewBookingContext): string {

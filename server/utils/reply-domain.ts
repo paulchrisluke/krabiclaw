@@ -3,8 +3,8 @@ interface ReplyDomainEnv {
 }
 
 export function getReplyDomain(env: ReplyDomainEnv): string {
-  const rawEnvValue = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim() || ''
-  const rawPlatformDomain = rawEnvValue || 'krabiclaw.com'
+  const rawPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!rawPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   let platformDomain = rawPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
   try {
@@ -13,10 +13,7 @@ export function getReplyDomain(env: ReplyDomainEnv): string {
     platformDomain = platformDomain.replace(/:\d+$/, '')
   }
 
-  // Ensure platformDomain is never empty
-  if (!platformDomain) {
-    platformDomain = 'krabiclaw.com'
-  }
+  if (!platformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is invalid')
 
   if (platformDomain === 'localhost' || platformDomain === '127.0.0.1' || platformDomain === '[::1]') {
     platformDomain = 'krabiclaw.local'

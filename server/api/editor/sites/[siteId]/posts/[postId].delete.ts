@@ -5,7 +5,7 @@ import { queryFirst } from '~/server/db'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { assertResourceAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const postId = getRouterParam(event, 'postId')
   if (!siteId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
@@ -30,13 +30,10 @@ export default defineEventHandler(async (event) => {
   `, [postId, site.organization_id, siteId])
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: post.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: post.location_id, })
 
   await deletePost(db, site.organization_id, siteId, postId)
   return jsonResponse({ success: true })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

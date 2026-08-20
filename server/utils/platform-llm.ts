@@ -1,4 +1,6 @@
-import { createError, getHeader, getRequestHost, type H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
+import {  getRequestHost } from 'nitro/h3';
 import { queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import {
   listContentComponents,
@@ -230,7 +232,7 @@ function buildFrontMatter(lines: Array<string | null>) {
 
 export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: string) {
   const categorySlug = categoryToSlug(doc.category)
-  if (!categorySlug) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
+  if (!categorySlug) throw new HTTPError({ statusCode: 404, statusMessage: 'Documentation not found' })
   const path = `/docs/${categorySlug}/${doc.slug}`
   const markdownPath = `/docs-md/${categorySlug}/${doc.slug}.md`
   const canonicalUrl = doc.canonical_url?.trim() || absoluteUrl(origin, path)
@@ -287,7 +289,7 @@ function renderBlogMarkdown(
 
 export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: string, categoryOverride?: string) {
   const categorySlug = categoryOverride || blogCategoryToSlug(post.category)
-  if (!categorySlug) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+  if (!categorySlug) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
   const path = `/blog/${categorySlug}/${post.slug}`
   const markdownPath = `/blog-md/${categorySlug}/${post.slug}.md`
   return renderBlogMarkdown(post, origin, { path, markdownPath })
@@ -657,13 +659,13 @@ export function resolvePublicOrigin(event: H3Event) {
     const tenantHost = String(
       event.context.tenantHost
       || getRequestHost(event, { xForwardedHost: true })
-      || getHeader(event, 'host')
+      || (event.req.headers.get('host'))
       || ''
     ).split(':')[0]
     if (!tenantHost) {
-      throw createError({ statusCode: 500, statusMessage: 'Tenant host not resolved' })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant host not resolved' })
     }
-    const forwardedProto = getHeader(event, 'x-forwarded-proto')
+    const forwardedProto = (event.req.headers.get('x-forwarded-proto'))
     const protocol = forwardedProto?.split(',')[0]?.trim()
       || (tenantHost.endsWith('.localhost') || tenantHost === 'localhost' ? 'http' : 'https')
     return `${protocol}://${tenantHost}`
@@ -672,7 +674,7 @@ export function resolvePublicOrigin(event: H3Event) {
   const runtimeConfig = useRuntimeConfig()
   const origin = runtimeConfig.public.siteUrl
   if (!origin) {
-    throw createError({ statusCode: 500, statusMessage: 'siteUrl not configured' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'siteUrl not configured' })
   }
   return origin.replace(/\/$/, '')
 }

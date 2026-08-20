@@ -5,7 +5,7 @@
     variant="ghost"
     :icon="sidebarCollapsed ? appConfig.ui.icons.panelOpen : appConfig.ui.icons.panelClose"
     :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
-    :data-sidebar-control-ready="ready"
+    :data-sidebar-control-ready="mounted ? 'true' : undefined"
     @click="toggleSidebar"
   />
 </template>
@@ -14,10 +14,10 @@
 const appConfig = useAppConfig()
 const nuxtApp = useNuxtApp()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
-const ready = ref(false)
+const mounted = ref(false)
 
 onMounted(() => {
-  ready.value = true
+  mounted.value = true
 })
 
 function toggleSidebar() {

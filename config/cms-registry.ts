@@ -92,7 +92,7 @@ const sayaCoreManagers: readonly CmsManagerCapability[] = [
   { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
   { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
   { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
-  { key: 'site.settings', id: 'settings', label: 'Brand, navigation, footer & SEO', section: 'site', route: 'settings', scope: 'site' },
+  { key: 'site.settings', id: 'settings', label: 'Brand', section: 'site', route: 'settings', scope: 'site' },
   { key: 'location.settings', id: 'settings', label: 'Location settings', section: 'site', route: ':location/settings', scope: 'location' },
 ]
 
@@ -143,7 +143,7 @@ const blawbyTemplateCatalog: CmsTemplateCatalog = {
     { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
     { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
     { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
-    { key: 'site.settings', id: 'settings', label: 'Brand, navigation, footer & SEO', section: 'site', route: 'settings', scope: 'site' },
+    { key: 'site.settings', id: 'settings', label: 'Brand', section: 'site', route: 'settings', scope: 'site' },
     { key: 'location.settings', id: 'settings', label: 'Location settings', section: 'site', route: ':location/settings', scope: 'location' },
   ],
   locationVocabularyDefault: 'office/service area',
@@ -198,8 +198,7 @@ const supportedCombinations: Record<SiteVertical, readonly PublicTemplateSlug[]>
 // Always-on features: 'contact'/'locations'/'settings' are infra; 'blog'/'qa'/
 // 'testimonials'/'reviews'/'posts'/'photos'/'media'/'links' are content managers — never business modules. An empty content manager still
 // needs to be reachable so an owner can create the first item (turning it off because it's empty
-// creates a circular UX problem), and public-side empty-state behavior for these is governed
-// separately by config/saya-empty-states.ts, not by this override model. None of these are
+// creates a circular UX problem). None of these are
 // user-toggleable, and every delta below still gets them unioned in by resolveCmsCapabilities —
 // including surviving an explicit `disabled` entry — so an override can never drop them.
 export const ALWAYS_ON_FEATURES: readonly ProductFeature[] = [

@@ -15,7 +15,7 @@ export function useOrgSettings() {
     general: computed(() => settingsBase.value ? `${settingsBase.value}/general` : null),
     billing: computed(() => settingsBase.value ? `${settingsBase.value}/billing` : null),
     members: computed(() => settingsBase.value ? `${settingsBase.value}/members` : null),
-    // Account-level pages (no org slug)
-    billingItems: computed(() => '/dashboard/account/billing-items'),
+    accountProfile: computed(() => '/dashboard/account/profile'),
+    accountAuth: computed(() => '/dashboard/account/authentication'),
   }
 }

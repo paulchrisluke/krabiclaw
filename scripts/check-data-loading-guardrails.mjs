@@ -33,12 +33,6 @@ const applicationRoots = [
 const violations = []
 
 const publicLoadingProhibitions = [
-  ['workers/app-entry.ts', [
-    'platform-home-static.js',
-    'renderStaticPlatformHome',
-    'x-public-render-mode',
-    'isStaticPlatformHomeRequest',
-  ]],
   ['layouts/saya.vue', [
     "rel: 'preload'",
     "onload: \"this.onload=null;this.rel='stylesheet'\"",

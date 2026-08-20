@@ -1,17 +1,17 @@
+import { HTTPError } from 'nitro';
+
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
   createContentDocumentWithBlocks,
   deleteContentDocumentForOwner,
-  publishCurrentPlatformDocRevision,
   getContentEditorSnapshot,
-  getPublishedContentSnapshot,
+  getContentBlocksForOwner,
   markdownToContentBlocks,
   prepareContentDocumentBlocksReplacement,
   prepareContentDocumentWithBlocks,
   replaceContentDocumentBlocks,
   renderContentBlocksToMarkdown,
   syncContentDocumentFromMarkdown,
-  unpublishContentDocument,
   type ContentDocumentOwnerType,
   type ContentBlockInput,
 } from '~/server/utils/content-documents'
@@ -80,21 +80,21 @@ function parseStringArray(value: unknown): string[] {
   if (value === null || value === undefined || value === '') return []
   if (Array.isArray(value)) {
     if (value.some(item => typeof item !== 'string')) {
-      throw createError({ statusCode: 500, statusMessage: 'Blog tags contain a non-string value' })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags contain a non-string value' })
     }
     return value as string[]
   }
   if (typeof value !== 'string') {
-    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(value) as unknown
   } catch {
-    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
   }
   if (!Array.isArray(parsed) || parsed.some(item => typeof item !== 'string')) {
-    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not an array of strings' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not an array of strings' })
   }
   return parsed as string[]
 }
@@ -105,10 +105,10 @@ export function parseBlogEditorThemeTokens(value: string | null | undefined): Ap
   try {
     parsed = JSON.parse(value) as unknown
   } catch {
-    throw createError({ statusCode: 500, statusMessage: 'Blog editor theme tokens are not valid JSON' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog editor theme tokens are not valid JSON' })
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw createError({ statusCode: 500, statusMessage: 'Blog editor theme tokens must be a JSON object' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog editor theme tokens must be a JSON object' })
   }
   return parsed as ApiRecord
 }
@@ -134,19 +134,15 @@ async function syncDocContentDocument(
   db: D1Database,
   docId: string,
   input: { body?: string; publish?: boolean; unpublish?: boolean },
-  createdBy?: string | null,
+  _createdBy?: string | null,
 ) {
   if (input.body !== undefined) {
     await syncContentDocumentFromMarkdown(db, {
       ownerType: 'platform_doc',
       ownerId: docId,
       bodyMarkdown: input.body,
-      createdBy,
-      label: input.publish ? 'Published markdown body' : 'Draft markdown body',
-      publish: Boolean(input.publish),
     })
-  } else if (input.publish) await publishCurrentPlatformDocRevision(db, docId)
-  if (input.unpublish) await unpublishContentDocument(db, 'platform_doc', docId)
+  }
 }
 
 export interface PlatformFaqItemInput {
@@ -403,11 +399,11 @@ interface PlatformComponentReplacement extends PlatformComponentMetadataInput {
 }
 
 function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+  throw new HTTPError({ statusCode: 400, statusMessage: message })
 }
 
 function notFound(message: string): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+  throw new HTTPError({ statusCode: 404, statusMessage: message })
 }
 
 // Lets every blog/doc tool accept either the row id or its public slug, so a
@@ -1293,8 +1289,8 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
 
   if (!post) return null
 
-  const contentBlocks = await getPublishedContentSnapshot(db, 'platform_blog', String(post.id))
-  if (!contentBlocks) throw createError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
+  const contentBlocks = await getContentBlocksForOwner(db, 'platform_blog', String(post.id))
+  if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const components = structuredComponentsFromBlocks(contentBlocks)
   const socialImage = await resolveBlogSocialImage(db, { siteId: null, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
@@ -1603,7 +1599,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   )
   if (!post) notFound('Post not found')
   const contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
-  if (!contentDocument) throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+  if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const components = structuredComponentsFromBlocks(contentDocument.blocks)
   const slug = typeof post.slug === 'string' ? post.slug : ''
   const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
@@ -1633,7 +1629,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     content_document: contentDocument,
     editor_template: editorTemplate?.slug ?? 'platform',
     editor_theme_tokens: editorThemeTokens,
-    editor_site_name: siteId ? editorTheme?.brand_name || 'Our Site' : 'KrabiClaw',
+    editor_site_name: siteId ? (editorTheme?.brand_name || '') : 'KrabiClaw',
     editor_brand_color: editorTheme?.brand_color ?? null,
     social_image: socialImage,
   }
@@ -1666,8 +1662,8 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
 
   if (!post) return null
 
-  const contentBlocks = await getPublishedContentSnapshot(db, 'tenant_blog', String(post.id))
-  if (!contentBlocks) throw createError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
+  const contentBlocks = await getContentBlocksForOwner(db, 'tenant_blog', String(post.id))
+  if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const components = structuredComponentsFromBlocks(contentBlocks)
   const socialImage = await resolveBlogSocialImage(db, { siteId, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
@@ -1707,8 +1703,8 @@ export async function createPlatformBlogPost(
     try {
       const blogPostInsert: BatchQuery = {
         query: `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, scheduled_revision_id, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, social_image_asset_id, author_id, site_author_id, published_at, first_published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, social_image_asset_id, author_id, site_author_id, published_at, first_published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id,
           organizationId,
@@ -1727,7 +1723,6 @@ export async function createPlatformBlogPost(
           input.featured_order != null ? Number(input.featured_order) : null,
           'draft',
           input.visibility ?? 'public',
-          null,
           null,
           input.seo_title ?? null,
           input.seo_description ?? null,
@@ -1748,9 +1743,6 @@ export async function createPlatformBlogPost(
       const ownerType = blogContentOwnerType(siteId)
       await createContentDocumentWithBlocks(db, ownerType, id, canonicalBlocks, {
         bodyMarkdown: canonicalBody,
-        createdBy: authorId,
-        label: 'Draft canonical blocks',
-        publish: false,
         additionalQueriesBefore: [blogPostInsert],
       })
       const post = await getPlatformBlogPost(db, id, siteId)
@@ -1772,7 +1764,7 @@ export async function createPlatformBlogPost(
     }
   }
 
-  throw createError({ statusCode: 500, statusMessage: 'Failed to create post' })
+  throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to create post' })
 }
 
 export async function updatePlatformBlogLifecycle(
@@ -1797,13 +1789,11 @@ export async function updatePlatformBlogLifecycle(
     id: string
     updated_at: string
     document_id: string | null
-    draft_revision_id: string | null
     document_updated_at: string | null
   }
   const rows = await queryAll<LifecycleSource>(db, `
     SELECT p.id, p.updated_at,
            d.id AS document_id,
-           d.draft_revision_id,
            d.updated_at AS document_updated_at
       FROM blog_posts p
       LEFT JOIN content_documents d
@@ -1818,13 +1808,13 @@ export async function updatePlatformBlogLifecycle(
   if (rows.length > 1) badRequest('Ambiguous platform content identifier; use the row id.')
   const source = rows[0]!
   if (source.updated_at !== input.expected_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
   }
-  if (!source.document_id || !source.draft_revision_id || !source.document_updated_at) {
-    throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing its draft revision' })
+  if (!source.document_id || !source.document_updated_at) {
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   }
   if (source.document_updated_at !== input.expected_document_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
   }
 
   const sourceTimestamp = Date.parse(source.updated_at)
@@ -1838,25 +1828,16 @@ export async function updatePlatformBlogLifecycle(
   let rowAssignments: string
   if (input.action === 'publish' && scheduledFor) {
     rowAssignments = `scheduled_for = ?,
-      scheduled_revision_id = (SELECT draft_revision_id FROM content_documents WHERE id = ?),
       published_at = NULL,
       status = 'scheduled',
       updated_at = ?`
-    rowParams.push(scheduledFor, source.document_id, committedAt)
+    rowParams.push(scheduledFor, committedAt)
   } else {
-    rowAssignments = `body = (
-        SELECT r.body_markdown
-          FROM content_documents d
-          JOIN content_revisions r ON r.id = d.draft_revision_id AND r.document_id = d.id
-         WHERE d.id = ?
-      ),
-      scheduled_for = NULL,
-      scheduled_revision_id = NULL,
+    rowAssignments = `scheduled_for = NULL,
       published_at = ${input.action === 'publish' ? '?' : 'NULL'},
       ${input.action === 'publish' ? 'first_published_at = COALESCE(first_published_at, ?),' : ''}
       status = '${input.action === 'publish' ? 'published' : 'draft'}',
       updated_at = ?`
-    rowParams.push(source.document_id)
     if (input.action === 'publish') rowParams.push(committedAt, committedAt)
     rowParams.push(committedAt)
   }
@@ -1868,7 +1849,7 @@ export async function updatePlatformBlogLifecycle(
          WHERE NOT EXISTS (SELECT 1 FROM blog_posts WHERE id = ? AND updated_at = ?)
             OR NOT EXISTS (
               SELECT 1 FROM content_documents
-               WHERE id = ? AND updated_at = ? AND draft_revision_id = ?
+               WHERE id = ? AND updated_at = ?
             )`,
       params: [
         crypto.randomUUID(),
@@ -1879,7 +1860,6 @@ export async function updatePlatformBlogLifecycle(
         input.expected_updated_at,
         source.document_id,
         input.expected_document_updated_at,
-        source.draft_revision_id,
       ],
     },
     {
@@ -1887,42 +1867,21 @@ export async function updatePlatformBlogLifecycle(
       params: [...rowParams, source.id, input.expected_updated_at],
     },
   ]
-  if (input.action === 'publish' && !scheduledFor) {
-    queries.push(
-      {
-        query: `UPDATE content_revisions
-          SET published_at = COALESCE(published_at, ?)
-          WHERE id = (SELECT draft_revision_id FROM content_documents WHERE id = ?)
-            AND document_id = ?`,
-        params: [committedAt, source.document_id, source.document_id],
-      },
-      {
-        query: 'UPDATE content_documents SET published_revision_id = draft_revision_id, updated_at = ? WHERE id = ?',
-        params: [committedAt, source.document_id],
-      },
-    )
-  } else if (input.action === 'unpublish') {
-    queries.push({
-      query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ?',
-      params: [committedAt, source.document_id],
-    })
-  }
-
   try {
     await executeBatch(db, queries)
   } catch (error) {
-    const latest = await queryFirst<{ updated_at: string; document_updated_at: string | null; draft_revision_id: string | null } | null>(db, `
-      SELECT p.updated_at, d.updated_at AS document_updated_at, d.draft_revision_id
+    const latest = await queryFirst<{ updated_at: string; document_updated_at: string | null;  } | null>(db, `
+      SELECT p.updated_at, d.updated_at AS document_updated_at
         FROM blog_posts p
         LEFT JOIN content_documents d ON d.id = ?
        WHERE p.id = ? LIMIT 1
     `, [source.document_id, source.id])
     if (!latest) notFound('Post not found')
     if (latest.updated_at !== input.expected_updated_at) {
-      throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
     }
-    if (latest.document_updated_at !== input.expected_document_updated_at || latest.draft_revision_id !== source.draft_revision_id) {
-      throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+    if (latest.document_updated_at !== input.expected_document_updated_at ) {
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
     }
     throw error
   }
@@ -1933,7 +1892,7 @@ export async function updatePlatformBlogLifecycle(
     published_at: input.action === 'publish' && !scheduledFor ? committedAt : null,
     scheduled_for: scheduledFor,
     updated_at: committedAt,
-    content_document_updated_at: scheduledFor ? source.document_updated_at : committedAt,
+    content_document_updated_at: source.document_updated_at,
   }
 }
 
@@ -1954,7 +1913,7 @@ export async function updatePlatformBlogPost(
   const current = await queryFirst<{ category: string | null; title: string; slug: string; status: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, 'SELECT category, title, slug, status, published_at, first_published_at, slug_manually_overridden, updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
   if (!current) notFound('Post not found')
   if (input.expected_updated_at && current.updated_at !== input.expected_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
   }
   let normalizedBlocks: Array<ContentBlockInput & { id?: string }> | null = null
   let contentDocument: Awaited<ReturnType<typeof getContentEditorSnapshot>> = null
@@ -1962,7 +1921,7 @@ export async function updatePlatformBlogPost(
     if (!input.expected_document_updated_at) badRequest('expected_document_updated_at is required with content_blocks')
     contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
     if (!contentDocument || contentDocument.document.updated_at !== input.expected_document_updated_at) {
-      throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
     }
     normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, siteId)
   }
@@ -2087,12 +2046,11 @@ export async function updatePlatformBlogPost(
       }, rowUpdate] : [rowUpdate]
       await replaceContentDocumentBlocks(db, blogContentOwnerType(siteId), postId, normalizedBlocks, {
         expected_document_updated_at: input.expected_document_updated_at ?? contentDocument.document.updated_at,
-        label: 'Editor autosave',
         additionalQueriesBefore: before,
       })
     } else {
       const post = await queryFirst<ApiRecord | null>(db, `${rowUpdate.query} RETURNING id`, rowUpdate.params)
-      if (!post && input.expected_updated_at) throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+      if (!post && input.expected_updated_at) throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
       if (!post) notFound('Post not found')
     }
     blogMutationApplied = true
@@ -2115,7 +2073,7 @@ export async function updatePlatformBlogPost(
     if (!blogMutationApplied && input.expected_updated_at) {
       const latest = await queryFirst<{ updated_at: string } | null>(db, 'SELECT updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
       if (latest && latest.updated_at !== input.expected_updated_at) {
-        throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+        throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
       }
     }
     if (isUniqueConstraintError(err, 'blog_posts')) badRequest('Slug already in use')
@@ -2333,7 +2291,7 @@ export async function createPlatformDoc(
     }
   }
 
-  throw createError({ statusCode: 500, statusMessage: 'Failed to create doc' })
+  throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to create doc' })
 }
 
 export async function updatePlatformDoc(
@@ -2430,15 +2388,6 @@ export async function updatePlatformDoc(
     ? await getContentEditorSnapshot(db, 'platform_doc', docId)
     : null
 
-  if (input.body === undefined && input.publish && contentSnapshot?.document.draft_revision_id) {
-    updates.push(`body = (
-      SELECT body_markdown
-        FROM content_revisions
-       WHERE id = ? AND document_id = ?
-    )`)
-    params.push(contentSnapshot.document.draft_revision_id, contentSnapshot.document.id)
-  }
-
   const rowUpdate: BatchQuery = {
     query: `UPDATE platform_docs SET ${updates.join(', ')} WHERE id = ?`,
     params: [...params, docId],
@@ -2465,46 +2414,17 @@ export async function updatePlatformDoc(
       if (contentSnapshot) {
         const prepared = prepareContentDocumentBlocksReplacement(contentSnapshot.document, canonicalBlocks, {
           expected_document_updated_at: contentSnapshot.document.updated_at,
-          label: input.publish ? 'Published markdown body' : 'Draft markdown body',
-          publish: Boolean(input.publish),
           additionalQueriesBefore: mutationQueries,
-          additionalQueriesAfter: input.unpublish
-            ? [{
-                query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ?',
-                params: [now, contentSnapshot.document.id],
-              }]
-            : undefined,
         })
         await executeBatch(db, prepared.queries)
       } else {
         const prepared = prepareContentDocumentWithBlocks('platform_doc', docId, canonicalBlocks, {
           bodyMarkdown: input.body,
-          label: input.publish ? 'Published markdown body' : 'Draft markdown body',
-          publish: Boolean(input.publish),
           additionalQueriesBefore: mutationQueries,
         })
         await executeBatch(db, prepared.queries)
       }
     } else {
-      if (input.publish && contentSnapshot?.document.draft_revision_id) {
-        mutationQueries.push(
-          {
-            query: `UPDATE content_revisions
-              SET published_at = COALESCE(published_at, ?)
-              WHERE id = ? AND document_id = ?`,
-            params: [now, contentSnapshot.document.draft_revision_id, contentSnapshot.document.id],
-          },
-          {
-            query: 'UPDATE content_documents SET published_revision_id = draft_revision_id, updated_at = ? WHERE id = ?',
-            params: [now, contentSnapshot.document.id],
-          },
-        )
-      } else if (input.unpublish && contentSnapshot) {
-        mutationQueries.push({
-          query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ?',
-          params: [now, contentSnapshot.document.id],
-        })
-      }
       await executeBatch(db, mutationQueries)
     }
 

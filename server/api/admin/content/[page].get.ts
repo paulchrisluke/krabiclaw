@@ -5,7 +5,7 @@ import { queryFirst } from '~/server/db'
 
 import { ALLOWED_PLATFORM_CONTENT_PAGES } from '~/utils/platform-content-pages'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const page = getRouterParam(event, 'page')
   if (!page) return jsonResponse({ error: 'Page required' }, { status: 400 })
   if (!ALLOWED_PLATFORM_CONTENT_PAGES.includes(page)) return jsonResponse({ error: 'Invalid page' }, { status: 400 })
@@ -31,3 +31,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ ...row, exists: true })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

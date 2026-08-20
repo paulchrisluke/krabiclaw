@@ -20,7 +20,6 @@ const payload = {
     site_id: 'site-demo',
     path: '/links',
     title: 'Links',
-    status: 'published',
     robots: 'noindex,follow',
     seo_title: null,
     seo_description: null,

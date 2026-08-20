@@ -11,7 +11,7 @@ interface DomainRecordRow {
   site_id: string
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const domainId = getRouterParam(event, 'domainId')
   if (typeof siteId !== 'string' || !siteId.trim() || typeof domainId !== 'string' || !domainId.trim()) {
@@ -37,29 +37,17 @@ export default defineEventHandler(async (event) => {
     }
 
     await notifyDomainLifecycle(env, db, {
-      organizationId: site.organization_id,
-      siteId,
-      domain: domain.domain,
-      status: domain.status,
-      title: `Domain synced: ${domain.domain}`,
-      message: `${domain.domain} is now ${domain.status}.`,
-      dashboardUrl: buildDashboardUrl({
-        env,
-        organizationId: site.organization_id,
-        organizationSlug: site.organization_slug ?? undefined,
-        subdomain: site.subdomain,
-      }, 'site.domains')
+      organizationId: site.organization_id, siteId, domain: domain.domain, status: domain.status, title: `Domain synced: ${domain.domain}`, message: `${domain.domain} is now ${domain.status}.`, dashboardUrl: buildDashboardUrl({
+        env, organizationId: site.organization_id, organizationSlug: site.organization_slug, subdomain: site.subdomain, }, 'site.domains')
     })
     return jsonResponse({ success: true, domain: { ...domain, instructions: domainInstructions(domain) } })
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     console.error('domain_sync_failed', {
-      siteId,
-      domainId,
-      userId: session.user.id,
-      error: normalizedError.message,
-      stack: normalizedError.stack ?? null
+      siteId, domainId, userId: session.user.id, error: normalizedError.message, stack: normalizedError.stack ?? null
     })
     return jsonResponse({ error: 'Failed to sync domain' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

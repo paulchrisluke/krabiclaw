@@ -4,7 +4,7 @@ import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-us
 import { parsePlatformBlogLifecycleInput, updatePlatformBlogLifecycle } from '~/server/utils/platform-content'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
   if (!postId) return jsonResponse({ error: 'Post ID required' }, { status: 400 })
 
@@ -27,3 +27,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to unpublish post' }, { status: statusCode })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

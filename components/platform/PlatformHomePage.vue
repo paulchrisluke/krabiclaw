@@ -134,6 +134,23 @@
         </div>
       </section>
 
+      <!-- Pricing -->
+      <section id="pricing" class="relative py-24 overflow-hidden">
+        <div class="absolute inset-0 -z-10" style="background: linear-gradient(180deg, var(--ui-bg) 0%, var(--ui-bg-elevated) 100%);"></div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center max-w-2xl mx-auto mb-14 flex flex-col items-center gap-4">
+            <span class="kc-eyebrow text-muted">Simple, transparent pricing</span>
+            <h2 class="text-[clamp(32px,4vw,48px)] font-extrabold tracking-tight leading-[1.05] m-0 text-default">
+              Start free. Grow when you're ready.
+            </h2>
+            <p class="text-lg leading-relaxed text-muted m-0">
+              Build your site with the free KrabiClaw ChatGPT app, then add the tools your business needs.
+            </p>
+          </div>
+          <BillingPricingTable v-if="plans" :plans="plans" />
+        </div>
+      </section>
+
     </div>
 
     <!-- Blawby tenant homepage -->
@@ -155,6 +172,8 @@ const features = [
   { icon: 'inbox', title: 'Full Inbox', body: 'Manage all your reservations, bookings, and contact inquiries from a single, unified inbox.' },
   { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
+
+const { plans } = usePlans()
 
 usePlatformPageSeo({
   path: '/',

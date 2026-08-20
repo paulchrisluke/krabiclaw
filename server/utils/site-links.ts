@@ -4,9 +4,7 @@ import { resolvePublicTemplate, type PublicTemplateSlug } from '~/utils/template
 
 const ROBOTS_DIRECTIVES = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] as const
 const LINK_ITEM_STATUSES = ['active', 'hidden'] as const
-const LINK_PAGE_STATUSES = ['draft', 'published', 'archived'] as const
 
-export type LinkPageStatus = typeof LINK_PAGE_STATUSES[number]
 export type LinkItemStatus = typeof LINK_ITEM_STATUSES[number]
 export type LinkPageRobots = typeof ROBOTS_DIRECTIVES[number]
 
@@ -16,7 +14,6 @@ export interface SiteLinksPage {
   site_id: string
   path: string
   title: string
-  status: LinkPageStatus
   robots: LinkPageRobots
   seo_title: string | null
   seo_description: string | null
@@ -57,7 +54,6 @@ export interface PublicSiteLinksPayload {
 
 export interface LinksPageUpdateInput {
   title?: unknown
-  status?: unknown
   robots?: unknown
   seo_title?: unknown
   seo_description?: unknown
@@ -93,17 +89,9 @@ function requiredString(value: unknown, maxLength: number, field: string) {
   return cleaned
 }
 
-function normalizeStatus(value: unknown, fallback: LinkPageStatus): LinkPageStatus {
-  const status = cleanString(value as ApiValue, 30)
-  if (!status) return fallback
-  if (!LINK_PAGE_STATUSES.includes(status as LinkPageStatus)) {
-    throw new SiteLinksValidationError('Links page status must be draft, published, or archived.')
-  }
-  return status as LinkPageStatus
-}
-
 function normalizeItemStatus(value: unknown): LinkItemStatus {
-  const status = cleanString(value as ApiValue, 30) || 'active'
+  const status = cleanString(value as ApiValue, 30)
+  if (!status) throw new SiteLinksValidationError('Link status is required.')
   if (!LINK_ITEM_STATUSES.includes(status as LinkItemStatus)) {
     throw new SiteLinksValidationError('Link status must be active or hidden.')
   }
@@ -144,34 +132,47 @@ export function validateLinkDestination(value: unknown): string {
 }
 
 function mapPage(row: ApiRecord): SiteLinksPage {
+  const required = (value: unknown, field: string) => {
+    if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored links page ${field} is invalid.`)
+    return value
+  }
+  const robots = required(row.robots, 'robots')
+  if (!ROBOTS_DIRECTIVES.includes(robots as LinkPageRobots)) throw new SiteLinksValidationError('Stored links page robots directive is invalid.')
   return {
-    id: String(row.id),
-    organization_id: String(row.organization_id),
-    site_id: String(row.site_id),
-    path: String(row.path || '/links'),
-    title: String(row.title || 'Links'),
-    status: (LINK_PAGE_STATUSES.includes(row.status as LinkPageStatus) ? row.status : 'draft') as LinkPageStatus,
-    robots: (ROBOTS_DIRECTIVES.includes(row.robots as LinkPageRobots) ? row.robots : 'noindex,follow') as LinkPageRobots,
+    id: required(row.id, 'id'),
+    organization_id: required(row.organization_id, 'organization_id'),
+    site_id: required(row.site_id, 'site_id'),
+    path: required(row.path, 'path'),
+    title: required(row.title, 'title'),
+    robots: robots as LinkPageRobots,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
-    created_at: String(row.created_at || ''),
-    updated_at: String(row.updated_at || ''),
+    created_at: required(row.created_at, 'created_at'),
+    updated_at: required(row.updated_at, 'updated_at'),
     updated_by: typeof row.updated_by === 'string' ? row.updated_by : null,
   }
 }
 
 function mapItem(row: ApiRecord): SiteLinkItem {
+  const required = (value: unknown, field: string) => {
+    if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored link ${field} is invalid.`)
+    return value
+  }
+  const status = required(row.status, 'status')
+  if (!LINK_ITEM_STATUSES.includes(status as LinkItemStatus)) throw new SiteLinksValidationError('Stored link status is invalid.')
+  const sortOrder = Number(row.sort_order)
+  if (!Number.isInteger(sortOrder)) throw new SiteLinksValidationError('Stored link sort order is invalid.')
   return {
-    id: String(row.id),
-    organization_id: String(row.organization_id),
-    site_id: String(row.site_id),
-    link_page_id: String(row.link_page_id),
-    label: String(row.label || ''),
-    destination: String(row.destination || ''),
-    sort_order: Number(row.sort_order ?? 0),
-    status: (LINK_ITEM_STATUSES.includes(row.status as LinkItemStatus) ? row.status : 'active') as LinkItemStatus,
-    created_at: String(row.created_at || ''),
-    updated_at: String(row.updated_at || ''),
+    id: required(row.id, 'id'),
+    organization_id: required(row.organization_id, 'organization_id'),
+    site_id: required(row.site_id, 'site_id'),
+    link_page_id: required(row.link_page_id, 'link_page_id'),
+    label: required(row.label, 'label'),
+    destination: required(row.destination, 'destination'),
+    sort_order: sortOrder,
+    status: status as LinkItemStatus,
+    created_at: required(row.created_at, 'created_at'),
+    updated_at: required(row.updated_at, 'updated_at'),
     updated_by: typeof row.updated_by === 'string' ? row.updated_by : null,
   }
 }
@@ -184,7 +185,6 @@ export function defaultLinksPage(input: { organizationId: string; siteId: string
     site_id: input.siteId,
     path: '/links',
     title: input.brandName || 'Links',
-    status: 'draft',
     robots: 'noindex,follow',
     seo_title: null,
     seo_description: null,
@@ -229,7 +229,7 @@ export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<
 
   const { page, items } = await getLinksPage(db, siteId)
   const publicItems = items.filter(item => item.status === 'active')
-  if (!page || page.status !== 'published' || page.path !== '/links' || publicItems.length === 0) return null
+  if (!page || page.path !== '/links' || publicItems.length === 0) return null
 
   const template = resolvePublicTemplate({
     themeId: typeof site.theme_id === 'string' ? site.theme_id : null,
@@ -263,7 +263,6 @@ export async function upsertLinksPage(db: DbClient, input: {
   const current = await getLinksPage(db, input.siteId)
   const pageId = current.page?.id || idWith('linkpage')
   const title = requiredString(input.page.title, 160, 'Title')
-  const status = normalizeStatus(input.page.status, current.page?.status ?? 'draft')
   const robots = normalizeRobots(input.page.robots)
 
   const normalizedItems = input.items.map((item, index) => {
@@ -281,10 +280,6 @@ export async function upsertLinksPage(db: DbClient, input: {
     }
   })
 
-  if (status === 'published' && normalizedItems.every(item => item.status !== 'active')) {
-    throw new SiteLinksValidationError('Publish at least one active link before publishing the links page.')
-  }
-
   const itemIds = normalizedItems.map(item => item.id)
   if (new Set(itemIds).size !== itemIds.length) throw new SiteLinksValidationError('Link item IDs must be unique.')
 
@@ -301,12 +296,11 @@ export async function upsertLinksPage(db: DbClient, input: {
   const statements: BatchQuery[] = [{
     query: `
       INSERT INTO site_link_pages
-        (id, organization_id, site_id, path, title, status, robots, seo_title, seo_description,
+        (id, organization_id, site_id, path, title, robots, seo_title, seo_description,
          created_at, updated_at, updated_by)
-      VALUES (?, ?, ?, '/links', ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, '/links', ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(site_id) DO UPDATE SET
         title = excluded.title,
-        status = excluded.status,
         robots = excluded.robots,
         seo_title = excluded.seo_title,
         seo_description = excluded.seo_description,
@@ -318,7 +312,6 @@ export async function upsertLinksPage(db: DbClient, input: {
       input.organizationId,
       input.siteId,
       title,
-      status,
       robots,
       nullableString(input.page.seo_title, 200),
       nullableString(input.page.seo_description, 500),
@@ -421,18 +414,6 @@ export async function deleteLinkItem(db: DbClient, input: {
     items: current.items.filter(item => item.id !== input.itemId),
     updatedBy: input.updatedBy,
   })
-}
-
-export async function publishLinksPage(db: DbClient, input: { organizationId: string; siteId: string; updatedBy?: string | null }) {
-  const current = await getLinksPage(db, input.siteId)
-  const page = current.page ?? defaultLinksPage({ organizationId: input.organizationId, siteId: input.siteId })
-  return await upsertLinksPage(db, { organizationId: input.organizationId, siteId: input.siteId, page: { ...page, status: 'published' }, items: current.items, updatedBy: input.updatedBy })
-}
-
-export async function unpublishLinksPage(db: DbClient, input: { organizationId: string; siteId: string; updatedBy?: string | null }) {
-  const current = await getLinksPage(db, input.siteId)
-  const page = current.page ?? defaultLinksPage({ organizationId: input.organizationId, siteId: input.siteId })
-  return await upsertLinksPage(db, { organizationId: input.organizationId, siteId: input.siteId, page: { ...page, status: 'draft' }, items: current.items, updatedBy: input.updatedBy })
 }
 
 export async function recordLinkClick(db: DbClient, input: {

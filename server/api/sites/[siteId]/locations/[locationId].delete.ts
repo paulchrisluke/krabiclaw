@@ -4,7 +4,7 @@ import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { deleteLocation } from '~/server/utils/location-management'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
   if (!siteId || !locationId) {
@@ -20,9 +20,7 @@ export default defineEventHandler(async (event) => {
   await purgePublicResourceCacheSafe(env, siteId)
 
   return jsonResponse({
-    success: true,
-    message: 'Location deleted successfully',
-    siteId,
-    locationId,
-  }, { status: result.status })
+    success: true, message: 'Location deleted successfully', siteId, locationId, }, { status: result.status })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

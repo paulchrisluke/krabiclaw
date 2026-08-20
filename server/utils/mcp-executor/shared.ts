@@ -1,10 +1,11 @@
-import { createError, type H3Event } from "h3";
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
 import { queryFirst } from "~/server/db";
 import { assertSafeDownloadUrl } from "~/server/utils/platform-mcp-executor";
 import { getMediaAsset } from "~/server/utils/media-asset-manager";
 import { generateSlots, type WeekdayName } from "~/server/utils/experiences";
 import type { getMcpTool } from "~/server/utils/mcp-tools";
-import { requireMcpUser, type requireMcpSite, type McpUserContext } from "~/server/utils/mcp-auth";
+import { requireMcpUser, type McpSiteContext, type McpUserContext } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import {
   resolveMcpWorkspace,
@@ -130,13 +131,13 @@ export function validateImageBuffer(
   sourceLabel: string,
 ): string {
   if (bytes.byteLength < 1024) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Invalid image payload from ${sourceLabel}: payload too small.`,
     });
   }
   if (bytes.byteLength > MAX_IMAGE_BYTES) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 413,
       statusMessage: `Invalid image payload from ${sourceLabel}: payload exceeds 20 MB limit.`,
     });
@@ -504,7 +505,7 @@ export async function resolveGeneratedImageFile(
 ): Promise<{ buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string }> {
   const response = await fetchToolFile(file, 15_000);
   if (!response.ok) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
     });
@@ -616,7 +617,7 @@ export async function resolveUserUploadedMediaFile(
 ): Promise<ResolvedMediaFile> {
   const response = await fetchToolFile(file, 30_000);
   if (!response.ok) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
     });
@@ -640,7 +641,7 @@ export async function resolveUserUploadedMediaFile(
     };
   }
   if (bytes.byteLength < 64) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Invalid media payload from attachment ${file.file_id}: payload too small.`,
     });
@@ -656,7 +657,7 @@ export async function resolveUserUploadedMediaFile(
     );
   }
   if (isImage && bytes.byteLength > Math.min(MAX_IMAGE_BYTES, maxBytes)) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 413,
       statusMessage: `Invalid image payload from attachment ${file.file_id}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
     });
@@ -737,7 +738,7 @@ export async function resolveGoogleMapsPlace(
     try {
       probe = await dependencies.resolveShortLink(parsedUrl.toString());
     } catch {
-      throw createError({
+      throw new HTTPError({
         statusCode: 502,
         statusMessage: "Google Maps link resolution failed.",
       });
@@ -792,7 +793,7 @@ export async function resolveGoogleMapsPlace(
   try {
     results = await dependencies.searchPlaces(signals.nameHint, locationBias);
   } catch (error) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 502,
       statusMessage:
         error instanceof Error ? error.message : "Google Places search failed.",
@@ -933,7 +934,8 @@ export function resolveSitePublicOrigin(
   if (subdomain) {
     const baseDomain = env?.NUXT_PUBLIC_FREE_SITE_DOMAIN
       ? env.NUXT_PUBLIC_FREE_SITE_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '')
-      : 'krabiclaw.com';
+      : '';
+    if (!baseDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
     return `https://${subdomain}.${baseDomain}`;
   }
 
@@ -1030,30 +1032,66 @@ export function workspaceLocationsPayload(
 }
 
 export async function mutationContextPayload(
-  site: {
-    db: D1Database;
-    userId: string;
-    siteId: string;
-  },
+  site: McpSiteContext,
   options: {
     organizationId?: string | null;
     locationId?: string | null;
   } = {},
 ) {
-  const workspace = await resolveMcpWorkspace(
-    site.db,
+  const context = await queryFirst<{
+    organization_id: string;
+    organization_name: string | null;
+    organization_slug: string | null;
+    site_id: string;
+    brand_name: string | null;
+    subdomain: string | null;
+    custom_domain: string | null;
+    public_url: string | null;
+    location_id: string | null;
+    location_slug: string | null;
+    location_title: string | null;
+  }>(site.db, `
+    SELECT o.id AS organization_id,
+           o.name AS organization_name,
+           o.slug AS organization_slug,
+           s.id AS site_id,
+           s.brand_name,
+           s.subdomain,
+           s.custom_domain,
+           s.public_url,
+           location.id AS location_id,
+           location.slug AS location_slug,
+           location.title AS location_title
+    FROM sites s
+    JOIN organization o ON o.id = s.organization_id
+    LEFT JOIN mcp_workspace_preferences preference
+      ON preference.user_id = ? AND preference.site_id = s.id
+    LEFT JOIN business_locations location
+      ON location.id = COALESCE(?, preference.location_id, s.primary_location_id)
+     AND location.organization_id = s.organization_id
+     AND location.site_id = s.id
+    WHERE s.id = ?
+      AND s.organization_id = ?
+    LIMIT 1
+  `, [
     site.userId,
-    {
-      organizationId: options.organizationId ?? null,
-      siteId: site.siteId,
-      locationId: options.locationId ?? null,
-    },
-  );
-  return workspaceContextPayload(
-    workspace.organization,
-    workspace.site,
-    workspace.location,
-  );
+    options.locationId ?? null,
+    site.siteId,
+    options.organizationId ?? site.organizationId,
+  ]);
+  if (!context) throw new Error('MCP site context is unavailable.');
+  return {
+    organization_id: context.organization_id,
+    organization_name: context.organization_name,
+    organization_slug: context.organization_slug,
+    site_id: context.site_id,
+    site_name: context.brand_name ?? context.subdomain,
+    site_subdomain: context.subdomain,
+    site_public_url: resolveSitePublicOrigin(context, site.env),
+    location_id: context.location_id,
+    location_slug: context.location_slug,
+    location_title: context.location_title,
+  };
 }
 
 export async function resolveMenuLocationId(
@@ -1094,6 +1132,7 @@ export async function normalizeWorkspaceArguments(
   toolName: string,
   schema: Record<string, unknown>,
   rawArguments: Record<string, unknown>,
+  authenticatedUser?: McpUserContext,
 ) {
   const args = { ...rawArguments };
 
@@ -1119,7 +1158,7 @@ export async function normalizeWorkspaceArguments(
     return args;
   }
 
-  const user = await requireMcpUser(event);
+  const user = authenticatedUser ?? await requireMcpUser(event);
   let workspace;
   try {
     workspace = await resolveMcpWorkspace(
@@ -1448,7 +1487,7 @@ export function assertDomainSuccess(result: {
   data: Record<string, unknown>;
 }) {
   if (result.status < 400) return;
-  throw createError({
+  throw new HTTPError({
     statusCode: result.status,
     statusMessage: String(result.data.error ?? "Request failed"),
     data: result.data,
@@ -1484,6 +1523,6 @@ export interface McpExecutorContext {
   normalizedArguments?: Record<string, unknown>
   tool?: ReturnType<typeof getMcpTool>
   siteId?: string
-  site: Awaited<ReturnType<typeof requireMcpSite>>
+  site: McpSiteContext
   args: Record<string, unknown>
 }

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { blawbyBaseURL, blawbyExtraHeaders, potteryHouseBaseURL, potteryHouseExtraHeaders, setupTenantHeaders } from './helpers'
+import { blawbyBaseURL, blawbyExtraHeaders, collectPageErrors, potteryHouseBaseURL, potteryHouseExtraHeaders, setupTenantHeaders } from './helpers'
 
 // Labels that must never appear in a visible search heading or badge — they describe
 // how a record is stored, not what the user is opening. See issue #254.
@@ -62,8 +62,24 @@ async function openSearchAfterHydration(page: Page, accessibleName: string) {
   }, `${accessibleName} should open after hydration`).toPass({ timeout: 10_000 })
 }
 
+async function mockPublicSearch(page: Page) {
+  await page.route('**/api/public/search**', async route => {
+    const requestUrl = new URL(route.request().url())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: requestUrl.searchParams.get('q') ?? '',
+        surface: requestUrl.searchParams.get('surface') ?? 'public',
+        results: [],
+      }),
+    })
+  })
+}
+
 test.describe('platform command search modal', () => {
   test('teleports to <body> and never shows storage-shaped labels', async ({ page, baseURL }) => {
+    await mockPublicSearch(page)
     await page.goto(`${baseURL}/blog`, { waitUntil: 'load' })
     await openSearchAfterHydration(page, 'Open blog search')
 
@@ -86,11 +102,14 @@ test.describe('platform command search modal', () => {
 test.describe('Saya command search modal', () => {
   test.beforeEach(async ({ page }) => {
     await setupTenantHeaders(page, potteryHouseBaseURL, potteryHouseExtraHeaders)
+    await mockPublicSearch(page)
   })
 
   test('teleports into #saya-portal-root and keeps AA contrast in light and dark mode', async ({ page }) => {
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     await page.goto(`${potteryHouseBaseURL}/blog/group-bookings-create-a-unique-pottery-experience-in-krabi`, { waitUntil: 'load' })
     await openSearchAfterHydration(page, 'Open story search')
+    expect(errors).toEqual([])
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
@@ -110,18 +129,22 @@ test.describe('Saya command search modal', () => {
     // a light-only hardcoded palette.
     await page.evaluate(() => document.documentElement.classList.add('dark'))
     await assertDialogContrast(page)
+    expect(errors).toEqual([])
   })
 })
 
 test.describe('Blawby command search modal', () => {
   test.beforeEach(async ({ page }) => {
     await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)
+    await mockPublicSearch(page)
   })
 
   test('teleports into #blawby-portal-root, inherits tenant palette, and keeps AA contrast', async ({ page }) => {
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     const response = await page.goto(`${blawbyBaseURL}/article/getting-a-divorce-in-north-carolina`, { waitUntil: 'load' })
     test.skip(response?.status() === 404, 'NCLS Blawby fixture is not seeded in the shared staging environment')
     await openSearchAfterHydration(page, 'Open article search')
+    expect(errors).toEqual([])
 
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
@@ -187,5 +210,6 @@ test.describe('Blawby command search modal', () => {
     expect(unchangedTokens.ink).toBe(lightTokens.ink)
     expect(unchangedTokens.uiText).toBe(unchangedTokens.ink)
     await assertDialogContrast(page)
+    expect(errors).toEqual([])
   })
 })

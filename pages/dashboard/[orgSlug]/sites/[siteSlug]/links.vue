@@ -28,12 +28,11 @@
 
           <UCard>
             <template #header>
-              <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
                 <div>
                   <h2 class="text-base font-semibold text-highlighted">Page details</h2>
                   <p class="mt-1 text-sm text-muted">Manage the owned-domain link hub for this site.</p>
                 </div>
-                <USelect v-model="form.status" :items="pageStatusOptions" class="w-36" />
               </div>
             </template>
 
@@ -69,7 +68,7 @@
             <div v-if="items.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
               <UIcon name="i-lucide-link" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm font-medium text-highlighted">No links yet</p>
-              <p class="mt-1 text-sm text-muted">Add at least one active link before publishing.</p>
+              <p class="mt-1 text-sm text-muted">Add an active link to make the page available.</p>
             </div>
 
             <div v-for="(item, index) in items" :key="item.id" class="rounded-lg border border-default bg-default p-4">
@@ -105,7 +104,7 @@
                     class="flex min-h-12 items-center rounded-lg border border-default bg-default px-3 py-2 text-center"
                   >
                     <span class="min-w-0 flex-1">
-                      <span class="block truncate text-sm font-medium text-highlighted">{{ item.label || 'Untitled link' }}</span>
+                      <span class="block truncate text-sm font-medium text-highlighted">{{ item.label }}</span>
                     </span>
                   </div>
                   <p v-if="activePreviewItems.length === 0" class="text-center text-sm text-muted">No active links to preview.</p>
@@ -124,12 +123,10 @@ const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.links' })
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
-type PageStatus = 'draft' | 'published' | 'archived'
 type ItemStatus = 'active' | 'hidden'
 
 interface LinksPage {
   title: string
-  status: PageStatus
   robots: string
   seo_title: string
   seo_description: string
@@ -156,7 +153,6 @@ const isLinksResponse = (
   isRecord(value)
   && isRecord(value.page)
   && typeof value.page.title === 'string'
-  && typeof value.page.status === 'string'
   && Array.isArray(value.items)
   && value.items.every(item =>
     isRecord(item)
@@ -175,11 +171,6 @@ const errorMessage = ref('')
 const savedSnapshot = ref('')
 const mounted = ref(false)
 
-const pageStatusOptions = [
-  { label: 'Draft', value: 'draft' },
-  { label: 'Published', value: 'published' },
-  { label: 'Archived', value: 'archived' },
-]
 const itemStatusOptions = [
   { label: 'Active', value: 'active' },
   { label: 'Hidden', value: 'hidden' },
@@ -192,7 +183,6 @@ const robotsOptions = [
 ]
 const form = reactive<LinksPage>({
   title: '',
-  status: 'draft',
   robots: 'noindex,follow',
   seo_title: '',
   seo_description: '',
@@ -223,7 +213,7 @@ const dirty = computed(() => savedSnapshot.value !== serializeState())
 const editorReady = computed(() => mounted.value && !pending.value)
 const activePreviewItems = computed(() => items.value.filter(item => item.status === 'active'))
 const publicLinksUrl = computed(() => {
-  const base = dashboard.site.value?.public_url || (dashboard.site.value?.subdomain ? `https://${dashboard.site.value.subdomain}.krabiclaw.com` : '')
+  const base = dashboard.site.value?.public_url || ''
   return base ? `${base.replace(/\/+$/, '')}/links` : ''
 })
 
@@ -231,7 +221,6 @@ function serializeState() {
   return JSON.stringify({
     page: {
       title: form.title,
-      status: form.status,
       robots: form.robots,
       seo_title: form.seo_title,
       seo_description: form.seo_description,
@@ -291,7 +280,6 @@ async function save() {
     const payload = {
       page: {
         title: form.title,
-        status: form.status,
         robots: form.robots,
         seo_title: form.seo_title,
         seo_description: form.seo_description,

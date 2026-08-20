@@ -1,7 +1,7 @@
 import type { McpExecutorContext } from './shared'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
 import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagram, publishToPage } from '~/server/utils/facebook-pages'
 import { hasSiteEntitlement } from '~/server/utils/billing'
@@ -145,7 +145,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         site.env,
       );
       if (!post)
-        throw createError({ statusCode: 404, statusMessage: "Post not found" });
+        throw new HTTPError({ statusCode: 404, statusMessage: "Post not found" });
       const now = new Date().toISOString();
 
       if (socialSkipReason) {
@@ -257,7 +257,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
 
       const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
       if (!publishedPost)
-        throw createError({ statusCode: 500, statusMessage: "Published post could not be read" });
+        throw new HTTPError({ statusCode: 500, statusMessage: "Published post could not be read" });
       const hydratedPublishedPost = attachViewUrlToRecord(publishedPost, site, {}, site.env);
 
       const hasFailures = failedChannels.length > 0 || skippedChannels.length > 0;

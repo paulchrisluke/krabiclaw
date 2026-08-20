@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { loadDashboardContext } from '~/server/utils/dashboard-context-service'
 import { EMPTY_ONBOARDING_CHECKLIST, loadOnboardingChecklist } from '~/server/utils/onboarding-checklist'
@@ -12,7 +14,7 @@ export async function loadDashboardOnboardingContext(event: H3Event) {
   }
   const env = cloudflareEnv(event)
   if (!env.PREVIEW_SECRET) {
-    throw createError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
   const [previewToken, checklist] = await Promise.all([
     createPreviewToken(String(env.PREVIEW_SECRET), siteId, Date.now() + 60 * 60 * 1000),

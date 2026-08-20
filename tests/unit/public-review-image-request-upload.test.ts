@@ -26,10 +26,24 @@ mock.module('../../server/utils/api-response.ts', {
   namedExports: {
     cleanString: (value: unknown, maxLength: number) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '',
     cloudflareEnv: () => ({ DB: {} }),
+    readRequiredBody: async () => {
+      if (state.readError) throw state.readError
+      return state.body
+    },
     jsonResponse: (body: Record<string, unknown>, options: { status?: number } = {}): JsonResult => ({
       body,
       status: options.status ?? 200,
     }),
+  },
+})
+
+mock.module('nitro/h3', {
+  namedExports: {
+    getRouterParam: (event: TestEvent, name: string) => event.params[name as keyof TestEvent['params']],
+    readBody: async () => {
+      if (state.readError) throw state.readError
+      return state.body
+    },
   },
 })
 

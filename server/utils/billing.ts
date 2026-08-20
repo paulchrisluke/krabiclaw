@@ -1,7 +1,6 @@
 import type Stripe from 'stripe'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
@@ -214,9 +213,9 @@ export async function requireBillingAccess(
     userId,
     organizationId,
   })
-  if (!membership) throw createError({ statusCode: 403, statusMessage: 'Access denied: Not a member of this organization' })
+  if (!membership) throw new HTTPError({ statusCode: 403, statusMessage: 'Access denied: Not a member of this organization' })
   if (!await hasBillingUpdatePermission(organizationId, String(membership.role))) {
-    throw createError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
+    throw new HTTPError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
   }
 }
 
@@ -248,58 +247,6 @@ export async function verifyStripeWebhook(
 }
 
 // ── User billing items ────────────────────────────────────────────────────────
-
-export interface UserBillingItem {
-  organization: {
-    id: string
-    name: string
-    slug: string
-    logo: string | null
-    createdAt: string
-    role: string
-  }
-  billing: {
-    plan: string | null
-    subscriptionStatus?: string | null
-    organizationId: string
-  }
-  userRole: string
-}
-
-export async function getUserBillingItems(
-  env: CloudflareEnv,
-  db: D1Database,
-  userId: string,
-): Promise<UserBillingItem[]> {
-  const auth = createAuth(env)
-  const authContext = await auth.$context
-  const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
-  const organizations = await organizationAdapter.listOrganizations(userId)
-  const organizationRows = await Promise.all(organizations.map(async (organization) => {
-    const member = await organizationAdapter.findMemberByOrgId({
-      userId,
-      organizationId: organization.id,
-    })
-    if (!member) throw new Error(`Better Auth membership missing for organization ${organization.id}`)
-    return {
-      id: organization.id,
-      name: organization.name,
-      slug: organization.slug,
-      logo: organization.logo ?? null,
-      createdAt: betterAuthTimestampToIso(organization.createdAt, 'organization.createdAt'),
-      role: String(member.role),
-    }
-  }))
-
-  return await Promise.all(organizationRows.map(async (organization) => {
-    const billingStatus = await getOrganizationBillingStatus(env, db, organization.id)
-    return {
-      organization,
-      billing: { ...billingStatus, organizationId: organization.id },
-      userRole: organization.role,
-    }
-  }))
-}
 
 function parseEntitlementRows(rows: EntitlementRow[]): EntitlementsMap {
   const result: EntitlementsMap = {}

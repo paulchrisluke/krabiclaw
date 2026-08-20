@@ -2,7 +2,7 @@
 // For images: returns a Cloudflare Images one-time uploadUrl + a pending assetId.
 // Client uploads directly to uploadUrl (multipart form), then calls /confirm.
 import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteImage, hasCloudflareImagesConfig, requestImageUpload } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
@@ -16,7 +16,7 @@ interface SiteRow {
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'])
 type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   try {
     const siteId = getRouterParam(event, 'siteId')
     if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
@@ -29,10 +29,7 @@ export default defineEventHandler(async (event) => {
     if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
     const site = await queryFirst<SiteRow>(
-      db,
-      `SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`,
-      [siteId],
-    )
+      db, `SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1`, [siteId], )
     if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
     const membership = await queryFirst<{ userId: string; member_id: string; member_role: string }>(db, `
@@ -48,7 +45,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
     }
 
-    const body = await readBody(event)
+    const body = await readRequiredBody<{ filename?: unknown; locationId?: unknown; category?: unknown }>(event)
     const rawFilename = typeof body?.filename === 'string' ? body.filename.trim() : ''
     if (rawFilename.length > 255) {
       return jsonResponse({ error: 'Invalid filename' }, { status: 400 })
@@ -79,12 +76,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: membership.member_id,
-      role: membership.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: locationId,
-    })
+      memberId: membership.member_id, role: membership.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId, })
 
     let category: MediaCategory | null = null
     if (body?.category !== undefined && body?.category !== null && body?.category !== '') {
@@ -103,28 +95,14 @@ export default defineEventHandler(async (event) => {
       uploadUrl = upload.uploadUrl
 
       await createMediaAsset(db, {
-        id: assetId,
-        organization_id: site.organization_id,
-        site_id: siteId,
-        location_id: locationId,
-        kind: 'image',
-        provider: 'cloudflare_images',
-        source: 'uploaded',
-        cloudflare_image_id: imageId,
-        status: 'pending',
-        file_name: filename,
-        category,
-        created_by_user_id: session.user.id,
-      })
+        id: assetId, organization_id: site.organization_id, site_id: siteId, location_id: locationId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: imageId, status: 'pending', file_name: filename, category, created_by_user_id: session.user.id, })
     } catch (error) {
       if (imageId) {
         try {
           await deleteImage(env, imageId)
         } catch (cleanupError) {
           throw new AggregateError(
-            [error, cleanupError],
-            `Image upload setup failed: ${error instanceof Error ? error.message : String(error)}; Cloudflare Images cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-          )
+            [error, cleanupError], `Image upload setup failed: ${error instanceof Error ? error.message : String(error)}; Cloudflare Images cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`, )
         }
       }
       throw error
@@ -135,9 +113,10 @@ export default defineEventHandler(async (event) => {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown image upload request error')
     console.error('media_request_upload_failed', { error: normalizedError.message, stack: normalizedError.stack })
-    return jsonResponse({ 
-      error: 'Failed to initialize image upload', 
-      message: normalizedError.message 
+    return jsonResponse({
+      error: 'Failed to initialize image upload', message: normalizedError.message
     }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

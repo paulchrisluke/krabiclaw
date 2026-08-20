@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { execute, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import { sanitizeUrl } from '~/utils/sanitize'
 export { formatBookingPolicySummary as renderBookingPolicySummary } from './booking-policy-summary.ts'
@@ -323,28 +323,28 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
 
 export function validateBookingPolicyScope(input: Pick<GetDirectBookingPolicyInput, 'policyType' | 'scopeType' | 'locationId' | 'experienceId'>) {
   if (input.policyType === 'reservation' && input.scopeType !== 'location') {
-    throw createError({ statusCode: 400, statusMessage: 'reservation policies must use location scope' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'reservation policies must use location scope' })
   }
   if (input.scopeType === 'site') {
     if (input.locationId || input.experienceId) {
-      throw createError({ statusCode: 400, statusMessage: 'site scope cannot include location_id or experience_id' })
+      throw new HTTPError({ statusCode: 400, statusMessage: 'site scope cannot include location_id or experience_id' })
     }
     return
   }
   if (input.scopeType === 'location') {
     if (!input.locationId) {
-      throw createError({ statusCode: 400, statusMessage: 'location scope requires location_id' })
+      throw new HTTPError({ statusCode: 400, statusMessage: 'location scope requires location_id' })
     }
     if (input.experienceId) {
-      throw createError({ statusCode: 400, statusMessage: 'location scope cannot include experience_id' })
+      throw new HTTPError({ statusCode: 400, statusMessage: 'location scope cannot include experience_id' })
     }
     return
   }
   if (input.policyType !== 'experience') {
-    throw createError({ statusCode: 400, statusMessage: 'experience scope is only valid for experience policies' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'experience scope is only valid for experience policies' })
   }
   if (!input.experienceId) {
-    throw createError({ statusCode: 400, statusMessage: 'experience scope requires experience_id' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'experience scope requires experience_id' })
   }
 }
 
@@ -352,7 +352,7 @@ function normalizeInteger(value: unknown, field: string) {
   if (value === undefined) return undefined
   if (value === null) return null
   if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
-    throw createError({ statusCode: 400, statusMessage: `${field} must be a non-negative integer or null` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a non-negative integer or null` })
   }
   return value
 }
@@ -360,7 +360,7 @@ function normalizeInteger(value: unknown, field: string) {
 function normalizeBoolean(value: unknown, field: string) {
   if (value === undefined) return undefined
   if (typeof value !== 'boolean') {
-    throw createError({ statusCode: 400, statusMessage: `${field} must be a boolean` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a boolean` })
   }
   return value
 }
@@ -369,7 +369,7 @@ function normalizeString(value: unknown, field: string) {
   if (value === undefined) return undefined
   if (value === null) return null
   if (typeof value !== 'string') {
-    throw createError({ statusCode: 400, statusMessage: `${field} must be a string or null` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a string or null` })
   }
   const trimmed = value.trim()
   return trimmed || null
@@ -499,7 +499,7 @@ export async function resolveBookingPolicy(
 ): Promise<ResolvedBookingPolicy> {
   if (input.policyType === 'reservation') {
     if (!input.locationId) {
-      throw createError({ statusCode: 400, statusMessage: 'reservation policies require location_id' })
+      throw new HTTPError({ statusCode: 400, statusMessage: 'reservation policies require location_id' })
     }
     const direct = await getDirectBookingPolicy(db, {
       siteId: input.siteId,
@@ -696,7 +696,7 @@ export async function upsertBookingPolicy(
     await execute(db, `UPDATE booking_policies SET ${sets.join(', ')} WHERE id = ?`, params)
     const updated = await getDirectBookingPolicy(db, input)
     if (!updated) {
-      throw createError({ statusCode: 500, statusMessage: 'Failed to load updated booking policy' })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to load updated booking policy' })
     }
     return updated
   }
@@ -755,7 +755,7 @@ export async function upsertBookingPolicy(
 
   const created = await getDirectBookingPolicy(db, input)
   if (!created) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to load created booking policy' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to load created booking policy' })
   }
   return created
 }

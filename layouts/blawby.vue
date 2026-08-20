@@ -9,13 +9,12 @@
          source in document order during SSR. -->
     <div id="blawby-portal-root" />
 
-    <BlawbyHeader :site="identity" :navigation="navigation" :consultation="consultation" />
+    <BlawbyHeader :site="identity" :consultation="consultation" />
     <main>
       <slot />
     </main>
     <BlawbyFooter
       :site="identity"
-      :navigation="navigation"
       :compliance="compliance"
       :offering-links="offeringLinks"
     />
@@ -26,15 +25,13 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import blawbyCriticalCss from '~/assets/css/blawby-critical.css?raw'
-import blawbyStylesheet from '~/assets/css/blawby-entry.css?url'
-import blawbyHomeStylesheet from '~/assets/css/blawby-home-entry.css?url'
+import '~/assets/css/blawby-entry.css'
 
 const route = useRoute()
-const isHome = computed(() => route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path))
-const blawbyStylesheetHref = new URL(blawbyStylesheet, 'http://nuxt.local').pathname
-const blawbyHomeStylesheetHref = new URL(blawbyHomeStylesheet, 'http://nuxt.local').pathname
+const isHome = computed(() => route.path === '/' || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
+const blawbyStylesheetHref = '/_nuxt/surfaces/blawby.css'
 const blawbyStylesheetForRoute = computed(() => {
-  return isHome.value ? blawbyHomeStylesheetHref : blawbyStylesheetHref
+  return blawbyStylesheetHref
 })
 
 useHead(() => ({
@@ -51,9 +48,13 @@ useHead(() => ({
     : [],
 }))
 
-const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = isHome.value
-  ? await useBlawbyCriticalHome()
-  : await useBlawbyShell()
+const target = resolveBlawbyRouteTarget(route.path, route.params)
+const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
+const identity = computed(() => document.value.shell.identity)
+const consultation = computed(() => document.value.shell.consultation)
+const compliance = computed(() => document.value.shell.compliance)
+const themeTokens = computed(() => document.value.shell.themeTokens)
+const offeringLinks = computed(() => document.value.shell.offeringLinks)
 provide('blawby-schema-context', { identity, compliance })
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })

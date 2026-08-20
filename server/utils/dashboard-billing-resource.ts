@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import type Stripe from 'stripe'
 import { queryFirst } from '~/server/db'
 import { getOrganizationCreditsResource } from '~/server/utils/ai-credits'
@@ -8,7 +10,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export async function loadDashboardBillingResource(event: H3Event, organizationSlug: string) {
   if (!organizationSlug) {
-    throw createError({ statusCode: 400, statusMessage: 'Organization slug is required for billing' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Organization slug is required for billing' })
   }
   const { env, db, userId, organization } = await getDashboardContext(event, {
     requireSite: false,

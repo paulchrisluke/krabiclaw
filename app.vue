@@ -63,8 +63,8 @@ const loadingColor = computed(() => {
 })
 
 // Inject brand color CSS variables from site config. Must run inside a
-// component (not a Nuxt plugin) — useBootstrap() depends on useI18n(),
-// which requires an active component instance.
+// component (not a Nuxt plugin) — useBootstrap() depends on the active
+// component instance provided by the application-owned i18n composable.
 if (import.meta.client) {
   watchEffect(() => {
     const brandColor = config?.value.brand_color

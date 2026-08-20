@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
@@ -7,6 +9,7 @@ export interface PublicBase {
   site: {
     id: string
     organization_id: string
+    primary_location_id: string | null
     default_currency: string | null
     contact_email: string | null
     contact_phone: string | null
@@ -22,6 +25,9 @@ export interface PublicBase {
     robots: string | null
     source_locale: string | null
     default_timezone: string | null
+    social_facebook_url: string | null
+    social_instagram_url: string | null
+    social_tiktok_url: string | null
   }
 }
 
@@ -44,15 +50,16 @@ export function loadPublicBase(
   const pending = (async () => {
     const startedAt = performance.now()
     const db = cloudflareEnv(event).DB
-    if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+    if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
     try {
       const site = await queryFirst<PublicBase['site']>(
         db,
-        `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name, s.vertical,
+        `SELECT s.id, s.organization_id, s.primary_location_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name, s.vertical,
                 s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
                 json_extract(s.settings, '$.favicon_url') AS favicon_url,
                 ma_og.public_url AS og_image_url,
                 s.seo_title, s.seo_description, s.canonical_url, s.robots,
+                s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
                 (SELECT sl.locale
                    FROM site_locales sl
                   WHERE sl.organization_id = s.organization_id
@@ -72,7 +79,7 @@ export function loadPublicBase(
           LIMIT 1`,
         [siteId],
       )
-      if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+      if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
       return { site }
     } finally {
       recordRequestPhase(event, 'base', startedAt)

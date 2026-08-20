@@ -2,18 +2,18 @@
   <div data-parity-root>
     <BlawbyServicesSection
       :offerings="routeData.offerings"
-      :title="String(servicesBlock.title || page?.title || 'Our')"
-      :accent="String(servicesBlock.accent || 'Services')"
+      :title="String(servicesBlock.title || page?.title || '')"
+      :accent="String(servicesBlock.accent || '')"
       :description="String(servicesBlock.description || page?.summary || '')"
       :decoration-url="servicesDecoration"
     />
     <BlawbyFaqSection :items="routeData.qa" :decoration-url="assetUrl(qaBlock?.decoration)" />
     <BlawbyConsultationCta
-      v-if="ctaBlock"
-      :title="String(ctaBlock.title || 'Get started today')"
+      v-if="ctaBlock && ctaBlock.title && ctaBlock.label && ctaBlock.url"
+      :title="String(ctaBlock.title || '')"
       :description="optionalString(ctaBlock.description)"
-      :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="String(ctaBlock.url || consultation.schedule_path)"
+      :label="String(ctaBlock.label || '')"
+      :destination="String(ctaBlock.url || '')"
       :background-url="assetUrl(ctaBlock.background)"
       :featured-url="assetUrl(ctaBlock.featured)"
       @click="trackConsultation"
@@ -24,8 +24,10 @@
 <script setup lang="ts">
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
-const { data } = await useBlawbyRoute('services')
-const { identity, consultation, compliance } = await useBlawbyShell()
+const { data, shell } = await useBlawbyRoute('services')
+const identity = computed(() => shell.value.identity)
+const consultation = computed(() => shell.value.consultation)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
@@ -56,7 +58,7 @@ function trackConsultation() {
 }
 
 useSeoMeta({
-  title: computed(() => page.value?.seo_title || `Services | ${identity.value.brand_name || 'Professional services'}`),
+  title: computed(() => page.value?.seo_title || `Services | ${identity.value.brand_name}`),
   description: computed(() => page.value?.seo_description || page.value?.summary || ''),
 })
 const canonicalUrl = useSeoUrl(() => '/services')
@@ -67,7 +69,7 @@ useProfessionalServiceSchema(() => ({
   recipe: 'services-index',
   org: org.value,
   pageUrl: canonicalUrl.value,
-  pageTitle: page.value?.seo_title || 'Services',
+  pageTitle: page.value?.seo_title || page.value?.title || '',
   pageDescription: page.value?.seo_description || page.value?.summary || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },

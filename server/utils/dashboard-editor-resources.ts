@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -57,9 +59,9 @@ interface EditorLocationRow {
 export async function loadDashboardEditorContext(event: H3Event, siteId: string) {
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+  if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
   const site = await queryFirst<EditorSiteRow>(db, `
     SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
            s.vertical, s.theme_id, s.feature_overrides, o.name AS organization_name,
@@ -70,7 +72,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
      WHERE s.id = ? AND om.userId = ?
      LIMIT 1
   `, [siteId, session.user.id])
-  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
 
   const principal = {
     memberId: site.member_id,
@@ -97,7 +99,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
     return result
   }, {})
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
-    throw createError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
   const previewToken = await createPreviewToken(env.PREVIEW_SECRET, siteId, Date.now() + 60 * 60 * 1000)
   const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
@@ -134,9 +136,9 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
 export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+  if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
   const site = await queryFirst<{
     id: string
     organization_id: string
@@ -149,7 +151,7 @@ export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {
      WHERE s.id = ? AND om.userId = ?
      LIMIT 1
   `, [siteId, session.user.id])
-  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
   await assertSiteWideAccess(db, {
     memberId: site.member_id,
     role: site.member_role,
@@ -235,7 +237,7 @@ export async function loadDashboardSettingsResource(
     organizationSlug: options.organizationSlug,
     siteSlug: options.siteSlug,
   })
-  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   await assertSiteWideAccess(db, {
     memberId: organization.memberId,
     role: organization.role,
@@ -255,7 +257,7 @@ export async function loadDashboardSettingsResource(
     facebook: facebookConnection
       ? {
           connected: true as const,
-          facebook_page_name: facebookConnection.facebook_page_name ?? undefined,
+          facebook_page_name: facebookConnection.facebook_page_name,
         }
       : { connected: false as const },
   }
@@ -269,7 +271,7 @@ export async function loadDashboardLocationOverview(
 ) {
   const { db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
-    throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
   await assertLocationAccess(db, {
     memberId: organization.memberId,
@@ -308,7 +310,7 @@ export async function loadDashboardLocationSettings(
 ) {
   const { db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
-    throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
   await assertLocationAccess(db, {
     memberId: organization.memberId,
@@ -348,7 +350,7 @@ export async function loadDashboardBlogPost(
 ) {
   const { db } = await requireBlogAccess(event, siteId)
   const post = await getPlatformBlogPost(db, postId, siteId)
-  if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+  if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
   return { post }
 }
 
@@ -359,7 +361,7 @@ export async function loadDashboardMenu(
 ) {
   const { db, site } = await requireSiteAccess(event, siteId, 'context')
   const menu = await getMenuWithItems(db, site.organization_id, siteId, menuId)
-  if (!menu) throw createError({ statusCode: 404, statusMessage: 'Menu not found' })
+  if (!menu) throw new HTTPError({ statusCode: 404, statusMessage: 'Menu not found' })
   await assertResourceAccess(db, {
     memberId: site.member_id,
     role: site.member_role,

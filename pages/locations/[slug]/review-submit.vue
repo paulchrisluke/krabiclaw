@@ -117,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-limits'
 import { authClient } from '~/lib/auth-client'
 
@@ -143,17 +144,18 @@ const activeVideoUploads = new Set<AbortController>()
 const imageCount = computed(() => media.value.filter(item => item.kind === 'image').length)
 const videoCount = computed(() => media.value.filter(item => item.kind === 'video').length)
 
-const { data: requestData, pending } = await useFetch<{
+const { data: requestData, pending } = await useAsyncData<{
   request: { id: string; bookingType: string; expiresAt: string }
   site: { id: string; name: string | null }
   location: { id: string | null; slug: string | null; title: string | null; googleReviewUrl: string | null }
   customer: { name: string | null }
-}>('/api/public/review-requests/validate', {
-  query: { token },
-  server: true,
-  onResponseError({ response }) {
-    loadError.value = (response._data as { error?: string } | undefined)?.error || 'The link may have expired or already been used.'
-  },
+}>('review-request-validation', async () => {
+  try {
+    return await $fetch('/api/public/review-requests/validate', { query: { token } })
+  } catch (error) {
+    loadError.value = (error as { data?: { error?: string } })?.data?.error || 'The link may have expired or already been used.'
+    throw error
+  }
 })
 
 onMounted(async () => {

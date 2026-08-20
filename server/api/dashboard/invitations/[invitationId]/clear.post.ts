@@ -4,7 +4,7 @@
 // re-invite the same phone number on a later config save (see
 // ensureWhatsAppRecipientAccess, which reuses any still-pending invitation
 // for the same org+email). See issue #293 Section A.4.
-import { getHeaders } from 'h3'
+
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { execute } from '~/server/db'
@@ -20,7 +20,7 @@ interface CancelInvitationApi {
   }): Promise<Response>
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const invitationId = String(getRouterParam(event, 'invitationId') || '').trim()
   if (!invitationId) return jsonResponse({ error: 'Invitation id is required' }, { status: 400 })
 
@@ -37,8 +37,7 @@ export default defineEventHandler(async (event) => {
   const auth = createAuth(env)
   const cancelApi = auth.api as unknown as CancelInvitationApi
 
-  // Remove scopes first. If this write fails the invitation remains pending,
-  // so the whole operation is safely retryable. If Better Auth cancellation
+  // Remove scopes first. If this write fails the invitation remains pending, // so the whole operation is safely retryable. If Better Auth cancellation
   // subsequently fails, a retry can still load the pending invitation and
   // finish cancellation; ensureWhatsAppRecipientAccess will recreate any
   // required scope if the assignment is saved again in the meantime.
@@ -46,19 +45,14 @@ export default defineEventHandler(async (event) => {
     await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
   } catch (error) {
     console.error('whatsapp_invitation_clear_scope_cleanup_failed', {
-      invitationId,
-      error: error instanceof Error ? error.message : String(error),
-    })
+      invitationId, error: error instanceof Error ? error.message : String(error), })
     return jsonResponse({ error: 'Failed to clear invitation access. Please retry.' }, { status: 502 })
   }
 
   let response: Response
   try {
     response = await cancelApi.cancelInvitation({
-      body: { invitationId },
-      headers: getHeaders(event) as HeadersInit,
-      asResponse: true,
-    })
+      body: { invitationId }, headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit, asResponse: true, })
   } catch (error) {
     console.error('whatsapp_invitation_clear_failed', { invitationId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to cancel invitation' }, { status: 502 })
@@ -78,3 +72,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

@@ -19,7 +19,6 @@ export interface PublicLinksPayload {
   page: {
     path: '/links'
     title: string
-    status: 'published'
     robots: string
     seo_title: string | null
     seo_description: string | null
@@ -46,7 +45,6 @@ export function isPublicLinksPayload(value: unknown): value is PublicLinksPayloa
     && (site.template === 'saya' || site.template === 'blawby')
     && page.path === '/links'
     && typeof page.title === 'string'
-    && page.status === 'published'
     && typeof page.robots === 'string'
     && isNullableString(page.seo_title)
     && isNullableString(page.seo_description)

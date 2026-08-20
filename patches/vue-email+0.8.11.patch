@@ -1,0 +1,344 @@
+diff --git a/node_modules/vue-email/dist/index.cjs b/node_modules/vue-email/dist/index.cjs
+index 36497cb..93f2f36 100644
+--- a/node_modules/vue-email/dist/index.cjs
++++ b/node_modules/vue-email/dist/index.cjs
+@@ -8256,34 +8256,6 @@ const EText = vue.defineComponent({
+   }
+ });
+ 
+-const EMarkdown = vue.defineComponent({
+-  name: "EMarkdown",
+-  props: {
+-    source: {
+-      type: String,
+-      required: true
+-    },
+-    customStyles: {
+-      type: Object,
+-      default: void 0
+-    },
+-    containerStyles: {
+-      type: Object,
+-      default: void 0
+-    }
+-  },
+-  async setup(props) {
+-    const parsedMarkdown = await parseMarkdownToVueEmailJSX(props.source, props.customStyles);
+-    return () => {
+-      return vue.h("div", {
+-        "data-id": "__vue-email-markdown",
+-        "style": props.containerStyles,
+-        "innerHTML": parsedMarkdown
+-      });
+-    };
+-  }
+-});
+-
+ const EStyle = vue.defineComponent({
+   name: "EStyle",
+   setup(_, { slots }) {
+@@ -8299,100 +8271,6 @@ const EStyle = vue.defineComponent({
+   }
+ });
+ 
+-const ECodeBlock = vue.defineComponent({
+-  name: "ECodeBlock",
+-  props: {
+-    code: {
+-      type: String,
+-      required: true
+-    },
+-    lang: {
+-      type: String,
+-      required: true
+-    },
+-    theme: {
+-      type: String,
+-      required: true
+-    },
+-    class: {
+-      type: String,
+-      default: ""
+-    },
+-    showLineNumbers: {
+-      type: Boolean,
+-      default: false
+-    },
+-    lineNumberColor: {
+-      type: String,
+-      default: "#636E7B"
+-    },
+-    lineHighlightingColor: {
+-      type: String,
+-      default: "rgba(101, 117, 133, .16)"
+-    },
+-    highlightedLines: {
+-      type: Array,
+-      default: () => []
+-    }
+-  },
+-  async setup({ code, lang, theme, showLineNumbers, lineNumberColor, highlightedLines, lineHighlightingColor }) {
+-    const { getHighlighter } = await import('shiki');
+-    const shiki = await getHighlighter({
+-      langs: [lang],
+-      themes: [theme]
+-    });
+-    const themeColorBg = shiki.getTheme(theme).bg;
+-    const html = shiki.codeToHtml(code, {
+-      lang,
+-      theme,
+-      transformers: [
+-        {
+-          code(node) {
+-            node.properties.style = "display: table; width: 100%;";
+-          }
+-        },
+-        {
+-          line(node, line) {
+-            node.properties.style = "display: table-row; line-height: 1.5; height: 1.5em;";
+-            if (showLineNumbers) {
+-              node.children.unshift({
+-                type: "element",
+-                tagName: "span",
+-                properties: {
+-                  className: ["line-number"],
+-                  style: `padding-left: 5px; padding-right: 15px; color: ${lineNumberColor}; user-select: none;`
+-                },
+-                children: [
+-                  {
+-                    type: "text",
+-                    value: `${line}`
+-                  }
+-                ]
+-              });
+-            }
+-            if (highlightedLines.includes(line))
+-              node.properties.style += `background-color: ${lineHighlightingColor};`;
+-          }
+-        }
+-      ]
+-    });
+-    return () => vue.h("pre", {
+-      class: ["shiki", theme],
+-      style: {
+-        backgroundColor: themeColorBg,
+-        display: "block",
+-        whiteSpace: "pre",
+-        fontFamily: "monospace"
+-      },
+-      tabindex: 0
+-    }, [
+-      vue.h("span", {
+-        innerHTML: html
+-      })
+-    ]);
+-  }
+-});
+-
+ const ECodeInline = vue.defineComponent({
+   name: "ECodeInline",
+   props: {
+@@ -8436,7 +8314,6 @@ const components = {
+   __proto__: null,
+   EBody: EBody,
+   EButton: EButton,
+-  ECodeBlock: ECodeBlock,
+   ECodeInline: ECodeInline,
+   EColumn: EColumn,
+   EContainer: EContainer,
+@@ -8447,7 +8324,6 @@ const components = {
+   EHtml: EHtml,
+   EImg: EImg,
+   ELink: ELink,
+-  EMarkdown: EMarkdown,
+   EPreview: EPreview,
+   ERow: ERow,
+   ESection: ESection,
+@@ -14320,7 +14196,6 @@ async function useRender(component, params, options = {
+ 
+ exports.EBody = EBody;
+ exports.EButton = EButton;
+-exports.ECodeBlock = ECodeBlock;
+ exports.ECodeInline = ECodeInline;
+ exports.EColumn = EColumn;
+ exports.EContainer = EContainer;
+@@ -14331,7 +14206,6 @@ exports.EHr = EHr;
+ exports.EHtml = EHtml;
+ exports.EImg = EImg;
+ exports.ELink = ELink;
+-exports.EMarkdown = EMarkdown;
+ exports.EPreview = EPreview;
+ exports.ERow = ERow;
+ exports.ESection = ESection;
+diff --git a/node_modules/vue-email/dist/index.d.ts b/node_modules/vue-email/dist/index.d.ts
+index ce14547..2d7f798 100644
+--- a/node_modules/vue-email/dist/index.d.ts
++++ b/node_modules/vue-email/dist/index.d.ts
+@@ -558,4 +558,4 @@ declare function cleanup(str: string): string;
+ 
+ declare function htmlToText(html: string): string;
+ 
+-export { type DeepRequired, _default$j as EBody, _default$i as EButton, _default$1 as ECodeBlock, _default as ECodeInline, _default$h as EColumn, _default$g as EContainer, _default$f as EFont, _default$e as EHead, _default$d as EHeading, _default$c as EHr, _default$b as EHtml, _default$a as EImg, _default$9 as ELink, _default$3 as EMarkdown, _default$8 as EPreview, _default$7 as ERow, _default$6 as ESection, _default$2 as EStyle, _default$5 as ETailwind, _default$4 as EText, type I18n, type Options, type Patterns, type RenderParams, type StylesType, VueEmailPlugin, type VueEmailPluginOptions, cleanup, deepmerge, htmlToText, useRender };
++export { type DeepRequired, _default$j as EBody, _default$i as EButton, _default as ECodeInline, _default$h as EColumn, _default$g as EContainer, _default$f as EFont, _default$e as EHead, _default$d as EHeading, _default$c as EHr, _default$b as EHtml, _default$a as EImg, _default$9 as ELink, _default$8 as EPreview, _default$7 as ERow, _default$6 as ESection, _default$2 as EStyle, _default$5 as ETailwind, _default$4 as EText, type I18n, type Options, type Patterns, type RenderParams, type StylesType, VueEmailPlugin, type VueEmailPluginOptions, cleanup, deepmerge, htmlToText, useRender };
+diff --git a/node_modules/vue-email/dist/index.mjs b/node_modules/vue-email/dist/index.mjs
+index 264a0a2..f375c1a 100644
+--- a/node_modules/vue-email/dist/index.mjs
++++ b/node_modules/vue-email/dist/index.mjs
+@@ -8254,34 +8254,6 @@ const EText = defineComponent({
+   }
+ });
+ 
+-const EMarkdown = defineComponent({
+-  name: "EMarkdown",
+-  props: {
+-    source: {
+-      type: String,
+-      required: true
+-    },
+-    customStyles: {
+-      type: Object,
+-      default: void 0
+-    },
+-    containerStyles: {
+-      type: Object,
+-      default: void 0
+-    }
+-  },
+-  async setup(props) {
+-    const parsedMarkdown = await parseMarkdownToVueEmailJSX(props.source, props.customStyles);
+-    return () => {
+-      return h("div", {
+-        "data-id": "__vue-email-markdown",
+-        "style": props.containerStyles,
+-        "innerHTML": parsedMarkdown
+-      });
+-    };
+-  }
+-});
+-
+ const EStyle = defineComponent({
+   name: "EStyle",
+   setup(_, { slots }) {
+@@ -8297,100 +8269,6 @@ const EStyle = defineComponent({
+   }
+ });
+ 
+-const ECodeBlock = defineComponent({
+-  name: "ECodeBlock",
+-  props: {
+-    code: {
+-      type: String,
+-      required: true
+-    },
+-    lang: {
+-      type: String,
+-      required: true
+-    },
+-    theme: {
+-      type: String,
+-      required: true
+-    },
+-    class: {
+-      type: String,
+-      default: ""
+-    },
+-    showLineNumbers: {
+-      type: Boolean,
+-      default: false
+-    },
+-    lineNumberColor: {
+-      type: String,
+-      default: "#636E7B"
+-    },
+-    lineHighlightingColor: {
+-      type: String,
+-      default: "rgba(101, 117, 133, .16)"
+-    },
+-    highlightedLines: {
+-      type: Array,
+-      default: () => []
+-    }
+-  },
+-  async setup({ code, lang, theme, showLineNumbers, lineNumberColor, highlightedLines, lineHighlightingColor }) {
+-    const { getHighlighter } = await import('shiki');
+-    const shiki = await getHighlighter({
+-      langs: [lang],
+-      themes: [theme]
+-    });
+-    const themeColorBg = shiki.getTheme(theme).bg;
+-    const html = shiki.codeToHtml(code, {
+-      lang,
+-      theme,
+-      transformers: [
+-        {
+-          code(node) {
+-            node.properties.style = "display: table; width: 100%;";
+-          }
+-        },
+-        {
+-          line(node, line) {
+-            node.properties.style = "display: table-row; line-height: 1.5; height: 1.5em;";
+-            if (showLineNumbers) {
+-              node.children.unshift({
+-                type: "element",
+-                tagName: "span",
+-                properties: {
+-                  className: ["line-number"],
+-                  style: `padding-left: 5px; padding-right: 15px; color: ${lineNumberColor}; user-select: none;`
+-                },
+-                children: [
+-                  {
+-                    type: "text",
+-                    value: `${line}`
+-                  }
+-                ]
+-              });
+-            }
+-            if (highlightedLines.includes(line))
+-              node.properties.style += `background-color: ${lineHighlightingColor};`;
+-          }
+-        }
+-      ]
+-    });
+-    return () => h("pre", {
+-      class: ["shiki", theme],
+-      style: {
+-        backgroundColor: themeColorBg,
+-        display: "block",
+-        whiteSpace: "pre",
+-        fontFamily: "monospace"
+-      },
+-      tabindex: 0
+-    }, [
+-      h("span", {
+-        innerHTML: html
+-      })
+-    ]);
+-  }
+-});
+-
+ const ECodeInline = defineComponent({
+   name: "ECodeInline",
+   props: {
+@@ -8434,7 +8312,6 @@ const components = {
+   __proto__: null,
+   EBody: EBody,
+   EButton: EButton,
+-  ECodeBlock: ECodeBlock,
+   ECodeInline: ECodeInline,
+   EColumn: EColumn,
+   EContainer: EContainer,
+@@ -8445,7 +8322,6 @@ const components = {
+   EHtml: EHtml,
+   EImg: EImg,
+   ELink: ELink,
+-  EMarkdown: EMarkdown,
+   EPreview: EPreview,
+   ERow: ERow,
+   ESection: ESection,
+@@ -14316,4 +14192,4 @@ async function useRender(component, params, options = {
+   };
+ }
+ 
+-export { EBody, EButton, ECodeBlock, ECodeInline, EColumn, EContainer, EFont, EHead, EHeading, EHr, EHtml, EImg, ELink, EMarkdown, EPreview, ERow, ESection, EStyle, ETailwind, EText, VueEmailPlugin, cleanup, deepmerge$1 as deepmerge, htmlToText, useRender };
++export { EBody, EButton, ECodeInline, EColumn, EContainer, EFont, EHead, EHeading, EHr, EHtml, EImg, ELink, EPreview, ERow, ESection, EStyle, ETailwind, EText, VueEmailPlugin, cleanup, deepmerge$1 as deepmerge, htmlToText, useRender };

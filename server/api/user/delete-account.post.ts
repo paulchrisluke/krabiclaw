@@ -4,7 +4,7 @@ import { executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db
 
 const ACTIVE_STATUSES = ['active', 'trialing', 'past_due']
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
 
@@ -41,8 +41,8 @@ export default defineEventHandler(async (event) => {
 
   // Single query: block deletion if any org has an active subscription
   if (allOrgIds.length > 0) {
-    const placeholders = allOrgIds.map(() => '?').join(',')
-    const statusPlaceholders = ACTIVE_STATUSES.map(() => '?').join(',')
+    const placeholders = allOrgIds.map(() => '?').join(', ')
+    const statusPlaceholders = ACTIVE_STATUSES.map(() => '?').join(', ')
     const activeSubscription = await queryFirst(db, `
       SELECT organization_id FROM organization_billing
       WHERE organization_id IN (${placeholders})
@@ -52,8 +52,7 @@ export default defineEventHandler(async (event) => {
 
     if (activeSubscription) {
       return jsonResponse(
-        { error: 'active_subscription', message: 'Please cancel your subscription before deleting your account.' },
-        { status: 409 }
+        { error: 'active_subscription', message: 'Please cancel your subscription before deleting your account.' }, { status: 409 }
       )
     }
   }
@@ -66,14 +65,12 @@ export default defineEventHandler(async (event) => {
 
     if ((otherMembers?.count ?? 0) > 0) {
       return jsonResponse(
-        { error: 'org_has_members', message: 'Transfer ownership or remove all members before deleting your account.' },
-        { status: 409 }
+        { error: 'org_has_members', message: 'Transfer ownership or remove all members before deleting your account.' }, { status: 409 }
       )
     }
   }
 
-  // Delete in correct order: member rows first, then orgs (avoids FK violations),
-  // then the user row (cascades sessions/accounts)
+  // Delete in correct order: member rows first, then orgs (avoids FK violations), // then the user row (cascades sessions/accounts)
   const statements: BatchQuery[] = []
 
   // Attribution is user-linked data even though the client ID is stored on
@@ -81,9 +78,7 @@ export default defineEventHandler(async (event) => {
   // the user leaves; the FK only protects ga_user_id and would otherwise leave
   // the client identifier behind on co-owned organizations.
   statements.push({
-    query: `UPDATE organization_billing SET ga_client_id = NULL, ga_user_id = NULL, updated_at = ? WHERE ga_user_id = ?`,
-    params: [new Date().toISOString(), userId],
-  })
+    query: `UPDATE organization_billing SET ga_client_id = NULL, ga_user_id = NULL, updated_at = ? WHERE ga_user_id = ?`, params: [new Date().toISOString(), userId], })
 
   // Remove user from all orgs (co-owned orgs: removes membership; sole-owned: clears before org delete)
   for (const orgId of allOrgIds) {
@@ -104,3 +99,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true })
 })
+import { defineHandler } from 'nitro';

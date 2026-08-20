@@ -6,7 +6,7 @@ import { isDemoOrg } from '~/server/utils/demo'
 import { queryFirst } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const localeParam = getRouterParam(event, 'locale')
   const locale = normalizeLocale(localeParam)
@@ -41,3 +41,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to update locale' }, { status: 400 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

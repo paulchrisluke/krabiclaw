@@ -42,7 +42,8 @@ function requiredDashboardSegment(
 }
 
 export function buildDashboardUrl(site: DashboardLinkOrgContext, destination: DashboardDestination): string {
-  const platformDomain = site.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com'
+  const platformDomain = site.env.NUXT_PUBLIC_PLATFORM_DOMAIN
+  if (!platformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const orgSlug = requiredDashboardSegment(site.organizationSlug, 'organizationSlug', destination)
   const siteSlug = site.siteSlug ?? site.subdomain ?? null
   const locationSlug = site.locationSlug ?? null

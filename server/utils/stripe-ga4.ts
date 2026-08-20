@@ -494,7 +494,7 @@ async function sendStripeGa4Refund(
   })
   const context = await resolveStripeGa4Context(db, stripe, subscription, null)
   const lines = await loadStripeInvoiceLines(stripe, invoice)
-  const purchaseType = classifyStripeInvoicePurchase(invoice.billing_reason, null, null) ?? undefined
+  const purchaseType = classifyStripeInvoicePurchase(invoice.billing_reason, null, null)
   await sendGa4Event(env, {
     clientId: context.clientId,
     userId: context.userId,
@@ -505,7 +505,7 @@ async function sendStripeGa4Refund(
       currency: refund.currency ?? invoice.currency ?? 'usd',
       subscriptionId,
       lines: positiveSubscriptionLines(lines, subscriptionId),
-      purchaseType,
+      purchaseType: purchaseType ?? undefined,
     }),
   })
 }

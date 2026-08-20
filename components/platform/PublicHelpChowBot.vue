@@ -79,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import { marked } from 'marked'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'

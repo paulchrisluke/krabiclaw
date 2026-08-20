@@ -404,12 +404,12 @@ export function buildProfessionalServiceGraph(input: ProfessionalServiceSchemaIn
   if (input.recipe === 'service-detail' && input.offering) {
     const offeringId = `${pageUrl}#service`
     mainEntityNode = {
-      '@type': input.offering.schemaType || 'Service',
       '@id': offeringId,
       name: input.offering.name,
       url: pageUrl,
       provider: { '@id': organizationId },
     }
+    if (input.offering.schemaType) mainEntityNode['@type'] = input.offering.schemaType
     if (input.offering.description) mainEntityNode.description = input.offering.description
     const offeringAddressVisible = input.offering.addressVisible ?? input.org.addressVisible ?? false
     if (offeringAddressVisible) {

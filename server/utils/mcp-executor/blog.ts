@@ -208,7 +208,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       return {
         posts: (await listPlatformBlogPosts(
           site.db,
-          optionalString(args, "status") ?? undefined,
+          optionalString(args, "status"),
           site.siteId,
         )).map((post) => toBlogPostSummary(attachViewUrlToRecord(post, site, {}, site.env))),
       };

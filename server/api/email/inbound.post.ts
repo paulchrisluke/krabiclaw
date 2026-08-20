@@ -5,22 +5,19 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import {
-  getSubmissionOrgSite,
-  isSubmissionType,
-  parseReplyToAddress,
-  verifyReplyToken,
-} from '~/server/utils/submission-messages'
+  getSubmissionOrgSite, isSubmissionType, parseReplyToAddress, verifyReplyToken, } from '~/server/utils/submission-messages'
 import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
 import { ensureGuestThread, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const secret = getHeader(event, 'x-email-inbound-secret')
+  const secret = (event.req.headers.get('x-email-inbound-secret'))
   if (!env.EMAIL_INBOUND_SECRET || secret !== env.EMAIL_INBOUND_SECRET) {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -50,44 +47,23 @@ export default defineEventHandler(async (event) => {
   // index — a retried delivery from the email worker appends nothing new and returns
   // the existing entry.
   const entry = await appendEntry(db, {
-    threadId: thread.id,
-    organizationId: orgSite.organizationId,
-    siteId: orgSite.siteId,
-    kind: 'message',
-    actorKind: 'guest',
-    channel: 'email',
-    body: text,
-    externalId: messageIdHeader,
-  })
+    threadId: thread.id, organizationId: orgSite.organizationId, siteId: orgSite.siteId, kind: 'message', actorKind: 'guest', channel: 'email', body: text, externalId: messageIdHeader, })
 
   if (entry.created) {
     const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
     await updateThreadProjection(db, thread.id, { conversationState })
+    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
 
     try {
       const source = await adapter.loadSource({ db }, parsed.submissionId)
       if (source) {
         const summary = adapter.summarize(source)
         await notifyGuestThreadReply(env, db, {
-          organizationId: orgSite.organizationId,
-          siteId: orgSite.siteId,
-          locationId: summary.locationId,
-          threadId: thread.id,
-          submissionType: parsed.submissionType,
-          submissionId: parsed.submissionId,
-          guestName: summary.guestName,
-          guestEmail: summary.guestEmail,
-          guestPhone: summary.guestPhone,
-          inboundChannel: 'email',
-          messagePreview: text,
-        })
+          organizationId: orgSite.organizationId, siteId: orgSite.siteId, locationId: summary.locationId, threadId: thread.id, submissionType: parsed.submissionType, submissionId: parsed.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'email', messagePreview: text, })
       }
     } catch (err) {
       console.error('[email-inbound] Failed to notify owner of guest reply:', {
-        submissionType: parsed.submissionType,
-        submissionId: parsed.submissionId,
-        error: err instanceof Error ? err.message : String(err),
-      })
+        submissionType: parsed.submissionType, submissionId: parsed.submissionId, error: err instanceof Error ? err.message : String(err), })
     }
   }
 
@@ -97,3 +73,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ received: true })
 })
+import { defineHandler } from 'nitro';
+import {  readBody  } from 'nitro/h3';

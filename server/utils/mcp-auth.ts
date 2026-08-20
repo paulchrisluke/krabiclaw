@@ -1,4 +1,6 @@
-import { createError, getHeader, getHeaders, type H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
+import { } from 'nitro/h3';
 import { verifyJwsAccessToken } from 'better-auth/oauth2'
 import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
@@ -7,6 +9,7 @@ import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { queryFirst } from '~/server/db'
 import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { cloudflareEnv } from '~/server/utils/api-response'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
 
@@ -67,24 +70,24 @@ export async function requireMcpUser(
     ...options,
     forbiddenScopes: options.forbiddenScopes ?? [],
   }
-  const env = event.context.cloudflare?.env as CloudflareEnv | undefined
+  const env = cloudflareEnv(event)
   const db = env?.DB
   if (!env || !db) {
-    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
   }
 
-  const authHeader = getHeader(event, 'authorization')
+  const authHeader = (event.req.headers.get('authorization'))
   if (authHeader?.startsWith('Bearer ')) {
     const user = await verifyBearerToken(event, authHeader.slice(7), env, db, normalizedOptions)
     if (normalizedOptions.requirePlatformAdmin && !user.isPlatformAdmin) {
-      throw createError({ statusCode: 403, statusMessage: 'Platform admin access required' })
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Platform admin access required' })
     }
     return user
   }
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) {
-    throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+    throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
   }
 
   // Session-based auth has no token to derive scopes from, so we assume the caller's
@@ -101,7 +104,7 @@ export async function requireMcpUser(
   }
   ensureForbiddenScopesAbsent(user.scopes, normalizedOptions.forbiddenScopes)
   if (normalizedOptions.requirePlatformAdmin && !user.isPlatformAdmin) {
-    throw createError({ statusCode: 403, statusMessage: 'Platform admin access required' })
+    throw new HTTPError({ statusCode: 403, statusMessage: 'Platform admin access required' })
   }
   return user
 }
@@ -113,7 +116,8 @@ async function verifyBearerToken(
   db: D1Database,
   options: RequireMcpUserOptions,
 ): Promise<McpUserContext> {
-  const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const baseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
+  if (!baseUrl) throw new HTTPError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
   const tokenFingerprint = (await sha256Base64Url(token)).slice(0, 12)
 
   const audiences = options.audiences?.length
@@ -162,7 +166,7 @@ async function verifyBearerToken(
     // dropping the WWW-Authenticate challenge). RFC 6750 §3.1 permits 401
     // for insufficient_scope too ("MAY" 403, not "SHOULD"), so this stays
     // spec-compliant while keeping the challenge intact on every path.
-    throw createError({
+    throw new HTTPError({
       statusCode: 401,
       statusMessage: authChallenge.description,
       data: { mcpAuth: authChallenge },
@@ -181,7 +185,7 @@ async function verifyBearerToken(
       audiences_checked: audiences,
       required_scopes: requiredScopes,
     })
-    throw createError({
+    throw new HTTPError({
       statusCode: 401,
       statusMessage: `${requiredScopeValue} scopes required`,
       data: { mcpAuth: { error: 'insufficient_scope', description: `${requiredScopeValue} scopes required`, scope: requiredScopeValue } },
@@ -196,7 +200,7 @@ async function verifyBearerToken(
       token_fingerprint: tokenFingerprint,
       reason: 'subject_missing',
     })
-    throw createError({
+    throw new HTTPError({
       statusCode: 401,
       statusMessage: 'Token missing, expired, invalid, or not issued for this MCP resource',
       data: { mcpAuth: { error: 'invalid_token', description: 'Token missing, expired, invalid, or not issued for this MCP resource' } },
@@ -216,7 +220,7 @@ async function verifyBearerToken(
       token_fingerprint: tokenFingerprint,
       reason: 'user_not_found',
     })
-    throw createError({ statusCode: 401, statusMessage: 'User not found' })
+    throw new HTTPError({ statusCode: 401, statusMessage: 'User not found' })
   }
 
   logMcpAuth(event, 'info', 'credential_accepted', {
@@ -236,10 +240,11 @@ async function verifyBearerToken(
 }
 
 async function getAuthJwks(event: H3Event, env: CloudflareEnv): Promise<JSONWebKeySet | undefined> {
-  const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const baseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
+  if (!baseUrl) throw new HTTPError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
   const response = await createAuth(env).handler(new Request(`${baseUrl}/api/auth/jwks`, {
     method: 'GET',
-    headers: getHeaders(event) as HeadersInit,
+    headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit,
   }))
   if (!response.ok) return undefined
   return await response.json() as JSONWebKeySet
@@ -319,8 +324,8 @@ function logMcpAuth(
 ) {
   console[level]('[MCP_AUTH]', JSON.stringify({
     event: authEvent,
-    ray_id: getHeader(event, 'cf-ray') ?? null,
-    user_agent: getHeader(event, 'user-agent') ?? null,
+    ray_id: (event.req.headers.get('cf-ray')) ?? null,
+    user_agent: (event.req.headers.get('user-agent')) ?? null,
     ...fields,
   }))
 }
@@ -338,7 +343,7 @@ function parseScopesFromJwtPayload(scopeClaim: unknown) {
 function ensureForbiddenScopesAbsent(scopes: string[], forbiddenScopes?: string[]) {
   const blocked = (forbiddenScopes ?? []).find(scope => scopes.includes(scope))
   if (blocked) {
-    throw createError({ statusCode: 403, statusMessage: `Token scope ${blocked} is not allowed for this MCP surface` })
+    throw new HTTPError({ statusCode: 403, statusMessage: `Token scope ${blocked} is not allowed for this MCP surface` })
   }
 }
 
@@ -349,8 +354,9 @@ export async function requireMcpSite(
   event: H3Event,
   siteId: string,
   minimumRole: McpToolRole = 'editor',
+  authenticatedUser?: McpUserContext,
 ): Promise<McpSiteContext> {
-  const user = await requireMcpUser(event)
+  const user = authenticatedUser ?? await requireMcpUser(event)
 
   type MemberSiteRow = { id: string; organization_id: string; role: string; member_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }
   const memberSiteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>
@@ -374,12 +380,12 @@ export async function requireMcpSite(
     ?? await memberSiteByColumn('custom_domain')
 
   if (!site?.organization_id || !site.role) {
-    throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
   }
 
   const role = normalizeRole(site.role)
   if (!role || ROLE_RANK[role] < ROLE_RANK[minimumRole]) {
-    throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
+    throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
   // MCP tools operate on a whole site at this auth layer, so an editor needs
@@ -463,5 +469,5 @@ export function requestOrigin(headers: HeadersInit | undefined) {
 }
 
 export function requestHeaders(event: H3Event) {
-  return getHeaders(event) as HeadersInit
+  return Object.fromEntries(event.req.headers.entries()) as HeadersInit
 }

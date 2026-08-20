@@ -61,7 +61,8 @@ export async function drainPublicResourceCacheInvalidations(
         SELECT subdomain, custom_domain FROM sites WHERE id = ? LIMIT 1
       `, [row.site_id])
       const site = sites[0]
-      const freeSiteDomain = normalizeHost(options.freeSiteDomain) || 'krabiclaw.com'
+      const freeSiteDomain = normalizeHost(options.freeSiteDomain)
+      if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
       const hostnames = new Set<string>(domains.map(domain => domain.domain))
       if (site?.subdomain) hostnames.add(`${site.subdomain}.${freeSiteDomain}`)
       if (site?.custom_domain) hostnames.add(site.custom_domain)
@@ -165,7 +166,12 @@ export async function purgePublicResourceCacheSafe(
   env: unknown,
   siteId: string,
 ): Promise<void> {
-  const maybeEnv = env as { DB?: DbClient; SITE_CACHE?: KVNamespace; ctx?: { waitUntil?: (_promise: Promise<unknown>) => void } } | null | undefined
+  const maybeEnv = env as {
+    DB?: DbClient
+    SITE_CACHE?: KVNamespace
+    NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+    ctx?: { waitUntil?: (_promise: Promise<unknown>) => void }
+  } | null | undefined
   const kv = maybeEnv?.SITE_CACHE
   if (!kv) return
 
@@ -176,7 +182,10 @@ export async function purgePublicResourceCacheSafe(
             (id, site_id, reason, status, attempt_count, created_at)
           VALUES (?, ?, 'legacy-safe-wrapper', 'pending', 0, ?)
         `, [crypto.randomUUID(), siteId, new Date().toISOString()])
-        await drainPublicResourceCacheInvalidations(maybeEnv.DB!, kv, { limit: 1 })
+        await drainPublicResourceCacheInvalidations(maybeEnv.DB!, kv, {
+          limit: 1,
+          freeSiteDomain: maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN,
+        })
       })()
     : purgePublicResourceCache(kv, siteId)
 

@@ -163,7 +163,6 @@ test('account surfaces use the mobile index and row-based account design', () =>
   const menu = source('lib/components/workspace/dashboard/DashboardAccountMenu.vue')
   const profile = source('pages/dashboard/account/profile.vue')
   const authentication = source('pages/dashboard/account/authentication.vue')
-  const billing = source('pages/dashboard/account/billing-items.vue')
 
   assert.match(menu, /label: 'Profile'/)
   assert.match(menu, /mobileOnly/)
@@ -173,7 +172,17 @@ test('account surfaces use the mobile index and row-based account design', () =>
   assert.match(profile, /editingRow/)
   assert.match(profile, /class="profile-row/)
   assert.doesNotMatch(authentication, /<UCard/)
-  assert.doesNotMatch(billing, /<UCard/)
+})
+
+test('account menu renders identity from the SSR-backed auth session', () => {
+  const menu = source('lib/components/workspace/dashboard/DashboardAccountMenu.vue')
+  const session = source('composables/useAuthSession.ts')
+  assert.match(menu, /const \{ sessionData \} = await useAuthSession\(\)/)
+  assert.match(menu, /renderedUser = computed\(\(\) => sessionData\.value\?\.user \?\? null\)/)
+  assert.doesNotMatch(menu, /const hydrated = ref\(false\)/)
+  assert.doesNotMatch(menu, /:avatar="\{ src: sessionData\?\.user/)
+  assert.match(session, /if \(!clientSession\.value \|\| clientSession\.value\.isPending\) return/)
+  assert.match(session, /sessionState\.value = clientSession\.value\.data \?\? null/)
 })
 
 test('mobile account avatar opens the shared sheet from the bottom nav and moves to the header on account pages', () => {
@@ -181,7 +190,7 @@ test('mobile account avatar opens the shared sheet from the bottom nav and moves
   assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
   assert.doesNotMatch(layout, /<NuxtLink :to="accountIndexTo"/)
   assert.doesNotMatch(source('pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue'), /DashboardAccountMenu/)
-  for (const page of ['index.vue', 'profile.vue', 'authentication.vue', 'billing-items.vue']) {
+  for (const page of ['index.vue', 'profile.vue', 'authentication.vue']) {
     assert.match(source(`pages/dashboard/account/${page}`), /<DashboardAccountMenu mobile-only class="md:hidden" \/>/)
   }
 })

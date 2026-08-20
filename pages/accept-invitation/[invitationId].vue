@@ -94,6 +94,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import { completeVerifiedInvitation } from '~/shared/auth/invitation-activation'
 import { buildLoginUrl } from '~/shared/auth/return-target'
 

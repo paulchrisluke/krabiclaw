@@ -2,17 +2,10 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
 import {
-  applyBookingPolicyPatch,
-  renderBookingPolicySummary,
-  resolveBookingPolicy,
-  validateBookingPolicyPatch,
-  validateBookingPolicyScope,
-  type BookingPolicyScopeType,
-  type BookingPolicyType,
-} from '~/server/utils/booking-policies'
+  applyBookingPolicyPatch, renderBookingPolicySummary, resolveBookingPolicy, validateBookingPolicyPatch, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType, } from '~/server/utils/booking-policies'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
 
@@ -24,15 +17,12 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(
-    db,
-    `SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
+    db, `SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
      FROM sites s
      JOIN organization o ON s.organization_id = o.id
      JOIN member om ON o.id = om.organizationId
      WHERE s.id = ? AND om.userId = ?
-     LIMIT 1`,
-    [siteId, session.user.id],
-  )
+     LIMIT 1`, [siteId, session.user.id], )
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const body = await readBody(event) as Record<string, unknown>
@@ -42,11 +32,7 @@ export default defineEventHandler(async (event) => {
   const locale = typeof body.locale === 'string' ? body.locale : 'en'
   const scopeType: BookingPolicyScopeType = body.scope_type === 'location' || body.scope_type === 'experience' ? body.scope_type : 'site'
   validateBookingPolicyScope({
-    policyType: policyType as BookingPolicyType,
-    scopeType,
-    locationId,
-    experienceId,
-  })
+    policyType: policyType as BookingPolicyType, scopeType, locationId, experienceId, })
 
   if (locationId) {
     const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])
@@ -59,30 +45,18 @@ export default defineEventHandler(async (event) => {
     if (!locationId) resourceLocationId = experience.location_id
   }
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId, })
 
   try {
     const resolved = await resolveBookingPolicy(db, {
-      siteId,
-      policyType: policyType as BookingPolicyType,
-      locationId,
-      experienceId,
-    })
+      siteId, policyType: policyType as BookingPolicyType, locationId, experienceId, })
     const preview = applyBookingPolicyPatch(
-      resolved,
-      await validateBookingPolicyPatch(body, policyType as BookingPolicyType),
-    )
+      resolved, await validateBookingPolicyPatch(body, policyType as BookingPolicyType), )
     return jsonResponse({
-      success: true,
-      resolved_policy: preview,
-      summary: renderBookingPolicySummary(preview, locale),
-    })
+      success: true, resolved_policy: preview, summary: renderBookingPolicySummary(preview, locale), })
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to preview booking policy' }, { status: 400 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

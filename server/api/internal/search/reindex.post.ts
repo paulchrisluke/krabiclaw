@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
 import { validateInternalRequest } from '~/server/utils/internal-secret'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   if (!env.db) {
     return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -23,3 +23,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to rebuild platform knowledge index', detail }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';

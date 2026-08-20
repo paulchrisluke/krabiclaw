@@ -2,11 +2,11 @@
 
 ## Model
 
-Two sources of truth, one ephemeral execution format:
+Two sources of truth and one ephemeral execution format:
 
 1. **Typed TS fixtures** (`seed-definitions/`) — curated tenants and synthetic scenarios
 2. **Approved import manifests** (`client-imports/<slug>/`) — real client onboarding data
-3. **Generated SQL** — ephemeral apply artifact, never hand-maintained
+3. **Generated SQL** — ephemeral execution artifact, never a source of truth
 
 Schema DDL lives in `migrations/` and is applied by the environment's locked
 preview workflow before browser coverage. Seed data is entirely separate
@@ -23,7 +23,7 @@ seed-definitions/kikuzuki.ts      ← source of truth
 ↓ yarn seed:kikuzuki               generate → /tmp/kikuzuki.sql → wrangler d1 execute → discard
 ```
 
-A maintained SQL seed file is a half-truth: it looks authoritative but isn't. The typed TS definition is. Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: generate SQL to `/tmp`, apply it with wrangler, and discard it immediately. `seeds/*.sql` is no longer a source-of-truth path for curated tenants.
+A maintained SQL seed file is a half-truth: it looks authoritative but isn't. The typed TS definition is. Demo, Pottery House, Kikuzuki, and NCLS all follow the same ephemeral model: generate SQL to `/tmp`, apply it with wrangler, and discard it immediately. `seeds/*.sql` is no longer a source-of-truth path for curated tenants.
 
 No new tenant is introduced via a hand-authored SQL file. Ever.
 
@@ -31,7 +31,13 @@ No new tenant is introduced via a hand-authored SQL file. Ever.
 
 ## What belongs in a typed fixture
 
-Every `CuratedSiteDefinition` is the complete initial state for a tenant. This includes:
+Demo, Pottery House, and Kikuzuki use `CuratedSiteDefinition`. NCLS uses a
+typed `NclsFixtureDefinition` snapshot because its regression fixture mirrors
+the approved production public dataset rather than a reduced synthetic legal
+site. Both shapes must contain the complete state their deployed tests depend
+on. Do not replace the NCLS snapshot with a smaller hand-curated approximation.
+
+Complete fixture state includes:
 
 - site metadata, config, locales, domains
 - site logo asset linkage via `logo_asset_id` when a tenant has a logo
@@ -79,11 +85,12 @@ Schema DDL only: `CREATE TABLE`, `ALTER TABLE`, index definitions. Applied autom
 
 | Tenant        | Typed definition                    | Generator                        | Targets             | CI-reproducible |
 | ------------- | ----------------------------------- | -------------------------------- | ------------------- | --------------- |
-| Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | local / PR preview  | ✓               |
-| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | local / PR preview  | ✓               |
-| Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | local / PR preview  | ✓               |
+| Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | local / preview / staging | ✓          |
+| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | local / preview / staging | ✓          |
+| Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | local / preview / staging | ✓          |
+| NCLS          | `seed-definitions/ncls.ts`          | `generate-ncls-seed.ts`          | local / preview / staging | ✓          |
 
-All three tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.
+All four tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.
 
 ### Kikuzuki media
 
@@ -107,21 +114,30 @@ the record; executable copies do not remain in the active repository.
 
 ## CI seeding
 
-Seeds run on every PR (preview) and once inside an explicitly dispatched,
-preview workflow. They are not conditional on file changes.
-The generate scripts run first, so the `.ts` fixture is the actual source of
-truth in CI — not committed SQL or a push-triggered shared-staging loop.
+Fixture provisioning runs before browser coverage in every environment where
+fixture-dependent tests execute. The generators run first, so the typed
+definitions are the source of truth in CI rather than committed SQL.
 
 | Trigger           | Environment  | What runs                                                                      |
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
-| PR opened/updated | `preview`    | generate demo + pottery house → apply SQL; generate kikuzuki → apply ephemeral |
-| Push to `staging` | `staging` | migrations and E2E artifact sweep; persistent fixtures are not reseeded |
+| PR opened/updated | `preview`    | generate and apply all four typed fixtures                                    |
+| Push to `staging` | `staging`    | migrate, sweep E2E artifacts, then generate and apply all four typed fixtures  |
+| `staging` to `main` PR opened/updated | none | reuse checks attached to the exact staging SHA; no deployment or seed |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
-Scripts:
+Staging provisioning is intentionally destructive only for the protected,
+fixed fixture IDs. `scripts/provision-staging-fixtures.ts` refuses unexpected
+site ownership, records D1 time-travel information before applying anything,
+and validates all four sites afterward. It must never be pointed at production.
 
-- `yarn seed:kikuzuki` — local D1
-- `yarn seed:kikuzuki:preview` — preview D1 (CI)
+Commands and entry points:
+
+- `yarn seed:local` — apply all four fixtures to local D1
+- `yarn seed:pottery-local` — apply only Pottery House locally
+- `yarn seed:kikuzuki` — apply only Kikuzuki locally
+- `node --experimental-strip-types scripts/generate-ncls-seed.ts` — apply only NCLS locally
+- `scripts/provision-staging-fixtures.ts --staging` — CI-owned staging provisioning; do not run casually
+- Preview fixture application is CI-owned and uses the four generators in `.github/workflows/ci.yml`.
 
 ---
 
@@ -143,33 +159,9 @@ Approved import replay (`client:replay`) is the standard path for re-seeding any
 
 ---
 
-## Tenant transfer: curated fixture → real client
-
-Kikuzuki and Pottery House currently live on the curated-fixture path (typed `seed-definitions/*.ts` + ephemeral generator + CI reseed), but both are real businesses and the eventual goal is to hand them off as independent client-owned sites. This is the runbook for that handoff — it does not exist yet for either tenant, so do this when the actual transfer happens, not before.
-
-### Why this matters
-
-Curated tenant seeds support local and preview databases only. Production and
-staging deployment jobs never seed curated client data. `business_locations`,
-`media_assets`, `menus`, `sites`, and `site_domains` use `INSERT OR REPLACE` in
-the generated SQL, so applying those fixtures to a client environment would
-silently clobber client edits.
-
-Preview seeding targets `krabiclaw-db-preview`, which is separate from production. Staging fixtures persist across deploys; only throwaway `e2e-` artifacts are swept before the staging suite.
-
-### Steps to take at transfer time
-
-1. **Pull the tenant out of CI seeding.** Delete its preview seed line from `.github/workflows/ci.yml`. Continuing to reseed preview with a fixture that no longer reflects the live site's real state is misleading, not just unnecessary.
-2. **Replace its E2E coverage.** Either retire the assertions that depended on the seeded fixture, point them at the pinned read-only production telemetry lane, or stand up a fresh synthetic tenant to cover the feature being tested (e.g. the second-location flow) without depending on a tenant that now has real client edits.
-3. **Delete the fixture generator after handoff.** Git retains its history;
-   inactive executable copies do not stay in the active repository.
-4. **Treat the tenant like any other client from this point on.** Future changes flow only through the dashboard/MCP/API. If you ever need to bulk-restore or clone its state, build a `client:import` manifest from the live site and use `client:replay` — never resurrect the old typed fixture.
-
----
-
 ## Guardrails
 
-Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed fixture -> generated SQL in `/tmp` -> `wrangler d1 execute` -> discard.
+Demo, Pottery House, Kikuzuki, and NCLS follow the same ephemeral model: typed fixture -> generated SQL in `/tmp` -> `wrangler d1 execute` -> discard.
 
 - `seeds/*.sql` is gitignored and should stay empty for curated tenant seeds
 - `lint-seeds.mjs` fails CI if a new `seeds/*.sql` appears that is not a declared generated output
@@ -178,6 +170,9 @@ Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed
 - template work, seed edits, and onboarding changes must preserve the dashboard storage split:
   images via `/media/request-upload` -> Cloudflare Images
   videos/files via `/media/upload` -> Cloudflare R2
+- Demo, Pottery House, Kikuzuki, and NCLS are required fixtures in local,
+  preview, and staging browser lanes. Their absence is a provisioning failure,
+  not a reason to skip fixture-dependent coverage.
 
 ---
 
@@ -187,5 +182,5 @@ Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed
 - `client-intake/` — intake YAML inputs for real clients
 - `client-imports/<slug>/` — generated and approved onboarding artifacts
 - `migrations/` — schema DDL only, no data
-- `seeds/` — build outputs only, never edited directly; will be gitignored once clean
+- `seeds/` — ignored generated outputs only, never edited directly
 - `public/` — never store tenant-specific source media here

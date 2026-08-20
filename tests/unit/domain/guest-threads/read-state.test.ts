@@ -133,3 +133,17 @@ test('advancing a cursor cannot rewind to an older sequence', async () => {
   assert.equal(cursor?.last_read_entry_id, 'e2')
   assert.equal(cursor?.last_read_sequence, 2)
 })
+
+test('advancing to an already-read sequence is idempotent', async () => {
+  reset()
+  state.entries.push({ id: 'e1', thread_id: 't1', sequence: 1 })
+
+  assert.equal(await advanceMemberCursor(db, 't1', 'member-a', 'e1'), true)
+  const writesAfterAdvance = state.execute.filter(call => call.query.includes('INSERT INTO guest_thread_member_state')).length
+
+  assert.equal(await advanceMemberCursor(db, 't1', 'member-a', 'e1'), false)
+  assert.equal(
+    state.execute.filter(call => call.query.includes('INSERT INTO guest_thread_member_state')).length,
+    writesAfterAdvance,
+  )
+})

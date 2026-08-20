@@ -5,40 +5,19 @@ import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { saveInboundMediaAsset } from '~/server/utils/chowbot-media'
 import { runChowBot, type JsonSerializable } from '~/server/utils/chowbot-agent'
 import {
-  createMessage,
-  getChannelState,
-  getConversation,
-  getOrCreateConversation,
-  getRecentAgentMessages,
-  getSiteForMember,
-  listSitesForMember,
-  metaMessageExists,
-  upsertChannelState,
-  type ChowBotConversation,
-} from '~/server/utils/chowbot-conversations'
+  createMessage, getChannelState, getConversation, getOrCreateConversation, getRecentAgentMessages, getSiteForMember, listSitesForMember, metaMessageExists, upsertChannelState, type ChowBotConversation, } from '~/server/utils/chowbot-conversations'
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { ensureGuestThread, getGuestThreadById, getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
 import { isAuthorizedWhatsAppRecipient, resolveMemberId, teamAccessPredicate } from '~/server/utils/member-access'
 import {
-  ASK_CHOWBOT_OR_QUOTE_MESSAGE,
-  REPLY_SENT_CONFIRMATION,
-  buildCollectReplyPrompt,
-  buildConfirmSendPrompt,
-  buildDisambiguationPrompt,
-  buildReplyFailedMessage,
-  decideWhatsAppReplyRouting,
-  isChowBotDirective,
-  maskEmailForDisplay,
-  stripChowBotPrefix,
-  type DisambiguationCandidate,
-  type PendingWhatsAppReplyState,
-} from '~/server/utils/whatsapp-reply-routing'
+  ASK_CHOWBOT_OR_QUOTE_MESSAGE, REPLY_SENT_CONFIRMATION, buildCollectReplyPrompt, buildConfirmSendPrompt, buildDisambiguationPrompt, buildReplyFailedMessage, decideWhatsAppReplyRouting, isChowBotDirective, maskEmailForDisplay, stripChowBotPrefix, type DisambiguationCandidate, type PendingWhatsAppReplyState, } from '~/server/utils/whatsapp-reply-routing'
 
 interface WhatsAppMessage {
   id: string
@@ -89,7 +68,8 @@ interface UserRow {
 }
 
 function platformLoginUrl(env: ApiRecord): string {
-  const raw = String(env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com').trim()
+  const raw = String(env.NUXT_PUBLIC_PLATFORM_DOMAIN || '').trim()
+  if (!raw) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const origin = /^https?:\/\//i.test(raw) ? raw.replace(/\/$/, '') : `https://${raw.replace(/\/$/, '')}`
   return `${origin}/login`
 }
@@ -117,18 +97,11 @@ function messageText(message: WhatsAppMessage): string {
 
 function siteListReply(sites: Array<{ id: string; brand_name: string | null }>): string {
   return [
-    'Which site should ChowBot use?',
-    ...sites.map((site, index) => `${index + 1}. ${site.brand_name ?? site.id}`),
-    'Reply with the number.',
-  ].join('\n')
+    'Which site should ChowBot use?', ...sites.map((site, index) => `${index + 1}. ${site.brand_name ?? site.id}`), 'Reply with the number.', ].join('\n')
 }
 
 async function reply(
-  db: D1Database | null,
-  env: ApiRecord,
-  toPhone: string,
-  text: string,
-  opts?: {
+  db: D1Database | null, env: ApiRecord, toPhone: string, text: string, opts?: {
     conversation?: ChowBotConversation
     userId?: string
     channel?: 'whatsapp'
@@ -140,18 +113,7 @@ async function reply(
   const result = await sendWhatsAppText(env, toPhone, text)
   if (db && opts?.conversation) {
     const message = await createMessage(db, {
-      conversationId: opts.conversation.id,
-      organizationId: opts.conversation.organization_id,
-      siteId: opts.conversation.site_id,
-      userId: opts.userId ?? opts.conversation.user_id,
-      role: 'assistant',
-      channel: 'whatsapp',
-      content: text,
-      metaMessageId: result.messageId ?? null,
-      toolCalls: opts.toolCalls ?? null,
-      status: result.success ? (opts.status ?? 'sent') : 'failed',
-      error: result.success ? (opts.error ?? null) : (result.error ?? 'WhatsApp send failed'),
-    }, opts.userId ?? opts.conversation.user_id)
+      conversationId: opts.conversation.id, organizationId: opts.conversation.organization_id, siteId: opts.conversation.site_id, userId: opts.userId ?? opts.conversation.user_id, role: 'assistant', channel: 'whatsapp', content: text, metaMessageId: result.messageId ?? null, toolCalls: opts.toolCalls ?? null, status: result.success ? (opts.status ?? 'sent') : 'failed', error: result.success ? (opts.error ?? null) : (result.error ?? 'WhatsApp send failed'), }, opts.userId ?? opts.conversation.user_id)
 
     if (result.success) {
       // An exhausted balance is intentionally recorded as `charged: false`
@@ -160,21 +122,15 @@ async function reply(
       // propagate so the webhook cannot claim an unqualified success.
       try {
         await chargeFlatCredits(db, opts.conversation.organization_id, {
-          siteId: opts.conversation.site_id ?? undefined,
-          action: 'whatsapp_free_text',
-          idempotencyKey: result.messageId
+          siteId: opts.conversation.site_id, action: 'whatsapp_free_text', idempotencyKey: result.messageId
             ? `whatsapp-provider:${result.messageId}`
-            : `whatsapp-message:${message.id}`,
-        })
+            : `whatsapp-message:${message.id}`, })
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error)
         const accountingError = `WhatsApp reply sent but credit accounting failed: ${reason}`
         try {
           await execute(
-            db,
-            `UPDATE chowbot_messages SET error = ? WHERE id = ?`,
-            [accountingError, message.id],
-          )
+            db, `UPDATE chowbot_messages SET error = ? WHERE id = ?`, [accountingError, message.id], )
         } catch (recordError) {
           const recordReason = recordError instanceof Error ? recordError.message : String(recordError)
           throw new Error(`${accountingError}; durable message update failed: ${recordReason}`)
@@ -209,9 +165,7 @@ function parsePendingMedia(raw: string | null | undefined): { assetId: string; s
 }
 
 async function runChowBotAndReply(
-  db: D1Database,
-  env: ApiRecord,
-  opts: {
+  db: D1Database, env: ApiRecord, opts: {
     toPhone: string
     conversation: ChowBotConversation
     organizationId: string
@@ -219,41 +173,21 @@ async function runChowBotAndReply(
     userId: string
     memberId: string
     userRole?: string
-    siteName: string | null
+    siteName: string
     pendingMedia: { assetId: string; siteId: string } | null
   }
 ) {
-  const site = await queryFirst<{ default_currency: string | null }>(db,
-    `SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`,
-    [opts.siteId, opts.organizationId]
+  const site = await queryFirst<{ default_currency: string | null }>(db, `SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`, [opts.siteId, opts.organizationId]
   )
   const messages = await getRecentAgentMessages(db, opts.conversation.id, opts.siteId, opts.userId)
   let assistantText = ''
   const result = await runChowBot({
-    db,
-    env,
-    orgId: opts.organizationId,
-    siteId: opts.siteId,
-    userId: opts.userId,
-    memberId: opts.memberId,
-    userRole: opts.userRole,
-    siteName: opts.siteName ?? 'your site',
-    defaultCurrency: site?.default_currency || 'THB',
-    messages,
-    currentPage: 'whatsapp',
-    channel: 'whatsapp',
-    sessionId: opts.conversation.id,
-    pendingMedia: opts.pendingMedia ?? undefined,
-    onEvent: (ev) => {
+    db, env, orgId: opts.organizationId, siteId: opts.siteId, userId: opts.userId, memberId: opts.memberId, userRole: opts.userRole, siteName: opts.siteName, defaultCurrency: site?.default_currency || 'THB', messages, currentPage: 'whatsapp', channel: 'whatsapp', sessionId: opts.conversation.id, pendingMedia: opts.pendingMedia ?? undefined, onEvent: (ev) => {
       if (ev.type === 'text') assistantText = ev.content ?? ''
-    },
-  })
+    }, })
 
   await reply(db, env, opts.toPhone, assistantText || result.responseText, {
-    conversation: opts.conversation,
-    userId: opts.userId,
-    toolCalls: result.toolCalls,
-  })
+    conversation: opts.conversation, userId: opts.userId, toolCalls: result.toolCalls, })
 }
 
 function parsePendingReplyState(raw: string | null | undefined): PendingWhatsAppReplyState | null {
@@ -291,10 +225,7 @@ interface QuotedNotificationMatch {
 // Returns null (never throws) for "no match yet" so the caller can treat it as
 // unmatched and fall through to the remaining routing tiers rather than erroring.
 async function resolveQuotedNotification(
-  db: D1Database,
-  providerMessageId: string,
-  phone: string,
-): Promise<QuotedNotificationMatch | null> {
+  db: D1Database, providerMessageId: string, phone: string, ): Promise<QuotedNotificationMatch | null> {
   const notification = await queryFirst<{
     organization_id: string
     site_id: string | null
@@ -312,12 +243,7 @@ async function resolveQuotedNotification(
   if (notification.related_submission_type === 'invitation') return null
 
   const authorized = await isAuthorizedWhatsAppRecipient(db, {
-    phone,
-    organizationId: notification.organization_id,
-    siteId: notification.site_id,
-    locationId: notification.location_id,
-    requireSiteWide: false,
-  })
+    phone, organizationId: notification.organization_id, siteId: notification.site_id, locationId: notification.location_id, requireSiteWide: false, })
   if (!authorized) return null
 
   const thread = await getGuestThreadBySubmission(db, notification.related_submission_type, notification.related_submission_id)
@@ -341,8 +267,7 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
     guestName: string
     submissionType: string
   }>(db, `
-    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId, gt.location_id AS locationId,
-           gt.guest_name AS guestName, gt.submission_type AS submissionType, MAX(n.created_at) AS createdAt
+    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId, gt.location_id AS locationId, gt.guest_name AS guestName, gt.submission_type AS submissionType, MAX(n.created_at) AS createdAt
     FROM notifications n
     JOIN member m ON m.organizationId = n.organization_id AND m.userId = ?
     JOIN guest_threads gt ON gt.submission_type = n.related_submission_type AND gt.submission_id = n.related_submission_id
@@ -358,34 +283,25 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
   `, [userId, sinceIso])
 
   return (rows ?? []).map((r) => ({
-    threadId: r.threadId,
-    siteId: r.siteId,
-    organizationId: r.organizationId,
-    locationId: r.locationId,
-    label: `${submissionTypeLabel(r.submissionType)} from ${r.guestName}`,
-  }))
+    threadId: r.threadId, siteId: r.siteId, organizationId: r.organizationId, locationId: r.locationId, label: `${submissionTypeLabel(r.submissionType)} from ${r.guestName}`, }))
 }
 
 // Issue #293 Section C's four-tier routing contract, applied only to messages from a
-// resolveUser-verified platform user (managers). Handles all I/O (lookups,
-// authorization, sends, channel-state persistence) around the pure decision function in
+// resolveUser-verified platform user (managers). Handles all I/O (lookups, // authorization, sends, channel-state persistence) around the pure decision function in
 // server/utils/whatsapp-reply-routing.ts. Returns `{ handled: false }` only when the
 // message should continue into the existing (unchanged) ChowBot dispatch flow — either
 // because it was explicitly ChowBot-directed, or because the manager hasn't finished the
 // pre-existing multi-site selection step yet (which also uses bare numeric replies, and
 // must keep first claim on them so it isn't shadowed by tier 3's disambiguation picker).
 async function routeManagerWhatsAppMessage(
-  db: D1Database,
-  env: ApiRecord,
-  opts: {
+  db: D1Database, env: ApiRecord, opts: {
     message: WhatsAppMessage
     toPhone: string
     userId: string
     existingState: Awaited<ReturnType<typeof getChannelState>>
     messageId: string
     sites: Array<{ id: string }>
-  },
-): Promise<{ handled: true } | { handled: false; effectiveText: string }> {
+  }, ): Promise<{ handled: true } | { handled: false; effectiveText: string }> {
   const rawText = messageText(opts.message)
   const pendingState = parsePendingReplyState(opts.existingState?.pending_confirmation)
   const contextId = opts.message.context?.id ?? null
@@ -427,13 +343,7 @@ async function routeManagerWhatsAppMessage(
     }
 
     return {
-      bypassToChowBotSiteSelection: false,
-      quotedMatch,
-      quotedResolved,
-      isChowBotDirected,
-      recentNotificationCount: recentCandidates.length,
-      recentCandidates,
-    }
+      bypassToChowBotSiteSelection: false, quotedMatch, quotedResolved, isChowBotDirected, recentNotificationCount: recentCandidates.length, recentCandidates, }
   }
 
   if (!pendingState) {
@@ -441,13 +351,7 @@ async function routeManagerWhatsAppMessage(
     if (fresh.bypassToChowBotSiteSelection) return { handled: false, effectiveText: rawText }
 
     const decision = decideWhatsAppReplyRouting({
-      hasQuotedContext,
-      quotedMatch: fresh.quotedMatch,
-      isChowBotDirected: fresh.isChowBotDirected,
-      pendingState: null,
-      recentNotificationCount: fresh.recentNotificationCount,
-      text: rawText,
-    })
+      hasQuotedContext, quotedMatch: fresh.quotedMatch, isChowBotDirected: fresh.isChowBotDirected, pendingState: null, recentNotificationCount: fresh.recentNotificationCount, text: rawText, })
 
     switch (decision.action) {
       case 'start_confirm_send': {
@@ -462,14 +366,7 @@ async function routeManagerWhatsAppMessage(
         const match = fresh.quotedResolved!
         const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
         const newState: PendingWhatsAppReplyState = {
-          kind: 'confirm_send',
-          threadId: match.threadId,
-          siteId: match.siteId,
-          organizationId: match.organizationId,
-          locationId: match.locationId,
-          replyBody: trimmedText,
-          guestEmailMasked,
-        }
+          kind: 'confirm_send', threadId: match.threadId, siteId: match.siteId, organizationId: match.organizationId, locationId: match.locationId, replyBody: trimmedText, guestEmailMasked, }
         const sendResult = await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
         if (!sendResult.success) {
           throw new Error(sendResult.error || 'Failed to send WhatsApp confirmation prompt')
@@ -510,11 +407,7 @@ async function routeManagerWhatsAppMessage(
     if (decision.action === 'confirm_send_execute') {
       // Reauthorize before executing the reply to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
-        phone: opts.toPhone,
-        organizationId: pendingState.organizationId,
-        siteId: pendingState.siteId,
-        locationId: pendingState.locationId,
-      })
+        phone: opts.toPhone, organizationId: pendingState.organizationId, siteId: pendingState.siteId, locationId: pendingState.locationId, })
       if (!authorized) {
         await clearPending()
         await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
@@ -523,18 +416,11 @@ async function routeManagerWhatsAppMessage(
       const actorMemberId = await resolveMemberId({ organizationId: pendingState.organizationId, userId: opts.userId, env })
       const result = actorMemberId
         ? await executeGuestThreadOperation(db, {
-            threadId: pendingState.threadId,
-            siteId: pendingState.siteId,
-            action: 'reply',
-            actorUserId: opts.userId,
-            actorMemberId,
-            body: pendingState.replyBody,
-            env,
-            idempotencyKey: `whatsapp:${opts.messageId}:reply`,
-          })
+            threadId: pendingState.threadId, siteId: pendingState.siteId, action: 'reply', actorUserId: opts.userId, actorMemberId, body: pendingState.replyBody, env, idempotencyKey: `whatsapp:${opts.messageId}:reply`, })
         : { ok: false as const, status: 404 as const, reason: 'thread_not_found' as const }
       await clearPending()
       if (result.ok) {
+        await publishGuestInboxThreadEvent(env, db, { threadId: result.thread.id, type: 'thread.changed' })
         await sendWhatsAppText(env, opts.toPhone, REPLY_SENT_CONFIRMATION)
       } else {
         await sendWhatsAppText(env, opts.toPhone, buildReplyFailedMessage(result.reason))
@@ -552,11 +438,7 @@ async function routeManagerWhatsAppMessage(
 
       // Reauthorize before disambiguation transition to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
-        phone: opts.toPhone,
-        organizationId: chosen.organizationId,
-        siteId: chosen.siteId,
-        locationId: chosen.locationId,
-      })
+        phone: opts.toPhone, organizationId: chosen.organizationId, siteId: chosen.siteId, locationId: chosen.locationId, })
       if (!authorized) {
         await clearPending()
         await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
@@ -583,14 +465,7 @@ async function routeManagerWhatsAppMessage(
   } else {
     // collect_reply: any non-empty text becomes the reply body, moving to confirm_send.
     const newState: PendingWhatsAppReplyState = {
-      kind: 'confirm_send',
-      threadId: pendingState.threadId,
-      siteId: pendingState.siteId,
-      organizationId: pendingState.organizationId,
-      locationId: pendingState.locationId,
-      replyBody: rawText,
-      guestEmailMasked: pendingState.guestEmailMasked,
-    }
+      kind: 'confirm_send', threadId: pendingState.threadId, siteId: pendingState.siteId, organizationId: pendingState.organizationId, locationId: pendingState.locationId, replyBody: rawText, guestEmailMasked: pendingState.guestEmailMasked, }
     const sendResult = await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(pendingState.guestEmailMasked))
     if (!sendResult.success) throw new Error(sendResult.error || 'Failed to send WhatsApp confirmation prompt')
     await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
@@ -602,27 +477,14 @@ async function routeManagerWhatsAppMessage(
   if (fresh.bypassToChowBotSiteSelection) return { handled: false, effectiveText: rawText }
 
   const decision = decideWhatsAppReplyRouting({
-    hasQuotedContext,
-    quotedMatch: fresh.quotedMatch,
-    isChowBotDirected: fresh.isChowBotDirected,
-    pendingState: null,
-    recentNotificationCount: fresh.recentNotificationCount,
-    text: rawText,
-  })
+    hasQuotedContext, quotedMatch: fresh.quotedMatch, isChowBotDirected: fresh.isChowBotDirected, pendingState: null, recentNotificationCount: fresh.recentNotificationCount, text: rawText, })
 
   switch (decision.action) {
     case 'start_confirm_send': {
       const match = fresh.quotedResolved!
       const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
       const newState: PendingWhatsAppReplyState = {
-        kind: 'confirm_send',
-        threadId: match.threadId,
-        siteId: match.siteId,
-        organizationId: match.organizationId,
-        locationId: match.locationId,
-        replyBody: rawText,
-        guestEmailMasked,
-      }
+        kind: 'confirm_send', threadId: match.threadId, siteId: match.siteId, organizationId: match.organizationId, locationId: match.locationId, replyBody: rawText, guestEmailMasked, }
       await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
       await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
       return { handled: true }
@@ -642,17 +504,14 @@ async function routeManagerWhatsAppMessage(
 }
 
 async function handleManagerChowBotMessage(
-  db: D1Database,
-  env: ApiRecord,
-  opts: {
+  db: D1Database, env: ApiRecord, opts: {
     user: UserRow
     message: WhatsAppMessage
     toPhone: string
     existingState: Awaited<ReturnType<typeof getChannelState>>
     sites: Array<{ id: string; organization_id: string; brand_name: string | null; default_currency: string | null; role: string }>
     text: string
-  },
-): Promise<void> {
+  }, ): Promise<void> {
   const { user, message, existingState, sites, toPhone } = opts
   if (!sites.length) {
     await reply(null, env, toPhone, 'No KrabiClaw sites are available for this account.')
@@ -671,14 +530,7 @@ async function handleManagerChowBotMessage(
     const selected = sites[selectedIndex]
     if (!selected) {
       await upsertChannelState(db, {
-        userId: user.id,
-        channel: 'whatsapp',
-        selectedSiteId: null,
-        activeConversationId: null,
-        pendingMedia: null,
-        pendingConfirmation: null,
-        lastInboundId: message.id,
-      })
+        userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMedia: null, pendingConfirmation: null, lastInboundId: message.id, })
       await reply(null, env, toPhone, siteListReply(sites))
       return
     }
@@ -697,29 +549,20 @@ async function handleManagerChowBotMessage(
   const site = await getSiteForMember(db, selectedSiteId, user.id)
   if (!site) {
     await upsertChannelState(db, {
-      userId: user.id,
-      channel: 'whatsapp',
-      selectedSiteId: null,
-      activeConversationId: null,
-      pendingMedia: null,
-      pendingConfirmation: null,
-      lastInboundId: message.id,
-    })
+      userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMedia: null, pendingConfirmation: null, lastInboundId: message.id, })
     await reply(null, env, toPhone, 'That site is no longer available. Reply again to choose a site.')
+    return
+  }
+  const siteName = site.brand_name?.trim()
+  if (!siteName) {
+    await reply(null, env, toPhone, 'This site is missing its configured brand name. Update the site identity before using ChowBot.')
     return
   }
 
   if (selectedSiteFromList && message.type === 'text' && /^\d+$/.test(text)) {
     await upsertChannelState(db, {
-      userId: user.id,
-      channel: 'whatsapp',
-      selectedSiteId: site.id,
-      activeConversationId: null,
-      pendingMedia: null,
-      pendingConfirmation: null,
-      lastInboundId: message.id,
-    })
-    await reply(null, env, toPhone, `ChowBot is now connected to ${site.brand_name ?? site.id}. What should we work on?`)
+      userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId: null, pendingMedia: null, pendingConfirmation: null, lastInboundId: message.id, })
+    await reply(null, env, toPhone, `ChowBot is now connected to ${siteName}. What should we work on?`)
     return
   }
 
@@ -729,12 +572,7 @@ async function handleManagerChowBotMessage(
     : null
   if (!conversation) {
     conversation = await getOrCreateConversation(db, {
-      organizationId: site.organization_id,
-      siteId: site.id,
-      userId: user.id,
-      firstMessage: firstText,
-      activeChannel: 'whatsapp',
-    })
+      organizationId: site.organization_id, siteId: site.id, userId: user.id, firstMessage: firstText, activeChannel: 'whatsapp', })
     activeConversationId = conversation.id
   }
 
@@ -748,48 +586,16 @@ async function handleManagerChowBotMessage(
     try {
       const media = await fetchWhatsAppMedia(env, mediaId)
       const asset = await saveInboundMediaAsset(db, env, {
-        organizationId: site.organization_id,
-        siteId: site.id,
-        userId: user.id,
-        bytes: media.bytes,
-        mimeType: media.mimeType,
-        fileSize: media.fileSize,
-        filename: message.type === 'document' ? message.document?.filename : undefined,
-      })
+        organizationId: site.organization_id, siteId: site.id, userId: user.id, bytes: media.bytes, mimeType: media.mimeType, fileSize: media.fileSize, filename: message.type === 'document' ? message.document?.filename : undefined, })
 
       await createMessage(db, {
-        conversationId: conversation.id,
-        organizationId: site.organization_id,
-        siteId: site.id,
-        userId: user.id,
-        role: 'user',
-        channel: 'whatsapp',
-        content: text || `Uploaded ${message.type}`,
-        media: { asset_id: asset.id, mime_type: asset.mime_type },
-        metaMessageId: message.id,
-      }, user.id)
+        conversationId: conversation.id, organizationId: site.organization_id, siteId: site.id, userId: user.id, role: 'user', channel: 'whatsapp', content: text || `Uploaded ${message.type}`, media: { asset_id: asset.id, mime_type: asset.mime_type }, metaMessageId: message.id, }, user.id)
 
       await upsertChannelState(db, {
-        userId: user.id,
-        channel: 'whatsapp',
-        selectedSiteId: site.id,
-        activeConversationId,
-        pendingMedia: { assetId: asset.id, siteId: site.id },
-        pendingConfirmation: { intent: 'pending_media' },
-        lastInboundId: message.id,
-      })
+        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMedia: { assetId: asset.id, siteId: site.id }, pendingConfirmation: { intent: 'pending_media' }, lastInboundId: message.id, })
 
       await runChowBotAndReply(db, env, {
-        toPhone,
-        conversation,
-        organizationId: site.organization_id,
-        siteId: site.id,
-        userId: user.id,
-        memberId: site.member_id,
-        userRole: site.role,
-        siteName: site.brand_name,
-        pendingMedia: { assetId: asset.id, siteId: site.id },
-      })
+        toPhone, conversation, organizationId: site.organization_id, siteId: site.id, userId: user.id, memberId: site.member_id, userRole: site.role, siteName, pendingMedia: { assetId: asset.id, siteId: site.id }, })
       return
     } catch (err) {
       await reply(db, env, toPhone, 'Failed to process the media file. Please try again.', { conversation, userId: user.id, status: 'failed', error: String(err) })
@@ -799,34 +605,13 @@ async function handleManagerChowBotMessage(
 
   try {
     await createMessage(db, {
-      conversationId: conversation.id,
-      organizationId: site.organization_id,
-      siteId: site.id,
-      userId: user.id,
-      role: 'user',
-      channel: 'whatsapp',
-      content: text || firstText,
-      metaMessageId: message.id,
-    }, user.id)
+      conversationId: conversation.id, organizationId: site.organization_id, siteId: site.id, userId: user.id, role: 'user', channel: 'whatsapp', content: text || firstText, metaMessageId: message.id, }, user.id)
 
     await runChowBotAndReply(db, env, {
-      toPhone,
-      conversation,
-      userId: user.id,
-      memberId: site.member_id,
-      organizationId: site.organization_id,
-      siteId: site.id,
-      userRole: site.role,
-      siteName: site.brand_name,
-      pendingMedia,
-    })
+      toPhone, conversation, userId: user.id, memberId: site.member_id, organizationId: site.organization_id, siteId: site.id, userRole: site.role, siteName, pendingMedia, })
   } catch (err) {
     await reply(db, env, toPhone, 'Sorry, something went wrong. Please try again.', {
-      conversation,
-      userId: user.id,
-      status: 'failed',
-      error: String(err),
-    })
+      conversation, userId: user.id, status: 'failed', error: String(err), })
   }
 }
 
@@ -859,35 +644,17 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
           const adapter = getAdapter(match.submissionType)
           const thread = await ensureGuestThread(db, adapter, match.submissionId)
           const entry = await appendEntry(db, {
-            threadId: thread.id,
-            organizationId: match.organizationId,
-            siteId: match.siteId,
-            kind: 'message',
-            actorKind: 'guest',
-            channel: 'whatsapp',
-            body: text,
-            externalId: message.id,
-          })
+            threadId: thread.id, organizationId: match.organizationId, siteId: match.siteId, kind: 'message', actorKind: 'guest', channel: 'whatsapp', body: text, externalId: message.id, })
           if (entry.created) {
             const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
             await updateThreadProjection(db, thread.id, { conversationState })
+            await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
 
             const source = await adapter.loadSource({ db }, match.submissionId)
             if (source) {
               const summary = adapter.summarize(source)
               await notifyGuestThreadReply(env, db, {
-                organizationId: match.organizationId,
-                siteId: match.siteId,
-                locationId: summary.locationId,
-                threadId: thread.id,
-                submissionType: match.submissionType,
-                submissionId: match.submissionId,
-                guestName: summary.guestName,
-                guestEmail: summary.guestEmail,
-                guestPhone: summary.guestPhone,
-                inboundChannel: 'whatsapp',
-                messagePreview: text,
-              })
+                organizationId: match.organizationId, siteId: match.siteId, locationId: summary.locationId, threadId: thread.id, submissionType: match.submissionType, submissionId: match.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'whatsapp', messagePreview: text, })
             }
           }
         } catch (err) {
@@ -917,23 +684,11 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
   // behavior. Only messages this returns `{ handled: false }` for continue into the
   // pre-existing ChowBot dispatch flow below, unchanged.
   const routed = await routeManagerWhatsAppMessage(db, env, {
-    message,
-    toPhone,
-    userId: user.id,
-    existingState,
-    messageId: messageId ?? message.id,
-    sites,
-  })
+    message, toPhone, userId: user.id, existingState, messageId: messageId ?? message.id, sites, })
   if (routed.handled) return
 
   await handleManagerChowBotMessage(db, env, {
-    user,
-    message,
-    toPhone,
-    existingState,
-    sites,
-    text: routed.effectiveText,
-  })
+    user, message, toPhone, existingState, sites, text: routed.effectiveText, })
 }
 
 function formatStatusError(errors: WhatsAppStatusError[] | undefined): string | null {
@@ -1001,7 +756,7 @@ async function handleStatus(db: D1Database, status: WhatsAppStatus): Promise<voi
   }
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -1009,14 +764,9 @@ export default defineEventHandler(async (event) => {
   const rawBody = await readRawBody(event) ?? ''
   const appSecret = typeof env.WHATSAPP_APP_SECRET === 'string' ? env.WHATSAPP_APP_SECRET : ''
   if (appSecret) {
-    const signature = getHeader(event, 'x-hub-signature-256') ?? ''
+    const signature = (event.req.headers.get('x-hub-signature-256')) ?? ''
     const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(appSecret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify'],
-    )
+      'raw', new TextEncoder().encode(appSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'], )
     const incomingHex = signature.startsWith('sha256=') ? signature.slice(7) : ''
     const pairs = incomingHex.match(/.{2}/g)
     const parsedPairs = pairs && pairs.length === 32 ? pairs.map((b) => parseInt(b, 16)) : null
@@ -1024,18 +774,18 @@ export default defineEventHandler(async (event) => {
       ? new Uint8Array(parsedPairs)
       : new Uint8Array(0)
     const isValid = incomingBytes.length === 32 && await crypto.subtle.verify(
-      { name: 'HMAC', hash: 'SHA-256' },
-      key,
-      incomingBytes,
-      new TextEncoder().encode(rawBody),
-    )
+      { name: 'HMAC', hash: 'SHA-256' }, key, incomingBytes, new TextEncoder().encode(rawBody), )
     if (!isValid) {
       return jsonResponse({ error: 'Invalid signature' }, { status: 403 })
     }
   }
 
   let payload: WhatsAppPayload = {}
-  try { payload = rawBody ? JSON.parse(rawBody) : {} } catch { payload = {} }
+  try {
+    payload = rawBody ? JSON.parse(rawBody) : {}
+  } catch {
+    return jsonResponse({ error: 'Malformed JSON payload' }, { status: 400 })
+  }
   const messages = inboundMessages(payload)
   const statuses = inboundStatuses(payload)
 
@@ -1048,3 +798,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true })
 })
+import { defineHandler } from 'nitro';
+import {  readRawBody  } from 'nitro/h3';

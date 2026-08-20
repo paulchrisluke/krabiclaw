@@ -12,17 +12,12 @@
 <script setup lang="ts">
 import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import ConsentBanner from '~/components/ConsentBanner.vue'
-import platformStylesheet from '~/assets/css/platform-entry.css?url'
-import platformHomeStylesheet from '~/assets/css/platform-home-entry.css?url'
+import '~/assets/css/platform-entry.css'
 
-const route = useRoute()
-const platformStylesheetHref = computed(() => {
-  const stylesheet = route.path === '/' ? platformHomeStylesheet : platformStylesheet
-  return new URL(stylesheet, 'http://nuxt.local').pathname
-})
+const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
 
 useHead(() => ({
-  link: [{ rel: 'stylesheet', href: platformStylesheetHref.value }],
+  link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
 }))
 
 const platformTheme = usePlatformTheme()

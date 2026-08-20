@@ -190,7 +190,11 @@ test('changelog route returns 400 for malformed limits and preserves the omitted
   }) as typeof fetch
 
   const { default: handler } = await import('../../server/api/changelog.get.ts')
-  const routeEvent = (query: Record<string, unknown>) => ({ context: { query } }) as unknown as H3Event
+  const routeEvent = (query: Record<string, unknown>) => {
+    const search = new URLSearchParams(query as Record<string, string>).toString()
+    const url = `http://localhost/api/changelog?${search}`
+    return { url: new URL(url), req: new Request(url), context: { query } } as unknown as H3Event
+  }
 
   for (const limit of ['', '0', '101', '1.5', '10abc']) {
     const response = await handler(routeEvent({ limit }))

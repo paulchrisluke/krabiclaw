@@ -3,7 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import { assertSiteWideAccess, resolveMemberId } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -25,19 +25,12 @@ export default defineEventHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const memberId = await resolveMemberId({
-    organizationId: site.organization_id,
-    userId: session.user.id,
-    env,
-  })
+    organizationId: site.organization_id, userId: session.user.id, env, })
   if (!memberId) return jsonResponse({ error: 'Organization membership not found' }, { status: 404 })
 
   try {
     await assertSiteWideAccess(db, {
-      memberId,
-      role: 'owner',
-      organizationId: site.organization_id,
-      siteId,
-    })
+      memberId, role: 'owner', organizationId: site.organization_id, siteId, })
   } catch {
     return jsonResponse({ error: 'Site access denied' }, { status: 403 })
   }
@@ -61,3 +54,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to complete onboarding' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

@@ -3,7 +3,7 @@ import type { ConversationState, GuestThreadSubmissionType } from '~/server/doma
 import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-threads'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -19,11 +19,8 @@ export default defineEventHandler(async (event) => {
   const unreadOnly = query.unread === '1' || query.unread === 'true'
 
   const payload = await loadDashboardGuestThreads(event, siteId, {
-    locationId,
-    search,
-    type,
-    conversationState,
-    unreadOnly,
-  })
+    locationId, search, type, conversationState, unreadOnly, })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-guest-threads', payload))
 })
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

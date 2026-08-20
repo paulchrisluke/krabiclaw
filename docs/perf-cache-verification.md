@@ -10,7 +10,7 @@ Build and run the production-style Worker:
 
 ```bash
 yarn build
-npx wrangler dev workers/app-entry.ts --assets .output/public --local --port 8787
+npx wrangler dev .output/server/index.mjs --assets .output/public --local --port 8787
 ```
 
 Use a preview-shaped host so the Worker deliberately skips public HTML and

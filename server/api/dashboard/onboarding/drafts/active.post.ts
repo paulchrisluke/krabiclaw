@@ -5,15 +5,7 @@ import { getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { queryFirst } from '~/server/db'
 import {
-  buildOnboardingDraftPayload,
-  parseOnboardingDraftPayload,
-  upsertActiveOnboardingDraft,
-  type DraftBrandInput,
-  type DraftDetailsInput,
-  type DraftUploadedImage,
-  type OnboardingDraftPayload,
-  type PlaceDetailsSnapshot,
-} from '~/server/utils/onboarding-drafts'
+  buildOnboardingDraftPayload, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
 import { createScopedPreviewToken } from '~/server/utils/preview-token'
 import { VALID_VERTICALS } from '~/server/utils/site-creation'
 import { DEFAULT_CURRENCY, isCurrencyCode } from '~/shared/currencies'
@@ -32,22 +24,9 @@ function parseCurrency(value: unknown, fallback = DEFAULT_CURRENCY) {
 }
 
 function detailsFromBody(
-  raw: Record<string, unknown> | null,
-  existing: DraftDetailsInput | null,
-  name: string,
-): DraftDetailsInput {
+  raw: Record<string, unknown> | null, existing: DraftDetailsInput | null, name: string, ): DraftDetailsInput {
   return {
-    name,
-    city: stringOrNull(raw?.city) ?? existing?.city ?? null,
-    address: stringOrNull(raw?.address) ?? existing?.address ?? null,
-    phone: stringOrNull(raw?.phone) ?? existing?.phone ?? null,
-    websiteUrl: stringOrNull(raw?.websiteUrl) ?? existing?.websiteUrl ?? null,
-    openingHours: stringOrNull(raw?.openingHours) ?? existing?.openingHours ?? null,
-    notificationPhone: stringOrNull(raw?.notificationPhone) ?? existing?.notificationPhone ?? null,
-    timezone: stringOrNull(raw?.timezone) ?? existing?.timezone ?? null,
-    currency: parseCurrency(raw?.currency, existing?.currency ?? DEFAULT_CURRENCY),
-    isPrimary: typeof raw?.isPrimary === 'boolean' ? raw.isPrimary : existing?.isPrimary ?? true,
-  }
+    name, city: stringOrNull(raw?.city) ?? existing?.city ?? null, address: stringOrNull(raw?.address) ?? existing?.address ?? null, phone: stringOrNull(raw?.phone) ?? existing?.phone ?? null, websiteUrl: stringOrNull(raw?.websiteUrl) ?? existing?.websiteUrl ?? null, openingHours: stringOrNull(raw?.openingHours) ?? existing?.openingHours ?? null, notificationPhone: stringOrNull(raw?.notificationPhone) ?? existing?.notificationPhone ?? null, timezone: stringOrNull(raw?.timezone) ?? existing?.timezone ?? null, currency: parseCurrency(raw?.currency, existing?.currency ?? DEFAULT_CURRENCY), isPrimary: typeof raw?.isPrimary === 'boolean' ? raw.isPrimary : existing?.isPrimary ?? true, }
 }
 
 function imageFromBody(raw: unknown, existing: DraftUploadedImage | null): DraftUploadedImage | null {
@@ -58,15 +37,7 @@ function imageFromBody(raw: unknown, existing: DraftUploadedImage | null): Draft
   const publicUrl = stringOrNull(record.publicUrl)
   if (!draftAssetId || !cloudflareImageId || !publicUrl) return existing
   return {
-    draftAssetId,
-    cloudflareImageId,
-    publicUrl,
-    thumbnailUrl: stringOrNull(record.thumbnailUrl),
-    mimeType: stringOrNull(record.mimeType),
-    fileName: stringOrNull(record.fileName),
-    fileSize: typeof record.fileSize === 'number' && Number.isFinite(record.fileSize) ? record.fileSize : null,
-    category: record.category === 'logo' ? 'logo' : 'other',
-  }
+    draftAssetId, cloudflareImageId, publicUrl, thumbnailUrl: stringOrNull(record.thumbnailUrl), mimeType: stringOrNull(record.mimeType), fileName: stringOrNull(record.fileName), fileSize: typeof record.fileSize === 'number' && Number.isFinite(record.fileSize) ? record.fileSize : null, category: record.category === 'logo' ? 'logo' : 'other', }
 }
 
 function brandFromBody(raw: Record<string, unknown> | null, existing: OnboardingDraftPayload | null): DraftBrandInput {
@@ -77,23 +48,14 @@ function brandFromBody(raw: Record<string, unknown> | null, existing: Onboarding
     : null
 
   return {
-    brandColor: stringOrNull(raw?.brandColor) ?? stringOrNull(existingConfig.brand_color) ?? null,
-    logoNote: stringOrNull(raw?.logoNote) ?? stringOrNull(existingConfig.draft_logo_note) ?? null,
-    logoPreviewUrl: stringOrNull(raw?.logoPreviewUrl) ?? existing?.preview.draftMedia?.logo?.publicUrl ?? null,
-    heroPhotoNote: stringOrNull(raw?.heroPhotoNote) ?? stringOrNull(existingConfig.draft_hero_photo_note) ?? null,
-    heroPreviewUrl: stringOrNull(raw?.heroPreviewUrl) ?? existing?.preview.draftMedia?.hero?.publicUrl ?? null,
-    heroHeadline: stringOrNull(raw?.heroHeadline) ?? stringOrNull(existingConfig.draft_hero_headline) ?? existingHeroHeadline,
-    heroDescription: stringOrNull(raw?.heroDescription) ?? stringOrNull(existingConfig.draft_hero_description) ?? null,
-    logoImage: imageFromBody(raw?.logoImage, existing?.preview.draftMedia?.logo ?? null),
-    heroImage: imageFromBody(raw?.heroImage, existing?.preview.draftMedia?.hero ?? null),
-  }
+    brandColor: stringOrNull(raw?.brandColor) ?? stringOrNull(existingConfig.brand_color) ?? null, logoNote: stringOrNull(raw?.logoNote) ?? stringOrNull(existingConfig.draft_logo_note) ?? null, logoPreviewUrl: stringOrNull(raw?.logoPreviewUrl) ?? existing?.preview.draftMedia?.logo?.publicUrl ?? null, heroPhotoNote: stringOrNull(raw?.heroPhotoNote) ?? stringOrNull(existingConfig.draft_hero_photo_note) ?? null, heroPreviewUrl: stringOrNull(raw?.heroPreviewUrl) ?? existing?.preview.draftMedia?.hero?.publicUrl ?? null, heroHeadline: stringOrNull(raw?.heroHeadline) ?? stringOrNull(existingConfig.draft_hero_headline) ?? existingHeroHeadline, heroDescription: stringOrNull(raw?.heroDescription) ?? stringOrNull(existingConfig.draft_hero_description) ?? null, logoImage: imageFromBody(raw?.logoImage, existing?.preview.draftMedia?.logo ?? null), heroImage: imageFromBody(raw?.heroImage, existing?.preview.draftMedia?.hero ?? null), }
 }
 
 function existingHeroHeadlineIsCustom(headline: string, brandName: string) {
   return headline.trim().length > 0 && headline.trim() !== brandName.trim()
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -128,8 +90,7 @@ export default defineEventHandler(async (event) => {
   const rawVertical = typeof body?.vertical === 'string' ? body.vertical : existingPayload?.preview.vertical
   if (!rawVertical || !VALID_VERTICALS.includes(rawVertical as SiteVertical)) {
     return jsonResponse({
-      error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`,
-    }, { status: 400 })
+      error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`, }, { status: 400 })
   }
   const vertical = rawVertical as SiteVertical
 
@@ -150,8 +111,7 @@ export default defineEventHandler(async (event) => {
         } catch (error) {
           const status = error instanceof PlaceDetailsError ? error.statusCode : 502
           return jsonResponse({
-            error: error instanceof Error ? error.message : 'Could not fetch place details. Try again.',
-          }, { status })
+            error: error instanceof Error ? error.message : 'Could not fetch place details. Try again.', }, { status })
         }
       }
     } else if (existingPlace) {
@@ -183,30 +143,16 @@ export default defineEventHandler(async (event) => {
   const details = detailsFromBody(rawDetails, existingPayload?.source.details ?? null, name)
   const brandDraft = brandFromBody(body.brandDraft && typeof body.brandDraft === 'object' ? body.brandDraft : null, existingPayload)
   const payload = buildOnboardingDraftPayload({
-    name,
-    vertical,
-    place,
-    details,
-    brandDraft,
-  })
+    name, vertical, place, details, brandDraft, })
 
   const draft = await upsertActiveOnboardingDraft(db, {
-    userId: session.user.id,
-    organizationId: dashboard?.organization?.id ?? null,
-    name: payload.preview.brandName,
-    vertical,
-    sourceType,
-    payload,
-  })
+    userId: session.user.id, organizationId: dashboard?.organization?.id ?? null, name: payload.preview.brandName, vertical, sourceType, payload, })
 
   const expiresAt = Date.now() + (1000 * 60 * 60 * 12)
   const previewToken = await createScopedPreviewToken(previewSecret, 'draft', draft.id, expiresAt)
 
   return jsonResponse({
-    success: true,
-    draftId: draft.id,
-    draftName: payload.preview.brandName,
-    subdomainCandidate: draft.subdomainCandidate,
-    previewToken,
-  })
+    success: true, draftId: draft.id, draftName: payload.preview.brandName, subdomainCandidate: draft.subdomainCandidate, previewToken, })
 })
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

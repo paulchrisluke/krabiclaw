@@ -23,6 +23,11 @@ export default defineAppConfig({
         toggle: 'hidden'
       }
     },
+    icons: {
+      menu: 'i-lucide-menu',
+      panelClose: 'i-lucide-panel-left-close',
+      panelOpen: 'i-lucide-panel-left-open'
+    },
     input: {
       defaultVariants: {
         size: 'md',

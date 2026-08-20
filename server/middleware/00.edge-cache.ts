@@ -13,7 +13,8 @@
 //   - Non-GET requests
 //   - No Host header
 
-import { defineEventHandler, setResponseHeaders, getHeader } from 'h3'
+import { defineHandler } from 'nitro';
+import { setResponseHeaders } from 'nitro/h3';
 import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
@@ -26,15 +27,15 @@ const SKIP_PREFIXES = [
 
 const SESSION_COOKIE = 'better-auth.session_token'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   if (event.method !== 'GET') return
   if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
-  if ((getHeader(event, 'cookie') ?? '').includes(SESSION_COOKIE)) return
+  if (((event.req.headers.get('cookie')) ?? '').includes(SESSION_COOKIE)) return
   if (event.path.includes('?')) return
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfReq = (event.context.cloudflare as any)?.request as Request | undefined
-  const host = cfReq?.headers.get('host') ?? getHeader(event, 'host') ?? ''
+  const cfReq = (event.runtime?.cloudflare as any)?.request as Request | undefined
+  const host = cfReq?.headers.get('host') ?? (event.req.headers.get('host')) ?? ''
   const hostname = host.split(':')[0] ?? host
 
   // Preview/staging Workers are redeployed on every CI run. Serving KV-cached HTML
@@ -48,7 +49,7 @@ export default defineEventHandler(async (event) => {
 
   // Access KV directly from the Cloudflare event context
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
+  const kv = (event.runtime?.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
   if (!kv) return
 
   try {

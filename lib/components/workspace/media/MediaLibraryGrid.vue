@@ -127,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
@@ -204,19 +205,6 @@ const filteredAssets = computed(() => {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const dataError = (data as Record<string, unknown>).error
-      if (typeof dataError === 'string' && dataError) return dataError
-    }
-    const message = (error as Record<string, unknown>).message
-    if (typeof message === 'string' && message) return message
-  }
-  return fallback
 }
 
 async function loadAssets() {

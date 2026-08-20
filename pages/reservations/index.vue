@@ -155,6 +155,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import BookingContactForm from '@/components/booking/BookingContactForm.vue'
 import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
 import BookingModal from '@/components/booking/BookingModal.vue'
@@ -174,6 +175,7 @@ function formatTitleItalics(text: string | null | undefined): string {
 definePageMeta({ layout: 'saya' })
 
 const { site, siteId } = useTenantSite()
+const route = useRoute()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
@@ -186,7 +188,7 @@ const isExperienceSite = computed(() => (site as { vertical?: string | null } | 
 // not show this page.
 watch(isExperienceSite, (isExp) => {
   if (isExp) {
-    navigateTo('/experiences', { replace: true, redirectCode: 302 })
+    navigateTo({ path: '/experiences', query: route.query }, { replace: true, redirectCode: 302 })
   }
 }, { immediate: true })
 
@@ -434,7 +436,7 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
-const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site')
+const brandName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 const primaryLocationSocialImage = computed(() => {
   const primary = locations.value[0]
   if (!primary) return null
@@ -459,7 +461,7 @@ useSchemaOrg([
   ({
     '@context': 'https://schema.org',
     '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
-    name: (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site',
+    name: brandName.value,
     url: requestUrl.origin,
     reservationUrl: `${requestUrl.origin}/reservations`,
     potentialAction: {

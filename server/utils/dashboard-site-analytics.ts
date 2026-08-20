@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { cloudflareEnv, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst } from '~/server/db'
@@ -102,15 +104,15 @@ function normalizeCountryCode(value: unknown): string {
   return /^[A-Z]{2}$/.test(code) ? code : 'XX'
 }
 
-function normalizeReferrer(value: unknown, siteSubdomain: string | null): string {
+function normalizeReferrer(value: unknown, sitePublicUrl: string | null): string {
   const raw = String(value || '').trim()
   if (!raw) return 'Direct'
 
   try {
     const url = new URL(raw)
     const host = url.hostname.replace(/^www\./, '')
-    const freeHost = siteSubdomain ? `${siteSubdomain}.krabiclaw.com` : ''
-    if (siteSubdomain && (host === freeHost || host === `${siteSubdomain}.localhost`)) return 'Internal'
+    const configuredHost = sitePublicUrl ? new URL(sitePublicUrl).hostname.replace(/^www\./, '') : ''
+    if (configuredHost && host === configuredHost) return 'Internal'
     return host || 'Direct'
   } catch {
     return 'Direct'
@@ -146,28 +148,28 @@ export async function loadDashboardSiteAnalytics(
   query: { startDate?: string; endDate?: string },
 ) {
   if (!siteId) {
-    throw createError({ statusCode: 400, statusMessage: 'Site ID is required' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Site ID is required' })
   }
 
   const env = cloudflareEnv(event)
   const db = env.DB
 
   if (!db) {
-    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
   }
 
   // Get authenticated user
   const session = await getAuthSession(event, env)
 
   if (!session?.user?.id) {
-    throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+    throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
   }
 
   try {
     const site = await loadMemberSiteRow(db, siteId, session.user.id)
 
     if (!site) {
-      throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
     }
 
     await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
@@ -183,7 +185,7 @@ export async function loadDashboardSiteAnalytics(
         throw new Error('startDate must be before or equal to endDate')
       }
     } catch (err) {
-      throw createError({
+      throw new HTTPError({
         statusCode: 400,
         statusMessage: err instanceof Error ? err.message : 'Invalid date',
       })
@@ -382,7 +384,7 @@ export async function loadDashboardSiteAnalytics(
       LIMIT 200
     `, [siteId, startIso, endIso])
     for (const row of referrerRows) {
-      const source = normalizeReferrer(row.referrer, site.subdomain)
+      const source = normalizeReferrer(row.referrer, site.public_url)
       referrerMap.set(source, (referrerMap.get(source) || 0) + toNumber(row.views))
     }
     const referrers: ReferrerBreakdown[] = Array.from(referrerMap.entries())
@@ -474,7 +476,7 @@ export async function loadDashboardSiteAnalytics(
     rethrowHttpError(error)
     const err = error instanceof Error ? error : new Error(String(error))
     console.error('Analytics fetch error:', err.message)
-    throw createError({ statusCode: 500, statusMessage: 'Failed to fetch analytics' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to fetch analytics' })
   }
 }
 

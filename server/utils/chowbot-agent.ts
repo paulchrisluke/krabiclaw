@@ -156,7 +156,6 @@ async function executeTool(
     channel?: "dashboard" | "whatsapp";
     sessionId?: string | null;
     pendingMedia?: { assetId: string; siteId: string };
-    forceSubdomainRegistrationFailure?: boolean;
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
@@ -263,7 +262,7 @@ async function executeTool(
       // location when the model omits location_id (MCP always requires it explicit).
       return runMcpExecutorToolForChowbot(executorSite, "create_menu", {
         ...input,
-        location_id: input.location_id ?? ctx.locationId ?? undefined,
+        location_id: input.location_id ?? ctx.locationId,
       });
     }
 
@@ -276,10 +275,10 @@ async function executeTool(
     }
 
     case "publish_menu": {
-      // ChowBot-only ergonomic name — delegates to update_menu's status field.
+      // ChowBot-only ergonomic name for making a hidden menu visible again.
       return runMcpExecutorToolForChowbot(executorSite, "update_menu", {
         menu_id: input.menu_id,
-        status: "published",
+        is_visible: true,
       });
     }
 
@@ -554,7 +553,7 @@ async function executeTool(
       // location when the model omits location_id.
       return runMcpExecutorToolForChowbot(executorSite, "get_reservation_inquiries", {
         ...input,
-        location_id: input.location_id ?? ctx.locationId ?? undefined,
+        location_id: input.location_id ?? ctx.locationId,
       });
     }
 
@@ -568,12 +567,7 @@ async function executeTool(
     case "get_tenant_page":
     case "create_tenant_page":
     case "update_tenant_page_draft":
-    case "publish_tenant_page":
-    case "unpublish_tenant_page":
     case "change_tenant_page_path":
-    case "archive_tenant_page":
-    case "restore_tenant_page":
-    case "delete_tenant_page":
       return runMcpExecutorToolForChowbot(executorSite, name, input);
 
     case "get_page_fields": {
@@ -582,7 +576,7 @@ async function executeTool(
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
-          : (ctx.locationId ?? undefined);
+          : (ctx.locationId);
       return runMcpExecutorToolForChowbot(executorSite, "get_page_fields", {
         page,
         location_id: targetLocationId,
@@ -599,7 +593,7 @@ async function executeTool(
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
-          : (ctx.locationId ?? undefined);
+          : (ctx.locationId);
       return runMcpExecutorToolForChowbot(executorSite, "update_page_content", {
         page,
         changes,
@@ -663,10 +657,6 @@ async function executeTool(
         orgId,
         { brand_name: input.brand_name },
         userId,
-        {
-          forceSubdomainRegistrationFailure:
-            ctx.forceSubdomainRegistrationFailure,
-        },
       );
       if (result.status >= 400) {
         return {
@@ -823,7 +813,7 @@ async function executeTool(
       // location when the model omits location_id.
       return runMcpExecutorToolForChowbot(executorSite, "list_experience_bookings", {
         ...input,
-        location_id: input.location_id ?? ctx.locationId ?? undefined,
+        location_id: input.location_id ?? ctx.locationId,
       });
     }
 
@@ -872,7 +862,7 @@ async function executeTool(
       const capacityOverride = input.capacity_override !== undefined && input.capacity_override !== null
         ? Number(input.capacity_override)
         : undefined;
-      const note = toSqlText(input.note) ?? undefined;
+      const note = toSqlText(input.note);
       const result = await upsertSlotOverride(db, orgId, siteId, experienceId, {
         override_date: date,
         time_slot: timeSlot,
@@ -888,9 +878,9 @@ async function executeTool(
       const experienceId = toSqlText(input.experience_id);
       if (!experienceId)
         return { error: "experience_id is required" };
-      const from = toSqlText(input.from) ?? undefined;
-      const to = toSqlText(input.to) ?? undefined;
-      const overrides = await listSlotOverrides(db, siteId, experienceId, { fromDate: from, toDate: to });
+      const from = toSqlText(input.from);
+      const to = toSqlText(input.to);
+      const overrides = await listSlotOverrides(db, siteId, experienceId, { fromDate: from ?? undefined, toDate: to ?? undefined });
       return { overrides };
     }
 
@@ -1005,7 +995,6 @@ export async function executeChowBotToolForTest(
     locationId?: string | null;
     channel?: "dashboard" | "whatsapp";
     pendingMedia?: { assetId: string; siteId: string };
-    forceSubdomainRegistrationFailure?: boolean;
   },
 ): Promise<ApiValue> {
   return executeTool(name, input, ctx);

@@ -1,4 +1,5 @@
-import { toWebRequest } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';
 import { cleanString, cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { execute } from '~/server/db'
 
@@ -13,9 +14,9 @@ const hashIp = async (ip: string) => {
 
 
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const request = toWebRequest(event)
+  const request = event.req
   let body: ApiRecord
 
   try {

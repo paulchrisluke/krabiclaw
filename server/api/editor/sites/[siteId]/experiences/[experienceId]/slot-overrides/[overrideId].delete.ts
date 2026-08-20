@@ -3,7 +3,7 @@ import { deleteSlotOverride, getExperienceById } from '~/server/utils/experience
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
   const overrideId = getRouterParam(event, 'overrideId')
@@ -15,15 +15,12 @@ export default defineEventHandler(async (event) => {
   const experience = await getExperienceById(db, siteId, experienceId)
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: experience.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: experience.location_id, })
 
   const deleted = await deleteSlotOverride(db, siteId, experienceId, overrideId)
   if (!deleted) return jsonResponse({ error: 'Override not found' }, { status: 404 })
 
   return jsonResponse({ deleted: true })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

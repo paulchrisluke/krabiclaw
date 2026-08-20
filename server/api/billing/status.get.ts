@@ -4,7 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getOrganizationBillingStatus } from '../../utils/billing'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
 
@@ -25,8 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const organization = await resolveRequestedOrganization(event, db, session.user.id, {
-    explicitOrganizationId: typeof query.organizationId === 'string' ? query.organizationId : null,
-  })
+    explicitOrganizationId: typeof query.organizationId === 'string' ? query.organizationId : null, })
 
   if (!organization) {
     return jsonResponse({ error: 'No organization found' }, { status: 404 })
@@ -37,9 +36,7 @@ export default defineEventHandler(async (event) => {
     const billingStatus = await getOrganizationBillingStatus(env, db, organization.id)
 
     return jsonResponse({
-      success: true,
-      billing: { ...billingStatus, organizationId: organization.id },
-      userRole: organization.role
+      success: true, billing: { ...billingStatus, organizationId: organization.id }, userRole: organization.role
     })
 
   } catch (error) {
@@ -49,3 +46,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

@@ -158,7 +158,6 @@
 </template>
 
 <script setup lang="ts">
-import { DEFAULT_BUSINESS_NAME } from '~/config/constants'
 import { getTodayGoogleHours, getActiveSpecialClosure } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
@@ -251,7 +250,7 @@ const locationsError = computed(() => props.error)
 const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
 const year = new Date().getFullYear()
 const logoUrl = computed(() => props.site?.logo_url || null)
-const restaurantName = computed(() => props.site?.brand_name?.trim() || DEFAULT_BUSINESS_NAME)
+const restaurantName = computed(() => props.site?.brand_name?.trim() || '')
 const tagline = computed(() => props.site?.brand_description?.trim() || '')
 const sitePlan = computed(() => props.site?.plan)
 const showBrandingCredit = computed(() => !props.isPlatform && sitePlan.value === 'free')
@@ -301,15 +300,9 @@ const activeSocials = computed(() =>
 )
 const locations = computed(() =>
   props.locations.map((loc: PublicLocation) => {
-    let phone = loc.phone
-    // Fallback if placeholder-like
-    if (!phone || phone.includes('example.com')) {
-      phone = props.site?.config?.phone || null
-    }
     const closure = getActiveSpecialClosure(loc.special_hours, loc.timezone)
     return {
       ...loc,
-      phone,
       hoursToday: closure ? 'Temporarily closed' : (loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null)
     }
   })

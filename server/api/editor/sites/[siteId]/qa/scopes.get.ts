@@ -1,7 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const { db } = await requireSiteAccess(event, siteId)
@@ -15,3 +15,5 @@ export default defineEventHandler(async (event) => {
   
   return jsonResponse(scopes.results ?? [])
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

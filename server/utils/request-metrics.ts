@@ -1,4 +1,6 @@
-import { getHeader, getResponseHeader, getResponseStatus, setHeader, type H3Event } from 'h3'
+import type { H3Event } from 'nitro';
+import type { HTTPEvent } from 'nitro/h3';
+import {  getResponseHeader, setHeader } from 'nitro/h3';
 import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
 
 export interface RequestDataMetrics {
@@ -14,8 +16,8 @@ export interface RequestDataMetrics {
   finalized: boolean
 }
 
-const metricsByEvent = new WeakMap<H3Event, RequestDataMetrics>()
-const databaseByEvent = new WeakMap<H3Event, D1Database>()
+const metricsByEvent = new WeakMap<object, RequestDataMetrics>()
+const databaseByEvent = new WeakMap<object, D1Database>()
 const databaseTargets = new WeakMap<D1Database, D1Database>()
 const statementTargets = new WeakMap<object, { target: object; query: string }>()
 const SLOW_D1_QUERY_MS = 1000
@@ -35,7 +37,7 @@ export function getRequestDataMetrics(event: H3Event): RequestDataMetrics {
   let metrics = metricsByEvent.get(event)
   if (!metrics) {
     metrics = {
-      requestId: getHeader(event, 'x-request-id') || crypto.randomUUID(),
+      requestId: (event.req.headers.get('x-request-id')) || crypto.randomUUID(),
       statementCount: 0,
       batchRoundTrips: 0,
       rowsRead: 0,
@@ -52,7 +54,7 @@ export function getRequestDataMetrics(event: H3Event): RequestDataMetrics {
 }
 
 export function safeRoute(event: H3Event): string {
-  const route = event.path || event.node.req.url || '/'
+  const route = event.url.pathname + event.url.search
 
   try {
     return new URL(route, 'http://internal').pathname
@@ -114,7 +116,7 @@ async function logD1Query(
     console[level]('[d1-query]', JSON.stringify({
       event: error ? 'd1_query_failed' : 'd1_query_slow',
       request_id: metrics.requestId,
-      ray_id: getHeader(event, 'cf-ray') ?? null,
+      ray_id: (event.req.headers.get('cf-ray')) ?? null,
       route: safeRoute(event),
       statement_method: statementMethod,
       operation: identity.operation,
@@ -209,7 +211,7 @@ export function instrumentD1(event: H3Event, database: D1Database): D1Database {
               console.error('[d1-query]', JSON.stringify({
                 event: 'd1_batch_failed',
                 request_id: metrics.requestId,
-                ray_id: getHeader(event, 'cf-ray') ?? null,
+                ray_id: (event.req.headers.get('cf-ray')) ?? null,
                 route: safeRoute(event),
                 statement_count: statements.length,
                 statements: statements.map((statement) => {
@@ -313,49 +315,27 @@ function applyMetricHeaders(
   ].join(', '))
 }
 
-function responseErrorCode(payload: unknown): string | null {
-  if (typeof payload === 'string') {
-    try {
-      return responseErrorCode(JSON.parse(payload))
-    } catch {
-      return null
-    }
-  }
-  if (!payload || typeof payload !== 'object') return null
-  const error = 'error' in payload ? payload.error : null
-  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
-    return error.code
-  }
-  return null
-}
-
-export function flushRequestMetrics(event: H3Event, responseBody?: unknown) {
+export async function flushRequestMetrics(event: HTTPEvent, response: Response) {
   const metrics = metricsByEvent.get(event)
   if (!metrics) return
 
-  // The afterResponse hook is logging only; setting headers here causes
+  // The response hook is logging only; setting headers here causes
   // ERR_HTTP_HEADERS_SENT in Nitro.
-  if (metrics.resources.size === 0 && responseBody !== undefined) {
-    const serialized = typeof responseBody === 'string'
-      ? responseBody
-      : JSON.stringify(responseBody)
-    metrics.resources.set(event.path, new TextEncoder().encode(serialized).byteLength)
+  if (metrics.resources.size === 0 && response.status !== 101) {
+    const serialized = await response.clone().text()
+    metrics.resources.set(new URL(event.req.url).pathname, new TextEncoder().encode(serialized).byteLength)
   }
   if (!metrics.finalized) {
     metrics.finalized = true
-    console.error('[data-request] response was not finalized before beforeResponse', JSON.stringify({
-      requestId: metrics.requestId,
-      resource: [...metrics.resources.keys()].join(',') || event.path,
-    }))
   }
-  const cacheStatus = String(getResponseHeader(event, 'x-bootstrap-cache') ?? 'BYPASS')
+  const cacheStatus = String(response.headers.get('x-bootstrap-cache') ?? 'BYPASS')
   const responseBytes = [...metrics.resources.values()].reduce((total, bytes) => total + bytes, 0)
-  const status = getResponseStatus(event)
-  const errorCode = status >= 400 ? responseErrorCode(responseBody) ?? `HTTP_${status}` : null
+  const status = response.status
+  const errorCode = status >= 400 ? `HTTP_${status}` : null
   const totalDuration = performance.now() - metrics.startedAt
   console.info('[data-request]', JSON.stringify({
     requestId: metrics.requestId,
-    resource: [...metrics.resources.keys()].join(',') || event.path,
+    resource: [...metrics.resources.keys()].join(',') || new URL(event.req.url).pathname,
     cacheStatus,
     attemptCount: 1,
     statementCount: metrics.statementCount,

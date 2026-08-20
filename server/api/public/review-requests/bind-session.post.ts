@@ -3,7 +3,7 @@ import { executeBatch } from '~/server/db'
 import { getAuthSession } from '~/server/utils/auth'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -30,9 +30,7 @@ export default defineEventHandler(async (event) => {
   await executeBatch(db, [
     {
       query: `UPDATE review_requests
-        SET user_id = COALESCE(user_id, ?),
-            anonymous_user_id = COALESCE(anonymous_user_id, ?),
-            updated_at = ?
+        SET user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
         WHERE id = ?
           AND token_hash = ?
           AND organization_id = ?
@@ -47,48 +45,19 @@ export default defineEventHandler(async (event) => {
             (user_id IS NULL AND anonymous_user_id IS NULL)
             OR user_id = ?
             OR anonymous_user_id = ?
-          )`,
-      params: [
-        sessionUser.isAnonymous ? null : sessionUser.id,
-        sessionUser.isAnonymous ? sessionUser.id : null,
-        now,
-        result.request.id,
-        result.request.token_hash,
-        result.context.organization_id,
-        result.context.site_id,
-        result.request.customer_id,
-        result.request.booking_type,
-        result.request.booking_id,
-        now,
-        sessionUser.id,
-        sessionUser.id,
-      ],
-    },
-    {
-      query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`,
-      params: ['review session binding lost its request-state guard'],
-    },
-    {
+          )`, params: [
+        sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, result.request.id, result.request.token_hash, result.context.organization_id, result.context.site_id, result.request.customer_id, result.request.booking_type, result.request.booking_id, now, sessionUser.id, sessionUser.id, ], }, {
+      query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`, params: ['review session binding lost its request-state guard'], }, {
       query: `UPDATE customers
         SET user_id = COALESCE(user_id, ?), updated_at = ?
         WHERE id = ?
           AND organization_id = ?
           AND site_id = ?
-          AND (user_id IS NULL OR user_id = ?)`,
-      params: [
-        sessionUser.id,
-        now,
-        result.request.customer_id,
-        result.context.organization_id,
-        result.context.site_id,
-        sessionUser.id,
-      ],
-    },
-    {
-      query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`,
-      params: ['review session binding lost its customer-state guard'],
-    },
-  ])
+          AND (user_id IS NULL OR user_id = ?)`, params: [
+        sessionUser.id, now, result.request.customer_id, result.context.organization_id, result.context.site_id, sessionUser.id, ], }, {
+      query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`, params: ['review session binding lost its customer-state guard'], }, ])
 
   return jsonResponse({ success: true, requestId: result.request.id })
 })
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

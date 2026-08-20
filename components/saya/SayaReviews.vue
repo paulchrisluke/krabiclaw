@@ -127,7 +127,6 @@ const props = defineProps({
   }
 })
 
-const { t } = useI18n()
 const { formatDate } = useLocaleDate()
 
 const starRatingMap = {
@@ -139,7 +138,7 @@ const starRatingMap = {
 }
 
 const reviewAuthor = review => {
-  return review.reviewer?.displayName?.trim() || review.author_name?.trim() || t('saya.reviews.anonymous')
+  return review.reviewer?.displayName?.trim() || review.author_name?.trim() || ''
 }
 const reviewText = review => {
   const text = typeof review.comment === 'string' ? review.comment : review.comment?.text ?? review.content ?? ''
@@ -156,7 +155,7 @@ const reviewRating = review => {
 }
 
 const displayedReviews = computed(() => {
-  const filtered = props.reviews.filter(review => reviewText(review))
+  const filtered = props.reviews.filter(review => reviewText(review) && reviewAuthor(review))
   return props.limit ? filtered.slice(0, props.limit) : filtered
 })
 

@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { ConversationNotFoundError, deleteConversation, getSiteForMember } from '~/server/utils/chowbot-conversations'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const conversationId = getRouterParam(event, 'conversationId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
@@ -30,3 +30,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to delete conversation' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

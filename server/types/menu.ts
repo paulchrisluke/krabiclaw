@@ -7,7 +7,7 @@ export interface Menu {
   location_id: string | null
   name: string
   description: string | null
-  status: 'draft' | 'published'
+  is_visible: boolean
   section_order: string[] | null
   created_at: string
   updated_at: string
@@ -76,7 +76,7 @@ export interface CreateMenuRequest {
 export interface UpdateMenuRequest {
   name?: string
   description?: string
-  status?: 'draft' | 'published'
+  is_visible?: boolean
   section_order?: string[]
 }
 

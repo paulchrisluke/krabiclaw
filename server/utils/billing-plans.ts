@@ -26,9 +26,6 @@ export interface PlanLimits {
   aiCredits: number | 'unlimited'
   customDomain: boolean
   googlePlaces: boolean
-  advancedSeo: boolean
-  whiteLabel: boolean
-  apiAccess: boolean
   support: string
 }
 
@@ -102,10 +99,6 @@ function publicPlanLimits(planId: string): PlanLimits {
     aiCredits,
     customDomain: entitlements.custom_domains === true,
     googlePlaces: entitlements.google_places === true,
-    advancedSeo: entitlements.advanced_seo === true,
-    whiteLabel: entitlements.white_label === true,
-    apiAccess: entitlements.api_access === true,
-    // Support copy is presentation policy, not Stripe metadata.
     support: planId === NEW_SALE_PLAN_ID ? 'Priority' : 'Community',
   }
 }
@@ -153,16 +146,10 @@ function isPlanLimits(value: unknown, planId: string): value is PlanLimits {
     validAiCredits
     && typeof value.customDomain === 'boolean'
     && typeof value.googlePlaces === 'boolean'
-    && typeof value.advancedSeo === 'boolean'
-    && typeof value.whiteLabel === 'boolean'
-    && typeof value.apiAccess === 'boolean'
     && typeof value.support === 'string'
     && value.aiCredits === expected.aiCredits
     && value.customDomain === expected.customDomain
     && value.googlePlaces === expected.googlePlaces
-    && value.advancedSeo === expected.advancedSeo
-    && value.whiteLabel === expected.whiteLabel
-    && value.apiAccess === expected.apiAccess
     && value.support === expected.support
   )
 }
@@ -360,7 +347,7 @@ export async function fetchStripeProducts(
       tagline: product.description ?? '',
       highlighted: meta.highlighted === 'true',
       badge: meta.badge || undefined,
-      image: product.images?.[0] ?? undefined,
+      image: product.images?.[0],
       prices: prices.sort((a, b) => {
         const rank: Record<string, number> = { month: 0, year: 1 }
         return (rank[a.interval] ?? 0) - (rank[b.interval] ?? 0)

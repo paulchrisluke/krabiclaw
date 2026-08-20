@@ -1,10 +1,12 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 import type { PublicResourceProvider } from '~/utils/public-resource-provider'
 import { loadPublicDraftPage, loadPublicDraftShell } from '~/server/utils/public-draft-bootstrap'
 import { loadPublicPage } from '~/server/utils/public-page'
 import { loadPublicShell } from '~/server/utils/public-shell'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
-export default defineEventHandler((event) => {
+export default defineHandler((event) => {
   const provider: PublicResourceProvider = async (options) => {
     options.signal?.throwIfAborted()
     if (options.draftId) {
@@ -14,22 +16,16 @@ export default defineEventHandler((event) => {
       return finalizeRequestMetrics(event, `public-draft-${options.resourceKind}`, payload)
     }
     if (!options.siteId) {
-      throw createError({ statusCode: 500, statusMessage: 'Public site context unavailable' })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Public site context unavailable' })
     }
     if (options.resourceKind === 'shell') {
       const payload = await loadPublicShell(event, options.siteId, {
-        locale: options.query.locale,
-        token: options.query.token,
-      }, {
-        mutateResponseHeaders: false,
-        signal: options.signal,
-      })
+        locale: options.query.locale, token: options.query.token, }, {
+        mutateResponseHeaders: false, signal: options.signal, })
       return finalizeRequestMetrics(event, 'public-shell-ssr', payload)
     }
     const payload = await loadPublicPage(event, options.siteId, options.query, {
-      mutateResponseHeaders: false,
-      signal: options.signal,
-    })
+      mutateResponseHeaders: false, signal: options.signal, })
     return finalizeRequestMetrics(event, 'public-page-ssr', payload)
   }
   event.context.publicResourceProvider = provider

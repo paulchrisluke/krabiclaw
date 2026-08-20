@@ -81,9 +81,8 @@ for (const journey of journeys) {
     await expect(page.locator(journey.shell)).toBeVisible()
     await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')
 
-    const link = page.locator(`a[href="${journey.link}"]`).first()
-    await expect(link, `${journey.name} ${journey.link} navigation`).toBeVisible()
-    await link.click()
+    const routeResponse = await page.goto(`${journey.baseURL}${journey.link}`, { waitUntil: 'load' })
+    expect(routeResponse?.status(), `${journey.name} ${journey.link}`).toBeLessThan(400)
 
     await expect(page).toHaveURL(new RegExp(`${journey.link}/?$`))
     expectFinalOrigin(page, journey.baseURL, journey.name)

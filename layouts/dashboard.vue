@@ -61,6 +61,7 @@
             <UDashboardSearchButton
               :collapsed="collapsed"
               label="Search dashboard, docs, help..."
+              :kbds="[]"
               class="w-full"
             />
             <UNavigationMenu
@@ -356,7 +357,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
         ? { label: siteLabel.value, to: siteBase.value }
         : orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
       peers: sites.value.map((s) => ({
-        label: s.brand_name ?? s.subdomain ?? 'Site',
+        label: s.brand_name ?? s.subdomain ?? s.id,
         icon: 'i-lucide-globe',
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
@@ -581,11 +582,11 @@ const settingsGroup = computed(() => {
       { label: 'Account', type: 'label' },
       { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: accountRouteQuery.value } },
       { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: accountRouteQuery.value } },
-      { label: 'Billing Items', icon: 'i-lucide-receipt', to: { path: '/dashboard/account/billing-items', query: accountRouteQuery.value } },
     ]
   }
   return []
 })
+
 
 const adminGroup = computed(() => [
   ...(dashboard.managedServiceEnabled.value ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin/work' }] : []),
@@ -631,17 +632,25 @@ function isActivePath(path?: string) {
 }
 
 const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
-  if (!orgBase.value) return []
+  const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+  if (!routeOrgSlug) return []
+  const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
+  const routeSiteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+  const routeSiteBase = routeSiteSlug ? `${routeOrgBase}/sites/${encodeURIComponent(routeSiteSlug)}` : null
+  const routeLocationSlug = typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null
+  const routeLocationBase = routeSiteBase && routeLocationSlug
+    ? `${routeSiteBase}/locations/${encodeURIComponent(routeLocationSlug)}`
+    : null
   const isOrganization = scope.value === 'organization'
-  const childrenTo = isOrganization ? `${orgBase.value}/sites` : siteBase.value
+  const childrenTo = isOrganization ? `${routeOrgBase}/sites` : routeSiteBase
   const inboxTo = isOrganization
-    ? `${orgBase.value}/inbox`
-    : scope.value === 'location' && locationBase.value
-      ? `${locationBase.value}/inbox`
-      : siteBase.value ? `${siteBase.value}/inbox` : undefined
+    ? `${routeOrgBase}/inbox`
+    : scope.value === 'location' && routeLocationBase
+      ? `${routeLocationBase}/inbox`
+      : routeSiteBase ? `${routeSiteBase}/inbox` : undefined
   const items: DashboardMobileNavItem[] = [
-    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: `${orgBase.value}/today` },
-    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
+    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: `${routeOrgBase}/today` },
+    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
     { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },
   ]

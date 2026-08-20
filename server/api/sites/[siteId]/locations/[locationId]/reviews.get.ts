@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
 import { queryAll } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
 
@@ -13,9 +13,7 @@ export default defineEventHandler(async (event) => {
   const { db } = await requireLocationAccess(event, siteId, locationId)
 
   const results = await queryAll<ApiValue>(db, `
-    SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
-           owner_reply_at, photo_urls, source, status, helpful_count, customer_id,
-           booking_id, booking_type, review_request_id, created_at, updated_at
+    SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply, owner_reply_at, photo_urls, source, status, helpful_count, customer_id, booking_id, booking_type, review_request_id, created_at, updated_at
     FROM reviews
     WHERE site_id = ? AND location_id = ?
     ORDER BY created_at DESC
@@ -23,20 +21,18 @@ export default defineEventHandler(async (event) => {
 
   const safeParsePhotoUrls = (photoUrls: unknown): string[] => {
     if (typeof photoUrls !== 'string' || !photoUrls.trim()) return []
-    try {
-      const parsed = JSON.parse(photoUrls)
-      return Array.isArray(parsed)
-        ? parsed.map(item => typeof item === 'string' ? item.trim() : '').filter(Boolean)
-        : []
-    } catch {
-      return []
+    const parsed = JSON.parse(photoUrls)
+    if (!Array.isArray(parsed) || !parsed.every(item => typeof item === 'string')) {
+      throw new Error('Stored review photo URLs are invalid')
     }
+    return parsed.map(item => item.trim()).filter(Boolean)
   }
 
   const reviews = (results ?? []).map((review: ApiValue) => ({
-    ...review,
-    photo_urls: safeParsePhotoUrls(review.photo_urls)
+    ...review, photo_urls: safeParsePhotoUrls(review.photo_urls)
   }))
 
   return jsonResponse({ success: true, reviews })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

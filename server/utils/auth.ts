@@ -7,8 +7,7 @@ import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
 import type { GenericEndpointContext } from '@better-auth/core'
-import { toWebRequest } from 'h3'
-import type { H3Event } from 'h3'
+import { HTTPError, type H3Event } from 'nitro';
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
@@ -28,6 +27,7 @@ import {
 import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
+import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -136,6 +136,8 @@ export interface CloudflareEnv {
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_VERIFY_TOKEN?: string
   WHATSAPP_BUSINESS_ACCOUNT_ID?: string
+  E2E_ALLOW_DEV_ROUTES?: string
+  E2E_DEV_ROUTE_SECRET?: string
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
@@ -148,8 +150,23 @@ export interface CloudflareEnv {
   DISCORD_DELIVERY_MODE?: string
   DISCORD_WEBHOOK_URL?: string
   MEDIA_BUCKET?: R2Bucket
+  GUEST_THREAD_COMMANDS?: DurableObjectNamespace
+  GUEST_INBOX_HUBS?: DurableObjectNamespace
+  GUEST_DELIVERY_QUEUE?: Queue
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
+}
+
+export function shouldBypassE2eAuthRateLimit(
+  env: Pick<CloudflareEnv, 'E2E_ALLOW_DEV_ROUTES' | 'E2E_DEV_ROUTE_SECRET'>,
+  request: Request,
+): boolean {
+  if (env.E2E_ALLOW_DEV_ROUTES !== 'true') return false
+  const expectedSecret = env.E2E_DEV_ROUTE_SECRET?.trim() ?? ''
+  const providedSecret = request.headers.get('x-dev-route-secret') ?? ''
+  return !!expectedSecret
+    && !!providedSecret
+    && timingSafeEqualText(providedSecret, expectedSecret)
 }
 
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
@@ -188,14 +205,18 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
   for (const origin of [authOrigin, platformOrigin, freeSiteOrigin, wildcardOrigin(freeSiteOrigin)]) {
     if (origin) origins.add(origin)
   }
-  if (import.meta.dev) {
-    const port = process.env.PORT || '3000'
-    origins.add(`http://localhost:${port}`)
-    origins.add(`http://127.0.0.1:${port}`)
-    origins.add(`http://*.localhost:${port}`)
+  if (import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true') {
+    const port = env.PORT || '3000'
+    if (import.meta.dev) {
+      origins.add(`http://localhost:${port}`)
+      origins.add(`http://127.0.0.1:${port}`)
+      origins.add(`http://*.localhost:${port}`)
+    }
 
     return (request?: Request) => {
-      const requestOrigin = localDevelopmentOrigin(request?.headers.get('origin') ?? undefined)
+      const requestOrigin = request && (import.meta.dev || shouldBypassE2eAuthRateLimit(env, request))
+        ? localDevelopmentOrigin(request.headers.get('origin') ?? undefined)
+        : null
       return requestOrigin ? [...origins, requestOrigin] : [...origins]
     }
   }
@@ -203,13 +224,15 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
 }
 
 export function createAuth(env: CloudflareEnv) {
+  if (!env?.DB) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const d1 = unwrapInstrumentedD1(env.DB)
 
   const cached = authCache.get(d1)
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = d1 === env.DB && env.db ? env.db : createDb(d1)
-  const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const authBaseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
+  if (!authBaseUrl) throw new Error('BETTER_AUTH_URL is required')
   const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
   const loadStripePlans = createStripePlanLoader(stripeClient, env)
 
@@ -218,6 +241,13 @@ export function createAuth(env: CloudflareEnv) {
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
+    rateLimit: {
+      customRules: {
+        '/sign-in/*': (request, currentRule) => shouldBypassE2eAuthRateLimit(env, request)
+          ? false
+          : currentRule,
+      },
+    },
     database: drizzleAdapter(db, {
       provider: 'sqlite',
       schema,
@@ -414,7 +444,7 @@ export function createAuth(env: CloudflareEnv) {
         },
       }),
       cimd({
-        allowLoopback: import.meta.dev,
+        allowLoopback: import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true',
         onClientCreated: normalizeCimdClientAuthentication,
         onClientRefreshed: normalizeCimdClientAuthentication,
       }),
@@ -555,6 +585,6 @@ export function createAuth(env: CloudflareEnv) {
 
 export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>> {
   return createAuth(env).api.getSession({
-    headers: toWebRequest(event).headers,
+    headers: event.req.headers,
   })
 }

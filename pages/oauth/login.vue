@@ -96,6 +96,7 @@
 </template>
 
 <script setup>
+import { $fetch } from 'ofetch'
 import WhatsAppAuthButton from '~/components/auth/WhatsAppAuthButton.vue'
 import { oauthContinuationDestination } from '~/shared/auth/oauth-login'
 

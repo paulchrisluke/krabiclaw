@@ -105,6 +105,7 @@
 </template>
 
 <script setup>
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'standalone', auth: false })
 
 useSeoMeta({ robots: 'noindex, nofollow' })

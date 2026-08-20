@@ -1,7 +1,6 @@
 <template>
-  <Teleport :to="teleportTarget">
+  <Teleport v-if="isOpen" :to="teleportTarget">
     <div
-      v-if="isOpen"
       class="fixed inset-0 z-[120] flex items-start justify-center bg-black/35 px-4 py-8 backdrop-blur-[2px] sm:py-12"
       @click.self="close"
     >
@@ -103,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import PlatformSearchGlyph, { PLATFORM_SEARCH_GLYPHS } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { PlatformSearchGlyphName } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { ComponentPublicInstance } from 'vue'

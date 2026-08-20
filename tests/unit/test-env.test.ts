@@ -50,12 +50,10 @@ test('production paid-client helpers use exact canonical custom origins without 
   })
 })
 
-test('local tunnel, preview, and staging stay on the shared origin with explicit tenant headers', () => {
+test('local tunnel and raw workers.dev hosts stay shared with explicit tenant headers', () => {
   for (const origin of [
     'https://local.krabiclaw.com',
-    'https://preview.krabiclaw.com',
     'https://krabiclaw-preview.paulchrisluke.workers.dev',
-    'https://staging.krabiclaw.com',
   ]) {
     withPreviewUrl(origin, () => {
       assert.deepEqual(
@@ -65,10 +63,33 @@ test('local tunnel, preview, and staging stay on the shared origin with explicit
       assert.deepEqual(
         [potteryHouseTestExtraHeaders(), kikuzukiTestExtraHeaders(), blawbyTestExtraHeaders()],
         [
-          { 'x-preview-tenant': 'pottery-house', 'cache-control': 'no-store' },
-          { 'x-preview-tenant': 'kikuzuki-krabi-thailand', 'cache-control': 'no-store' },
-          { 'x-preview-tenant': 'ncls', 'cache-control': 'no-store' },
+          { 'x-preview-tenant': 'pottery-house' },
+          { 'x-preview-tenant': 'kikuzuki-krabi-thailand' },
+          { 'x-preview-tenant': 'ncls' },
         ],
+      )
+    })
+  }
+})
+
+test('deployed preview and staging use direct tenant aliases without headers', () => {
+  for (const [origin, environment] of [
+    ['https://preview.krabiclaw.com', 'preview'],
+    ['https://staging.krabiclaw.com', 'staging'],
+  ]) {
+    withPreviewUrl(origin, () => {
+      assert.equal(tenantTestBaseUrl(), `https://demo-${environment}.krabiclaw.com`)
+      assert.deepEqual(
+        [potteryHouseTestBaseUrl(), kikuzukiTestBaseUrl(), blawbyTestBaseUrl()],
+        [
+          `https://pottery-house-${environment}.krabiclaw.com`,
+          `https://kikuzuki-krabi-thailand-${environment}.krabiclaw.com`,
+          `https://ncls-${environment}.krabiclaw.com`,
+        ],
+      )
+      assert.deepEqual(
+        [potteryHouseTestExtraHeaders(), kikuzukiTestExtraHeaders(), blawbyTestExtraHeaders()],
+        [{}, {}, {}],
       )
     })
   }

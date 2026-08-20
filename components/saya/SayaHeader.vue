@@ -13,13 +13,13 @@
         </NuxtLink>
 
         <!-- Desktop nav -->
-        <nav data-saya-critical-nav class="hidden items-center gap-1 lg:flex" :aria-label="$t('saya.header.nav_aria')">
+        <nav data-saya-critical-nav class="hidden items-center gap-1 lg:flex" :aria-label="t('saya.header.nav_aria')">
           <NuxtLink
             v-if="hasMenu"
             to="/menu"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            {{ $t('saya.header.menu') }}
+            {{ t('saya.header.menu') }}
           </NuxtLink>
 
           <NuxtLink
@@ -27,14 +27,14 @@
             to="/reservations"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            {{ $t('saya.header.reservations') }}
+            {{ t('saya.header.reservations') }}
           </NuxtLink>
           <NuxtLink
             v-if="hasExperiences"
             to="/experiences"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            {{ $t('saya.header.experiences') }}
+            {{ t('saya.header.experiences') }}
           </NuxtLink>
 
           <NuxtLink
@@ -42,7 +42,7 @@
             to="/locations"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            {{ $t('saya.header.locations') }}
+            {{ t('saya.header.locations') }}
           </NuxtLink>
         </nav>
 
@@ -62,30 +62,30 @@
             <summary
               data-saya-critical-menu
               class="inline-flex size-8 list-none items-center justify-center rounded-full text-muted transition hover:bg-muted hover:text-default [&::-webkit-details-marker]:hidden"
-              :aria-label="mobileMenuOpen ? $t('saya.header.close_navigation') : $t('saya.header.open_navigation')"
+              :aria-label="mobileMenuOpen ? t('saya.header.close_navigation') : t('saya.header.open_navigation')"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M2.75 5.75a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75zM2.75 10a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13A.75.75 0 012.75 10zM2.75 14.25a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75z" clip-rule="evenodd" /></svg>
             </summary>
             <div class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden">
-              <nav class="grid gap-1" :aria-label="$t('saya.header.mobile_nav_aria')">
+              <nav class="grid gap-1" :aria-label="t('saya.header.mobile_nav_aria')">
                 <NuxtLink v-if="hasMenu" to="/menu" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ $t('saya.header.menu') }}
+                  {{ t('saya.header.menu') }}
                 </NuxtLink>
                 <NuxtLink v-if="locations.length > 1" to="/locations" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ $t('saya.header.locations') }}
+                  {{ t('saya.header.locations') }}
                 </NuxtLink>
                 <div class="my-1 border-t border-default" />
                 <NuxtLink v-if="hasOrderLinks && !isExperienceSite" to="/order" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ $t('saya.header.order_now') }}
+                  {{ t('saya.header.order_now') }}
                 </NuxtLink>
                 <NuxtLink v-if="!isExperienceSite" to="/reservations" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ $t('saya.header.reservations') }}
+                  {{ t('saya.header.reservations') }}
                 </NuxtLink>
                 <NuxtLink v-if="hasExperiences" to="/experiences" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ $t('saya.header.experiences') }}
+                  {{ t('saya.header.experiences') }}
                 </NuxtLink>
                 <NuxtLink to="/contact" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ $t('saya.header.contact') }}
+                  {{ t('saya.header.contact') }}
                 </NuxtLink>
               </nav>
             </div>
@@ -98,6 +98,7 @@
 </template>
 
 <script setup lang="ts">
+import { shallowRef } from 'vue'
 interface Site {
   brand_name?: string | null
   logo_url?: string | null
@@ -114,7 +115,6 @@ interface I18nComposable {
 
 
 import { getVerticalCopy } from '~/utils/vertical-copy'
-import { DEFAULT_BUSINESS_NAME } from '~/config/constants'
 
 // Data comes from layouts/saya.vue, which already owns the single shared
 // bootstrap/tenant-site fetch — header is presentation-only, not a fetcher.
@@ -132,7 +132,7 @@ const { locale, t } = i18n
 const verticalCopy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
 const mobileMenuOpen = ref(false)
 const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
-const headerRef = ref<HTMLElement | null>(null)
+const headerRef = shallowRef<Element | null>(null)
 let headerResizeObserver: ResizeObserver | null = null
 
 function syncMobileNavState(event: Event) {
@@ -162,7 +162,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', syncHeaderHeight)
 })
 
-const restaurantName = computed(() => props.site?.brand_name || DEFAULT_BUSINESS_NAME)
+const restaurantName = computed(() => props.site?.brand_name?.trim() || '')
 const logoUrl = computed(() => props.site?.logo_url || null)
 const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
@@ -173,7 +173,7 @@ const hasOrderLinks = computed(() =>
 
 const primaryCtaPath = computed(() => {
   if (hasOrderLinks.value && !isExperienceSite.value) return '/order'
-  if (isExperienceSite.value && props.experienceCtaPath !== undefined) return props.experienceCtaPath
+  if (isExperienceSite.value) return props.experienceCtaPath ?? null
   return verticalCopy.value.ctaRoute
 })
 

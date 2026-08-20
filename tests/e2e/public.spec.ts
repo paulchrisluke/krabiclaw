@@ -46,6 +46,17 @@ test.describe('public tenant site', () => {
     const heroTitle = page.locator('[data-field="hero.title"]')
     await expect(heroTitle).toContainText('ไฟฟืนและค่ำคืนในบรูคลิน')
     await expect(heroTitle).not.toContainText('Wood fire. Brooklyn nights.')
+    await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+  })
+
+  test('hydrates a direct Thai locale URL with matching content and document language', async ({ page }) => {
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
+    const response = await page.goto(`${tenantBaseURL}/?locale=th`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page.locator('[data-field="hero.title"]')).toContainText('ไฟฟืนและค่ำคืนในบรูคลิน')
+    await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+    await page.waitForTimeout(250)
+    expect(errors).toEqual([])
   })
 
   for (const route of tenantRoutes) {
@@ -73,7 +84,7 @@ test.describe('public tenant site', () => {
       data: {
         name: 'Token Cancel Test',
         email: `cancel-${Date.now()}@example.com`,
-        phone: '+15555550123',
+        phone: '+14155552674',
         date: '2030-05-17',
         time: '19:00',
         guests: '2',
@@ -286,7 +297,7 @@ test.describe('platform public site', () => {
   })
 
   test('/templates/saya renders the Saya detail experience', async ({ page, baseURL }) => {
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     const response = await page.goto(`${baseURL}/templates/saya`, { waitUntil: 'load' })
 
     expect(response?.status()).toBeLessThan(400)
@@ -298,7 +309,7 @@ test.describe('platform public site', () => {
   })
 
   test('/templates/blawby renders the Blawby detail experience with the NCLS demo link', async ({ page, baseURL }) => {
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     const response = await page.goto(`${baseURL}/templates/blawby`, { waitUntil: 'load' })
 
     expect(response?.status()).toBeLessThan(400)

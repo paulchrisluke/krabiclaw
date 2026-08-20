@@ -157,11 +157,11 @@ const businessPrimaryPhoto = computed(() => props.data?.businessPrimaryPhoto)
 const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
 const ctaRoute = computed(() => props.data?.ctaRoute || '')
 const reserveCta = computed(() => props.data?.reserveCta || '')
-const orderNowCta = computed(() => props.data?.orderNowCta || 'Action')
-const viewMenuCta = computed(() => props.data?.viewMenuCta || 'Explore')
-const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '/')
+const orderNowCta = computed(() => props.data?.orderNowCta || '')
+const viewMenuCta = computed(() => props.data?.viewMenuCta || '')
+const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '')
 const showSecondaryCta = computed(() =>
-  !hasOrderLinks.value && !!viewMenuRoute.value && viewMenuRoute.value !== ctaRoute.value
+  !hasOrderLinks.value && !!viewMenuRoute.value && !!viewMenuCta.value && viewMenuRoute.value !== ctaRoute.value
 )
 // Neutral default until the owner picks a brand color in onboarding.
 const brandColor = computed(() => props.data?.brandColor || '#3F3F46')

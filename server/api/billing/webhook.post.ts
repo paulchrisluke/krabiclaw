@@ -1,4 +1,5 @@
-import { toWebRequest } from 'h3'
+import { HTTPError, defineHandler  } from 'nitro';
+
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 
@@ -7,11 +8,11 @@ import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
  * production. Subscription verification and lifecycle handling live in the
  * Better Auth Stripe plugin at /api/auth/stripe/webhook.
  */
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
-  if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  if (!env.DB) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
 
-  const request = toWebRequest(event)
+  const request = event.req
   const body = await request.arrayBuffer()
   const target = new URL(request.url)
   target.pathname = '/api/auth/stripe/webhook'

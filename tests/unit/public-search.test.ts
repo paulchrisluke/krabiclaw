@@ -71,12 +71,49 @@ const {
   buildSearchFilters,
   buildTenantBlogDocuments,
   buildPlatformKnowledgeDocuments,
+  ensurePlatformKnowledgeInstance,
   expandDocumentsForSurfaces,
   recordMetadata,
   computeLexicalBoost,
   dedupeByPath,
   balanceResultTypes,
 } = await import('../../server/utils/public-search.ts')
+
+test('ensurePlatformKnowledgeInstance updates an existing index without deleting it', async () => {
+  const calls = { update: 0, create: 0, delete: 0 }
+  const namespace = {
+    get: () => ({
+      update: async () => { calls.update += 1 },
+    }),
+    create: async () => { calls.create += 1 },
+    delete: async () => { calls.delete += 1 },
+  }
+
+  await ensurePlatformKnowledgeInstance({
+    AI_SEARCH: namespace,
+    AI_SEARCH_INSTANCE_ID: 'staging-index',
+  } as never)
+
+  assert.deepEqual(calls, { update: 1, create: 0, delete: 0 })
+})
+
+test('ensurePlatformKnowledgeInstance creates the index when update is unavailable', async () => {
+  const calls = { create: 0, delete: 0 }
+  const namespace = {
+    get: () => ({
+      update: async () => { throw new Error('not found') },
+    }),
+    create: async () => { calls.create += 1 },
+    delete: async () => { calls.delete += 1 },
+  }
+
+  await ensurePlatformKnowledgeInstance({
+    AI_SEARCH: namespace,
+    AI_SEARCH_INSTANCE_ID: 'staging-index',
+  } as never)
+
+  assert.deepEqual(calls, { create: 1, delete: 0 })
+})
 
 // ── Corpus construction ──────────────────────────────────────────────────────
 

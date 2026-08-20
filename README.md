@@ -1,6 +1,6 @@
 # KrabiClaw
 
-Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
+Multi-tenant platform SaaS. Nuxt 5 nightly + Nitro 3 + Cloudflare Workers + D1.
 
 **Package manager: yarn only.** Never npm or pnpm.
 
@@ -10,7 +10,8 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 
 | Command | What it does |
 |---|---|
-| `yarn dev` | Dev server (localhost:3000) with local Cloudflare bindings for D1/R2/KV and tenant subdomain routing on `*.localhost`. |
+| `yarn dev` | Nuxt development server for platform/UI work at `http://localhost:3000`. |
+| `yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000` | Run the built Worker locally with Wrangler. |
 | `yarn build` | Production build → `.output/` |
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
@@ -49,6 +50,11 @@ submission paths send for real in production.
 yarn install
 ```
 
+The repository uses Node.js 24.18.1. Use the exact version declared in
+`.nvmrc` before installing dependencies. When changing Node, follow the
+[Node runtime upgrade runbook](docs/operations/node-runtime-upgrades.md) so
+local development, CI, type definitions, and Worker builds move together.
+
 ### 2. Environment
 
 Copy `.env.example` to `.env` and fill in values. Required for local dev:
@@ -76,11 +82,19 @@ yarn dev
 
 App at `http://localhost:3000`.
 
-For browser tests, use the production Worker locally instead of Nuxt's dev
-server:
+For browser verification, use the generated Worker locally. Wrangler reads
+`.env` and `.dev.vars` using its
+documented local-development behavior.
 
 ```bash
 yarn test:e2e:local tests/e2e/smoke.spec.ts
+```
+
+For a manually running built Worker:
+
+```bash
+yarn build
+yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000
 ```
 
 Playwright applies the local D1 schema, clears disposable E2E artifacts, seeds
@@ -89,22 +103,17 @@ Cloudflare Worker, and starts it under local workerd. Authenticated tests sign
 in through Better Auth with those credentials; no email inbox or authentication
 bypass route is involved.
 
-Tenant sites use the same shared-host routing contract as preview and staging:
-the browser targets `localhost` and the test helper supplies
-`x-preview-tenant` for the selected fixture. This avoids relying on wildcard
-localhost DNS behavior that differs across browsers and Wrangler versions.
+Local tenant tests use a shared-host routing contract: the browser targets
+`localhost` and the test helper supplies `x-preview-tenant` for the selected
+fixture. Deployed preview and staging use direct first-level tenant aliases
+instead. This is the authoritative local browser path; do not rely on direct
+`*.localhost` navigation for Worker browser verification.
 
 ```text
+http://localhost:3000/                  (x-preview-tenant: ncls)
+http://localhost:3000/services          (x-preview-tenant: ncls)
 http://localhost:3000/experiences       (x-preview-tenant: pottery-house)
 http://localhost:3000/reservations      (x-preview-tenant: kikuzuki-krabi-thailand)
-```
-
-`yarn dev` now disables Wrangler remote bindings by default so tenant dev does not depend on a remote Workers AI proxy session. This matters because Wrangler otherwise tries to open a remote preview session for the `AI` binding before attaching local `DB`/R2/KV bindings; if that handshake times out, tenant hosts fall through to `Site Not Found` even when local D1 is seeded correctly.
-
-If you specifically need the old remote-binding behavior for AI debugging, opt back in per shell:
-
-```bash
-NUXT_CF_REMOTE_BINDINGS=true yarn dev
 ```
 
 ### Local ChatGPT MCP harness
@@ -131,10 +140,13 @@ ulimit -n 65536
 
 Deployment follows the branches in `.github/workflows/ci.yml`:
 
-1. Pull requests deploy the isolated preview Worker and run representative E2E.
-2. Merges to `staging` deploy the staging Worker, apply staging migrations, and
-   run the full Playwright suite.
-3. A reviewed `staging` to `main` merge deploys the production Worker, applies
+1. Runtime pull requests deploy the isolated preview Worker and run permanent
+   core plus diff-selected affected E2E coverage.
+2. Merges to `staging` deploy the staging Worker once, apply staging migrations,
+   provision fixtures/auth once, and run the full Playwright suite with two workers.
+3. The `staging` to `main` release PR reuses the checks attached to its exact
+   staging head without another deployment or test cycle.
+4. A reviewed `staging` to `main` merge deploys the production Worker, applies
    production migrations, and runs read-only production browser smoke.
 
 CI invokes native Wrangler commands only in the matching branch job. See

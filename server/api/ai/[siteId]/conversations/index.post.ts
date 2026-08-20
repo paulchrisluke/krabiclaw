@@ -3,7 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { createConversation, getSiteForMember } from '~/server/utils/chowbot-conversations'
 import { queryFirst } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   try {
     const siteId = getRouterParam(event, 'siteId')
     if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
@@ -36,9 +36,7 @@ export default defineEventHandler(async (event) => {
 
     // Validate locationId if provided
     if (typeof body.locationId === 'string' && body.locationId) {
-      const location = await queryFirst(db,
-        'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
-        [body.locationId, siteId]
+      const location = await queryFirst(db, 'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [body.locationId, siteId]
       )
       if (!location) {
         return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
@@ -46,13 +44,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const conversation = await createConversation(db, {
-      organizationId: site.organization_id,
-      siteId,
-      userId: session.user.id,
-      title: body.title,
-      activeChannel: 'dashboard',
-      selectedLocationId: (typeof body.locationId === 'string' && body.locationId) ? body.locationId : null,
-    })
+      organizationId: site.organization_id, siteId, userId: session.user.id, title: body.title, activeChannel: 'dashboard', selectedLocationId: (typeof body.locationId === 'string' && body.locationId) ? body.locationId : null, })
 
     return jsonResponse({ success: true, conversation }, { status: 201 })
   } catch (error) {
@@ -60,3 +52,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Internal server error' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

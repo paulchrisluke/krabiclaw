@@ -1,7 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { ChangelogFetchError, getRecentChanges, parseChangelogLimitQuery } from '~/server/utils/changelog'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   try {
     const query = getQuery(event)
     let prLimit: number
@@ -10,9 +10,7 @@ export default defineEventHandler(async (event) => {
     } catch (error) {
       if (!(error instanceof RangeError)) throw error
       return jsonResponse(
-        { error: error.message },
-        { status: 400 },
-      )
+        { error: error.message }, { status: 400 }, )
     }
 
     const env = cloudflareEnv(event)
@@ -33,3 +31,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to generate changelog' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

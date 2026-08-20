@@ -117,6 +117,8 @@ test('preview and deployment-provider hosts are globally non-indexable', () => {
     'local.krabiclaw.com',
     'preview.krabiclaw.com',
     'staging.krabiclaw.com',
+    'pottery-house-preview.krabiclaw.com',
+    'pottery-house-staging.krabiclaw.com',
     'krabiclaw.pages.dev',
     'krabiclaw-preview.paulchrisluke.workers.dev',
   ]) {
@@ -141,14 +143,14 @@ test('runtime site config uses the active tenant origin', () => {
   })
 })
 
-test('runtime site config preserves the platform canonical and blocks preview', () => {
+test('runtime site config uses the exact platform request origin and blocks preview', () => {
   assert.deepEqual(resolveRuntimeSeoSiteConfig({
     tenantType: TENANT_TYPES.PLATFORM,
     origin: 'https://www.krabiclaw.com',
     hostname: 'www.krabiclaw.com',
   }), {
     name: 'KrabiClaw',
-    url: 'https://krabiclaw.com',
+    url: 'https://www.krabiclaw.com',
     indexable: true,
   })
 

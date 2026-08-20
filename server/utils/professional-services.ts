@@ -1,5 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
@@ -9,7 +9,6 @@ import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/u
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
 import type {
   PublicBlawbyData,
-  PublicBlawbyCriticalHomeData,
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,
   PublicBlawbyShellData,
@@ -18,7 +17,6 @@ import type {
   PublicCompliance,
   PublicComplianceContactPoint,
   PublicConsultationSettings,
-  PublicNavigationItem,
   PublicOffering,
   PublicOfferingFeature,
   PublicOfferingLink,
@@ -28,17 +26,13 @@ import type {
   PublicTenantPage,
 } from '~/types/blawby'
 
-function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (!raw) return fallback
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
-}
-
 function asBoolean(value: unknown) {
   return value === true || value === 1 || value === '1'
+}
+
+function requiredText(value: unknown, field: string): string {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
 }
 
 type OfferingRow = ApiRecord & {
@@ -77,24 +71,16 @@ async function loadMediaById(db: DbClient, siteId: string, mediaIds: string[]) {
 }
 
 function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): PublicOffering {
-  const ids = parseJson<string[]>(row.media_asset_ids, [])
-  const rawFeatures = parseJson<unknown[]>(row.features, [])
+  const ids = row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : []
+  const rawFeatures = row.features ? JSON.parse(row.features) as ApiRecord[] : []
   const features: PublicOfferingFeature[] = rawFeatures.map((feature, index) => {
-    if (typeof feature === 'string') {
-      const separator = feature.indexOf(':')
-      return {
-        title: separator > 0 ? feature.slice(0, separator).trim() : feature,
-        description: separator > 0 ? feature.slice(separator + 1).trim() : '',
-        image_url: null,
-        icon: null,
-        icon_url: null,
-        sort_order: index,
-      }
+    if (!feature || typeof feature !== 'object' || Array.isArray(feature)) {
+      throw new HTTPError({ statusCode: 500, statusMessage: `Stored offering ${row.id}.features[${index}] is invalid`, data: { code: 'INVALID_STORED_CONTENT' } })
     }
-    const record = feature && typeof feature === 'object' ? feature as ApiRecord : {}
+    const record = feature as ApiRecord
     return {
-      title: String(record.title || record.name || `Feature ${index + 1}`),
-      description: String(record.description || record.desc || ''),
+      title: requiredText(record.title ?? record.name, `offering ${row.id}.features[${index}].title`),
+      description: requiredText(record.description ?? record.desc, `offering ${row.id}.features[${index}].description`),
       image_url: typeof record.image_url === 'string' ? record.image_url : null,
       icon: typeof record.icon === 'string' ? record.icon : null,
       icon_url: typeof record.icon_url === 'string' ? record.icon_url : null,
@@ -110,7 +96,7 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     short_description: typeof row.short_description === 'string' ? row.short_description : null,
     body: typeof row.body === 'string' ? row.body : null,
     features,
-    faqs: parseJson<Array<{ question: string; answer: string }>>(row.faqs, []),
+    faqs: row.faqs ? JSON.parse(row.faqs) as { question: string; answer: string }[] : [],
     cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
     cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
     thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
@@ -118,7 +104,7 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     media: ids.map(id => mediaById.get(id)).filter(Boolean).map(asset => ({
       id: String(asset!.id),
       url: String(asset!.public_url),
-      kind: String(asset!.kind || 'image'),
+      kind: requiredText(asset!.kind, `media asset ${asset!.id}.kind`),
       alt_text: typeof asset!.alt_text === 'string' ? String(asset!.alt_text) : null,
       width: Number.isFinite(Number(asset!.width)) ? Number(asset!.width) : null,
       height: Number.isFinite(Number(asset!.height)) ? Number(asset!.height) : null,
@@ -127,7 +113,6 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     canonical_path: typeof row.canonical_path === 'string' ? row.canonical_path : null,
-    status: String(row.status),
     sort_order: Number(row.sort_order ?? 0),
     featured: asBoolean(row.featured),
     // Real business_locations data for the offering's own location, when one
@@ -151,11 +136,11 @@ export async function listPublicOfferings(db: DbClient, siteId: string): Promise
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ? AND o.status = 'published'
+     WHERE o.site_id = ?
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
 
-  const mediaIds = rows.flatMap(row => parseJson<string[]>(row.media_asset_ids, []))
+  const mediaIds = rows.flatMap(row => row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : [])
   const mediaById = await loadMediaById(db, siteId, mediaIds)
   return rows.map(row => mapOfferingRow(row, mediaById))
 }
@@ -164,7 +149,7 @@ export async function listPublicOfferingLinks(db: DbClient, siteId: string): Pro
   const rows = await queryAll<ApiRecord>(db, `
     SELECT id, name, slug, canonical_path
       FROM offerings
-     WHERE site_id = ? AND status = 'published'
+     WHERE site_id = ?
      ORDER BY sort_order ASC, name ASC
   `, [siteId])
 
@@ -172,9 +157,7 @@ export async function listPublicOfferingLinks(db: DbClient, siteId: string): Pro
     id: String(row.id),
     name: String(row.name),
     slug: String(row.slug),
-    canonical_path: typeof row.canonical_path === 'string' && row.canonical_path
-      ? row.canonical_path
-      : `/services/${String(row.slug)}`,
+    canonical_path: requiredText(row.canonical_path, `offering ${row.id}.canonical_path`),
   }))
 }
 
@@ -184,7 +167,7 @@ export async function listPublicOfferingSummaries(db: DbClient, siteId: string):
            thumb.public_url AS thumbnail_url, o.canonical_path, o.sort_order, o.featured
       FROM offerings o
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
-     WHERE o.site_id = ? AND o.status = 'published'
+     WHERE o.site_id = ?
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
   return rows.map(row => ({
@@ -195,9 +178,7 @@ export async function listPublicOfferingSummaries(db: DbClient, siteId: string):
     summary: typeof row.summary === 'string' ? row.summary : null,
     short_description: typeof row.short_description === 'string' ? row.short_description : null,
     thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
-    canonical_path: typeof row.canonical_path === 'string' && row.canonical_path
-      ? row.canonical_path
-      : `/services/${String(row.slug)}`,
+    canonical_path: requiredText(row.canonical_path, `offering ${row.id}.canonical_path`),
     sort_order: Number(row.sort_order ?? 0),
     featured: asBoolean(row.featured),
   }))
@@ -220,14 +201,12 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     slug: String(row.slug),
     excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
     category: typeof row.category === 'string' ? row.category : null,
-    tags: parseJson<string[]>(row.tags_json, []),
+    tags: row.tags_json ? JSON.parse(row.tags_json) as string[] : [],
     featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     author_image: typeof row.author_image === 'string' ? row.author_image : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: typeof row.canonical_url === 'string' && row.canonical_url
-      ? row.canonical_url
-      : `/article/${String(row.slug)}`,
+    canonical_url: requiredText(row.canonical_url, `article ${row.id}.canonical_url`),
     featured_image: typeof row.public_url === 'string' && row.public_url
       ? {
           public_url: row.public_url,
@@ -249,11 +228,11 @@ export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ? AND o.slug = ? AND o.status = 'published'
+     WHERE o.site_id = ? AND o.slug = ?
      LIMIT 1
   `, [siteId, slug])
   if (!row) return null
-  const mediaById = await loadMediaById(db, siteId, parseJson<string[]>(row.media_asset_ids, []))
+  const mediaById = await loadMediaById(db, siteId, row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : [])
   return mapOfferingRow(row, mediaById)
 }
 
@@ -272,7 +251,6 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
-    published_revision_id: page.published_revision_id,
     updated_at: page.updated_at,
   }))
 }
@@ -293,7 +271,6 @@ export async function getPublicTenantPageByPath(db: DbClient, siteId: string, pa
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
-    published_revision_id: page.published_revision_id,
     updated_at: page.updated_at,
   }
 }
@@ -306,15 +283,22 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
      LIMIT 1
   `, [siteId])
 
-  const metadata = parseJson<ApiRecord>(row?.metadata_json as string | null, {})
+  if (!row) throw new HTTPError({ statusCode: 500, statusMessage: 'Professional-service consultation settings are missing', data: { code: 'CONSULTATION_SETTINGS_MISSING' } })
+  const metadata = row.metadata_json ? JSON.parse(row.metadata_json) as ApiRecord : {}
+  const ctaLabel = requiredText(row.cta_label, 'consultation.cta_label')
+  const schedulePath = requiredText(row.schedule_path, 'consultation.schedule_path')
+  const confirmationPath = requiredText(row.confirmation_path, 'consultation.confirmation_path')
+  if (row.mode !== 'native_disabled' && row.mode !== 'external_url') {
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Professional-service consultation mode is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+  }
 
   return {
-    mode: row?.mode === 'native_disabled' ? 'native_disabled' : 'external_url',
-    cta_label: typeof row?.cta_label === 'string' && row.cta_label.trim() ? row.cta_label : 'Book a consultation',
-    external_url: typeof row?.external_url === 'string' ? row.external_url : null,
-    schedule_path: typeof row?.schedule_path === 'string' ? row.schedule_path : '/schedule',
-    confirmation_path: typeof row?.confirmation_path === 'string' ? row.confirmation_path : '/contact/confirmed',
-    tracking_enabled: row?.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),
+    mode: row.mode,
+    cta_label: ctaLabel,
+    external_url: typeof row.external_url === 'string' ? row.external_url : null,
+    schedule_path: schedulePath,
+    confirmation_path: confirmationPath,
+    tracking_enabled: row.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),
     contact_form_enabled: metadata.contact_form_enabled == null ? true : asBoolean(metadata.contact_form_enabled),
     metadata,
   }
@@ -338,7 +322,7 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
          LIMIT 1
       `, [siteId])
     : null
-  const documentAssetIds = parseJson<string[]>(row.document_asset_ids as string | null, [])
+  const documentAssetIds = row.document_asset_ids ? JSON.parse(row.document_asset_ids) as string[] : []
   const documentRows = documentAssetIds.length
     ? await queryAll<ApiRecord>(db, `
         SELECT id, public_url, alt_text, file_name
@@ -366,8 +350,8 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
     })),
     founder_name: typeof row.founder_name === 'string' ? row.founder_name : null,
     founding_date: typeof row.founding_date === 'string' ? row.founding_date : null,
-    same_as: parseJson<string[]>(row.same_as as string | null, []),
-    contact_points: parseJson<PublicComplianceContactPoint[]>(row.contact_points as string | null, []),
+    same_as: row.same_as ? JSON.parse(row.same_as) as string[] : [],
+    contact_points: row.contact_points ? JSON.parse(row.contact_points) as PublicComplianceContactPoint[] : [],
     address_visibility: row.address_visibility === 'visible' ? 'visible' : 'hidden',
     address: visibleAddress
       ? {
@@ -378,27 +362,11 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
           country: null,
         }
       : null,
-    metadata: parseJson<ApiRecord>(row.metadata_json as string | null, {}),
+    metadata: row.metadata_json ? JSON.parse(row.metadata_json) as ApiRecord : {},
   }
 }
 
-export async function listPublicNavigationItems(db: DbClient, siteId: string): Promise<PublicNavigationItem[]> {
-  const rows = await queryAll<ApiRecord>(db, `
-    SELECT *
-      FROM tenant_navigation_items
-     WHERE site_id = ? AND status = 'active'
-     ORDER BY area ASC, sort_order ASC, label ASC
-  `, [siteId])
-  return rows.map(row => ({
-    id: String(row.id),
-    area: String(row.area || 'header') as PublicNavigationItem['area'],
-    label: String(row.label),
-    url: String(row.url),
-    item_type: String(row.item_type || 'internal'),
-    sort_order: Number(row.sort_order ?? 0),
-    metadata: parseJson<ApiRecord>(row.metadata_json as string | null, {}),
-  }))
-}
+
 
 export async function getPublicThemeTokens(db: DbClient, siteId: string, templateSlug = 'blawby'): Promise<ApiRecord> {
   const row = await queryFirst<{ tokens_json: string | null }>(db, `
@@ -407,7 +375,7 @@ export async function getPublicThemeTokens(db: DbClient, siteId: string, templat
      WHERE site_id = ? AND template_slug = ? AND status = 'active'
      LIMIT 1
   `, [siteId, templateSlug])
-  return parseJson<ApiRecord>(row?.tokens_json, {})
+  return row?.tokens_json ? JSON.parse(row.tokens_json) as ApiRecord : {}
 }
 
 export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Promise<PublicBlawbyIdentity> {
@@ -424,7 +392,7 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
   `, [siteId])
 
   return {
-    brand_name: typeof row?.brand_name === 'string' ? row.brand_name : null,
+    brand_name: requiredText(row?.brand_name, `site ${siteId}.brand_name`),
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
     logo_url: typeof row?.logo_url === 'string' ? row.logo_url : null,
     favicon_url: typeof row?.favicon_url === 'string' ? row.favicon_url : null,
@@ -440,9 +408,8 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
 }
 
 export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Promise<PublicBlawbyShellData> {
-  const [identity, navigation, consultation, compliance, themeTokens, offeringLinks] = await Promise.all([
+  const [identity, consultation, compliance, themeTokens, offeringLinks] = await Promise.all([
     getPublicBlawbyIdentity(db, siteId),
-    listPublicNavigationItems(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicThemeTokens(db, siteId),
@@ -453,7 +420,7 @@ export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Pr
     identity.banner_content = typeof (header as ApiRecord).banner_content === 'string' ? String((header as ApiRecord).banner_content) : null
     identity.banner_dismissible = asBoolean((header as ApiRecord).banner_dismissible)
   }
-  return { identity, navigation, consultation, compliance, themeTokens, offeringLinks }
+  return { identity, consultation, compliance, themeTokens, offeringLinks }
 }
 
 export async function getPublicBlawbyDocumentData(
@@ -472,36 +439,6 @@ export async function getPublicBlawbyDocumentData(
   return { shell, route }
 }
 
-export async function getPublicBlawbyCriticalHomeData(
-  db: DbClient,
-  siteId: string,
-): Promise<PublicBlawbyCriticalHomeData | null> {
-  const site = await getActiveBlawbySite(db, siteId)
-  if (!site) return null
-
-  const [shell, page] = await Promise.all([
-    getPublicBlawbyShellData(db, siteId),
-    getPublicTenantPageByPath(db, siteId, '/'),
-  ])
-  if (!page) return null
-  return { shell, page }
-}
-
-export async function resolvePublicBlawbyCriticalHomeOrThrow(
-  db: DbClient,
-  siteId: string,
-): Promise<{ success: true; shell: PublicBlawbyShellData; page: PublicTenantPage }> {
-  const critical = await getPublicBlawbyCriticalHomeData(db, siteId)
-  if (!critical) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Blawby homepage content not found',
-      data: { code: 'BLAWBY_HOME_NOT_FOUND' },
-    })
-  }
-  return { success: true, ...critical }
-}
-
 export async function resolvePublicBlawbyDocumentOrThrow(
   db: DbClient,
   siteId: string,
@@ -510,14 +447,14 @@ export async function resolvePublicBlawbyDocumentOrThrow(
 ): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
   const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options)
   if (!document) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: 'Blawby is not enabled for this site',
       data: { code: 'BLAWBY_NOT_ENABLED' },
     })
   }
   if (!hasPublicBlawbyRouteContent(document.route)) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: 'Route content not found',
       data: { code: 'BLAWBY_ROUTE_NOT_FOUND' },
@@ -561,11 +498,11 @@ function mapPublicQa(rows: Array<{
 function mapPublicReviews(rows: Array<Record<string, unknown>>): PublicSiteReview[] {
   return rows.map(row => ({
     id: String(row.id),
-    author_name: String(row.author_name || 'Client'),
+    author_name: requiredText(row.author_name, `review ${row.id}.author_name`),
     reviewer_photo_url: typeof row.reviewer_photo_url === 'string' ? row.reviewer_photo_url : null,
-    rating: Number(row.rating ?? 5),
+    rating: Number(row.rating),
     title: typeof row.title === 'string' ? row.title : null,
-    content: String(row.content || ''),
+    content: requiredText(row.content, `review ${row.id}.content`),
     original_review_date: typeof row.original_review_date === 'string' ? row.original_review_date : null,
     verified: row.verified === true,
   }))
@@ -578,14 +515,14 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     id: String(row.id),
     title: String(row.title),
     slug: String(row.slug),
-    body: String(row.body || ''),
+    body: requiredText(row.body, `article ${row.id}.body`),
     excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
     category: typeof row.category === 'string' ? row.category : null,
-    tags: Array.isArray(row.tags) ? row.tags.map(String) : parseJson<string[]>(row.tags_json, []),
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : (row.tags_json ? JSON.parse(row.tags_json) as string[] : []),
     featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
     author_name: typeof row.author_name === 'string' ? row.author_name : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: typeof row.canonical_url === 'string' && row.canonical_url ? row.canonical_url : `/article/${String(row.slug)}`,
+    canonical_url: requiredText(row.canonical_url, `article ${row.id}.canonical_url`),
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     robots: typeof row.robots === 'string' ? row.robots : null,
@@ -635,7 +572,7 @@ export async function getPublicBlawbyRouteData(
   ])
   let posts = initialPosts
   if (recipe === 'article' && postRow) {
-    const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : parseJson<string[]>(postRow.tags_json, [])
+    const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
     const summaries = await listPublicBlogSummaries(db, siteId, 50)
     posts = summaries
       .filter(summary => summary.slug !== options.slug && summary.tags.some(tag => postTags.includes(tag)))
@@ -662,15 +599,14 @@ export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boole
 }
 
 export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {
-  const [offerings, tenantPages, compliance, consultation, navigation, themeTokens] = await Promise.all([
+  const [offerings, tenantPages, compliance, consultation, themeTokens] = await Promise.all([
     listPublicOfferings(db, siteId),
     listPublicTenantPages(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicConsultationSettings(db, siteId),
-    listPublicNavigationItems(db, siteId),
     getPublicThemeTokens(db, siteId),
   ])
-  return { offerings, tenantPages, compliance, consultation, navigation, themeTokens }
+  return { offerings, tenantPages, compliance, consultation, themeTokens }
 }
 
 export async function recordSiteConversionEvent(db: DbClient, input: {

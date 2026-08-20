@@ -13,48 +13,18 @@
             :content="description"
             class="blawby-footer-copy max-w-xl text-sm leading-6 text-gray-300"
           />
-          <div v-if="socialItems.length" class="flex gap-6">
-            <a
-              v-for="item in socialItems"
-              :key="item.id"
-              :href="item.url"
-              class="text-gray-400 transition hover:text-white"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span class="sr-only">{{ item.label }}</span>
-              <BlawbySocialIcon :platform="item.label" class="size-6" />
-            </a>
-          </div>
         </div>
 
-        <div v-if="offeringLinks.length || supportItems.length || companyItems.length || legalItems.length" class="mt-16 grid grid-cols-2 gap-8 xl:col-span-2 xl:mt-0">
-          <div class="md:grid md:grid-cols-2 md:gap-8">
-            <div v-if="offeringLinks.length">
-              <h3 class="text-sm font-semibold leading-6 text-white">Services</h3>
-              <ul class="mt-6 space-y-4" role="list">
-                <li v-for="offering in offeringLinks" :key="offering.id">
-                  <NuxtLink :to="offering.canonical_path" class="text-sm leading-6 text-gray-300 no-underline hover:text-white">
-                    {{ offering.name }}
-                  </NuxtLink>
-                </li>
-              </ul>
-            </div>
-            <div v-if="supportItems.length" class="mt-10 md:mt-0">
-              <h3 class="text-sm font-semibold leading-6 text-white">Support</h3>
-              <BlawbyFooterLinks :items="supportItems" />
-            </div>
-          </div>
-
-          <div class="md:grid md:grid-cols-2 md:gap-8">
-            <div v-if="companyItems.length">
-              <h3 class="text-sm font-semibold leading-6 text-white">Company</h3>
-              <BlawbyFooterLinks :items="companyItems" />
-            </div>
-            <div v-if="legalItems.length" class="mt-10 md:mt-0">
-              <h3 class="text-sm font-semibold leading-6 text-white">Legal</h3>
-              <BlawbyFooterLinks :items="legalItems" />
-            </div>
+        <div v-if="offeringLinks.length" class="mt-16 xl:col-span-2 xl:mt-0">
+          <div>
+            <h3 class="text-sm font-semibold leading-6 text-white">Services</h3>
+            <ul class="mt-6 space-y-4" role="list">
+              <li v-for="offering in offeringLinks" :key="offering.id">
+                <NuxtLink :to="offering.canonical_path" class="text-sm leading-6 text-gray-300 no-underline hover:text-white">
+                  {{ offering.name }}
+                </NuxtLink>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -69,11 +39,10 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicBlawbyIdentity, PublicCompliance, PublicNavigationItem, PublicOfferingLink } from '~/types/blawby'
+import type { PublicBlawbyIdentity, PublicCompliance, PublicOfferingLink } from '~/types/blawby'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
-  navigation: PublicNavigationItem[]
   compliance: PublicCompliance | null
   offeringLinks: PublicOfferingLink[]
 }>()
@@ -84,23 +53,4 @@ const description = computed(() => props.compliance?.footer_disclaimer || props.
 const footerLogo = computed(() => typeof props.compliance?.metadata?.logo_dark_url === 'string'
   ? props.compliance.metadata.logo_dark_url
   : props.site.logo_url)
-const footerItems = computed(() => props.navigation.filter(item => item.area === 'footer'))
-const socialItems = computed(() => props.navigation.filter(item => item.area === 'social' && item.url !== '/none'))
-
-function groupItems(group: string) {
-  return footerItems.value.filter(item => item.metadata?.group === group)
-}
-
-const supportItems = computed<PublicNavigationItem[]>(() => {
-  return groupItems('support')
-})
-
-const companyItems = computed<PublicNavigationItem[]>(() => {
-  return groupItems('company')
-})
-
-const legalItems = computed<PublicNavigationItem[]>(() => {
-  return props.navigation.filter(item => item.area === 'legal')
-})
-
 </script>

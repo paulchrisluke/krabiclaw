@@ -111,16 +111,13 @@
 
       <!-- ── Brand story ─────────────────────────────────────── -->
       <LazySayaBrandStory
+        v-if="getField('story.headline') || getField('story.body') || getField('story.image')"
         :data="{
-          headline: getField('story.headline', businessTitle),
-          body: getField('story.body', businessSubtitle),
+          headline: getField('story.headline'),
+          body: getField('story.body'),
           image: getField('story.image'),
-          isAuthenticated: false,
           ourStoryKicker: homeCopy.ourStoryKicker,
-          readMoreCta: homeCopy.readMoreCta,
-          brandStoryPlaceholder: homeCopy.brandStoryPlaceholder,
-          brandStoryDescription: homeCopy.brandStoryDescription,
-          addStoryCta: homeCopy.addStoryCta
+          readMoreCta: homeCopy.readMoreCta
         }"
       />
 
@@ -361,7 +358,7 @@ const googleBusiness = computed(() => {
     media: gb.media && gb.media.length ? gb.media : [{ google_url: gb.business?.profile?.photoUrl || '' }],
     reviews: ((supplemental?.reviews ?? gb.reviews) || []).map((r) => ({
       ...r,
-      author_name: r.author || r.reviewer?.displayName || r.author_name || 'Anonymous',
+      author_name: r.author || r.reviewer?.displayName || r.author_name || '',
       date: r.date || r.createTime || r.updateTime
     })),
     posts: supplemental?.posts ?? gb.posts ?? [],
@@ -388,7 +385,7 @@ const googleReviewSummary = computed(() => {
   return { average: average.toFixed(1), count: summary.totalReviewCount }
 })
 
-const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Business')
+const restaurantName = computed(() => site?.brand_name?.trim() || businessTitle.value?.trim() || '')
 
 // Hero metadata from CMS and imported location data — used for OG image metadata below,
 // SayaHomeHero.vue resolves its own copy via getHero() from its :data prop.
@@ -404,7 +401,7 @@ if (siteId) {
   const seoTitle = computed(() => {
     if (pageConfig.value?.seo_title) return pageConfig.value.seo_title
     const primary = (restaurantName.value || '').trim()
-    const secondary = (businessTitle.value || 'Business').trim() || 'Business'
+    const secondary = businessTitle.value?.trim() || ''
     if (!primary || primary.toLowerCase() === secondary.toLowerCase()) {
       return secondary
     }
@@ -415,7 +412,7 @@ if (siteId) {
   // truncation, so
   // this page shouldn't pre-truncate and risk drifting from that length.
   const seoDescription = computed(() =>
-    pageConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.'
+    pageConfig.value?.seo_description || businessSubtitle.value || ''
   )
 
   useTenantSocialMetadata(() => ({
@@ -469,12 +466,12 @@ const defaultCurrency = computed(() => pageConfig.value.default_currency || 'THB
 const isExperienceTenant = computed(() => site?.vertical === 'experience')
 const homeExperienceHref = computed(() => resolveSiteExperienceHref(experiencesList.value))
 const homePrimaryCtaRoute = computed(() => {
-  if (isExperienceTenant.value) return homeExperienceHref.value || homeCopy.value.ctaRoute
+  if (isExperienceTenant.value) return homeExperienceHref.value
   return homeCopy.value.ctaRoute
 })
 const homeFeaturedContentLinkTarget = computed(() => {
   if (hasMenu.value) return '/menu'
-  return homeExperienceHref.value || '/experiences'
+  return homeExperienceHref.value
 })
 
 // Review location filter
@@ -511,11 +508,11 @@ const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() =>
   googleReviews.value.slice(0, 3).map((review, i) => ({
     id: review.id ?? review.name ?? i,
-    author: review.reviewer?.displayName || review.author_name || 'Anonymous',
+    author: review.reviewer?.displayName || review.author_name || '',
     content: review.comment?.text || review.content || '',
     rating: googleReviewRating(review),
     locationTitle: locations.value.length > 1 ? review.location_title || null : null,
-  }))
+  })).filter(review => review.author && review.content)
 )
 
 // Recent posts — shown in the "Lately" section, each tile links to the real
@@ -527,7 +524,7 @@ const recentPosts = computed(() => {
     .filter(p => p.media?.[0]?.url && (p.publicPath || p.public_path || p.slug))
   return posts.slice(0, 4).map((post, i) => ({
     id: post.slug || String(i),
-    path: post.publicPath || post.public_path || `/posts/${post.slug}`,
+    path: post.publicPath || post.public_path,
     image: post.media?.[0]?.url || null,
     imageKind: post.media?.[0]?.kind || 'image',
     poster: post.media?.[0]?.thumbnail_url || null,
@@ -539,11 +536,11 @@ const recentPosts = computed(() => {
 
 const recentBlogPosts = computed(() =>
   (blogList.value || [])
-    .filter(post => post.slug)
+    .filter(post => post.slug && typeof post.title === 'string' && post.title.trim())
     .slice(0, 3)
     .map((post) => ({
       slug: String(post.slug || ''),
-      title: String(post.title || 'Untitled'),
+      title: post.title.trim(),
       excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
       category: typeof post.category === 'string' ? post.category : '',
       publishedAt: typeof post.published_at === 'string' ? post.published_at : null,
@@ -577,7 +574,7 @@ const featuredContent = computed(() => {
         image: isVideo ? (item.thumbnail_url || null) : (item.public_url || null),
         imageKind: 'image',
         alt: item.name ? `${item.name} dish` : 'Featured dish image',
-        href: item.slug ? `/menu/${item.slug}` : '/menu',
+        href: item.slug ? `/menu/${item.slug}` : '',
       }
     } else {
       return {
@@ -586,7 +583,7 @@ const featuredContent = computed(() => {
         image: experienceCoverImage(item),
         imageKind: 'image',
         alt: item.title ? `${item.title} experience` : 'Featured experience image',
-        href: item.slug ? `/experiences/${item.slug}` : '/experiences',
+        href: item.slug ? `/experiences/${item.slug}` : '',
         unavailable: item.location_id ? closedLocationIds.value.has(item.location_id) : false,
       }
     }

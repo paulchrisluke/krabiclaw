@@ -24,11 +24,12 @@
 </template>
 
 <script setup lang="ts">
-import type { RouteLocationRaw } from 'vue-router'
 import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from './dashboardScopeHeaderContext'
 
+type DashboardRoute = string | { path: string; query?: Record<string, string> }
+
 const props = withDefaults(defineProps<{
-  detailTo?: RouteLocationRaw | null
+  detailTo?: DashboardRoute | null
   detailLabel?: string
   backToOrganization?: boolean
 }>(), {

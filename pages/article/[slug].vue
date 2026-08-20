@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout name="blawby">
     <div v-if="post" data-parity-root>
-      <div class="mx-auto max-w-7xl px-6 pb-12 pt-12 sm:pb-16 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8" data-parity-section="article-content">
+      <div class="mx-auto max-w-7xl px-6 pb-12 pt-20 sm:pb-16 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8 lg:pt-12" data-parity-section="article-content">
         <!--
           Sidebar is removed from the mobile document flow entirely (`hidden lg:block`), not
           just visually collapsed — it used to render above the article on mobile with no
@@ -37,9 +37,7 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.social_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby">
-              <template #legacy-body><div class="prose min-w-full"><BlawbyRichText :content="body" unstyled class="contents" /></div></template>
-            </BlogArticleView>
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.social_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -54,10 +52,11 @@
       </div>
 
       <BlawbyConsultationCta
-        :title="String(ctaBlock?.title || 'Get started today')"
+        v-if="ctaBlock && ctaBlock.title && ctaBlock.label && (consultation.external_url || ctaBlock.url)"
+        :title="String(ctaBlock?.title || '')"
         :description="optionalString(ctaBlock?.description)"
-        :label="String(ctaBlock?.label || consultation.cta_label)"
-        :destination="consultation.external_url || String(ctaBlock?.url || consultation.schedule_path)"
+        :label="String(ctaBlock?.label || '')"
+        :destination="consultation.external_url || String(ctaBlock?.url || '')"
         :background-url="assetUrl(ctaBlock?.background)"
         :featured-url="assetUrl(ctaBlock?.featured)"
         @click="trackConsultation"
@@ -81,7 +80,6 @@
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
-import { stripLeadingTitleHeading } from '~/utils/markdown'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { isBlawby } = usePublicTemplate()
@@ -91,30 +89,36 @@ if (!isTenant) throw createError({ statusCode: 404 })
 definePageMeta({ layout: false })
 
 const slug = String(useRoute().params.slug || '')
-const { data, error } = await useBlawbyRoute('article', slug)
+const { data, error, shell } = await useBlawbyRoute('article', slug)
 if (error.value) throw error.value
 if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })
+if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_blocks.length === 0) {
+  throw createError({ statusCode: 500, statusMessage: 'Published article content is missing its canonical blocks' })
+}
 
-const { identity, consultation, compliance } = await useBlawbyShell()
+const identity = computed(() => shell.value.identity)
+const consultation = computed(() => shell.value.consultation)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
+const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
+if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
 const ctaBlock = computed(() => {
   const page = data.value.page
   if (!page) return null
   return findTenantPageBlock(page.blocks, 'consultation_cta', 'contact_cta')
 })
-const body = computed(() => stripLeadingTitleHeading(post.value.body || '', post.value.title))
 const displayTags = computed(() => post.value.tags.slice(1))
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
-const { categories } = useTenantBlogNav(computed(() => data.value.posts))
+const { categories } = useTenantBlogNav(computed(() => blogIndexData.value.posts))
 const browseTopicsOpen = ref(false)
 const requestURL = useRequestURL()
 const articlePath = computed(() => `/article/${post.value.slug}`)
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value.title, seoTitle: post.value.seo_title, excerpt: post.value.excerpt,
   seoDescription: post.value.seo_description, slug: post.value.slug, canonicalUrl: post.value.canonical_url,
-  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.brand_name || 'Professional services',
+  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.brand_name,
   robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots,
 }))
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
@@ -138,7 +142,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
   author: post.value.author_name || null,
   publishedAt: post.value.published_at || null,
   brand: {
-    siteName: identity.value.brand_name || 'Professional services',
+    siteName: identity.value.brand_name,
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },

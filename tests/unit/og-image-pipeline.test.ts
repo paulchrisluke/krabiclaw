@@ -18,7 +18,7 @@ const PAYLOAD: OgImageRenderPayload = {
 }
 
 function fakeEvent(env: Record<string, unknown>) {
-  return { context: { cloudflare: { env } } } as unknown as Parameters<typeof resolveOgImage>[0]
+  return { runtime: { cloudflare: { env } } } as unknown as Parameters<typeof resolveOgImage>[0]
 }
 
 const wasmBytes = await readFile(path.join(repoRoot, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'))
@@ -47,12 +47,13 @@ test('resolveOgImage renders without R2/KV bindings', async () => {
   assert.equal(result.cacheKey, computeOgImageCacheKey(PAYLOAD))
 })
 
-test('resolveOgImage identifies renderer failures when serving the static fallback', async () => {
-  const result = await resolveOgImage(fakeEvent({}), PAYLOAD, {
-    render: async () => { throw new Error('renderer unavailable') },
-  })
-  assert.equal(result.source, 'fallback')
-  assert.equal(result.fallbackReason, 'renderer_error')
+test('resolveOgImage preserves renderer failures', async () => {
+  await assert.rejects(
+    () => resolveOgImage(fakeEvent({}), PAYLOAD, {
+      render: async () => { throw new Error('renderer unavailable') },
+    }),
+    /renderer unavailable/,
+  )
 })
 
 test('resolveOgImage renders and caches in KV, then serves from cache on the next call', async () => {

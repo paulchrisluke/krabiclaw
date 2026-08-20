@@ -2,7 +2,7 @@
 // Generates an image via the configured OpenAI image model through CF AI Gateway, uploads to Cloudflare Images,
 // creates a media_asset record, and charges credits from returned token usage.
 // body: { prompt, locationId? }
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
@@ -11,7 +11,7 @@ import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -37,16 +37,14 @@ export default defineEventHandler(async (event) => {
     if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
   }
 
-  const body = await readBody(event)
+  const body = await readRequiredBody<{ prompt?: unknown; locationId?: unknown }>(event)
   const prompt = typeof body?.prompt === 'string' ? body.prompt.trim().slice(0, 1000) : ''
   const locationId = typeof body?.locationId === 'string' ? body.locationId.trim() || null : null
   if (!prompt) return jsonResponse({ error: 'prompt required' }, { status: 400 })
 
   // Validate locationId if provided
   if (locationId) {
-    const location = await queryFirst(db,
-      'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
-      [locationId, siteId]
+    const location = await queryFirst(db, 'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [locationId, siteId]
     )
     if (!location) {
       return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
@@ -54,12 +52,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: locationId,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId, })
 
   if (!env.CLOUDFLARE_IMAGES_API_TOKEN) {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
@@ -90,8 +83,7 @@ export default defineEventHandler(async (event) => {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     const code = (normalizedError as { code?: string }).code
     console.error('generate_image_failed', {
-      siteId, userId: session.user.id, model: IMAGE_MODEL,
-      error: normalizedError.message, stack: normalizedError.stack ?? null
+      siteId, userId: session.user.id, model: IMAGE_MODEL, error: normalizedError.message, stack: normalizedError.stack ?? null
     })
     if (code === 'AI_TIMEOUT') {
       return jsonResponse({ error: 'Image generation timed out. Please try again.' }, { status: 504 })
@@ -106,20 +98,7 @@ export default defineEventHandler(async (event) => {
   const assetId = crypto.randomUUID()
   try {
     await createMediaAsset(db, {
-      id: assetId,
-      organization_id: orgId,
-      site_id: siteId,
-      location_id: locationId,
-      kind: 'image',
-      provider: 'cloudflare_images',
-      source: 'generated',
-      cloudflare_image_id: imageId,
-      public_url: publicUrl,
-      thumbnail_url: thumbnailUrl,
-      mime_type: 'image/png',
-      status: 'active',
-      created_by_user_id: session.user.id,
-    })
+      id: assetId, organization_id: orgId, site_id: siteId, location_id: locationId, kind: 'image', provider: 'cloudflare_images', source: 'generated', cloudflare_image_id: imageId, public_url: publicUrl, thumbnail_url: thumbnailUrl, mime_type: 'image/png', status: 'active', created_by_user_id: session.user.id, })
   } catch (error) {
     try {
       if (imageId) await deleteImage(env, imageId)
@@ -135,11 +114,7 @@ export default defineEventHandler(async (event) => {
   if (!isDev) {
     try {
       await chargeCredits(db, orgId, {
-        siteId, sessionId: session.session.id, action: 'generate_image', model: IMAGE_MODEL,
-        inputTokens: generatedImage.inputTokens,
-        outputTokens: generatedImage.outputTokens,
-        cfGatewayLogId: cfLogId,
-      })
+        siteId, sessionId: session.session.id, action: 'generate_image', model: IMAGE_MODEL, inputTokens: generatedImage.inputTokens, outputTokens: generatedImage.outputTokens, cfGatewayLogId: cfLogId, })
     } catch (error) {
       const normalizedError = error instanceof Error ? error : new Error('Unknown error')
       console.error('chargeCredits_failed', { siteId, model: IMAGE_MODEL, error: normalizedError.message })
@@ -152,3 +127,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'active' })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

@@ -4,7 +4,7 @@ import { queryAll, queryFirst } from '~/server/db'
 import { buildInvitationRedirectUrl, sanitizeInvitationReturnTo } from '~/server/utils/invitations'
 import { isPhoneInvitationEmail } from '~/server/utils/phone-invitations'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const invitationId = String(getRouterParam(event, 'invitationId') || '').trim()
   if (!invitationId) return jsonResponse({ error: 'Invitation id is required' }, { status: 400 })
 
@@ -27,9 +27,7 @@ export default defineEventHandler(async (event) => {
     inviterName: string | null
     inviterEmail: string | null
   }>(db, `
-    SELECT i.id, i.organizationId, i.email, i.role, i.status, i.expiresAt,
-           o.name AS organizationName, o.slug AS organizationSlug,
-           u.name AS inviterName, u.email AS inviterEmail
+    SELECT i.id, i.organizationId, i.email, i.role, i.status, i.expiresAt, o.name AS organizationName, o.slug AS organizationSlug, u.name AS inviterName, u.email AS inviterEmail
     FROM invitation i
     JOIN organization o ON o.id = i.organizationId
     LEFT JOIN user u ON u.id = i.inviterId
@@ -69,11 +67,7 @@ export default defineEventHandler(async (event) => {
         `, [invitation.organizationId])
         const preferredSite = preferredSiteId ? orgSites.find(site => site.id === preferredSiteId) ?? null : null
         redirectTo = buildInvitationRedirectUrl({
-          orgSlug,
-          preferredSite,
-          fallbackSites: orgSites,
-          bypassOnboardingGate: isPhoneInvitationEmail(invitation.email),
-        })
+          orgSlug, preferredSite, fallbackSites: orgSites, bypassOnboardingGate: isPhoneInvitationEmail(invitation.email), })
       }
       return jsonResponse({ status: 'accepted', redirectTo, organization: { id: invitation.organizationId, slug: invitation.organizationSlug } })
     }
@@ -106,27 +100,10 @@ export default defineEventHandler(async (event) => {
   const resolvedSite = preferredSite ?? (orgSites.length === 1 ? orgSites[0]! : null)
 
   return jsonResponse({
-    id: invitation.id,
-    email: invitation.email,
-    role: invitation.role ?? 'member',
-    expiresAt: new Date(invitation.expiresAt * 1000).toISOString(),
-    organization: {
-      id: invitation.organizationId,
-      name: invitation.organizationName,
-      slug: invitation.organizationSlug,
-    },
-    inviter: {
-      name: invitation.inviterName,
-      email: invitation.inviterEmail,
-    },
-    site: resolvedSite ? {
-      id: resolvedSite.id,
-      subdomain: resolvedSite.subdomain,
-      brandName: resolvedSite.brand_name,
-      status: resolvedSite.status,
-      onboardingStatus: resolvedSite.onboarding_status,
-    } : null,
-    siteCount: orgSites.length,
-    preferredSiteRequested: Boolean(preferredSiteId),
-  })
+    id: invitation.id, email: invitation.email, role: invitation.role ?? 'member', expiresAt: new Date(invitation.expiresAt * 1000).toISOString(), organization: {
+      id: invitation.organizationId, name: invitation.organizationName, slug: invitation.organizationSlug, }, inviter: {
+      name: invitation.inviterName, email: invitation.inviterEmail, }, site: resolvedSite ? {
+      id: resolvedSite.id, subdomain: resolvedSite.subdomain, brandName: resolvedSite.brand_name, status: resolvedSite.status, onboardingStatus: resolvedSite.onboarding_status, } : null, siteCount: orgSites.length, preferredSiteRequested: Boolean(preferredSiteId), })
 })
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

@@ -1,5 +1,5 @@
 // PATCH /api/admin/blog/posts/[postId] - Update platform blog post
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { updatePlatformBlogPost } from '~/server/utils/platform-content'
@@ -7,7 +7,7 @@ import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-s
 
 import type { PlatformBlogPostRequestBody } from '~/server/types/platform-content'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
   if (!postId) return jsonResponse({ error: 'Post ID required' }, { status: 400 })
 
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   if (permissionDenied) return permissionDenied
 
   let body: PlatformBlogPostRequestBody
-  try { body = await readBody(event) } catch {
+  try { body = await readRequiredBody<PlatformBlogPostRequestBody>(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
@@ -40,3 +40,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

@@ -2,7 +2,7 @@ import { execute } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
 import { getNotificationAccess } from '~/server/utils/notification-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const access = await getNotificationAccess(event)
   const now = new Date().toISOString()
   await execute(access.db, `
@@ -15,3 +15,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, unread_count: 0 })
 })
+import { defineHandler } from 'nitro';

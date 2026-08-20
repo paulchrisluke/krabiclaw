@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -43,7 +45,7 @@ export async function loadTransferOnboardingContext(
     || !rawTransferId.trim()
     || rawTransferId !== rawTransferId.trim()
   )) {
-    throw createError({ statusCode: 400, statusMessage: 'The transfer query parameter is invalid.' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'The transfer query parameter is invalid.' })
   }
   const exactTransferId = hasTransferScope ? rawTransferId! : null
 
@@ -64,7 +66,7 @@ export async function loadTransferOnboardingContext(
     const db = env.DB
     const session = await getAuthSession(event, env)
     if (!db || !session?.user?.id) {
-      throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+      throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
     }
     const paymentPending = await queryFirst<{ id: string }>(
       db,
@@ -132,7 +134,7 @@ export async function loadTransferOnboardingContext(
       [exactTransferId, session.user.id, session.user.id, context.organization.id, context.organization.id],
     )
     if (!transferredSite?.id) {
-      throw createError({ statusCode: 404, statusMessage: 'Transferred site not found' })
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Transferred site not found' })
     }
     context = await loadDashboardContext(event, {
       orgSlug: scope.orgSlug,
@@ -148,7 +150,7 @@ export async function loadTransferOnboardingContext(
     const db = env.DB
     const session = await getAuthSession(event, env)
     if (!db || !session?.user?.id) {
-      throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+      throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
     }
     const transferredSite = await queryFirst<{ subdomain: string | null }>(
       db,
@@ -174,10 +176,10 @@ export async function loadTransferOnboardingContext(
   }
 
   if (!context.site) {
-    throw createError({ statusCode: 404, statusMessage: 'Transferred site not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Transferred site not found' })
   }
   const db = cloudflareEnv(event).DB
-  if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const [locations, notifications] = await Promise.all([
     queryAll<{
       id: string

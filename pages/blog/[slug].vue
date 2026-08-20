@@ -15,24 +15,7 @@
 
     <article class="min-w-0">
     <div class="mx-auto max-w-4xl">
-    <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :site-name="siteName" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="saya">
-      <template #legacy-body><div class="space-y-14">
-      <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
-        <!-- eslint-disable vue/no-v-html -->
-        <div
-          v-if="block.kind === 'html'"
-          class="prose prose-lg max-w-none
-                 prose-headings:text-default prose-headings:font-bold
-                 prose-p:leading-relaxed prose-p:text-muted
-                 prose-a:text-primary prose-a:no-underline hover:prose-a:underline
-                 prose-strong:text-default prose-li:text-muted"
-          v-html="block.html"
-        />
-        <!-- eslint-enable vue/no-v-html -->
-        <component :is="resolveContentComponent(block.type)" v-else v-bind="block.props" />
-      </template>
-      </div></template>
-    </BlogArticleView>
+    <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :site-name="siteName" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="saya" />
 
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
@@ -72,12 +55,7 @@
 <script setup lang="ts">
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
-import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
-import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
-import { resolveContentComponent } from '~/utils/content-component-resolver'
-import { loadDomPurify } from '~/utils/dom-purify-loader'
-
-const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
+import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
@@ -177,13 +155,16 @@ if (error.value) {
 if (!data.value?.post) {
   throw createError({ statusCode: 404, statusMessage: 'Post not found', fatal: true })
 }
+if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_blocks.length === 0) {
+  throw createError({ statusCode: 500, statusMessage: 'Published blog content is missing its canonical blocks' })
+}
 
 const post = computed(() => data.value?.post ?? null)
 const { blogList, config } = await usePublicPageData()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
-const siteName = computed(() => site?.brand_name || 'Our Site')
+const siteName = computed(() => site?.brand_name?.trim() ?? '')
 const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
 const readTime = computed(() => {
   const words = (post.value?.body ?? '')
@@ -200,27 +181,8 @@ const wasUpdated = computed(() => {
   return Math.abs(updatedDate.getTime() - publishedDate.getTime()) > 60_000
 })
 
-function renderMarkdown(markdown: string) {
-  return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
-}
-
-const hasExplicitEmbeds = computed(() => /\{\{\s*component\s+type\s*=/.test(post.value?.body ?? ''))
-const renderedBlocks = computed(() => {
-  const blocks = buildContentBlocks(stripLeadingTitleHeading(post.value?.body ?? '', post.value?.title), post.value?.components ?? [], renderMarkdown)
-  if (hasExplicitEmbeds.value) return blocks
-
-  const fallbackBlocks = (post.value?.components ?? [])
-    .map(component => normalizeContentComponent(component, renderMarkdown))
-    .filter((component): component is NonNullable<ReturnType<typeof normalizeContentComponent>> => Boolean(component))
-    .map(component => ({ kind: 'component' as const, type: component.type, props: component.props, component: component.source }))
-
-  return [...blocks, ...fallbackBlocks]
-})
-
 const renderableComponents = computed(() =>
-  renderedBlocks.value
-    .filter((block): block is Extract<typeof block, { kind: 'component' }> => block.kind === 'component')
-    .map(block => block.component),
+  structuredComponentsFromBlocks(post.value?.content_blocks ?? []),
 )
 
 const selectedPostImage = computed(() => {

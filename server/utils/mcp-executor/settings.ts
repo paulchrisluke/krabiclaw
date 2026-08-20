@@ -3,7 +3,7 @@ import { DASHBOARD_DESTINATIONS, buildDashboardUrl, type DashboardDestination } 
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createCustomDomainPair, deleteCustomDomain, hasCustomDomainsEntitlement, setCanonicalDomain, syncDomainWithCloudflare, validateCustomDomain } from '~/server/utils/domains'
 import { domainInstructions, getSiteDomains } from '~/server/utils/domain-read-model'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
 
 export async function handleSettingsTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -41,7 +41,7 @@ export async function handleSettingsTools(ctx: McpExecutorContext): Promise<unkn
         site.siteId,
       );
       if (!hasEntitlement) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 403,
           statusMessage: "Custom domains require the Growth plan or higher.",
         });
@@ -53,7 +53,7 @@ export async function handleSettingsTools(ctx: McpExecutorContext): Promise<unkn
         domain,
       );
       if (!validation.valid) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 400,
           statusMessage: validation.reason ?? "Invalid domain",
         });

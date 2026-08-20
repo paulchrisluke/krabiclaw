@@ -63,7 +63,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         menu_id: { type: 'string' },
         name: { type: 'string' },
         description: { type: 'string' },
-        status: { type: 'string', enum: ['draft', 'published'] },
+        is_visible: { type: 'boolean' },
         section_order: { type: 'array', items: { type: 'string' }, description: 'Section names in display order.' },
       },
       required: ['menu_id'],

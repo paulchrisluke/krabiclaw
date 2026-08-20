@@ -1,10 +1,11 @@
 // Get single site details
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '../../utils/auth'
-import { defineEventHandler, getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';
 import { queryFirst } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
 
   if (!siteId) {

@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -11,3 +11,5 @@ export default defineEventHandler(async (event) => {
   const notifications = await getNotificationsSettings(db, site.organization_id, siteId)
   return jsonResponse({ success: true, notifications })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

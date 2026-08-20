@@ -2,7 +2,7 @@
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { listPlatformDocs } from '~/server/utils/platform-content'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Documentation data is temporarily unavailable')
@@ -14,3 +14,4 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, 503, 'DOCS_UNAVAILABLE', 'Documentation data is temporarily unavailable')
   }
 })
+import { defineHandler } from 'nitro';

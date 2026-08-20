@@ -167,6 +167,7 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
 import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
+import { getErrorMessage } from '~/utils/errors'
 
 const siteId = await useDashboardSiteId()
 const siteApiBase = `/api/editor/sites/${siteId}`
@@ -229,19 +230,6 @@ const {
   pendingRetryFile,
   upload,
 } = useMediaUpload(siteApiBase)
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const errorMessage = (data as Record<string, unknown>).error
-      if (typeof errorMessage === 'string' && errorMessage) return errorMessage
-    }
-    const message = (error as Record<string, unknown>).message
-    if (typeof message === 'string' && message) return message
-  }
-  return fallback
-}
 
 const kindTabs = [
   { label: 'All', value: '' },

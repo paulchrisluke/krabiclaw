@@ -41,6 +41,7 @@ interface NotificationEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
   EMAIL_REPLY_SECRET?: string
   PLATFORM_OWNER_EMAILS?: string
+  GUEST_INBOX_HUBS?: DurableObjectNamespace
 }
 
 interface SiteContext {
@@ -172,8 +173,10 @@ export interface NotificationCopyPreview {
   text: string
 }
 
-function siteName(opts: SiteContext, fallback = 'the business'): string {
-  return opts.siteName || fallback
+function siteName(opts: SiteContext): string {
+  const value = opts.siteName?.trim()
+  if (!value) throw new Error('Tenant site name is required for notifications')
+  return value
 }
 
 function formatDateHuman(dateValue: string): string {
@@ -219,7 +222,8 @@ function buildReservationWhatsAppContext(locationName?: string | null): string {
 }
 
 function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: string | null): string {
-  const business = siteName?.trim() || 'the business'
+  const business = siteName?.trim()
+  if (!business) throw new Error('Tenant site name is required for WhatsApp notifications')
   return `Business: ${business} · Experience: ${experienceTitle}`
 }
 
@@ -244,7 +248,7 @@ async function buildOwnerInboxUrl(
       import('~/server/domain/guest-threads/repository'),
       import('~/server/domain/guest-threads/adapters/registry'),
     ])
-    const thread = await ensureGuestThread(db, getAdapter(submissionType), opts.submissionId)
+    const thread = await ensureGuestThread(db, getAdapter(submissionType), opts.submissionId, { publishEnv: env })
     return await buildOwnerThreadInboxUrl(env, db, {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
@@ -254,7 +258,7 @@ async function buildOwnerInboxUrl(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (message.includes('Submission not found')) return null
-    return null
+    throw error instanceof Error ? error : new Error(message)
   }
 }
 
@@ -303,22 +307,18 @@ async function getOwnerNotificationChannels(
 
   if (!row?.value) return hasWhatsAppPhone ? ['whatsapp'] : ['email']
 
-  let rawChannels: string[]
-  try {
-    rawChannels = JSON.parse(row.value) as string[]
-    if (!Array.isArray(rawChannels)) {
-      return hasWhatsAppPhone ? ['whatsapp'] : ['email']
-    }
-  } catch {
-    return hasWhatsAppPhone ? ['whatsapp'] : ['email']
+  const parsedChannels: unknown = JSON.parse(row.value)
+  if (!Array.isArray(parsedChannels) || !parsedChannels.every(channel => typeof channel === 'string')) {
+    throw new Error('Stored owner notification channels are invalid')
   }
+  const rawChannels = parsedChannels
 
   const channels = rawChannels
     .map(channel => channel.trim().toLowerCase())
     .filter((channel): channel is NotificationChannel => channel === 'email' || channel === 'whatsapp')
 
   const uniqueChannels = [...new Set(channels)]
-  return uniqueChannels.length > 0 ? uniqueChannels : (hasWhatsAppPhone ? ['whatsapp'] : ['email'])
+  return uniqueChannels
 }
 
 export async function insertDashboardNotification(
@@ -1218,7 +1218,7 @@ export async function notifyExperienceBookingCreated(
   db: DbClient,
   opts: ExperienceBookingNotificationInput
 ) {
-  const studio = siteName(opts, 'the business')
+  const studio = siteName(opts)
   const prettyDate = formatDateHuman(opts.bookingDate)
   const prettyTime = formatTimeHuman(opts.timeSlot)
   const platformDomain = getPlatformDomain(env)
@@ -1301,7 +1301,7 @@ export async function notifyExperienceBookingCancelled(
   opts: ExperienceBookingNotificationInput
 ) {
   const confirmed = Boolean(opts.wasConfirmed)
-  const studio = siteName(opts, 'the business')
+  const studio = siteName(opts)
   const prettyDate = formatDateHuman(opts.bookingDate)
   const prettyTime = formatTimeHuman(opts.timeSlot)
   const platformDomain = getPlatformDomain(env)

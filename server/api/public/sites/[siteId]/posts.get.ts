@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublishedPosts } from '~/server/utils/post-management'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -16,3 +16,6 @@ export default defineEventHandler(async (event) => {
   const posts = await getPublishedPosts(db, siteId, env, limit, locationId)
   return jsonResponse({ success: true, posts })
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

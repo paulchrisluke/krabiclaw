@@ -11,15 +11,6 @@ export interface PublicShellQueryIndexes {
   locales: number
 }
 
-function parseJson(raw: string | null) {
-  if (!raw) return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
 export function appendPublicShellQueries(
   queries: BatchQuery[],
   organizationId: string,
@@ -63,7 +54,7 @@ export function appendPublicShellQueries(
               SELECT '__has_menu',
                      CAST(EXISTS(
                        SELECT 1 FROM menus
-                        WHERE organization_id = ? AND site_id = ? AND status = 'published'
+                        WHERE organization_id = ? AND site_id = ? AND is_visible = 1
                      ) AS TEXT)`, [organizationId, siteId, siteId, organizationId, siteId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM site_locales
@@ -85,7 +76,7 @@ export function buildPublicShellPayload(
       id: location.id,
       slug: location.slug,
       title: location.title,
-      address: parseJson(location.address as string | null),
+      address: location.address ? JSON.parse(String(location.address)) : null,
       phone: location.phone,
       email: location.email ?? null,
       website_url: location.website_url,
@@ -100,8 +91,8 @@ export function buildPublicShellPayload(
       }),
       latitude: location.latitude,
       longitude: location.longitude,
-      opening_hours: parseJson(location.opening_hours as string | null),
-      special_hours: parseJson(location.special_hours as string | null),
+      opening_hours: location.opening_hours ? JSON.parse(String(location.opening_hours)) : null,
+      special_hours: location.special_hours ? JSON.parse(String(location.special_hours)) : null,
       timezone: location.timezone ?? null,
       rating: location.rating,
       review_count: location.review_count,
@@ -141,6 +132,11 @@ export function buildPublicShellPayload(
   if (site.seo_description) config.seo_description = site.seo_description
   if (site.canonical_url) config.canonical_url = site.canonical_url
   if (site.robots) config.robots = site.robots
+  // Real, writable site-scope columns — the single source for footer social icons. Never
+  // derived from site_link_items (a link's destination and a footer profile are unrelated).
+  if (site.social_facebook_url) config.social_facebook = site.social_facebook_url
+  if (site.social_instagram_url) config.social_instagram = site.social_instagram_url
+  if (site.social_tiktok_url) config.social_tiktok = site.social_tiktok_url
 
   const primary = rawLocations.find(location => location.is_primary) ?? rawLocations[0] ?? null
   const verifiedLocations = rawLocations.filter(
@@ -176,7 +172,7 @@ export function buildPublicShellPayload(
         ? {
             title: primary.title,
             city: primary.city,
-            storefrontAddress: parseJson(primary.address as string | null),
+            storefrontAddress: primary.address ? JSON.parse(String(primary.address)) : null,
             phoneNumbers: primary.phone ? [{ phoneNumber: primary.phone }] : [],
             websiteUri: primary.website_url,
             mapsUri: primary.maps_url,

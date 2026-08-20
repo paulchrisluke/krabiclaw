@@ -71,7 +71,8 @@ const config = useRuntimeConfig()
 const copied = ref(false)
 
 const mcpUrl = computed(() => {
-  const base = (config.public.platformDomain as string | undefined) || 'https://krabiclaw.com'
+  const base = config.public.platformDomain as string | undefined
+  if (!base) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' })
   return `${base.replace(/\/$/, '')}/api/mcp`
 })
 

@@ -4,7 +4,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 const INTERNAL_DOCS = new Set(['billing-architecture'])
 const VALID_SLUG = /^[a-zA-Z0-9-_]+$/
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   if (!slug || !VALID_SLUG.test(slug)) {
     return jsonResponse({ error: 'Invalid slug' }, { status: 400 })
@@ -29,3 +29,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Documentation not found' }, { status: 404 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';
+import { useStorage } from 'nitro/storage'

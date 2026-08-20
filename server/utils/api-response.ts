@@ -1,4 +1,7 @@
-import { createError, getHeader, getRequestHost, type H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
+import {  getRequestHost, readBody  } from 'nitro/h3';
+import { useRuntimeConfig } from 'nitro/runtime-config';
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
@@ -11,6 +14,14 @@ export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) => {
     ...init,
     headers: mergedHeaders,
   })
+}
+
+export async function readRequiredBody<T>(event: H3Event): Promise<T> {
+  const body = await readBody<T>(event)
+  if (body === undefined) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Request body is required' })
+  }
+  return body as T
 }
 
 export const textResponse = (
@@ -45,7 +56,7 @@ export const cleanString = (value: ApiValue, maxLength: number) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 
 // A generic `catch (error) { return 500 }` block silently swallows a
-// createError() thrown earlier in the same try (e.g. an authorization check
+// new HTTPError() thrown earlier in the same try (e.g. an authorization check
 // from server/utils/member-access.ts) into a wrong, generic 500. Call this
 // first in every such catch block so an intentional statusCode (401/403/404/...)
 // propagates instead of being masked.
@@ -62,22 +73,24 @@ export function rethrowHttpError(error: unknown): void {
 
 // A nested internal self-fetch (event.$fetch/useRequestFetch inside SSR) is a
 // synthetic event that Nitro dispatches locally without re-attaching
-// event.context.cloudflare — that's the direct, reliable signal to detect it,
+// event.runtime.cloudflare — that's the direct, reliable signal to detect it,
 // rather than inferring it from an absent cf-ray header. Middleware that does
 // real work (DB pragmas, tenant resolution) should guard on this before doing
 // anything, not just when deciding a log level.
 export const isInternalSelfFetch = (event: H3Event): boolean =>
-  !event.context.cloudflare?.env
+  !event.runtime?.cloudflare?.env
 
 export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
+  const processEnv: Record<string, string | undefined> = typeof process === 'undefined' ? {} : process.env
+  const rawRuntimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
   const runtimeEnv = (() => {
-    const env = event.context.cloudflare?.env as Record<string, unknown> | undefined
+    const env = rawRuntimeEnv
     const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI'] as const
     const missing = requiredBindings.filter((key) => !env?.[key])
 
     if (missing.length > 0) {
-      const cfRay = getHeader(event, 'cf-ray')
-      const host = getHeader(event, 'host') ?? 'no-host'
+      const cfRay = (event.req.headers.get('cf-ray'))
+      const host = (event.req.headers.get('host')) ?? 'no-host'
       const path = event.path ?? 'no-path'
       const isRealInboundRequest = !isInternalSelfFetch(event)
       const logMessage =
@@ -93,8 +106,8 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
         console.warn(logMessage)
       }
 
-      if (process.env.CI === 'true' && isRealInboundRequest) {
-        throw createError({
+      if (rawRuntimeEnv?.CI === 'true' && isRealInboundRequest) {
+        throw new HTTPError({
           statusCode: 503,
           statusMessage: `Cloudflare bindings missing: ${missing.join(', ')}`
         })
@@ -103,6 +116,26 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
 
     return env ?? {}
   })()
+  // nitro-dev's rolldown builder inlines a separate, independently-snapshotted copy of
+  // #nitro/virtual/runtime-config for any module reached only through a dynamic import() (proven
+  // by inspecting .nuxt/dev/index.mjs: two distinct `useRuntimeConfig`/`useRuntimeConfig$N`
+  // function bodies, each closing over its own `runtimeConfig` object) — this file is one such
+  // module (server/utils/api-response.ts is dynamically imported from composables/useAuthSession.ts
+  // and elsewhere per the CLAUDE.md self-fetch pattern), and the inlined copy's snapshot is taken
+  // before Nuxt modules finish registering their runtimeConfig.public keys, so `.public` itself is
+  // absent rather than merely incomplete. `?? {}` is scoped to exactly that dev-bundler defect, not
+  // a stand-in for a real API contract — every value read off `publicConfig` below is optional
+  // already and process.env (merged in afterward with higher precedence) supplies the same values.
+  const publicConfig = (useRuntimeConfig().public ?? {}) as Record<string, unknown>
+  const configuredEnv = {
+    ...(typeof publicConfig.platformDomain === 'string' && { NUXT_PUBLIC_PLATFORM_DOMAIN: publicConfig.platformDomain }),
+    ...(typeof publicConfig.freeSiteDomain === 'string' && { NUXT_PUBLIC_FREE_SITE_DOMAIN: publicConfig.freeSiteDomain }),
+    ...(typeof publicConfig.siteUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.siteUrl }),
+  }
+  const effectiveEnv: Record<string, unknown> = { ...configuredEnv, ...processEnv, ...runtimeEnv }
+  const emailDeliveryMode = typeof effectiveEnv.EMAIL_DELIVERY_MODE === 'string' ? effectiveEnv.EMAIL_DELIVERY_MODE : undefined
+  const whatsappDeliveryMode = typeof effectiveEnv.WHATSAPP_DELIVERY_MODE === 'string' ? effectiveEnv.WHATSAPP_DELIVERY_MODE : undefined
+  const discordDeliveryMode = typeof effectiveEnv.DISCORD_DELIVERY_MODE === 'string' ? effectiveEnv.DISCORD_DELIVERY_MODE : undefined
 
   const rawD1 = runtimeEnv.DB as D1Database | undefined
   const d1 = rawD1 ? instrumentD1(event, rawD1) : undefined
@@ -110,13 +143,13 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
 
   // Apply E2E delivery-mode overrides only for approved dev/E2E requests
   const devMode = import.meta.dev
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = effectiveEnv.E2E_ALLOW_DEV_ROUTES === 'true'
   const allowDevRoute = devMode || e2eOverride
   let e2eDeliveryOverrides: Record<string, string> = {}
 
   if (allowDevRoute && !devMode && e2eOverride) {
-    const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
-    const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+    const expectedSecret = String(effectiveEnv.E2E_DEV_ROUTE_SECRET ?? '')
+    const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
     const secretValid = expectedSecret && providedSecret && expectedSecret === providedSecret
     const hostname = (getRequestHost(event, { xForwardedHost: true }) || '').split(':')[0] || ''
     const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1'
@@ -125,22 +158,21 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
 
     if (secretValid && hostAllowed) {
       e2eDeliveryOverrides = {
-        ...(process.env.EMAIL_DELIVERY_MODE !== undefined && { EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE }),
-        ...(process.env.WHATSAPP_DELIVERY_MODE !== undefined && { WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE }),
-        ...(process.env.DISCORD_DELIVERY_MODE !== undefined && { DISCORD_DELIVERY_MODE: process.env.DISCORD_DELIVERY_MODE }),
+        ...(emailDeliveryMode !== undefined && { EMAIL_DELIVERY_MODE: emailDeliveryMode }),
+        ...(whatsappDeliveryMode !== undefined && { WHATSAPP_DELIVERY_MODE: whatsappDeliveryMode }),
+        ...(discordDeliveryMode !== undefined && { DISCORD_DELIVERY_MODE: discordDeliveryMode }),
       }
     }
   } else if (devMode) {
     e2eDeliveryOverrides = {
-      ...(process.env.EMAIL_DELIVERY_MODE !== undefined && { EMAIL_DELIVERY_MODE: process.env.EMAIL_DELIVERY_MODE }),
-      ...(process.env.WHATSAPP_DELIVERY_MODE !== undefined && { WHATSAPP_DELIVERY_MODE: process.env.WHATSAPP_DELIVERY_MODE }),
-      ...(process.env.DISCORD_DELIVERY_MODE !== undefined && { DISCORD_DELIVERY_MODE: process.env.DISCORD_DELIVERY_MODE }),
+      ...(emailDeliveryMode !== undefined && { EMAIL_DELIVERY_MODE: emailDeliveryMode }),
+      ...(whatsappDeliveryMode !== undefined && { WHATSAPP_DELIVERY_MODE: whatsappDeliveryMode }),
+      ...(discordDeliveryMode !== undefined && { DISCORD_DELIVERY_MODE: discordDeliveryMode }),
     }
   }
 
   return {
-    ...process.env,
-    ...runtimeEnv,
+    ...effectiveEnv,
     ...e2eDeliveryOverrides,
     DB: d1,
     db,

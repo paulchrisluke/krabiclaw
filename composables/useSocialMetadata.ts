@@ -26,31 +26,30 @@ export function useSocialMetadata(
     return composeSocialMetadata(value, resolvedImage)
   })
 
-  useSeoMeta({
-    title: computed(() => tags.value.title),
-    description: computed(() => tags.value.description),
-    ogTitle: computed(() => tags.value.ogTitle),
-    ogDescription: computed(() => tags.value.ogDescription),
-    ogType: computed(() => tags.value.ogType),
-    ogUrl: computed(() => tags.value.ogUrl),
-    ogSiteName: computed(() => tags.value.ogSiteName),
-    ogImage: computed(() => tags.value.ogImage),
-    ogImageWidth: computed(() => tags.value.ogImageWidth),
-    ogImageHeight: computed(() => tags.value.ogImageHeight),
-    ogImageType: computed(() => tags.value.ogImageType),
-    ogImageAlt: computed(() => tags.value.ogImageAlt),
-    twitterCard: computed(() => tags.value.twitterCard),
-    twitterTitle: computed(() => tags.value.twitterTitle),
-    twitterDescription: computed(() => tags.value.twitterDescription),
-    twitterImage: computed(() => tags.value.twitterImage),
-    twitterImageAlt: computed(() => tags.value.twitterImageAlt),
-    articleAuthor: computed(() => tags.value.articleAuthor),
-    articlePublishedTime: computed(() => tags.value.articlePublishedTime),
-  })
-
   useHead(() => ({
+    title: tags.value.title,
+    meta: [
+      { name: 'description', content: tags.value.description },
+      { property: 'og:title', content: tags.value.ogTitle },
+      { property: 'og:description', content: tags.value.ogDescription },
+      { property: 'og:type', content: tags.value.ogType },
+      { property: 'og:url', content: tags.value.ogUrl },
+      { property: 'og:site_name', content: tags.value.ogSiteName },
+      { property: 'og:image', content: tags.value.ogImage },
+      { property: 'og:image:width', content: tags.value.ogImageWidth },
+      { property: 'og:image:height', content: tags.value.ogImageHeight },
+      { property: 'og:image:type', content: tags.value.ogImageType },
+      { property: 'og:image:alt', content: tags.value.ogImageAlt },
+      { name: 'twitter:card', content: tags.value.twitterCard },
+      { name: 'twitter:title', content: tags.value.twitterTitle },
+      { name: 'twitter:description', content: tags.value.twitterDescription },
+      { name: 'twitter:image', content: tags.value.twitterImage },
+      { name: 'twitter:image:alt', content: tags.value.twitterImageAlt },
+      { property: 'article:author', content: tags.value.articleAuthor },
+      { property: 'article:published_time', content: tags.value.articlePublishedTime },
+      ...(tags.value.robots ? [{ name: 'robots', content: tags.value.robots }] : []),
+    ].filter(item => item.content !== undefined),
     link: [{ rel: 'canonical', href: tags.value.canonicalUrl }],
-    meta: tags.value.robots ? [{ name: 'robots', content: tags.value.robots }] : [],
   }))
 
   return {

@@ -16,10 +16,7 @@
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
-          <!-- Poster image: always present for LCP. Video swaps in when card scrolls into view.
-               Branches are flattened (not nested inside the video template) so a video-kind
-               location with no thumbnail_url and not yet scrolled into view still falls through
-               to the icon placeholder below instead of rendering nothing. -->
+          <!-- Poster image when location media is available. Video swaps in when the card scrolls into view. -->
           <template v-if="loc.kind === 'video' && loc.public_url && visibleLocCards.has(locIdx)">
             <ClientOnly>
               <video
@@ -60,33 +57,16 @@
         </div>
       </NuxtLink>
     </div>
-    <!-- Empty state: no locations yet -->
-    <div v-else>
-      <div class="grid gap-8 md:grid-cols-2">
-        <SayaEmptyExample
-          v-for="(example, i) in sayaEmptyStates.locations.examples"
-          :key="i"
-          :item="example"
-          icon="map-pin"
-          aspect="video"
-          dashed
-        />
-      </div>
-      <div class="text-center pt-8">
-        <div v-if="isAuthenticated" class="mt-2">
-          <NuxtLink to="/dashboard" class="inline-flex items-center justify-center rounded-full border border-default px-3 py-1.5 text-sm font-medium text-default no-underline transition hover:bg-muted">
-            {{ connectGoogleCta }}
-          </NuxtLink>
-        </div>
-      </div>
+    <div v-else-if="isAuthenticated" class="pt-8">
+      <NuxtLink to="/dashboard" class="inline-flex items-center justify-center rounded-full border border-default px-3 py-1.5 text-sm font-medium text-default no-underline transition hover:bg-muted">
+        {{ connectGoogleCta }}
+      </NuxtLink>
     </div>
   </AppSection>
 </template>
 
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
-import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
-import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 interface Props {
   data?: {

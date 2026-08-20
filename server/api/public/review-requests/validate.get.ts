@@ -1,7 +1,7 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getReviewRequestByToken, resolveGoogleReviewUrl } from '~/server/utils/review-requests'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -15,22 +15,10 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     request: {
-      id: result.request.id,
-      bookingType: result.request.booking_type,
-      expiresAt: result.request.expires_at,
-    },
-    site: {
-      id: result.context.site_id,
-      name: result.context.site_name,
-    },
-    location: {
-      id: result.context.location_id,
-      slug: result.context.location_slug,
-      title: result.context.location_title,
-      googleReviewUrl: resolveGoogleReviewUrl(result.context),
-    },
-    customer: {
-      name: result.context.customer_name || result.context.guest_name,
-    },
-  })
+      id: result.request.id, bookingType: result.request.booking_type, expiresAt: result.request.expires_at, }, site: {
+      id: result.context.site_id, name: result.context.site_name, }, location: {
+      id: result.context.location_id, slug: result.context.location_slug, title: result.context.location_title, googleReviewUrl: resolveGoogleReviewUrl(result.context), }, customer: {
+      name: result.context.customer_name || result.context.guest_name, }, })
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

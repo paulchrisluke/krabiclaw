@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   deriveSubdomain,
+  environmentTenantAliasHostname,
+  environmentTenantAliasSlug,
   getFreeSiteDomain,
   getPlatformHtmlCacheHosts,
   getPlatformHosts,
@@ -9,6 +11,7 @@ import {
   isPlatformHost,
   isPreviewContext,
   normalizeHost,
+  usesTenantHeader,
   type TenantHostEnv,
 } from '../../server/utils/tenant-hosts.ts'
 
@@ -20,6 +23,11 @@ const prodEnv: TenantHostEnv = {
 const localEnv: TenantHostEnv = {
   NUXT_PUBLIC_FREE_SITE_DOMAIN: 'http://localhost:3000',
   NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
+}
+
+const stagingEnv: TenantHostEnv = {
+  NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com',
+  NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://staging.krabiclaw.com',
 }
 
 const portedCustomEnv: TenantHostEnv = {
@@ -44,15 +52,16 @@ test('hostnameOf strips the port from a Host header', () => {
   assert.equal(hostnameOf(''), '')
 })
 
-test('getPlatformHosts always includes localhost, loopback and the documented production domains', () => {
-  // Routing contract: localhost / krabiclaw.com are platform routes.
-  for (const env of [prodEnv, localEnv, {}]) {
+test('getPlatformHosts includes loopback and only explicitly configured domains', () => {
+  for (const env of [prodEnv, localEnv]) {
     const hosts = getPlatformHosts(env)
     assert.ok(hosts.includes('localhost'))
     assert.ok(hosts.includes('127.0.0.1'))
-    assert.ok(hosts.includes('krabiclaw.com'))
-    assert.ok(hosts.includes('www.krabiclaw.com'))
+    assert.ok(hosts.includes(normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)))
+    assert.ok(hosts.includes(normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN)))
+    assert.equal(hosts.includes('www.krabiclaw.com'), false)
   }
+  assert.deepEqual(getPlatformHosts({}), ['localhost', '127.0.0.1'])
 })
 
 test('getPlatformHosts folds the configured domains in without duplicates', () => {
@@ -65,8 +74,7 @@ test('getPlatformHtmlCacheHosts covers all platform host cache prefixes', () => 
     'krabiclaw.com',
     'localhost',
     '127.0.0.1',
-    'www.krabiclaw.com',
-  ])
+])
 })
 
 test('isPlatformHost recognizes localhost and loopback with and without a port', () => {
@@ -81,15 +89,14 @@ test('isPlatformHost recognizes localhost and loopback with and without a port',
 test('isPlatformHost recognizes the configured platform domain with and without a port', () => {
   assert.equal(isPlatformHost('krabiclaw.com', prodEnv), true)
   assert.equal(isPlatformHost('krabiclaw.com:443', prodEnv), true)
-  assert.equal(isPlatformHost('www.krabiclaw.com', prodEnv), true)
-  assert.equal(isPlatformHost('www.krabiclaw.com:443', prodEnv), true)
+  assert.equal(isPlatformHost('www.krabiclaw.com', prodEnv), false)
+  assert.equal(isPlatformHost('www.krabiclaw.com:443', prodEnv), false)
 })
 
-test('isPlatformHost treats krabiclaw.com as a platform host even when NUXT_PUBLIC_FREE_SITE_DOMAIN points elsewhere (e.g. local/CI)', () => {
-  // The routing contract requires this to hold
-  // regardless of how the free-site domain is configured for the environment.
-  assert.equal(isPlatformHost('krabiclaw.com', localEnv), true)
-  assert.equal(isPlatformHost('www.krabiclaw.com', localEnv), true)
+test('isPlatformHost does not recognize an unconfigured production host', () => {
+  const env = { ...localEnv, NUXT_PUBLIC_PLATFORM_DOMAIN: 'http://localhost:3000' }
+  assert.equal(isPlatformHost('krabiclaw.com', env), false)
+  assert.equal(isPlatformHost('www.krabiclaw.com', env), false)
 })
 
 test('isPlatformHost rejects unrelated external hosts and tenant custom domains', () => {
@@ -118,11 +125,11 @@ test('getFreeSiteDomain normalizes the configured domain and strips its port', (
   assert.equal(getFreeSiteDomain(portedCustomEnv), 'myapp.example.com')
 })
 
-test('getFreeSiteDomain falls back to krabiclaw.com when unconfigured', () => {
-  assert.equal(getFreeSiteDomain({}), 'krabiclaw.com')
+test('getFreeSiteDomain rejects an unconfigured domain', () => {
+  assert.throws(() => getFreeSiteDomain({}), /NUXT_PUBLIC_FREE_SITE_DOMAIN is required/)
 })
 
-test('shared local and deployed test hosts use explicit tenant headers instead of nested hostnames', () => {
+test('preview contexts include platform hosts, direct tenant aliases, and raw shared hosts', () => {
   assert.equal(isPreviewContext('localhost'), true)
   assert.equal(isPreviewContext('localhost:3000'), true)
   assert.equal(isPreviewContext('127.0.0.1:3000'), true)
@@ -132,9 +139,41 @@ test('shared local and deployed test hosts use explicit tenant headers instead o
   assert.equal(isPreviewContext('demo.local.krabiclaw.com'), false)
   assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
   assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('pottery-house-preview.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('pottery-house-staging.krabiclaw.com'), true)
   assert.equal(isPreviewContext('preview.customer.com'), false)
   assert.equal(isPreviewContext('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
   assert.equal(isPreviewContext('some-other-worker.paulchrisluke.workers.dev'), false)
+})
+
+test('tenant headers are confined to local and raw workers.dev shared hosts', () => {
+  assert.equal(usesTenantHeader('localhost:3000'), true)
+  assert.equal(usesTenantHeader('local.krabiclaw.com'), true)
+  assert.equal(usesTenantHeader('krabiclaw-preview.paulchrisluke.workers.dev'), true)
+  assert.equal(usesTenantHeader('preview.krabiclaw.com'), false)
+  assert.equal(usesTenantHeader('staging.krabiclaw.com'), false)
+  assert.equal(usesTenantHeader('pottery-house-staging.krabiclaw.com'), false)
+})
+
+test('environment tenant aliases use first-level preview and staging hostnames', () => {
+  assert.equal(
+    environmentTenantAliasHostname('staging.krabiclaw.com', 'pottery-house'),
+    'pottery-house-staging.krabiclaw.com',
+  )
+  assert.equal(
+    environmentTenantAliasHostname('preview.krabiclaw.com', 'ncls'),
+    'ncls-preview.krabiclaw.com',
+  )
+  assert.equal(environmentTenantAliasHostname('krabiclaw.com', 'ncls'), '')
+  assert.equal(environmentTenantAliasHostname('staging.krabiclaw.com', '../ncls'), '')
+
+  assert.equal(
+    environmentTenantAliasSlug('pottery-house-staging.krabiclaw.com', stagingEnv),
+    'pottery-house',
+  )
+  assert.equal(environmentTenantAliasSlug('staging.krabiclaw.com', stagingEnv), '')
+  assert.equal(environmentTenantAliasSlug('pottery-house-preview.krabiclaw.com', stagingEnv), '')
+  assert.equal(environmentTenantAliasSlug('unknown.example.com', stagingEnv), '')
 })
 
 test('deriveSubdomain matches a subdomain of the configured platform domain', () => {

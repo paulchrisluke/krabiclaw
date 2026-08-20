@@ -40,7 +40,7 @@ interface TenantBlogPost {
 const { siteId, draftId, site } = useTenantSite()
 if (!siteId && !draftId) throw createError({ statusCode: 404 })
 
-const siteName = computed(() => site?.brand_name || 'Our Site')
+const siteName = computed(() => site?.brand_name?.trim() ?? '')
 
 const { blogList, error, pending, config } = await usePublicPageData()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])

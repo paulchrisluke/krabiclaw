@@ -1,13 +1,9 @@
-// Centralized dashboard auth-check (issue #293, Section B). Unlike
-// middleware/account.ts — wired via definePageMeta to a small, fixed set of
-// pages — the dashboard area spans
+// Centralized dashboard auth-check (issue #293, Section B). The dashboard area spans
 // 40+ page files under pages/dashboard/**. Registering this as a Nuxt
 // `.global.ts` middleware (auto-run on every navigation; Nuxt's own
 // filename-convention feature, not a new mechanism) lets it cover every
 // dashboard route without threading `middleware: 'dashboard'` through each
-// page file individually, while still reusing the exact
-// resolveAccountAccessForEvent() session check middleware/account.ts already
-// uses server-side — no new auth primitive.
+// page file individually, while reusing the server-side session check.
 //
 // This is UX-only: it exists so an expired/absent session redirects straight
 // to a login screen with the destination preserved, instead of silently
@@ -48,24 +44,17 @@ export default defineNuxtRouteMiddleware(async (to) => {
     throw createError({ statusCode: 404, statusMessage: 'Page not found' })
   }
 
-  let allowed = false
-
   if (import.meta.server) {
     const event = requireDashboardRequestEvent()
     const { resolveAccountAccessForEvent } = await import('~/server/utils/route-access')
     const result = await resolveAccountAccessForEvent(event)
-    allowed = result.status === 'ok' && result.allowed
-  } else {
-    const access = await $fetch<{ allowed?: unknown }>('/api/account/access')
-    allowed = requireAllowedResponse(access, 'Dashboard access response was malformed')
-  }
-
-  if (!allowed) {
-    const query: Record<string, string> = { redirect: to.fullPath }
-    // Only the WhatsApp-notification inbox deep link forces the focused
-    // phone-OTP login branch — see isWhatsAppInboxDeepLinkPath's doc comment.
-    if (isWhatsAppInboxDeepLinkPath(to.path)) query.mode = 'whatsapp'
-    return navigateTo({ path: '/login', query })
+    if (result.status !== 'ok' || !result.allowed) {
+      const query: Record<string, string> = { redirect: to.fullPath }
+      // Only the WhatsApp-notification inbox deep link forces the focused
+      // phone-OTP login branch — see isWhatsAppInboxDeepLinkPath's doc comment.
+      if (isWhatsAppInboxDeepLinkPath(to.path)) query.mode = 'whatsapp'
+      return navigateTo({ path: '/login', query })
+    }
   }
 
   // Capability-gated manager pages (definePageMeta({ cmsCapabilityKey: 'site.qa' | ... }),
@@ -98,7 +87,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
         capabilityKey,
       })
     } else {
-      const result = await $fetch<{ allowed?: unknown }>('/api/dashboard/route-capability', {
+      const result = await $fetch<{ allowed?: unknown }, string>('/api/dashboard/route-capability', {
         query: { orgSlug: organizationSlug, siteSlug, locationSlug: locationSlug ?? undefined, key: capabilityKey },
       })
       capabilityAllowed = requireAllowedResponse(result, 'Dashboard capability response was malformed')

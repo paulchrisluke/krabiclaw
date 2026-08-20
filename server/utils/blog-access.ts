@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
 // Blog is a site-wide manager (blog_posts has no location_id) — requireSiteAccess's

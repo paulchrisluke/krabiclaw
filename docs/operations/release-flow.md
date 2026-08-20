@@ -5,21 +5,50 @@ Cloudflare Workers.
 
 | Git event | Worker | Validation |
 | --- | --- | --- |
-| Pull request to `staging` or `main` | `krabiclaw-preview` | Representative Playwright coverage |
-| Push to `staging` | `krabiclaw-staging` | Full Playwright suite |
+| Pull request to `staging` | `krabiclaw-preview` | Core plus affected Playwright coverage selected from the diff |
+| Push to `staging` | `krabiclaw-staging` | Full Playwright qualification with two workers |
+| `staging` to `main` pull request | None | Reuses required checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | Read-only production browser smoke |
 
 Each deployment is a normal `wrangler deploy` to its environment. Cloudflare
 retains ordinary deployment history.
+
+The platform uses `preview.krabiclaw.com` and `staging.krabiclaw.com`. Public
+tenant verification uses `<subdomain>-preview.krabiclaw.com` and
+`<subdomain>-staging.krabiclaw.com`, routed to the same environment Worker.
+These direct hosts are the browser and manual-QA contract; deployed checks do
+not select tenants through request headers.
 
 The checks job runs the repository's migration lint once. Each deployment job
 then builds, performs one normal Worker deploy, and uses native
 `wrangler d1 migrations apply`; Wrangler owns the applied-migration history.
 Runtime removals land before their contract migration so the environment never
 runs an older Worker against columns that have already been dropped.
-Preview fixtures are reset and seeded for PR isolation. Staging keeps its
-persistent fixtures and sweeps only disposable E2E artifacts. Production is
-never seeded by CI.
+Preview and staging both sweep disposable E2E artifacts and deterministically
+reapply Demo, Pottery House, Kikuzuki, and NCLS from their typed definitions
+before fixture-dependent browser coverage. Staging provisioning is limited to
+protected fixed IDs, refuses unexpected ownership, and records D1 time-travel
+information before applying the fixtures. Production is never seeded by CI.
+
+Staging also provisions the durable human-review identity
+`staging-review@staging.krabiclaw.test` after the curated fixtures. Its password
+comes from the repository Actions secret named `STAGING_REVIEW_PASSWORD`.
+Ordinary provisioning restores editor and site-team memberships
+for Pottery House, Kikuzuki, and NCLS without rotating the password or deleting
+sessions. Rotation is explicit and separate from ephemeral E2E credentials.
+
+`config/e2e-impact-map.mjs` is the executable impact map. Documentation-only
+changes do not deploy a Worker. Narrow changes run the permanent core browser
+sentinels plus the mapped subsystem specs. Schema, migration, Worker, test
+harness, and unclassified runtime changes fail safe to the full suite. Changing
+an E2E spec always selects that exact spec.
+
+Every push to `staging` performs one build, one deployment, one fixture and auth
+provisioning sequence, and one complete Playwright invocation with two workers
+against `staging.krabiclaw.com`. The ordinary `staging` to `main` pull request
+does not deploy, reprovision, or rerun qualification; it consumes the required
+checks already attached to that exact staging SHA. Production may not be
+promoted until that exact-SHA qualification passes.
 
 Releases enter staging and production through reviewed branch merges. During an
 outage, use Cloudflare's deployment history without changing D1 data, then

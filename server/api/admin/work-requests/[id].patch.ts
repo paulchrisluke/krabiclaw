@@ -1,11 +1,11 @@
 // PATCH /api/admin/work-requests/[id] — update status, notes, assignment
-import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
+import { cloudflareEnv, jsonResponse, readRequiredBody } from "~/server/utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
 import { platformPermissionJsonResponse } from "~/server/utils/platform-admin-users";
 import { execute, queryFirst } from "~/server/db";
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from "~/server/utils/site-events";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event);
   const db = env.DB;
   if (!db)
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     assigned_to?: string | null;
   };
   try {
-    body = await readBody(event);
+    body = await readRequiredBody<{ status?: string; priority?: string; notes?: string; assigned_to?: string | null }>(event);
   } catch {
     return jsonResponse({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -41,9 +41,7 @@ export default defineEventHandler(async (event) => {
       !("assigned_to" in body))
   ) {
     return jsonResponse(
-      { error: "At least one updatable field required" },
-      { status: 400 },
-    );
+      { error: "At least one updatable field required" }, { status: 400 }, );
   }
 
   const VALID_STATUSES = ["pending", "in_progress", "done", "cancelled"];
@@ -73,30 +71,14 @@ export default defineEventHandler(async (event) => {
 
   const result = await execute(db, `
     UPDATE work_requests SET
-      status = COALESCE(?, status),
-      priority = COALESCE(?, priority),
-      notes = COALESCE(?, notes),
-      assigned_to = CASE WHEN ? = 1 THEN ? ELSE assigned_to END,
-      completed_at = CASE
+      status = COALESCE(?, status), priority = COALESCE(?, priority), notes = COALESCE(?, notes), assigned_to = CASE WHEN ? = 1 THEN ? ELSE assigned_to END, completed_at = CASE
         WHEN ? = 'done' THEN ?
         WHEN ? IS NOT NULL AND ? != 'done' THEN NULL
         ELSE completed_at
-      END,
-      updated_at = ?
+      END, updated_at = ?
     WHERE id = ?
   `, [
-    body.status ?? null,
-    body.priority ?? null,
-    body.notes ?? null,
-    "assigned_to" in body ? 1 : 0,
-    body.assigned_to ?? null,
-    body.status ?? null,
-    completedAt ?? null,
-    body.status ?? null,
-    body.status ?? null,
-    now,
-    id,
-  ]);
+    body.status ?? null, body.priority ?? null, body.notes ?? null, "assigned_to" in body ? 1 : 0, body.assigned_to ?? null, body.status ?? null, completedAt ?? null, body.status ?? null, body.status ?? null, now, id, ]);
 
   if (result.meta.changes === 0)
     return jsonResponse({ error: "Request not found" }, { status: 404 });
@@ -105,17 +87,11 @@ export default defineEventHandler(async (event) => {
     const eventSiteId = existing.site_id ?? (await resolvePrimarySiteForEvent(db, existing.organization_id));
     if (eventSiteId) {
       await fireSiteEventSafe({
-        db,
-        organizationId: existing.organization_id,
-        siteId: eventSiteId,
-        actorId: session.user.id,
-        eventType: "work_request.status_changed",
-        entityType: "work_request",
-        entityId: id,
-        metadata: { status: body.status },
-      });
+        db, organizationId: existing.organization_id, siteId: eventSiteId, actorId: session.user.id, eventType: "work_request.status_changed", entityType: "work_request", entityId: id, metadata: { status: body.status }, });
     }
   }
 
   return jsonResponse({ success: true });
 });
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

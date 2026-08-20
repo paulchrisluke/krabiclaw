@@ -207,6 +207,7 @@ interface Location {
 
 interface Props {
   interactive: boolean
+  organizationId: string
   siteId: string
   orgSlug: string
   siteSlug: string
@@ -219,12 +220,12 @@ interface Props {
   // (see utils/vertical-copy.ts's normalizeVertical) — this component does
   // not itself talk to the DB-storage alias ('service'), so it must not
   // silently coerce anything it doesn't recognize to 'restaurant'.
-  vertical?: SiteVertical | null
+  vertical: SiteVertical
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ done: [] }>()
-const siteVertical = computed<SiteVertical>(() => props.vertical ?? 'restaurant')
+const siteVertical = computed<SiteVertical>(() => props.vertical)
 const transferStarterPrompt = computed(() => props.vertical === 'professional_service'
   ? 'Audit this imported site and help me improve it. Start with hero copy, brand story, missing photos, and any weak services pages.'
   : props.vertical === 'experience'
@@ -280,8 +281,6 @@ const connectingFacebook = ref(false)
 const facebookConnected = ref(false)
 const socialError = ref<string | null>(null)
 
-const { data: session } = await authClient.useSession(useFetch)
-const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
 const toast = useToast()
 
 function renderMarkdown(text: string) {
@@ -397,7 +396,7 @@ async function saveNotifications() {
 }
 
 async function sendInvite() {
-  if (!activeOrgId.value || !inviteForm.email.trim()) return
+  if (!inviteForm.email.trim()) return
   inviting.value = true
   inviteSuccess.value = false
   inviteError.value = null
@@ -405,7 +404,7 @@ async function sendInvite() {
     const { error } = await authClient.organization.inviteMember({
       email: inviteForm.email.trim(),
       role: inviteForm.role as 'member' | 'admin',
-      organizationId: activeOrgId.value,
+      organizationId: props.organizationId,
     })
     if (error) {
       inviteError.value = error.message || 'Failed to send invite. Please try again.'

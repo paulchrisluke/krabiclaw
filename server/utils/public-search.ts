@@ -223,11 +223,9 @@ function normalizeSearchResults(
     const display = (() => {
       const raw = typeof metadata.display === 'string' ? metadata.display : ''
       if (!raw) return {}
-      try {
-        return JSON.parse(raw) as Record<string, unknown>
-      } catch {
-        return {}
-      }
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Search metadata.display must be an object')
+      return parsed as Record<string, unknown>
     })()
     const id = String(metadata.record_id ?? chunk.item.key ?? chunk.id)
     const title = typeof display.title === 'string' && display.title.trim()
@@ -321,24 +319,22 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
   }
 }
 
-// TEMPORARY one-time recreation: pure keyword retrieval returns zero results even for
-// terms that literally appear in already-indexed content (e.g. "manage" in a real,
-// confirmed-indexed blog post title). Per Cloudflare's docs, an instance created without
-// keyword search enabled never gets a real keyword index from update() alone — it has to
-// be created with index_method.keyword set from the start. This instance predates that
-// config in our code, so update() has been silently accepting the setting without ever
-// actually building the keyword index. Force delete+recreate once, then the next line
-// below (the automatic post-deploy reindex) does a full fresh upload. Revert to the
-// normal update-or-create upsert once this is confirmed working.
-async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
+export async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
   const instanceId = platformKnowledgeInstanceId(env)
   const namespace = searchNamespace(env)
 
-  await namespace.delete(instanceId).catch(() => {})
-  await namespace.create({
-    id: instanceId,
-    ...platformKnowledgeInstanceConfig(),
-  })
+  try {
+    const instance = namespace.get(instanceId)
+    await instance.update({
+      id: instanceId,
+      ...platformKnowledgeInstanceConfig(),
+    })
+  } catch {
+    await namespace.create({
+      id: instanceId,
+      ...platformKnowledgeInstanceConfig(),
+    })
+  }
 }
 
 export async function listAllItems(env: CloudflareEnv) {
@@ -416,7 +412,7 @@ export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKn
   `)
 
   return (posts ?? []).map((post) => {
-    const tags = (() => { try { return JSON.parse(post.tags_json || '[]') as string[] } catch { return [] } })()
+    const tags = post.tags_json ? JSON.parse(post.tags_json) as string[] : []
     const snippet = truncateSnippet(post.excerpt || post.seo_description || post.body || post.title)
     const body = [
       post.title,
@@ -631,7 +627,11 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (_
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runNext))
 }
 
-export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbClient) {
+export async function rebuildPlatformKnowledgeIndex(
+  env: CloudflareEnv,
+  db: DbClient,
+  options: { confirmIndexing?: boolean } = {},
+) {
   // Temporary phase timing: two identical "fetch failed" (raw connection death) results
   // at ~5:01 elapsed survived a 10x concurrency change to the upload loop with no
   // improvement — meaning uploads themselves are very unlikely to be the bottleneck.
@@ -686,11 +686,13 @@ export async function rebuildPlatformKnowledgeIndex(env: CloudflareEnv, db: DbCl
   // safe courtesy window and return regardless of whether it confirms completion
   // within that window; a not-yet-confirmed result is not a failed rebuild.
   let indexingConfirmed = false
-  try {
-    await waitForIndexing(env, 45 * 1000)
-    indexingConfirmed = true
-  } catch (error) {
-    console.warn('[ai-search] indexing not confirmed complete within the courtesy window; it continues asynchronously on Cloudflare’s side', error)
+  if (options.confirmIndexing !== false) {
+    try {
+      await waitForIndexing(env, 45 * 1000)
+      indexingConfirmed = true
+    } catch (error) {
+      console.warn('[ai-search] indexing not confirmed complete within the courtesy window; it continues asynchronously on Cloudflare’s side', error)
+    }
   }
 
   return {
@@ -839,9 +841,8 @@ export async function searchPublicResources(
       if (!options.siteId || !env.db || (typeFilter && typeFilter !== 'blog')) {
         return [] as TenantBlogSearchRow[]
       }
-      try {
-        const likePattern = `%${escapeLikePattern(normalized)}%`
-        return await queryAll<TenantBlogSearchRow>(
+      const likePattern = `%${escapeLikePattern(normalized)}%`
+      return await queryAll<TenantBlogSearchRow>(
           env.db,
           `SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
            FROM blog_posts
@@ -868,10 +869,7 @@ export async function searchPublicResources(
             likePattern,
             candidateLimit,
           ],
-        )
-      } catch {
-        return [] as TenantBlogSearchRow[]
-      }
+      )
     })(),
   ])
 

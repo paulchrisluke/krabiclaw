@@ -1,7 +1,7 @@
-// Core site creation logic shared by site creation entry points. Handles org creation/lookup, idempotency,
-// subdomain uniqueness, seeding, and Cloudflare subdomain registration.
+// Core site creation logic shared by site creation entry points. Handles org creation/lookup,
+// idempotency, subdomain uniqueness, and seeding.
 import { seedNewSite } from '~/server/utils/site-template'
-import { createSystemSubdomain } from '~/server/utils/domains'
+import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { getOrganizationBillingStatus, setSiteEntitlementsFromPlan, type BillingEnv } from '~/server/utils/billing'
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
@@ -102,6 +102,9 @@ export async function runSiteCreation(
     `, [normalizedSubdomain])
     if (existingSubdomain) {
       return { status: 409, data: { error: 'This subdomain is already taken' } }
+    }
+    if (await isSystemSubdomainSpent(env, db, normalizedSubdomain)) {
+      return { status: 409, data: { error: 'This subdomain is permanently unavailable' } }
     }
 
     const themeId = resolveThemeId(vertical)
@@ -285,12 +288,9 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
 function organizationMetadata(value: unknown): Record<string, unknown> {
   if (isMetadataRecord(value)) return { ...value }
   if (typeof value !== 'string') return {}
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return isMetadataRecord(parsed) ? { ...parsed } : {}
-  } catch {
-    return {}
-  }
+  const parsed: unknown = JSON.parse(value)
+  if (!isMetadataRecord(parsed)) throw new Error('Stored organization metadata is invalid')
+  return { ...parsed }
 }
 
 function isMetadataRecord(value: unknown): value is Record<string, unknown> {

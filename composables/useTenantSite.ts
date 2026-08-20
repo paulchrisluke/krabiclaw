@@ -32,11 +32,11 @@ export const useTenantSite = () => {
     if (event) {
       return {
         tenantType: (event.context.tenantType as TenantType | undefined) || TENANT_TYPES.PLATFORM,
-        siteId: event.context.siteId || null,
-        draftId: event.context.draftId || null,
-        organizationId: event.context.organizationId || null,
-        themeId: event.context.themeId || null,
-        site: event.context.site || null
+        siteId: typeof event.context.siteId === 'string' ? event.context.siteId : null,
+        draftId: typeof event.context.draftId === 'string' ? event.context.draftId : null,
+        organizationId: typeof event.context.organizationId === 'string' ? event.context.organizationId : null,
+        themeId: typeof event.context.themeId === 'string' ? event.context.themeId : null,
+        site: (event.context.site as TenantSiteInfo | null | undefined) ?? null
       }
     }
     return {

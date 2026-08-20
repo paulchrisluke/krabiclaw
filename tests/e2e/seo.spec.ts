@@ -22,6 +22,9 @@ test.describe('platform SEO contracts', () => {
     if (nonProduction) {
       expect(robotsBody).toContain('Disallow: /')
       expect(robots.headers()['x-robots-tag']).toContain('noindex')
+
+      const homepage = await request.get('/')
+      expect(homepage.headers()['x-robots-tag']).toContain('noindex')
     } else {
       expect(robotsBody).toContain('Disallow: /admin')
       expect(robotsBody).toContain('Disallow: /dashboard')
@@ -57,16 +60,6 @@ test.describe('platform SEO contracts', () => {
     }
   })
 
-  test('legacy billing permanently redirects to canonical pricing', async ({ request, baseURL }) => {
-    expect(baseURL).toBeTruthy()
-    const response = await request.get('/billing', { maxRedirects: 0 })
-    expect(response.status()).toBe(301)
-
-    const location = response.headers().location
-    expect(location).toBeTruthy()
-    expect(new URL(location!, baseURL!).pathname).toBe('/pricing')
-  })
-
   test('tenant-only route families return 404 on the platform host', async ({ request }) => {
     for (const path of ['/experiences', '/locations', '/menu', '/order', '/reservations', '/reviews']) {
       const response = await request.get(path, { maxRedirects: 0 })
@@ -87,6 +80,16 @@ test.describe('tenant SEO contracts', () => {
     const canonical = page.locator('link[rel="canonical"]')
     await expect(canonical).toHaveCount(1)
     await expect(canonical).toHaveAttribute('href', `${new URL(tenantBaseURL).origin}/locations`)
+  })
+
+  test('review detail canonicals retain the review identifier', async ({ page }) => {
+    const path = '/locations/brooklyn/reviews/rev-demo-1'
+    const response = await page.goto(`${tenantBaseURL}${path}`, { waitUntil: 'domcontentloaded' })
+    expect(response?.status()).toBeLessThan(400)
+
+    const canonical = page.locator('link[rel="canonical"]')
+    await expect(canonical).toHaveCount(1)
+    await expect(canonical).toHaveAttribute('href', `${new URL(tenantBaseURL).origin}${path}`)
   })
 
   test('tenant structured data does not hardcode the platform origin', async ({ page }) => {

@@ -197,28 +197,24 @@ const formattedAddress = computed(() => {
   return loc.address || loc.city || ''
 })
 
+const weekdayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+function currentLocationWeekday(timezone: unknown): string {
+  if (!timezone) return weekdayNames[new Date().getDay()]!
+  return new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: String(timezone) }).format(new Date()).toUpperCase()
+}
+
 const weekHours = computed(() => {
   const hours = location.value?.opening_hours
   if (!hours) return []
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   const timezone = location.value?.time_zone || location.value?.timezone || null
-  let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
-  if (timezone) {
-    try {
-      today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
-    } catch { /* fallback to local */ }
-  }
+  const today = currentLocationWeekday(timezone)
   return formatGoogleHours(hours).map((h: ApiValue, i: number) => ({ ...h, today: days[i] === today }))
 })
 
 const todayHours = computed(() => {
   const timezone = location.value?.time_zone || location.value?.timezone || null
-  let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
-  if (timezone) {
-    try {
-      today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
-    } catch { /* fallback to local */ }
-  }
+  const today = currentLocationWeekday(timezone)
   return getTodayGoogleHours(location.value?.opening_hours, today)
 })
 const isOpenNow = computed(() => {
@@ -237,7 +233,7 @@ const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
 const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 useTenantSocialMetadata(() => ({
   path: `/locations/${slug.value}/contact`,

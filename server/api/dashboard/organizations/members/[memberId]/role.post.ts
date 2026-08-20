@@ -8,7 +8,7 @@
 // wraps that call the same way remove.post.ts wraps removeMember: the only
 // thing layered on top is our app-specific site/location team scoping for
 // the 'editor' role, which Better Auth's flat role model has no concept of.
-import { getHeaders } from 'h3'
+
 import { queryFirst } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
@@ -25,7 +25,7 @@ interface UpdateMemberRoleApi {
   }): Promise<Response>
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const memberId = String(getRouterParam(event, 'memberId') || '').trim()
   if (!memberId) return jsonResponse({ error: 'Member id is required' }, { status: 400 })
 
@@ -80,15 +80,10 @@ export default defineEventHandler(async (event) => {
   let response: Response
   try {
     response = await roleApi.updateMemberRole({
-      body: { memberId: target.id, role, organizationId: organization.id },
-      headers: getHeaders(event) as HeadersInit,
-      asResponse: true,
-    })
+      body: { memberId: target.id, role, organizationId: organization.id }, headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit, asResponse: true, })
   } catch (error) {
     console.error('dashboard_member_role_update_failed', {
-      memberId: target.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
+      memberId: target.id, error: error instanceof Error ? error.message : String(error), })
     return jsonResponse({ error: 'Failed to update member role' }, { status: 502 })
   }
 
@@ -109,15 +104,12 @@ export default defineEventHandler(async (event) => {
   // to match.
   if (role === 'editor') {
     await addMemberResourceAccess(db, {
-      env,
-      userId: target.userId,
-      organizationId: organization.id,
-      siteId,
-      locationId,
-    })
+      env, userId: target.userId, organizationId: organization.id, siteId, locationId, })
   } else if (isScopedRole(target.role)) {
     await removeAllMemberResourceAccess(db, { env, organizationId: organization.id, userId: target.userId })
   }
 
   return jsonResponse({ success: true, memberId: target.id, role })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

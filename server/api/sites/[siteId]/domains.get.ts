@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import { getSiteDomainsDashboardPayload } from '~/server/utils/domain-read-model'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
 
@@ -31,3 +31,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, ...payload, siteId })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

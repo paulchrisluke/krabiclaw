@@ -2,8 +2,7 @@
 
 > **Status key used throughout this document:**
 > - **Current** — true today, mechanically checkable against the code cited.
-> - **Resolved** — was a real gap when originally written; fixed since, kept here only as dated history so the fix isn't rediscovered as a "new" finding.
-> - **Deferred** — a known, real gap, intentionally not fixed yet, with a linked tracking issue.
+> - **Resolved** — was a real gap when originally written and is now fixed.
 >
 > This document previously mixed current-state description, resolved bug writeups, and open product questions with no way to tell which was which — see #277 (onboarding architecture cleanup), which added these markers and reconciled every claim below against the code as of that issue.
 
@@ -33,12 +32,12 @@ Global first, local second, persistent after that.
 
 - ~~The checklist's `hero_image` check can never pass because it queries the wrong column.~~ Fixed prior to #277 — `checklist.get.ts` now checks `site_config.hero_image_is_placeholder` and `business_locations.hero_media_asset_id` → `media_assets.source`, matching what both creation paths actually write.
 - ~~No dedicated brand step exists anywhere in the wizard.~~ Fixed prior to #277 and revised in #459 — `OnboardingWizard.vue` now prompts before commit with separate skippable `Brand` and `Homepage hero` draft steps, instead of combining brand color, logo, hero photo, and homepage copy in one dense card.
-- ~~Restaurant-flavored placeholder copy bleeds into non-restaurant verticals.~~ Fixed by #276 — `onboarding-drafts.ts` and `site-template.ts` now have explicit `professional_service` copy (hero/CTA/about/Q&A/post), and neither seeds a menu for it.
+- ~~Restaurant-flavored placeholder copy bleeds into non-restaurant verticals.~~ Resolved — onboarding and site creation persist only owner/imported content; professional-service sites use the Blawby renderer and never receive generated menu, Q&A, story, or CTA copy.
 
-**Deferred** — real, tracked gaps, not silently left as current-behavior claims:
+**Resolved in the cleanup pass:**
 
-- `checklist.get.ts`'s `core_offering` item still only has real completion logic for `restaurant` (menu items) and `experience` (experiences) — a `professional_service` site can never complete it, because there is no offerings/practice-areas content model yet for it to check against. Tracked in #284, which depends on the offerings model from #194/#278.
-- `lib/components/workspace/onboarding/OnboardingPreviewPane.vue`'s tab list (`Home`/`Menu`/`About`/`Contact`) is hardcoded and not vertical-aware — a `professional_service` preview shows a `Menu` tab that doesn't exist for that template instead of `/services`. Tracked in #285, deferred to #278's vertical-aware CMS/preview registry.
+- `onboarding-checklist.ts` uses menu, experiences, or professional-service offerings for the `core_offering` check.
+- `OnboardingPreviewPane.vue` resolves its secondary tab from the canonical vertical/template registry, so professional-service previews expose Services rather than Menu.
 
 ---
 
@@ -52,17 +51,11 @@ The onboarding preview now renders the active draft through the same Saya bootst
 
 ---
 
-## Content state model — placeholder vs. owner-authored (open question, unchanged)
+## Content state model
 
-**Deferred / open design question**, not yet decided or implemented as of #277:
+Generated placeholder rows are no longer part of onboarding or site creation.
 
-Today there is no way to distinguish "owner wrote this" from "template wrote this" once a row exists in tenant-page blocks, `menu_items`, or `media_assets`. A long stock paragraph and a real paragraph the owner wrote both just look like "done" to the checklist and to any future seed/reseed logic.
-
-Recommended mechanism (still just a proposal, not implemented): add a single nullable `placeholder_source` (or reuse a `source` enum: `'template' | 'owner' | null`) to tenant-page block metadata, `menu_items`, and the hero-bearing `media_assets`/`business_locations` rows, set by `seedNewSite()`/`buildOnboardingDraftPayload()` at insert time and cleared automatically the moment the owner edits that row (dashboard Pages save, MCP tool call, or ChowBot edit all funnel through shared server/domain utilities).
-
-- Checklist completion (`core_offering`, `story`, etc.) should check `placeholder_source IS NULL`, not just "a row exists" / "length > 20."
-- This is a schema change (per the `server/db/schema.ts` workflow in `AGENTS.md`) and a real behavior change to checklist semantics — flagged here as a decision point, not something to implement unprompted.
-- `menu_items.source != 'template'` filters already used by `checklist.get.ts` are a partial, ad hoc version of this idea; the proposal above would make it uniform and explicit rather than column-by-column.
+Tenant pages, menu items, and media are either owner/imported records or absent. Missing content is omitted or returned as an explicit empty/error state, so no placeholder-source column is needed.
 
 ---
 
@@ -89,15 +82,15 @@ Only asked again on **add-location** (`OnboardingWizard.vue` `mode="add-location
 
 - Location title, address, hours, phone
 - Notification routing for this location
-- Location hero/media (defaults to site hero if not set — do not force a re-upload)
+- Location hero/media (uses location media only; it remains empty until supplied)
 - Optional location-specific notes/social
 
 ---
 
-## Open questions (need a decision before implementation)
+## Open questions (product decisions, not runtime fallbacks)
 
 1. **Does "Create site" move earlier?** Today `commitDraft()` (real site row, real org-scoped data) happens only after the owner clicks "Create site" — the draft preview before that point is a separate, parallel draft record (`onboarding_drafts` table), not the real site. If the draft preview moves to step 2 of 9 above, does the underlying site row get created then (private/unpublished) so all later steps just edit the real site, or does the draft stay a separate pre-commit record through step 9? The first option is simpler (one code path, no draft/commit duplication) but is a bigger behavior change to `site-creation.ts`. The second preserves current semantics but means steps 3-9 keep writing through draft-specific endpoints instead of the normal dashboard CMS path. **Still open — no decision made as of #277.**
-2. **Placeholder-source column** — confirm before adding to `schema.ts`/generating a migration, since it changes checklist completion semantics for every existing seeded site. **Still open.**
+2. **Placeholder-source column** — not required: generated placeholder rows were removed, so missing content is represented by absence and no schema column is added.
 3. ~~Fix the existing hero_image checklist bug.~~ **Resolved** (see above).
 
 ---
@@ -107,4 +100,4 @@ Only asked again on **add-location** (`OnboardingWizard.vue` `mode="add-location
 - #194 — Blawby professional-service template PRD (offerings model, canonical `professional_service` vertical decision).
 - #276 — professional_service onboarding (vertical/theme_id resolution, explicit copy, VALID_VERTICALS).
 - #277 — this cleanup (endpoint separation, wizard mode contract, vertical documentation, this file's status markers).
-- #278 — CMS vertical-aware page/navigation registry (owns the deferred items above: #284, #285).
+- #278 — CMS vertical-aware page/navigation registry.

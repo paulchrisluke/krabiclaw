@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   getDashboardContext,
@@ -36,7 +38,7 @@ export async function loadDashboardContext(
     // If an organization slug was explicitly requested but not found,
     // that's an error, not a fallback to null.
     if (scope?.orgSlug) {
-      throw createError({ statusCode: 404, statusMessage: `Organization not found: ${scope.orgSlug}` })
+      throw new HTTPError({ statusCode: 404, statusMessage: `Organization not found: ${scope.orgSlug}` })
     }
     return {
       success: true as const,

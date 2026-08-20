@@ -1,23 +1,20 @@
+import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '../../../utils/api-response'
 import { verifyOAuthState } from '../../../utils/encryption'
 import {
-  exchangeFacebookCode,
-  getFacebookUserInfo,
-  getFacebookPages,
-  storeFacebookPagesConnection,
-} from '../../../utils/facebook-pages'
+  exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, } from '../../../utils/facebook-pages'
 import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
 
   if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_APP_SECRET) {
     return new Response('Missing Facebook OAuth configuration', { status: 500 })
   }
 
-  const url = getRequestURL(event)
+  const url = event.url
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
   const error = url.searchParams.get('error')
@@ -67,11 +64,7 @@ export default defineEventHandler(async (event) => {
     const siteAccess = await loadMemberSiteRow(db, siteId, userId)
     if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
     await assertSiteWideAccess(db, {
-      memberId: siteAccess.member_id,
-      role: siteAccess.member_role,
-      organizationId,
-      siteId,
-    })
+      memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId, siteId, })
 
     // System-user access tokens from FLB never expire — no long-lived exchange needed
     const systemUserToken = await exchangeFacebookCode(env, code)
@@ -85,23 +78,10 @@ export default defineEventHandler(async (event) => {
     const firstPage = pages[0]
 
     await storeFacebookPagesConnection(env, {
-      organization_id: organizationId,
-      site_id: siteId,
-      connected_by_user_id: userId,
-      facebook_user_id: userInfo.id,
-      facebook_page_id: firstPage?.id,
-      facebook_page_name: firstPage?.name,
-      encrypted_user_token: systemUserToken,
-      encrypted_page_token: firstPage?.access_token,
-      user_token_expires_at: undefined,
-      scopes: undefined,
-      status: 'active',
-    })
+      organization_id: organizationId, site_id: siteId, connected_by_user_id: userId, facebook_user_id: userInfo.id, facebook_page_id: firstPage?.id, facebook_page_name: firstPage?.name, encrypted_user_token: systemUserToken, encrypted_page_token: firstPage?.access_token, user_token_expires_at: undefined, scopes: undefined, status: 'active', })
 
     return new Response(null, {
-      status: 302,
-      headers: { Location: await settingsRedirect('connected') },
-    })
+      status: 302, headers: { Location: await settingsRedirect('connected') }, })
   } catch (err) {
     console.error('Facebook OAuth callback failed:', err)
     return new Response(null, { status: 302, headers: { Location: await settingsRedirect('error') } })

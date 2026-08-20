@@ -11,12 +11,12 @@
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
         <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← {{ $t('saya.location.back_to', { title: location?.title }) }}
+          ← {{ t('saya.location.back_to', { title: location?.title }) }}
         </NuxtLink>
 
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">
-            <em class="saya-italic">{{ $t('saya.location.posts_from', { title: location?.title }) }}</em>
+            <em class="saya-italic">{{ t('saya.location.posts_from', { title: location?.title }) }}</em>
           </h1>
         </div>
       </header>
@@ -34,14 +34,16 @@
         <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
           <SayaIcon name="newspaper" class="size-7" />
         </div>
-        <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.posts.empty_title') }}</h3>
-        <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.posts.empty_desc') }}</p>
+        <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.posts.empty_title') }}</h3>
+        <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.posts.empty_desc') }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const { t } = useI18n()
+
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
@@ -49,7 +51,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 const { location, postsList, config: pageConfig } = await usePublicPageData()
 const posts = postsList

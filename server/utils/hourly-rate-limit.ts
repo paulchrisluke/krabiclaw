@@ -1,3 +1,4 @@
+
 import { queryFirst, type DbClient } from '~/server/db'
 
 // Shared defaults for public submission endpoints (contact, reservations,
@@ -8,13 +9,11 @@ export const HOUR_MS = 3_600_000
 export const DAY_MS = 86_400_000
 
 export function getClientIp(event: ApiValue): string {
-  const cfIp = getHeader(event, 'CF-Connecting-IP')
+  const cfIp = (event.req.headers.get('CF-Connecting-IP'))
   if (cfIp) return cfIp
 
-  const fwd = event.node?.req?.headers?.['x-forwarded-for']
-  const forwardedFor = Array.isArray(fwd) ? fwd.join(',') : String(fwd || '')
+  const forwardedFor = (event.req.headers.get('x-forwarded-for')) || ''
   return forwardedFor.split(',').map((p: string) => p.trim()).find(Boolean)
-    || event.node?.req?.socket?.remoteAddress
     || 'unknown'
 }
 

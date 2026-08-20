@@ -1,7 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { generateSlots } from '~/server/utils/experiences'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const query = getQuery(event)
   const start = typeof query.start === 'string' ? query.start : ''
   const end = typeof query.end === 'string' ? query.end : ''
@@ -52,3 +52,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: statusMessage }, { status: statusCode })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

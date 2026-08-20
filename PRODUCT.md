@@ -147,7 +147,7 @@ Default template for restaurant/experience tenants. SSR-rendered, SEO-first, edi
 /contact                       → Brand contact form
 /reservations                  → Reservation form
 /posts                         → Posts / news feed
-/menu                          → Redirects to primary location menu (SEO fallback)
+/menu                          → Site-level menu when published; location menus live under /locations/[slug]/menu
 ```
 
 Nav: Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). Locations dropdown built at runtime from `business_locations`.

@@ -635,10 +635,10 @@ VALUES
 ON CONFLICT(id) DO NOTHING;
 
 -- Locales
-INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
+INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status)
 VALUES
-  ('locale::${orgId}::${siteId}::en', '${orgId}', '${siteId}', 'en', 'English', 1, 'published', 1),
-  ('locale::${orgId}::${siteId}::th', '${orgId}', '${siteId}', 'th', 'ไทย', 0, 'published', 1)
+  ('locale::${orgId}::${siteId}::en', '${orgId}', '${siteId}', 'en', 'English', 1, 'published'),
+  ('locale::${orgId}::${siteId}::th', '${orgId}', '${siteId}', 'th', 'ไทย', 0, 'published')
 ON CONFLICT(id) DO NOTHING;
 
 -- Locations

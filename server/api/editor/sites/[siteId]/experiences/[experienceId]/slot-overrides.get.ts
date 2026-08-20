@@ -3,7 +3,7 @@ import { getExperienceById, listSlotOverrides } from '~/server/utils/experiences
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
   if (!siteId || !experienceId) return jsonResponse({ error: 'siteId and experienceId required' }, { status: 400 })
@@ -12,12 +12,7 @@ export default defineEventHandler(async (event) => {
   const experience = await getExperienceById(db, siteId, experienceId)
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: experience.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: experience.location_id, })
 
   const query = getQuery(event)
   const fromDate = typeof query.from === 'string' ? query.from : undefined
@@ -26,3 +21,5 @@ export default defineEventHandler(async (event) => {
   const overrides = await listSlotOverrides(db, siteId, experienceId, { fromDate, toDate })
   return jsonResponse({ overrides })
 })
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

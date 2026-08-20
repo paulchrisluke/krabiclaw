@@ -4,7 +4,8 @@
 // runs once event.context.siteId/tenantType is resolved and any onboarding/canonical-domain
 // redirect has already short-circuited the request (h3 skips later middleware
 // once a response is sent — see event.handled).
-import { defineEventHandler, getHeader, getRequestURL } from 'h3'
+import { defineHandler } from 'nitro';
+import { } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
@@ -20,7 +21,7 @@ import {
   resolveLocationIdFromPath
 } from '~/server/utils/pageview-tracking'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   if (event.method !== 'GET') return
 
   const isTenant = event.context.tenantType === TENANT_TYPES.TENANT
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
   const siteId = event.context.siteId
   if (isTenant && !siteId) return
 
-  const url = getRequestURL(event)
+  const url = event.url
   if (!isTrackablePath(url.pathname)) return
 
   const env = cloudflareEnv(event)
@@ -43,9 +44,9 @@ export default defineEventHandler(async (event) => {
     const ipHash = await hashIp(getClientIp(event))
     const geo = getCloudflareGeo(event)
 
-    const rawReferrer = getHeader(event, 'referer') || null
+    const rawReferrer = (event.req.headers.get('referer')) || null
     const referrer = rawReferrer ? rawReferrer.slice(0, 2048) : null
-    const rawUa = getHeader(event, 'user-agent') || null
+    const rawUa = (event.req.headers.get('user-agent')) || null
     const userAgent = rawUa ? rawUa.slice(0, 1024) : null
 
     const insertPromise = isTenant
@@ -55,7 +56,7 @@ export default defineEventHandler(async (event) => {
             db,
             siteId as string,
             url.pathname,
-            url.searchParams.get('locale') || getHeader(event, 'x-tenant-locale'),
+            url.searchParams.get('locale') || (event.req.headers.get('x-tenant-locale')),
           ),
         ]).then(([locationId, page]) =>
           insertPageviewEvent(db, {
@@ -66,7 +67,7 @@ export default defineEventHandler(async (event) => {
             pageType: page?.page_type ?? null,
             recipe: page?.recipe ?? null,
             locale: page?.locale ?? null,
-            revisionId: page?.revision_id ?? null,
+            revisionId: null,
             referrer,
             userAgent,
             ipHash,
@@ -89,7 +90,7 @@ export default defineEventHandler(async (event) => {
           city: geo.city || null
         })
 
-    const cfContext = event.context.cloudflare?.context
+    const cfContext = event.runtime?.cloudflare?.context
     if (cfContext?.waitUntil) {
       cfContext.waitUntil(insertPromise.catch((error) => {
         const err = error instanceof Error ? error : new Error(String(error))

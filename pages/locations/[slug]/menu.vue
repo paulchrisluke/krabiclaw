@@ -11,13 +11,13 @@
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
         <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← {{ $t('saya.location.back_to', { title: location?.title }) }}
+          ← {{ t('saya.location.back_to', { title: location?.title }) }}
         </NuxtLink>
         
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">{{ location?.title }}</h1>
           <p class="text-sm text-muted">
-            {{ $t('saya.menu_page.updated', { date: menuUpdated }) }}
+            {{ t('saya.menu_page.updated', { date: menuUpdated }) }}
           </p>
         </div>
       </header>
@@ -25,15 +25,15 @@
 
     <!-- Loading -->
     <div v-if="menuLoading && !pageData" class="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
-      <p class="text-muted">{{ $t('saya.menu_page.loading') }}</p>
+      <p class="text-muted">{{ t('saya.menu_page.loading') }}</p>
     </div>
 
     <!-- Empty state -->
     <div v-else-if="!hasMenu" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
-      <div class="saya-display saya-italic text-3xl text-default mb-4">{{ $t('saya.menu_page.coming_soon_title') }}</div>
-      <p class="text-sm text-muted mb-6">{{ $t('saya.menu_page.coming_soon_desc', { location: location?.title }) }}</p>
+      <div class="saya-display saya-italic text-3xl text-default mb-4">{{ t('saya.menu_page.coming_soon_title') }}</div>
+      <p class="text-sm text-muted mb-6">{{ t('saya.menu_page.coming_soon_desc', { location: location?.title }) }}</p>
       <SayaButton v-if="locationExperienceHref" :to="locationExperienceHref">
-        {{ $t('saya.menu_page.view_experiences') }}
+        {{ t('saya.menu_page.view_experiences') }}
       </SayaButton>
     </div>
 
@@ -92,7 +92,7 @@
                       :class="['text-default no-underline hover:underline underline-offset-2', !item.available && 'opacity-50']"
                     >{{ item.name }}</NuxtLink>
                     <span v-else class="text-default opacity-50">{{ item.name }}</span>
-                    <SayaBadgeUnavailable v-if="!item.available" :text="$t('saya.menu_page.unavailable')" />
+                    <SayaBadgeUnavailable v-if="!item.available" :text="t('saya.menu_page.unavailable')" />
                     <span
                       v-for="tag in getDietaryTags(item)"
                       :key="tag"
@@ -115,12 +115,12 @@
 
         <!-- Allergens footer -->
         <section class="border-t border-default pt-12">
-          <p class="saya-kicker mb-4">{{ $t('saya.menu_page.allergens_title') }}</p>
+          <p class="saya-kicker mb-4">{{ t('saya.menu_page.allergens_title') }}</p>
           <p class="text-sm leading-relaxed text-muted">
             <strong class="font-semibold text-default">V</strong> vegetarian ·
             <strong class="font-semibold text-default">VG</strong> vegan ·
             <strong class="font-semibold text-default">GF</strong> gluten-free.
-            {{ $t('saya.menu_page.allergens_desc') }}
+            {{ t('saya.menu_page.allergens_desc') }}
           </p>
         </section>
       </div>
@@ -131,6 +131,7 @@
 <script setup lang="ts">
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+const { t } = useI18n()
 
 definePageMeta({ layout: 'saya' })
 
@@ -139,9 +140,11 @@ const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
+const { isBlawby } = usePublicTemplate()
+if (isBlawby.value) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 const { data: pageData, location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList } = await usePublicPageData({ lazy: false })
 const { formatDate } = useLocaleDate()

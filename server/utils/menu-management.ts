@@ -1,4 +1,4 @@
-import { createError } from "h3";
+import { HTTPError } from 'nitro';
 import type {
   Menu,
   MenuItem,
@@ -24,23 +24,7 @@ const MAX_SUFFIX_ATTEMPTS = 50;
 
 type SqlBindValue = string | number | boolean | null;
 
-interface PublishedMenuTranslation {
-  name: string | null;
-  description: string | null;
-  section_order: string | null;
-}
 
-interface PublishedMenuItemTranslation {
-  menu_item_id: string;
-  section: string | null;
-  name: string | null;
-  description: string | null;
-  allergens: string | null;
-  ingredients: string | null;
-  dietary_notes: string | null;
-  preparation: string | null;
-  serving_note: string | null;
-}
 
 export class MenuSectionConflictError extends Error {
   code = "MENU_SECTION_CONFLICT" as const;
@@ -105,7 +89,7 @@ async function assertValidMenuLocation(
   );
 
   if (!location?.id) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: "Location not found for this site",
     });
@@ -119,26 +103,25 @@ function slugify(name: string): string {
     .trim()
     .replace(/[\s-]+/g, "-");
 
-  // Return fallback if slug is empty (e.g., non-ASCII only names)
-  if (!slug) {
-    return `untitled-${Date.now().toString(36)}`;
-  }
+  if (!slug) return `item-${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`
 
   return slug;
 }
 
 export function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value))
-    return value.filter((item): item is string => typeof item === "string");
-  if (typeof value !== "string" || !value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string")
-      : [];
-  } catch {
-    return [];
-  }
+    return value.map((item, index) => {
+      if (typeof item !== "string") throw new Error(`String array item ${index} is invalid`)
+      return item
+    });
+  if (value == null || value === '') return []
+  if (typeof value !== "string") throw new Error('Expected a JSON string array')
+  const parsed = JSON.parse(value)
+  if (!Array.isArray(parsed)) throw new Error('Expected a JSON string array')
+  return parsed.map((item, index) => {
+    if (typeof item !== "string") throw new Error(`String array item ${index} is invalid`)
+    return item
+  })
 }
 
 export function normalizeSectionOrder(sections: unknown): string[] {
@@ -160,6 +143,7 @@ export function normalizeSectionOrder(sections: unknown): string[] {
 export function mapMenu(row: Record<string, unknown>): Menu {
   return {
     ...(row as unknown as Menu),
+    is_visible: Boolean(row.is_visible),
     section_order: normalizeSectionOrder(row.section_order),
   };
 }
@@ -278,78 +262,6 @@ export function sortMenuItems(items: MenuItem[], sectionOrder: string[]): MenuIt
   });
 }
 
-async function applyPublishedMenuTranslations(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  menu: MenuWithItems,
-  locale?: string,
-): Promise<MenuWithItems> {
-  if (!locale) return menu;
-
-  const menuTranslation = await queryFirst<PublishedMenuTranslation>(
-    db,
-    `
-    SELECT name, description, section_order
-    FROM menu_translations
-    WHERE organization_id = ? AND site_id = ? AND menu_id = ? AND locale = ? AND status = 'published'
-    LIMIT 1
-  `,
-    [organizationId, siteId, menu.id, locale],
-  );
-
-  const results = await queryAll<PublishedMenuItemTranslation>(
-    db,
-    `
-    SELECT menu_item_id, section, name, description, allergens, ingredients, dietary_notes, preparation, serving_note
-    FROM menu_item_translations
-    WHERE organization_id = ? AND site_id = ? AND locale = ? AND status = 'published'
-      AND menu_item_id IN (SELECT id FROM menu_items WHERE menu_id = ?)
-  `,
-    [organizationId, siteId, locale, menu.id],
-  );
-
-  const itemTranslations = new Map(
-    (results ?? []).map((row) => [row.menu_item_id, row]),
-  );
-  const sectionOrder = menuTranslation?.section_order
-    ? normalizeSectionOrder(menuTranslation.section_order)
-    : (menu.section_order ?? []);
-
-  const translatedItems = menu.items.map((item) => {
-    const translation = itemTranslations.get(item.id);
-    if (!translation) return item;
-
-    return {
-      ...item,
-      section: translation.section ?? item.section,
-      name: translation.name ?? item.name,
-      description: translation.description ?? item.description,
-      allergens:
-        translation.allergens !== null
-          ? parseStringArray(translation.allergens)
-          : item.allergens,
-      ingredients:
-        translation.ingredients !== null
-          ? parseStringArray(translation.ingredients)
-          : item.ingredients,
-      dietary_notes:
-        translation.dietary_notes !== null
-          ? parseStringArray(translation.dietary_notes)
-          : item.dietary_notes,
-      preparation: translation.preparation ?? item.preparation,
-      serving_note: translation.serving_note ?? item.serving_note,
-    };
-  });
-
-  return {
-    ...menu,
-    name: menuTranslation?.name ?? menu.name,
-    description: menuTranslation?.description ?? menu.description,
-    section_order: sectionOrder,
-    items: sortMenuItems(translatedItems, sectionOrder),
-  };
-}
 
 async function getMenuSectionOrder(
   db: DbClient,
@@ -484,7 +396,7 @@ export async function getMenus(
   locationId?: string | null,
 ): Promise<Menu[]> {
   let query = `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+    SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
     WHERE organization_id = ? AND site_id = ?
@@ -497,7 +409,7 @@ export async function getMenus(
     params.push(locationId);
   }
 
-  query += ` ORDER BY location_id IS NULL, (status = 'published') DESC, name`;
+  query += ` ORDER BY location_id IS NULL, is_visible DESC, name`;
 
   const results = await queryAll<Record<string, unknown>>(db, query, params);
   return (results || []).map((row) => mapMenu(row));
@@ -514,7 +426,7 @@ export async function getMenuWithItems(
   const menu = await queryFirst<Record<string, unknown>>(
     db,
     `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+    SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
     WHERE id = ? AND organization_id = ? AND site_id = ?
@@ -563,7 +475,6 @@ async function loadPublishedMenuById(
   organizationId: string,
   siteId: string,
   menuRow: Record<string, unknown>,
-  locale?: string,
 ): Promise<MenuWithItems> {
   const mappedMenu = mapMenu(menuRow);
   const items = await queryAll<Record<string, unknown>>(
@@ -595,78 +506,51 @@ async function loadPublishedMenuById(
       mappedMenu.section_order ?? [],
     ),
   };
-  return applyPublishedMenuTranslations(
-    db,
-    organizationId,
-    siteId,
-    menuWithItems,
-    locale,
-  );
+  return menuWithItems;
 }
 
-// Get active menu for a scope (brand or location)
+// Get the active menu owned by the requested scope.
 export async function getActiveMenu(
   db: DbClient,
   organizationId: string,
   siteId: string,
   locationId?: string | null,
-  locale?: string,
 ): Promise<MenuWithItems | null> {
-  // First try to get location-specific menu
   if (locationId) {
     const locationMenu = await queryFirst<Record<string, unknown>>(
       db,
       `
-      SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+      SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
              created_at, updated_at, created_by, updated_by
       FROM menus
-      WHERE organization_id = ? AND site_id = ? AND location_id = ? AND status = 'published'
+      WHERE organization_id = ? AND site_id = ? AND location_id = ? AND is_visible = 1
       LIMIT 1
     `,
       [organizationId, siteId, locationId],
     );
 
-    if (locationMenu) {
-      return loadPublishedMenuById(db, organizationId, siteId, locationMenu, locale);
-    }
+    return locationMenu
+      ? loadPublishedMenuById(db, organizationId, siteId, locationMenu)
+      : null;
   }
 
-  // Fall back to brand/default menu (no location_id)
   const brandMenu = await queryFirst<Record<string, unknown>>(
     db,
     `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+    SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
-    WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND status = 'published'
+    WHERE organization_id = ? AND site_id = ? AND location_id IS NULL AND is_visible = 1
     LIMIT 1
   `,
     [organizationId, siteId],
   );
 
   if (brandMenu) {
-    return loadPublishedMenuById(db, organizationId, siteId, brandMenu, locale);
+    return loadPublishedMenuById(db, organizationId, siteId, brandMenu);
   }
 
-  // Sites with only location-scoped menus (no brand-level menu) still need a
-  // default to show on non-location pages, so fall back to the primary
-  // (or first) active location's published menu.
-  const fallbackLocationMenu = await queryFirst<Record<string, unknown>>(
-    db,
-    `
-    SELECT m.id, m.organization_id, m.site_id, m.location_id, m.name, m.description, m.status, m.section_order,
-           m.created_at, m.updated_at, m.created_by, m.updated_by
-    FROM menus m
-    JOIN business_locations bl ON bl.id = m.location_id
-    WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published' AND bl.status = 'active'
-    ORDER BY bl.is_primary DESC, bl.title ASC
-    LIMIT 1
-  `,
-    [organizationId, siteId],
-  );
-
-  if (!fallbackLocationMenu) return null;
-  return loadPublishedMenuById(db, organizationId, siteId, fallbackLocationMenu, locale);
+  return null;
 }
 
 // Get public menu item by slug
@@ -686,7 +570,7 @@ export async function getPublicMenuItem(
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     JOIN menus m ON m.id = mi.menu_id
-    WHERE m.site_id = ? AND mi.slug = ? AND m.status = 'published'
+    WHERE m.site_id = ? AND mi.slug = ? AND m.is_visible = 1
     LIMIT 1
   `,
     [siteId, slug],
@@ -714,8 +598,8 @@ export async function createMenu(
   const result = await execute(
     db,
     `
-    INSERT INTO menus (id, organization_id, site_id, location_id, name, description, status, created_at, updated_at, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
+    INSERT INTO menus (id, organization_id, site_id, location_id, name, description, is_visible, created_at, updated_at, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
   `,
     [
       id,
@@ -753,7 +637,7 @@ export async function createMenu(
     location_id: locationId,
     name: menu.name,
     description: menu.description || null,
-    status: "published",
+    is_visible: true,
     created_at: now,
     updated_at: now,
     created_by: createdBy,
@@ -785,9 +669,9 @@ export async function updateMenu(
     setParts.push("description = ?");
     params.push(updates.description);
   }
-  if (updates.status !== undefined) {
-    setParts.push("status = ?");
-    params.push(updates.status);
+  if (updates.is_visible !== undefined) {
+    setParts.push("is_visible = ?");
+    params.push(updates.is_visible ? 1 : 0);
   }
   if (updates.section_order !== undefined) {
     setParts.push("section_order = ?");
@@ -817,7 +701,7 @@ export async function updateMenu(
   const updatedMenu = await queryFirst<Record<string, unknown>>(
     db,
     `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+    SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
     WHERE id = ? AND organization_id = ? AND site_id = ?
@@ -868,7 +752,7 @@ export async function createMenuItem(
     `SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
     [menuId, organizationId, siteId],
   );
-  if (!menuOwner) throw createError({ statusCode: 404, statusMessage: "Menu not found" });
+  if (!menuOwner) throw new HTTPError({ statusCode: 404, statusMessage: "Menu not found" });
   assertValidSaleWindow(item.sale_starts_at, item.sale_ends_at);
   await validateMediaAsset(db, organizationId, siteId, item.og_image_asset_id, "image", "og_image_asset_id");
 

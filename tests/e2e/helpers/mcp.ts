@@ -20,6 +20,7 @@ export async function mcpRequest(
     args?: Record<string, unknown>
     extraHeaders?: Record<string, string>
     params?: Record<string, unknown>
+    idempotent?: boolean
   },
 ) {
   const payload = {
@@ -37,6 +38,7 @@ export async function mcpRequest(
   }
 
   return request.post(`${baseURL}/api/mcp`, {
+    maxRetries: options.idempotent ? 1 : 0,
     headers: {
       'content-type': 'application/json',
       'mcp-protocol-version': MCP_VERSION,

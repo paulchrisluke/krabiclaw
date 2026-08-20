@@ -22,6 +22,10 @@ import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import {
+  environmentTenantAliasHostname,
+  usesTenantHeader,
+} from "../server/utils/tenant-hosts.ts";
 
 const { values: args } = parseArgs({
   options: {
@@ -45,9 +49,19 @@ if (!args.url) {
   process.exit(1);
 }
 
-const BASE = args.url.replace(/\/$/, "");
 const VERTICAL = args.vertical;
 const SITE_ID = args["site-id"];
+const TENANT_SLUG = args["tenant-slug"];
+const inputUrl = new URL(args.url);
+const environmentAlias = TENANT_SLUG
+  ? environmentTenantAliasHostname(inputUrl.hostname, TENANT_SLUG)
+  : "";
+if (environmentAlias) inputUrl.hostname = environmentAlias;
+const BASE = inputUrl.toString().replace(/\/$/, "");
+const TENANT_HEADERS =
+  TENANT_SLUG && usesTenantHeader(new URL(BASE).hostname)
+    ? { "x-preview-tenant": TENANT_SLUG, "cache-control": "no-store" }
+    : {};
 const OUT_DIR =
   args["out-dir"] ??
   (args.slug ? join(process.cwd(), "client-imports", args.slug) : null);
@@ -180,10 +194,15 @@ async function get(path, opts = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
+    const headers = new Headers(opts.headers);
+    for (const [name, value] of Object.entries(TENANT_HEADERS)) {
+      if (!headers.has(name)) headers.set(name, value);
+    }
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
       ...opts,
+      headers,
     });
     clearTimeout(timer);
     return res;
@@ -268,7 +287,7 @@ if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
   info("── Slug route checks");
 
   const contentType = VERTICAL === "experience" ? "experiences" : "menu";
-  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${contentType}`;
+  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${contentType}&datasets=${contentType}`;
   const res = await get(apiPath);
 
   if (res.ok) {
@@ -414,10 +433,10 @@ if (SITE_ID) {
     else pass("No contact email in site config (allowed for WhatsApp-only contact setups)");
 
     const allJson = JSON.stringify(data);
-    if (allJson.includes("bamboo.chow@gmail.com") && VERTICAL !== "experience")
-      fail("Kikuzuki placeholder email found in production data");
-    if (allJson.includes("Ember & Slice"))
-      fail("Demo site data (Ember & Slice) found in production response");
+    if (allJson.includes("bamboo.chow@gmail.com") && SITE_ID !== "site-kikuzuki")
+      fail("Kikuzuki placeholder email found in another tenant response");
+    if (allJson.includes("Ember & Slice") && SITE_ID !== "site-demo")
+      fail("Demo site data (Ember & Slice) found in another tenant response");
 
     // Guard: static fallback phone must not be served
     if (allJson.includes("+66 81 270 2616") && !allJson.includes("bamboo")) {

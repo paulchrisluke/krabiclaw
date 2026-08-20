@@ -1,4 +1,5 @@
 import { TENANT_TYPES, type TenantType } from '../../utils/tenant-routing.ts'
+import { isEnvironmentTenantAliasHost } from './tenant-hosts.ts'
 
 export const PLATFORM_SITEMAP_ROUTES = [
   '/',
@@ -103,6 +104,7 @@ export function isNonIndexableHost(hostname: string): boolean {
   return host === 'local.krabiclaw.com'
     || host === 'preview.krabiclaw.com'
     || host === 'staging.krabiclaw.com'
+    || isEnvironmentTenantAliasHost(host)
     || host.endsWith('.pages.dev')
     || host.endsWith('.workers.dev')
 }
@@ -127,7 +129,7 @@ export function resolveRuntimeSeoSiteConfig(input: {
   if (input.tenantType === TENANT_TYPES.PLATFORM) {
     return {
       name: 'KrabiClaw',
-      url: indexable ? 'https://krabiclaw.com' : input.origin,
+      url: input.origin,
       indexable,
     }
   }

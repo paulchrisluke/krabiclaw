@@ -4,7 +4,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getActiveMenu } from '~/server/utils/menu-management'
 import { resolveSiteLocale } from '~/server/utils/site-i18n'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const query = getQuery(event)
   let locationId = typeof query.locationId === 'string' ? query.locationId : undefined
@@ -44,55 +44,27 @@ export default defineEventHandler(async (event) => {
     if (!locationId) {
       if (site.primary_location_id) {
         locationId = site.primary_location_id
-      } else {
-        const primaryLocation = await queryFirst<{ id: string }>(db, `
-          SELECT id
-          FROM business_locations
-          WHERE site_id = ? AND status = 'active'
-          ORDER BY is_primary DESC, created_at ASC
-          LIMIT 1
-        `, [siteId])
-        locationId = primaryLocation?.id
       }
     }
 
     const menu = await getActiveMenu(
-      db,
-      site.organization_id,
-      siteId,
-      locationId,
-      localeState.isSourceLocale ? undefined : localeState.effectiveLocale,
-    )
+      db, site.organization_id, siteId, locationId, )
     
     if (!menu) {
       return jsonResponse({
-        success: true,
-        menu: null,
-        message: 'No menu available for this scope',
-        siteId,
-        locationId,
-        locale: localeState.effectiveLocale,
-        requestedLocale: localeState.requestedLocale,
-        sourceLocale: localeState.sourceLocale,
-        currency: site.default_currency || 'THB',
-      })
+        success: true, menu: null, message: 'No menu available for this scope', siteId, locationId, locale: localeState.effectiveLocale, requestedLocale: localeState.requestedLocale, sourceLocale: localeState.sourceLocale, currency: site.default_currency || 'THB', })
     }
 
     return jsonResponse({
-      success: true,
-      menu,
-      siteId,
-      locationId,
-      locale: localeState.effectiveLocale,
-      requestedLocale: localeState.requestedLocale,
-      sourceLocale: localeState.sourceLocale,
-      currency: site.default_currency || 'THB',
-    })
+      success: true, menu, siteId, locationId, locale: localeState.effectiveLocale, requestedLocale: localeState.requestedLocale, sourceLocale: localeState.sourceLocale, currency: site.default_currency || 'THB', })
     
   } catch (error) {
     console.error('Failed to get public menu:', error)
     return jsonResponse({ 
       error: 'Failed to get menu' 
-    }, { status: 500 })
+    }, { status: error && typeof error === 'object' && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

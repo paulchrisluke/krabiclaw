@@ -92,7 +92,9 @@ VALUES
 ]
 
 if (isStdout) {
-  process.stdout.write(sqlChunks.map((c) => c.sql).join('\n'))
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(sqlChunks.map((c) => c.sql).join('\n'), error => error ? reject(error) : resolve())
+  })
   process.exit(0)
 }
 

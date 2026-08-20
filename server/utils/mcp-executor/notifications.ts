@@ -1,4 +1,4 @@
-import { getHeaders } from 'h3'
+
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { getNotificationsSettings, updateNotificationsSettings } from '~/server/utils/mcp-workflows'
@@ -41,7 +41,7 @@ export async function handleNotificationsTools(ctx: McpExecutorContext): Promise
             whatsappPhone,
             channels,
             site.env,
-            ctx.event ? (getHeaders(ctx.event) as HeadersInit) : undefined,
+            ctx.event ? (Object.fromEntries(ctx.event.req.headers.entries()) as HeadersInit) : undefined,
           );
         } catch (error) {
           // setOrgWhatsAppPhone rejects an invalid/impossible number outright (issue #293

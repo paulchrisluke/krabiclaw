@@ -217,38 +217,6 @@
         </div>
       </section>
 
-      <section v-if="relatedItems.length > 0" aria-labelledby="related-heading" class="mt-16 border-t border-default pt-12 sm:mt-24">
-        <h2 id="related-heading" class="text-lg font-medium text-highlighted">More from {{ category?.name }}</h2>
-        <div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-          <NuxtLink
-            v-for="related in relatedItems"
-            :key="related.id"
-            :to="`/menu/${related.slug}`"
-            class="group relative"
-          >
-            <div class="aspect-square overflow-hidden rounded-md bg-elevated">
-              <img
-                v-if="related.public_url && !related.public_url.includes('PLACEHOLDER')"
-                :src="related.public_url"
-                :alt="related.name"
-                class="h-full w-full object-cover transition-opacity group-hover:opacity-80"
-                loading="lazy"
-              />
-              <div v-else class="flex h-full w-full items-center justify-center px-4 text-center">
-                <span class="text-sm text-dimmed">No image yet</span>
-              </div>
-            </div>
-            <div class="mt-4 flex justify-between gap-4">
-              <div>
-                <h3 class="text-sm font-medium text-highlighted">{{ related.name }}</h3>
-                <p class="mt-1 text-sm text-muted">{{ related.description }}</p>
-              </div>
-              <p class="shrink-0 text-sm font-medium text-highlighted">{{ formatPrice(related) }}</p>
-            </div>
-          </NuxtLink>
-        </div>
-      </section>
-
     </article>
 
     <!-- 404 State -->
@@ -266,6 +234,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'saya' })
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
@@ -273,7 +242,9 @@ import type { MenuItem } from '~/server/types/menu'
 
 const route = useRoute()
 const { site } = useTenantSite()
-const siteName = computed(() => site?.brand_name || 'KrabiClaw')
+const { isBlawby } = usePublicTemplate()
+if (!site || isBlawby.value) throw createError({ statusCode: 404 })
+const siteName = computed(() => site?.brand_name?.trim() ?? '')
 
 interface Review {
   id: string
@@ -428,9 +399,6 @@ const detailSections = computed(() => {
   }
   return sections
 })
-
-
-const relatedItems = ref<MenuItemType[]>([]) // To be implemented with a related items API if needed
 
 const approvedReviews = ref<Review[]>([])
 const reviewsLoading = ref(true)

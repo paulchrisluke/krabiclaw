@@ -9,7 +9,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { validateInternalRequest } from '~/server/utils/internal-secret'
 import { listAllItems } from '~/server/utils/public-search'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
 
   const validation = await validateInternalRequest(event, env)
@@ -19,12 +19,10 @@ export default defineEventHandler(async (event) => {
   try {
     const items = await listAllItems(env)
     return jsonResponse({
-      ok: true,
-      itemCount: items.length,
-      elapsedMs: Date.now() - startedAt,
-    })
+      ok: true, itemCount: items.length, elapsedMs: Date.now() - startedAt, })
   } catch (error) {
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     return jsonResponse({ error: 'Failed to list AI Search items', detail, elapsedMs: Date.now() - startedAt }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';

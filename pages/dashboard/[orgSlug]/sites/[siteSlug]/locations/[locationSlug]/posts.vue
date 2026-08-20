@@ -191,6 +191,7 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.posts' })
 
@@ -541,19 +542,6 @@ const aiLoading = ref(false)
 const aiImageFile = ref<File | null>(null)
 const aiImageInput = ref<HTMLInputElement | null>(null)
 const credits = ref<number | null>(null)
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const errorMessage = (data as Record<string, unknown>).error
-      if (typeof errorMessage === 'string' && errorMessage) return errorMessage
-    }
-    const message = (error as Record<string, unknown>).message
-    if (typeof message === 'string' && message) return message
-  }
-  return fallback
-}
 
 const onAiImageSelect = (e: Event) => {
   const file = (e.target as HTMLInputElement).files?.[0] ?? null

@@ -51,7 +51,6 @@
           :src="demoUrl"
           class="absolute inset-x-0 top-[113px] h-[calc(100dvh-113px)] w-full border-0 sm:top-[65px] sm:h-[calc(100dvh-65px)]"
           :title="`${template.displayName} template live demo`"
-          sandbox="allow-scripts allow-same-origin"
         />
       </div>
     </Teleport>
@@ -86,7 +85,6 @@
             :src="demoUrl"
             class="absolute inset-0 w-full h-full border-0"
             loading="lazy"
-            sandbox="allow-scripts allow-same-origin"
             :title="`${template.displayName} template live preview`"
           />
         </div>
@@ -266,7 +264,9 @@ if (!template) {
 }
 
 const config = useRuntimeConfig()
-const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+const requestUrl = useRequestURL()
+const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '')
+if (!platformHostname) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_FREE_SITE_DOMAIN is required' })
 const isDemoPreviewOpen = ref(false)
 const previewDialogRef = ref<HTMLElement | null>(null)
 const closePreviewButtonRef = ref<HTMLButtonElement | null>(null)
@@ -280,8 +280,11 @@ const isNclsShowcase = template.slug === 'blawby'
 // always has. Blawby's demoUrl is the literal NCLS-approved production URL.
 const demoUrl = computed(() => {
   if (template.demoUrl) return template.demoUrl
-  return import.meta.dev
-    ? 'http://demo.localhost:3000'
+  const isLocalOrigin = requestUrl.hostname === 'localhost'
+    || requestUrl.hostname === '127.0.0.1'
+    || requestUrl.hostname.endsWith('.localhost')
+  return isLocalOrigin
+    ? requestUrl.origin
     : `https://demo.${platformHostname}`
 })
 

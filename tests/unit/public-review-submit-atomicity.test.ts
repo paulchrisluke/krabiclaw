@@ -3,7 +3,7 @@ import test, { mock } from 'node:test'
 import Database from 'better-sqlite3'
 
 type JsonResult = { body: Record<string, unknown>; status: number }
-type TestEvent = { headers: Record<string, string> }
+type TestEvent = { headers: Record<string, string>; req: Request }
 type BatchQuery = { query: string; params?: unknown[] }
 
 type SqliteDb = InstanceType<typeof Database>
@@ -172,6 +172,17 @@ const previousGlobals = {
   getHeader: globalThis.getHeader,
   readBody: globalThis.readBody,
 }
+
+mock.module('nitro/h3', {
+  namedExports: {
+    getHeader: (event: TestEvent, name: string) => event.headers[name.toLowerCase()],
+    readBody: async () => {
+      if (state.readError) throw state.readError
+      return state.body
+    },
+  },
+})
+
 globalThis.defineEventHandler = (handler: unknown) => handler
 globalThis.getHeader = (event: TestEvent, name: string) => event.headers[name.toLowerCase()]
 globalThis.readBody = async () => {
@@ -230,7 +241,12 @@ test.beforeEach(() => {
 })
 
 function invoke() {
-  return handler({ headers: { 'user-agent': 'atomicity-test' } })
+  return handler({
+    headers: { 'user-agent': 'atomicity-test' },
+    req: new Request('http://localhost/api/public/review-requests/submit', {
+      headers: { 'user-agent': 'atomicity-test' },
+    }),
+  })
 }
 
 test('commits the review, request, booking, customer identity, and media links in one guarded batch', async () => {

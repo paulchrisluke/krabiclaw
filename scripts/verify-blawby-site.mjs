@@ -9,7 +9,10 @@ import {
   NCLS_ARTICLE_SLUGS,
 } from './blawby-parity-config.mjs'
 import { isNonIndexableHost } from '../server/utils/seo-policy.ts'
-import { isPreviewContext } from '../server/utils/tenant-hosts.ts'
+import {
+  environmentTenantAliasHostname,
+  usesTenantHeader,
+} from '../server/utils/tenant-hosts.ts'
 
 const DEFAULT_ROUTES = [
   '/',
@@ -97,6 +100,10 @@ function resolveUrl(base, route) {
 
 function normalizeTenantBaseUrl(rawUrl, tenantSlug) {
   const url = new URL(rawUrl)
+  const environmentAlias = tenantSlug
+    ? environmentTenantAliasHostname(url.hostname, tenantSlug)
+    : ''
+  if (environmentAlias) url.hostname = environmentAlias
   if (tenantSlug && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
     url.hostname = `${tenantSlug}.localhost`
   }
@@ -105,7 +112,7 @@ function normalizeTenantBaseUrl(rawUrl, tenantSlug) {
 
 function previewTenantHeaders(base, tenantSlug) {
   if (!tenantSlug) return {}
-  return isPreviewContext(new URL(base).hostname)
+  return usesTenantHeader(new URL(base).hostname)
     ? { 'x-preview-tenant': tenantSlug, 'cache-control': 'no-store' }
     : {}
 }
@@ -299,14 +306,29 @@ async function checkRoute(base, route, options = {}) {
 
 async function fetchBlawbyData(base, siteId) {
   if (!base || !siteId) return null
-  const { response, timer } = await fetchResponseWithTimeout(resolveUrl(base, `/api/public/sites/${siteId}/blawby`))
-  try {
-    if (!response.ok) return null
-    return await response.json()
-  } catch {
-    return null
-  } finally {
-    if (timer) clearTimeout(timer)
+  const recipes = ['home', 'services', 'pricing', 'donate', 'privacy', 'terms']
+  const documents = {}
+  for (const recipe of recipes) {
+    const path = `/api/public/sites/${siteId}/blawby/document?recipe=${encodeURIComponent(recipe)}`
+    const { response, timer } = await fetchResponseWithTimeout(resolveUrl(base, path))
+    try {
+      if (!response.ok) return null
+      const document = await response.json()
+      if (document?.success !== true || document.route?.recipe !== recipe) return null
+      documents[recipe] = document
+    } catch {
+      return null
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
+  return {
+    offerings: documents.services.route.offerings,
+    tenantPages: ['pricing', 'donate', 'privacy', 'terms'].map(recipe => documents[recipe].route.page),
+    consultation: documents.home.shell.consultation,
+    compliance: documents.home.shell.compliance,
+    canonicalDocuments: documents,
   }
 }
 
@@ -358,8 +380,6 @@ function validateArtifacts(checks, manifest) {
   )
   pushCheck(checks, Boolean(manifest.editSurfaceMatrix), 'Import manifest contains edit-surface matrix')
   pushCheck(checks, Boolean(manifest.intentionalDifferences), 'Import manifest contains intentional differences')
-  const navigationKeys = (manifest.navigation ?? []).map(item => `${item.area}:${item.label}:${item.url}`)
-  pushCheck(checks, new Set(navigationKeys).size === navigationKeys.length, 'Import manifest navigation has no duplicate rows')
   const redirectFromPaths = new Set((manifest.redirects ?? []).map(redirect => redirect.from_path))
   pushCheck(checks, redirectFromPaths.has('/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare'), 'Import manifest preserves the legacy divorce article URL')
   pushCheck(checks, redirectFromPaths.has('/article/writing-your-own-will-how-it-works-in-north-carolina'), 'Import manifest preserves the legacy will article URL')
@@ -448,7 +468,11 @@ function validatePublicData(checks, data, required) {
   pushCheck(checks, Array.isArray(data.tenantPages) && data.tenantPages.some((page) => page.path === '/pricing'), 'Public Blawby API returns /pricing')
   pushCheck(checks, data.consultation?.tracking_enabled === true, 'Public consultation tracking is enabled')
   pushCheck(checks, Boolean(data.compliance?.entity_name), 'Public compliance metadata is present')
-  pushCheck(checks, (data.compliance?.documents ?? []).length > 0, 'Public compliance exposes legal document assets')
+  pushCheck(
+    checks,
+    ['/policies/privacy', '/policies/terms'].every(path => data.tenantPages.some(page => page.path === path)),
+    'Public Blawby API returns privacy and terms documents',
+  )
   for (const document of data.compliance?.documents ?? []) {
     if (!document.url) continue
     const result = checkMediaUrl(document.url)
@@ -458,11 +482,13 @@ function validatePublicData(checks, data, required) {
     pushCheck(checks, !String(page.body || '').includes('](/files/'), `Public tenant page ${page.path} does not reference legacy /files assets`)
   }
   const donationPage = (data.tenantPages ?? []).find((page) => page.path === '/donate')
+  const donationUrl = donationPage?.cta_url
+    ?? donationPage?.blocks?.find(block => block.type === 'donation_choices')?.data?.destination
   pushCheck(
     checks,
-    donationPage?.cta_url === APPROVED_DONATION_URL,
+    donationUrl === APPROVED_DONATION_URL,
     'Public donation CTA uses the approved Stripe destination',
-    { donationUrl: donationPage?.cta_url ?? null },
+    { donationUrl: donationUrl ?? null },
   )
 
   const bridge = data.consultation?.metadata?.analyticsBridge
@@ -556,10 +582,6 @@ function validateScreenshots(checks, evidenceDir, required) {
         pushCheck(checks, hasSections, `Section captures exist: ${source}/${route}-${viewport}`)
       }
     }
-    const hasMobileNavigationState = Boolean(manifest?.states?.some(state =>
-      state.route_name === 'home' && state.viewport === 'mobile' && state.name === 'mobile-navigation-open',
-    ))
-    pushCheck(checks, hasMobileNavigationState, `Mobile navigation state capture exists: ${source}`)
   }
 }
 

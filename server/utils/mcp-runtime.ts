@@ -8,28 +8,13 @@
 // methods, and outer-catch error/telemetry shaping), per the Better Auth
 // epic's "a configurable shared transport/runtime is allowed; a merged tool
 // endpoint or tool-filter-only security boundary is not."
-import { getHeader, setResponseStatus, type H3Event } from 'h3'
-import {
-  asMcpError,
-  mcpFailure,
-  mcpProtocolError,
-  mcpSuccess,
-  MCP_ERROR,
-  MCP_PROTOCOL_VERSION,
-  SUPPORTED_PROTOCOL_VERSIONS,
-  type JsonRpcId,
-  type McpRpcRequest,
-} from '~/server/utils/mcp-protocol'
+import type { H3Event } from 'nitro';
+import {  setResponseStatus, readBody  } from 'nitro/h3';
+import { asMcpError, mcpFailure, mcpProtocolError, mcpSuccess, MCP_ERROR, MCP_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS, type JsonRpcId, type McpRpcRequest, } from '~/server/utils/mcp-protocol'
 import { mcpHttpStatusForError, sendMcpErrorResponse, setMcpNotificationAccepted } from '~/server/utils/mcp-http-response'
 import { requireMcpUser, type RequireMcpUserOptions } from '~/server/utils/mcp-auth'
 import {
-  buildMcpAuthChallengeForError,
-  buildMcpOAuthChallenge,
-  describeMcpAuthTelemetryError,
-  mcpAuthRequiredResult,
-  mcpToolErrorResult,
-  setMcpAuthChallenge,
-} from '~/server/utils/mcp-route-helpers'
+  buildMcpAuthChallengeForError, buildMcpOAuthChallenge, describeMcpAuthTelemetryError, mcpAuthRequiredResult, mcpToolErrorResult, setMcpAuthChallenge, } from '~/server/utils/mcp-route-helpers'
 
 export interface McpToolMeta {
   domain?: string | null
@@ -55,14 +40,11 @@ export interface McpSurfaceRuntimeConfig {
  * the caller proceeds to read and dispatch the real request body.
  */
 export async function resolveMissingMcpCredential(
-  event: H3Event,
-  config: Pick<McpSurfaceRuntimeConfig, 'resourceMetadataUrl' | 'authDescription' | 'authRequiredText' | 'logEvent' | 'resolveToolMeta'>,
-  baseUrl: string,
-): Promise<
+  event: H3Event, config: Pick<McpSurfaceRuntimeConfig, 'resourceMetadataUrl' | 'authDescription' | 'authRequiredText' | 'logEvent' | 'resolveToolMeta'>, baseUrl: string, ): Promise<
   | { handled: false }
   | { handled: true; requestId: JsonRpcId | undefined; requestMethod: string | undefined; requestToolName: string | undefined; response: unknown }
 > {
-  if (getHeader(event, 'authorization')?.startsWith('Bearer ') || getHeader(event, 'cookie')) {
+  if ((event.req.headers.get('authorization'))?.startsWith('Bearer ') || (event.req.headers.get('cookie'))) {
     return { handled: false }
   }
 
@@ -76,38 +58,20 @@ export async function resolveMissingMcpCredential(
     : undefined
 
   const authChallenge = buildMcpOAuthChallenge({
-    resourceMetadataUrl: config.resourceMetadataUrl(baseUrl),
-    description: config.authDescription,
-  })
+    resourceMetadataUrl: config.resourceMetadataUrl(baseUrl), description: config.authDescription, })
 
   if (requestMethod === 'tools/call') {
     const toolMeta = config.resolveToolMeta(requestToolName ?? null)
     config.logEvent(event, {
-      requestId: requestId ?? null,
-      method: requestMethod,
-      toolName: requestToolName ?? null,
-      toolDomain: requestToolName ? toolMeta.domain ?? null : null,
-      status: 'auth_required',
-      errorMessage: 'credential_missing: missing bearer token or cookie',
-    })
+      requestId: requestId ?? null, method: requestMethod, toolName: requestToolName ?? null, toolDomain: requestToolName ? toolMeta.domain ?? null : null, status: 'auth_required', errorMessage: 'credential_missing: missing bearer token or cookie', })
     return {
-      handled: true,
-      requestId,
-      requestMethod,
-      requestToolName,
-      response: mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: config.authRequiredText })),
-    }
+      handled: true, requestId, requestMethod, requestToolName, response: mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: config.authRequiredText })), }
   }
 
   setResponseStatus(event, 401)
   setMcpAuthChallenge(event, authChallenge)
   return {
-    handled: true,
-    requestId,
-    requestMethod,
-    requestToolName,
-    response: mcpFailure(requestId ?? null, { code: MCP_ERROR.invalidRequest, message: 'Authentication required.' }),
-  }
+    handled: true, requestId, requestMethod, requestToolName, response: mcpFailure(requestId ?? null, { code: MCP_ERROR.invalidRequest, message: 'Authentication required.' }), }
 }
 
 export interface McpResourceCatalog {
@@ -136,19 +100,10 @@ export interface McpDiscoverInfo {
  * one of these seven, so the caller falls through to its own handling.
  */
 export async function dispatchStandardMcpMethod(
-  event: H3Event,
-  request: McpRpcRequest,
-  runtime: Pick<McpSurfaceRuntimeConfig, 'authOptions' | 'logEvent'>,
-  catalog: { resources: McpResourceCatalog; prompts: McpPromptCatalog; discover: McpDiscoverInfo },
-): Promise<unknown | undefined> {
+  event: H3Event, request: McpRpcRequest, runtime: Pick<McpSurfaceRuntimeConfig, 'authOptions' | 'logEvent'>, catalog: { resources: McpResourceCatalog; prompts: McpPromptCatalog; discover: McpDiscoverInfo }, ): Promise<unknown | undefined> {
   if (request.method === 'notifications/initialized') {
     runtime.logEvent(event, {
-      requestId: request.id ?? null,
-      method: request.method,
-      status: 'success',
-      httpStatus: 202,
-      protocolVersion: MCP_PROTOCOL_VERSION,
-    })
+      requestId: request.id ?? null, method: request.method, status: 'success', httpStatus: 202, protocolVersion: MCP_PROTOCOL_VERSION, })
     return setMcpNotificationAccepted(event)
   }
 
@@ -157,40 +112,21 @@ export async function dispatchStandardMcpMethod(
     // before the OAuth handshake completes, and it returns no information
     // beyond {}.
     runtime.logEvent(event, {
-      requestId: request.id,
-      method: request.method,
-      status: 'success',
-      httpStatus: 200,
-      protocolVersion: MCP_PROTOCOL_VERSION,
-    })
+      requestId: request.id, method: request.method, status: 'success', httpStatus: 200, protocolVersion: MCP_PROTOCOL_VERSION, })
     return mcpSuccess(request.id, {})
   }
 
   if (request.method === 'resources/list') {
     const user = await requireMcpUser(event, runtime.authOptions)
     runtime.logEvent(event, {
-      userId: user.userId,
-      requestId: request.id,
-      method: request.method,
-      result: { count: catalog.resources.list.length },
-      status: 'success',
-      httpStatus: 200,
-      oauthClientId: user.oauthClientId ?? null,
-    })
+      userId: user.userId, requestId: request.id, method: request.method, result: { count: catalog.resources.list.length }, status: 'success', httpStatus: 200, oauthClientId: user.oauthClientId ?? null, })
     return mcpSuccess(request.id, { resources: catalog.resources.list })
   }
 
   if (request.method === 'resources/templates/list') {
     const user = await requireMcpUser(event, runtime.authOptions)
     runtime.logEvent(event, {
-      userId: user.userId,
-      requestId: request.id,
-      method: request.method,
-      result: { count: 0 },
-      status: 'success',
-      httpStatus: 200,
-      oauthClientId: user.oauthClientId ?? null,
-    })
+      userId: user.userId, requestId: request.id, method: request.method, result: { count: 0 }, status: 'success', httpStatus: 200, oauthClientId: user.oauthClientId ?? null, })
     return mcpSuccess(request.id, { resourceTemplates: [] })
   }
 
@@ -199,28 +135,14 @@ export async function dispatchStandardMcpMethod(
     const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
     const content = await catalog.resources.read(uri, event)
     runtime.logEvent(event, {
-      userId: user.userId,
-      requestId: request.id,
-      method: request.method,
-      result: { uri },
-      status: 'success',
-      httpStatus: 200,
-      oauthClientId: user.oauthClientId ?? null,
-    })
+      userId: user.userId, requestId: request.id, method: request.method, result: { uri }, status: 'success', httpStatus: 200, oauthClientId: user.oauthClientId ?? null, })
     return mcpSuccess(request.id, { contents: [content] })
   }
 
   if (request.method === 'prompts/list') {
     const user = await requireMcpUser(event, runtime.authOptions)
     runtime.logEvent(event, {
-      userId: user.userId,
-      requestId: request.id,
-      method: request.method,
-      result: { count: catalog.prompts.list.length },
-      status: 'success',
-      httpStatus: 200,
-      oauthClientId: user.oauthClientId ?? null,
-    })
+      userId: user.userId, requestId: request.id, method: request.method, result: { count: catalog.prompts.list.length }, status: 'success', httpStatus: 200, oauthClientId: user.oauthClientId ?? null, })
     return mcpSuccess(request.id, { prompts: catalog.prompts.list })
   }
 
@@ -236,37 +158,17 @@ export async function dispatchStandardMcpMethod(
     }
     const rendered = catalog.prompts.render(name, promptArgs)
     runtime.logEvent(event, {
-      userId: user.userId,
-      requestId: request.id,
-      method: request.method,
-      toolName: name || null,
-      result: { name },
-      status: 'success',
-      httpStatus: 200,
-      oauthClientId: user.oauthClientId ?? null,
-    })
+      userId: user.userId, requestId: request.id, method: request.method, toolName: name || null, result: { name }, status: 'success', httpStatus: 200, oauthClientId: user.oauthClientId ?? null, })
     return mcpSuccess(request.id, {
-      description: rendered.description,
-      messages: [{ role: 'user', content: { type: 'text', text: rendered.text } }],
-    })
+      description: rendered.description, messages: [{ role: 'user', content: { type: 'text', text: rendered.text } }], })
   }
 
   if (request.method === 'server/discover') {
     const user = await requireMcpUser(event, runtime.authOptions)
     runtime.logEvent(event, {
-      userId: user.userId,
-      requestId: request.id,
-      method: request.method,
-      status: 'success',
-      httpStatus: 200,
-      oauthClientId: user.oauthClientId ?? null,
-    })
+      userId: user.userId, requestId: request.id, method: request.method, status: 'success', httpStatus: 200, oauthClientId: user.oauthClientId ?? null, })
     return mcpSuccess(request.id, {
-      supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
-      capabilities: { tools: {} },
-      serverInfo: { name: catalog.discover.serverName, version: catalog.discover.serverVersion },
-      instructions: catalog.discover.instructions,
-    })
+      supportedVersions: SUPPORTED_PROTOCOL_VERSIONS, capabilities: { tools: {} }, serverInfo: { name: catalog.discover.serverName, version: catalog.discover.serverVersion }, instructions: catalog.discover.instructions, })
   }
 
   return undefined
@@ -277,16 +179,13 @@ export function unsupportedMcpMethodError(method: string | undefined) {
 }
 
 /**
- * Shared outer-catch error shaping: computes the JSON-RPC/HTTP error shape,
- * logs `tools/call` telemetry uniformly (auth_required vs error, with
+ * Shared outer-catch error shaping: computes the JSON-RPC/HTTP error shape, * logs `tools/call` telemetry uniformly (auth_required vs error, with
  * toolDomain/isMutating/arguments resolved from the surface's own tool
  * catalog), and dispatches to the auth-challenge response, the tool-call
  * permission-error response, or the generic error response.
  */
 export function respondToMcpError(
-  event: H3Event,
-  error: unknown,
-  input: {
+  event: H3Event, error: unknown, input: {
     requestId: JsonRpcId | undefined
     requestMethod: string | undefined
     requestToolName: string | undefined
@@ -297,8 +196,7 @@ export function respondToMcpError(
     authRequiredText: string
     logEvent: (_event: H3Event, _fields: Record<string, unknown>) => void
     resolveToolMeta: (_toolName: string | null) => McpToolMeta
-  },
-) {
+  }, ) {
   const mcpError = asMcpError(error)
   const toolCallPermissionError = input.requestMethod === 'tools/call' && mcpError.kind === 'forbidden'
   const mappedStatus = toolCallPermissionError ? 200 : mcpHttpStatusForError(mcpError)
@@ -307,29 +205,14 @@ export function respondToMcpError(
     const toolMeta = input.resolveToolMeta(input.requestToolName ?? null)
     const isAuthRequired = error instanceof Error && /Authentication required/i.test(error.message)
     input.logEvent(event, {
-      requestId: input.requestId ?? null,
-      method: input.requestMethod,
-      toolName: input.requestToolName ?? null,
-      toolDomain: input.requestToolName ? toolMeta.domain ?? null : null,
-      isMutating: toolMeta.isMutating ?? false,
-      arguments: input.requestToolArgs,
-      status: isAuthRequired ? 'auth_required' : 'error',
-      errorCode: mcpError.code,
-      errorMessage: isAuthRequired
+      requestId: input.requestId ?? null, method: input.requestMethod, toolName: input.requestToolName ?? null, toolDomain: input.requestToolName ? toolMeta.domain ?? null : null, isMutating: toolMeta.isMutating ?? false, arguments: input.requestToolArgs, status: isAuthRequired ? 'auth_required' : 'error', errorCode: mcpError.code, errorMessage: isAuthRequired
         ? describeMcpAuthTelemetryError(error)
-        : error instanceof Error ? error.message : String(error),
-      httpStatus: mappedStatus,
-      jsonrpcErrorCode: mcpError.code,
-      jsonrpcErrorMessage: mcpError.message,
-      unknownToolName: mcpError.kind === 'protocol' && input.requestToolName ? input.requestToolName : null,
-    })
+        : error instanceof Error ? error.message : String(error), httpStatus: mappedStatus, jsonrpcErrorCode: mcpError.code, jsonrpcErrorMessage: mcpError.message, unknownToolName: mcpError.kind === 'protocol' && input.requestToolName ? input.requestToolName : null, })
   }
 
   if (mcpError.kind === 'auth') {
     const authChallenge = buildMcpAuthChallengeForError(error, {
-      resourceMetadataUrl: input.resourceMetadataUrl(input.baseUrl),
-      defaultDescription: input.authDescription,
-    })
+      resourceMetadataUrl: input.resourceMetadataUrl(input.baseUrl), defaultDescription: input.authDescription, })
     if (input.requestMethod === 'tools/call') {
       return mcpSuccess(input.requestId, mcpAuthRequiredResult({ challenge: authChallenge, message: input.authRequiredText }))
     }

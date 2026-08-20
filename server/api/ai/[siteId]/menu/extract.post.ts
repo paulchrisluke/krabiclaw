@@ -1,3 +1,5 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 // POST /api/ai/[siteId]/menu/extract
 // Accepts a photo (JPEG/PNG/WEBP) or PDF page image as multipart form data.
 // Passes it to Claude via Cloudflare AI Gateway, extracts menu items as structured JSON,
@@ -6,7 +8,7 @@
 // Multipart fields:
 //   file        — required, image file (JPEG/PNG/WEBP/GIF) or first page of a PDF rendered to image
 //   menuId      — optional, existing menu to append to; creates a new one if omitted
-//   menuName    — optional, name for a newly created menu (default: "Imported Menu")
+//   menuName    — required when menuId is omitted, name for a newly created menu
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -30,19 +32,14 @@ If you cannot read the menu clearly, return {"items": [], "warning": "reason"}.
 Return ONLY valid JSON. No markdown, no explanation.`
 
 const IMAGE_MIME_TYPES: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'> = {
-  'image/jpeg': 'image/jpeg',
-  'image/jpg': 'image/jpeg',
-  'image/png': 'image/png',
-  'image/gif': 'image/gif',
-  'image/webp': 'image/webp',
-}
+  'image/jpeg': 'image/jpeg', 'image/jpg': 'image/jpeg', 'image/png': 'image/png', 'image/gif': 'image/gif', 'image/webp': 'image/webp', }
 
 // Workers memory cap: base64 inflates ~33%, so 10 MB file → ~13 MB encoded.
 // Claude's PDF limit is 32 MB decoded; we stay well under Workers' ~128 MB heap.
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024   // 10 MB
 const MAX_PDF_BYTES   = 10 * 1024 * 1024   // 10 MB (conservative for Workers)
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
 
   if (!siteId) {
@@ -50,6 +47,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
+  const platformOrigin = env.NUXT_PUBLIC_PLATFORM_DOMAIN
+  if (!platformOrigin) return jsonResponse({ error: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' }, { status: 500 })
   const db = env.DB
 
   if (!db) {
@@ -84,8 +83,7 @@ export default defineEventHandler(async (event) => {
     const creditOk = await hasCredits(db, orgId, session.session.id)
     if (!creditOk) {
       return jsonResponse(
-        { error: 'Shared weekly usage quota exhausted. Upgrade your organization plan to continue.' },
-        { status: 402 }
+        { error: 'Shared weekly usage quota exhausted. Upgrade your organization plan to continue.' }, { status: 402 }
       )
     }
   }
@@ -108,8 +106,7 @@ export default defineEventHandler(async (event) => {
 
   if (!mimeType && !isPdf) {
     return jsonResponse(
-      { error: `Unsupported file type "${file.type}". Upload a JPEG, PNG, WEBP, GIF, or PDF (max 10 MB).` },
-      { status: 415 }
+      { error: `Unsupported file type "${file.type}". Upload a JPEG, PNG, WEBP, GIF, or PDF (max 10 MB).` }, { status: 415 }
     )
   }
 
@@ -139,21 +136,11 @@ export default defineEventHandler(async (event) => {
   let aiResponse
   try {
     aiResponse = await callAiGateway(
-      env,
-      [
+      env, [
         {
-          role: 'user',
-          content: [
-            fileContentBlock,
-            textBlock('Extract all menu items from this file as JSON.'),
-          ],
-        },
-      ],
-      {
-        system: EXTRACT_SYSTEM,
-        maxTokens: 4096,
-        metadata: { org_id: orgId, site_id: siteId, action: 'menu_extract' },
-      }
+          role: 'user', content: [
+            fileContentBlock, textBlock('Extract all menu items from this file as JSON.'), ], }, ], {
+        system: EXTRACT_SYSTEM, maxTokens: 4096, metadata: { org_id: orgId, site_id: siteId, action: 'menu_extract' }, }
     )
   } catch (err) {
     console.error('AI Gateway error:', err)
@@ -165,14 +152,7 @@ export default defineEventHandler(async (event) => {
   let newBalance = 0
   try {
     const charged = await chargeCredits(db, orgId, {
-      siteId,
-      sessionId: session.session.id,
-      action: 'menu_extract',
-      model: 'claude-sonnet-4-6',
-      inputTokens: aiResponse.usage.input_tokens,
-      outputTokens: aiResponse.usage.output_tokens,
-      cfGatewayLogId: aiResponse.cfLogId,
-    })
+      siteId, sessionId: session.session.id, action: 'menu_extract', model: 'claude-sonnet-4-6', inputTokens: aiResponse.usage.input_tokens, outputTokens: aiResponse.usage.output_tokens, cfGatewayLogId: aiResponse.cfLogId, })
     creditsCharged = charged.creditsCharged
     newBalance = charged.newBalance
   } catch (err) {
@@ -195,8 +175,7 @@ export default defineEventHandler(async (event) => {
   } catch {
     console.error('[menu/extract] unparseable response:', rawText.slice(0, 300))
     return jsonResponse(
-      { error: 'Could not read menu from that file. Try a higher-resolution photo or a less complex layout.' },
-      { status: 422 }
+      { error: 'Could not read menu from that file. Try a higher-resolution photo or a less complex layout.' }, { status: 422 }
     )
   }
 
@@ -211,20 +190,14 @@ export default defineEventHandler(async (event) => {
 
   if (validItems.length === 0) {
     return jsonResponse({
-      success: true,
-      menuItems: [],
-      warning: parsed.warning ?? 'No items detected in the image.',
-      credits: { charged: creditsCharged, remaining: newBalance },
-    })
+      success: true, menuItems: [], warning: parsed.warning ?? 'No items detected in the image.', credits: { charged: creditsCharged, remaining: newBalance }, })
   }
 
   // Resolve or create a menu to append to
   const principal = { memberId: site.member_id, role: site.member_role, organizationId: orgId, siteId }
   let menuId = formData.get('menuId') as string | null
   if (menuId) {
-    const existing = await queryFirst<{ id: string; location_id: string | null }>(db,
-      'SELECT id, location_id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1',
-      [menuId, orgId, siteId]
+    const existing = await queryFirst<{ id: string; location_id: string | null }>(db, 'SELECT id, location_id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1', [menuId, orgId, siteId]
     )
     if (!existing) {
       menuId = null
@@ -237,7 +210,10 @@ export default defineEventHandler(async (event) => {
   if (!menuId) {
     // A brand-new menu created here has no location — it's always site-wide.
     await assertSiteWideAccess(db, principal)
-    const menuName = (formData.get('menuName') as string | null)?.trim() || 'Imported Menu'
+    const menuName = (formData.get('menuName') as string | null)?.trim()
+    if (!menuName) {
+      return jsonResponse({ error: 'menuName is required when creating a menu.' }, { status: 400 })
+    }
     const newMenu = await createMenu(db, orgId, siteId, { name: menuName }, session.user.id)
     menuId = newMenu.id
     menuCreatedInThisRequest = true
@@ -250,18 +226,12 @@ export default defineEventHandler(async (event) => {
   try {
     for (const item of validItems as ApiValue[]) {
       const priceAmount = item.price_amount ?? item.price
+      const section = typeof item.section === 'string' ? item.section.trim().slice(0, 100) : ''
+      const name = typeof item.name === 'string' ? item.name.trim().slice(0, 200) : ''
+      if (!section || !name) throw new HTTPError({ statusCode: 422, statusMessage: 'AI menu items require section and name' })
       const created = await createMenuItem(
-        db,
-        orgId,
-        siteId!,
-        menuId!,
-        {
-          section: String(item.section || 'Menu').slice(0, 100),
-          name: String(item.name || '').slice(0, 200),
-          description: item.description ? String(item.description).slice(0, 500) : undefined,
-          price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined,
-        },
-        `ai:${session.user.id}`
+        db, orgId, siteId!, menuId!, {
+          section, name, description: item.description ? String(item.description).slice(0, 500) : undefined, price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined, }, `ai:${session.user.id}`
       )
       createdItems.push(created)
       createdItemIds.push(created.id)
@@ -293,36 +263,18 @@ export default defineEventHandler(async (event) => {
     if (!phone) return
     // Notify: AI extraction complete
     sendWhatsAppNotification(env, db, {
-      organizationId: orgId,
-      siteId,
-      toPhone: phone,
-      template: 'ai_action_complete',
-      vars: {
-        action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and added to menu`,
-        preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/menu`,
-      },
-    }).catch(console.error)
+      organizationId: orgId, siteId, toPhone: phone, template: 'ai_action_complete', vars: {
+        action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and added to menu`, preview_url: `${platformOrigin}/dashboard/${orgSlug}/menu`, }, }).catch(console.error)
 
     // Notify: low credits warning (threshold: 50)
     if (newBalance > 0 && newBalance <= 50) {
       sendWhatsAppNotification(env, db, {
-        organizationId: orgId,
-        siteId,
-        toPhone: phone,
-        template: 'low_credits',
-        vars: {
-          credits_remaining: String(newBalance),
-          upgrade_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/settings/billing`,
-        },
-      }).catch(console.error)
+        organizationId: orgId, siteId, toPhone: phone, template: 'low_credits', vars: {
+          credits_remaining: String(newBalance), upgrade_url: `${platformOrigin}/dashboard/${orgSlug}/settings/billing`, }, }).catch(console.error)
     }
   }).catch(console.error)
 
   return jsonResponse({
-    success: true,
-    menuId,
-    menuItems: createdItems,
-    warning: parsed.warning ?? null,
-    credits: { charged: creditsCharged, remaining: newBalance },
-  }, { status: 201 })
+    success: true, menuId, menuItems: createdItems, warning: parsed.warning ?? null, credits: { charged: creditsCharged, remaining: newBalance }, }, { status: 201 })
 })
+import { getRouterParam, readFormData  } from 'nitro/h3';

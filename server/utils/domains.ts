@@ -12,15 +12,12 @@ export interface DomainEnv {
   CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   CF_ACCOUNT_ID?: string
-  CF_PAGES_PROJECT_NAME?: string
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
 export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'
 export type DomainRole = 'canonical' | 'secondary'
-
-const PAGES_DOMAIN_REQUEST_TIMEOUT_MS = 10_000
 
 export interface DomainRecord {
   id: string
@@ -146,16 +143,22 @@ export function platformHostname(env: DomainEnv): string {
   return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
+export function platformDomain(env: DomainEnv): string {
+  const domain = env.NUXT_PUBLIC_PLATFORM_DOMAIN
+  if (!domain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
 function platformDomainCandidates(env: DomainEnv): string[] {
   const values = [
     env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
     env.NUXT_PUBLIC_PLATFORM_DOMAIN,
-    'krabiclaw.com'
   ]
-
-  return values
+  const domains = values
     .filter((value): value is string => Boolean(value))
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
+  if (domains.length === 0) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN or NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  return domains
 }
 
 export function platformAnalyticsHostnames(env: DomainEnv): string[] {
@@ -164,12 +167,6 @@ export function platformAnalyticsHostnames(env: DomainEnv): string[] {
     if (hostname.split('.').length === 2) hostnames.add(`www.${hostname}`)
   }
   return Array.from(hostnames).sort()
-}
-
-// Non-throwing variant of platformHostname for callers building a best-effort fallback URL
-// (e.g. a tenant subdomain link) where an unconfigured env should not break the response.
-export function platformHostnameFallback(env: DomainEnv): string {
-  return platformDomainCandidates(env)[0]!
 }
 
 export function validateCustomDomain(env: DomainEnv, domain: string): { valid: boolean; reason?: string } {
@@ -220,44 +217,18 @@ export async function ensureDomainAvailable(db: D1Database, domains: string[], e
   if (existing?.domain) throw new Error(`${existing.domain} is already in use`)
 }
 
-/**
- * Registers a subdomain with the Cloudflare Pages project via the Pages Domains API.
- * This is what makes `*.krabiclaw.com` subdomains route to the Pages Worker automatically
- * without any manual Cloudflare dashboard interaction.
- */
-async function addPagesCustomDomain(env: DomainEnv, domain: string): Promise<void> {
-  const accountId = env.CF_ACCOUNT_ID
-  const projectName = env.CF_PAGES_PROJECT_NAME
-  const token = env.CF_CUSTOM_HOSTNAMES_API_TOKEN
-
-  if (!accountId || !projectName || !token) {
-    console.warn('addPagesCustomDomain: missing CF_ACCOUNT_ID, CF_PAGES_PROJECT_NAME, or CF_CUSTOM_HOSTNAMES_API_TOKEN — skipping Pages domain registration')
-    return
-  }
-
-  const response = await fetch(
-    `${CF_API_BASE}/accounts/${accountId}/pages/projects/${projectName}/domains`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name: domain }),
-      signal: AbortSignal.timeout(PAGES_DOMAIN_REQUEST_TIMEOUT_MS),
-    }
+export async function isSystemSubdomainSpent(
+  env: DomainEnv,
+  db: D1Database,
+  subdomain: string,
+): Promise<boolean> {
+  const domain = `${subdomain}.${platformHostname(env)}`
+  const spent = await queryFirst<{ domain: string }>(
+    db,
+    'SELECT domain FROM spent_subdomains WHERE domain = ? LIMIT 1',
+    [domain],
   )
-
-  const body = await response.json().catch(() => null) as ApiValue
-
-  // 409 means the domain is already registered — that is fine
-  if (response.status === 409) return
-
-  if (!response.ok || body?.success === false) {
-    const message = body?.errors?.map((e: ApiValue) => e.message).filter(Boolean).join('; ') || `Pages API HTTP ${response.status}`
-    console.error('addPagesCustomDomain: failed to register domain with Cloudflare Pages', { domain, message })
-    throw new Error(message)
-  }
+  return Boolean(spent)
 }
 
 export async function createSystemSubdomain(
@@ -265,27 +236,74 @@ export async function createSystemSubdomain(
   db: D1Database,
   siteId: string,
   organizationId: string,
-  subdomain: string
+  subdomain: string,
+  options: {
+    siteUpdate?: { sql: string; values: unknown[] }
+  } = {},
 ): Promise<DomainRecord> {
   const now = new Date().toISOString()
   const domain = `${subdomain}.${platformHostname(env)}`
-  const id = `domain-${siteId}-subdomain`
+  const existing = await queryFirst<Pick<DomainRecord, 'id' | 'domain' | 'role' | 'created_at'>>(
+    db,
+    `SELECT id, domain, role, created_at
+       FROM site_domains
+      WHERE site_id = ? AND organization_id = ? AND type = 'subdomain' AND status = 'active'
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [siteId, organizationId],
+  )
 
-  // Automatically provision this subdomain in the Cloudflare Pages project.
-  // This is the equivalent of clicking "Set up a custom domain" in the dashboard.
-  await addPagesCustomDomain(env, domain)
+  if (existing?.domain === domain) {
+    return (await queryFirst<DomainRecord>(db, 'SELECT * FROM site_domains WHERE id = ?', [existing.id])) as DomainRecord
+  }
 
-  await execute(db, `
-    INSERT OR REPLACE INTO site_domains
-    (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'subdomain', 'canonical', 'active', 'valid', ?, ?, ?, ?)
-  `, [id, organizationId, siteId, domain, platformHostname(env), now, now, now])
+  if (await isSystemSubdomainSpent(env, db, subdomain)) {
+    throw new Error(`${domain} has already been used and cannot be reassigned`)
+  }
 
-  await execute(db, `
-    UPDATE sites
-    SET public_url = ?, updated_at = ?
-    WHERE id = ? AND organization_id = ?
-  `, [`https://${domain}`, now, siteId, organizationId])
+  const role = existing?.role ?? 'canonical'
+  const id = existing
+    ? `domain-${siteId}-subdomain-${subdomain}`
+    : `domain-${siteId}-subdomain`
+
+  const stmts: Array<{ sql: string; values: unknown[] }> = []
+
+  if (existing) {
+    stmts.push(
+      {
+        sql: 'INSERT INTO spent_subdomains (domain, site_id, successor_domain, spent_at) VALUES (?, ?, ?, ?)',
+        values: [existing.domain, siteId, domain, now],
+      },
+      {
+        sql: `UPDATE site_domains
+                SET role = 'secondary', status = 'disabled', updated_at = ?
+              WHERE id = ? AND site_id = ? AND organization_id = ? AND status = 'active'`,
+        values: [now, existing.id, siteId, organizationId],
+      },
+    )
+  }
+
+  stmts.push(
+    {
+      sql: `INSERT INTO site_domains
+        (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'subdomain', ?, 'active', 'valid', ?, ?, ?, ?)`,
+      values: [id, organizationId, siteId, domain, role, platformHostname(env), now, now, now],
+    },
+  )
+
+  if (role === 'canonical') {
+    stmts.push({
+      sql: `UPDATE sites SET public_url = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+      values: [`https://${domain}`, now, siteId, organizationId],
+    })
+  }
+
+  if (options.siteUpdate) {
+    stmts.push(options.siteUpdate)
+  }
+
+  await db.batch(stmts.map(s => db.prepare(s.sql).bind(...s.values)))
 
   return (await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [id])) as DomainRecord
 }

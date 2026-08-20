@@ -21,12 +21,13 @@
 <script setup lang="ts">
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
-const { data, error } = await useBlawbyRoute('blog')
+const { data, error, shell } = await useBlawbyRoute('blog')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Blog content not found' })
-const { identity, compliance } = await useBlawbyShell()
+const identity = computed(() => shell.value.identity)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
@@ -37,16 +38,16 @@ function block(type: string) {
 
 const heroBlock = computed(() => block('page_hero'))
 const disclaimerBlock = computed(() => block('disclaimer'))
-const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || 'Our Blog'))
+const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || ''))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
 
 const { canonicalUrl } = useTenantSocialMetadata(() => ({
   path: '/blog',
-  title: page.value?.seo_title || `Articles | ${identity.value.brand_name || 'Professional services'}`,
+  title: page.value?.seo_title || `Articles | ${identity.value.brand_name}`,
   description: page.value?.seo_description || page.value?.summary || '',
   label: 'Blog',
   brand: {
-    siteName: identity.value.brand_name || 'Professional services',
+    siteName: identity.value.brand_name,
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },

@@ -1,8 +1,9 @@
-import { defineEventHandler, getRequestURL, setHeader } from 'h3'
+import { defineHandler } from 'nitro';
+import {  setHeader } from 'nitro/h3';
 import { isNonIndexableHost, isPrivateSeoPath, isTechnicalAssetSeoPath } from '~/server/utils/seo-policy'
 
-export default defineEventHandler((event) => {
-  const url = getRequestURL(event)
+export default defineHandler((event) => {
+  const url = event.url
   const nonIndexableHost = isNonIndexableHost(url.hostname)
   const privatePath = isPrivateSeoPath(url.pathname)
   const technicalAssetPath = isTechnicalAssetSeoPath(url.pathname)

@@ -11,7 +11,7 @@ interface RenameSectionBody {
   new_section?: string
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const menuId = getRouterParam(event, 'menuId')
 
@@ -59,22 +59,12 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: menu.location_id,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: menu.location_id, })
 
     const updated = await renameMenuSection(db, site.organization_id, siteId, menuId, oldSection, newSection, session.user.id)
 
     return jsonResponse({
-      success: true,
-      menuId,
-      old_section: oldSection,
-      new_section: newSection,
-      updated,
-    })
+      success: true, menuId, old_section: oldSection, new_section: newSection, updated, })
   } catch (error) {
     rethrowHttpError(error)
     if (error instanceof SyntaxError || error instanceof TypeError) {
@@ -93,3 +83,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to rename menu section' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

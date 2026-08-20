@@ -73,7 +73,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const { locations, photosList, pending, config } = await usePublicPageData()
 const photos = photosList
-const siteName = computed(() => site?.brand_name || 'Our Site')
+const siteName = computed(() => site?.brand_name?.trim() ?? '')
 
 const locationsById = computed(() => Object.fromEntries(locations.value.map(l => [l.id, l])))
 function locationTitle(photo) {

@@ -3,7 +3,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublicMenuItem } from '~/server/utils/menu-management'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   
@@ -25,10 +25,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Validate site is active
     const site = await queryFirst<{ status: string; default_currency: string | null }>(
-      db,
-      `SELECT status, default_currency FROM sites WHERE id = ? LIMIT 1`,
-      [siteId],
-    )
+      db, `SELECT status, default_currency FROM sites WHERE id = ? LIMIT 1`, [siteId], )
     if (!site || site.status !== 'active') {
       return jsonResponse({ error: 'Menu item not found' }, { status: 404 })
     }
@@ -42,9 +39,7 @@ export default defineEventHandler(async (event) => {
     }
 
     return jsonResponse({
-      success: true,
-      item,
-      currency: site.default_currency || 'THB'
+      success: true, item, currency: site.default_currency || 'THB'
     })
     
   } catch (error) {
@@ -54,3 +49,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

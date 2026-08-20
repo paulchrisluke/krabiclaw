@@ -27,9 +27,9 @@
           </div>
           <div data-blawby-critical-hero-actions class="w-full lg:w-2/5">
             <div class="mt-10 flex justify-start gap-x-6 min-[1920px]:mt-16 min-[2560px]:mt-20">
-              <BlawbyButton :to="heroDestination" class="gap-2" @click="trackConsultation('hero', heroDestination)">
+              <BlawbyButton v-if="heroDestination && hero.label" :to="heroDestination" class="gap-2" @click="trackConsultation('hero', heroDestination)">
                 <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
-                {{ hero.label || consultation.cta_label }}
+                {{ hero.label }}
               </BlawbyButton>
             </div>
           </div>
@@ -37,8 +37,7 @@
       </div>
     </section>
 
-    <template v-if="routeData">
-    <section v-if="services" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
+    <section v-if="services && routeData.offerings.length && (services.title || services.accent || services.description)" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
       <div class="blawby-container relative z-20">
         <BlawbySectionHeading
           :title="String(services.title || '')"
@@ -73,37 +72,28 @@
     </div>
 
     <BlawbyConsultationCta
-      v-if="ctaBlock"
-      :title="String(ctaBlock.title || 'Get started today')"
+      v-if="ctaBlock && ctaBlock.title && ctaBlock.label && ctaBlock.url"
+      :title="String(ctaBlock.title || '')"
       :description="asOptionalString(ctaBlock.description)"
-      :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="String(ctaBlock.url || consultation.schedule_path)"
+      :label="String(ctaBlock.label || '')"
+      :destination="String(ctaBlock.url || '')"
       :background-url="ctaBackgroundSrc"
       :featured-url="ctaFeaturedSrc"
-      @click="trackConsultation('cta_section', String(ctaBlock.url || consultation.schedule_path))"
+      @click="trackConsultation('cta_section', String(ctaBlock.url || ''))"
     />
-    </template>
-    <section v-else-if="routeError" class="blawby-container py-16 text-center" data-testid="blawby-home-content-error">
-      <p role="alert" class="text-sm text-gray-500">Homepage content could not be loaded.</p>
-    </section>
-    <section v-else class="blawby-container space-y-8 py-16" data-testid="blawby-home-content-loading" aria-busy="true">
-      <div class="h-8 w-48 animate-pulse rounded bg-slate-200" />
-      <div class="grid gap-6 md:grid-cols-3">
-        <div v-for="index in 3" :key="index" class="h-48 rounded-2xl bg-slate-200 animate-pulse" />
-      </div>
-    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-const critical = await useBlawbyCriticalHome()
-const { data, error: routeError } = await useBlawbyRoute('home', null, { server: true, lazy: false })
-const { identity, consultation, compliance } = critical
+const { data, error } = await useBlawbyDocument('home', null, { server: true, lazy: false })
+if (error.value) throw error.value
+if (!data.value?.route.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
+const identity = computed(() => data.value!.shell.identity)
+const consultation = computed(() => data.value!.shell.consultation)
+const compliance = computed(() => data.value!.shell.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
-const criticalPage = computed(() => critical.data.value.page)
-const routeData = computed(() => data.value)
-
-if (!criticalPage.value) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
+const criticalPage = computed(() => data.value!.route.page!)
+const routeData = computed(() => data.value!.route)
 
 function block(type: string): ApiRecord | null {
   const canonicalType = {
@@ -130,14 +120,6 @@ function block(type: string): ApiRecord | null {
   if (type === 'home_hero') {
     data.label = data.cta_label ?? data.label
     data.url = data.cta_url ?? data.url
-  }
-  if (type === 'video_feature' && !Array.isArray(data.features)) {
-    data.features = Array.isArray(data.items)
-      ? data.items.map(item => ({
-          name: typeof item === 'object' && item ? (item as ApiRecord).title : '',
-          desc: typeof item === 'object' && item ? (item as ApiRecord).description : '',
-        }))
-      : []
   }
   return data
 }
@@ -167,9 +149,9 @@ const servicesDecorationSrc = servicesDecoration
 const qaDecorationSrc = computed(() => assetUrl(qaBlock.value?.decoration))
 const ctaBackgroundSrc = computed(() => assetUrl(ctaBlock.value?.background))
 const ctaFeaturedSrc = computed(() => assetUrl(ctaBlock.value?.featured))
-const heroDestination = computed(() => String(hero.value.url || consultation.value.schedule_path))
+const heroDestination = computed(() => String(hero.value.url || ''))
 const heroTitle = computed(() => {
-  const title = String(hero.value.title || identity.value.brand_name || '')
+  const title = String(hero.value.title || '')
   const accent = String(hero.value.accent || '')
   const index = accent ? title.indexOf(accent) : -1
   return index >= 0

@@ -1,14 +1,10 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
-  buildNamedBlogJsonFeed,
-  buildTenantBlogLinkEntries,
-  buildPlatformBlogLinkEntries,
-  listPublishedTenantBlogPostsForLlm,
-  listPublishedPlatformBlogPostsForLlm,
-  resolvePublicOrigin,
-} from '~/server/utils/platform-llm'
+  buildNamedBlogJsonFeed, buildTenantBlogLinkEntries, buildPlatformBlogLinkEntries, listPublishedTenantBlogPostsForLlm, listPublishedPlatformBlogPostsForLlm, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -16,7 +12,8 @@ export default defineEventHandler(async (event) => {
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
   const siteId = isTenant ? String(event.context.siteId || '') : ''
-  const siteName = String(event.context.site?.brand_name || 'Site')
+  const siteName = (event.context.site as { brand_name?: string | null } | undefined)?.brand_name?.trim() || ''
+  if (isTenant && siteId && !siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
   const posts = isTenant && siteId
     ? await listPublishedTenantBlogPostsForLlm(db, siteId)
     : await listPublishedPlatformBlogPostsForLlm(db)
@@ -24,8 +21,5 @@ export default defineEventHandler(async (event) => {
     ? buildTenantBlogLinkEntries(posts ?? [], origin)
     : buildPlatformBlogLinkEntries(posts ?? [], origin)
   return jsonResponse(buildNamedBlogJsonFeed(origin, entries, isTenant ? {
-    title: `${siteName} Blog`,
-    description: `Published blog feed for ${siteName}.`,
-    authorName: siteName,
-  } : {}))
+    title: `${siteName} Blog`, description: `Published blog feed for ${siteName}.`, authorName: siteName, } : {}))
 })

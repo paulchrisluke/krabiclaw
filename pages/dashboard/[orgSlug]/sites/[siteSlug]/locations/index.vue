@@ -76,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import { cfImageVariant } from '~/utils/cf-image'
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Locations | KrabiClaw', robots: 'noindex, nofollow' })
 

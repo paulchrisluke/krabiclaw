@@ -49,6 +49,13 @@ mock.module('../../server/utils/api-response.ts', {
   },
 })
 
+mock.module('nitro/h3', {
+  namedExports: {
+    getRouterParam: (event: { context: { params: Record<string, string> } }, name: string) => event.context.params[name],
+    readBody: async () => ({ organizationId: requestedOrganizationId }),
+  },
+})
+
 mock.module('../../server/utils/platform-admin-users.ts', {
   namedExports: {
     platformPermissionJsonResponse: async () => null,
@@ -146,7 +153,7 @@ test.beforeEach(() => {
 })
 
 function invoke() {
-  return handler({ params: { siteId: transfer.site_id } })
+  return handler({ context: { params: { siteId: transfer.site_id } } })
 }
 
 function assertTransferTargetsRecipient() {

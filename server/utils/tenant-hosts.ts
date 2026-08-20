@@ -11,6 +11,9 @@ const PAGES_DEV_HOST = 'krabiclaw.pages.dev'
 
 // CI runs Playwright against the one preview Worker's canonical workers.dev host.
 const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
+const ENVIRONMENT_PLATFORM_HOST_PATTERN = /^(preview|staging)\.(.+)$/
+const ENVIRONMENT_TENANT_ALIAS_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?-(?:preview|staging)\.krabiclaw\.com$/
+const TENANT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
 // Strip protocol, path, and port so config values (which may be
 // full URLs like "https://krabiclaw.com" or "http://localhost:3000") compare
@@ -27,16 +30,10 @@ export function hostnameOf(host: string): string {
   return host?.split(':')[0] || ''
 }
 
-// "localhost" / "krabiclaw.com" are platform routes regardless of how
-// NUXT_PUBLIC_FREE_SITE_DOMAIN is configured.
-// This mirrors the hardcoded 'krabiclaw.com' fallback in
-// server/utils/domains.ts platformDomainCandidates.
 export function getPlatformHosts(env: TenantHostEnv): string[] {
   return Array.from(new Set([
     'localhost',
     '127.0.0.1',
-    'krabiclaw.com',
-    'www.krabiclaw.com',
     normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN),
     normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN),
   ].filter((value): value is string => Boolean(value))))
@@ -63,22 +60,63 @@ export function isPlatformHost(host: string, env: TenantHostEnv): boolean {
   return getPlatformHosts(env).includes(hostname)
 }
 
-// Returns true for shared hosts where x-preview-tenant carries tenant identity
-// because the request cannot use a tenant hostname. This includes local
-// workerd, the named local tunnel, preview, and staging.
+export function isEnvironmentTenantAliasHost(host: string): boolean {
+  return ENVIRONMENT_TENANT_ALIAS_HOST_PATTERN.test(
+    hostnameOf(host).toLowerCase().replace(/\.$/, ''),
+  )
+}
+
+export function environmentTenantAliasHostname(platformHost: string, tenantSlug: string): string {
+  const hostname = hostnameOf(platformHost).toLowerCase().replace(/\.$/, '')
+  const match = hostname.match(ENVIRONMENT_PLATFORM_HOST_PATTERN)
+  if (!match || !TENANT_SLUG_PATTERN.test(tenantSlug)) return ''
+
+  const [, environment, rootDomain] = match
+  if (!environment || !rootDomain) return ''
+  return `${tenantSlug}-${environment}.${rootDomain}`
+}
+
+export function environmentTenantAliasSlug(host: string, env: TenantHostEnv): string {
+  const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
+  const platformHost = normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN).toLowerCase()
+  const match = platformHost.match(ENVIRONMENT_PLATFORM_HOST_PATTERN)
+  if (!match) return ''
+
+  const [, environment, rootDomain] = match
+  if (!environment || !rootDomain) return ''
+  const suffix = `-${environment}.${rootDomain}`
+  if (!hostname.endsWith(suffix)) return ''
+
+  const slug = hostname.slice(0, -suffix.length)
+  return TENANT_SLUG_PATTERN.test(slug) ? slug : ''
+}
+
+// Only hosts that cannot express tenant identity in their hostname use the
+// test-only x-preview-tenant header. Deployed preview and staging use direct
+// first-level tenant aliases instead.
+export function usesTenantHeader(host: string): boolean {
+  const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true
+  if (hostname === 'local.krabiclaw.com') return true
+  return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
+}
+
+// Returns true for non-production hosts. Call usesTenantHeader() when deciding
+// how tenant identity is transported; deployed aliases are preview contexts but
+// resolve identity from their hostname.
 export function isPreviewContext(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
   if (hostname === 'localhost' || hostname === '127.0.0.1') return true
   if (hostname === 'local.krabiclaw.com') return true
   if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
+  if (isEnvironmentTenantAliasHost(hostname)) return true
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }
 
-// The domain that free-tier subdomains (e.g. "demo.krabiclaw.com") are minted
-// under. Falls back to 'krabiclaw.com' when unconfigured, matching
-// platformDomainCandidates in server/utils/domains.ts.
 export function getFreeSiteDomain(env: TenantHostEnv): string {
-  return normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN) || 'krabiclaw.com'
+  const domain = normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
+  if (!domain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
+  return domain
 }
 
 // Derives the subdomain label to look up in site_domains for a given

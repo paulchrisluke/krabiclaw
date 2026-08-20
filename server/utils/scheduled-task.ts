@@ -1,11 +1,8 @@
-import type { Task } from 'nitropack/types'
+import type { Task } from 'nitro/types'
 
 /**
- * Runtime-safe task definition helper.
- *
- * Nitro's `defineTask` is an auto-import backed by Nitro's virtual task
- * registry. The Cloudflare entrypoint runs these handlers directly, so task
- * modules must not import that registry (or its cron runner) into the Worker.
+ * Runtime-safe task definition helper for the native Cloudflare scheduled hook.
+ * The application owns the cron-to-task map and Nitro owns the event handler.
  */
 export function defineScheduledTask<RT = unknown>(definition: Task<RT>): Task<RT> {
   return definition

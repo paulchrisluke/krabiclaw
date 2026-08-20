@@ -1,12 +1,12 @@
 <template>
-  <AppSection v-if="!allUnavailable" :bg="bg" :padding="padding">
+  <AppSection v-if="items.length && !allUnavailable" :bg="bg" :padding="padding">
     <div class="mb-12 flex flex-wrap items-end justify-between gap-4">
       <div class="max-w-2xl">
         <p class="saya-kicker mb-6">{{ sectionKicker }}</p>
         <h2 class="saya-display-md text-default">{{ sectionHeading }}</h2>
       </div>
       <NuxtLink
-        v-if="items.length"
+        v-if="items.length && linkTarget"
         :to="linkTarget"
         class="border-b border-default pb-1 text-xs uppercase tracking-widest text-default no-underline transition hover:opacity-60"
       >
@@ -17,7 +17,7 @@
       <NuxtLink
         v-for="(item, i) in items"
         :key="i"
-        :to="item.href || linkTarget"
+        :to="item.href"
         class="group relative block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
       >
         <div class="relative aspect-square overflow-hidden bg-muted">
@@ -58,18 +58,12 @@
         </div>
       </NuxtLink>
     </div>
-    <template v-else>
-      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <SayaEmptyExample v-for="(example, i) in emptyState.examples" :key="i" :item="example" aspect="square" />
-      </div>
-    </template>
   </AppSection>
 </template>
 
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
-import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
-import { sayaEmptyStates } from '~/config/saya-empty-states'
+import { cfImageSrcset } from '~/utils/cf-image'
 
 interface Props {
   data?: {
@@ -99,28 +93,22 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { site } = useTenantSite()
 
-const items = computed(() => props.data?.items || [])
+const items = computed(() => (props.data?.items || []).filter(item => Boolean(item.href)))
 // A location-wide closure marks every item unavailable at once — showing a
 // row of all-badged cards reads as broken, so hide the whole section instead.
-// This is distinct from a genuinely empty list, which still shows the
-// filled example placeholders per the Saya empty-state design.
 const allUnavailable = computed(() => {
   const list = items.value
   return list.length > 0 && list.every(item => item.unavailable)
 })
 const hasMenu = computed(() => props.data?.hasMenu || false)
-const linkTarget = computed(() => props.data?.linkTarget || (hasMenu.value ? '/menu' : '/experiences'))
-
-const emptyState = computed(() => hasMenu.value ? sayaEmptyStates.menu : sayaEmptyStates.experiences)
+const linkTarget = computed(() => props.data?.linkTarget || '')
 
 const sectionKicker = computed(() => hasMenu.value ? 'The menu' : 'Experiences')
 const sectionHeading = computed(() => {
   const siteRecord = site as Record<string, unknown>
   const brandName = typeof siteRecord?.brand_name === 'string' ? siteRecord.brand_name : null
-  if (hasMenu.value) {
-    return `What we're cooking at ${brandName || 'our kitchen'}.`
-  }
-  return `What we're offering at ${brandName || 'our studio'}.`
+  if (hasMenu.value) return brandName ? `What we're cooking at ${brandName}.` : 'Menu'
+  return brandName ? `What we're offering at ${brandName}.` : 'Experiences'
 })
 
 const clientReady = ref(false)

@@ -12,7 +12,7 @@
 // a member id is already globally unambiguous, but resolving the acting
 // org/role from the session (rather than trusting a client-supplied org id)
 // keeps the owner/admin permission check tamper-proof.
-import { getHeaders } from 'h3'
+
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
@@ -28,7 +28,7 @@ interface RemoveMemberApi {
   }): Promise<Response>
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const memberId = String(getRouterParam(event, 'memberId') || '').trim()
   if (!memberId) return jsonResponse({ error: 'Member id is required' }, { status: 400 })
 
@@ -56,10 +56,7 @@ export default defineEventHandler(async (event) => {
       // Block raw removal with actionable guidance rather than silently
       // proceeding and leaving stale notification_phone/site_config pointers.
       return jsonResponse({
-        error: 'This member has active WhatsApp notification assignments. Confirm to clear them and continue.',
-        requiresConfirmation: true,
-        assignments,
-      }, { status: 409 })
+        error: 'This member has active WhatsApp notification assignments. Confirm to clear them and continue.', requiresConfirmation: true, assignments, }, { status: 409 })
     }
     if (assignments.length > 0 && confirmedClear) {
       const result = await clearOrReassignAssignments(db, memberId, { action: 'clear' })
@@ -73,10 +70,7 @@ export default defineEventHandler(async (event) => {
   let response: Response
   try {
     response = await removeApi.removeMember({
-      body: { memberIdOrEmail: member.id, organizationId: member.organizationId },
-      headers: getHeaders(event) as HeadersInit,
-      asResponse: true,
-    })
+      body: { memberIdOrEmail: member.id, organizationId: member.organizationId }, headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit, asResponse: true, })
   } catch (error) {
     console.error('dashboard_member_remove_failed', { memberId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to remove member' }, { status: 502 })
@@ -98,3 +92,5 @@ export default defineEventHandler(async (event) => {
   // `user` row.
   return jsonResponse({ success: true, clearedAssignments })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

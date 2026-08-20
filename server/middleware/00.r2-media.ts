@@ -2,7 +2,9 @@
 // Must run before tenant-resolution (filename prefix "00." ensures alphabetical priority).
 // Handles range requests so video seeking works in browsers.
 
-import { defineEventHandler, getHeader, getRequestURL, sendStream, setHeader, setResponseStatus, createError, sendError } from 'h3'
+import { defineHandler, HTTPError  } from 'nitro';
+import type { getHeader} from 'nitro/h3';
+import {  sendStream, setHeader, setResponseStatus } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
@@ -17,17 +19,20 @@ const WORKER_MEDIA_PREFIX = '/__media/'
 // hit /__media/* and read straight from the R2 bucket.
 function isWorkerMediaPathAllowed(event: Parameters<typeof getHeader>[0]): boolean {
   if (import.meta.dev) return true
-  if (process.env.E2E_ALLOW_DEV_ROUTES !== 'true') return false
-  const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
-  const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+  const runtimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
+  if (runtimeEnv?.E2E_ALLOW_DEV_ROUTES !== 'true') return false
+  const expectedSecret = typeof runtimeEnv.E2E_DEV_ROUTE_SECRET === 'string'
+    ? runtimeEnv.E2E_DEV_ROUTE_SECRET
+    : ''
+  const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
   if (!expectedSecret || expectedSecret !== providedSecret) return false
-  const hostname = (getHeader(event, 'host') || '').split(':')[0] ?? ''
+  const hostname = ((event.req.headers.get('host')) || '').split(':')[0] ?? ''
   return hostname === 'localhost' || hostname === '127.0.0.1' || isPreviewContext(hostname)
 }
 
-export default defineEventHandler(async (event) => {
-  const host = (getHeader(event, 'host') || '').split(':')[0]
-  const url = getRequestURL(event)
+export default defineHandler(async (event) => {
+  const host = ((event.req.headers.get('host')) || '').split(':')[0]
+  const url = event.url
   const isMediaHost = host === MEDIA_HOST
   const isWorkerMediaPath = url.pathname.startsWith(WORKER_MEDIA_PREFIX) && isWorkerMediaPathAllowed(event)
   if (!isMediaHost && !isWorkerMediaPath) return
@@ -35,28 +40,28 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const bucket = env.MEDIA_BUCKET
   if (!bucket) {
-    return sendError(event, createError({ statusCode: 503, statusMessage: 'Media storage unavailable' }))
+    throw new HTTPError({ statusCode: 503, statusMessage: 'Media storage unavailable' })
   }
 
   const key = isWorkerMediaPath
     ? url.pathname.slice(WORKER_MEDIA_PREFIX.length)
     : url.pathname.replace(/^\/+/, '')
   if (!key) {
-    return sendError(event, createError({ statusCode: 400 }))
+    throw new HTTPError({ statusCode: 400 })
   }
 
-  const rangeHeader = getHeader(event, 'range')
+  const rangeHeader = (event.req.headers.get('range'))
 
   if (rangeHeader) {
     try {
       const head = await bucket.head(key)
-      if (!head) return sendError(event, createError({ statusCode: 404 }))
+      if (!head) throw new HTTPError({ statusCode: 404 })
 
       const totalSize = head.size
       const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/)
       if (!rangeMatch) {
         setHeader(event, 'content-range', `bytes */${totalSize}`)
-        return sendError(event, createError({ statusCode: 416 }))
+        throw new HTTPError({ statusCode: 416 })
       }
 
       const start = parseInt(rangeMatch[1] ?? '0', 10)
@@ -64,39 +69,39 @@ export default defineEventHandler(async (event) => {
 
       if (start >= totalSize || start > end || start < 0) {
         setHeader(event, 'content-range', `bytes */${totalSize}`)
-        return sendError(event, createError({ statusCode: 416 }))
+        throw new HTTPError({ statusCode: 416 })
       }
 
       const length = end - start + 1
 
       const obj = await bucket.get(key, { range: { offset: start, length } })
-      if (!obj) return sendError(event, createError({ statusCode: 404 }))
+      if (!obj) throw new HTTPError({ statusCode: 404 })
 
       setResponseStatus(event, 206)
       setHeader(event, 'content-type', obj.httpMetadata?.contentType ?? 'application/octet-stream')
       setHeader(event, 'content-range', `bytes ${start}-${end}/${totalSize}`)
-      setHeader(event, 'content-length', length)
+      setHeader(event, 'content-length', String(length))
       setHeader(event, 'accept-ranges', 'bytes')
       setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
       return sendStream(event, obj.body)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'R2 error'
-      return sendError(event, createError({ statusCode: 502, statusMessage: msg }))
+      throw new HTTPError({ statusCode: 502, statusMessage: msg })
     }
   }
 
   try {
     const obj = await bucket.get(key)
-    if (!obj) return sendError(event, createError({ statusCode: 404 }))
+    if (!obj) throw new HTTPError({ statusCode: 404 })
 
     setHeader(event, 'content-type', obj.httpMetadata?.contentType ?? 'application/octet-stream')
-    setHeader(event, 'content-length', obj.size)
+    setHeader(event, 'content-length', String(obj.size))
     setHeader(event, 'accept-ranges', 'bytes')
     setHeader(event, 'etag', obj.etag)
     setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
     return sendStream(event, obj.body)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'R2 error'
-    return sendError(event, createError({ statusCode: 502, statusMessage: msg }))
+    throw new HTTPError({ statusCode: 502, statusMessage: msg })
   }
 })

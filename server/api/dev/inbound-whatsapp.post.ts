@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError, defineHandler  } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -6,6 +8,7 @@ import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
 import { ensureGuestThread, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 
 const enc = new TextEncoder()
@@ -23,26 +26,25 @@ function timingSafeEqualText(a: string, b: string): boolean {
   return diff === 0
 }
 
-function ensureDevAccess(event: H3Event) {
+function ensureDevAccess(event: H3Event, env: ReturnType<typeof cloudflareEnv>) {
   const devMode = import.meta.dev
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!devMode && !e2eOverride) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
   if (!devMode && e2eOverride) {
-    const expected = process.env.E2E_DEV_ROUTE_SECRET || ''
-    const provided = getHeader(event, 'x-dev-route-secret') || ''
+    const expected = env.E2E_DEV_ROUTE_SECRET || ''
+    const provided = (event.req.headers.get('x-dev-route-secret')) || ''
     if (!expected || !provided || !timingSafeEqualText(provided, expected)) {
-      throw createError({ statusCode: 404, statusMessage: 'Not found' })
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
     }
   }
 }
 
-export default defineEventHandler(async (event) => {
-  ensureDevAccess(event)
-
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
+  ensureDevAccess(event, env)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
@@ -61,11 +63,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const match = await findSubmissionByPhone(
-    db,
-    parsePhoneOrThrow(from, { defaultCountry: 'TH' }),
-    body.organizationId?.trim() || undefined,
-    body.siteId?.trim() || undefined,
-  )
+    db, parsePhoneOrThrow(from, { defaultCountry: 'TH' }), body.organizationId?.trim() || undefined, body.siteId?.trim() || undefined, )
   if (!match) {
     return jsonResponse({ error: 'Submission not found for phone' }, { status: 404 })
   }
@@ -74,37 +72,20 @@ export default defineEventHandler(async (event) => {
   const adapter = getAdapter(match.submissionType)
   const thread = await ensureGuestThread(db, adapter, match.submissionId)
   const entry = await appendEntry(db, {
-    threadId: thread.id,
-    organizationId: match.organizationId,
-    siteId: match.siteId,
-    kind: 'message',
-    actorKind: 'guest',
-    channel: 'whatsapp',
-    body: text,
-    externalId: messageId,
-  })
+    threadId: thread.id, organizationId: match.organizationId, siteId: match.siteId, kind: 'message', actorKind: 'guest', channel: 'whatsapp', body: text, externalId: messageId, })
   if (entry.created) {
     const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
     await updateThreadProjection(db, thread.id, { conversationState })
+    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
 
     const source = await adapter.loadSource({ db }, match.submissionId)
     if (source) {
       const summary = adapter.summarize(source)
       await notifyGuestThreadReply(env, db, {
-        organizationId: match.organizationId,
-        siteId: match.siteId,
-        locationId: summary.locationId,
-        threadId: thread.id,
-        submissionType: match.submissionType,
-        submissionId: match.submissionId,
-        guestName: summary.guestName,
-        guestEmail: summary.guestEmail,
-        guestPhone: summary.guestPhone,
-        inboundChannel: 'whatsapp',
-        messagePreview: text,
-      })
+        organizationId: match.organizationId, siteId: match.siteId, locationId: summary.locationId, threadId: thread.id, submissionType: match.submissionType, submissionId: match.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'whatsapp', messagePreview: text, })
     }
   }
 
   return jsonResponse({ received: true, match, messageId })
 })
+import {  readBody  } from 'nitro/h3';

@@ -11,5 +11,6 @@ export async function useBlawbyRoute(
   return {
     ...asyncData,
     data: computed(() => asyncData.data.value?.route ?? null),
+    shell: computed(() => asyncData.data.value.shell),
   }
 }

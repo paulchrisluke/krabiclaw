@@ -1,7 +1,7 @@
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublicReview } from '~/server/utils/review-management'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   const reviewId = getRouterParam(event, 'reviewId')
@@ -16,3 +16,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ review })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

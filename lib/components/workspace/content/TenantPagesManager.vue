@@ -33,7 +33,6 @@
             >
               <span class="flex items-center justify-between gap-2">
                 <span class="truncate font-medium text-highlighted">{{ page.title }}</span>
-                <UBadge :color="page.status === 'published' ? 'success' : page.status === 'archived' ? 'neutral' : 'warning'" variant="subtle" size="xs">{{ page.status }}</UBadge>
               </span>
               <span class="mt-1 block truncate text-xs text-muted">{{ page.path }}</span>
             </button>
@@ -45,23 +44,16 @@
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted">{{ selected.id ? selected.path : 'New page' }}</p>
-              <h2 class="text-2xl font-semibold text-highlighted">{{ selected.title || 'Untitled page' }}</h2>
+              <h2 class="text-2xl font-semibold text-highlighted">{{ selected.title }}</h2>
             </div>
             <div class="flex flex-wrap gap-2">
-              <UButton v-if="selected.id && selected.status !== 'published'" color="success" variant="soft" :loading="busy === 'publish'" :disabled="busy !== null" @click="publish">Publish</UButton>
-              <UButton v-if="selected.id && selected.status === 'published'" color="warning" variant="soft" :loading="busy === 'unpublish'" :disabled="busy !== null" @click="unpublish">Unpublish</UButton>
-              <UButton v-if="selected.id && selected.status !== 'archived'" color="neutral" variant="soft" :loading="busy === 'archive'" :disabled="busy !== null" @click="archive">Archive</UButton>
-              <UButton v-if="selected.id && selected.status === 'archived'" color="success" variant="soft" :loading="busy === 'restore'" :disabled="busy !== null" @click="restore">Restore</UButton>
-              <UButton v-if="selected.id && !selected.ever_published" color="error" variant="ghost" :loading="busy === 'delete'" :disabled="busy !== null" @click="removePage">Delete</UButton>
               <UButton v-if="selected.id" color="neutral" variant="outline" :disabled="busy !== null" @click="duplicate">Duplicate</UButton>
               <UButton v-if="selected.id" color="neutral" variant="outline" :to="navigablePreviewUrl" target="_blank" :disabled="busy !== null || !navigablePreviewUrl">Preview</UButton>
               <UButton color="primary" :loading="busy === 'save'" :disabled="busy !== null" @click="save">Save</UButton>
             </div>
           </div>
 
-          <p v-if="selected.id && selected.ever_published" class="text-xs text-muted">This page has publication history and cannot be deleted. Archive or replace it instead.</p>
-
-          <UAlert v-if="dirty" color="warning" variant="soft" title="Unsaved changes" description="Save this draft before leaving the page, switching locales, or opening Preview." />
+          <UAlert v-if="dirty" color="warning" variant="soft" title="Unsaved changes" description="Save before leaving the page, switching locales, or opening Preview." />
 
           <UAlert v-if="pageLoadError" color="error" variant="soft" title="Page could not be loaded" :description="pageLoadError" />
           <UAlert v-if="editorError" color="error" variant="soft" title="Page could not be saved" :description="editorError" />
@@ -154,8 +146,8 @@ import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAll
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import { canProceedWithTenantPageTransition, createTenantPageLocaleRevertGuard, createTenantPageRequestGate, previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 
-interface PageSummary { id: string; title: string; path: string; page_type: TenantPageType; recipe: string | null; status: string; locale: string; sort_order: number; updated_at: string; published_revision_id: string | null; ever_published: boolean }
-interface PageDetailResponse extends PageSummary { page_id: string; site_id: string; organization_id: string; summary: string | null; seo_title: string | null; seo_description: string | null; canonical_url: string | null; robots: string | null; blocks: TenantPageBlock[]; document: { updated_at: string; draft_revision_id: string | null; published_revision_id: string | null } }
+interface PageSummary { id: string; title: string; path: string; page_type: TenantPageType; recipe: string | null; locale: string; sort_order: number; updated_at: string }
+interface PageDetailResponse extends PageSummary { page_id: string; site_id: string; organization_id: string; summary: string | null; seo_title: string | null; seo_description: string | null; canonical_url: string | null; robots: string | null; blocks: TenantPageBlock[]; document: { updated_at: string } }
 interface PageDetail extends Omit<PageDetailResponse, 'recipe' | 'summary' | 'seo_title' | 'seo_description' | 'canonical_url' | 'robots'> { recipe: string; summary: string; seo_title: string; seo_description: string; canonical_url: string; robots: string }
 
 const dashboard = useDashboardSite()
@@ -165,7 +157,7 @@ if (!siteId) throw createError({ statusCode: 503, statusMessage: 'Dashboard site
 const resolvedSiteId = siteId
 const dashboardApi = useDashboardApi()
 const toast = useToast()
-const config = useRuntimeConfig()
+const platformOrigin = useRequestURL().origin
 const pages = ref<PageSummary[]>([])
 const selected = ref<PageDetail | null>(null)
 const locale = ref(String(dashboard.site.value?.source_locale || 'en'))
@@ -192,9 +184,8 @@ const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY
 const blockErrors = computed(() => selected.value?.blocks.map(block => validateTenantPageBlock(block)) ?? [])
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
-  const base = String(config.public.platformDomain || config.public.freeSiteDomain).replace(/\/$/, '')
   const path = selected.value.path === '/' ? '' : selected.value.path
-  return `${base}/preview/site/${siteId}${path}?preview=true&locale=${encodeURIComponent(selected.value.locale)}&token=${encodeURIComponent(previewToken.value)}`
+  return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&locale=${encodeURIComponent(selected.value.locale)}&token=${encodeURIComponent(previewToken.value)}`
 })
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
 
@@ -207,13 +198,13 @@ watch(blockTypeOptions, (options) => {
 function validateList(value: unknown): value is { pages: PageSummary[] } {
   return isRecord(value)
     && Array.isArray(value.pages)
-    && value.pages.every(page => isRecord(page) && typeof page.ever_published === 'boolean')
+    && value.pages.every(page => isRecord(page) && typeof page.id === 'string' && typeof page.path === 'string')
 }
 function validatePage(value: unknown): value is { page: PageDetailResponse } {
   return isRecord(value)
     && isRecord(value.page)
     && typeof value.page.id === 'string'
-    && typeof value.page.ever_published === 'boolean'
+    && isRecord(value.page.document)
     && Array.isArray(value.page.blocks)
 }
 function validateContext(value: unknown): value is { context: { previewToken: string } } {
@@ -221,9 +212,6 @@ function validateContext(value: unknown): value is { context: { previewToken: st
 }
 function validateLocales(value: unknown): value is { source_locale: string; locales: Array<{ locale: string; status: string }> } {
   return isRecord(value) && typeof value.source_locale === 'string' && Array.isArray(value.locales)
-}
-function validateDelete(value: unknown): value is { deleted: true } {
-  return isRecord(value) && value.deleted === true
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value && typeof value === 'object' && !Array.isArray(value)) }
 function toEditorPage(page: PageDetailResponse): PageDetail {
@@ -309,8 +297,8 @@ function startNewPage() {
   pageLoadError.value = null
   editorError.value = null
   selected.value = {
-    id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '/new-page', title: 'New page', page_type: 'custom', recipe: '', status: 'draft', sort_order: pages.value.length, updated_at: '', published_revision_id: null, ever_published: false,
-    summary: '', seo_title: '', seo_description: '', canonical_url: '', robots: '', blocks: [], document: { updated_at: '', draft_revision_id: null, published_revision_id: null },
+    id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '/new-page', title: 'New page', page_type: 'custom', recipe: '', sort_order: pages.value.length, updated_at: '',
+    summary: '', seo_title: '', seo_description: '', canonical_url: '', robots: '', blocks: [], document: { updated_at: '' },
   }
   selectedBlockIndex.value = -1
   dirty.value = true
@@ -415,65 +403,16 @@ async function save() {
     selectedBlockIndex.value = selected.value.blocks.length ? Math.min(selectedBlockIndex.value, selected.value.blocks.length - 1) : -1
     await loadPages()
     dirty.value = false
-    toast.add({ title: 'Saved', description: 'Page draft saved.', color: 'success' })
+    toast.add({ title: 'Saved', description: 'Page saved.', color: 'success' })
   } catch (error) {
     editorError.value = error instanceof Error ? error.message : 'Unable to save page'
   } finally { busy.value = null }
 }
 
-async function action(name: string, path: string, confirmMessage?: string, extraBody: Record<string, unknown> = {}) {
-  if (!selected.value?.id) return
-  if (!canDiscardUnsavedChanges()) return
-  if (confirmMessage && !window.confirm(confirmMessage)) return
-  const requestToken = requestGate.begin()
-  const editorAtRequest = selected.value
-  const pageId = selected.value.id
-  busy.value = name; editorError.value = null
-  try {
-    const response = await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${pageId}/${path}`, { method: 'POST', body: { expectedDocumentUpdatedAt: selected.value.document.updated_at, ...extraBody }, validate: validatePage })
-    if (!requestGate.isCurrent(requestToken)) {
-      if (selected.value === editorAtRequest) preservePersistedIdentity(response.page)
-      return
-    }
-    selected.value = toEditorPage(response.page)
-    selectedBlockIndex.value = selected.value.blocks.length ? Math.min(selectedBlockIndex.value, selected.value.blocks.length - 1) : -1
-    await loadPages()
-    dirty.value = false
-  } catch (error) { editorError.value = error instanceof Error ? error.message : `Unable to ${name} page` } finally { busy.value = null }
-}
-const publish = () => action('publish', 'publish')
-const unpublish = () => action('unpublish', 'unpublish')
-async function archive() {
-  if (!selected.value) return
-  const archiveOptions: Record<string, unknown> = {}
-  if (selected.value.page_type === 'legal') {
-    const decision = window.prompt('Enter a published replacement path, or type 410 to make this page return Gone. Leave blank to archive without a redirect.')
-    if (decision === null) return
-    if (decision.trim() === '410') archiveOptions.gone = true
-    else if (decision.trim()) archiveOptions.replacementPath = decision.trim()
-  }
-  await action('archive', 'archive', 'Archive this page? It will stop rendering publicly.', archiveOptions)
-}
-const restore = () => action('restore', 'restore')
-
-async function removePage() {
-  if (!selected.value?.id || !canDiscardUnsavedChanges() || !window.confirm('Delete this page and its revisions? This cannot be undone.')) return
-  const requestToken = requestGate.begin()
-  const pageId = selected.value.id
-  busy.value = 'delete'; editorError.value = null
-  try {
-    await dashboardApi(`/api/editor/sites/${siteId}/pages/${pageId}`, { method: 'DELETE', query: { expectedDocumentUpdatedAt: selected.value.document.updated_at }, validate: validateDelete })
-    if (!requestGate.isCurrent(requestToken)) return
-    selected.value = null
-    await loadPages()
-    dirty.value = false
-  } catch (error) { editorError.value = error instanceof Error ? error.message : 'Unable to delete page' } finally { busy.value = null }
-}
-
 async function duplicate() {
   if (!selected.value || !canDiscardUnsavedChanges()) return
   const original = selected.value
-  selected.value = { ...original, id: '', page_id: '', path: `${original.path}-copy`, title: `${original.title} copy`, status: 'draft', ever_published: false, published_revision_id: null, document: { updated_at: '', draft_revision_id: null, published_revision_id: null }, blocks: original.blocks.map((block, index) => ({ ...block, id: crypto.randomUUID(), data: structuredClone(toRaw(block.data)), position: index })) }
+  selected.value = { ...original, id: '', page_id: '', path: `${original.path}-copy`, title: `${original.title} copy`, document: { updated_at: '' }, blocks: original.blocks.map((block, index) => ({ ...block, id: crypto.randomUUID(), data: structuredClone(toRaw(block.data)), position: index })) }
   selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1
   dirty.value = true
   await save()

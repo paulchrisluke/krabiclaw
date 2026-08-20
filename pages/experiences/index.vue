@@ -34,7 +34,7 @@ import type { Experience } from '~/server/utils/experiences'
 const { isPlatform, site } = useTenantSite()
 if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 

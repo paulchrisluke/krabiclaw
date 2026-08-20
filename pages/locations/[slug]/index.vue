@@ -319,7 +319,7 @@ const locationIndexCopy = computed(() => getVerticalCopy((site as ApiValue)?.ver
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 // Bootstrap: location + all locations + page content + menu + reviews + posts — 1 SSR call
 const {
@@ -372,11 +372,10 @@ const featuredContentLinkTarget = computed(() => {
   return locationExperienceHref.value
 })
 
-// Contact fallbacks
+// Contact details are location-owned; missing or placeholder values stay absent.
 const displayPhone = computed(() => {
   const p = location.value?.phone
-  if (p && !p.includes('example.com')) return p
-  return (site as ApiValue)?.config?.phone || null
+  return p && !p.includes('example.com') ? p : null
 })
 const dialablePhone = computed(() => displayPhone.value?.replace(/[^\d+]/g, '') ?? '')
 const displayEmail = computed(() => {
@@ -546,7 +545,10 @@ useTenantSocialMetadata(() => ({
 useSchemaOrg([
   computed(() => {
     const loc = location.value
-    if (!loc) return undefined
+    // nuxt-schema-org's own UnheadSchemaOrg plugin explicitly filters out non-object and null
+    // nodes before building the graph, so undefined is the correct, filtered "no schema" value
+    // here — the vendored UseSchemaOrgInput type just doesn't include it in its union.
+    if (!loc) return undefined as unknown as Record<string, unknown>
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,

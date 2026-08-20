@@ -1,4 +1,7 @@
-import { isPreviewContext } from '../../server/utils/tenant-hosts'
+import {
+  environmentTenantAliasHostname,
+  usesTenantHeader,
+} from '../../server/utils/tenant-hosts'
 
 export const POTTERY_HOUSE_CANONICAL_URL = 'https://www.potteryhousekrabi.com'
 export const KIKUZUKI_CANONICAL_URL = 'https://www.kikuzuki-thailand.com'
@@ -17,16 +20,25 @@ export function testBaseUrl() {
 }
 
 function previewWorkerHeaders(slug: string): Record<string, string> {
-  return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
+  return { 'x-preview-tenant': slug }
 }
 
 function usesSharedTenantHost(base: URL): boolean {
   return ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)
-    || isPreviewContext(base.hostname)
+    || usesTenantHeader(base.hostname)
+}
+
+function deployedEnvironmentTenantBaseUrl(base: URL, slug: string): string | null {
+  const aliasHostname = environmentTenantAliasHostname(base.hostname, slug)
+  if (!aliasHostname) return null
+  base.hostname = aliasHostname
+  return base.toString().replace(/\/$/, '')
 }
 
 export function tenantTestBaseUrl() {
   const base = new URL(testBaseUrl())
+  const environmentBaseUrl = deployedEnvironmentTenantBaseUrl(base, 'demo')
+  if (environmentBaseUrl) return environmentBaseUrl
   if (usesSharedTenantHost(base)) {
     return base.toString().replace(/\/$/, '')
   }
@@ -36,6 +48,8 @@ export function tenantTestBaseUrl() {
 
 export function potteryHouseTestBaseUrl() {
   const base = new URL(testBaseUrl())
+  const environmentBaseUrl = deployedEnvironmentTenantBaseUrl(base, 'pottery-house')
+  if (environmentBaseUrl) return environmentBaseUrl
   if (usesSharedTenantHost(base)) {
     return base.toString().replace(/\/$/, '')
   }
@@ -44,12 +58,16 @@ export function potteryHouseTestBaseUrl() {
 
 export function blawbyTestBaseUrl() {
   const base = new URL(testBaseUrl())
+  const environmentBaseUrl = deployedEnvironmentTenantBaseUrl(base, 'ncls')
+  if (environmentBaseUrl) return environmentBaseUrl
   if (usesSharedTenantHost(base)) return base.toString().replace(/\/$/, '')
   return NCLS_CANONICAL_URL
 }
 
 export function kikuzukiTestBaseUrl() {
   const base = new URL(testBaseUrl())
+  const environmentBaseUrl = deployedEnvironmentTenantBaseUrl(base, 'kikuzuki-krabi-thailand')
+  if (environmentBaseUrl) return environmentBaseUrl
   if (usesSharedTenantHost(base)) {
     return base.toString().replace(/\/$/, '')
   }

@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { execute, executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { assertResourceAccess, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import {
@@ -12,6 +12,7 @@ import {
 import { getTenantPageForEditorByPath, updateTenantPageDraft } from '~/server/utils/tenant-pages'
 import { materializeTenantFavicon } from '~/server/utils/favicon-derivative'
 import { deleteFromR2 } from '~/server/utils/cloudflare-r2'
+import { syncPostCoverMedia } from '~/server/utils/post-management'
 
 export type MediaPlacementTarget =
   | { type: 'site_logo' }
@@ -106,13 +107,13 @@ export async function validateAndHydrateMediaPlacement(
   const definition = mediaPlacementDefinition(input.target)
   const assetIds = input.assetIds.map(id => id.trim()).filter(Boolean)
   if (assetIds.length !== input.assetIds.length) {
-    throw createError({ statusCode: 400, statusMessage: 'asset_ids must contain non-empty strings' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'asset_ids must contain non-empty strings' })
   }
   if (definition.cardinality === 'single' && assetIds.length > 1) {
-    throw createError({ statusCode: 400, statusMessage: `${input.target.type} accepts zero or one asset_id` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${input.target.type} accepts zero or one asset_id` })
   }
   if (definition.cardinality === 'ordered' && assetIds.length > MAX_ORDERED_MEDIA_ASSETS) {
-    throw createError({ statusCode: 400, statusMessage: `${input.target.type} accepts at most ${MAX_ORDERED_MEDIA_ASSETS} asset_ids` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${input.target.type} accepts at most ${MAX_ORDERED_MEDIA_ASSETS} asset_ids` })
   }
   const refs: MediaAssetRefInput[] = assetIds.map(asset_id => ({ asset_id }))
   return hydrateMediaAssetRefs(db, {
@@ -157,7 +158,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       return placementResult(input.target, media, 'site', input.siteId, now)
     }
     case 'home_hero': {
-      if (input.target.location_id) throw createError({ statusCode: 400, statusMessage: 'Home hero media is site-scoped.' })
+      if (input.target.location_id) throw new HTTPError({ statusCode: 400, statusMessage: 'Home hero media is site-scoped.' })
       const home = await getTenantPageForEditorByPath(db, input.siteId, '/')
       await updateTenantPageDraft(db, home.id, {
         userId: null,
@@ -218,7 +219,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       }]
       const [result] = await executeBatch(db, updateQueries)
       if (!result?.success || Number(result.meta?.changes ?? 0) === 0) {
-        throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+        throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
       }
       return placementResult(input.target, media, 'location', input.target.location_id, now, targetLocationId)
     }
@@ -246,7 +247,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
         }),
       ])
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
-        throw createError({ statusCode: 404, statusMessage: 'Menu item not found' })
+        throw new HTTPError({ statusCode: 404, statusMessage: 'Menu item not found' })
       }
       const menu = await queryFirst<{ location_id: string | null; updated_at: string | null }>(db, `
         SELECT m.location_id, mi.updated_at
@@ -264,8 +265,9 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
          WHERE organization_id = ? AND site_id = ? AND id = ?
       `, [assetId, now, input.organizationId, input.siteId, input.target.post_id])
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
-        throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+        throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
       }
+      await syncPostCoverMedia(db, input.organizationId, input.siteId, input.target.post_id, assetId)
       const post = await queryFirst<{ location_id: string | null; updated_at: string | null }>(db, `
         SELECT location_id, updated_at
           FROM posts
@@ -281,7 +283,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
          WHERE organization_id = ? AND site_id = ? AND id = ?
       `, [assetId, now, input.organizationId, input.siteId, input.target.post_id])
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
-        throw createError({ statusCode: 404, statusMessage: 'Blog post not found' })
+        throw new HTTPError({ statusCode: 404, statusMessage: 'Blog post not found' })
       }
       return placementResult(input.target, media, 'blog_post', input.target.post_id, now)
     }
@@ -292,7 +294,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
         WHERE organization_id = ? AND site_id = ? AND (id = ? OR slug = ?)
         LIMIT 1
       `, [input.organizationId, input.siteId, input.target.experience_id, input.target.experience_id])
-      if (!experience) throw createError({ statusCode: 404, statusMessage: 'Experience not found' })
+      if (!experience) throw new HTTPError({ statusCode: 404, statusMessage: 'Experience not found' })
       const [updateResult] = await executeBatch(db, [
         {
           query: `UPDATE experiences SET updated_at = ? WHERE organization_id = ? AND site_id = ? AND id = ?`,
@@ -307,7 +309,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
         }),
       ])
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
-        throw createError({ statusCode: 404, statusMessage: 'Experience not found' })
+        throw new HTTPError({ statusCode: 404, statusMessage: 'Experience not found' })
       }
       return placementResult(input.target, media, 'experience', experience.id, now, targetLocationId)
     }
@@ -328,7 +330,7 @@ export async function assignSiteLogoWithFavicon(
   const now = input.now ?? new Date().toISOString()
   let derivative: { key: string; publicUrl: string } | null = null
   if (input.asset) {
-    if (!input.env) throw createError({ statusCode: 500, statusMessage: 'Media storage unavailable' })
+    if (!input.env) throw new HTTPError({ statusCode: 500, statusMessage: 'Media storage unavailable' })
     derivative = await materializeTenantFavicon(input.env, {
       siteId: input.siteId,
       assetId: input.asset.id,
@@ -357,7 +359,7 @@ export async function assignSiteLogoWithFavicon(
       input.onlyIfEmpty ? 1 : 0,
     ])
     if (!result?.success || Number(result.meta?.changes ?? 0) === 0) {
-      throw createError({ statusCode: input.onlyIfEmpty ? 409 : 404, statusMessage: input.onlyIfEmpty ? 'Site logo already assigned' : 'Site not found' })
+      throw new HTTPError({ statusCode: input.onlyIfEmpty ? 409 : 404, statusMessage: input.onlyIfEmpty ? 'Site logo already assigned' : 'Site not found' })
     }
   } catch (error) {
     if (derivative && input.env) {
@@ -390,7 +392,7 @@ async function resolvePlacementLocationId(db: DbClient, input: SetMediaPlacement
         WHERE organization_id = ? AND site_id = ? AND id = ?
         LIMIT 1
       `, [input.organizationId, input.siteId, input.target.location_id])
-      if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+      if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
       return location.id
     }
     case 'menu_item_media': {
@@ -401,7 +403,7 @@ async function resolvePlacementLocationId(db: DbClient, input: SetMediaPlacement
         WHERE m.organization_id = ? AND m.site_id = ? AND mi.id = ?
         LIMIT 1
       `, [input.organizationId, input.siteId, input.target.menu_item_id])
-      if (!menu) throw createError({ statusCode: 404, statusMessage: 'Menu item not found' })
+      if (!menu) throw new HTTPError({ statusCode: 404, statusMessage: 'Menu item not found' })
       return menu.location_id ?? null
     }
     case 'post_image': {
@@ -410,7 +412,7 @@ async function resolvePlacementLocationId(db: DbClient, input: SetMediaPlacement
         WHERE organization_id = ? AND site_id = ? AND id = ?
         LIMIT 1
       `, [input.organizationId, input.siteId, input.target.post_id])
-      if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+      if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
       return post.location_id ?? null
     }
     case 'experience_media': {
@@ -419,7 +421,7 @@ async function resolvePlacementLocationId(db: DbClient, input: SetMediaPlacement
         WHERE organization_id = ? AND site_id = ? AND (id = ? OR slug = ?)
         LIMIT 1
       `, [input.organizationId, input.siteId, input.target.experience_id, input.target.experience_id])
-      if (!experience) throw createError({ statusCode: 404, statusMessage: 'Experience not found' })
+      if (!experience) throw new HTTPError({ statusCode: 404, statusMessage: 'Experience not found' })
       return experience.location_id ?? null
     }
   }
