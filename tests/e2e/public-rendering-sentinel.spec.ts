@@ -49,6 +49,8 @@ const journeys = [
     themeVariable: '--blawby-bg',
     link: '/pricing',
     content: /Pricing|affordable/i,
+    headerLinks: ['Services', 'Pricing', 'About', 'Contact', 'Blog', 'Donate'],
+    footerLinks: ['Family law', 'Request a Consultation', 'About', 'Privacy'],
   },
 ] as const
 
@@ -80,6 +82,14 @@ for (const journey of journeys) {
     expectFinalOrigin(page, journey.baseURL, journey.name)
     await expect(page.locator(journey.shell)).toBeVisible()
     await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')
+    if ('headerLinks' in journey) {
+      for (const label of journey.headerLinks) {
+        await expect(page.locator('header').getByRole('link', { name: label, exact: true })).toBeVisible()
+      }
+      for (const label of journey.footerLinks) {
+        await expect(page.locator('footer').getByRole('link', { name: label, exact: true })).toBeVisible()
+      }
+    }
 
     const routeResponse = await page.goto(`${journey.baseURL}${journey.link}`, { waitUntil: 'load' })
     expect(routeResponse?.status(), `${journey.name} ${journey.link}`).toBeLessThan(400)

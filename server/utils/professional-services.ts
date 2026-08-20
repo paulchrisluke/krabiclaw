@@ -6,6 +6,7 @@ import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
+import { listPublishedTenantPagePaths } from '~/server/utils/tenant-pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
 import type {
   PublicBlawbyData,
@@ -413,19 +414,27 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
 }
 
 export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Promise<PublicBlawbyShellData> {
-  const [identity, consultation, compliance, themeTokens, offeringLinks] = await Promise.all([
+  const [identity, consultation, compliance, themeTokens, offeringLinks, pageLinks] = await Promise.all([
     getPublicBlawbyIdentity(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicThemeTokens(db, siteId),
     listPublicOfferingLinks(db, siteId),
+    listPublishedTenantPagePaths(db, siteId),
   ])
   const header = compliance?.metadata?.header
   if (header && typeof header === 'object') {
     identity.banner_content = typeof (header as ApiRecord).banner_content === 'string' ? String((header as ApiRecord).banner_content) : null
     identity.banner_dismissible = asBoolean((header as ApiRecord).banner_dismissible)
   }
-  return { identity, consultation, compliance, themeTokens, offeringLinks }
+  return {
+    identity,
+    consultation,
+    compliance,
+    themeTokens,
+    offeringLinks,
+    pageLinks: pageLinks.map(page => ({ id: page.id, path: page.path, title: page.title })),
+  }
 }
 
 export async function getPublicBlawbyDocumentData(

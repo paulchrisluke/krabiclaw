@@ -893,8 +893,8 @@ export async function updateTenantPageDraft(db: DbClient, variantId: string, inp
 
 export async function listPublishedTenantPagePaths(db: DbClient, siteId: string, locale?: string | null) {
   const resolvedLocale = await resolveLocale(db, siteId, locale)
-  return await queryAll<{ path: string; updated_at: string; robots: string | null }>(db, `
-    SELECT v.path, v.updated_at, v.robots
+  return await queryAll<{ id: string; path: string; title: string; updated_at: string; robots: string | null }>(db, `
+    SELECT v.id, v.path, v.title, v.updated_at, v.robots
       FROM tenant_page_variants v
      WHERE v.site_id = ? AND v.locale = ?
      ORDER BY path ASC
