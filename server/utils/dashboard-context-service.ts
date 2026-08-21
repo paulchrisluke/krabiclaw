@@ -52,7 +52,8 @@ export async function loadDashboardContext(
   }
 
   const principal = { memberId: organization.memberId, role: organization.role }
-  const sites = await listOrganizationSites(db, organization.id, principal)
+  const ogOrigin = new URL(event.req.url).origin
+  const sites = await listOrganizationSites(db, organization.id, ogOrigin, principal)
   if (!site) {
     return {
       success: true as const,
@@ -67,7 +68,7 @@ export async function loadDashboardContext(
 
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
-    listDashboardLocations(db, organization.id, site.id, principal),
+    listDashboardLocations(db, organization.id, site.id, ogOrigin, principal),
     resolveDashboardSiteAccess(db, {
       ...principal,
       organizationId: organization.id,

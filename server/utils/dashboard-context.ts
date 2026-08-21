@@ -6,6 +6,8 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole } from '~/server/utils/member-access'
+import { resolveSocialOgImage } from '~/utils/social-metadata'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 
 function safeJsonParse(value: string): unknown {
   return JSON.parse(value)
@@ -71,7 +73,7 @@ export interface DashboardLocationRow {
   status: string
   city: string | null
   address: string | null
-  hero_url: string | null
+  og_image_url: string
   // Same contract as DashboardSiteRow.feature_overrides, one scope down — the delta is applied
   // on top of the parent site's effective feature set (never the vertical defaults directly).
   feature_overrides: string | null
@@ -371,32 +373,96 @@ export interface DashboardSiteSummaryRow {
   status: string | null
   onboarding_status: string | null
   plan: string | null
-  preview_image_url: string | null
+  og_image_url: string
 }
 
-export async function listOrganizationSites(db: DbClient, organizationId: string, principal?: { memberId: string; role: string }) {
-  return await queryAll<DashboardSiteSummaryRow>(db, `
+interface DashboardOgSource {
+  vertical: string | null
+  theme_id: string | null
+  brand_name: string | null
+  logo_url: string | null
+  favicon_url: string | null
+  brand_color: string | null
+  og_background_url: string | null
+}
+
+function requiredOgText(value: string | null, field: string): string {
+  const text = value?.trim()
+  if (!text) throw new Error(`Cannot generate dashboard OG image: ${field} is missing`)
+  return text
+}
+
+function generatedDashboardOgUrl(
+  origin: string,
+  source: DashboardOgSource,
+  page: { title: string; description?: string | null; label?: string | null; location?: string | null },
+): string {
+  const siteName = requiredOgText(source.brand_name, 'site brand name')
+  const template = resolvePublicTemplate({ themeId: source.theme_id, vertical: source.vertical }).slug
+  return resolveSocialOgImage({
+    template,
+    title: page.title,
+    description: page.description,
+    canonicalUrl: origin,
+    label: page.label,
+    location: page.location,
+    brand: {
+      siteName,
+      logoUrl: source.logo_url,
+      faviconUrl: source.favicon_url,
+      primaryColor: source.brand_color,
+    },
+    heroImage: source.og_background_url ? { url: source.og_background_url } : null,
+  }, origin).url
+}
+
+export async function listOrganizationSites(
+  db: DbClient,
+  organizationId: string,
+  origin: string,
+  principal?: { memberId: string; role: string },
+) {
+  const rows = await queryAll<DashboardSiteSummaryRow & DashboardOgSource & {
+    seo_title: string | null
+    seo_description: string | null
+    brand_description: string | null
+  }>(db, `
     SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.status,
-           s.onboarding_status, s.plan,
-           COALESCE(ma_site_og.public_url, ma_hero.thumbnail_url, ma_hero.public_url) AS preview_image_url
+           s.onboarding_status, s.plan, s.theme_id, s.seo_title,
+           s.seo_description, s.brand_description,
+           COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
+           json_extract(s.settings, '$.favicon_url') AS favicon_url,
+           (SELECT value FROM site_config WHERE organization_id = s.organization_id AND site_id = s.id AND key = 'brand_color' LIMIT 1) AS brand_color,
+           ma_site_og.public_url AS og_background_url
     FROM sites s
+    LEFT JOIN media_assets ma_logo
+      ON ma_logo.id = s.logo_asset_id
+     AND ma_logo.site_id = s.id
+     AND ma_logo.organization_id = s.organization_id
+     AND ma_logo.status = 'active'
     LEFT JOIN media_assets ma_site_og
       ON ma_site_og.id = s.og_image_asset_id
      AND ma_site_og.site_id = s.id
      AND ma_site_og.organization_id = s.organization_id
      AND ma_site_og.status = 'active'
-    LEFT JOIN business_locations bl
-      ON bl.id = s.primary_location_id
-     AND bl.site_id = s.id
-     AND bl.organization_id = s.organization_id
-    LEFT JOIN media_assets ma_hero
-      ON ma_hero.id = bl.hero_media_asset_id
-     AND ma_hero.site_id = s.id
-     AND ma_hero.organization_id = s.organization_id
     WHERE s.organization_id = ?
       ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id WHERE m.id = ? AND m.organizationId = s.organization_id)' : ''}
     ORDER BY s.created_at ASC, s.id ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, principal.memberId] : [organizationId])
+
+  return rows.map(row => ({
+    id: row.id,
+    brand_name: row.brand_name,
+    subdomain: row.subdomain,
+    vertical: row.vertical,
+    status: row.status,
+    onboarding_status: row.onboarding_status,
+    plan: row.plan,
+    og_image_url: generatedDashboardOgUrl(origin, row, {
+      title: row.seo_title?.trim() || requiredOgText(row.brand_name, 'site brand name'),
+      description: row.seo_description || row.brand_description,
+    }),
+  }))
 }
 
 export async function getDashboardSite(event: H3Event) {
@@ -472,23 +538,51 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
   }
 }
 
-export async function listDashboardLocations(db: DbClient, organizationId: string, siteId: string, principal?: { memberId: string; role: string }) {
-  const locations = await queryAll<DashboardLocationRow>(db, `
+export async function listDashboardLocations(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  origin: string,
+  principal?: { memberId: string; role: string },
+) {
+  const locations = await queryAll<DashboardLocationRow & DashboardOgSource & {
+    seo_title: string | null
+    seo_description: string | null
+    short_description: string | null
+  }>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
            business_locations.is_primary, business_locations.status,
            business_locations.city, business_locations.address, business_locations.feature_overrides,
-           COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
+           business_locations.seo_title, business_locations.seo_description,
+           business_locations.short_description, sites.vertical, sites.theme_id,
+           sites.brand_name, COALESCE(ma_logo.public_url, sites.logo_url) AS logo_url,
+           json_extract(sites.settings, '$.favicon_url') AS favicon_url,
+           (SELECT value FROM site_config WHERE organization_id = sites.organization_id AND site_id = sites.id AND key = 'brand_color' LIMIT 1) AS brand_color,
+           ma_og.public_url AS og_background_url
     FROM business_locations
-    LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_media_asset_id
-      AND ma_hero.organization_id = business_locations.organization_id AND ma_hero.site_id = business_locations.site_id
+    JOIN sites ON sites.id = business_locations.site_id AND sites.organization_id = business_locations.organization_id
+    LEFT JOIN media_assets ma_logo ON ma_logo.id = sites.logo_asset_id
+      AND ma_logo.organization_id = sites.organization_id AND ma_logo.site_id = sites.id AND ma_logo.status = 'active'
+    LEFT JOIN media_assets ma_og ON ma_og.id = business_locations.og_image_asset_id
+      AND ma_og.organization_id = business_locations.organization_id AND ma_og.site_id = business_locations.site_id AND ma_og.status = 'active'
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
       ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN sites s ON s.id = business_locations.site_id JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, business_locations.team_id) WHERE m.id = ? AND m.organizationId = business_locations.organization_id)' : ''}
     ORDER BY is_primary DESC, title ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, siteId, principal.memberId] : [organizationId, siteId])
 
   return locations.map((location) => ({
-    ...location,
+    id: location.id,
+    slug: location.slug,
+    title: location.title,
     is_primary: Boolean(location.is_primary),
-    address: parseLocationAddress(location.address)
+    status: location.status,
+    city: location.city,
+    address: parseLocationAddress(location.address),
+    feature_overrides: location.feature_overrides,
+    og_image_url: generatedDashboardOgUrl(origin, location, {
+      title: location.seo_title?.trim() || `${location.title} | Locations`,
+      description: location.seo_description || location.short_description,
+      location: location.title,
+    }),
   }))
 }

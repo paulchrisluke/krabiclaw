@@ -1,18 +1,22 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getDashboardHomeData } from '~/server/utils/dashboard-home'
+import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { defineHandler } from 'nitro'
 
 export default defineHandler(async (event) => {
-  const { db, organization, site } = await getDashboardContext(event, { requireSite: false })
+  const { db, organization, site } = await getDashboardContext(event, { requireSite: true })
+  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 
-  if (!site) {
-    return jsonResponse({
-      organization, site: null, locations: [], events: [], operations: { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }, })
-  }
+  await assertSiteWideAccess(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId: organization.id,
+    siteId: site.id,
+  })
 
-  const home = await getDashboardHomeData(db, organization.id, site.id, {
-    memberId: organization.memberId, role: organization.role, })
-
-  return jsonResponse({ organization, site, ...home })
+  return jsonResponse(await getDashboardHomeData(db, organization.id, site.id, {
+    memberId: organization.memberId,
+    role: organization.role,
+  }))
 })
-import { defineHandler } from 'nitro';

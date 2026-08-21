@@ -6,7 +6,7 @@ import { getOgImageFonts } from './fonts.ts'
 import { resolveOgImageRenderer } from './renderers/index.ts'
 import { fetchImageAsDataUri } from './fetch-image.ts'
 import { convertWebpDataUriToPng } from './webp-to-png.ts'
-import { ensureResvgInitialized } from '~/server/utils/resvg-runtime'
+import { ensureResvgInitialized, loadLocalWasmModule } from '~/server/utils/resvg-runtime'
 import platformLogoBase64 from '~/server/assets/platform-logo'
 
 // A same-zone self-fetch (this Worker requesting its own krabiclaw.com/krabi-claw-logo.png)
@@ -38,16 +38,19 @@ function resolveLogoDataUri(
 let satoriInit: Promise<void> | null = null
 
 async function loadBundledYogaWasm(): Promise<WebAssembly.Module> {
+  if (import.meta.dev) return await loadLocalWasmModule('satori/yoga.wasm')
   const { default: wasmModule } = await import('satori/yoga.wasm')
   return wasmModule
 }
 
 async function loadBundledWebpDecoderWasm(): Promise<WebAssembly.Module> {
+  if (import.meta.dev) return await loadLocalWasmModule('@jsquash/webp/codec/dec/webp_dec.wasm')
   const { default: wasmModule } = await import('@jsquash/webp/codec/dec/webp_dec.wasm')
   return wasmModule
 }
 
 async function loadBundledPngEncoderWasm(): Promise<WebAssembly.Module> {
+  if (import.meta.dev) return await loadLocalWasmModule('@jsquash/png/codec/pkg/squoosh_png_bg.wasm')
   // squoosh_png_bg.wasm ships its own wasm-bindgen .d.ts declaring named function exports,
   // which TypeScript prefers over this repo's ambient `declare module '*.wasm'` default-export
   // fallback (types/wasm.d.ts) — the real runtime import (matching resvg/yoga/webp_dec, all

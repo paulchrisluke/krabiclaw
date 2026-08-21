@@ -137,7 +137,7 @@ import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import { useGuestInboxSocket, type GuestInboxSocketEvent } from '~/composables/useGuestInboxSocket'
 
 const props = defineProps<{
-  scope: 'site' | 'location'
+  scope: 'organization' | 'site' | 'location'
   threadId?: string | null
   submissionTypeFilter?: 'contact' | 'reservation' | 'experience_booking'
 }>()
@@ -225,25 +225,37 @@ const ACTION_META: Record<string, { label: string; icon: string; color: UiColor;
   cancel: { label: 'Cancel', icon: 'i-lucide-x', color: 'error', variant: 'ghost', destructive: true },
 }
 
-const siteId = await useDashboardSiteId()
-const toast = useToast()
-const route = useRoute()
-const router = useRouter()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const { formatRelativeTime } = useHumanTime()
 
+const siteId = computed(() => {
+  if (isOrganizationScope.value) return null
+  return dashboard.siteId.value
+})
+const toast = useToast()
+const route = useRoute()
+const router = useRouter()
+
 const selectedLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const isLocationScope = computed(() => props.scope === 'location')
+const isOrganizationScope = computed(() => props.scope === 'organization')
 const isDetailMode = computed(() => Boolean(props.threadId))
-const panelId = computed(() => props.scope === 'site' ? 'site-inbox' : 'location-inbox')
+const panelId = computed(() => {
+  if (isOrganizationScope.value) return 'org-inbox'
+  return props.scope === 'site' ? 'site-inbox' : 'location-inbox'
+})
 const navbarTitle = computed(() => {
   if (selectedDetail.value) return selectedDetail.value.guestName
   if (isDetailMode.value) return 'Conversation'
+  if (isOrganizationScope.value) return 'Inbox'
   return props.scope === 'site' ? 'Site Inbox' : 'Location Inbox'
 })
 const listRoute = computed(() => {
   const orgSlug = String(route.params.orgSlug)
+  if (isOrganizationScope.value) {
+    return `/dashboard/${orgSlug}/inbox`
+  }
   const siteSlug = String(route.params.siteSlug)
   if (isLocationScope.value) {
     return `/dashboard/${orgSlug}/sites/${siteSlug}/locations/${String(route.params.locationSlug)}/inbox`
@@ -254,6 +266,7 @@ const locationVocabulary = computed(() => capabilities.value?.locationVocabulary
 const locationNoun = computed(() => locationVocabulary.value === 'office/service area' ? 'office/service area' : 'location')
 const emptyDescription = computed(() => {
   const work = supportedThreadLabels.value.join(', ')
+  if (isOrganizationScope.value) return `New ${work || 'guest work'} across all sites will appear here.`
   if (props.scope === 'location') return `Assigned ${work || 'guest work'} for this ${locationNoun.value} will appear here.`
   return `New ${work || 'guest work'} will appear here.`
 })
@@ -276,9 +289,9 @@ const operationAttemptKeys = ref<Record<string, string>>({})
 const retryAttemptKeys = ref<Record<string, string>>({})
 
 const inboxSocket = useGuestInboxSocket({
-  siteId,
+  siteId: siteId.value ?? 'org',
   onEvent: (event: GuestInboxSocketEvent) => {
-    if (event.siteId !== siteId) return
+    if (siteId.value && event.siteId !== siteId.value) return
     if (isDetailMode.value && event.threadId === props.threadId) {
       void refreshThread(event.threadId)
     } else if (!isDetailMode.value) {
@@ -352,9 +365,9 @@ type InitialInboxResource =
 
 const initialInboxKey = computed(() => [
   'dashboard-guest-inbox',
-  siteId,
+  siteId.value ?? 'org',
   props.scope,
-  isLocationScope.value ? selectedLocationId.value ?? 'pending-location' : 'site',
+  isLocationScope.value ? selectedLocationId.value ?? 'pending-location' : isOrganizationScope.value ? 'org' : 'site',
   props.threadId ?? 'list',
   props.submissionTypeFilter ?? 'all',
 ].join(':'))
@@ -374,28 +387,55 @@ const {
     if (!requestEvent) {
       throw createError({ statusCode: 500, statusMessage: 'Dashboard request event unavailable' })
     }
-    const { loadDashboardGuestThread, loadDashboardGuestThreads } = await import(
+    const { loadDashboardGuestThread, loadDashboardGuestThreads, loadOrganizationGuestThreads } = await import(
       '~/server/utils/dashboard-guest-threads'
     )
     if (props.threadId) {
-      const result = await loadDashboardGuestThread(requestEvent, siteId, props.threadId)
+      if (!siteId.value) {
+        throw createError({ statusCode: 400, statusMessage: 'Thread detail requires site scope' })
+      }
+      const result = await loadDashboardGuestThread(requestEvent, siteId.value, props.threadId)
       return { mode: 'detail', thread: result.thread as ThreadDetail }
     }
-    const result = await loadDashboardGuestThreads(requestEvent, siteId, {
+    if (isOrganizationScope.value) {
+      const result = await loadOrganizationGuestThreads(requestEvent, {
+        type: props.submissionTypeFilter ?? null,
+      })
+      return { mode: 'list', threads: result.threads as ThreadListItem[] }
+    }
+    if (!siteId.value) {
+      throw createError({ statusCode: 400, statusMessage: 'Inbox requires site scope' })
+    }
+    const result = await loadDashboardGuestThreads(requestEvent, siteId.value, {
       locationId: isLocationScope.value ? selectedLocationId.value : null,
       type: props.submissionTypeFilter ?? null,
     })
     return { mode: 'list', threads: result.threads as ThreadListItem[] }
   }
   if (props.threadId) {
+    if (!siteId.value) {
+      throw createError({ statusCode: 400, statusMessage: 'Thread detail requires site scope' })
+    }
     const result = await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}`,
+      `/api/dashboard/sites/${siteId.value}/guest-threads/${props.threadId}`,
       { validate: isThreadDetailResponse },
     )
     return { mode: 'detail', thread: result.thread }
   }
+  if (isOrganizationScope.value) {
+    const result = await dashboardApi<{ threads: ThreadListItem[] }>(
+      '/api/dashboard/guest-threads',
+      {
+        query: {
+          type: props.submissionTypeFilter,
+        },
+        validate: isThreadListResponse,
+      },
+    )
+    return { mode: 'list', threads: result.threads }
+  }
   const result = await dashboardApi<{ threads: ThreadListItem[] }>(
-    `/api/dashboard/sites/${siteId}/guest-threads`,
+    `/api/dashboard/sites/${siteId.value}/guest-threads`,
     {
       query: {
         location_id: isLocationScope.value ? selectedLocationId.value : undefined,
@@ -478,14 +518,25 @@ async function loadThreads() {
   loadingThreads.value = true
   threadsError.value = null
   try {
-    const res = await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
-      query: {
-        location_id: isLocationScope.value ? selectedLocationId.value : undefined,
-        search: search.value || undefined,
-        type: props.submissionTypeFilter,
-      },
-      validate: isThreadListResponse,
-    })
+    let res
+    if (isOrganizationScope.value) {
+      res = await dashboardApi<{ threads: ThreadListItem[] }>('/api/dashboard/guest-threads', {
+        query: {
+          search: search.value || undefined,
+          type: props.submissionTypeFilter,
+        },
+        validate: isThreadListResponse,
+      })
+    } else {
+      res = await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/sites/${siteId.value}/guest-threads`, {
+        query: {
+          location_id: isLocationScope.value ? selectedLocationId.value : undefined,
+          search: search.value || undefined,
+          type: props.submissionTypeFilter,
+        },
+        validate: isThreadListResponse,
+      })
+    }
     if (requestToken !== threadsRequestToken) return
     threads.value = res.threads ?? []
   } catch (error) {
@@ -504,7 +555,7 @@ async function loadThreadDetail(threadId: string) {
   selectedDetail.value = null
   detailError.value = null
   try {
-    const res = await dashboardApi<{ thread: ThreadDetail }>(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`, {
+    const res = await dashboardApi<{ thread: ThreadDetail }>(`/api/dashboard/sites/${siteId.value}/guest-threads/${threadId}`, {
       validate: isThreadDetailResponse,
     })
     if (requestToken !== detailRequestToken) return
@@ -529,7 +580,7 @@ async function sendReply() {
   replySaving.value = true
   try {
     await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`,
+      `/api/dashboard/sites/${siteId.value}/guest-threads/${props.threadId}/operations/reply`,
       {
       method: 'POST',
       body: { body: replyDraft.value, idempotencyKey },
@@ -560,7 +611,7 @@ async function runOperationalAction(action: string) {
   operationActionPending.value = action
   try {
     await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/${action}`,
+      `/api/dashboard/sites/${siteId.value}/guest-threads/${threadId}/operations/${action}`,
       {
       method: 'POST',
       body: { idempotencyKey },
@@ -589,7 +640,7 @@ async function retryDelivery(deliveryId: string) {
   retryingDeliveryId.value = deliveryId
   try {
     await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/retry_delivery`,
+      `/api/dashboard/sites/${siteId.value}/guest-threads/${threadId}/operations/retry_delivery`,
       {
       method: 'POST',
       body: { deliveryId, idempotencyKey },

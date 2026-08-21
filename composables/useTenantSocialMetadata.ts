@@ -19,10 +19,9 @@ function resolveTemplate(themeId: MaybeRefOrGetter<string | null>): SocialTempla
 /**
  * Thin adapter over the shared #259 contract for Saya and Blawby tenant pages — the
  * tenant-side counterpart to usePlatformPageSeo. Resolves origin (request-origin-first,
- * matching useSeoUrl/useTenantOgImage's existing precedence) and render template from the
- * current tenant site context; callers supply the rest (title, description, brand, hero
- * image, explicit override) from their own data source (bootstrap config for Saya, the
- * Blawby shell payload for Blawby).
+ * matching useSeoUrl's tenant precedence) and render template from the
+ * current tenant site context; callers supply the rest (title, description, brand and
+ * optional renderer background) from their own data source.
  */
 export function useTenantSocialMetadata(input: MaybeRefOrGetter<TenantSocialMetadataInput>) {
   const { themeId } = useTenantSite()

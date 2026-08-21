@@ -34,7 +34,7 @@ export function schedulePlatformKnowledgeIndexRebuild(
   const guarded = run.catch((error) => {
     console.error(`Failed to rebuild platform knowledge index after ${context}:`, error)
   })
-  const executionContext = event.runtime?.cloudflare?.context
+  const executionContext = event.req.runtime?.cloudflare?.context
   if (executionContext) {
     executionContext.waitUntil(guarded)
   } else {

@@ -73,16 +73,16 @@ export function rethrowHttpError(error: unknown): void {
 
 // A nested internal self-fetch (event.$fetch/useRequestFetch inside SSR) is a
 // synthetic event that Nitro dispatches locally without re-attaching
-// event.runtime.cloudflare — that's the direct, reliable signal to detect it,
+// event.req.runtime.cloudflare — that's the direct, reliable signal to detect it,
 // rather than inferring it from an absent cf-ray header. Middleware that does
 // real work (DB pragmas, tenant resolution) should guard on this before doing
 // anything, not just when deciding a log level.
 export const isInternalSelfFetch = (event: H3Event): boolean =>
-  !event.runtime?.cloudflare?.env
+  !event.req.runtime?.cloudflare?.env
 
 export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const processEnv: Record<string, string | undefined> = typeof process === 'undefined' ? {} : process.env
-  const rawRuntimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
+  const rawRuntimeEnv = event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined
   const runtimeEnv = (() => {
     const env = rawRuntimeEnv
     const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI'] as const

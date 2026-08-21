@@ -10,8 +10,9 @@ Multi-tenant platform SaaS. Nuxt 5 nightly + Nitro 3 + Cloudflare Workers + D1.
 
 | Command | What it does |
 |---|---|
-| `yarn dev` | Nuxt development server for platform/UI work at `http://localhost:3000`. |
-| `yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000` | Run the built Worker locally with Wrangler. |
+| `yarn dev` | Nuxt development server with HMR and locally emulated Cloudflare bindings at `http://localhost:3000`. |
+| `yarn dev:worker` | Build and run the production-like Worker locally with Wrangler at `http://localhost:3000`. |
+| `yarn dev:worker:start` | Run the existing `.output` Worker build locally without rebuilding it. |
 | `yarn build` | Production build → `.output/` |
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
@@ -82,20 +83,28 @@ yarn dev
 
 App at `http://localhost:3000`.
 
-For browser verification, use the generated Worker locally. Wrangler reads
-`.env` and `.dev.vars` using its
-documented local-development behavior.
+`yarn dev` is the normal application-development loop. Nitro reads the bindings
+declared in `wrangler.toml`, emulates local D1/KV/R2 resources, and preserves
+Nuxt hot module replacement. Run `yarn schema:local` and the required local seed
+before starting when the local database is empty.
+
+For production-runtime browser verification, use the generated Worker locally.
+Wrangler reads `.env` and `.dev.vars` using its documented local-development
+behavior.
 
 ```bash
 yarn test:e2e:local tests/e2e/smoke.spec.ts
 ```
 
-For a manually running built Worker:
+For a production-like local Worker:
 
 ```bash
-yarn build
-yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000
+yarn dev:worker
 ```
+
+After a successful build, `yarn dev:worker:start` restarts that same `.output`
+without rebuilding. Source edits are not compiled into `.output` automatically;
+use `yarn dev` for the normal HMR editing loop.
 
 Playwright applies the local D1 schema, clears disposable E2E artifacts, seeds
 the curated sites and verified synthetic Better Auth accounts, builds the

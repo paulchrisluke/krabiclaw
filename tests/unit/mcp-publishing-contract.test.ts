@@ -7,6 +7,7 @@ import { renderMcpPrompt } from '../../server/utils/mcp-prompts.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
+import { ONBOARDING_TOOLS } from '../../server/utils/mcp-tools/onboarding.ts'
 import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
 import { CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/index.ts'
 import { MEDIA_CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/media.ts'
@@ -172,6 +173,20 @@ test('media placement contract does not reintroduce entity-specific assignment t
     assert.equal(mcpNames.has(name), false, `${name} must not be exposed by MCP`)
     assert.equal(chowbotNames.has(name), false, `${name} must not be exposed by ChowBot`)
   }
+})
+
+test('generated menu image picker requires an exact menu item target', () => {
+  const picker = tool(ONBOARDING_TOOLS, 'show_generated_images')
+  assert.match(String((picker as unknown as { description: string }).description), /one standalone food photo per item/i)
+  const branches = picker.inputSchema.oneOf as Array<{
+    properties?: { target?: { const?: string, enum?: string[] } }
+    required?: string[]
+    not?: { anyOf?: Array<{ required: string[] }> }
+  }>
+  const menuItemBranch = branches.find(branch => branch.properties?.target?.const === 'menu_item_media')
+  assert.ok(menuItemBranch)
+  assert.deepEqual(menuItemBranch.required, ['target', 'site_id', 'menu_item_id'])
+  assert.equal(menuItemBranch.not?.anyOf?.some(candidate => candidate.required.includes('menu_item_id')), false)
 })
 
 test('photo prompt uploads each confirmed attachment once before reporting placement', () => {

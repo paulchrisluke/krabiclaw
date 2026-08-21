@@ -1,5 +1,10 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { listAccessibleLocationIds } from '~/server/utils/member-access'
+import {
+  isOrganizationWideRole,
+  isScopedRole,
+  listAccessibleLocationIds,
+  teamAccessPredicate,
+} from '~/server/utils/member-access'
 import { CONVERSATION_STATE_LABELS } from './types'
 import type {
   AnyGuestThreadSourceAdapter,
@@ -146,15 +151,26 @@ export interface OperationSummary {
 
 export async function getGuestThreadOperationSummary(
   db: DbClient,
-  siteId: string,
+  siteId: string | null,
   opts: ListGuestThreadsOptions,
 ): Promise<OperationSummary> {
-  const params: Array<string | number> = [siteId]
-  let where = 'gt.site_id = ?'
+  const params: Array<string | number> = []
+  let where = ''
+
+  if (siteId) {
+    params.push(siteId)
+    where = 'gt.site_id = ?'
+  } else if (opts.organizationId) {
+    params.push(opts.organizationId)
+    where = 'gt.organization_id = ?'
+  } else {
+    return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
+  }
+
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
-  } else if (opts.principal) {
+  } else if (opts.principal && 'siteId' in opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) {
@@ -163,6 +179,23 @@ export async function getGuestThreadOperationSummary(
       where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
       params.push(...accessibleLocationIds)
     }
+  } else if (opts.principal && isScopedRole(opts.principal.role)) {
+    where += ` AND EXISTS (
+      SELECT 1
+      FROM member m
+      JOIN sites scoped_site ON scoped_site.id = gt.site_id
+      LEFT JOIN business_locations scoped_location ON scoped_location.id = gt.location_id
+      WHERE m.id = ?
+        AND m.organizationId = ?
+        AND ${teamAccessPredicate({
+          userIdExpr: 'm.userId',
+          siteTeamExpr: 'scoped_site.team_id',
+          locationTeamExpr: 'scoped_location.team_id',
+        })}
+    )`
+    params.push(opts.principal.memberId, opts.principal.organizationId)
+  } else if (opts.principal && !isOrganizationWideRole(opts.principal.role)) {
+    return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
   }
 
   const counts = await queryFirst<OperationSummary>(db, `
@@ -209,6 +242,7 @@ async function countUnreadThreadIds(
 
 interface GuestThreadListRow extends GuestThreadRow {
   location_title: string | null
+  site_name?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
 }
@@ -225,7 +259,7 @@ export async function listGuestThreads(
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
-  } else if (opts.principal) {
+  } else if (opts.principal && 'siteId' in opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) return []
@@ -294,6 +328,127 @@ export async function listGuestThreads(
       guestName: row.guest_name,
       submissionType: row.submission_type,
       contextLabel: row.last_message_preview ?? '',
+      locationLabel: row.location_title,
+      conversationState: row.conversation_state,
+      conversationStateLabel: CONVERSATION_STATE_LABELS[row.conversation_state],
+      operationalStatus: row.operational_status,
+      operationalStatusLabel: row.operational_status ? formatOperationalStatusLabel(row.submission_type, row.operational_status) : null,
+      unread,
+      unreadCount: unread ? 1 : 0,
+      preview: row.latest_message_kind === 'message'
+        ? { kind: 'message', text: row.latest_message_body ?? '' }
+        : (row.last_message_preview ? { kind: 'submission', text: row.last_message_preview } : null),
+      lastActivityAt: row.updated_at,
+      needsAttention: row.conversation_state === 'needs_attention',
+    })
+  }
+  return items
+}
+
+export async function listOrganizationGuestThreads(
+  db: DbClient,
+  opts: Omit<ListGuestThreadsOptions, 'principal'> & {
+    organizationId: string
+    principal: {
+      memberId: string
+      role: string
+      organizationId: string
+    }
+  },
+): Promise<GuestThreadListItemViewModel[]> {
+  const params: Array<string | number> = [opts.organizationId]
+  let where = 'gt.organization_id = ?'
+
+  if (opts.siteId) {
+    where += ' AND gt.site_id = ?'
+    params.push(opts.siteId)
+  }
+  if (opts.locationId) {
+    where += ' AND gt.location_id = ?'
+    params.push(opts.locationId)
+  }
+  if (isScopedRole(opts.principal.role)) {
+    where += ` AND EXISTS (
+      SELECT 1
+      FROM member m
+      WHERE m.id = ?
+        AND m.organizationId = ?
+        AND ${teamAccessPredicate({
+          userIdExpr: 'm.userId',
+          siteTeamExpr: 's.team_id',
+          locationTeamExpr: 'bl.team_id',
+        })}
+    )`
+    params.push(opts.principal.memberId, opts.principal.organizationId)
+  } else if (!isOrganizationWideRole(opts.principal.role)) {
+    return []
+  }
+  if (opts.type) {
+    where += ' AND gt.submission_type = ?'
+    params.push(opts.type)
+  }
+  if (opts.conversationState) {
+    where += ' AND gt.conversation_state = ?'
+    params.push(opts.conversationState)
+  }
+  if (opts.search?.trim()) {
+    const like = `%${opts.search.trim().toLowerCase()}%`
+    where += ' AND (LOWER(gt.guest_name) LIKE ? OR LOWER(COALESCE(gt.guest_email, \'\')) LIKE ? OR LOWER(COALESCE(gt.guest_phone, \'\')) LIKE ?)'
+    params.push(like, like, like)
+  }
+
+  const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
+
+  const unreadFilter = opts.unreadOnly && opts.memberId
+    ? `
+      AND EXISTS (
+        SELECT 1
+        FROM guest_thread_entries e
+        LEFT JOIN guest_thread_member_state gms ON gms.thread_id = gt.id AND gms.member_id = ?
+        WHERE e.thread_id = gt.id
+          AND e.sequence > COALESCE(gms.last_read_sequence, 0)
+      )
+    `
+    : ''
+
+  const rows = await queryAll<GuestThreadListRow>(db, `
+    SELECT
+      gt.*,
+      bl.title AS location_title,
+      s.brand_name AS site_name,
+      (
+        SELECT body FROM guest_thread_entries
+        WHERE thread_id = gt.id AND kind = 'message'
+        ORDER BY sequence DESC LIMIT 1
+      ) AS latest_message_body,
+      (
+        SELECT kind FROM guest_thread_entries
+        WHERE thread_id = gt.id AND kind = 'message'
+        ORDER BY sequence DESC LIMIT 1
+      ) AS latest_message_kind
+    FROM guest_threads gt
+    LEFT JOIN business_locations bl ON bl.id = gt.location_id
+    LEFT JOIN sites s ON s.id = gt.site_id
+    WHERE ${where}
+    ${unreadFilter}
+    ORDER BY gt.updated_at DESC
+    LIMIT ?
+  `, opts.unreadOnly && opts.memberId ? [opts.memberId, ...params, limit] : [...params, limit])
+
+  const unreadIds = opts.memberId
+    ? new Set(await listUnreadThreadIds(db, rows.map(row => row.id), opts.memberId))
+    : new Set<string>()
+  const items: GuestThreadListItemViewModel[] = []
+  for (const row of rows ?? []) {
+    const unread = unreadIds.has(row.id)
+    const contextLabel = row.site_name && row.location_title
+      ? `${row.site_name} · ${row.location_title}`
+      : row.site_name || row.location_title || ''
+    items.push({
+      id: row.id,
+      guestName: row.guest_name,
+      submissionType: row.submission_type,
+      contextLabel,
       locationLabel: row.location_title,
       conversationState: row.conversation_state,
       conversationStateLabel: CONVERSATION_STATE_LABELS[row.conversation_state],

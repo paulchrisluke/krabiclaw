@@ -19,7 +19,13 @@ export function cfImageVariant(
   opts: CfImageVariantOptions = {},
 ): string | null {
   if (!url) return null
-  if (!url.includes('imagedelivery.net')) return url
+  let hostname: string
+  try {
+    hostname = new URL(url).hostname
+  } catch {
+    return url
+  }
+  if (hostname !== 'imagedelivery.net' && !hostname.endsWith('.imagedelivery.net')) return url
 
   // fit=cover requires both width AND height (Cloudflare needs both to know
   // how to crop) — passing only one dimension with fit=cover is invalid and
@@ -54,7 +60,13 @@ export function cfImageSrcset(
   opts: Omit<CfImageVariantOptions, 'width'> = {},
 ): string | null {
   if (!url) return null
-  if (!url.includes('imagedelivery.net')) return null
+  let hostname: string
+  try {
+    hostname = new URL(url).hostname
+  } catch {
+    return null
+  }
+  if (hostname !== 'imagedelivery.net' && !hostname.endsWith('.imagedelivery.net')) return null
 
   return widths
     .map((w) => `${cfImageVariant(url, { ...opts, width: w })} ${w}w`)

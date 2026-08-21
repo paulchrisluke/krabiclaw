@@ -90,7 +90,7 @@ export default defineHandler(async (event) => {
           city: geo.city || null
         })
 
-    const cfContext = event.runtime?.cloudflare?.context
+    const cfContext = event.req.runtime?.cloudflare?.context
     if (cfContext?.waitUntil) {
       cfContext.waitUntil(insertPromise.catch((error) => {
         const err = error instanceof Error ? error : new Error(String(error))

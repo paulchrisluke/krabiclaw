@@ -6,6 +6,7 @@ import {
   getGuestThreadById,
   getGuestThreadOperationSummary,
   listGuestThreads,
+  listOrganizationGuestThreads,
 } from '~/server/domain/guest-threads/repository'
 import { advanceMemberCursor } from '~/server/domain/guest-threads/read-state'
 import type {
@@ -15,6 +16,7 @@ import type {
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertMemberScope } from '~/server/utils/member-access'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
+import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export interface DashboardGuestThreadListQuery {
   locationId?: string | null
@@ -22,6 +24,10 @@ export interface DashboardGuestThreadListQuery {
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean
+}
+
+export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadListQuery {
+  siteId?: string | null
 }
 
 export async function loadDashboardGuestThreads(
@@ -100,4 +106,36 @@ export async function loadDashboardGuestThread(
     })
   }
   return { thread: detail }
+}
+
+export async function loadOrganizationGuestThreads(
+  event: H3Event,
+  query: OrganizationGuestThreadListQuery,
+) {
+  const { db, organization } = await getDashboardContext(event, { requireOrganization: true })
+  if (!organization) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+  }
+
+  const principal = {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId: organization.id,
+  }
+  const options = {
+    organizationId: organization.id,
+    siteId: query.siteId ?? null,
+    locationId: query.locationId ?? null,
+    principal,
+    memberId: organization.memberId,
+    search: query.search ?? null,
+    type: query.type ?? null,
+    conversationState: query.conversationState ?? null,
+    unreadOnly: query.unreadOnly ?? false,
+  }
+  const [threads, summary] = await Promise.all([
+    listOrganizationGuestThreads(db, options),
+    getGuestThreadOperationSummary(db, null, options),
+  ])
+  return { threads, summary }
 }

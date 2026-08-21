@@ -193,6 +193,15 @@ VALUES ('member-demo', 'org-demo', 'user-demo', 'owner', unixepoch());
 
 ${renderCompiledDemoCoreSeedBlock()}
 
+-- Preserve the canonical credentialed local browser owner across demo-only reseeds.
+-- The user/session is provisioned separately by scripts/provision-e2e-auth.ts, while
+-- deleting org-demo above cascades its membership; restore that membership when the
+-- credentialed user already exists without inventing another auth path.
+INSERT INTO member (id, organizationId, userId, role, createdAt)
+SELECT 'member-user-e2e-demo-owner-org-demo', 'org-demo', 'user-e2e-demo-owner', 'owner', unixepoch()
+WHERE EXISTS (SELECT 1 FROM user WHERE id = 'user-e2e-demo-owner')
+ON CONFLICT(id) DO UPDATE SET role = excluded.role;
+
 ${renderCompiledDemoMediaBlock()}
 
 ${renderCompiledDemoReviewsBlock()}

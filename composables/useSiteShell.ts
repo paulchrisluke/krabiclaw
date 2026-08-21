@@ -13,7 +13,7 @@ export const useSiteShellState = () => {
   const route = useRoute();
   const { locale } = useI18n();
   const isSyntheticServerAssetFetch = import.meta.server
-    && !requestEvent?.runtime?.cloudflare?.env
+    && !requestEvent?.req.runtime?.cloudflare?.env
     && (
       requestEvent?.path?.startsWith('/_i18n/')
       || requestEvent?.path?.startsWith('/_nuxt/')

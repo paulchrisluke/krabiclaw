@@ -28,16 +28,6 @@ export interface SocialImageSource {
   alt?: string
 }
 
-export function inferSocialImageMimeType(url: string): SocialImageMimeType | undefined {
-  const pathname = (() => {
-    try { return new URL(url, 'https://image.internal').pathname.toLowerCase() } catch { return '' }
-  })()
-  if (/\.jpe?g$/.test(pathname)) return 'image/jpeg'
-  if (/\.gif$/.test(pathname)) return 'image/gif'
-  if (/\.png$/.test(pathname)) return 'image/png'
-  return undefined
-}
-
 export interface SocialBrand {
   /** og:site_name and the name rendered on generated OG image cards. */
   siteName: string
@@ -62,8 +52,6 @@ export interface SocialPageMetadataInput {
   brand: SocialBrand
   /** A real photo to feature (article hero, offering photo, location photo). */
   heroImage?: SocialImageSource | null
-  /** Explicit user-provided OG image override — always wins when present. */
-  ogImageOverride?: SocialImageSource | null
   /** Short eyebrow/category shown on the generated card (e.g. "Service", "Blog"). */
   label?: string | null
   location?: string | null
@@ -147,12 +135,9 @@ export function composeSocialMetadata(
     ogUrl: input.canonicalUrl,
     ogSiteName: input.brand.siteName,
     ogImage: resolvedOgImage.url,
-    // Only asserted when the resolver actually knows the real dimensions (generated
-    // cards always know; a raw explicit override without dimensions omits these tags
-    // rather than assert incorrect 1200x630 metadata for an arbitrary image).
     ogImageWidth: resolvedOgImage.width,
     ogImageHeight: resolvedOgImage.height,
-    ogImageType: resolvedOgImage.type || inferSocialImageMimeType(resolvedOgImage.url),
+    ogImageType: resolvedOgImage.type,
     ogImageAlt: alt,
     twitterCard: 'summary_large_image',
     twitterTitle: title,
@@ -221,20 +206,9 @@ export function buildOgImageUrl(origin: string, payload: OgImageRenderPayload): 
   return new URL(`${OG_IMAGE_ROUTE}?${params.toString()}`, origin).toString()
 }
 
-/**
- * Explicit overrides take precedence; otherwise every page gets a template-aware
- * generated 1200×630 card (hero photo as composited background, title/description/brand
- * overlay) rather than a raw hero image or logo at the wrong aspect ratio.
- */
+/** Every page gets a template-aware generated 1200×630 card. Media is composited as
+ * background input; no raw asset can bypass the title/description/brand renderer. */
 export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: string): SocialImageSource {
-  if (input.ogImageOverride?.url) {
-    return {
-      ...input.ogImageOverride,
-      url: new URL(input.ogImageOverride.url, origin).toString(),
-      type: input.ogImageOverride.type || inferSocialImageMimeType(input.ogImageOverride.url),
-    }
-  }
-
   const renderPayload: OgImageRenderPayload = {
     template: input.template,
     title: input.title,

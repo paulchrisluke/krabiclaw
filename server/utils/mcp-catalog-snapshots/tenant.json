@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:954ad68054220035f75891ad06aa3c6f3162b30f5f8c43702005115169d8ff45",
+  "fingerprint": "sha256:a96b258173230424feade2efb827f0adea77bdbb6cdcd3ac13a590eb826197f4",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -1117,7 +1117,7 @@
             ]
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this experience's social share image. If unset, social sharing uses the first image or video poster from the ordered media list.",
+            "description": "Optional asset id from get_site_media_assets used as the background inside this experience's generated social card. It never replaces the generated title and branding.",
             "type": [
               "string",
               "null"
@@ -1347,7 +1347,7 @@
             "type": "number"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to location hero media, then the site-level og image, if unset.",
+            "description": "Optional asset id from get_site_media_assets used as the background inside this page's generated social card. It never replaces the generated title and branding.",
             "type": [
               "string",
               "null"
@@ -1674,7 +1674,7 @@
             "type": "string"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to the site-level og image if unset.",
+            "description": "Optional asset id from get_site_media_assets used as the background inside this page's generated social card. It never replaces the generated title and branding.",
             "type": [
               "string",
               "null"
@@ -10845,6 +10845,179 @@
       "name": "show_generated_images",
       "inputSchema": {
         "additionalProperties": true,
+        "oneOf": [
+          {
+            "not": {
+              "required": [
+                "target"
+              ]
+            }
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target": {
+                "enum": [
+                  "logo",
+                  "home_hero",
+                  "about_story_image",
+                  "home_story_image"
+                ]
+              }
+            },
+            "required": [
+              "target",
+              "site_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target": {
+                "const": "location_hero"
+              }
+            },
+            "required": [
+              "target",
+              "site_id",
+              "location_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target": {
+                "const": "post_image"
+              }
+            },
+            "required": [
+              "target",
+              "site_id",
+              "post_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target": {
+                "const": "menu_item_media"
+              }
+            },
+            "required": [
+              "target",
+              "site_id",
+              "menu_item_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target": {
+                "const": "experience_image"
+              }
+            },
+            "required": [
+              "target",
+              "site_id",
+              "experience_id"
+            ]
+          }
+        ],
         "properties": {
           "experience_id": {
             "type": "string"
@@ -13134,7 +13307,7 @@
             ]
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this experience's social share image. If unset, social sharing uses the first image or video poster from the ordered media list.",
+            "description": "Optional asset id from get_site_media_assets used as the background inside this experience's generated social card. It never replaces the generated title and branding.",
             "type": [
               "string",
               "null"
@@ -13548,7 +13721,7 @@
             "type": "string"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to location hero media, then the site-level og image, if unset.",
+            "description": "Optional asset id from get_site_media_assets used as the background inside this page's generated social card. It never replaces the generated title and branding.",
             "type": [
               "string",
               "null"
@@ -13951,7 +14124,7 @@
             "type": "string"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to the site-level og image if unset.",
+            "description": "Optional asset id from get_site_media_assets used as the background inside this page's generated social card. It never replaces the generated title and branding.",
             "type": [
               "string",
               "null"

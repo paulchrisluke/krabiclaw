@@ -31,7 +31,7 @@ interface OgImageBindings {
 }
 
 function getBindings(event: H3Event): OgImageBindings {
-  return (event.runtime?.cloudflare?.env as OgImageBindings | undefined) ?? {}
+  return (event.req.runtime?.cloudflare?.env as OgImageBindings | undefined) ?? {}
 }
 
 /** The one image-generation/cache/response pipeline every OG image request goes through. */
@@ -56,7 +56,7 @@ export async function resolveOgImage(
 
   try {
     const bytes = await (deps.render ?? renderOgImagePng)(payload, {
-      platformDomain: (event.runtime?.cloudflare?.env as OgImageBindings | undefined)?.NUXT_PUBLIC_PLATFORM_DOMAIN,
+      platformDomain: (event.req.runtime?.cloudflare?.env as OgImageBindings | undefined)?.NUXT_PUBLIC_PLATFORM_DOMAIN,
     })
     if (SITE_CACHE) {
       try {

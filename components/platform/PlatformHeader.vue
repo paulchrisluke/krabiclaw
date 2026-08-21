@@ -25,9 +25,6 @@
 
       <!-- Right actions -->
       <div class="flex items-center gap-2 shrink-0">
-        <NuxtLink to="/login" class="hidden sm:inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-default no-underline">
-          Login
-        </NuxtLink>
         <NuxtLink to="/signup" class="hidden sm:inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 no-underline">
           Start free
         </NuxtLink>
@@ -52,9 +49,6 @@
                 {{ item.label }}
               </NuxtLink>
               <div class="pt-4 space-y-2">
-                <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline" @click="closeMobileMenu">
-                  Login
-                </NuxtLink>
                 <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
                   Start free
                 </NuxtLink>

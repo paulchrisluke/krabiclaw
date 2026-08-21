@@ -444,13 +444,6 @@ const mediaItems = computed(() => {
   return []
 })
 
-const experienceCoverImageUrl = computed(() => {
-  const cover = experience.value?.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url || null
-  if (cover?.kind === 'video') return cover.thumbnail_url || null
-  return null
-})
-
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
   const h = Math.floor(minutes / 60)
@@ -611,7 +604,7 @@ const seoDescription = computed(() =>
 )
 
 const { canonicalUrl } = useTenantSocialMetadata(() => {
-  const heroImageUrl = experience.value?.og_image_public_url || experienceCoverImageUrl.value
+  const heroImageUrl = experience.value?.og_image_public_url || null
   return {
     path: experience.value?.canonical_url || `/experiences/${slug}`,
     title: seoTitle.value,

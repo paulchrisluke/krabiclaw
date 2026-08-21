@@ -108,7 +108,7 @@ export function describeMcpAuthTelemetryError(
 
 export function getCloudflareWaitUntil(event: H3Event): ((_promise: Promise<unknown>) => void) | undefined {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ctx = (event.runtime?.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
+  const ctx = (event.req.runtime?.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
   return ctx?.waitUntil?.bind(ctx)
 }
 

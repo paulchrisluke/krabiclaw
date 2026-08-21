@@ -1,6 +1,19 @@
 import type { McpToolDefinition } from './shared'
 import { fileReferenceObject, generatedImagePickerOutputSchema, globalTool, siteTool, withToolAnnotations } from './shared'
 
+const generatedImageEntityIdFields = ['location_id', 'post_id', 'menu_item_id', 'experience_id'] as const
+
+function generatedImageTargetBranch(targets: string[], requiredEntityId?: typeof generatedImageEntityIdFields[number]) {
+  const forbiddenEntityIds = generatedImageEntityIdFields.filter(field => field !== requiredEntityId)
+  return {
+    properties: {
+      target: targets.length === 1 ? { const: targets[0] } : { enum: targets },
+    },
+    required: ['target', 'site_id', ...(requiredEntityId ? [requiredEntityId] : [])],
+    not: { anyOf: forbiddenEntityIds.map(field => ({ required: [field] })) },
+  }
+}
+
 export const ONBOARDING_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'import_from_maps',
@@ -53,7 +66,7 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
     })),
   globalTool(withToolAnnotations({
       name: 'show_generated_images',
-      description: 'Use this after generating AI photos for the user to pick from — the picker for AI-generated images. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here. Include target metadata when the selected image should be applied directly.',
+      description: 'Use this after generating AI photos for the user to pick from — the picker for AI-generated images. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here. A targeted picker represents exactly one content placement and requires the matching entity id. For multiple menu items, generate one standalone food photo per item and call this separately for each exact menu_item_id; never use a collage, website screenshot, or UI mockup as menu-item media.',
       domain: 'onboarding',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -81,6 +94,14 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
           regenerate_label: { type: 'string', description: 'Optional label for the secondary button.' },
         },
         required: ['images'],
+        oneOf: [
+          { not: { required: ['target'] } },
+          generatedImageTargetBranch(['logo', 'home_hero', 'about_story_image', 'home_story_image']),
+          generatedImageTargetBranch(['location_hero'], 'location_id'),
+          generatedImageTargetBranch(['post_image'], 'post_id'),
+          generatedImageTargetBranch(['menu_item_media'], 'menu_item_id'),
+          generatedImageTargetBranch(['experience_image'], 'experience_id'),
+        ],
         additionalProperties: true,
       },
       outputSchema: generatedImagePickerOutputSchema,

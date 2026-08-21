@@ -1,7 +1,7 @@
 <template>
   <div>
-    <h1 class="text-4xl font-extrabold tracking-tight text-default">Welcome back</h1>
-    <p class="mt-2 mb-7 text-sm text-muted">Sign in to continue.</p>
+    <h1 class="text-4xl font-extrabold tracking-tight text-default">Continue to KrabiClaw</h1>
+    <p class="mt-2 mb-7 text-sm text-muted">Google and WhatsApp will sign you in or create your account automatically.</p>
 
     <div v-if="notice" role="status" class="mb-4 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-600">{{ notice }}</div>
     <div v-if="operationError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ operationError }}</div>
@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <p v-if="!isWhatsAppMode" class="mt-6 text-center text-sm text-muted">New to KrabiClaw? <NuxtLink :to="signupUrl" class="font-semibold text-primary">Create an account</NuxtLink></p>
+    <p v-if="!isWhatsAppMode" class="mt-6 text-center text-sm text-muted">Want to use email and password? <NuxtLink :to="signupUrl" class="font-semibold text-primary">Create an email account</NuxtLink></p>
   </div>
 </template>
 

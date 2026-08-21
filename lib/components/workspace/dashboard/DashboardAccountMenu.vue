@@ -1,11 +1,12 @@
 <template>
   <UDropdownMenu
-    v-if="!mobileOnly"
     :items="items"
-    :content="{ align: 'start', collisionPadding: 12, side: 'top', sideOffset: 12 }"
-    :ui="{ content: 'w-[260px]' }"
+    :content="menuContent"
+    :modal="false"
+    :ui="menuUi"
   >
     <UButton
+      v-if="!mobileOnly"
       color="neutral"
       variant="ghost"
       class="dashboard-account-menu-button w-full min-w-0 cursor-pointer hover:text-highlighted"
@@ -16,99 +17,54 @@
       :trailing-icon="collapsed ? undefined : 'i-lucide-ellipsis'"
       data-testid="dashboard-account-menu-button"
     />
-
-    <template #content-top>
-      <div class="flex flex-col px-2.5 py-2">
-        <span class="text-sm font-semibold text-highlighted truncate">{{ renderedUser?.name || 'User' }}</span>
-        <span class="text-xs text-muted truncate mt-0.5">{{ renderedUser?.email }}</span>
-      </div>
-    </template>
-
-    <template #theme>
-      <div class="flex w-full items-center justify-between px-2.5 py-1.5 text-sm font-medium text-default">
-        <span>Theme</span>
-        <div class="bg-muted border border-default p-0.5 rounded-full flex items-center gap-0.5 shadow-inner">
-          <button
-            v-for="pref in ['system', 'light', 'dark'] as const"
-            :key="pref"
-            class="rounded-full size-7 flex items-center justify-center transition-all cursor-pointer"
-            :class="preference === pref ? 'bg-elevated text-highlighted shadow-sm border border-default' : 'text-dimmed hover:text-muted'"
-            :aria-label="`${pref} theme`"
-            :aria-pressed="preference === pref"
-            @click="setPreference(pref)"
-          >
-            <UIcon :name="getThemeIcon(pref)" class="size-3.5" />
-          </button>
-        </div>
-      </div>
-    </template>
-
-    <template #content-bottom>
-      <div class="px-2.5 py-2.5 flex items-center justify-between select-none border-t border-default">
-        <div class="flex flex-col">
-          <span class="text-[10px] text-dimmed uppercase tracking-wider font-semibold">Platform Status</span>
-          <span class="text-xs font-semibold text-highlighted mt-0.5">
-            {{ platformStatus === 'normal' ? 'All systems normal.' : platformStatus === 'loading' ? 'Checking status...' : 'System interruption' }}
-          </span>
-        </div>
-        <span class="relative flex size-2">
-          <span
-            class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
-            :class="{
-              'bg-success': platformStatus === 'normal',
-              'bg-warning': platformStatus === 'loading',
-              'bg-error': platformStatus === 'error'
-            }"
-          />
-          <span
-            class="relative inline-flex size-2 rounded-full"
-            :class="{
-              'bg-success': platformStatus === 'normal',
-              'bg-warning': platformStatus === 'loading',
-              'bg-error': platformStatus === 'error'
-            }"
-          />
-        </span>
-      </div>
-    </template>
-  </UDropdownMenu>
-
-  <template v-else>
     <UButton
+      v-else
       color="neutral"
       variant="ghost"
       square
       :avatar="{ src: renderedUser?.image ?? undefined, alt: renderedUser?.name || 'User avatar', size: 'sm' }"
       aria-label="Open account menu"
-      @click="mobileOpen = true"
+      data-testid="dashboard-mobile-account-menu-button"
     />
-    <UModal
-      v-model:open="mobileOpen"
-      title="Account menu"
-      :close="false"
-      :ui="{ overlay: 'md:hidden', content: 'fixed inset-x-0 bottom-0 top-auto max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-default bg-elevated p-4 shadow-2xl sm:max-w-none md:hidden' }"
-    >
-      <template #content>
-        <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-accented" />
-        <div class="mb-3 px-3"><p class="font-semibold text-highlighted">{{ renderedUser?.name || 'User' }}</p><p class="truncate text-sm text-muted">{{ renderedUser?.email }}</p></div>
-        <nav class="divide-y divide-default border-y border-default">
-          <NuxtLink :to="profileTo" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-user" class="size-5" /><span>Profile</span><UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-dimmed" /></NuxtLink>
-          <div class="mobile-account-row"><span>Theme</span><div class="ml-auto flex gap-1"><UButton v-for="pref in ['system', 'light', 'dark'] as const" :key="pref" :icon="getThemeIcon(pref)" square size="xs" color="neutral" :variant="preference === pref ? 'soft' : 'ghost'" :aria-label="`${pref} theme`" @click="setPreference(pref)" /></div></div>
-          <a :href="config.public.helpUrl as string" target="_blank" class="mobile-account-row"><UIcon name="i-lucide-circle-help" class="size-5" /><span>Help</span></a>
-          <NuxtLink to="/docs" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-book-open" class="size-5" /><span>Docs</span></NuxtLink>
-          <button type="button" class="mobile-account-row w-full text-error" @click="handleSignOut"><UIcon name="i-lucide-log-out" class="size-5" /><span>Log Out</span></button>
-        </nav>
-        <div class="flex items-center justify-between px-3 pt-4 text-sm"><span class="text-muted">Platform Status</span><span class="font-medium text-highlighted">{{ platformStatus === 'normal' ? 'All systems normal.' : platformStatus === 'loading' ? 'Checking status...' : 'System interruption' }}</span></div>
-      </template>
-    </UModal>
-  </template>
+
+    <template #content-top>
+      <NuxtLink :to="settingsTo" class="account-summary">
+        <UAvatar :src="renderedUser?.image ?? undefined" :alt="renderedUser?.name || 'User avatar'" size="sm" />
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm font-semibold text-highlighted">{{ renderedUser?.name || 'User' }}</span>
+          <span class="mt-0.5 block truncate text-xs text-muted">{{ renderedUser?.email }}</span>
+        </span>
+        <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
+      </NuxtLink>
+    </template>
+
+    <template #theme>
+      <div class="flex h-10 w-full items-center justify-between px-2.5 text-sm font-medium text-default">
+        <span class="flex items-center gap-2.5"><UIcon name="i-lucide-palette" class="size-4 text-muted" />Theme</span>
+        <div class="flex items-center gap-0.5 rounded-full border border-default bg-muted p-0.5">
+          <button
+            v-for="pref in ['system', 'light', 'dark'] as const"
+            :key="pref"
+            type="button"
+            class="flex size-6 cursor-pointer items-center justify-center rounded-full transition-colors"
+            :class="preference === pref ? 'bg-elevated text-highlighted shadow-sm border border-default' : 'text-dimmed hover:text-muted'"
+            :aria-label="`${pref} theme`"
+            :aria-pressed="preference === pref"
+            @click.stop="setPreference(pref)"
+          >
+            <UIcon :name="getThemeIcon(pref)" class="size-3" />
+          </button>
+        </div>
+      </div>
+    </template>
+  </UDropdownMenu>
 </template>
 
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 
-defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
+const props = defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
 
 const { sessionData } = await useAuthSession()
 const { signOut } = useAuth()
@@ -116,7 +72,6 @@ const route = useRoute()
 const dashboard = useDashboardSite()
 const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
-const mobileOpen = ref(false)
 const renderedUser = computed(() => sessionData.value?.user ?? null)
 const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed((): Record<string, string> => {
   const organization = dashboard.organization.value
@@ -124,9 +79,23 @@ const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed((): Rec
   return { organization: organization.slug, organizationName: organization.name }
 }))
 
-const profileTo = computed(() => ({
-  path: '/dashboard/account/profile',
+const settingsTo = computed(() => ({
+  path: '/dashboard/account',
   query: accountRouteQuery.value,
+}))
+
+const menuContent = computed(() => ({
+  align: props.mobileOnly ? 'end' as const : 'start' as const,
+  collisionPadding: 12,
+  side: 'top' as const,
+  sideOffset: 12,
+}))
+const menuUi = computed(() => ({
+  content: props.mobileOnly
+    ? 'max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-3xl p-2 shadow-2xl'
+    : 'w-64 rounded-2xl p-1.5 shadow-xl',
+  item: 'min-h-10 rounded-xl px-2.5 py-2 text-sm',
+  separator: 'my-1',
 }))
 
 function getThemeIcon(pref: 'system' | 'light' | 'dark') {
@@ -134,23 +103,6 @@ function getThemeIcon(pref: 'system' | 'light' | 'dark') {
   if (pref === 'light') return 'i-lucide-sun'
   return 'i-lucide-moon'
 }
-
-const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
-
-async function checkPlatformStatus() {
-  try {
-    // Use $fetch for platform health check (not dashboard-scoped API traffic)
-    const res = await $fetch<{ status: string }, string>('/api/health')
-    platformStatus.value = res.status === 'ok' ? 'normal' : 'error'
-  } catch (err) {
-    console.error('Failed to fetch platform status:', err)
-    platformStatus.value = 'error'
-  }
-}
-
-onMounted(() => {
-  checkPlatformStatus().catch(console.error)
-})
 
 async function handleSignOut() {
   // Preserve the current path across sign-out/sign-back-in like
@@ -164,8 +116,10 @@ async function handleSignOut() {
 }
 
 const items = computed<DropdownMenuItem[][]>(() => [
-  [{ label: 'Profile', icon: 'i-lucide-user', to: profileTo.value }],
-  [{ slot: 'theme', onSelect: (e: Event) => e.preventDefault() }],
+  [
+    { label: 'Settings', icon: 'i-lucide-settings', to: settingsTo.value },
+  ],
+  [{ slot: 'theme', onSelect: (event: Event) => event.preventDefault(), ui: { item: 'p-0' } }],
   [
     { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
     { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
@@ -180,14 +134,17 @@ const items = computed<DropdownMenuItem[][]>(() => [
   background-color: var(--ui-bg-accented) !important;
 }
 
-.mobile-account-row {
+.account-summary {
   display: flex;
-  min-height: 52px;
+  min-height: 3.25rem;
   align-items: center;
   gap: 0.75rem;
-  padding-inline: 0.75rem;
-  color: var(--ui-text);
-  font-size: 0.875rem;
-  font-weight: 500;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: 0.75rem 0.75rem 0 0;
+  padding: 0.5rem 0.625rem 0.75rem;
+}
+
+.account-summary:hover {
+  background: var(--ui-bg-accented);
 }
 </style>

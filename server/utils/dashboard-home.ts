@@ -2,6 +2,10 @@ import { queryAll, type DbClient } from '~/server/db'
 import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
+import { loadSettingsPayload } from '~/server/utils/site-settings'
+import { listTenantPages } from '~/server/utils/tenant-pages'
+import { listMediaAssets } from '~/server/utils/media-asset-manager'
+import { getLinksPage } from '~/server/utils/site-links'
 
 export interface DashboardHomeLocation {
   id: string
@@ -13,7 +17,6 @@ export interface DashboardHomeLocation {
   is_primary: boolean
   status: string
   updated_at: string
-  hero_url: string | null
   address: { addressLines?: string[] } | null
   latitude: number | null
   longitude: number | null
@@ -42,6 +45,10 @@ export interface DashboardHomeData {
     reservations: number
     experienceBookings: number
   }
+  settings: Awaited<ReturnType<typeof loadSettingsPayload>>
+  pages: Awaited<ReturnType<typeof listTenantPages>>
+  media: Array<Awaited<ReturnType<typeof listMediaAssets>>[number] & { public_url: string }>
+  links: Awaited<ReturnType<typeof getLinksPage>>['items']
 }
 
 function safeJsonParse(value: string): unknown {
@@ -63,7 +70,7 @@ function parseLocationAddress(value: string | null): { addressLines?: string[] }
   throw new Error('Stored location address is missing address lines')
 }
 
-// Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR
+// Shared by server/api/dashboard/home.get.ts and the site overview page's SSR
 // branch — see the "Nested SSR self-fetch loses Cloudflare bindings" rule in
 // the SSR boundary rule for why the page can't just $fetch its own API route.
 export async function getDashboardHomeData(
@@ -96,22 +103,18 @@ export async function getDashboardHomeData(
           AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}
       )`
     : ''
-  const [locations, events, operations] = await Promise.all([
+  const [locations, events, operations, settings, pages, media, linksPage] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
-      hero_url: string | null
       address: string | null; maps_url: string | null
       latitude: number | null; longitude: number | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
              bl.address, bl.maps_url, bl.latitude, bl.longitude,
-             bl.is_primary, bl.status, bl.updated_at,
-             COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
+             bl.is_primary, bl.status, bl.updated_at
       FROM business_locations bl
-      LEFT JOIN media_assets ma_hero ON ma_hero.id = bl.hero_media_asset_id
-        AND ma_hero.organization_id = bl.organization_id AND ma_hero.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
@@ -143,9 +146,11 @@ export async function getDashboardHomeData(
         : null,
       memberId: principal?.memberId ?? '',
     }),
+    loadSettingsPayload(db, organizationId, siteId),
+    listTenantPages(db, siteId),
+    listMediaAssets(db, siteId, { kind: 'image', limit: 6, offset: 0 }),
+    getLinksPage(db, siteId),
   ])
-
-  const operationCounts = operations ?? { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
 
   return {
     locations: locations.map((l) => {
@@ -162,10 +167,17 @@ export async function getDashboardHomeData(
       metadata: e.metadata ? safeJsonParse(e.metadata) : null,
     })),
     operations: {
-      openThreads: operationCounts.openThreads ?? 0,
-      unreadThreads: operationCounts.unreadThreads ?? 0,
-      reservations: operationCounts.reservations ?? 0,
-      experienceBookings: operationCounts.experienceBookings ?? 0,
+      openThreads: operations.openThreads,
+      unreadThreads: operations.unreadThreads,
+      reservations: operations.reservations,
+      experienceBookings: operations.experienceBookings,
     },
+    settings,
+    pages,
+    media: media.map((asset) => {
+      if (!asset.public_url) throw new Error(`Active overview media asset ${asset.id} has no public URL`)
+      return { ...asset, public_url: asset.public_url }
+    }),
+    links: linksPage.items,
   }
 }
