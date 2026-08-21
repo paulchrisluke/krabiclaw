@@ -26,18 +26,19 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   }
 
   const pathname = requestUrl.pathname
+  const rawBody = await request.arrayBuffer()
   const shouldNormalizePhone = [
     '/api/auth/phone-number/send-otp',
     '/api/auth/phone-number/verify',
     '/api/auth/sign-in/phone-number',
   ].includes(pathname)
   if (!shouldNormalizePhone) {
-    return new Request(url, { method: request.method, headers: request.headers, body: request.body })
+    return new Request(url, { method: request.method, headers: request.headers, body: rawBody })
   }
 
-  const body = await request.clone().json().catch(() => null) as { phoneNumber?: unknown } | null
+  const body = await new Response(rawBody).json().catch(() => null) as { phoneNumber?: unknown } | null
   if (!body || typeof body.phoneNumber !== 'string') {
-    return new Request(url, { method: request.method, headers: request.headers, body: request.body })
+    return new Request(url, { method: request.method, headers: request.headers, body: rawBody })
   }
 
   const headers = new Headers(request.headers)

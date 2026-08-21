@@ -1,90 +1,9 @@
-<template>
-  <UDashboardPanel id="site-locations">
-    <template #header>
-      <UDashboardNavbar title="Locations">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template #trailing>
-          <UButton
-            v-if="canManageSite"
-            icon="i-lucide-plus"
-            label="Add location"
-            size="sm"
-            color="primary"
-            variant="soft"
-            :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/locations/new`"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div v-if="locations.length === 0" class="py-16 text-center">
-        <UIcon name="i-lucide-map-pin" class="size-8 text-muted mx-auto mb-3" />
-        <p class="text-sm text-muted">No locations yet.</p>
-        <UButton
-          v-if="canManageSite"
-          label="Add your first location"
-          size="sm"
-          color="primary"
-          class="mt-4"
-          :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/locations/new`"
-        />
-      </div>
-
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <NuxtLink
-          v-for="location in locations"
-          :key="location.id"
-          :to="locationPath(location.id)"
-          class="group block"
-        >
-          <UCard variant="soft" class="h-full cursor-pointer">
-            <div class="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
-              <img
-                :src="cfImageVariant(location.og_image_url, { width: 640 }) ?? location.og_image_url"
-                :alt="location.title"
-                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
-              />
-            </div>
-            <div class="p-4">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="text-sm font-semibold text-highlighted truncate">{{ location.title }}</p>
-                  <p class="text-xs text-muted">{{ location.city || addressText(location.address) || 'Location' }}</p>
-                </div>
-                <UBadge
-                  v-if="location.status"
-                  :label="location.status"
-                  color="neutral"
-                  variant="soft"
-                  size="xs"
-                />
-              </div>
-            </div>
-          </UCard>
-        </NuxtLink>
-      </div>
-    </template>
-  </UDashboardPanel>
-</template>
-
 <script setup lang="ts">
-import { cfImageVariant } from '~/utils/cf-image'
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Locations | KrabiClaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
-const dashboard = useDashboardSite()
-const siteId = await useDashboardSiteId()
-const { locationPath } = useDashboardSiteLinks(siteId)
-
-const locations = computed(() => dashboard.locations.value)
-const canManageSite = computed(() => dashboard.siteAccess.value === 'organization' || dashboard.siteAccess.value === 'site')
-
-function addressText(address: { addressLines?: string[] } | null) {
-  return address?.addressLines?.filter(Boolean).join(', ') ?? ''
-}
+await navigateTo(
+  `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`,
+  { redirectCode: 301, replace: true },
+)
 </script>

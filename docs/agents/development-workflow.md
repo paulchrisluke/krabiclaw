@@ -129,10 +129,48 @@ What each step prevents:
   artifacts, seeds curated sites and verified synthetic Better Auth
   credentials, builds the production Worker, and runs it in local workerd.
 
+### Manual authenticated browser development
+
+Playwright generates its own random `E2E_TEST_PASSWORD` and keeps it inside the
+test process. A successful Playwright run may leave a valid browser session, but
+it does not establish a known password that a contributor or browser agent can
+reuse later. Do not search `.env` for a committed fixture password and do not add
+an authentication bypass.
+
+For normal HMR development with an authenticated dashboard, use this exact
+sequence:
+
+```bash
+yarn schema:local
+yarn seed:local
+E2E_TEST_PASSWORD='choose-a-local-only-password' yarn auth:e2e:local:provision
+yarn dev
+```
+
+Open `http://localhost:3000/login` and sign in with:
+
+```text
+Email: demo-owner@playwright.example
+Password: the value supplied as E2E_TEST_PASSWORD above
+```
+
+Fixture identities and their organization/site scopes live in
+`config/e2e-auth-fixtures.ts`; every credential fixture receives the same
+password supplied for that provisioning run. The provisioner uses local D1 by
+default. Never add `--preview` or `--staging` for routine local development.
+
+Provisioning is destructive only to the synthetic authentication fixtures: it
+replaces their credential hashes, organization/team memberships, and deletes
+their current sessions. It does not invent a fallback login. After running it,
+all previously authenticated fixture browsers must sign in again with the new
+password.
+
 If a browser test fails in a fresh worktree, check these setup symptoms first:
 
 - `Process from config.webServer was not able to start`: run the documented
-  preparation and built-Worker command visibly — `yarn e2e:local:prepare && yarn dev:worker:start` — and read the startup error.
+  preparation and built-Worker commands visibly —
+  `E2E_TEST_PASSWORD='local-only-password' yarn e2e:local:prepare` followed by
+  `yarn dev:worker:start` — and read the startup error.
 - Better Auth reports `Invalid origin: http://krabiclaw.com` for a localhost
   request: stop the Worker and restart the documented command
   `yarn dev:worker:start`; do not repair this by changing application auth allowlists or by adding a production-origin override to `.env`.

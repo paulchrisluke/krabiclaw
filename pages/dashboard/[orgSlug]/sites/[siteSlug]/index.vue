@@ -4,7 +4,6 @@
       <UDashboardNavbar
         :title="siteName"
         :toggle="false"
-        :ui="{ left: 'mx-auto w-full max-w-[var(--ws-page-narrow,45rem)]' }"
       >
         <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
@@ -13,18 +12,14 @@
     <template #body>
       <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)] pb-24">
         <div class="mb-3 flex items-center gap-2.5">
-          <div class="grid flex-1 grid-cols-2 rounded-full bg-elevated p-1">
-            <button
-              v-for="item in tabs"
-              :key="item.value"
-              type="button"
-              class="rounded-full px-4 py-2 text-sm font-semibold transition"
-              :class="activeTab === item.value ? 'bg-default text-highlighted shadow-sm' : 'text-muted hover:text-highlighted'"
-              @click="activeTab = item.value"
-            >
-              {{ item.label }}
-            </button>
-          </div>
+          <UTabs
+            v-model="activeTab"
+            :items="tabs"
+            :content="false"
+            variant="pill"
+            class="min-w-0 flex-1"
+            :ui="{ list: 'w-full', trigger: 'flex-1' }"
+          />
           <UButton
             v-if="canManageSite"
             :to="`${siteDashboardPath}/settings`"

@@ -2,11 +2,11 @@
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
     <!-- Body: wizard left, preview right. Single column with vertical scroll
-         below sm so the wizard pane (min 24rem) never gets hard-clipped by
-         overflow-hidden on narrow viewports; two-column split from sm up. -->
+         below the shared dashboard desktop breakpoint so the wizard pane never
+         gets hard-clipped; two-column split begins with the desktop shell. -->
     <div
       v-if="loaded && !loadError"
-      class="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto sm:grid-cols-[minmax(24rem,45%)_1fr] sm:overflow-hidden"
+      class="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(24rem,45%)_1fr] lg:overflow-hidden"
       style="grid-template-rows: minmax(0, 1fr)"
     >
       <TransferOnboardingWizard

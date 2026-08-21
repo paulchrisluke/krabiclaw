@@ -3,7 +3,7 @@
 
     <div
       v-if="contextLoaded && !contextError"
-      class="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(24rem,45%)_1fr]"
+      class="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[minmax(24rem,45%)_1fr]"
     >
       <OnboardingWizard
         mode="new-site"
@@ -18,7 +18,7 @@
       />
       <OnboardingPreviewPane
         v-if="!isMobilePreviewViewport"
-        class="hidden md:flex"
+        class="hidden lg:flex"
         :iframe-src="iframeSrc"
         :site-locations="previewLocations"
         :selected-location-id="selectedLocationId"
@@ -393,7 +393,7 @@ const onDraftCleared = () => {
 
 // ─── Toast from query params ──────────────────────────────────────────────────
 onMounted(async () => {
-  const mobilePreviewQuery = window.matchMedia('(max-width: 767.98px)')
+  const mobilePreviewQuery = window.matchMedia('(max-width: 991.98px)')
   const updateMobilePreviewViewport = () => {
     isMobilePreviewViewport.value = mobilePreviewQuery.matches
     if (!mobilePreviewQuery.matches) mobilePreviewOpen.value = false

@@ -48,7 +48,7 @@
         v-model:collapsed="sidebarCollapsed"
         resizable
         collapsible
-        class="hidden md:flex"
+        class="hidden lg:flex"
         :menu="{ close: false }"
         :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
       >
@@ -89,7 +89,7 @@
 
     <div
       v-if="mobileNavItems.length && !isAccountRoute"
-      class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 md:hidden"
+      class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden"
       data-testid="dashboard-mobile-nav"
     >
       <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
@@ -145,8 +145,8 @@ import '~/assets/css/dashboard.css'
 //   Site items must not leak into location scope and vice versa — this was a
 //   real bug here once, caused by checking "does siteBase/locationBase exist"
 //   instead of "does the manager's scope match the CURRENT scope".
-// - At md and above, the parent row is a normal UNavigationMenu item built from
-//   scopeHeaderModel.parent. Below md the same model is provided to
+// - At lg and above, the parent row is a normal UNavigationMenu item built from
+//   scopeHeaderModel.parent. Below lg the same model is provided to
 //   DashboardNavbarLeading because the sidebar is hidden.
 // - New verticals/templates need zero changes here — add the combination to
 //   cmsCapabilityRegistry and nav/capabilities update automatically. A new
@@ -352,13 +352,18 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   if (scope.value === 'site' || scope.value === 'location') {
     return {
       scope: 'site',
-      current: { label: siteLabel.value, icon: 'i-lucide-globe' },
+      current: {
+        label: siteLabel.value,
+        avatar: site.value?.logo_url ?? undefined,
+        icon: site.value?.logo_url ? undefined : 'i-lucide-globe'
+      },
       parent: scope.value === 'location' && siteBase.value
         ? { label: siteLabel.value, to: siteBase.value }
         : orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
       peers: sites.value.map((s) => ({
         label: s.brand_name ?? s.subdomain ?? s.id,
-        icon: 'i-lucide-globe',
+        avatar: s.logo_url ?? undefined,
+        icon: s.logo_url ? undefined : 'i-lucide-globe',
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
       })),
@@ -487,7 +492,7 @@ function _revenueLabel(item: ReturnType<typeof _managerAction>) {
 const organizationNavigationItems = computed(() => {
   if (!orgBase.value) return []
   return [
-    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: orgBase.value },
+    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: orgBase.value },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
     { key: 'sites', label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${orgBase.value}/inbox` },
@@ -536,11 +541,10 @@ const _siteOverviewGroup = computed(() => {
 const _locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
   return [
-    { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
+    { label: 'Location', icon: 'i-lucide-map-pin', to: `${locationBase.value}/settings` },
     ...(canManageSite.value ? [{ label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` }] : []),
     ...(siteBase.value && canManageSite.value ? [{ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` }] : []),
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
-    { label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings` },
   ]
 })
 
@@ -650,7 +654,7 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
       ? `${routeLocationBase}/inbox`
       : routeSiteBase ? `${routeSiteBase}/inbox` : undefined
   const items: DashboardMobileNavItem[] = [
-    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: routeOrgBase, exact: true },
+    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
     { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },

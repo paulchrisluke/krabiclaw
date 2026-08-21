@@ -15,6 +15,7 @@ import {
   renderCompiledDemoQaBlock,
   renderCompiledDemoReviewsBlock,
   renderCompiledDemoBillingBlock,
+  renderCompiledDemoInboxBlock,
   renderDemoExperienceSeedBlock,
 } from '../seed-definitions/demo.ts'
 import { renderCanonicalBillingSql } from '../seed-definitions/billing-sql.ts'
@@ -215,6 +216,8 @@ ${renderCompiledDemoPostsBlock()}
 ${renderCompiledDemoBlogBlock()}
 
 ${renderDemoExperienceSeedBlock()}
+
+${renderCompiledDemoInboxBlock()}
 
 ${renderCompiledDemoContentBlock()}
 

@@ -74,7 +74,7 @@
             </div>
             <UFormField v-if="addingAuthor" class="mt-2">
               <div class="flex items-center gap-2">
-                <UInput v-model="newAuthorName" placeholder="Author name" class="flex-1" @keyup.enter="submitNewAuthor" />
+                <UInput v-model="newAuthorName" placeholder="Author name" @keyup.enter="submitNewAuthor" />
                 <UButton size="sm" :loading="savingAuthor" :disabled="!newAuthorName.trim()" @click="submitNewAuthor">Save</UButton>
                 <UButton color="neutral" variant="ghost" size="sm" @click="addingAuthor = false">Cancel</UButton>
               </div>
@@ -104,7 +104,7 @@
           <UCard>
             <template #header><h3 class="font-semibold text-highlighted">Advanced</h3></template>
             <div class="space-y-4">
-            <UFormField label="URL slug"><UInput v-model="form.slug" :disabled="slugResetRequested" /><div class="mt-1 flex items-center justify-between gap-3"><p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p><button v-if="post?.slug_manually_overridden" type="button" class="text-xs text-primary hover:underline" @click="resetSlugOverride">Use automatic slug</button></div></UFormField>
+            <UFormField label="URL slug"><UInput v-model="form.slug" :disabled="slugResetRequested" /><div class="mt-1 flex items-center justify-between gap-3"><p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p><UButton v-if="post?.slug_manually_overridden" size="xs" variant="link" @click="resetSlugOverride">Use automatic slug</UButton></div></UFormField>
             <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
             <UFormField label="Canonical URL"><UInput v-model="form.canonical_url" :placeholder="resolvedSeo.canonicalUrl" /></UFormField>
             <UFormField label="Robots"><UInput v-model="form.robots" placeholder="index, follow" /></UFormField>

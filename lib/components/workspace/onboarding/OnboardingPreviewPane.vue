@@ -5,31 +5,28 @@
       class="flex shrink-0 items-center gap-2.5 border-b border-default bg-default px-[18px] py-3"
     >
       <div class="flex gap-0.5 rounded-[11px] border border-default bg-muted p-1">
-        <button
+        <UButton
           v-for="tab in tabs"
           :key="tab.id"
+          size="sm"
+          color="neutral"
+          variant="ghost"
           :disabled="!tab.enabled"
-          :class="[
-            'rounded-lg px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors',
-            selectedPage === tab.id
-              ? 'bg-default text-highlighted shadow-sm'
-              : 'bg-transparent text-muted hover:text-highlighted',
-            !tab.enabled && 'cursor-not-allowed opacity-35',
-          ]"
           @click="tab.enabled && $emit('select-page', tab.id)"
         >
           {{ tab.label }}
-        </button>
+        </UButton>
       </div>
 
-      <button
+      <UButton
         v-if="currentTabIsLocationScoped && siteLocations.length > 0"
-        class="inline-flex items-center gap-1.5 rounded-[10px] border border-default bg-default px-3 py-2 text-[12.5px] font-semibold text-highlighted shadow-sm transition-colors hover:border-default/80"
+        color="neutral"
+        variant="outline"
+        icon="i-lucide-map-pin"
         @click="cycleLocation"
       >
-        <UIcon name="i-lucide-map-pin" class="size-3.5 text-primary" />
         {{ selectedLocationLabel }}
-      </button>
+      </UButton>
 
       <div class="ml-auto flex items-center gap-2">
         <UBadge

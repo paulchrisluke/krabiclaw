@@ -23,18 +23,14 @@
 
       <UFormField label="Channel">
         <div class="flex gap-2">
-          <button
+          <UButton
             v-for="ch in channelOptions"
             :key="ch.value"
-            type="button"
-            :class="[
-              'rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors',
-              form.channels.includes(ch.value)
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-default bg-default text-muted hover:border-default/80',
-            ]"
+            size="sm"
+            :variant="form.channels.includes(ch.value) ? 'subtle' : 'outline'"
+            :color="form.channels.includes(ch.value) ? 'primary' : 'neutral'"
             @click="toggleChannel(ch.value)"
-          >{{ ch.label }}</button>
+          >{{ ch.label }}</UButton>
         </div>
       </UFormField>
 

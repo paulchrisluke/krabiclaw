@@ -402,6 +402,8 @@ const {
     if (isOrganizationScope.value) {
       const result = await loadOrganizationGuestThreads(requestEvent, {
         type: props.submissionTypeFilter ?? null,
+      }, {
+        orgSlug: dashboardScope.value.orgSlug,
       })
       return { mode: 'list', threads: result.threads as ThreadListItem[] }
     }

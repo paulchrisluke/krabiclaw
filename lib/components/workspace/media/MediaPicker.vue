@@ -140,7 +140,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [assetId: string | null]
-  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null]
+  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string; altText?: string } | null]
 }>()
 
 const { trackImageUploaded, trackVideoUploaded, trackMediaLibraryViewed } = useAnalytics()
@@ -155,6 +155,7 @@ interface PickerMediaAsset {
   publicUrl?: string | null
   thumbnailUrl?: string | null
   alt_text?: string | null
+  file_name?: string | null
   size?: number | null
 }
 
@@ -171,7 +172,7 @@ const isPickerMediaResponse = (value: unknown): value is { media: PickerMediaAss
 
 const isOpen = ref(false)
 const panel = ref<Panel>('library')
-const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null>(null)
+const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; kind?: string; altText?: string } | null>(null)
 const generatePanel = ref<ApiRecord | null>(null)
 
 const selectedUrl = ref<string | null>(null)
@@ -243,6 +244,7 @@ function onSelect(asset: PickerMediaAsset) {
     publicUrl: asset.public_url ?? '',
     thumbnailUrl: asset.thumbnail_url ?? '',
     kind: asset.kind ?? 'image',
+    altText: asset.alt_text || asset.file_name || '',
   }
 }
 
@@ -255,6 +257,7 @@ function onUploaded(asset: PickerMediaAsset) {
     publicUrl: url,
     thumbnailUrl: asset.thumbnailUrl ?? asset.thumbnail_url ?? '',
     kind,
+    altText: asset.alt_text || asset.file_name || '',
   }
   if (kind === 'image') {
     trackImageUploaded(props.siteId, size, 'cloudflare_images')

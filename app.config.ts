@@ -20,6 +20,7 @@ export default defineAppConfig({
     },
     dashboardNavbar: {
       slots: {
+        left: 'mx-auto w-full max-w-[var(--ws-page-narrow,45rem)]',
         toggle: 'hidden'
       }
     },

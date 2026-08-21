@@ -1,53 +1,28 @@
 <template>
-  <UDashboardPanel id="organization-settings">
-    <template #header>
-      <UDashboardNavbar title="Organization Settings">
-        <template #leading><DashboardNavbarLeading /></template>
-      </UDashboardNavbar>
-    </template>
-    <template #body>
-      <div class="mx-auto max-w-4xl space-y-6">
-        <UCard>
-          <template #header>
-            <div>
-              <h2 class="font-semibold text-highlighted">Organization</h2>
-              <p class="mt-1 text-sm text-muted">The ownership boundary for sites, members, billing, and connected services.</p>
-            </div>
-          </template>
-          <div class="grid gap-5 sm:grid-cols-2">
-            <UFormField label="Organization name">
-              <UInput v-model="name" :disabled="!canManage" />
-            </UFormField>
-            <UFormField label="Your role">
-              <UInput :model-value="organization?.role || ''" readonly class="capitalize" />
-            </UFormField>
-          </div>
-          <template #footer>
-            <div class="flex justify-end">
-              <UButton v-if="canManage" :loading="saving" :disabled="!dirty" @click="save">Save organization</UButton>
-            </div>
-          </template>
-        </UCard>
-
-        <div class="grid gap-4 sm:grid-cols-2">
-          <UCard v-for="item in managementLinks" :key="item.to">
-            <div class="flex items-start gap-3">
-              <UIcon :name="item.icon" class="mt-0.5 size-5 text-primary" />
-              <div class="min-w-0 flex-1">
-                <h3 class="font-medium text-highlighted">{{ item.label }}</h3>
-                <p class="mt-1 text-sm text-muted">{{ item.description }}</p>
-                <UButton class="mt-4" size="sm" color="neutral" variant="outline" :to="item.to">Open</UButton>
-              </div>
-            </div>
-          </UCard>
-        </div>
+  <OrganizationSettingsShell
+    :detail-title="isGeneralRoute ? 'General' : undefined"
+    :show-actions="isGeneralRoute"
+    :saving="saving"
+    :save-disabled="!dirty"
+    @cancel="cancel"
+    @save="save"
+  >
+    <div v-if="isGeneralRoute" class="space-y-8">
+      <p class="text-base text-muted">The ownership boundary for sites, members, billing, and connected services.</p>
+      <UFormField label="Organization name">
+        <UInput v-model="name" :disabled="!canManage" size="xl" autofocus class="w-full" />
+      </UFormField>
+      <div>
+        <p class="text-sm font-medium text-highlighted">Your role</p>
+        <p class="mt-2 capitalize text-muted">{{ organization?.role || 'Not available' }}</p>
       </div>
-    </template>
-  </UDashboardPanel>
+    </div>
+  </OrganizationSettingsShell>
 </template>
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
+import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -63,12 +38,8 @@ const saving = ref(false)
 const canManage = computed(() => organization.value?.role === 'owner' || organization.value?.role === 'admin')
 const dirty = computed(() => Boolean(name.value.trim()) && name.value.trim() !== organization.value?.name)
 const orgBase = computed(() => `/dashboard/${String(route.params.orgSlug)}`)
-const managementLinks = computed(() => [
-  { label: 'Members', description: 'Invite people and manage their organization membership.', icon: 'i-lucide-users', to: `${orgBase.value}/settings/members` },
-  { label: 'Billing', description: 'Manage plans, payment methods, and organization credits.', icon: 'i-lucide-credit-card', to: `${orgBase.value}/settings/billing` },
-  { label: 'Analytics', description: 'Choose a site and configure its analytics connection.', icon: 'i-lucide-chart-bar', to: `${orgBase.value}/settings/analytics` },
-  { label: 'ChatGPT', description: 'Configure the organization ChatGPT connection.', icon: 'i-lucide-message-square', to: `${orgBase.value}/settings/chatgpt` },
-])
+const settingsPath = computed(() => `${orgBase.value}/settings`)
+const isGeneralRoute = computed(() => route.path === `${settingsPath.value}/general`)
 
 let organizationLoadToken = 0
 watch(() => route.params.orgSlug, async (nextOrgSlug, previousOrgSlug) => {
@@ -97,6 +68,10 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+function cancel() {
+  name.value = organization.value?.name ?? ''
 }
 
 useSeoMeta({ title: 'Organization Settings | KrabiClaw', robots: 'noindex, nofollow' })

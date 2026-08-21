@@ -1,118 +1,136 @@
 <template>
   <UDashboardPanel id="location-overview">
     <template #header>
-      <UDashboardNavbar :title="location?.title || 'Location Overview'">
-        <template #leading><DashboardNavbarLeading :detail-to="locationsBase" detail-label="Locations" /></template>
-        <template #right>
-          <UButton icon="i-lucide-settings" color="neutral" variant="outline" :to="`${locationBase}/settings`">Settings</UButton>
+      <UDashboardNavbar :title="location?.title || 'Location'" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading :detail-to="sitePath" detail-label="Site overview" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div v-if="loading" class="space-y-4">
-        <USkeleton class="h-28 rounded-xl" />
-        <USkeleton class="h-64 rounded-xl" />
-      </div>
-      <UAlert v-else-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" />
-      <div v-else-if="location" class="space-y-6">
-        <UCard>
-          <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div class="min-w-0">
-              <p class="text-xs font-semibold uppercase tracking-wider text-primary">Today</p>
-              <h2 class="mt-1 text-xl font-semibold text-highlighted">{{ location.title }}</h2>
-              <p class="mt-1 text-sm text-muted">
-                {{ currentOpeningState }} · {{ inboxSummary.unreadThreads }} unread · {{ inboxSummary.openThreads }} open guest {{ inboxSummary.openThreads === 1 ? 'request' : 'requests' }}
-              </p>
+      <UPage>
+        <UPageBody>
+          <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)] pb-20">
+            <div v-if="loading" class="space-y-5">
+              <USkeleton class="aspect-[16/9] w-full rounded-2xl" />
+              <USkeleton v-for="index in 3" :key="index" class="h-44 rounded-2xl" />
             </div>
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[520px]">
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">Status</p>
-                <div class="mt-1 flex flex-wrap gap-1">
-                  <UBadge :color="location.status === 'active' ? 'success' : 'neutral'" variant="soft" class="capitalize">{{ location.status }}</UBadge>
-                  <UBadge v-if="location.is_primary" color="primary" variant="soft">Primary</UBadge>
-                </div>
+
+            <UAlert
+              v-else-if="error"
+              color="error"
+              variant="soft"
+              icon="i-lucide-triangle-alert"
+              :description="error"
+            />
+
+            <div v-else-if="location" class="space-y-8">
+              <div class="flex items-center gap-2.5">
+                <UTabs
+                  v-model="activeTab"
+                  :items="tabs"
+                  :content="false"
+                  variant="pill"
+                  class="min-w-0 flex-1"
+                  :ui="{ list: 'w-full', trigger: 'flex-1' }"
+                />
+                <UButton
+                  :to="settingsPath"
+                  icon="i-lucide-settings"
+                  color="neutral"
+                  variant="ghost"
+                  square
+                  aria-label="Location settings"
+                />
               </div>
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">Rating</p>
-                <p class="mt-1 text-sm font-semibold text-highlighted">{{ hasReviews && location.rating ? `${location.rating} / 5` : 'Not synced' }}</p>
+
+              <div v-if="activeTab === 'location'" class="space-y-4">
+                <NuxtLink :to="`${settingsPath}/profile`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                  <UCard
+                    variant="subtle"
+                    class="overflow-hidden rounded-2xl transition-colors group-hover:bg-elevated"
+                    :ui="{ body: '!p-0 sm:!p-0' }"
+                  >
+                    <img
+                      v-if="locationImage"
+                      :src="locationImage"
+                      :alt="`${location.title} preview`"
+                      class="aspect-[16/9] w-full object-cover"
+                    />
+                    <div class="space-y-3 px-5 py-5 sm:px-6">
+                      <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <h1 class="text-xl font-semibold text-highlighted">{{ location.title }}</h1>
+                          <p class="mt-1 text-sm text-muted">{{ addressSummary }}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                          <UBadge :color="location.status === 'active' ? 'success' : 'neutral'" variant="soft" class="capitalize">
+                            {{ location.status }}
+                          </UBadge>
+                          <UBadge v-if="location.is_primary" color="primary" variant="soft">Primary</UBadge>
+                        </div>
+                      </div>
+                      <p class="text-sm text-muted">{{ locationStatusSummary }}</p>
+                    </div>
+                  </UCard>
+                </NuxtLink>
+
+                <NuxtLink :to="`${locationPath}/inbox`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                  <UCard variant="subtle" class="rounded-2xl transition-colors group-hover:bg-elevated">
+                    <div class="flex items-center justify-between gap-5">
+                      <div class="min-w-0">
+                        <h2 class="font-semibold text-highlighted">Guest activity</h2>
+                        <p class="mt-1 text-sm text-muted">{{ inboxSummary.unreadThreads }} unread · {{ inboxSummary.openThreads }} open requests</p>
+                      </div>
+                      <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+                    </div>
+                  </UCard>
+                </NuxtLink>
+
+                <NuxtLink :to="`${settingsPath}/hours`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                  <UCard variant="subtle" class="rounded-2xl transition-colors group-hover:bg-elevated">
+                    <div class="flex items-center justify-between gap-5">
+                      <div class="min-w-0">
+                        <h2 class="font-semibold text-highlighted">Hours</h2>
+                        <p class="mt-1 text-sm text-muted">{{ currentOpeningState }}</p>
+                      </div>
+                      <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+                    </div>
+                  </UCard>
+                </NuxtLink>
+
+                <NuxtLink :to="`${settingsPath}/discovery`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                  <UCard variant="subtle" class="rounded-2xl transition-colors group-hover:bg-elevated">
+                    <div class="flex items-center justify-between gap-5">
+                      <div class="min-w-0">
+                        <h2 class="font-semibold text-highlighted">Discovery</h2>
+                        <p class="mt-1 text-sm text-muted">{{ location.google_place_id ? 'Google Places connected' : 'Google Places not connected' }}</p>
+                      </div>
+                      <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+                    </div>
+                  </UCard>
+                </NuxtLink>
               </div>
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">Inbox</p>
-                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ inboxSummary.unreadThreads }}</p>
-              </div>
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">{{ primaryManageLabel }}</p>
-                <p class="mt-1 text-sm font-semibold text-highlighted">{{ primaryManageValue }}</p>
-              </div>
+
+              <EditorNavigationList v-else :groups="contentGroups" />
             </div>
           </div>
-        </UCard>
-
-        <UAlert
-          v-if="needsGooglePlaces"
-          color="warning"
-          variant="soft"
-          icon="i-lucide-triangle-alert"
-          title="Add a Google Place ID"
-          description="Add a Google Place ID in settings to import hours, ratings, reviews, and location details from Google Places."
-          :actions="[{ label: 'Open location settings', to: `${locationBase}/settings`, color: 'warning', variant: 'soft' }]"
-        />
-
-        <div class="grid gap-6 xl:grid-cols-2">
-          <UCard>
-            <template #header><h2 class="font-semibold text-highlighted">Profile</h2></template>
-            <dl class="space-y-4 text-sm">
-              <div><dt class="text-muted">Address</dt><dd class="mt-1 text-highlighted">{{ addressLabel }}</dd></div>
-              <div><dt class="text-muted">Email</dt><dd class="mt-1 text-highlighted">{{ location.email || 'Not set' }}</dd></div>
-              <div><dt class="text-muted">Timezone</dt><dd class="mt-1 text-highlighted">{{ location.timezone || 'Site default' }}</dd></div>
-              <div><dt class="text-muted">Notification routing</dt><dd class="mt-1 text-highlighted">{{ location.notification_phone || 'Site default' }}</dd></div>
-            </dl>
-          </UCard>
-
-          <UCard>
-            <template #header><h2 class="font-semibold text-highlighted">Connected Services</h2></template>
-            <div class="space-y-4 text-sm">
-              <div class="flex items-center justify-between gap-3">
-                <span class="text-highlighted">Google Places</span>
-                <UBadge :color="location.google_place_id ? 'success' : 'neutral'" variant="soft">{{ location.google_place_id ? 'Configured' : 'Not configured' }}</UBadge>
-              </div>
-              <p class="text-muted">Read-only import for hours, ratings, reviews, and location details.</p>
-              <UButton color="neutral" variant="outline" :to="`${locationBase}/settings`">Manage Google Places</UButton>
-            </div>
-          </UCard>
-        </div>
-
-        <UCard>
-          <template #header><h2 class="font-semibold text-highlighted">Manage</h2></template>
-          <div class="divide-y divide-default">
-            <NuxtLink
-              v-for="item in workspaceLinks"
-              :key="item.to"
-              :to="item.to"
-              class="flex items-center justify-between gap-3 py-3 text-sm"
-            >
-              <span class="flex min-w-0 items-center gap-3 font-medium text-highlighted">
-                <UIcon :name="item.icon" class="size-4 text-muted" />
-                <span class="truncate">{{ item.label }}</span>
-              </span>
-              <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
-            </NuxtLink>
-          </div>
-        </UCard>
-      </div>
+        </UPageBody>
+      </UPage>
     </template>
   </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
-const dashboardApi = useDashboardApi()
+import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayGoogleHours } from '~/utils/formatters'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'dashboard' })
+useSeoMeta({ title: 'Location Overview | KrabiClaw', robots: 'noindex, nofollow' })
 
 interface LocationOverview {
   id: string
@@ -126,82 +144,168 @@ interface LocationOverview {
   rating: number | null
   google_place_id: string | null
   timezone?: string | null
-  notification_phone?: string | null
   opening_hours?: Parameters<typeof getTodayGoogleHours>[0]
 }
 
-interface InboxSummary { openThreads: number; unreadThreads: number }
+interface InboxSummary {
+  openThreads: number
+  unreadThreads: number
+}
 
+interface LocationOverviewResource {
+  location: { success: boolean; location: LocationOverview }
+  menus: { success: boolean; menus: ApiRecord[] }
+  threads: { summary: InboxSummary }
+}
+
+const dashboardApi = useDashboardApi()
 const route = useRoute()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
-const locationBase = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const locationsBase = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations`)
+const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
+const locationPath = computed(() => `${sitePath.value}/locations/${String(route.params.locationSlug)}`)
+const settingsPath = computed(() => `${locationPath.value}/settings`)
 const location = ref<LocationOverview | null>(null)
 const menus = ref<ApiRecord[]>([])
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
 const loading = ref(true)
 const error = ref<string | null>(null)
-const addressLabel = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Not set')
+const activeTab = ref('location')
+const tabs = [
+  { label: 'My location', value: 'location' },
+  { label: 'Content', value: 'content' },
+]
+
+const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
+const locationImage = computed(() => dashboardLocationRow.value?.og_image_url ?? '')
+const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Address not set')
+
 const capabilities = computed(() => {
   const vertical = dashboard.site.value?.vertical
   if (!vertical) return null
   try {
     const normalizedVertical = normalizeVertical(vertical) as SiteVertical
     const template = resolvePublicTemplate({ vertical }).slug
-    const locationRow = dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null
     return resolveCmsCapabilities(normalizedVertical, template, {
       site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
-      location: parseCmsFeatureOverrideDelta(locationRow?.feature_overrides),
+      location: parseCmsFeatureOverrideDelta(dashboardLocationRow.value?.feature_overrides),
     })
   } catch {
     return null
   }
 })
+
 const featureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.pages.map(page => page.feature) ?? []),
   ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
 ]))
-const hasMenu = computed(() => featureSet.value.has('menu'))
-const hasReviews = computed(() => featureSet.value.has('reviews'))
-const hasReservations = computed(() => featureSet.value.has('reservations'))
-const hasExperiences = computed(() => featureSet.value.has('experiences'))
-const needsGooglePlaces = computed(() => !location.value?.google_place_id)
-const primaryManageItem = computed(() => workspaceLinks.value.find(item => ['menu', 'experiences', 'services'].includes(item.feature)) ?? workspaceLinks.value[0] ?? null)
-const primaryManageLabel = computed(() => primaryManageItem.value?.label ?? 'Manage')
-const primaryManageValue = computed(() => {
-  if (primaryManageItem.value?.feature === 'menu') return `${menus.value.length} ${menus.value.length === 1 ? 'menu' : 'menus'}`
-  return primaryManageItem.value ? 'Ready' : 'Not set'
-})
+const hasFeature = (feature: ProductFeature) => featureSet.value.has(feature)
+
 const currentOpeningState = computed(() => {
   const hours = location.value?.opening_hours
-  if (!hours) return 'Not set'
+  if (!hours) return 'Hours not set'
   const timezone = location.value?.timezone || null
   let today = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][new Date().getDay()]
   if (timezone) {
     try {
       today = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: timezone }).format(new Date()).toUpperCase()
-    } catch { /* use local day */ }
+    } catch {
+      // Use the local day when the configured timezone is invalid.
+    }
   }
   return getTodayGoogleHours(hours, today) || 'Hours synced'
 })
-const workspaceLinks = computed(() => [
-  { feature: 'content', label: 'Pages', icon: 'i-lucide-file-text', to: `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`, visible: true },
-  { feature: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox`, visible: true },
-  { feature: 'menu', label: 'Menu', icon: 'i-lucide-utensils', to: `${locationBase.value}/menu`, visible: hasMenu.value },
-  { feature: 'services', label: 'Services', icon: 'i-lucide-briefcase', to: `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/professional-services`, visible: featureSet.value.has('services') },
-  { feature: 'reservations', label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${locationBase.value}/reservations`, visible: hasReservations.value },
-  { feature: 'experiences', label: 'Experiences', icon: 'i-lucide-ticket', to: `${locationBase.value}/experiences`, visible: hasExperiences.value },
-  { feature: 'photos', label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos`, visible: featureSet.value.has('photos') },
-  { feature: 'qa', label: 'Q&A', icon: 'i-lucide-message-circle-question', to: `${locationBase.value}/qa`, visible: featureSet.value.has('qa') },
-  { feature: 'settings', label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings`, visible: true },
-].filter(item => item.visible))
 
-const isLocationResponse = (
-  value: unknown,
-): value is { success: boolean; location: LocationOverview } =>
+const locationStatusSummary = computed(() => {
+  const parts = [currentOpeningState.value]
+  if (location.value?.rating) parts.push(`${location.value.rating} rating`)
+  parts.push(`${inboxSummary.value.unreadThreads} unread`)
+  return parts.join(' · ')
+})
+
+const contentGroups = computed(() => {
+  const publicContent = [
+    {
+      id: 'profile',
+      label: 'Location details',
+      summary: addressSummary.value,
+      to: `${settingsPath.value}/profile`,
+    },
+    {
+      id: 'photos',
+      label: 'Photos',
+      summary: 'Manage the images shown for this location',
+      to: `${locationPath.value}/photos`,
+      visible: hasFeature('photos'),
+    },
+    {
+      id: 'menu',
+      label: 'Menu',
+      summary: `${menus.value.length} ${menus.value.length === 1 ? 'menu' : 'menus'}`,
+      to: `${locationPath.value}/menu`,
+      visible: hasFeature('menu'),
+    },
+    {
+      id: 'services',
+      label: 'Services',
+      summary: 'Manage services available at this location',
+      to: `${sitePath.value}/professional-services`,
+      visible: hasFeature('services'),
+    },
+    {
+      id: 'experiences',
+      label: 'Experiences',
+      summary: 'Manage bookable experiences',
+      to: `${locationPath.value}/experiences`,
+      visible: hasFeature('experiences'),
+    },
+    {
+      id: 'posts',
+      label: 'Posts',
+      summary: 'Publish updates and stories from this location',
+      to: `${locationPath.value}/posts`,
+      visible: hasFeature('posts'),
+    },
+    {
+      id: 'qa',
+      label: 'Q&A',
+      summary: 'Manage guest questions and answers',
+      to: `${locationPath.value}/qa`,
+      visible: hasFeature('qa'),
+    },
+  ].filter(item => item.visible !== false)
+
+  const operations = [
+    {
+      id: 'inbox',
+      label: 'Inbox',
+      summary: `${inboxSummary.value.unreadThreads} unread · ${inboxSummary.value.openThreads} open`,
+      to: `${locationPath.value}/inbox`,
+    },
+    {
+      id: 'reservations',
+      label: 'Reservations',
+      summary: 'Manage reservation requests and bookings',
+      to: `${locationPath.value}/reservations`,
+      visible: hasFeature('reservations'),
+    },
+    {
+      id: 'analytics',
+      label: 'Analytics',
+      summary: 'Review this location’s performance',
+      to: `${locationPath.value}/analytics`,
+    },
+  ].filter(item => item.visible !== false)
+
+  return [
+    { id: 'public-content', items: publicContent.filter(item => item.id !== 'profile') },
+    { id: 'operations', label: 'Manage', items: operations.filter(item => item.id !== 'inbox') },
+  ].filter(group => group.items.length > 0)
+})
+
+const isLocationResponse = (value: unknown): value is { success: boolean; location: LocationOverview } =>
   isRecord(value)
   && typeof value.success === 'boolean'
   && isRecord(value.location)
@@ -221,50 +325,40 @@ const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSumm
   && typeof value.summary.openThreads === 'number'
   && typeof value.summary.unreadThreads === 'number'
 
-interface LocationOverviewResource {
-  location: { success: boolean; location: LocationOverview }
-  menus: { success: boolean; menus: ApiRecord[] }
-  threads: { summary: InboxSummary }
-}
-
 const requestEvent = useRequestEvent()
-const overviewKey = computed(() =>
-  `dashboard-location-overview:${siteId}:${locationId.value}`,
-)
-const { data: overview, pending: overviewPending, error: overviewError } =
-  await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
-    if (!locationId.value) {
-      throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-    }
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardLocationOverview } = await import('~/server/utils/dashboard-editor-resources')
-      return await loadDashboardLocationOverview(requestEvent, siteId, locationId.value, {
-        includeMenus: hasMenu.value,
-      }) as LocationOverviewResource
-    }
-    const [locationResponse, menuResponse, threadsResponse] = await Promise.all([
-      dashboardApi<{ success: boolean; location: LocationOverview }>(
-        `/api/dashboard/locations/${locationId.value}`,
-        { validate: isLocationResponse },
-      ),
-      hasMenu.value
-        ? dashboardApi<{ success: boolean; menus: ApiRecord[] }>(
-            `/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`,
-            { validate: isMenusResponse },
-          )
-        : Promise.resolve({ success: true, menus: [] }),
-      dashboardApi<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
-        query: { location_id: locationId.value },
-        validate: isThreadsSummaryResponse,
-      }),
-    ])
-    return {
-      location: locationResponse,
-      menus: menuResponse,
-      threads: threadsResponse,
-    }
-  }, { lazy: import.meta.client })
+const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}`)
+const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
+  if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const { loadDashboardLocationOverview } = await import('~/server/utils/dashboard-editor-resources')
+    return await loadDashboardLocationOverview(requestEvent, siteId, locationId.value, {
+      includeMenus: hasFeature('menu'),
+    }) as LocationOverviewResource
+  }
+
+  const [locationResponse, menuResponse, threadsResponse] = await Promise.all([
+    dashboardApi<{ success: boolean; location: LocationOverview }>(
+      `/api/dashboard/locations/${locationId.value}`,
+      { validate: isLocationResponse },
+    ),
+    hasFeature('menu')
+      ? dashboardApi<{ success: boolean; menus: ApiRecord[] }>(
+          `/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`,
+          { validate: isMenusResponse },
+        )
+      : Promise.resolve({ success: true, menus: [] }),
+    dashboardApi<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
+      query: { location_id: locationId.value },
+      validate: isThreadsSummaryResponse,
+    }),
+  ])
+  return {
+    location: locationResponse,
+    menus: menuResponse,
+    threads: threadsResponse,
+  }
+}, { lazy: import.meta.client })
 
 watch([overview, overviewPending, overviewError], ([resource, pending, cause]) => {
   loading.value = pending
@@ -278,6 +372,4 @@ watch([overview, overviewPending, overviewError], ([resource, pending, cause]) =
   inboxSummary.value = resource.threads.summary
   error.value = null
 }, { immediate: true })
-
-useSeoMeta({ title: 'Location Overview | KrabiClaw', robots: 'noindex, nofollow' })
 </script>

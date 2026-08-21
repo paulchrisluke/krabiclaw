@@ -11,12 +11,9 @@
 
     <template v-else-if="block.type === 'image'">
       <UFormField label="Media asset">
-        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @update:model-value="setString('asset_id', $event ?? '')" />
+        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @update:model-value="setString('asset_id', $event ?? '')" @change="setAssetAlt" />
       </UFormField>
-      <div class="grid gap-4 md:grid-cols-2">
-        <UFormField label="Alt text"><UInput :model-value="stringField('alt')" @update:model-value="setString('alt', $event)" /></UFormField>
-        <UFormField label="Caption"><UInput :model-value="stringField('caption')" @update:model-value="setString('caption', $event)" /></UFormField>
-      </div>
+      <UFormField label="Caption"><UInput :model-value="stringField('caption')" @update:model-value="setString('caption', $event)" /></UFormField>
     </template>
 
     <template v-else-if="block.type === 'gallery'">
@@ -74,9 +71,8 @@
         <UFormField class="md:col-span-2" label="Subtitle"><UTextarea :model-value="stringField('subtitle')" :rows="3" autoresize @update:model-value="setString('subtitle', $event)" /></UFormField>
       </div>
       <UFormField label="Hero image">
-        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @update:model-value="setString('asset_id', $event ?? '')" />
+        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @update:model-value="setString('asset_id', $event ?? '')" @change="setAssetAlt" />
       </UFormField>
-      <UFormField label="Hero alt text"><UInput :model-value="stringField('alt')" @update:model-value="setString('alt', $event)" /></UFormField>
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="CTA label"><UInput :model-value="stringField('cta_label')" @update:model-value="setString('cta_label', $event)" /></UFormField>
         <UFormField label="CTA URL"><UInput :model-value="stringField('cta_url')" placeholder="/contact or https://..." @update:model-value="setString('cta_url', $event)" /></UFormField>
@@ -203,6 +199,10 @@ function numberField(key: string, fallback: number): number {
 
 function setString(key: string, value: unknown) {
   emitBlock({ ...props.block, data: { ...props.block.data, [key]: value == null ? '' : String(value) } })
+}
+
+function setAssetAlt(asset: { altText?: string } | null) {
+  emitBlock({ ...props.block, data: { ...props.block.data, alt: asset?.altText ?? '' } })
 }
 
 function setNumber(key: string, value: unknown) {

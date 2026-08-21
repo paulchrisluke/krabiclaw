@@ -1,15 +1,6 @@
 <template>
-  <UDashboardPanel id="org-settings-billing">
-    <template #header>
-      <UDashboardNavbar title="Billing">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div v-if="loading" class="space-y-6">
+  <OrganizationSettingsShell detail-title="Billing">
+    <div v-if="loading" class="space-y-6">
         <USkeleton class="h-28 w-full" />
         <div class="grid gap-4 lg:grid-cols-3">
           <USkeleton class="h-64" />
@@ -315,13 +306,14 @@
             </div>
           </UCard>
         </div>
-      </div>
-    </template>
-  </UDashboardPanel>
+    </div>
+  </OrganizationSettingsShell>
 
 </template>
 
 <script setup lang="ts">
+import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
+
 const dashboardApi = useDashboardApi()
 
 import { authClient } from '~/lib/auth-client'
