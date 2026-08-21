@@ -146,11 +146,11 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },
-  heroImage: (post.value.social_image?.public_url || post.value.featured_image?.public_url)
+  heroImage: post.value.social_image?.public_url
     ? {
-        url: (post.value.social_image?.public_url || post.value.featured_image?.public_url)!,
-        width: post.value.social_image?.width || post.value.featured_image?.width || undefined,
-        height: post.value.social_image?.height || post.value.featured_image?.height || undefined,
+        url: post.value.social_image.public_url,
+        width: post.value.social_image.width || undefined,
+        height: post.value.social_image.height || undefined,
       }
     : null,
   robots: resolvedSeo.value.robots,

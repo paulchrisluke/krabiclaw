@@ -201,6 +201,7 @@ const selectedPostImage = computed(() => {
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
+const socialBackground = computed(() => post.value?.social_image?.public_url || null)
 
 const categorySlug = computed(() => blogCategoryToSlug(post.value?.category) || String(route.params.category))
 const postPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || '/blog')
@@ -233,7 +234,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   label: post.value?.category || null,
   author: post.value?.author_name || null,
   publishedAt: post.value?.published_at || null,
-  heroImage: postMedia.value.thumb ? { url: postMedia.value.thumb } : null,
+  heroImage: socialBackground.value ? { url: socialBackground.value } : null,
   robots: resolvedSeo.value.robots,
   indexable: post.value?.visibility !== 'unlisted' && (!post.value?.robots || !/noindex/i.test(post.value.robots)),
 }), platformOrigin)

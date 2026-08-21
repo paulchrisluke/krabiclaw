@@ -37,19 +37,3 @@ export function usePlatformSeoUrl(value: MaybeRefOrGetter<string | null | undefi
 export function useSharedOgImage(value?: MaybeRefOrGetter<string | null | undefined>) {
   return useSeoUrl(() => toValue(value) || SHARED_OG_IMAGE_PATH)
 }
-
-/**
- * og:image for tenant pages that don't have a page-specific photo (About, Contact, Q&A, etc).
- * Uses an explicit page image, then the site's configured social asset, then a location
- * hero photo, then the site's logo, and finally the generated platform card.
- */
-export function useTenantOgImage(value?: MaybeRefOrGetter<string | null | undefined>) {
-  const { config, locations } = useSiteShellState()
-  return useSeoUrl(() =>
-    toValue(value) ||
-    config.value?.og_image_url ||
-    (locations.value[0]?.kind !== 'video' ? locations.value[0]?.public_url : null) ||
-    config.value?.logo_url ||
-    SHARED_OG_IMAGE_PATH
-  )
-}

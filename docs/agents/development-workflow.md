@@ -132,10 +132,10 @@ What each step prevents:
 If a browser test fails in a fresh worktree, check these setup symptoms first:
 
 - `Process from config.webServer was not able to start`: run the documented
-  preparation and built-Worker command visibly — `yarn e2e:local:prepare && yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000` — and read the startup error.
+  preparation and built-Worker command visibly — `yarn e2e:local:prepare && yarn dev:worker:start` — and read the startup error.
 - Better Auth reports `Invalid origin: http://krabiclaw.com` for a localhost
   request: stop the Worker and restart the documented command
-  `yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000`; do not repair this by changing application auth allowlists or by adding a production-origin override to `.env`.
+  `yarn dev:worker:start`; do not repair this by changing application auth allowlists or by adding a production-origin override to `.env`.
 - Better Auth returns `Failed to decrypt private key`: the local Worker and D1
   JWKS used different `BETTER_AUTH_SECRET` values. Use one Wrangler-native
   `.dev.vars` or `.env` value.
@@ -205,13 +205,20 @@ If an authenticated dashboard E2E reaches the right page but API calls return 50
 
 If Nuxt or Playwright cannot bind a local loopback port in the sandbox, verify no process is listening on that port, then rerun the exact same command with approval/outside the sandbox before declaring the E2E blocked. A sandbox socket failure is not evidence of a product regression.
 
-For manual browser inspection after a build, use the documented built-Worker
-command:
+Use `yarn dev` for the normal HMR application-development loop. Nitro emulates
+the bindings declared in `wrangler.toml`, so dashboard/API work uses the same
+local D1/KV/R2 state as Wrangler. A missing binding during a real inbound
+`yarn dev` request is a local-runtime regression, not a supported limitation.
+
+For manual browser inspection under the production Worker runtime, use:
 
 ```bash
-yarn build
-yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000
+yarn dev:worker
 ```
+
+If `.output` was just built by another preparation command, use
+`yarn dev:worker:start` to avoid rebuilding it. Wrangler watches the generated
+Worker, not Nuxt source files; use `yarn dev` while editing.
 
 Local tenant identity is carried by `x-preview-tenant` on the shared
 `localhost` origin. For example, Blawby uses `x-preview-tenant: ncls` and its

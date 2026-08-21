@@ -505,8 +505,7 @@ const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name
 const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
 useTenantSocialMetadata(() => {
-  const firstMedia = mediaItems.value[0]
-  const heroImageUrl = item.value?.og_image_public_url || firstMedia?.poster || firstMedia?.url || null
+  const heroImageUrl = item.value?.og_image_public_url || null
   return {
     path: item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'),
     title: seoTitle(),

@@ -34,7 +34,7 @@ export default defineHandler(async (event) => {
   if (event.path.includes('?')) return
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfReq = (event.runtime?.cloudflare as any)?.request as Request | undefined
+  const cfReq = (event.req.runtime?.cloudflare as any)?.request as Request | undefined
   const host = cfReq?.headers.get('host') ?? (event.req.headers.get('host')) ?? ''
   const hostname = host.split(':')[0] ?? host
 
@@ -49,7 +49,7 @@ export default defineHandler(async (event) => {
 
   // Access KV directly from the Cloudflare event context
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const kv = (event.runtime?.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
+  const kv = (event.req.runtime?.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
   if (!kv) return
 
   try {

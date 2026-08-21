@@ -2,7 +2,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { resolveSeoUrl } from '~/composables/useSeoUrls'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import { useSocialMetadata } from '~/composables/useSocialMetadata'
-import { inferSocialImageMimeType, type SocialImageSource, type SocialPageMetadataInput, type SocialPageType } from '~/utils/social-metadata'
+import type { SocialImageSource, SocialPageMetadataInput, SocialPageType } from '~/utils/social-metadata'
 
 export interface PlatformBreadcrumb {
   name: string
@@ -27,7 +27,6 @@ interface PlatformPageSeoInput {
   path: string
   title: string
   description: string
-  ogImage?: string | null
   /** Set only when you need to override the default (indexable) robots behavior. */
   robots?: string | null
   breadcrumbs?: PlatformBreadcrumb[]
@@ -87,9 +86,6 @@ export function usePlatformPageSeo(input: MaybeRefOrGetter<PlatformPageSeoInput>
       description: value.description,
       canonicalUrl: pageUrl.value,
       brand: { siteName: PLATFORM_NAME, logoUrl: resolveSeoUrl('/krabi-claw-logo.png', origin), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
-      ogImageOverride: value.ogImage
-        ? { url: resolveSeoUrl(value.ogImage, origin), type: inferSocialImageMimeType(value.ogImage) }
-        : null,
       heroImage: value.heroImage ?? null,
       label: value.label ?? null,
       author: value.author ?? null,

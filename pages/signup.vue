@@ -1,18 +1,18 @@
 <template>
   <div>
     <h1 class="text-4xl font-extrabold tracking-tight text-default">Create your account</h1>
-    <p class="mt-2 mb-7 text-sm text-muted">Start building and managing your business online.</p>
+    <p class="mt-2 mb-7 text-sm text-muted">Continue with Google or WhatsApp, or create an account with email and password.</p>
     <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
     <div class="space-y-3">
       <AuthGoogleAuthButton :loading="loading" @activate="googleSignup" />
       <WhatsAppAuthButton :disabled="loading" @activate="showPhone = !showPhone" />
-      <AuthPhoneOtpForm v-if="showPhone" default-country="TH" verify-label="Verify and create account" @verified="whatsAppSignupComplete" />
+      <AuthPhoneOtpForm v-if="showPhone" default-country="TH" verify-label="Continue with WhatsApp" @verified="whatsAppSignupComplete" />
       <div class="flex items-center gap-3 py-1">
-        <div class="h-px flex-1 bg-default" /><span class="text-xs uppercase tracking-widest text-dimmed">or</span><div class="h-px flex-1 bg-default" />
+        <div class="h-px flex-1 bg-default" /><span class="text-xs uppercase tracking-widest text-dimmed">or use email</span><div class="h-px flex-1 bg-default" />
       </div>
       <AuthEmailSignUpForm :callback-url="verificationCallback" @success="emailSignupComplete" />
     </div>
-    <p class="mt-6 text-center text-sm text-muted">Already have an account? <NuxtLink :to="loginUrl" class="font-semibold text-primary">Sign in</NuxtLink></p>
+    <p class="mt-6 text-center text-sm text-muted">Already have an account? <NuxtLink :to="loginUrl" class="font-semibold text-primary">Continue to KrabiClaw</NuxtLink></p>
   </div>
 </template>
 

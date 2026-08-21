@@ -27,7 +27,7 @@
             </h1>
 
             <p class="text-lg leading-relaxed text-muted m-0 max-w-lg">
-              Sign up, add the KrabiClaw app in ChatGPT, and start editing your menus, content, and photos through conversation.
+              Continue with Google, WhatsApp, or email, add the KrabiClaw app in ChatGPT, and start editing through conversation.
             </p>
 
             <!-- CTAs -->

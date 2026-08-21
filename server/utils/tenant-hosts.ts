@@ -118,18 +118,3 @@ export function getFreeSiteDomain(env: TenantHostEnv): string {
   if (!domain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
   return domain
 }
-
-// Derives the subdomain label to look up in site_domains for a given
-// hostname, e.g. "demo.krabiclaw.com" -> "demo". Returns '' when the
-// hostname isn't a subdomain of the configured free-site domain and isn't
-// a simple two-label host either.
-export function deriveSubdomain(hostname: string, freeSiteDomain: string): string {
-  if (!hostname) return ''
-
-  const subdomain = freeSiteDomain && hostname.endsWith(`.${freeSiteDomain}`)
-    ? hostname.replace(`.${freeSiteDomain}`, '')
-    : hostname.split('.')[0]
-
-  if (!subdomain || subdomain === 'www' || subdomain === hostname) return ''
-  return subdomain
-}

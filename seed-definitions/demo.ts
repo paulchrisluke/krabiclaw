@@ -1462,7 +1462,7 @@ export function renderCompiledDemoMediaBlock(): string {
 
   const heroUpdates = compiledDemoSeed.locations
     .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
-    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
+    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)}, og_image_asset_id = ${sqlValue(l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
     .join('\n')
 
   return `-- BEGIN GENERATED: demo_media

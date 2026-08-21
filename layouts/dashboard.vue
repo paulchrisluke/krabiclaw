@@ -487,7 +487,7 @@ function _revenueLabel(item: ReturnType<typeof _managerAction>) {
 const organizationNavigationItems = computed(() => {
   if (!orgBase.value) return []
   return [
-    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: `${orgBase.value}/today` },
+    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: orgBase.value },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
     { key: 'sites', label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${orgBase.value}/inbox` },
@@ -603,7 +603,7 @@ const adminGroup = computed(() => [
 const navigationItems = computed(() => {
   if (isAdminRoute.value) return [adminGroup.value]
   if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
-  return [mobileNavItems.value.map(({ key: _key, active: _active, ...item }) => item)]
+  return [mobileNavItems.value.map(({ key: _key, active: _active, exact: _exact, ...item }) => item)]
 })
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
@@ -624,11 +624,12 @@ interface DashboardMobileNavItem {
   icon: string
   to?: string
   active?: boolean
+  exact?: boolean
 }
 
-function isActivePath(path?: string) {
+function isActivePath(path?: string, exact = false) {
   if (!path) return false
-  return route.path === path || route.path.startsWith(`${path}/`)
+  return route.path === path || (!exact && route.path.startsWith(`${path}/`))
 }
 
 const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
@@ -649,12 +650,12 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
       ? `${routeLocationBase}/inbox`
       : routeSiteBase ? `${routeSiteBase}/inbox` : undefined
   const items: DashboardMobileNavItem[] = [
-    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: `${routeOrgBase}/today` },
+    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
     { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },
   ]
-  return items.map(item => ({ ...item, active: isActivePath(item.to) }))
+  return items.map(item => ({ ...item, active: isActivePath(item.to, item.exact) }))
 })
 
 watch(

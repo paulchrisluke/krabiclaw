@@ -121,21 +121,11 @@ const themeStyles = computed(() => {
 
 const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
 
-const ogTitle = computed(() => config.value?.seo_title || config.value?.brand_name || null)
-const ogDescription = computed(() => truncateForSeo(config.value?.seo_description || config.value?.brand_description, 160) || null)
-const ogImage = computed(() =>
-  config.value?.og_image_url ||
-  locations.value[0]?.hero_image_public_url ||
-  config.value?.logo_url ||
-  null
-)
-
 // Request-scoped URL state must be captured eagerly during setup. Tenant routing
 // already 301s alternate subdomains to the configured custom domain, so the
 // rendered request origin is the canonical origin for every indexable tenant page.
 const requestURL = useRequestURL()
 const requestHostname = requestURL.hostname
-const canonicalUrl = computed(() => new URL(route.path, requestURL.origin).toString())
 const routeLocationSlug = computed(() => {
   const match = route.path.match(/^\/locations\/([^/]+)/)
   return match?.[1] ?? null
@@ -183,34 +173,25 @@ const siteRobots = computed(() => {
   return config.value?.robots || null
 })
 
+useTenantSocialMetadata(() => ({
+  path: route.path,
+  title: config.value?.seo_title || config.value?.brand_name || resolvedSite.value?.brand_name || '',
+  description: config.value?.seo_description || config.value?.brand_description || '',
+  brand: {
+    siteName: config.value?.brand_name || resolvedSite.value?.brand_name || '',
+    logoUrl: config.value?.logo_url || null,
+    faviconUrl: config.value?.favicon_url || null,
+    primaryColor: config.value?.brand_color || null,
+  },
+  heroImage: config.value?.og_image_url ? { url: config.value.og_image_url } : null,
+  robots: siteRobots.value,
+}))
+
 useHead(() => {
-  const meta = []
-
-  meta.push({ property: 'og:type', content: 'website' })
-  meta.push({ name: 'twitter:card', content: 'summary_large_image' })
-  if (ogTitle.value) {
-    meta.push({ property: 'og:title', content: ogTitle.value })
-    meta.push({ name: 'twitter:title', content: ogTitle.value })
-    meta.push({ property: 'og:site_name', content: ogTitle.value })
-  }
-  if (ogDescription.value) {
-    meta.push({ property: 'og:description', content: ogDescription.value })
-    meta.push({ name: 'twitter:description', content: ogDescription.value })
-  }
-  if (ogImage.value) meta.push({ property: 'og:image', content: ogImage.value })
-  if (siteRobots.value) meta.push({ name: 'robots', content: siteRobots.value })
-
-  if (googleSiteVerification.value) {
-    meta.push({
-      name: 'google-site-verification',
-      content: googleSiteVerification.value
-    })
-  }
   return {
-    meta,
-    link: [
-      { rel: 'canonical', href: canonicalUrl.value },
-    ],
+    meta: googleSiteVerification.value
+      ? [{ name: 'google-site-verification', content: googleSiteVerification.value }]
+      : [],
   }
 })
 </script>

@@ -1,6 +1,13 @@
 import type { DbClient } from '~/server/db'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 
+export interface OrganizationMemberAccessPrincipal {
+  memberId: string
+  role: string
+  organizationId: string
+  teamIds: string[] | null
+}
+
 export type GuestThreadEntryKind = 'submission' | 'message' | 'operation' | 'delivery' | 'assignment' | 'resolution'
 export type GuestThreadActorKind = 'guest' | 'member' | 'system'
 export type GuestThreadChannel = 'web' | 'email' | 'whatsapp' | 'system'
@@ -187,6 +194,8 @@ export type AnyGuestThreadSourceAdapter = GuestThreadSourceAdapter<unknown, unkn
 
 export interface GuestThreadListItemViewModel {
   id: string
+  siteId?: string
+  siteSlug?: string | null
   guestName: string
   submissionType: GuestThreadSubmissionType
   contextLabel: string
@@ -247,8 +256,10 @@ export interface GuestThreadDetailViewModel {
 }
 
 export interface ListGuestThreadsOptions {
+  organizationId?: string | null
+  siteId?: string | null
   locationId?: string | null
-  principal?: MemberAccessPrincipal | null
+  principal?: MemberAccessPrincipal | OrganizationMemberAccessPrincipal | null
   memberId: string
   search?: string | null
   type?: GuestThreadSubmissionType | null

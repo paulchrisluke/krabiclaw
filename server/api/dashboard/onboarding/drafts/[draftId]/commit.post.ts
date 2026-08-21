@@ -267,9 +267,9 @@ export default defineHandler(async (event) => {
     }
     draftCommitted = true
     if (siteId) {
-      const waitUntil = event.runtime?.cloudflare?.context?.waitUntil
+      const waitUntil = event.req.runtime?.cloudflare?.context?.waitUntil
       if (typeof waitUntil === 'function') {
-        waitUntil.call(event.runtime?.cloudflare?.context, purgePublicResourceCacheSafe(env, siteId))
+        waitUntil.call(event.req.runtime?.cloudflare?.context, purgePublicResourceCacheSafe(env, siteId))
       } else {
         await purgePublicResourceCacheSafe(env, siteId)
       }

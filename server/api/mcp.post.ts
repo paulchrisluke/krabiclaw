@@ -131,6 +131,8 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 6. After the user approves, assign with set_media using the appropriate top-level target_type (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, or experience_media) and the exact entity id returned by a read tool when that placement requires one.
 7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
+For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For menu items, each show_generated_images and set_media call must include that item's exact menu_item_id; finish every requested item before reporting completion.
+
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 
 **User-uploaded (user provides their own photo):**

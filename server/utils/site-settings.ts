@@ -3,7 +3,7 @@ import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/do
 import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
@@ -70,14 +70,24 @@ function buildSlug(value: string): string {
 }
 
 export async function loadSettingsPayload(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string
 ) {
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
     SELECT id, organization_id, subdomain, theme, status,
            primary_location_id, public_url, custom_domain_status, default_currency,
-           brand_name, brand_description, logo_url, logo_asset_id, contact_email,
+           brand_name, brand_description,
+           COALESCE(
+             (SELECT public_url FROM media_assets
+              WHERE id = sites.logo_asset_id
+                AND organization_id = sites.organization_id
+                AND site_id = sites.id
+                AND status = 'active'
+              LIMIT 1),
+             logo_url
+           ) AS logo_url,
+           logo_asset_id, contact_email,
            seo_title, seo_description, canonical_url, robots, og_image_asset_id,
            social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, settings, last_published_at, created_at, updated_at,

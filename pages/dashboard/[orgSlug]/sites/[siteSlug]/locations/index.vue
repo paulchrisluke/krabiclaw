@@ -43,15 +43,11 @@
           <UCard variant="soft" class="h-full cursor-pointer">
             <div class="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
               <img
-                v-if="location.hero_url"
-                :src="cfImageVariant(location.hero_url, { width: 640 }) ?? undefined"
+                :src="cfImageVariant(location.og_image_url, { width: 640 }) ?? location.og_image_url"
                 :alt="location.title"
                 class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                 loading="lazy"
               />
-              <div v-else class="flex h-full items-center justify-center">
-                <UIcon name="i-lucide-map-pin" class="size-8 text-muted" />
-              </div>
             </div>
             <div class="p-4">
               <div class="flex items-start justify-between gap-2">
