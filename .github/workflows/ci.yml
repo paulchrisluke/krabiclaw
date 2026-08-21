@@ -214,6 +214,7 @@ jobs:
     needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    environment: staging
     concurrency:
       group: staging-deployment
       cancel-in-progress: false
@@ -287,6 +288,7 @@ jobs:
     needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: production
     outputs:
       nuxt_build_id: ${{ steps.nuxt_build.outputs.id }}
     concurrency:
