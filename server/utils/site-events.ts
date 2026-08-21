@@ -1,5 +1,4 @@
-import { execute, type DbClient } from '~/server/db'
-import { listOrganizationSites } from '~/server/utils/dashboard-context'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 
 export type SiteEventType =
   // Contact
@@ -101,8 +100,13 @@ export async function fireSiteEventSafe(params: FireEventParams): Promise<void> 
 // auth hook, a work-request write), so it degrades to null like any other miss.
 export async function resolvePrimarySiteForEvent(db: DbClient, organizationId: string): Promise<string | null> {
   try {
-    const sites = await listOrganizationSites(db, organizationId)
-    return sites[0]?.id ?? null
+    const site = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM sites
+      WHERE organization_id = ?
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1
+    `, [organizationId])
+    return site?.id ?? null
   } catch (error) {
     console.warn('resolve_primary_site_for_event_failed', {
       organizationId,

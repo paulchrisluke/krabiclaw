@@ -63,7 +63,7 @@ interface CloudflareGeo {
 
 export function getCloudflareGeo(event: H3Event): CloudflareGeo {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfReq = (event.runtime?.cloudflare as any)?.request as (Request & { cf?: CloudflareGeo }) | undefined
+  const cfReq = (event.req.runtime?.cloudflare as any)?.request as (Request & { cf?: CloudflareGeo }) | undefined
   const cf = cfReq?.cf
   if (cf) {
     return { country: cf.country, region: cf.region, city: cf.city }

@@ -104,7 +104,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 ## Adding a tenant route
 
 1. Ensure the route requires a resolved tenant/site.
-2. Add a canonical through the Saya layout; page-specific SEO should use `useSeoUrl()` or `useTenantOgImage()`.
+2. Add page-specific canonical and social metadata through `useTenantSocialMetadata()`; every social image is rendered by `/og-image-render.png`, with any selected media used only as its background input.
 3. Add the platform-host route classification when the path is tenant-only.
 4. Add the route to `server/plugins/sitemap.ts` only when it has durable public search value and can avoid empty/thin output.
 5. Query and filter tenant-owned records explicitly.

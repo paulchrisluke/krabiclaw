@@ -43,7 +43,7 @@ function normalizeHostname(host: string): string {
 
 export function assertDevRouteAllowed(event: H3Event) {
   const devMode = import.meta.dev
-  const runtimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
+  const runtimeEnv = event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined
   const e2eOverride = runtimeEnv?.E2E_ALLOW_DEV_ROUTES === 'true'
   const allowDevRoute = devMode || e2eOverride
   if (!allowDevRoute) {
@@ -78,7 +78,7 @@ export function assertDevRouteAllowed(event: H3Event) {
 }
 
 export function assertE2eFixtureEnabled(event: H3Event) {
-  const runtimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
+  const runtimeEnv = event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined
   if (!import.meta.dev && runtimeEnv?.E2E_ALLOW_DEV_ROUTES !== 'true') {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }

@@ -68,7 +68,6 @@
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaSite } from '~/server/utils/dashboard-agenda'
 
-definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Today | KrabiClaw', robots: 'noindex, nofollow' })
 
 interface TodayResponse {

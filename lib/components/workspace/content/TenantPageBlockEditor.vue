@@ -1,24 +1,12 @@
 <template>
   <div class="space-y-4">
-    <div class="grid gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
-      <UFormField label="Block type">
-        <USelect :model-value="block.type" :items="blockTypeOptions" @update:model-value="changeType" />
-      </UFormField>
-      <div class="rounded-lg bg-elevated p-3 text-sm">
-        <p class="font-medium text-highlighted">{{ definition.label }}</p>
-        <p class="mt-1 text-muted">{{ definition.description }}</p>
-        <p class="mt-2 text-xs text-muted">Typed fields: {{ definition.fields.join(', ') || 'No editable fields' }}</p>
-      </div>
-    </div>
-
     <div v-if="block.type === 'heading'" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem]">
       <UFormField label="Heading text"><UInput :model-value="stringField('text')" @update:model-value="setString('text', $event)" /></UFormField>
       <UFormField label="Heading level"><USelect :model-value="numberField('level', 2)" :items="headingLevels" @update:model-value="setNumber('level', $event)" /></UFormField>
     </div>
 
-    <UFormField v-else-if="block.type === 'markdown'" label="Rich text / Markdown">
+    <UFormField v-else-if="block.type === 'markdown'" label="Text">
       <UTextarea :model-value="stringField('markdown')" :rows="10" autoresize @update:model-value="setString('markdown', $event)" />
-      <p class="mt-1 text-xs text-muted">Use Markdown for prose. Structured sections belong in their own blocks.</p>
     </UFormField>
 
     <template v-else-if="block.type === 'image'">
@@ -174,20 +162,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import { TENANT_PAGE_BLOCK_REGISTRY, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
-import { createTenantPageEditorData, validateTenantPageBlock } from '~/utils/tenant-page-editor'
+import type { TenantPageBlock, TenantPageType } from '~/utils/tenant-page-blocks'
+import { validateTenantPageBlock } from '~/utils/tenant-page-editor'
 
 const props = defineProps<{ block: TenantPageBlock; siteId: string; pageRecipe?: string | null; pageType: TenantPageType }>()
 const emit = defineEmits<{ 'update:block': [block: TenantPageBlock] }>()
 
-const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY)
-  .filter(definition => isTenantPageBlockAllowed(definition, props.pageRecipe, props.pageType))
-  .map(definition => ({ label: definition.label, value: definition.type })))
 const headingLevels = [1, 2, 3, 4, 5, 6].map(level => ({ label: `H${level}`, value: level }))
 const toneOptions = ['neutral', 'info', 'success', 'warning', 'error'].map(value => ({ label: value[0]!.toUpperCase() + value.slice(1), value }))
 const faqSourceOptions = [{ label: 'Manual questions', value: 'manual' }, { label: 'Published site Q&A', value: 'page_qa' }]
 
-const definition = computed(() => TENANT_PAGE_BLOCK_REGISTRY[props.block.type])
 const validationErrors = computed(() => validateTenantPageBlock(props.block))
 const isCtaBlock = computed(() => ['cta', 'contact_cta', 'booking_cta'].includes(props.block.type))
 const isGridBlock = computed(() => ['feature_grid', 'testimonial_grid', 'offering_grid', 'location_grid'].includes(props.block.type))
@@ -205,14 +189,6 @@ const sourceValue = computed(() => stringField('source') || 'manual')
 
 function emitBlock(block: TenantPageBlock) {
   emit('update:block', block)
-}
-
-function changeType(value: unknown) {
-  const type = String(value) as TenantPageBlockType
-  if (!TENANT_PAGE_BLOCK_REGISTRY[type] || type === props.block.type || !isTenantPageBlockAllowed(type, props.pageRecipe, props.pageType)) return
-  const preserved: Record<string, unknown> = {}
-  for (const key of ['field', 'legacy_type']) if (props.block.data[key] !== undefined) preserved[key] = props.block.data[key]
-  emitBlock({ ...props.block, type, data: { ...createTenantPageEditorData(type), ...preserved } })
 }
 
 function stringField(key: string): string {

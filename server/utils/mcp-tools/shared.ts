@@ -50,14 +50,14 @@ export const BLOG_NAV_FIELDS_SCHEMA = {
   featured_order: { type: ['number', 'null'], description: 'Sort position in featured/homepage placements, independent of nav ordering.' },
 }
 
-/** SEO override fields shared across location/menu-item/experience/site tools. Each entity supplies its own og_image fallback description. */
-export function seoOverrideFieldsSchema(ogImageFallbackDescription: string) {
+/** SEO override fields shared across location/menu-item/experience/site tools. */
+export function seoOverrideFieldsSchema() {
   return {
     seo_title: { type: ['string', 'null'], description: 'Optional SEO title override. Falls back to the computed default if unset.' },
     seo_description: { type: ['string', 'null'], description: 'Optional SEO meta description override. Falls back to the computed default if unset.' },
     canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
     robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
-    og_image_asset_id: { type: ['string', 'null'], description: `Asset id from get_site_media_assets for this page's social share image. ${ogImageFallbackDescription}` },
+    og_image_asset_id: { type: ['string', 'null'], description: 'Optional asset id from get_site_media_assets used as the background inside this page\'s generated social card. It never replaces the generated title and branding.' },
   }
 }
 
@@ -731,7 +731,7 @@ export const experienceWriteSchema = {
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
   canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
   robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
-  og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets for this experience\'s social share image. If unset, social sharing uses the first image or video poster from the ordered media list.' },
+  og_image_asset_id: { type: ['string', 'null'], description: 'Optional asset id from get_site_media_assets used as the background inside this experience\'s generated social card. It never replaces the generated title and branding.' },
 } as const
 
 export const renderedBookingPolicySummaryObject = {

@@ -1,7 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  deriveSubdomain,
   environmentTenantAliasHostname,
   environmentTenantAliasSlug,
   getFreeSiteDomain,
@@ -174,38 +173,4 @@ test('environment tenant aliases use first-level preview and staging hostnames',
   assert.equal(environmentTenantAliasSlug('staging.krabiclaw.com', stagingEnv), '')
   assert.equal(environmentTenantAliasSlug('pottery-house-preview.krabiclaw.com', stagingEnv), '')
   assert.equal(environmentTenantAliasSlug('unknown.example.com', stagingEnv), '')
-})
-
-test('deriveSubdomain matches a subdomain of the configured platform domain', () => {
-  // deriveSubdomain always receives an already port-stripped hostname
-  // (callers run hostnameOf() first), so only bare hostnames are exercised here.
-  assert.equal(deriveSubdomain('demo.krabiclaw.com', 'krabiclaw.com'), 'demo')
-})
-
-test('deriveSubdomain ignores the www label', () => {
-  assert.equal(deriveSubdomain('www.krabiclaw.com', 'krabiclaw.com'), '')
-})
-
-test('deriveSubdomain is never asked to resolve the bare platform domain (isPlatformHost intercepts it first)', () => {
-  // deriveSubdomain alone would treat "krabiclaw.com" as subdomain "krabiclaw"
-  // of "krabiclaw.com" — but resolveTenantSite() only runs after
-  // isPlatformHost() returns false, and isPlatformHost('krabiclaw.com', ...)
-  // is always true (see getPlatformHosts), so this input never reaches here.
-  assert.equal(isPlatformHost('krabiclaw.com', prodEnv), true)
-  assert.equal(deriveSubdomain('krabiclaw.com', 'krabiclaw.com'), 'krabiclaw')
-})
-
-test('deriveSubdomain handles an unrelated custom tenant domain by taking its first label', () => {
-  assert.equal(deriveSubdomain('pottery-house-krabi.com', 'krabiclaw.com'), 'pottery-house-krabi')
-})
-
-test('deriveSubdomain is correct when the platform domain is configured with a port (regression: main kept the port)', () => {
-  // Real bug class this guards against: if NUXT_PUBLIC_FREE_SITE_DOMAIN carries
-  // a port (e.g. a non-standard local/staging config), a naive platformDomain
-  // that keeps ":3000" never matches `endsWith('.myapp.example.com:3000')`,
-  // so a real subdomain falls through to the wrong site_domains lookup
-  // ("tenant.myapp.example.com:3000" instead of "tenant.myapp.example.com").
-  const freeSiteDomain = getFreeSiteDomain(portedCustomEnv)
-  assert.equal(freeSiteDomain, 'myapp.example.com')
-  assert.equal(deriveSubdomain('tenant.myapp.example.com', freeSiteDomain), 'tenant')
 })

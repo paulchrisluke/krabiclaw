@@ -191,6 +191,7 @@ const selectedPostImage = computed(() => {
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
+const socialBackground = computed(() => post.value?.social_image?.public_url || null)
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
@@ -216,7 +217,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: postMedia.value.thumb ? { url: postMedia.value.thumb } : null,
+  heroImage: socialBackground.value ? { url: socialBackground.value } : null,
 }))
 
 useHead(() => ({

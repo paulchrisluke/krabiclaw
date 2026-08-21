@@ -19,7 +19,7 @@ const WORKER_MEDIA_PREFIX = '/__media/'
 // hit /__media/* and read straight from the R2 bucket.
 function isWorkerMediaPathAllowed(event: Parameters<typeof getHeader>[0]): boolean {
   if (import.meta.dev) return true
-  const runtimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
+  const runtimeEnv = event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined
   if (runtimeEnv?.E2E_ALLOW_DEV_ROUTES !== 'true') return false
   const expectedSecret = typeof runtimeEnv.E2E_DEV_ROUTE_SECRET === 'string'
     ? runtimeEnv.E2E_DEV_ROUTE_SECRET

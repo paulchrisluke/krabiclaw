@@ -3,7 +3,6 @@
 
 import { HTTPError, defineHandler  } from 'nitro';
 import { redirect } from 'nitro/h3';
-import type { H3Event } from 'nitro';
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { platformHostname } from "~/server/utils/domains";
 import { TENANT_TYPES } from "~/utils/tenant-routing";
@@ -21,10 +20,6 @@ export default defineHandler(async (event) => {
 
   // Handle unknown tenant (404)
   if (tenantType === TENANT_TYPES.TENANT_404) {
-    if (shouldRenderWithNuxtErrorPage(event, pathname)) {
-      return;
-    }
-
     throw new HTTPError({
       statusCode: 404,
       statusMessage: "Site Not Found",
@@ -67,11 +62,6 @@ export default defineHandler(async (event) => {
       }
 
       default:
-        if (shouldRenderWithNuxtErrorPage(event, pathname)) {
-          event.context.tenantType = TENANT_TYPES.TENANT_404;
-          return;
-        }
-
         throw new HTTPError({
           statusCode: 404,
           statusMessage: "Site Not Found",
@@ -79,18 +69,3 @@ export default defineHandler(async (event) => {
     }
   }
 });
-
-function shouldRenderWithNuxtErrorPage(
-  event: H3Event,
-  pathname: string,
-) {
-  if (event.method !== "GET") return false;
-  if (pathname.startsWith("/api/")) return false;
-  if (pathname.startsWith("/_nuxt/") || pathname.startsWith("/assets/") || pathname.startsWith("/_ipx/")) return false;
-
-  const secFetchDest = (event.req.headers.get("sec-fetch-dest"));
-  if (secFetchDest === "document") return true;
-
-  const accept = (event.req.headers.get("accept")) || "";
-  return accept.includes("text/html");
-}
