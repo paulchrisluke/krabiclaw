@@ -160,10 +160,12 @@ password supplied for that provisioning run. The provisioner uses local D1 by
 default. Never add `--preview` or `--staging` for routine local development.
 
 Provisioning is destructive only to the synthetic authentication fixtures: it
-replaces their credential hashes, organization/team memberships, and deletes
-their current sessions. It does not invent a fallback login. After running it,
-all previously authenticated fixture browsers must sign in again with the new
-password.
+replaces their credential hashes, organization memberships, and current
+sessions. It also recreates each configured site's Better Auth team, assigns
+`sites.team_id`, and rebuilds the fixture user's `teamMember` rows from
+`config/e2e-auth-fixtures.ts`. It does not invent a fallback login. After
+running it, all previously authenticated fixture browsers must sign in again
+with the new password.
 
 If a browser test fails in a fresh worktree, check these setup symptoms first:
 

@@ -45,6 +45,7 @@
             v-for="notification in notifications"
             :key="notification.id"
             block
+            class="justify-start text-left"
             color="neutral"
             variant="ghost"
             @click="openNotification(notification)"

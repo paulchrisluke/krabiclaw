@@ -1,5 +1,5 @@
 <template>
-  <OrganizationSettingsShell detail-title="Billing">
+  <OrganizationSettingsShell detail-title="Billing" wide-detail>
     <div v-if="loading" class="space-y-6">
         <USkeleton class="h-28 w-full" />
         <div class="grid gap-4 lg:grid-cols-3">

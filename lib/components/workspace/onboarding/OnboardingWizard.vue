@@ -160,8 +160,9 @@
                   v-for="choice in messages[index]?.choiceCard?.choices"
                   :key="choice.action"
                   block
-                  color="neutral"
-                  variant="outline"
+                  :color="choice.primary ? 'primary' : 'neutral'"
+                  :variant="isSelectedChoice(messages[index]!, choice) ? 'soft' : choice.ghost ? 'ghost' : choice.primary ? 'solid' : 'outline'"
+                  :aria-pressed="isSelectedChoice(messages[index]!, choice)"
                   :disabled="importing || Boolean(selectedChoiceAction)"
                   @click="selectChoice(choice, index)"
                 >

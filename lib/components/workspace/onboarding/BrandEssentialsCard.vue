@@ -178,16 +178,15 @@ async function onLogoSelected(event: Event) {
     }
     logoPreviewUrl.value = URL.createObjectURL(file)
     const result = await uploadLogo(file, { category: 'logo' })
-    if (result) {
-      logoAssetId.value = result.id
-      if (logoInput.value?.inputRef) logoInput.value.inputRef.value = ''
-    }
+    if (result) logoAssetId.value = result.id
   } catch {
     errorMessage.value = 'Could not upload that logo. Try a different image.'
     if (logoPreviewUrl.value?.startsWith('blob:')) {
       URL.revokeObjectURL(logoPreviewUrl.value)
     }
     logoPreviewUrl.value = null
+  } finally {
+    if (logoInput.value?.inputRef) logoInput.value.inputRef.value = ''
   }
 }
 
@@ -202,16 +201,15 @@ async function onHeroSelected(event: Event) {
     }
     heroPreviewUrl.value = URL.createObjectURL(file)
     const result = await uploadHero(file)
-    if (result) {
-      heroAssetId.value = result.id
-      if (heroInput.value?.inputRef) heroInput.value.inputRef.value = ''
-    }
+    if (result) heroAssetId.value = result.id
   } catch {
     errorMessage.value = 'Could not upload that photo. Try a different image.'
     if (heroPreviewUrl.value?.startsWith('blob:')) {
       URL.revokeObjectURL(heroPreviewUrl.value)
     }
     heroPreviewUrl.value = null
+  } finally {
+    if (heroInput.value?.inputRef) heroInput.value.inputRef.value = ''
   }
 }
 

@@ -11,7 +11,7 @@
 
     <template v-else-if="block.type === 'image'">
       <UFormField label="Media asset">
-        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @update:model-value="setString('asset_id', $event ?? '')" @change="setAssetAlt" />
+        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @change="setAsset" />
       </UFormField>
       <UFormField label="Caption"><UInput :model-value="stringField('caption')" @update:model-value="setString('caption', $event)" /></UFormField>
     </template>
@@ -71,7 +71,7 @@
         <UFormField class="md:col-span-2" label="Subtitle"><UTextarea :model-value="stringField('subtitle')" :rows="3" autoresize @update:model-value="setString('subtitle', $event)" /></UFormField>
       </div>
       <UFormField label="Hero image">
-        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @update:model-value="setString('asset_id', $event ?? '')" @change="setAssetAlt" />
+        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @change="setAsset" />
       </UFormField>
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="CTA label"><UInput :model-value="stringField('cta_label')" @update:model-value="setString('cta_label', $event)" /></UFormField>
@@ -201,8 +201,15 @@ function setString(key: string, value: unknown) {
   emitBlock({ ...props.block, data: { ...props.block.data, [key]: value == null ? '' : String(value) } })
 }
 
-function setAssetAlt(asset: { altText?: string } | null) {
-  emitBlock({ ...props.block, data: { ...props.block.data, alt: asset?.altText ?? '' } })
+function setAsset(asset: { id: string; altText?: string } | null) {
+  emitBlock({
+    ...props.block,
+    data: {
+      ...props.block.data,
+      asset_id: asset?.id ?? '',
+      alt: asset?.altText ?? '',
+    },
+  })
 }
 
 function setNumber(key: string, value: unknown) {

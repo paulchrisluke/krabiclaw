@@ -8,7 +8,7 @@
       <UCard
         variant="subtle"
         class="overflow-hidden rounded-2xl"
-        :ui="{ body: '!p-0 sm:!p-0' }"
+        :ui="{ body: 'p-0! sm:p-0!' }"
       >
         <NuxtLink
           v-for="(item, index) in group.items"

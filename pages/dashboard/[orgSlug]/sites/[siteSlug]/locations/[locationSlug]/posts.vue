@@ -34,7 +34,7 @@
                 <div class="flex items-center gap-2">
                   <label class="cursor-pointer">
                     <UInput ref="aiImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onAiImageSelect" />
-                    <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-image" @click="aiImageInput?.inputRef?.click()">
+                    <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-image" @click.stop="aiImageInput?.inputRef?.click()">
                       {{ aiImageFile ? aiImageFile.name.slice(0, 12) + '…' : 'Photo' }}
                     </UButton>
                   </label>
@@ -54,8 +54,9 @@
                   v-for="tab in ['all','published','archived']"
                   :key="tab"
                   size="xs"
-                  variant="link"
+                  :variant="activeTab === tab ? 'soft' : 'ghost'"
                   color="neutral"
+                  :aria-current="activeTab === tab ? 'page' : undefined"
                   @click="activeTab = tab; loadPosts()"
                 >{{ tab }}</UButton>
               </div>

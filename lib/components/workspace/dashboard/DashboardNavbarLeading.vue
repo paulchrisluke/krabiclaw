@@ -50,7 +50,7 @@ const props = withDefaults(defineProps<{
   detailLabel: 'Back',
   backToOrganization: false,
   actionIcon: null,
-  actionLabel: 'Go back',
+  actionLabel: 'Navigation action',
 })
 
 defineEmits<{ action: [] }>()

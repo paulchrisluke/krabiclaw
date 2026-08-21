@@ -74,7 +74,7 @@
             </div>
             <UFormField v-if="addingAuthor" class="mt-2">
               <div class="flex items-center gap-2">
-                <UInput v-model="newAuthorName" placeholder="Author name" @keyup.enter="submitNewAuthor" />
+                <UInput v-model="newAuthorName" class="min-w-0 flex-1" placeholder="Author name" @keyup.enter="submitNewAuthor" />
                 <UButton size="sm" :loading="savingAuthor" :disabled="!newAuthorName.trim()" @click="submitNewAuthor">Save</UButton>
                 <UButton color="neutral" variant="ghost" size="sm" @click="addingAuthor = false">Cancel</UButton>
               </div>

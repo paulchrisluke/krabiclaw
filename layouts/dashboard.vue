@@ -517,13 +517,18 @@ function parentNavItem() {
 // resolved capabilities (locationVocabulary), not a hardcoded string, so a professional_service
 // site correctly reads "Offices / Service Areas" instead of "Locations".
 const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
+const locationsNavTarget = computed(() => {
+  if (!locationsBase.value) return null
+  const firstLocation = dashboard.locations.value[0]
+  return firstLocation?.slug ? `${locationsBase.value}/${firstLocation.slug}` : `${locationsBase.value}/new`
+})
 
 const _siteOverviewGroup = computed(() => {
   if (scope.value !== 'site' || !siteBase.value) return []
   const items = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${siteBase.value}/inbox` },
-    { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsBase.value ?? `${siteBase.value}/locations` },
+    { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsNavTarget.value ?? `${siteBase.value}/locations/new` },
   ]
   if (!canManageSite.value) return items
   return [
@@ -541,7 +546,8 @@ const _siteOverviewGroup = computed(() => {
 const _locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
   return [
-    { label: 'Location', icon: 'i-lucide-map-pin', to: `${locationBase.value}/settings` },
+    { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
+    { label: 'Location settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings` },
     ...(canManageSite.value ? [{ label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` }] : []),
     ...(siteBase.value && canManageSite.value ? [{ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` }] : []),
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
@@ -647,7 +653,7 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
     ? `${routeSiteBase}/locations/${encodeURIComponent(routeLocationSlug)}`
     : null
   const isOrganization = scope.value === 'organization'
-  const childrenTo = isOrganization ? `${routeOrgBase}/sites` : routeSiteBase
+  const childrenTo = isOrganization ? `${routeOrgBase}/sites` : locationsNavTarget.value
   const inboxTo = isOrganization
     ? `${routeOrgBase}/inbox`
     : scope.value === 'location' && routeLocationBase

@@ -95,6 +95,20 @@ const isOrganizationCreditsResource = (value: unknown): value is OrganizationCre
 
 const credits = ref<OrganizationCreditsResource | null>(null)
 
+if (import.meta.server) {
+  const requestEvent = useRequestEvent()
+  const organization = dashboard.organization.value
+  if (requestEvent && organization?.id) {
+    const [{ cloudflareEnv }, { getOrganizationCreditsResource }] = await Promise.all([
+      import('~/server/utils/api-response'),
+      import('~/server/utils/ai-credits'),
+    ])
+    const db = cloudflareEnv(requestEvent).DB
+    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    credits.value = await getOrganizationCreditsResource(db, organization.id)
+  }
+}
+
 const usageLabel = computed(() => {
   const resource = credits.value
   if (!resource || resource.reconciliationRequired) return null
@@ -104,18 +118,20 @@ const usageLabel = computed(() => {
   return `${percentLeft}% left`
 })
 
-watch(() => dashboard.organization.value?.slug, async (orgSlug) => {
-  credits.value = null
-  if (!orgSlug) return
-  try {
-    credits.value = await dashboardFetch<OrganizationCreditsResource>('/api/billing/credits', { orgSlug }, {
-      method: 'GET',
-      validate: isOrganizationCreditsResource,
-    })
-  } catch {
+if (import.meta.client) {
+  watch(() => dashboard.organization.value?.slug, async (orgSlug) => {
     credits.value = null
-  }
-}, { immediate: true })
+    if (!orgSlug) return
+    try {
+      credits.value = await dashboardFetch<OrganizationCreditsResource>('/api/billing/credits', { orgSlug }, {
+        method: 'GET',
+        validate: isOrganizationCreditsResource,
+      })
+    } catch {
+      credits.value = null
+    }
+  }, { immediate: true })
+}
 
 async function handleSignOut() {
   // Preserve the current path across sign-out/sign-back-in like

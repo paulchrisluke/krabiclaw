@@ -54,7 +54,7 @@
                 />
               </NuxtLink>
             </div>
-            <UButton v-else :to="locationsPath" icon="i-lucide-plus" label="Add a location" color="neutral" variant="soft" />
+            <UButton v-else :to="`${locationsPath}/new`" icon="i-lucide-plus" label="Add a location" color="neutral" variant="soft" />
           </section>
 
           <UCard class="overflow-hidden" :ui="{ header: 'p-0 sm:p-0', body: 'p-0 sm:p-0' }">

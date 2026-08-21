@@ -393,7 +393,7 @@ const onDraftCleared = () => {
 
 // ─── Toast from query params ──────────────────────────────────────────────────
 onMounted(async () => {
-  const mobilePreviewQuery = window.matchMedia('(max-width: 991.98px)')
+  const mobilePreviewQuery = window.matchMedia('(max-width: 1023.98px)')
   const updateMobilePreviewViewport = () => {
     isMobilePreviewViewport.value = mobilePreviewQuery.matches
     if (!mobilePreviewQuery.matches) mobilePreviewOpen.value = false

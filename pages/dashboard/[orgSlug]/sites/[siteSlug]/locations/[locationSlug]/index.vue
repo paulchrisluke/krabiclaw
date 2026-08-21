@@ -50,7 +50,7 @@
                   <UCard
                     variant="subtle"
                     class="overflow-hidden rounded-2xl transition-colors group-hover:bg-elevated"
-                    :ui="{ body: '!p-0 sm:!p-0' }"
+                    :ui="{ body: 'p-0! sm:p-0!' }"
                   >
                     <img
                       v-if="locationImage"
@@ -202,6 +202,7 @@ const featureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
 ]))
 const hasFeature = (feature: ProductFeature) => featureSet.value.has(feature)
+const includeMenus = computed(() => hasFeature('menu'))
 
 const currentOpeningState = computed(() => {
   const hours = location.value?.opening_hours
@@ -227,12 +228,6 @@ const locationStatusSummary = computed(() => {
 
 const contentGroups = computed(() => {
   const publicContent = [
-    {
-      id: 'profile',
-      label: 'Location details',
-      summary: addressSummary.value,
-      to: `${settingsPath.value}/profile`,
-    },
     {
       id: 'photos',
       label: 'Photos',
@@ -279,12 +274,6 @@ const contentGroups = computed(() => {
 
   const operations = [
     {
-      id: 'inbox',
-      label: 'Inbox',
-      summary: `${inboxSummary.value.unreadThreads} unread · ${inboxSummary.value.openThreads} open`,
-      to: `${locationPath.value}/inbox`,
-    },
-    {
       id: 'reservations',
       label: 'Reservations',
       summary: 'Manage reservation requests and bookings',
@@ -300,8 +289,8 @@ const contentGroups = computed(() => {
   ].filter(item => item.visible !== false)
 
   return [
-    { id: 'public-content', items: publicContent.filter(item => item.id !== 'profile') },
-    { id: 'operations', label: 'Manage', items: operations.filter(item => item.id !== 'inbox') },
+    { id: 'public-content', items: publicContent },
+    { id: 'operations', label: 'Manage', items: operations },
   ].filter(group => group.items.length > 0)
 })
 
@@ -326,14 +315,15 @@ const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSumm
   && typeof value.summary.unreadThreads === 'number'
 
 const requestEvent = useRequestEvent()
-const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}`)
+const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeMenus.value ? 'menus' : 'no-menus'}`)
 const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+  const shouldIncludeMenus = includeMenus.value
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const { loadDashboardLocationOverview } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardLocationOverview(requestEvent, siteId, locationId.value, {
-      includeMenus: hasFeature('menu'),
+      includeMenus: shouldIncludeMenus,
     }) as LocationOverviewResource
   }
 
@@ -342,7 +332,7 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
       `/api/dashboard/locations/${locationId.value}`,
       { validate: isLocationResponse },
     ),
-    hasFeature('menu')
+    shouldIncludeMenus
       ? dashboardApi<{ success: boolean; menus: ApiRecord[] }>(
           `/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`,
           { validate: isMenusResponse },

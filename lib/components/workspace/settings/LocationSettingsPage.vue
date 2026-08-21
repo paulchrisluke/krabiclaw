@@ -26,7 +26,7 @@
         v-else-if="location"
         :has-detail="hasDetail"
         show-desktop-detail
-        show-actions
+        :show-actions="hasDetail"
         :saving="saving"
         :save-disabled="saveDisabled"
         @cancel="cancelEditor"
@@ -385,7 +385,10 @@ const parseOpeningHours = (weekdayDescriptions?: string[]): DayHours[] => {
   const byDay = new Map(defaults.map(item => [item.day, { ...item }]))
 
   for (const line of weekdayDescriptions) {
-    const [rawDay, rawValue] = String(line).split(':', 2)
+    const separatorIndex = String(line).indexOf(':')
+    if (separatorIndex === -1) continue
+    const rawDay = String(line).slice(0, separatorIndex)
+    const rawValue = String(line).slice(separatorIndex + 1)
     const day = rawDay?.trim() as typeof WEEKDAYS[number] | undefined
     const value = rawValue?.trim() ?? ''
     if (!day || !byDay.has(day)) continue
@@ -687,18 +690,21 @@ const {
   watch: [locationId],
 })
 
-watchEffect(() => {
-  loading.value = locationSettingsPending.value
-  error.value = locationSettingsError.value
-    ? getErrorMessage(locationSettingsError.value, 'Failed to load location')
-    : null
-  const resource = locationSettingsResource.value
-  if (!resource) return
-  location.value = resource.location.location
-  fillLocationFeatures(resource.location)
-  fillDetailsForm(resource.location.location)
-  originalSignature.value = editorSignature(editorKey.value)
-})
+watch(
+  [locationSettingsResource, locationSettingsPending, locationSettingsError],
+  ([resource, pending, resourceError]) => {
+    loading.value = pending
+    error.value = resourceError
+      ? getErrorMessage(resourceError, 'Failed to load location')
+      : null
+    if (!resource) return
+    location.value = resource.location.location
+    fillLocationFeatures(resource.location)
+    fillDetailsForm(resource.location.location)
+    originalSignature.value = editorSignature(editorKey.value)
+  },
+  { immediate: true },
+)
 
 watch(detailKey, () => resetDraft())
 

@@ -10,7 +10,8 @@
           :key="tab.id"
           size="sm"
           color="neutral"
-          variant="ghost"
+          :variant="selectedPage === tab.id ? 'soft' : 'ghost'"
+          :aria-current="selectedPage === tab.id ? 'page' : undefined"
           :disabled="!tab.enabled"
           @click="tab.enabled && $emit('select-page', tab.id)"
         >

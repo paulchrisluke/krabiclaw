@@ -201,12 +201,18 @@ const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
 const validBrandKeys = new Set(['name', 'logo', 'description', 'color', 'contact', 'social'])
-const validSettingsKeys = new Set(['currency', 'notifications', 'search-index', 'analytics', 'verification', 'visibility', 'publishing'])
-if (routeSegments.value.length > 2
-  || (surface.value === 'brand' && firstSegment.value && !validBrandKeys.has(firstSegment.value))
-  || (surface.value === 'settings' && detailKey.value && !validSettingsKeys.has(detailKey.value))) {
-  throw createError({ statusCode: 404, statusMessage: 'Setting not found' })
-}
+const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing'])
+const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
+const routeIsCanonical = computed(() => {
+  const segments = routeSegments.value
+  if (surface.value === 'brand') return segments.length <= 1 && (!segments[0] || validBrandKeys.has(segments[0]))
+  if (segments.length === 0) return true
+  if (segments.length === 1) return validSettingsKeys.has(segments[0]!)
+  return segments.length === 2 && segments[0] === 'search' && validSearchKeys.has(segments[1]!)
+})
+watchEffect(() => {
+  if (!routeIsCanonical.value) throw createError({ statusCode: 404, statusMessage: 'Setting not found' })
+})
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -260,7 +266,6 @@ const searchItems = computed<EditorNavigationItem[]>(() => [
   { id: 'verification', label: 'Search verification', summary: loadedSettings.value?.google_site_verification ? 'Configured' : 'Not configured', icon: 'i-lucide-badge-check', to: `${settingsPath.value}/search/verification` },
   { id: 'visibility', label: 'Search visibility', summary: searchSummary.value, icon: 'i-lucide-scan-search', to: `${settingsPath.value}/search/visibility` },
 ])
-const navigationItems = computed(() => surface.value === 'brand' ? brandItems.value : firstSegment.value === 'search' && secondSegment.value ? searchItems.value : settingsItems.value)
 const navigationGroups = computed(() => {
   if (surface.value === 'brand') return [{ id: 'brand', items: brandItems.value }]
   if (firstSegment.value === 'search' && secondSegment.value) return [{ id: 'search', items: searchItems.value }]
@@ -306,10 +311,12 @@ function isValidUrl(value: string) {
   if (!value.trim()) return true
   try { const url = new URL(value); return url.protocol === 'http:' || url.protocol === 'https:' } catch { return false }
 }
+const dirty = computed(() => editorSignature(detailKey.value) !== originalSignature.value)
 const validationMessage = computed(() => {
+  if (!dirty.value) return null
   switch (detailKey.value) {
     case 'name': return form.brand_name.trim() ? null : 'Enter a brand name.'
-    case 'color': return /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
+    case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
     case 'notifications': return !notificationChannels.value.length ? 'Select at least one notification channel.' : notificationChannels.value.includes('whatsapp') && !whatsappPhone.value.trim() ? 'Enter the WhatsApp number used for notifications.' : null
@@ -317,7 +324,6 @@ const validationMessage = computed(() => {
     default: return null
   }
 })
-const dirty = computed(() => editorSignature(detailKey.value) !== originalSignature.value)
 const saveDisabled = computed(() => !dirty.value || validationMessage.value !== null)
 
 function fillForm(settings: SiteSettingsResponse) {

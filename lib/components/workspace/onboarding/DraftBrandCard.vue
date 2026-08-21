@@ -24,12 +24,12 @@
           >
             <UIcon v-if="!customColorSelected" name="i-lucide-plus" class="size-4" />
             <UInput
-              :value="form.brandColor"
+              :model-value="form.brandColor"
               type="color"
               class="absolute inset-0 cursor-pointer opacity-0"
               aria-label="Choose custom brand color"
               :disabled="disabled"
-              @input="setCustomBrandColor"
+              @update:model-value="setCustomBrandColor"
              />
           </label>
         </div>
@@ -181,9 +181,8 @@ function setBrandColor(color: string) {
   emit('brand-color-change')
 }
 
-function setCustomBrandColor(event: Event) {
-  const input = event.target as HTMLInputElement
-  setBrandColor(input.value)
+function setCustomBrandColor(value: string | number) {
+  setBrandColor(String(value))
 }
 
 async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {

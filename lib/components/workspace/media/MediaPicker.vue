@@ -167,7 +167,9 @@ const isPickerMediaResponse = (value: unknown): value is { media: PickerMediaAss
     && typeof asset.id === 'string'
     && (asset.kind === undefined || asset.kind === null || typeof asset.kind === 'string')
     && (asset.public_url === undefined || asset.public_url === null || typeof asset.public_url === 'string')
-    && (asset.thumbnail_url === undefined || asset.thumbnail_url === null || typeof asset.thumbnail_url === 'string'),
+    && (asset.thumbnail_url === undefined || asset.thumbnail_url === null || typeof asset.thumbnail_url === 'string')
+    && (asset.alt_text === undefined || asset.alt_text === null || typeof asset.alt_text === 'string')
+    && (asset.file_name === undefined || asset.file_name === null || typeof asset.file_name === 'string'),
   )
 
 const isOpen = ref(false)
@@ -183,6 +185,12 @@ const modelLoadError = ref<string | null>(null)
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
+}
+
+function assetAlt(asset: Pick<PickerMediaAsset, 'alt_text' | 'file_name'> | { altText?: string | null }): string {
+  if ('altText' in asset && typeof asset.altText === 'string') return asset.altText
+  if ('alt_text' in asset && typeof asset.alt_text === 'string' && asset.alt_text) return asset.alt_text
+  return 'file_name' in asset && typeof asset.file_name === 'string' ? asset.file_name : ''
 }
 
 watch(() => props.modelValue, async (id) => {
@@ -211,7 +219,7 @@ watch(() => props.modelValue, async (id) => {
     if (asset) {
       selectedUrl.value = asset.thumbnail_url ?? asset.public_url ?? null
       selectedKind.value = asset.kind ?? 'image'
-      selectedAlt.value = asset.alt_text || ''
+      selectedAlt.value = assetAlt(asset)
     } else {
       selectedUrl.value = null
       selectedKind.value = null
@@ -244,7 +252,7 @@ function onSelect(asset: PickerMediaAsset) {
     publicUrl: asset.public_url ?? '',
     thumbnailUrl: asset.thumbnail_url ?? '',
     kind: asset.kind ?? 'image',
-    altText: asset.alt_text || asset.file_name || '',
+    altText: assetAlt(asset),
   }
 }
 
@@ -257,7 +265,7 @@ function onUploaded(asset: PickerMediaAsset) {
     publicUrl: url,
     thumbnailUrl: asset.thumbnailUrl ?? asset.thumbnail_url ?? '',
     kind,
-    altText: asset.alt_text || asset.file_name || '',
+    altText: assetAlt(asset),
   }
   if (kind === 'image') {
     trackImageUploaded(props.siteId, size, 'cloudflare_images')
@@ -266,10 +274,11 @@ function onUploaded(asset: PickerMediaAsset) {
   }
 }
 
-function onGenerated(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string }) {
+function onGenerated(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string; altText?: string }) {
   pendingAsset.value = asset
   selectedUrl.value = asset.thumbnailUrl || asset.publicUrl
   selectedKind.value = asset.kind || 'image'
+  selectedAlt.value = assetAlt(asset)
   emit('update:modelValue', asset.id)
   emit('change', asset)
   isOpen.value = false
@@ -280,6 +289,7 @@ function confirm() {
   if (!pendingAsset.value) return
   selectedUrl.value = pendingAsset.value.thumbnailUrl || pendingAsset.value.publicUrl
   selectedKind.value = pendingAsset.value.kind || 'image'
+  selectedAlt.value = assetAlt(pendingAsset.value)
   emit('update:modelValue', pendingAsset.value.id)
   emit('change', pendingAsset.value)
   isOpen.value = false
@@ -287,6 +297,8 @@ function confirm() {
 
 function clear() {
   selectedUrl.value = null
+  selectedKind.value = null
+  selectedAlt.value = ''
   pendingAsset.value = null
   emit('update:modelValue', null)
   emit('change', null)

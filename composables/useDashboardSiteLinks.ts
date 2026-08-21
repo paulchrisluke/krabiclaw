@@ -111,9 +111,10 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
 
   const locationPath = (locationId: string) => {
     const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
-    return `${paths.value.site}/locations/${location?.slug ?? locationId}/settings`
+    return `${paths.value.site}/locations/${location?.slug ?? locationId}`
   }
-  const locationBasePath = (locationId: string) => locationPath(locationId).replace(/\/settings$/, '')
+  const locationBasePath = (locationId: string) => locationPath(locationId)
+  const locationSettingsPath = (locationId: string) => `${locationBasePath(locationId)}/settings`
   const locationMenuPath = (locationId: string) => `${locationBasePath(locationId)}/menu`
   const locationContentPath = (_locationId: string) => paths.value.pages
 
@@ -142,6 +143,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     previewLink,
     buildHeaderLinks,
     locationPath,
+    locationSettingsPath,
     locationMenuPath,
     locationContentPath,
     menuPath,

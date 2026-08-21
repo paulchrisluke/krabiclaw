@@ -418,7 +418,7 @@ export function generatedDashboardOgUrl(
   page: { title: string; description?: string | null; label?: string | null; location?: string | null },
 ): string {
   const siteName = requiredOgText(source.brand_name, 'site brand name')
-  const backgroundImageUrl = requiredOgText(source.og_background_url, 'hero image')
+  const backgroundImageUrl = source.og_background_url?.trim() || null
   const template = resolvePublicTemplate({ themeId: source.theme_id, vertical: source.vertical }).slug
   return resolveSocialOgImage({
     template,
@@ -433,7 +433,7 @@ export function generatedDashboardOgUrl(
       faviconUrl: source.favicon_url,
       primaryColor: source.brand_color,
     },
-    heroImage: { url: backgroundImageUrl },
+    heroImage: backgroundImageUrl ? { url: backgroundImageUrl } : null,
   }, origin).url
 }
 

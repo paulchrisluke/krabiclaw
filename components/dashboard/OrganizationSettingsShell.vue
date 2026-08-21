@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel
     id="organization-settings"
-    :ui="{ body: 'min-h-0 !gap-0 !overflow-hidden !p-0 sm:!p-0' }"
+    :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }"
   >
     <template #header>
       <UDashboardNavbar :title="detailTitle || 'Organization Settings'" :toggle="false">
@@ -21,6 +21,7 @@
         :show-actions="showActions"
         :saving="saving"
         :save-disabled="saveDisabled"
+        :wide-detail="wideDetail"
         @cancel="closeDetail"
         @save="$emit('save')"
       >
@@ -43,6 +44,7 @@ const props = defineProps<{
   showActions?: boolean
   saving?: boolean
   saveDisabled?: boolean
+  wideDetail?: boolean
 }>()
 
 const emit = defineEmits<{ cancel: []; save: [] }>()
