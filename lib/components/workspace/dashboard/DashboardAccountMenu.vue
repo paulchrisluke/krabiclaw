@@ -148,6 +148,7 @@ const items = computed<DropdownMenuItem[][]>(() => [
   [
     {
       label: displayName.value,
+      description: renderedUser.value?.email ?? undefined,
       avatar: { src: renderedUser.value?.image ?? undefined, alt: displayName.value },
       to: settingsTo.value,
     },

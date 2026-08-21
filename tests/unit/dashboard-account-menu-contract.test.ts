@@ -17,9 +17,9 @@ test('account menu exposes settings through one responsive dropdown', () => {
   assert.doesNotMatch(source, /UModal|mobileOpen/)
 })
 
-test('account menu exposes theme choices as keyboard-accessible menu items', () => {
-  assert.match(source, /\(\['system', 'light', 'dark'\] as const\)\.map/)
-  assert.match(source, /onSelect: \(\) => setPreference\(pref\)/)
-  assert.doesNotMatch(source, /<button[^>]*v-for|slot: 'theme'/)
+test('account menu routes organization settings without duplicating appearance controls', () => {
+  assert.match(source, /label: 'Settings'/)
+  assert.match(source, /to: organizationSettingsTo\.value/)
+  assert.doesNotMatch(source, /setPreference|slot: 'theme'|label: 'Theme'/)
   assert.doesNotMatch(source, /platformStatus|checkPlatformStatus|\/api\/health/)
 })
