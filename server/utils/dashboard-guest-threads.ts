@@ -14,7 +14,7 @@ import type {
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { assertMemberScope } from '~/server/utils/member-access'
+import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds } from '~/server/utils/member-access'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
@@ -112,7 +112,7 @@ export async function loadOrganizationGuestThreads(
   event: H3Event,
   query: OrganizationGuestThreadListQuery,
 ) {
-  const { db, organization } = await getDashboardContext(event, { requireOrganization: true })
+  const { db, env, organization, userId } = await getDashboardContext(event, { requireOrganization: true })
   if (!organization) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   }
@@ -121,6 +121,9 @@ export async function loadOrganizationGuestThreads(
     memberId: organization.memberId,
     role: organization.role,
     organizationId: organization.id,
+    teamIds: isOrganizationWideRole(organization.role)
+      ? null
+      : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId }),
   }
   const options = {
     organizationId: organization.id,
@@ -135,7 +138,7 @@ export async function loadOrganizationGuestThreads(
   }
   const [threads, summary] = await Promise.all([
     listOrganizationGuestThreads(db, options),
-    getGuestThreadOperationSummary(db, null, options),
+    getGuestThreadOperationSummary(db, options.siteId, options),
   ])
   return { threads, summary }
 }

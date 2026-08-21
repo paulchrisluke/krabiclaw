@@ -2,8 +2,10 @@ import type { McpToolDefinition } from './shared'
 import { fileReferenceObject, generatedImagePickerOutputSchema, globalTool, siteTool, withToolAnnotations } from './shared'
 
 const generatedImageEntityIdFields = ['location_id', 'post_id', 'menu_item_id', 'experience_id'] as const
+const GENERATED_IMAGE_TARGETS = ['logo', 'home_hero', 'about_story_image', 'home_story_image', 'location_hero', 'post_image', 'menu_item_media', 'experience_image'] as const
+type GeneratedImageTarget = typeof GENERATED_IMAGE_TARGETS[number]
 
-function generatedImageTargetBranch(targets: string[], requiredEntityId?: typeof generatedImageEntityIdFields[number]) {
+function generatedImageTargetBranch(targets: GeneratedImageTarget[], requiredEntityId?: typeof generatedImageEntityIdFields[number]) {
   const forbiddenEntityIds = generatedImageEntityIdFields.filter(field => field !== requiredEntityId)
   return {
     properties: {
@@ -80,7 +82,7 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
           },
           target: {
             type: 'string',
-            enum: ['logo', 'home_hero', 'about_story_image', 'home_story_image', 'location_hero', 'post_image', 'menu_item_media', 'experience_image'],
+            enum: GENERATED_IMAGE_TARGETS,
             description: 'Optional target that should be updated directly after the user selects an image.',
           },
           site_id: { type: 'string', description: 'Required with target. Site ID that owns the target content.' },

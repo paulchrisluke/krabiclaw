@@ -658,8 +658,9 @@ export async function executePlatformMcpToolCall(
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown tool: ${toolName}`, { unknownToolName: toolName }, 'protocol')
   }
 
-  const authBaseUrl = typeof (event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined)?.BETTER_AUTH_URL === 'string'
-    ? ((event.req.runtime?.cloudflare?.env as Record<string, unknown>).BETTER_AUTH_URL as string).replace(/\/$/, '')
+  const environment = cloudflareEnv(event)
+  const authBaseUrl = typeof environment.BETTER_AUTH_URL === 'string'
+    ? environment.BETTER_AUTH_URL.replace(/\/$/, '')
     : undefined
   if (!authBaseUrl) throw new HTTPError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
   const user = await requireMcpUser(event, {

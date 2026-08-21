@@ -3,7 +3,6 @@ import {
   isOrganizationWideRole,
   isScopedRole,
   listAccessibleLocationIds,
-  teamAccessPredicate,
 } from '~/server/utils/member-access'
 import { CONVERSATION_STATE_LABELS } from './types'
 import type {
@@ -170,30 +169,32 @@ export async function getGuestThreadOperationSummary(
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
-  } else if (opts.principal && 'siteId' in opts.principal) {
+  }
+  if (opts.principal && 'siteId' in opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) {
         return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
       }
-      where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
-      params.push(...accessibleLocationIds)
+      if (opts.locationId) {
+        if (!accessibleLocationIds.includes(opts.locationId)) {
+          return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
+        }
+      } else {
+        where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+        params.push(...accessibleLocationIds)
+      }
     }
   } else if (opts.principal && isScopedRole(opts.principal.role)) {
-    where += ` AND EXISTS (
-      SELECT 1
-      FROM member m
-      JOIN sites scoped_site ON scoped_site.id = gt.site_id
-      LEFT JOIN business_locations scoped_location ON scoped_location.id = gt.location_id
-      WHERE m.id = ?
-        AND m.organizationId = ?
-        AND ${teamAccessPredicate({
-          userIdExpr: 'm.userId',
-          siteTeamExpr: 'scoped_site.team_id',
-          locationTeamExpr: 'scoped_location.team_id',
-        })}
+    const teamIds = opts.principal.teamIds ?? []
+    if (teamIds.length === 0) return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
+    const sitePlaceholders = teamIds.map(() => '?').join(', ')
+    const locationPlaceholders = teamIds.map(() => '?').join(', ')
+    where += ` AND (
+      EXISTS (SELECT 1 FROM sites scoped_site WHERE scoped_site.id = gt.site_id AND scoped_site.team_id IN (${sitePlaceholders}))
+      OR EXISTS (SELECT 1 FROM business_locations scoped_location WHERE scoped_location.id = gt.location_id AND scoped_location.team_id IN (${locationPlaceholders}))
     )`
-    params.push(opts.principal.memberId, opts.principal.organizationId)
+    params.push(...teamIds, ...teamIds)
   } else if (opts.principal && !isOrganizationWideRole(opts.principal.role)) {
     return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
   }
@@ -243,6 +244,7 @@ async function countUnreadThreadIds(
 interface GuestThreadListRow extends GuestThreadRow {
   location_title: string | null
   site_name?: string | null
+  site_slug?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
 }
@@ -259,12 +261,17 @@ export async function listGuestThreads(
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
-  } else if (opts.principal && 'siteId' in opts.principal) {
+  }
+  if (opts.principal && 'siteId' in opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) return []
-      where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
-      params.push(...accessibleLocationIds)
+      if (opts.locationId) {
+        if (!accessibleLocationIds.includes(opts.locationId)) return []
+      } else {
+        where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+        params.push(...accessibleLocationIds)
+      }
     }
   }
   if (opts.type) {
@@ -353,6 +360,7 @@ export async function listOrganizationGuestThreads(
       memberId: string
       role: string
       organizationId: string
+      teamIds: string[] | null
     }
   },
 ): Promise<GuestThreadListItemViewModel[]> {
@@ -368,18 +376,12 @@ export async function listOrganizationGuestThreads(
     params.push(opts.locationId)
   }
   if (isScopedRole(opts.principal.role)) {
-    where += ` AND EXISTS (
-      SELECT 1
-      FROM member m
-      WHERE m.id = ?
-        AND m.organizationId = ?
-        AND ${teamAccessPredicate({
-          userIdExpr: 'm.userId',
-          siteTeamExpr: 's.team_id',
-          locationTeamExpr: 'bl.team_id',
-        })}
-    )`
-    params.push(opts.principal.memberId, opts.principal.organizationId)
+    const teamIds = opts.principal.teamIds ?? []
+    if (teamIds.length === 0) return []
+    const sitePlaceholders = teamIds.map(() => '?').join(', ')
+    const locationPlaceholders = teamIds.map(() => '?').join(', ')
+    where += ` AND (s.team_id IN (${sitePlaceholders}) OR bl.team_id IN (${locationPlaceholders}))`
+    params.push(...teamIds, ...teamIds)
   } else if (!isOrganizationWideRole(opts.principal.role)) {
     return []
   }
@@ -416,6 +418,7 @@ export async function listOrganizationGuestThreads(
       gt.*,
       bl.title AS location_title,
       s.brand_name AS site_name,
+      s.subdomain AS site_slug,
       (
         SELECT body FROM guest_thread_entries
         WHERE thread_id = gt.id AND kind = 'message'
@@ -441,11 +444,15 @@ export async function listOrganizationGuestThreads(
   const items: GuestThreadListItemViewModel[] = []
   for (const row of rows ?? []) {
     const unread = unreadIds.has(row.id)
+    const siteSlug = row.site_slug?.trim()
+    if (!siteSlug) throw new Error(`Guest thread ${row.id} belongs to a site without a subdomain`)
     const contextLabel = row.site_name && row.location_title
       ? `${row.site_name} · ${row.location_title}`
       : row.site_name || row.location_title || ''
     items.push({
       id: row.id,
+      siteId: row.site_id,
+      siteSlug,
       guestName: row.guest_name,
       submissionType: row.submission_type,
       contextLabel,

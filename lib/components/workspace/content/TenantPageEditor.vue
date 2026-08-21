@@ -363,10 +363,12 @@ async function save() {
 }
 
 watch(selected, () => {
-  if (!hydrating.value) {
-    dirty.value = true
-    requestGate.invalidate()
+  if (hydrating.value) {
+    dirty.value = false
+    return
   }
+  dirty.value = true
+  requestGate.invalidate()
 }, { deep: true, flush: 'sync' })
 
 watch(locale, async (nextLocale, previousLocale) => {

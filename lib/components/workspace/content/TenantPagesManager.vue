@@ -47,6 +47,7 @@
 
 <script setup lang="ts">
 import type { TenantPageType } from '~/utils/tenant-page-blocks'
+import { createTenantPageRequestGate } from '~/utils/tenant-page-editor-safety'
 
 interface PageSummary {
   id: string
@@ -76,7 +77,9 @@ const localeOptions = computed(() => locales.value.map(value => ({ label: value,
 const managedPageRecipes = new Set(['locations', 'menu', 'order', 'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog', 'services', 'pricing', 'donate', 'schedule'])
 const visiblePages = computed(() => pages.value
   .filter(page => (!page.recipe || !managedPageRecipes.has(page.recipe)) && !page.path.startsWith('/locations/'))
-  .toSorted((left, right) => Number(right.path === '/') - Number(left.path === '/')))
+  .sort((left, right) => Number(right.path === '/') - Number(left.path === '/')))
+const requestGate = createTenantPageRequestGate()
+let applyingFallbackLocale = false
 
 function validateList(value: unknown): value is { pages: PageSummary[] } {
   return isRecord(value)
@@ -89,23 +92,36 @@ function validateLocales(value: unknown): value is { source_locale: string, loca
 }
 
 async function loadPages() {
+  const requestToken = requestGate.begin()
   loading.value = true
   loadError.value = null
   try {
-    const [pagesResponse, localeResponse] = await Promise.all([
-      dashboardApi<{ pages: PageSummary[] }>(`/api/editor/sites/${siteId}/pages?locale=${encodeURIComponent(locale.value)}`, { validate: validateList }),
-      dashboardApi<{ source_locale: string, locales: Array<{ locale: string, status: string }> }>(`/api/editor/sites/${siteId}/locales`, { validate: validateLocales }),
-    ])
+    const localeResponse = await dashboardApi<{ source_locale: string, locales: Array<{ locale: string, status: string }> }>(`/api/editor/sites/${siteId}/locales`, { validate: validateLocales })
+    if (!requestGate.isCurrent(requestToken)) return
+    const availableLocales = localeResponse.locales.filter(item => item.status !== 'disabled').map(item => item.locale)
+    const effectiveLocale = availableLocales.includes(locale.value) ? locale.value : localeResponse.source_locale
+    if (effectiveLocale !== locale.value) {
+      applyingFallbackLocale = true
+      locale.value = effectiveLocale
+    }
+    const pagesResponse = await dashboardApi<{ pages: PageSummary[] }>(`/api/editor/sites/${siteId}/pages?locale=${encodeURIComponent(effectiveLocale)}`, { validate: validateList })
+    if (!requestGate.isCurrent(requestToken)) return
     pages.value = pagesResponse.pages
-    locales.value = localeResponse.locales.filter(item => item.status !== 'disabled').map(item => item.locale)
-    if (!locales.value.includes(locale.value)) locale.value = localeResponse.source_locale
+    locales.value = availableLocales
   } catch (error) {
+    if (!requestGate.isCurrent(requestToken)) return
     loadError.value = error instanceof Error ? error.message : 'Unable to load pages'
   } finally {
-    loading.value = false
+    if (requestGate.isCurrent(requestToken)) loading.value = false
   }
 }
 
-watch(locale, loadPages)
-onMounted(loadPages)
+watch(locale, () => {
+  if (applyingFallbackLocale) {
+    applyingFallbackLocale = false
+    return
+  }
+  void loadPages()
+}, { flush: 'sync' })
+onMounted(() => void loadPages())
 </script>

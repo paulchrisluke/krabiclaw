@@ -392,7 +392,13 @@ function requiredOgText(value: string | null, field: string): string {
   return text
 }
 
-function generatedDashboardOgUrl(
+export function requiredDashboardOgOrigin(platformDomain: string | undefined): string {
+  const value = platformDomain?.trim()
+  if (!value) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required for dashboard OG images')
+  return new URL(value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`).origin
+}
+
+export function generatedDashboardOgUrl(
   origin: string,
   source: DashboardOgSource,
   page: { title: string; description?: string | null; label?: string | null; location?: string | null },
@@ -420,8 +426,11 @@ export async function listOrganizationSites(
   db: DbClient,
   organizationId: string,
   origin: string,
-  principal?: { memberId: string; role: string },
+  principal?: { role: string; teamIds: string[] | null },
 ) {
+  const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
+  if (scopedTeamIds && scopedTeamIds.length === 0) return []
+  const scopedTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
   const rows = await queryAll<DashboardSiteSummaryRow & DashboardOgSource & {
     seo_title: string | null
     seo_description: string | null
@@ -446,9 +455,9 @@ export async function listOrganizationSites(
      AND ma_site_og.organization_id = s.organization_id
      AND ma_site_og.status = 'active'
     WHERE s.organization_id = ?
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id WHERE m.id = ? AND m.organizationId = s.organization_id)' : ''}
+      ${scopedTeamIds ? `AND s.team_id IN (${scopedTeamPlaceholders})` : ''}
     ORDER BY s.created_at ASC, s.id ASC
-  `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, principal.memberId] : [organizationId])
+  `, scopedTeamIds ? [organizationId, ...scopedTeamIds] : [organizationId])
 
   return rows.map(row => ({
     id: row.id,
@@ -543,8 +552,12 @@ export async function listDashboardLocations(
   organizationId: string,
   siteId: string,
   origin: string,
-  principal?: { memberId: string; role: string },
+  principal?: { role: string; teamIds: string[] | null },
 ) {
+  const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
+  if (scopedTeamIds && scopedTeamIds.length === 0) return []
+  const siteTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
+  const locationTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
   const locations = await queryAll<DashboardLocationRow & DashboardOgSource & {
     seo_title: string | null
     seo_description: string | null
@@ -566,9 +579,9 @@ export async function listDashboardLocations(
     LEFT JOIN media_assets ma_og ON ma_og.id = business_locations.og_image_asset_id
       AND ma_og.organization_id = business_locations.organization_id AND ma_og.site_id = business_locations.site_id AND ma_og.status = 'active'
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN sites s ON s.id = business_locations.site_id JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, business_locations.team_id) WHERE m.id = ? AND m.organizationId = business_locations.organization_id)' : ''}
+      ${scopedTeamIds ? `AND (sites.team_id IN (${siteTeamPlaceholders}) OR business_locations.team_id IN (${locationTeamPlaceholders}))` : ''}
     ORDER BY is_primary DESC, title ASC
-  `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, siteId, principal.memberId] : [organizationId, siteId])
+  `, scopedTeamIds ? [organizationId, siteId, ...scopedTeamIds, ...scopedTeamIds] : [organizationId, siteId])
 
   return locations.map((location) => ({
     id: location.id,

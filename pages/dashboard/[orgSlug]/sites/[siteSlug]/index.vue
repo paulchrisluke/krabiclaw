@@ -174,12 +174,14 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
     if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }] = await Promise.all([
+    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { requiredDashboardOgOrigin }] = await Promise.all([
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-home'),
       import('~/server/utils/member-access'),
+      import('~/server/utils/dashboard-context'),
     ])
-    const db = cloudflareEnv(requestEvent).db
+    const environment = cloudflareEnv(requestEvent)
+    const db = environment.db
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
     await assertSiteWideAccess(db, {
       memberId: organization.memberId,
@@ -190,6 +192,7 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     return await getDashboardHomeData(db, organization.id, siteId, {
       memberId: organization.memberId,
       role: organization.role,
+      ogOrigin: requiredDashboardOgOrigin(environment.NUXT_PUBLIC_PLATFORM_DOMAIN),
     })
   }
   return await dashboardApi<DashboardHomeData>('/api/dashboard/home', {
@@ -207,14 +210,7 @@ const overview = computed(() => {
   if (!overviewData.value) throw createError({ statusCode: 500, statusMessage: 'Site overview data is unavailable' })
   return overviewData.value
 })
-const locations = computed(() => {
-  const ogImages = new Map(dashboard.locations.value.map(location => [location.id, location.og_image_url]))
-  return overview.value.locations.map((location) => {
-    const ogImageUrl = ogImages.get(location.id)
-    if (!ogImageUrl) throw createError({ statusCode: 500, statusMessage: `OG image unavailable for ${location.title}` })
-    return { ...location, og_image_url: ogImageUrl }
-  })
-})
+const locations = computed(() => overview.value.locations)
 const settings = computed(() => overview.value.settings)
 const pages = computed(() => overview.value.pages)
 const media = computed(() => overview.value.media)

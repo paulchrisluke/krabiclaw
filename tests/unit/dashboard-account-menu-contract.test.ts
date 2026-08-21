@@ -8,14 +8,18 @@ const source = readFileSync(
 )
 
 test('account menu exposes settings through one responsive dropdown', () => {
-  assert.match(source, /label: 'Settings'/)
   assert.doesNotMatch(source, /label: 'Profile'/)
   assert.match(source, /path: '\/dashboard\/account'/)
+  assert.match(source, /to: settingsTo\.value/)
+  assert.match(source, /description: renderedUser\.value\?\.email/)
+  assert.match(source, /avatar: \{ src: renderedUser\.value\?\.image/)
   assert.equal((source.match(/<UDropdownMenu/g) ?? []).length, 1)
   assert.doesNotMatch(source, /UModal|mobileOpen/)
 })
 
-test('account menu keeps theme controls compact and removes stale status work', () => {
-  assert.match(source, /class="flex h-10 w-full items-center/)
+test('account menu exposes theme choices as keyboard-accessible menu items', () => {
+  assert.match(source, /\(\['system', 'light', 'dark'\] as const\)\.map/)
+  assert.match(source, /onSelect: \(\) => setPreference\(pref\)/)
+  assert.doesNotMatch(source, /<button[^>]*v-for|slot: 'theme'/)
   assert.doesNotMatch(source, /platformStatus|checkPlatformStatus|\/api\/health/)
 })

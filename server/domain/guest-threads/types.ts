@@ -5,6 +5,7 @@ export interface OrganizationMemberAccessPrincipal {
   memberId: string
   role: string
   organizationId: string
+  teamIds: string[] | null
 }
 
 export type GuestThreadEntryKind = 'submission' | 'message' | 'operation' | 'delivery' | 'assignment' | 'resolution'
@@ -193,6 +194,8 @@ export type AnyGuestThreadSourceAdapter = GuestThreadSourceAdapter<unknown, unkn
 
 export interface GuestThreadListItemViewModel {
   id: string
+  siteId?: string
+  siteSlug?: string | null
   guestName: string
   submissionType: GuestThreadSubmissionType
   contextLabel: string

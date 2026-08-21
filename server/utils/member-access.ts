@@ -139,6 +139,16 @@ async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdap
   return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
 }
 
+export async function listUserOrganizationTeamIds(input: {
+  env: CloudflareEnv
+  organizationId: string
+  userId: string
+}): Promise<string[]> {
+  const adapter = await organizationAdapter(input.env)
+  const teams = await adapter.listTeamsByUser({ userId: input.userId })
+  return teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)
+}
+
 async function ensureTeam(
   env: CloudflareEnv,
   input: { organizationId: string; teamId: string; name: string },

@@ -41,7 +41,7 @@ export async function resolveOgImage(
   deps: ResolveOgImageDeps = {},
 ): Promise<OgImagePipelineResult> {
   const cacheKey = computeOgImageCacheKey(payload)
-  const { SITE_CACHE } = getBindings(event)
+  const { SITE_CACHE, NUXT_PUBLIC_PLATFORM_DOMAIN } = getBindings(event)
 
   if (SITE_CACHE) {
     try {
@@ -56,7 +56,7 @@ export async function resolveOgImage(
 
   try {
     const bytes = await (deps.render ?? renderOgImagePng)(payload, {
-      platformDomain: (event.req.runtime?.cloudflare?.env as OgImageBindings | undefined)?.NUXT_PUBLIC_PLATFORM_DOMAIN,
+      platformDomain: NUXT_PUBLIC_PLATFORM_DOMAIN,
     })
     if (SITE_CACHE) {
       try {

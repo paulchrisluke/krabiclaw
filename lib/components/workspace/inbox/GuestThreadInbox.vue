@@ -39,7 +39,7 @@
           <NuxtLink
             v-for="thread in threads"
             :key="thread.id"
-            :to="threadRoute(thread.id)"
+            :to="threadRoute(thread)"
             class="group flex items-start gap-3 border-b border-default px-4 py-4 transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <div class="relative shrink-0">
@@ -148,6 +148,8 @@ type UiColor = 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error
 
 interface ThreadListItem {
   id: string
+  siteId?: string
+  siteSlug?: string | null
   guestName: string
   submissionType: SubmissionType
   contextLabel: string
@@ -487,8 +489,13 @@ function actionMeta(action: string) {
   return ACTION_META[action] ?? { label: action.charAt(0).toUpperCase() + action.slice(1), icon: 'i-lucide-circle', color: 'neutral' as UiColor, variant: 'outline' as const }
 }
 
-function threadRoute(threadId: string) {
-  return `${listRoute.value}/${encodeURIComponent(threadId)}`
+function threadRoute(thread: ThreadListItem) {
+  if (isOrganizationScope.value) {
+    if (!thread.siteSlug) throw createError({ statusCode: 500, statusMessage: 'Thread site route is unavailable' })
+    const orgSlug = encodeURIComponent(String(route.params.orgSlug))
+    return `/dashboard/${orgSlug}/sites/${encodeURIComponent(thread.siteSlug)}/inbox/${encodeURIComponent(thread.id)}`
+  }
+  return `${listRoute.value}/${encodeURIComponent(thread.id)}`
 }
 
 function activeReplyAttemptKey() {
@@ -663,7 +670,8 @@ function threadTypeLabel(type: SubmissionType) {
 function threadMetaLine(thread: ThreadListItem) {
   const parts: string[] = []
   if (!props.submissionTypeFilter) parts.push(threadTypeLabel(thread.submissionType))
-  if (thread.locationLabel) parts.push(thread.locationLabel)
+  if (isOrganizationScope.value && thread.contextLabel) parts.push(thread.contextLabel)
+  else if (thread.locationLabel) parts.push(thread.locationLabel)
   return parts.join(' · ')
 }
 

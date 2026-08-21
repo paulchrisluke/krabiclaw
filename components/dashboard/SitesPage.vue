@@ -84,7 +84,7 @@ import { getVerticalLabel } from '~/utils/vertical-copy'
 useSeoMeta({ title: 'Your sites | KrabiClaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
-const orgSlug = route.params.orgSlug as string
+const orgSlug = computed(() => String(route.params.orgSlug || ''))
 const dashboard = useDashboardSite()
 const pending = dashboard.pending
 
@@ -97,8 +97,8 @@ function verticalLabel(vertical: string | null) {
 
 function siteDashboardPath(site: (typeof sites.value)[number]) {
   return site.subdomain
-    ? `/dashboard/${orgSlug}/sites/${site.subdomain}`
-    : `/dashboard/${orgSlug}/onboarding`
+    ? `/dashboard/${orgSlug.value}/sites/${site.subdomain}`
+    : `/dashboard/${orgSlug.value}/onboarding`
 }
 </script>
 

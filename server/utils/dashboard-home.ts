@@ -6,6 +6,7 @@ import { loadSettingsPayload } from '~/server/utils/site-settings'
 import { listTenantPages } from '~/server/utils/tenant-pages'
 import { listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getLinksPage } from '~/server/utils/site-links'
+import { generatedDashboardOgUrl } from '~/server/utils/dashboard-context'
 
 export interface DashboardHomeLocation {
   id: string
@@ -21,6 +22,7 @@ export interface DashboardHomeLocation {
   latitude: number | null
   longitude: number | null
   map_embed_url: string | null
+  og_image_url: string
 }
 
 export interface DashboardHomeEvent {
@@ -77,7 +79,7 @@ export async function getDashboardHomeData(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  principal?: { memberId: string; role: string },
+  principal: { memberId: string; role: string; ogOrigin: string },
 ): Promise<DashboardHomeData> {
   const scoped = principal && !isOrganizationWideRole(principal.role)
   const locationScopeClause = scoped
@@ -110,11 +112,26 @@ export async function getDashboardHomeData(
       is_primary: number; status: string; updated_at: string
       address: string | null; maps_url: string | null
       latitude: number | null; longitude: number | null
+      vertical: string | null; theme_id: string | null; brand_name: string | null
+      logo_url: string | null; favicon_url: string | null; brand_color: string | null
+      og_background_url: string | null; seo_title: string | null
+      seo_description: string | null; short_description: string | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
              bl.address, bl.maps_url, bl.latitude, bl.longitude,
-             bl.is_primary, bl.status, bl.updated_at
+             bl.is_primary, bl.status, bl.updated_at,
+             bl.seo_title, bl.seo_description, bl.short_description,
+             s.vertical, s.theme_id, s.brand_name,
+             COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
+             json_extract(s.settings, '$.favicon_url') AS favicon_url,
+             (SELECT value FROM site_config WHERE organization_id = s.organization_id AND site_id = s.id AND key = 'brand_color' LIMIT 1) AS brand_color,
+             ma_og.public_url AS og_background_url
       FROM business_locations bl
+      JOIN sites s ON s.id = bl.site_id AND s.organization_id = bl.organization_id
+      LEFT JOIN media_assets ma_logo ON ma_logo.id = s.logo_asset_id
+        AND ma_logo.organization_id = s.organization_id AND ma_logo.site_id = s.id AND ma_logo.status = 'active'
+      LEFT JOIN media_assets ma_og ON ma_og.id = bl.og_image_asset_id
+        AND ma_og.organization_id = bl.organization_id AND ma_og.site_id = bl.site_id AND ma_og.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
@@ -160,6 +177,11 @@ export async function getDashboardHomeData(
         is_primary: Boolean(l.is_primary),
         address,
         map_embed_url: calculateMapEmbedUrl({ ...l, address: address?.addressLines?.[0] ?? null }),
+        og_image_url: generatedDashboardOgUrl(principal.ogOrigin, l, {
+          title: l.seo_title?.trim() || `${l.title} | Locations`,
+          description: l.seo_description || l.short_description,
+          location: l.title,
+        }),
       }
     }),
     events: events.map(e => ({

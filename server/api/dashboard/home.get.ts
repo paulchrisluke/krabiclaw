@@ -1,5 +1,5 @@
-import { jsonResponse } from '~/server/utils/api-response'
-import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { getDashboardContext, requiredDashboardOgOrigin } from '~/server/utils/dashboard-context'
 import { getDashboardHomeData } from '~/server/utils/dashboard-home'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { defineHandler } from 'nitro'
@@ -18,5 +18,6 @@ export default defineHandler(async (event) => {
   return jsonResponse(await getDashboardHomeData(db, organization.id, site.id, {
     memberId: organization.memberId,
     role: organization.role,
+    ogOrigin: requiredDashboardOgOrigin(cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN),
   }))
 })

@@ -26,37 +26,6 @@
       aria-label="Open account menu"
       data-testid="dashboard-mobile-account-menu-button"
     />
-
-    <template #content-top>
-      <NuxtLink :to="settingsTo" class="account-summary">
-        <UAvatar :src="renderedUser?.image ?? undefined" :alt="renderedUser?.name || 'User avatar'" size="sm" />
-        <span class="min-w-0 flex-1">
-          <span class="block truncate text-sm font-semibold text-highlighted">{{ renderedUser?.name || 'User' }}</span>
-          <span class="mt-0.5 block truncate text-xs text-muted">{{ renderedUser?.email }}</span>
-        </span>
-        <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
-      </NuxtLink>
-    </template>
-
-    <template #theme>
-      <div class="flex h-10 w-full items-center justify-between px-2.5 text-sm font-medium text-default">
-        <span class="flex items-center gap-2.5"><UIcon name="i-lucide-palette" class="size-4 text-muted" />Theme</span>
-        <div class="flex items-center gap-0.5 rounded-full border border-default bg-muted p-0.5">
-          <button
-            v-for="pref in ['system', 'light', 'dark'] as const"
-            :key="pref"
-            type="button"
-            class="flex size-6 cursor-pointer items-center justify-center rounded-full transition-colors"
-            :class="preference === pref ? 'bg-elevated text-highlighted shadow-sm border border-default' : 'text-dimmed hover:text-muted'"
-            :aria-label="`${pref} theme`"
-            :aria-pressed="preference === pref"
-            @click.stop="setPreference(pref)"
-          >
-            <UIcon :name="getThemeIcon(pref)" class="size-3" />
-          </button>
-        </div>
-      </div>
-    </template>
   </UDropdownMenu>
 </template>
 
@@ -117,9 +86,22 @@ async function handleSignOut() {
 
 const items = computed<DropdownMenuItem[][]>(() => [
   [
-    { label: 'Settings', icon: 'i-lucide-settings', to: settingsTo.value },
+    {
+      label: renderedUser.value?.name || 'User',
+      description: renderedUser.value?.email || undefined,
+      avatar: { src: renderedUser.value?.image ?? undefined, alt: renderedUser.value?.name || 'User avatar' },
+      to: settingsTo.value,
+    },
   ],
-  [{ slot: 'theme', onSelect: (event: Event) => event.preventDefault(), ui: { item: 'p-0' } }],
+  [
+    { type: 'label', label: 'Theme' },
+    ...(['system', 'light', 'dark'] as const).map(pref => ({
+      label: `${pref.charAt(0).toUpperCase()}${pref.slice(1)}`,
+      icon: getThemeIcon(pref),
+      trailingIcon: preference.value === pref ? 'i-lucide-check' : undefined,
+      onSelect: () => setPreference(pref),
+    })),
+  ],
   [
     { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
     { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
@@ -134,17 +116,4 @@ const items = computed<DropdownMenuItem[][]>(() => [
   background-color: var(--ui-bg-accented) !important;
 }
 
-.account-summary {
-  display: flex;
-  min-height: 3.25rem;
-  align-items: center;
-  gap: 0.75rem;
-  border-bottom: 1px solid var(--ui-border);
-  border-radius: 0.75rem 0.75rem 0 0;
-  padding: 0.5rem 0.625rem 0.75rem;
-}
-
-.account-summary:hover {
-  background: var(--ui-bg-accented);
-}
 </style>
