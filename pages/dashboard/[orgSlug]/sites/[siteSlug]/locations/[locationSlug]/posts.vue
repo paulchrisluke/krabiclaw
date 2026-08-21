@@ -32,12 +32,12 @@
                   <span v-if="credits !== null">{{ credits.toLocaleString() }} credits remaining · </span>Attach a photo for image-aware posts
                 </p>
                 <div class="flex items-center gap-2">
-                  <label class="cursor-pointer">
+                  <div>
                     <UInput ref="aiImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onAiImageSelect" />
                     <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-image" @click.stop="aiImageInput?.inputRef?.click()">
                       {{ aiImageFile ? aiImageFile.name.slice(0, 12) + '…' : 'Photo' }}
                     </UButton>
-                  </label>
+                  </div>
                   <UButton size="sm" :loading="aiLoading" :disabled="!aiPrompt.trim()" icon="i-lucide-sparkles" @click="generatePost">
                     Generate
                   </UButton>

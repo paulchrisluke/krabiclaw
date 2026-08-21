@@ -118,17 +118,21 @@ const usageLabel = computed(() => {
   return `${percentLeft}% left`
 })
 
+let creditsRequestId = 0
+
 if (import.meta.client) {
   watch(() => dashboard.organization.value?.slug, async (orgSlug) => {
+    const requestId = ++creditsRequestId
     credits.value = null
     if (!orgSlug) return
     try {
-      credits.value = await dashboardFetch<OrganizationCreditsResource>('/api/billing/credits', { orgSlug }, {
+      const resource = await dashboardFetch<OrganizationCreditsResource>('/api/billing/credits', { orgSlug }, {
         method: 'GET',
         validate: isOrganizationCreditsResource,
       })
+      if (requestId === creditsRequestId) credits.value = resource
     } catch {
-      credits.value = null
+      if (requestId === creditsRequestId) credits.value = null
     }
   }, { immediate: true })
 }

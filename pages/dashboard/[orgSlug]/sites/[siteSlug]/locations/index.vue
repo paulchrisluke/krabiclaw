@@ -1,7 +1,7 @@
 <template><div /></template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: false })
 
 const route = useRoute()
 await navigateTo(
