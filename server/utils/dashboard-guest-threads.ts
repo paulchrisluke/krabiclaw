@@ -111,8 +111,13 @@ export async function loadDashboardGuestThread(
 export async function loadOrganizationGuestThreads(
   event: H3Event,
   query: OrganizationGuestThreadListQuery,
+  scope?: { orgSlug?: string | null },
 ) {
-  const { db, env, organization, userId } = await getDashboardContext(event, { requireOrganization: true })
+  const { db, env, organization, userId } = await getDashboardContext(event, {
+    requireOrganization: true,
+    organizationSlug: scope?.orgSlug,
+    pathname: '/api/dashboard/guest-threads',
+  })
   if (!organization) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   }

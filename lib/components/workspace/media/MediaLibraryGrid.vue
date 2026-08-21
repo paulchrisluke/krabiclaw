@@ -8,23 +8,23 @@
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
-      @click="fileInput?.click()"
+      @click="fileInput?.inputRef?.click()"
     >
       <UIcon name="i-lucide-upload" class="size-6 text-muted" />
       <div class="flex items-center gap-2">
-        <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.click()">+ Add files</UButton>
+        <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.inputRef?.click()">+ Add files</UButton>
         <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-sparkles" @click.stop="emit('generate')">
           Generate image
         </UButton>
       </div>
       <p class="text-xs text-muted">Drag and drop images or videos</p>
-      <input
+      <UInput
         ref="fileInput"
         type="file"
         :accept="computedAccept"
         class="hidden"
         @change="onFileSelect"
-      />
+       />
     </div>
 
     <div v-if="uploading" class="flex items-center gap-2 text-xs font-medium text-default">
@@ -174,7 +174,7 @@ const loading = ref(false)
 const loadError = ref<string | null>(null)
 const uploadError = ref<string | null>(null)
 const isDragging = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const search = ref('')
 const kindFilter = ref(props.accept === 'video' ? 'video' : 'image')
 const loadAbortController = ref<AbortController | null>(null)
@@ -248,7 +248,7 @@ function onDrop(e: DragEvent) {
 function onFileSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (file) void upload(file)
-  if (fileInput.value) fileInput.value.value = ''
+  if (fileInput.value?.inputRef) fileInput.value.inputRef.value = ''
 }
 
 async function upload(file: File) {

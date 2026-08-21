@@ -39,6 +39,7 @@
     "dev": "nuxt dev",
     "dev:worker": "yarn build && yarn dev:worker:start",
     "dev:worker:start": "wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000 --live-reload",
+    "auth:e2e:local:provision": "node --experimental-strip-types scripts/provision-e2e-auth.ts",
     "e2e:local:prepare": "yarn schema:local && node --experimental-strip-types scripts/reset-e2e-artifacts.ts --older-than-hours=0 && yarn seed:local && node --experimental-strip-types scripts/provision-e2e-auth.ts && yarn build",
     "postinstall": "patch-package --error-on-fail && nuxt prepare",
     "schema:local": "wrangler d1 migrations apply DB --local",

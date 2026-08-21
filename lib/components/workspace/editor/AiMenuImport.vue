@@ -27,7 +27,7 @@
           @dragover.prevent="isDragging = true"
           @dragleave.prevent="isDragging = false"
           @drop.prevent="onDrop"
-          @click="fileInput?.click()"
+          @click="fileInput?.inputRef?.click()"
         >
           <UIcon name="i-lucide-image" class="size-10 text-muted" />
           <div class="text-center">
@@ -40,22 +40,22 @@
                 : 'JPEG, PNG, WEBP or PDF — max 10 MB.' }}
             </p>
           </div>
-          <UButton v-if="!selectedFile" size="sm" color="neutral" variant="outline" @click.stop="fileInput?.click()">
+          <UButton v-if="!selectedFile" size="sm" color="neutral" variant="outline" @click.stop="fileInput?.inputRef?.click()">
             Choose file
           </UButton>
           <div v-else class="flex gap-2">
-            <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.click()">
+            <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.inputRef?.click()">
               Change
             </UButton>
             <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-x" @click.stop="selectedFile = null" />
           </div>
-          <input
+          <UInput
             ref="fileInput"
             type="file"
             accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
             class="hidden"
             @change="onFileSelect"
-          />
+           />
         </div>
 
         <UAlert
@@ -230,7 +230,7 @@ const isOpen = ref(false)
 const step = ref<Step>('idle')
 const isDragging = ref(false)
 const selectedFile = ref<File | null>(null)
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const uploadError = ref<string | null>(null)
 const extractWarning = ref<string | null>(null)
 const editedItems = ref<{ id: string; section: string; name: string; description: string; price_amount: string }[]>([])

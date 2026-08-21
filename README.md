@@ -72,8 +72,33 @@ GOOGLE_CLIENT_SECRET=
 
 ```bash
 yarn schema:local
-yarn seed:local             # optional — loads local demo and client test fixtures
+yarn seed:local
 ```
+
+The seed creates site and content fixtures, but it does not create a usable
+Better Auth password. For an authenticated dashboard session in a normal
+browser, choose a local-only password and provision the synthetic accounts:
+
+```bash
+E2E_TEST_PASSWORD='choose-a-local-only-password' yarn auth:e2e:local:provision
+```
+
+Then sign in at `http://localhost:3000/login` with:
+
+```text
+Email: demo-owner@playwright.example
+Password: the value supplied as E2E_TEST_PASSWORD above
+```
+
+The demo owner can access the `ember-slice-demo` organization and its demo
+site. Other scoped fixture identities are declared in
+`config/e2e-auth-fixtures.ts` and use the same provisioned password.
+
+The password is deliberately not committed or stored in fixture data. Better
+Auth stores only its hash in local D1. Running the provisioning command again
+replaces the fixture passwords and deletes their existing sessions, so sign in
+again with the newly supplied value. Do not use this command with `--preview`
+or `--staging` during ordinary local development.
 
 ### 4. Run
 
@@ -86,7 +111,9 @@ App at `http://localhost:3000`.
 `yarn dev` is the normal application-development loop. Nitro reads the bindings
 declared in `wrangler.toml`, emulates local D1/KV/R2 resources, and preserves
 Nuxt hot module replacement. Run `yarn schema:local` and the required local seed
-before starting when the local database is empty.
+before starting when the local database is empty. Run
+`auth:e2e:local:provision` after a fresh seed or whenever the fixture password
+needs to change.
 
 For production-runtime browser verification, use the generated Worker locally.
 Wrangler reads `.env` and `.dev.vars` using its documented local-development
@@ -109,8 +136,10 @@ use `yarn dev` for the normal HMR editing loop.
 Playwright applies the local D1 schema, clears disposable E2E artifacts, seeds
 the curated sites and verified synthetic Better Auth accounts, builds the
 Cloudflare Worker, and starts it under local workerd. Authenticated tests sign
-in through Better Auth with those credentials; no email inbox or authentication
-bypass route is involved.
+in through Better Auth with a random password generated inside the Playwright
+process; no email inbox or authentication bypass route is involved. That random
+password is not a reusable manual-browser credential. Use the explicit
+`auth:e2e:local:provision` command above for manual browser work.
 
 Local tenant tests use a shared-host routing contract: the browser targets
 `localhost` and the test helper supplies `x-preview-tenant` for the selected

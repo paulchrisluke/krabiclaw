@@ -59,6 +59,7 @@ export interface DashboardSiteRow {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
+  logo_url: string | null
   // JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts),
   // or null for pure vertical defaults — see resolveSiteCmsCapabilities
   // (server/utils/cms-capabilities.ts), the one place this is parsed.
@@ -218,9 +219,13 @@ export async function resolveRequestedOrganization(
 async function resolveRecentlyTransferredSite(db: DbClient, organizationId: string, userId: string): Promise<DashboardSiteRow | null> {
   return await queryFirst<DashboardSiteRow>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale, s.feature_overrides
+           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
+           COALESCE(ma_logo.public_url, s.logo_url) AS logo_url, s.feature_overrides
     FROM site_transfer_requests t
     JOIN sites s ON s.id = t.site_id
+    LEFT JOIN media_assets ma_logo
+      ON ma_logo.id = s.logo_asset_id AND ma_logo.site_id = s.id
+     AND ma_logo.organization_id = s.organization_id AND ma_logo.status = 'active'
     WHERE t.claiming_organization_id = ? AND t.accepted_by_user_id = ? AND t.status = 'accepted'
     ORDER BY t.completed_at DESC
     LIMIT 1
@@ -324,18 +329,26 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
 
   const site = siteId
     ? await queryFirst<DashboardSiteRow>(db, `
-        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-               status, onboarding_status, plan, primary_location_id, default_currency, source_locale, feature_overrides
-        FROM sites
-        WHERE organization_id = ? AND id = ?
+        SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
+               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
+               COALESCE(ma_logo.public_url, s.logo_url) AS logo_url, s.feature_overrides
+        FROM sites s
+        LEFT JOIN media_assets ma_logo
+          ON ma_logo.id = s.logo_asset_id AND ma_logo.site_id = s.id
+         AND ma_logo.organization_id = s.organization_id AND ma_logo.status = 'active'
+        WHERE s.organization_id = ? AND s.id = ?
         LIMIT 1
       `, [organization.id, siteId])
     : siteSlug
       ? await queryFirst<DashboardSiteRow>(db, `
-        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
-               status, onboarding_status, plan, primary_location_id, default_currency, source_locale, feature_overrides
-        FROM sites
-        WHERE organization_id = ? AND subdomain = ?
+        SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
+               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
+               COALESCE(ma_logo.public_url, s.logo_url) AS logo_url, s.feature_overrides
+        FROM sites s
+        LEFT JOIN media_assets ma_logo
+          ON ma_logo.id = s.logo_asset_id AND ma_logo.site_id = s.id
+         AND ma_logo.organization_id = s.organization_id AND ma_logo.status = 'active'
+        WHERE s.organization_id = ? AND s.subdomain = ?
         LIMIT 1
         `, [organization.id, siteSlug])
       : options.allowTransferFallback
@@ -373,6 +386,7 @@ export interface DashboardSiteSummaryRow {
   status: string | null
   onboarding_status: string | null
   plan: string | null
+  logo_url: string | null
   og_image_url: string
 }
 
@@ -404,6 +418,7 @@ export function generatedDashboardOgUrl(
   page: { title: string; description?: string | null; label?: string | null; location?: string | null },
 ): string {
   const siteName = requiredOgText(source.brand_name, 'site brand name')
+  const backgroundImageUrl = source.og_background_url?.trim() || null
   const template = resolvePublicTemplate({ themeId: source.theme_id, vertical: source.vertical }).slug
   return resolveSocialOgImage({
     template,
@@ -418,7 +433,7 @@ export function generatedDashboardOgUrl(
       faviconUrl: source.favicon_url,
       primaryColor: source.brand_color,
     },
-    heroImage: source.og_background_url ? { url: source.og_background_url } : null,
+    heroImage: backgroundImageUrl ? { url: backgroundImageUrl } : null,
   }, origin).url
 }
 
@@ -467,6 +482,7 @@ export async function listOrganizationSites(
     status: row.status,
     onboarding_status: row.onboarding_status,
     plan: row.plan,
+    logo_url: row.logo_url,
     og_image_url: generatedDashboardOgUrl(origin, row, {
       title: row.seo_title?.trim() || requiredOgText(row.brand_name, 'site brand name'),
       description: row.seo_description || row.brand_description,

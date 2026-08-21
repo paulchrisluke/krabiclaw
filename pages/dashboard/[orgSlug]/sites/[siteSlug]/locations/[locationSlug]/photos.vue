@@ -10,7 +10,7 @@
           <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!locationId" @click="openUploadPicker">Upload</UButton>
           <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!locationId" @click="openAttachModal">Attach existing</UButton>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
-          <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
+          <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -147,7 +147,7 @@ const loadError = ref<string | null>(null)
 const attachOpen = ref(false)
 const attachLoading = ref(false)
 const categoryFilter = ref('all')
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const posterPromptOpen = ref(false)
 const pendingVideoFile = ref<File | null>(null)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
@@ -203,13 +203,13 @@ async function loadPhotos() {
 
 function openUploadPicker() {
   if (!locationId.value || uploading.value) return
-  fileInput.value?.click()
+  fileInput.value?.inputRef?.click()
 }
 
 function onFileSelect(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (file) handleSelectedFile(file)
-  if (fileInput.value) fileInput.value.value = ''
+  if (fileInput.value?.inputRef) fileInput.value.inputRef.value = ''
 }
 
 function handleSelectedFile(file: File) {

@@ -1,15 +1,6 @@
 <template>
-  <UDashboardPanel id="org-settings-analytics">
-    <template #header>
-      <UDashboardNavbar title="Analytics">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="grid gap-4">
+  <OrganizationSettingsShell detail-title="Analytics">
+    <div class="grid gap-4">
         <UCard>
           <UFormField label="Site" description="Choose which site's analytics integrations to manage.">
             <USelectMenu
@@ -92,12 +83,13 @@
             <UButton :loading="saving" :disabled="!siteId || connectionSiteId !== siteId" @click="saveSelection">Save</UButton>
           </div>
         </UCard>
-      </div>
-    </template>
-  </UDashboardPanel>
+    </div>
+  </OrganizationSettingsShell>
 </template>
 
 <script setup lang="ts">
+import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Analytics | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

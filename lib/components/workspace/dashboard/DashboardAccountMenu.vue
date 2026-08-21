@@ -12,8 +12,8 @@
       class="dashboard-account-menu-button w-full min-w-0 cursor-pointer hover:text-highlighted"
       :class="collapsed ? 'justify-center' : 'justify-between'"
       :ui="{ base: 'min-w-0 w-full items-center px-2 py-1.5', trailingIcon: 'text-dimmed ms-auto' }"
-      :avatar="{ src: renderedUser?.image ?? undefined, alt: renderedUser?.name || 'User avatar', size: 'sm' }"
-      :label="collapsed ? undefined : renderedUser?.name"
+      :avatar="{ src: renderedUser?.image ?? undefined, alt: displayName, size: 'sm' }"
+      :label="collapsed ? undefined : displayName"
       :trailing-icon="collapsed ? undefined : 'i-lucide-ellipsis'"
       data-testid="dashboard-account-menu-button"
     />
@@ -22,16 +22,21 @@
       color="neutral"
       variant="ghost"
       square
-      :avatar="{ src: renderedUser?.image ?? undefined, alt: renderedUser?.name || 'User avatar', size: 'sm' }"
+      :avatar="{ src: renderedUser?.image ?? undefined, alt: displayName, size: 'sm' }"
       aria-label="Open account menu"
       data-testid="dashboard-mobile-account-menu-button"
     />
+
+    <template #usage-trailing>
+      <span class="text-xs tabular-nums text-dimmed">{{ usageLabel }}</span>
+    </template>
   </UDropdownMenu>
 </template>
 
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
+import { dashboardFetch } from '~/composables/dashboardFetch'
 
 const props = defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
 
@@ -39,9 +44,9 @@ const { sessionData } = await useAuthSession()
 const { signOut } = useAuth()
 const route = useRoute()
 const dashboard = useDashboardSite()
-const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
 const renderedUser = computed(() => sessionData.value?.user ?? null)
+const displayName = computed(() => renderedUser.value?.name || renderedUser.value?.email || 'User')
 const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed((): Record<string, string> => {
   const organization = dashboard.organization.value
   if (!organization?.slug) return {}
@@ -52,6 +57,11 @@ const settingsTo = computed(() => ({
   path: '/dashboard/account',
   query: accountRouteQuery.value,
 }))
+const organizationSettingsTo = computed(() => {
+  const organization = dashboard.organization.value
+  if (!organization?.slug || !['owner', 'admin'].includes(organization.role ?? '')) return null
+  return `/dashboard/${organization.slug}/settings`
+})
 
 const menuContent = computed(() => ({
   align: props.mobileOnly ? 'end' as const : 'start' as const,
@@ -67,10 +77,64 @@ const menuUi = computed(() => ({
   separator: 'my-1',
 }))
 
-function getThemeIcon(pref: 'system' | 'light' | 'dark') {
-  if (pref === 'system') return 'i-lucide-monitor'
-  if (pref === 'light') return 'i-lucide-sun'
-  return 'i-lucide-moon'
+interface OrganizationCreditsResource {
+  periodAllowance: number | null
+  periodUsed: number
+  periodRemaining: number | null
+  unlimited: boolean
+  reconciliationRequired: boolean
+}
+
+const isOrganizationCreditsResource = (value: unknown): value is OrganizationCreditsResource =>
+  isRecord(value)
+  && (value.periodAllowance === null || typeof value.periodAllowance === 'number')
+  && typeof value.periodUsed === 'number'
+  && (value.periodRemaining === null || typeof value.periodRemaining === 'number')
+  && typeof value.unlimited === 'boolean'
+  && typeof value.reconciliationRequired === 'boolean'
+
+const credits = ref<OrganizationCreditsResource | null>(null)
+
+if (import.meta.server) {
+  const requestEvent = useRequestEvent()
+  const organization = dashboard.organization.value
+  if (requestEvent && organization?.id) {
+    const [{ cloudflareEnv }, { getOrganizationCreditsResource }] = await Promise.all([
+      import('~/server/utils/api-response'),
+      import('~/server/utils/ai-credits'),
+    ])
+    const db = cloudflareEnv(requestEvent).DB
+    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    credits.value = await getOrganizationCreditsResource(db, organization.id)
+  }
+}
+
+const usageLabel = computed(() => {
+  const resource = credits.value
+  if (!resource || resource.reconciliationRequired) return null
+  if (resource.unlimited) return 'Unlimited'
+  if (resource.periodAllowance === null || resource.periodAllowance <= 0 || resource.periodRemaining === null) return null
+  const percentLeft = Math.round((resource.periodRemaining / resource.periodAllowance) * 100)
+  return `${percentLeft}% left`
+})
+
+let creditsRequestId = 0
+
+if (import.meta.client) {
+  watch(() => dashboard.organization.value?.slug, async (orgSlug) => {
+    const requestId = ++creditsRequestId
+    credits.value = null
+    if (!orgSlug) return
+    try {
+      const resource = await dashboardFetch<OrganizationCreditsResource>('/api/billing/credits', { orgSlug }, {
+        method: 'GET',
+        validate: isOrganizationCreditsResource,
+      })
+      if (requestId === creditsRequestId) credits.value = resource
+    } catch {
+      if (requestId === creditsRequestId) credits.value = null
+    }
+  }, { immediate: true })
 }
 
 async function handleSignOut() {
@@ -87,26 +151,19 @@ async function handleSignOut() {
 const items = computed<DropdownMenuItem[][]>(() => [
   [
     {
-      label: renderedUser.value?.name || 'User',
-      description: renderedUser.value?.email || undefined,
-      avatar: { src: renderedUser.value?.image ?? undefined, alt: renderedUser.value?.name || 'User avatar' },
+      label: displayName.value,
+      description: renderedUser.value?.email ?? undefined,
+      avatar: { src: renderedUser.value?.image ?? undefined, alt: displayName.value },
       to: settingsTo.value,
     },
   ],
   [
-    { type: 'label', label: 'Theme' },
-    ...(['system', 'light', 'dark'] as const).map(pref => ({
-      label: `${pref.charAt(0).toUpperCase()}${pref.slice(1)}`,
-      icon: getThemeIcon(pref),
-      trailingIcon: preference.value === pref ? 'i-lucide-check' : undefined,
-      onSelect: () => setPreference(pref),
-    })),
-  ],
-  [
+    ...(usageLabel.value ? [{ label: 'Usage', icon: 'i-lucide-gauge', disabled: true, slot: 'usage' }] : []),
+    ...(organizationSettingsTo.value ? [{ label: 'Settings', icon: 'i-lucide-settings', to: organizationSettingsTo.value }] : []),
     { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
     { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
+    { label: 'Log Out', icon: 'i-lucide-log-out', onSelect: handleSignOut },
   ],
-  [{ label: 'Log Out', icon: 'i-lucide-log-out', color: 'error', onSelect: handleSignOut }],
 ])
 </script>
 
