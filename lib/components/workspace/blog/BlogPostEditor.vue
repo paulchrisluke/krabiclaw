@@ -25,7 +25,7 @@
           :author-name="resolvedAuthorName"
           :author-image="post?.author_image || null"
           :site-name="resolvedSiteName"
-          :media-url="resolvedPrimaryImageUrl"
+          :media-url="resolvedPrimaryMediaUrl"
           :media-kind="resolvedMediaKind"
           :read-minutes="readMinutes"
           :blocks="blocks"
@@ -98,7 +98,7 @@
             <div class="rounded-lg border border-default bg-muted p-3"><p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p><p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p><p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p></div>
             <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" /></UFormField>
             <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :placeholder="resolvedExcerpt" /></UFormField>
-            <UFormField label="Share preview"><img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover"><p v-else class="text-xs text-dimmed">Add a featured or content image to use it in the generated share card.</p></UFormField>
+            <UFormField label="Share preview"><img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover"><video v-else-if="resolvedPrimaryVideoUrl" :src="resolvedPrimaryVideoUrl" controls muted playsinline class="aspect-video w-full rounded-lg object-cover" /><p v-else class="text-xs text-dimmed">Add a featured or content image to use it in the generated share card.</p></UFormField>
             </div>
           </UCard>
           <UCard>
@@ -225,18 +225,27 @@ const publicPath = computed(() => resolveBlogPublicPath({ scope: props.siteId ? 
 const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
 const resolvedPrimaryImageUrl = computed<string | null>(() => {
   const block = blocks.value.find(item => item.type === 'image')
-  const candidate = post.value?.primary_image?.thumbnail_url || post.value?.primary_image?.public_url || block?.data.thumbnail_url || block?.data.public_url || post.value?.featured_image?.public_url
+  const primary = post.value?.primary_image
+  const candidate = primary?.thumbnail_url
+    || (primary?.kind !== 'video' ? primary?.public_url : null)
+    || block?.data.thumbnail_url
+    || block?.data.public_url
+    || (post.value?.featured_image?.kind !== 'video' ? post.value?.featured_image?.public_url : null)
   return typeof candidate === 'string' && candidate ? candidate : null
 })
+const resolvedPrimaryVideoUrl = computed<string | null>(() => {
+  if (resolvedPrimaryImageUrl.value) return null
+  const primary = post.value?.primary_image
+  const candidate = primary?.kind === 'video'
+    ? primary.public_url
+    : post.value?.featured_image?.kind === 'video'
+      ? post.value.featured_image.public_url
+      : null
+  return typeof candidate === 'string' && candidate ? candidate : null
+})
+const resolvedPrimaryMediaUrl = computed(() => resolvedPrimaryImageUrl.value || resolvedPrimaryVideoUrl.value)
 const resolvedMediaKind = computed(() => {
-  const block = blocks.value.find(item => item.type === 'image')
-  const hasPrimaryImage = Boolean(
-    post.value?.primary_image?.thumbnail_url
-    || post.value?.primary_image?.public_url
-    || block?.data.thumbnail_url
-    || block?.data.public_url,
-  )
-  return !hasPrimaryImage && post.value?.featured_image?.kind === 'video' ? 'video' : 'image'
+  return resolvedPrimaryVideoUrl.value ? 'video' : 'image'
 })
 const saveLabel = computed(() => {
   if (saveState.value === 'saving') return 'Saving…'

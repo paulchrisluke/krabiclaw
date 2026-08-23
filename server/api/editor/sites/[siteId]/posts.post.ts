@@ -25,6 +25,7 @@ export default defineHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const body = await readRequiredBody<EditorPostBody>(event)
+  if ('og_image_asset_id' in body) return jsonResponse({ error: 'og_image_asset_id is retired' }, { status: 400 })
   if (!body.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)

@@ -119,10 +119,13 @@ export async function resolveBlogPrimaryImage(db: DbClient, input: {
 }) {
   const firstImage = input.blocks?.find(block => block.type === 'image' && block.data.status !== 'inactive')
   const firstImageId = typeof firstImage?.data.asset_id === 'string' ? firstImage.data.asset_id : null
-  const assetId = input.featuredAssetId || firstImageId
-  if (!assetId) return null
-  return await queryFirst<{ asset_id: string; public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null>(db, `
-    SELECT id AS asset_id, public_url, thumbnail_url, width, height
+  const resolveAsset = async (assetId: string) => await queryFirst<{ asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null>(db, `
+    SELECT id AS asset_id, public_url, thumbnail_url, kind, width, height
       FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1
   `, [assetId])
+  if (input.featuredAssetId) {
+    const featured = await resolveAsset(input.featuredAssetId)
+    if (featured) return featured
+  }
+  return firstImageId ? await resolveAsset(firstImageId) : null
 }

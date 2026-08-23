@@ -26,6 +26,7 @@ export default defineHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const body = await readRequiredBody<EditorPostUpdateBody>(event)
+  if ('og_image_asset_id' in body) return jsonResponse({ error: 'og_image_asset_id is retired' }, { status: 400 })
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
