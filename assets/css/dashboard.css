@@ -6,11 +6,23 @@
 @source "../../lib/components/workspace";
 @import "@nuxt/ui";
 
+/*
+ * Dashboard responsive contract:
+ * - compact: below sm
+ * - tablet: sm through below lg
+ * - desktop: lg and above
+ *
+ * Structural UI changes only at lg: persistent sidebar, removal of the bottom
+ * navigation, split editors, calendar grid, and side-by-side previews. The sm
+ * breakpoint may adjust spacing and content density, but never navigation or
+ * pane topology.
+ */
+
 .w-\(--width\) {
   width: var(--width);
 }
 
-@media (width >= 992px) {
+@media (width >= 1024px) {
   /* stylelint-disable-next-line selector-class-pattern -- utility mirrors Nuxt UI's generated class */
   .lg\:w-\(--width\) {
     width: var(--width);

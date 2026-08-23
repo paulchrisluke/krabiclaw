@@ -1,20 +1,19 @@
 <template>
   <form class="space-y-3" @submit.prevent="submit">
-    <SayaFormField v-slot="{ id, describedBy, invalid }" label="Email" name="signup-email" :error="emailError">
-      <input :id="id" v-model="email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" :class="FORM_INPUT_CLASS" :aria-describedby="describedBy" :aria-invalid="invalid" />
-    </SayaFormField>
-    <SayaFormField v-slot="{ id, describedBy, invalid }" label="Password" name="signup-password" :error="passwordError">
-      <input :id="id" v-model="password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="new-password" :class="FORM_INPUT_CLASS" :aria-describedby="describedBy" :aria-invalid="invalid" />
-    </SayaFormField>
-    <PlatformButton type="submit" size="lg" block :loading="loading">Create account</PlatformButton>
-    <p v-if="error" role="alert" class="text-sm text-red-500">{{ error }}</p>
+    <UFormField label="Email" name="signup-email" :error="emailError" size="lg">
+      <UInput v-model="email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" size="lg" class="w-full" />
+    </UFormField>
+    <UFormField label="Password" name="signup-password" :error="passwordError" size="lg">
+      <UInput v-model="password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="new-password" size="lg" class="w-full" />
+    </UFormField>
+    <UButton type="submit" size="lg" block :loading="loading">Create account</UButton>
+    <UAlert v-if="error" color="error" variant="soft" :description="error" />
   </form>
 </template>
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 import { validatePassword } from '~/utils/password-validation'
-import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 
 const props = defineProps<{ callbackUrl: string }>()
 const emit = defineEmits<{ success: [email: string] }>()

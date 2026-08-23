@@ -41,12 +41,13 @@
           <p class="text-sm text-muted">No notifications yet.</p>
         </div>
         <div v-else class="max-h-96 overflow-y-auto divide-y divide-default">
-          <button
+          <UButton
             v-for="notification in notifications"
             :key="notification.id"
-            type="button"
-            class="w-full flex gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
-            :class="notification.read_at ? '' : 'bg-primary/5'"
+            block
+            class="justify-start text-left"
+            color="neutral"
+            variant="ghost"
             @click="openNotification(notification)"
           >
             <span class="mt-1 relative flex size-2 shrink-0">
@@ -57,7 +58,7 @@
               <span v-if="notification.message" class="block text-xs text-muted line-clamp-2 mt-0.5">{{ notification.message }}</span>
               <span class="block text-[11px] text-dimmed mt-1">{{ formatExactDateTime(notification.created_at, { includeTime: true }) }}</span>
             </span>
-          </button>
+          </UButton>
         </div>
       </div>
     </template>

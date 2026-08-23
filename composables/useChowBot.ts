@@ -92,8 +92,11 @@ export const useChowBot = () => {
     let target = ''
     if (names.has('create_post') || names.has('publish_post')) {
       target = paths.posts
-    } else if (names.has('create_location') || names.has('update_location')) {
-      target = paths.locations
+    } else if (names.has('update_location')) {
+      const locationId = selectedLocation.value?.id
+      target = locationId ? dashboardLinks.locationPath(locationId) : paths.site
+    } else if (names.has('create_location')) {
+      target = paths.site
     } else if ([...names].some(n => MENU_TOOLS.has(n))) {
       const locId = selectedLocation.value?.id ?? null
       target = locId ? dashboardLinks.locationMenuPath(locId) : paths.menu

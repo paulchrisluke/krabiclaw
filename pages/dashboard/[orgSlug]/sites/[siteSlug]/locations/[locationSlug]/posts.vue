@@ -32,12 +32,12 @@
                   <span v-if="credits !== null">{{ credits.toLocaleString() }} credits remaining · </span>Attach a photo for image-aware posts
                 </p>
                 <div class="flex items-center gap-2">
-                  <label class="cursor-pointer">
-                    <input ref="aiImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onAiImageSelect" />
-                    <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-image" :class="aiImageFile ? 'text-green-600' : ''" @click="aiImageInput?.click()">
+                  <div>
+                    <UInput ref="aiImageInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onAiImageSelect" />
+                    <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-image" @click.stop="aiImageInput?.inputRef?.click()">
                       {{ aiImageFile ? aiImageFile.name.slice(0, 12) + '…' : 'Photo' }}
                     </UButton>
-                  </label>
+                  </div>
                   <UButton size="sm" :loading="aiLoading" :disabled="!aiPrompt.trim()" icon="i-lucide-sparkles" @click="generatePost">
                     Generate
                   </UButton>
@@ -50,13 +50,15 @@
           <div class="overflow-hidden rounded-lg border border-default">
             <div class="flex items-center justify-between gap-4 border-b border-default bg-elevated px-4 py-2.5">
               <div class="flex items-center gap-3">
-                <button
+                <UButton
                   v-for="tab in ['all','published','archived']"
                   :key="tab"
-                  class="text-xs font-semibold capitalize transition-colors"
-                  :class="activeTab === tab ? 'text-highlighted' : 'text-muted hover:text-default'"
+                  size="xs"
+                  :variant="activeTab === tab ? 'soft' : 'ghost'"
+                  color="neutral"
+                  :aria-pressed="activeTab === tab"
                   @click="activeTab = tab; loadPosts()"
-                >{{ tab }}</button>
+                >{{ tab }}</UButton>
               </div>
               <div class="flex items-center gap-2">
                 <UButton v-if="loading" size="xs" color="neutral" variant="ghost" loading />
@@ -84,7 +86,7 @@
             <div v-if="!loading && !postsLoadError && posts.length === 0" class="px-4 py-10 text-center">
               <UIcon name="i-lucide-newspaper" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No posts yet. Use the AI composer or write one manually.</p>
-              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-pencil" class="mt-3" @click="openCompose">
+              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-pencil" @click="openCompose">
                 New post
               </UButton>
             </div>
@@ -540,14 +542,14 @@ async function copyPublicLink() {
 const aiPrompt = ref('')
 const aiLoading = ref(false)
 const aiImageFile = ref<File | null>(null)
-const aiImageInput = ref<HTMLInputElement | null>(null)
+const aiImageInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const credits = ref<number | null>(null)
 
 const onAiImageSelect = (e: Event) => {
   const file = (e.target as HTMLInputElement).files?.[0] ?? null
   if (file && file.size > 5 * 1024 * 1024) {
     toast.add({ description: 'Image must be under 5 MB', color: 'error' })
-    if (aiImageInput.value) aiImageInput.value.value = ''
+    if (aiImageInput.value?.inputRef) aiImageInput.value.inputRef.value = ''
     aiImageFile.value = null
     return
   }

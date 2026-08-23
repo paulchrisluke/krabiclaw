@@ -232,6 +232,26 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
+### Local authenticated browser development
+
+The seeded local database does not contain a reusable plaintext password.
+Before manually testing an authenticated dashboard flow, provision the Better
+Auth fixture credentials with a caller-chosen local-only password:
+
+```bash
+yarn schema:local
+yarn seed:local
+E2E_TEST_PASSWORD='choose-a-local-only-password' yarn auth:e2e:local:provision
+yarn dev
+```
+
+Sign in at `/login` as `demo-owner@playwright.example` with that password.
+Playwright's automatically generated password is process-local and is not a
+manual-browser credential. Reprovisioning replaces fixture credential hashes
+and deletes their sessions. Do not add an auth bypass or look for a committed
+fixture password. The complete contributor and agent workflow is in
+`docs/agents/development-workflow.md`.
+
 Release qualification covers only Pottery House, Kikuzuki, and NCLS public
 rendering/navigation; Pottery booking/contact and Kikuzuki reservation journeys;
 and tenant MCP/OAuth/content/media. Admin, dashboard, CMS, ChowBot, billing,

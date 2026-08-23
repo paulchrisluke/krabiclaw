@@ -1,23 +1,22 @@
 <template>
   <div class="space-y-3">
     <p v-if="fixedPhone" class="text-sm text-muted">Verify <strong class="text-default">{{ fixedPhone }}</strong> to continue.</p>
-    <SayaFormField v-else v-slot="{ id }" label="WhatsApp number" name="phone">
-      <input :id="id" v-model="phone" type="tel" placeholder="+66 81 234 5678" :disabled="loading" :class="FORM_INPUT_CLASS" @keydown.enter.prevent="send" />
-    </SayaFormField>
-    <PlatformButton v-if="step === 'send'" block :loading="loading" @click="send">Send code</PlatformButton>
+    <UFormField v-else label="WhatsApp number" name="phone" size="lg">
+      <UInput v-model="phone" type="tel" placeholder="+66 81 234 5678" :disabled="loading" size="lg" class="w-full" @keydown.enter.prevent="send" />
+    </UFormField>
+    <UButton v-if="step === 'send'" block size="lg" :loading="loading" @click="send">Send code</UButton>
     <template v-else>
-      <SayaFormField v-slot="{ id }" label="Verification code" name="otp-code">
-        <input :id="id" v-model="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" :disabled="loading" :class="[FORM_INPUT_CLASS, 'font-mono tracking-widest text-center']" @keydown.enter.prevent="verify" />
-      </SayaFormField>
-      <PlatformButton block :disabled="code.length !== 6" :loading="loading" @click="verify">{{ verifyLabel }}</PlatformButton>
-      <PlatformButton variant="ghost" size="sm" block :disabled="loading" @click="send">Resend code</PlatformButton>
+      <UFormField label="Verification code" name="otp-code" size="lg">
+        <UInput v-model="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" :disabled="loading" size="lg" class="w-full font-mono tracking-widest text-center" @keydown.enter.prevent="verify" />
+      </UFormField>
+      <UButton block size="lg" :disabled="code.length !== 6" :loading="loading" @click="verify">{{ verifyLabel }}</UButton>
+      <UButton variant="ghost" size="sm" block :disabled="loading" @click="send">Resend code</UButton>
     </template>
-    <p v-if="error" role="alert" class="text-sm text-red-500">{{ error }}</p>
+    <UAlert v-if="error" color="error" variant="soft" :description="error" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 import type { CountryCode } from '~/utils/phone'
 
 const props = withDefaults(defineProps<{ fixedPhone?: string; defaultCountry?: CountryCode; verifyLabel?: string }>(), {

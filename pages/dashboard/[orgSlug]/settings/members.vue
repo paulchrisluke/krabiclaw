@@ -1,15 +1,6 @@
 <template>
-  <UDashboardPanel id="org-settings-members">
-    <template #header>
-      <UDashboardNavbar title="Members">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="space-y-4">
+  <OrganizationSettingsShell detail-title="Members">
+    <div class="space-y-4">
         <UCard>
           <template #header>
             <div class="flex items-center justify-between gap-3">
@@ -352,12 +343,13 @@
             description="Invitation sent."
           />
         </UCard>
-      </div>
-    </template>
-  </UDashboardPanel>
+    </div>
+  </OrganizationSettingsShell>
 </template>
 
 <script setup lang="ts">
+import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
+
 const dashboardApi = useDashboardApi()
 import { authClient } from '~/lib/auth-client'
 

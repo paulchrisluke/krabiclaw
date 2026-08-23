@@ -11,7 +11,7 @@
     <template #body>
       <!-- Filters -->
       <div class="mb-4 flex flex-wrap items-center gap-2">
-        <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" class="w-56" />
+        <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" />
         <div class="flex gap-1">
           <UButton
             v-for="k in kindTabs"
@@ -56,7 +56,7 @@
         <p class="text-xs text-muted">Use this site-wide library for page media, posts, galleries, and reusable assets.</p>
       </div>
 
-      <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
+      <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
 
       <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mb-4" />
       <UAlert
@@ -206,7 +206,7 @@ const loadingMore = ref(false)
 const deleting = ref(false)
 const isDragging = ref(false)
 const dragCounter = ref(0)
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const posterPromptOpen = ref(false)
 const pendingVideoFile = ref<File | null>(null)
 const search = ref('')
@@ -348,12 +348,12 @@ function handleDrop(e: DragEvent) {
 function onFileSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (file) handleSelectedFile(file)
-  if (fileInput.value) fileInput.value.value = ''
+  if (fileInput.value?.inputRef) fileInput.value.inputRef.value = ''
 }
 
 function openUploadPicker() {
   if (uploadLoading.value) return
-  fileInput.value?.click()
+  fileInput.value?.inputRef?.click()
 }
 
 function handleSelectedFile(file: File) {

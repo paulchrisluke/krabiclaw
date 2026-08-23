@@ -6,7 +6,7 @@
           <DashboardNavbarLeading back-to-organization />
         </template>
         <template #right>
-          <DashboardAccountMenu mobile-only class="md:hidden" />
+          <DashboardAccountMenu mobile-only class="lg:hidden" />
         </template>
       </UDashboardNavbar>
     </template>

@@ -23,14 +23,14 @@
             aria-label="Choose custom brand color"
           >
             <UIcon v-if="!customColorSelected" name="i-lucide-plus" class="size-4" />
-            <input
-              :value="form.brandColor"
+            <UInput
+              :model-value="form.brandColor"
               type="color"
               class="absolute inset-0 cursor-pointer opacity-0"
               aria-label="Choose custom brand color"
               :disabled="disabled"
-              @input="setCustomBrandColor"
-            >
+              @update:model-value="setCustomBrandColor"
+             />
           </label>
         </div>
       </UFormField>
@@ -43,7 +43,7 @@
             class="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-default bg-default transition-colors hover:border-primary"
             aria-label="Upload logo"
             :disabled="disabled || logoUploading || !draftId"
-            @click="logoInput?.click()"
+            @click="logoInput?.inputRef?.click()"
           >
             <img v-if="form.logoPreviewUrl" :src="form.logoPreviewUrl" alt="" class="h-full w-full object-contain">
             <UIcon v-else name="i-lucide-image" class="size-5 text-dimmed" />
@@ -54,11 +54,11 @@
             size="sm"
             :loading="logoUploading"
             :disabled="disabled || !draftId"
-            @click="logoInput?.click()"
+            @click="logoInput?.inputRef?.click()"
           >
             {{ form.logoPreviewUrl ? 'Replace logo' : 'Upload logo' }}
           </UButton>
-          <input ref="logoInput" type="file" accept="image/*" class="hidden" @change="event => uploadDraftImage(event, 'logo')">
+          <UInput ref="logoInput" type="file" accept="image/*" class="hidden" @change="event => uploadDraftImage(event, 'logo')" />
         </div>
       </div>
 
@@ -69,7 +69,7 @@
           class="flex aspect-[16/9] w-full items-center justify-center overflow-hidden rounded-xl border border-default bg-default transition-colors hover:border-primary"
           aria-label="Upload hero photo"
           :disabled="disabled || heroUploading || !draftId"
-          @click="heroInput?.click()"
+          @click="heroInput?.inputRef?.click()"
         >
           <img v-if="form.heroPreviewUrl" :src="form.heroPreviewUrl" alt="" class="h-full w-full object-cover">
           <UIcon v-else name="i-lucide-image" class="size-7 text-highlighted" />
@@ -81,15 +81,15 @@
           class="mt-3"
           :loading="heroUploading"
           :disabled="disabled || !draftId"
-          @click="heroInput?.click()"
+          @click="heroInput?.inputRef?.click()"
         >
           {{ form.heroPreviewUrl ? 'Replace photo' : 'Upload photo' }}
         </UButton>
-        <input ref="heroInput" type="file" accept="image/*" class="hidden" @change="event => uploadDraftImage(event, 'hero')">
+        <UInput ref="heroInput" type="file" accept="image/*" class="hidden" @change="event => uploadDraftImage(event, 'hero')" />
       </div>
 
       <UFormField v-if="section === 'hero'" label="Hero headline">
-        <UInput v-model="form.heroHeadline" size="xl" class="w-full" placeholder="A clear promise guests remember" />
+        <UInput v-model="form.heroHeadline" size="xl" placeholder="A clear promise guests remember" />
       </UFormField>
       <UFormField v-if="section === 'hero'" label="Hero description">
         <UTextarea
@@ -166,8 +166,8 @@ const emit = defineEmits<{
 }>()
 
 const colorPresets = ['#3F3F46', '#FB7461', '#0EA5E9', '#16A34A', '#D97706', '#1F2547']
-const logoInput = ref<HTMLInputElement | null>(null)
-const heroInput = ref<HTMLInputElement | null>(null)
+const logoInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
+const heroInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const logoUploading = ref(false)
 const heroUploading = ref(false)
 const uploadError = ref<string | null>(null)
@@ -181,9 +181,8 @@ function setBrandColor(color: string) {
   emit('brand-color-change')
 }
 
-function setCustomBrandColor(event: Event) {
-  const input = event.target as HTMLInputElement
-  setBrandColor(input.value)
+function setCustomBrandColor(value: string | number) {
+  setBrandColor(String(value))
 }
 
 async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {

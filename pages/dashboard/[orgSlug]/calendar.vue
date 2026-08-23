@@ -40,7 +40,7 @@
         <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
 
         <template v-else-if="agendaData && !agendaError">
-          <div data-testid="calendar-month-grid" class="hidden overflow-hidden rounded-lg border border-default md:block">
+          <div data-testid="calendar-month-grid" class="hidden overflow-hidden rounded-lg border border-default lg:block">
             <div class="grid grid-cols-7 border-b border-default bg-muted/30">
               <div v-for="day in weekdayLabels" :key="day" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day }}</div>
             </div>
@@ -65,14 +65,14 @@
             </div>
           </div>
 
-          <section v-if="selectedDayItems.length" id="calendar-day-list" class="hidden scroll-mt-20 space-y-2 md:block">
+          <section v-if="selectedDayItems.length" id="calendar-day-list" class="hidden scroll-mt-20 space-y-2 lg:block">
             <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDay) }}</h3>
             <div class="divide-y divide-default border-y border-default">
               <AgendaRow v-for="item in selectedDayItems" :key="item.id" :item="item" />
             </div>
           </section>
 
-          <div data-testid="calendar-mobile-list" class="space-y-8 md:hidden">
+          <div data-testid="calendar-mobile-list" class="space-y-8 lg:hidden">
             <section v-for="group in mobileGroups" :id="`day-${group.dayKey}`" :key="group.dayKey" class="scroll-mt-20 space-y-2">
               <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(group.dayKey) }}</h3>
               <div class="divide-y divide-default border-y border-default">

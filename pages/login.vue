@@ -1,29 +1,27 @@
 <template>
   <div>
-    <h1 class="text-4xl font-extrabold tracking-tight text-default">Continue to KrabiClaw</h1>
-    <p class="mt-2 mb-7 text-sm text-muted">Google and WhatsApp will sign you in or create your account automatically.</p>
+    <h1 class="text-2xl font-semibold tracking-tight text-highlighted">Sign in</h1>
 
-    <div v-if="notice" role="status" class="mb-4 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm text-green-600">{{ notice }}</div>
-    <div v-if="operationError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ operationError }}</div>
+    <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mt-4" />
+    <UAlert v-if="operationError" color="error" variant="soft" :description="operationError" class="mt-4" />
 
-    <AuthPhoneOtpForm v-if="isWhatsAppMode" default-country="TH" @verified="finishPhoneSignIn" />
+    <AuthPhoneOtpForm v-if="isWhatsAppMode" default-country="TH" class="mt-6" @verified="finishPhoneSignIn" />
 
-    <div v-else class="space-y-3">
+    <div v-else class="mt-6 space-y-3">
       <AuthGoogleAuthButton :loading="googleLoading" @activate="signInWithGoogle(postLoginUrl)" />
       <WhatsAppAuthButton @activate="showPhone = !showPhone" />
       <AuthPhoneOtpForm v-if="showPhone" default-country="TH" @verified="finishPhoneSignIn" />
-      <div class="flex items-center gap-3 py-1">
-        <div class="h-px flex-1 bg-default" /><span class="text-xs uppercase tracking-widest text-dimmed">or</span><div class="h-px flex-1 bg-default" />
-      </div>
+      <USeparator label="or" />
       <AuthEmailSignInForm :callback-url="postLoginUrl" :initial-email="queryEmail" @verification-required="showVerification" />
 
-      <div v-if="verificationEmail" class="rounded-xl border border-default p-3 space-y-2">
-        <p class="text-sm text-muted">Verify your email before signing in.</p>
-        <PlatformButton variant="outline" block :loading="resending" @click="resendVerification">Resend verification</PlatformButton>
-      </div>
+      <UAlert v-if="verificationEmail" color="neutral" variant="soft" description="Verify your email before signing in.">
+        <template #actions>
+          <UButton variant="outline" :loading="resending" @click="resendVerification">Resend verification</UButton>
+        </template>
+      </UAlert>
     </div>
 
-    <p v-if="!isWhatsAppMode" class="mt-6 text-center text-sm text-muted">Want to use email and password? <NuxtLink :to="signupUrl" class="font-semibold text-primary">Create an email account</NuxtLink></p>
+    <p v-if="!isWhatsAppMode" class="mt-6 text-center text-sm text-muted">Don't have an account? <NuxtLink :to="signupUrl" class="font-semibold text-primary">Sign up</NuxtLink></p>
   </div>
 </template>
 

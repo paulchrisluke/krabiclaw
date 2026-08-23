@@ -1,7 +1,18 @@
 <template>
   <UButton
-    v-if="detailParent"
-    class="min-w-0 shrink-0 md:hidden"
+    v-if="actionIcon"
+    class="min-w-0 shrink-0"
+    color="neutral"
+    variant="ghost"
+    size="sm"
+    square
+    :icon="actionIcon"
+    :aria-label="actionLabel"
+    @click="$emit('action')"
+  />
+  <UButton
+    v-else-if="detailParent"
+    class="min-w-0 shrink-0 lg:hidden"
     color="neutral"
     variant="ghost"
     size="sm"
@@ -12,7 +23,7 @@
   />
   <UButton
     v-else-if="scopeParent"
-    class="min-w-0 shrink-0 md:hidden"
+    class="min-w-0 shrink-0 lg:hidden"
     color="neutral"
     variant="ghost"
     size="sm"
@@ -32,11 +43,17 @@ const props = withDefaults(defineProps<{
   detailTo?: DashboardRoute | null
   detailLabel?: string
   backToOrganization?: boolean
+  actionIcon?: string | null
+  actionLabel?: string
 }>(), {
   detailTo: null,
   detailLabel: 'Back',
   backToOrganization: false,
+  actionIcon: null,
+  actionLabel: 'Navigation action',
 })
+
+defineEmits<{ action: [] }>()
 
 const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
 const organizationParent = inject(dashboardOrganizationParentKey, null)

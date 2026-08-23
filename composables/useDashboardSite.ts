@@ -21,6 +21,7 @@ interface DashboardSite {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
+  logo_url: string | null
   feature_overrides: string | null
 }
 
@@ -32,6 +33,7 @@ interface DashboardSiteSummary {
   status: string | null
   onboarding_status: string | null
   plan: string | null
+  logo_url: string | null
   og_image_url: string
 }
 
@@ -73,6 +75,7 @@ const isDashboardSite = (value: unknown): value is DashboardSite =>
   && (value.brand_name === null || typeof value.brand_name === 'string')
   && (value.subdomain === null || typeof value.subdomain === 'string')
   && (value.public_url === null || typeof value.public_url === 'string')
+  && (value.logo_url === null || typeof value.logo_url === 'string')
   && typeof value.status === 'string'
   && typeof value.onboarding_status === 'string'
 
@@ -96,6 +99,7 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     && typeof site.id === 'string'
     && (site.brand_name === null || typeof site.brand_name === 'string')
     && (site.subdomain === null || typeof site.subdomain === 'string')
+    && (site.logo_url === null || typeof site.logo_url === 'string')
     && typeof site.og_image_url === 'string')
   && Array.isArray(value.locations)
   && value.locations.every(isDashboardLocation)
