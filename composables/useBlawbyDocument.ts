@@ -68,13 +68,13 @@ export async function useBlawbyDocument(
       if (draftId) {
         return await publicApiRequest<BlawbyDocumentPayload>('/api/public/drafts/' + encodeURIComponent(draftId) + '/blawby/document', {
           query: { recipe, ...(previewToken ? { token: previewToken } : {}) },
-          validate: isBlawbyDocumentPayload,
+          validate: value => isBlawbyDocumentPayload(value, recipe),
         })
       }
       if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
       return await publicApiRequest<BlawbyDocumentPayload>('/api/public/sites/' + encodeURIComponent(siteId) + '/blawby/document', {
         query: { recipe, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
-        validate: isBlawbyDocumentPayload,
+        validate: value => isBlawbyDocumentPayload(value, recipe),
       })
     },
     {

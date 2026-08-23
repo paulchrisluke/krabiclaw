@@ -70,7 +70,7 @@ export async function loadPublicBlawbyDocument(
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as unknown
-        if (!isBlawbyDocumentPayload(parsed)) throw new Error('Blawby document cache contract mismatch')
+        if (!isBlawbyDocumentPayload(parsed, recipe)) throw new Error('Blawby document cache contract mismatch')
         if (mutateResponseHeaders) setHeader(event, 'x-bootstrap-cache', 'HIT')
         return parsed
       } catch (error) {

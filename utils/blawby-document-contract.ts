@@ -53,7 +53,10 @@ function hasRequiredRouteContent(route: Record<string, unknown>) {
   return isRecord(route.page)
 }
 
-export const isBlawbyDocumentPayload = (value: unknown): value is BlawbyDocumentPayload =>
+export const isBlawbyDocumentPayload = (
+  value: unknown,
+  expectedRecipe: PublicBlawbyRouteData['recipe'],
+): value is BlawbyDocumentPayload =>
   isRecord(value)
   && value.success === true
   && isRecord(value.shell)
@@ -65,6 +68,7 @@ export const isBlawbyDocumentPayload = (value: unknown): value is BlawbyDocument
   && Array.isArray(value.shell.pageLinks)
   && typeof value.route.recipe === 'string'
   && RECIPES.has(value.route.recipe)
+  && value.route.recipe === expectedRecipe
   && Array.isArray(value.route.offerings)
   && Array.isArray(value.route.qa)
   && Array.isArray(value.route.reviews)

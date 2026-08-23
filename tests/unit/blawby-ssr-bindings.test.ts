@@ -127,6 +127,26 @@ test('Blawby SSR and API paths perform one canonical load without self-fetching 
   assert.equal(fetchMock.mock.callCount(), 0)
 
   resolverCalls = 0
+  cacheDeleteCalls = 0
+  cachePutCalls = 0
+  cachedValue = JSON.stringify({
+    ...payload,
+    route: { ...payload.route, recipe: 'confirmation', page: null },
+  })
+  const mismatchedRecipeEvent = createEvent('/services')
+  const mismatchedRecipeResult = await loadPublicBlawbyDocument(
+    mismatchedRecipeEvent,
+    'site-ncls-blawby',
+    'home',
+  )
+
+  assert.deepEqual(mismatchedRecipeResult, payload)
+  assert.equal(resolverCalls, 1)
+  assert.equal(cacheDeleteCalls, 1)
+  assert.equal(cachePutCalls, 1)
+  assert.equal(fetchMock.mock.callCount(), 0)
+
+  resolverCalls = 0
   cachedValue = null
   const apiEvent = createEvent('/api/public/sites/site-ncls-blawby/blawby/document?recipe=home')
   const response = await documentHandler(apiEvent)
