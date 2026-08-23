@@ -93,7 +93,8 @@ const isOrganizationCreditsResource = (value: unknown): value is OrganizationCre
   && typeof value.unlimited === 'boolean'
   && typeof value.reconciliationRequired === 'boolean'
 
-const credits = ref<OrganizationCreditsResource | null>(null)
+const credits = useState<OrganizationCreditsResource | null>('dashboard-account-credits', () => null)
+const creditsOrganizationId = useState<string | null>('dashboard-account-credits-organization-id', () => null)
 
 if (import.meta.server) {
   const requestEvent = useRequestEvent()
@@ -106,6 +107,7 @@ if (import.meta.server) {
     const db = cloudflareEnv(requestEvent).DB
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
     credits.value = await getOrganizationCreditsResource(db, organization.id)
+    creditsOrganizationId.value = organization.id
   }
 }
 
@@ -121,16 +123,26 @@ const usageLabel = computed(() => {
 let creditsRequestId = 0
 
 if (import.meta.client) {
-  watch(() => dashboard.organization.value?.slug, async (orgSlug) => {
+  watch(() => dashboard.organization.value?.id, async (organizationId) => {
     const requestId = ++creditsRequestId
+    const orgSlug = dashboard.organization.value?.slug
+    if (!organizationId || !orgSlug) {
+      credits.value = null
+      creditsOrganizationId.value = null
+      return
+    }
+    if (creditsOrganizationId.value === organizationId) return
     credits.value = null
-    if (!orgSlug) return
+    creditsOrganizationId.value = null
     try {
       const resource = await dashboardFetch<OrganizationCreditsResource>('/api/billing/credits', { orgSlug }, {
         method: 'GET',
         validate: isOrganizationCreditsResource,
       })
-      if (requestId === creditsRequestId) credits.value = resource
+      if (requestId === creditsRequestId) {
+        credits.value = resource
+        creditsOrganizationId.value = organizationId
+      }
     } catch {
       if (requestId === creditsRequestId) credits.value = null
     }

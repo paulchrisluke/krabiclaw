@@ -56,7 +56,7 @@
                   size="xs"
                   :variant="activeTab === tab ? 'soft' : 'ghost'"
                   color="neutral"
-                  :aria-current="activeTab === tab ? 'page' : undefined"
+                  :aria-pressed="activeTab === tab"
                   @click="activeTab = tab; loadPosts()"
                 >{{ tab }}</UButton>
               </div>

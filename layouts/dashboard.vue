@@ -519,6 +519,7 @@ function parentNavItem() {
 const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
 const locationsNavTarget = computed(() => {
   if (!locationsBase.value) return null
+  if (scope.value === 'location') return locationBase.value
   const firstLocation = dashboard.locations.value[0]
   return firstLocation?.slug ? `${locationsBase.value}/${firstLocation.slug}` : `${locationsBase.value}/new`
 })
@@ -613,7 +614,11 @@ const adminGroup = computed(() => [
 const navigationItems = computed(() => {
   if (isAdminRoute.value) return [adminGroup.value]
   if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
-  return [mobileNavItems.value.map(({ key: _key, active: _active, exact: _exact, ...item }) => item)]
+  return [
+    mobileNavItems.value.map(({ key: _key, active: _active, exact: _exact, ...item }) => item),
+    _siteOverviewGroup.value,
+    _locationOverviewGroup.value,
+  ]
 })
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {

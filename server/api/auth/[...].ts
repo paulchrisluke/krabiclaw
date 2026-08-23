@@ -54,9 +54,17 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   }
   const url = requestUrl.toString()
   if (request.method !== 'POST') {
-    return url === request.url
-      ? request as unknown as Request
-      : new Request(url, { method: request.method, headers: request.headers, signal: request.signal })
+    if (url === request.url) return request as unknown as Request
+    const init: RequestInit & { duplex?: 'half' } = {
+      method: request.method,
+      headers: request.headers,
+      signal: request.signal,
+    }
+    if (request.body && !['GET', 'HEAD'].includes(request.method)) {
+      init.body = request.body
+      init.duplex = 'half'
+    }
+    return new Request(url, init)
   }
 
   const pathname = requestUrl.pathname
