@@ -150,6 +150,7 @@ export interface CloudflareEnv {
   DISCORD_DELIVERY_MODE?: string
   DISCORD_WEBHOOK_URL?: string
   MEDIA_BUCKET?: R2Bucket
+  SITE_CACHE?: KVNamespace
   GUEST_THREAD_COMMANDS?: DurableObjectNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
   GUEST_DELIVERY_QUEUE?: Queue

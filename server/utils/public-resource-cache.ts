@@ -101,6 +101,21 @@ export interface PublicResourceCacheParams {
 const encodeKeyField = (value: string | null | undefined): string =>
   encodeURIComponent(value ?? '').replace(/~/g, '%7E')
 
+export function buildPublicBlawbyDocumentCacheKey(
+  siteId: string,
+  recipe: string,
+  slug?: string | null,
+): string {
+  return [
+    'public',
+    encodeKeyField(siteId),
+    'v2',
+    'blawby-document',
+    encodeKeyField(recipe),
+    encodeKeyField(slug),
+  ].join('~')
+}
+
 export function buildPublicResourceCacheKey(siteId: string, params: PublicResourceCacheParams): string {
   return [
     'public',

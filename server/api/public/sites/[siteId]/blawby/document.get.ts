@@ -1,5 +1,6 @@
-import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { resolvePublicBlawbyDocumentOrThrow } from '~/server/utils/professional-services'
+import { apiErrorResponse, jsonResponse } from '~/server/utils/api-response'
+import { loadPublicBlawbyDocument } from '~/server/utils/public-blawby-document'
+import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 import { BLAWBY_ROUTE_RECIPES, type BlawbyRouteRecipe } from '~/types/blawby'
 
 const RECIPES = new Set(BLAWBY_ROUTE_RECIPES)
@@ -16,12 +17,9 @@ export default defineHandler(async (event) => {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_SLUG_REQUIRED', 'Route slug required')
   }
 
-  const db = cloudflareEnv(event).db
-  if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Database unavailable')
-
   try {
-    const document = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug })
-    return jsonResponse(document)
+    const document = await loadPublicBlawbyDocument(event, siteId, recipe, { slug })
+    return jsonResponse(finalizeRequestMetrics(event, 'public-blawby-document', document))
   } catch (error) {
     const typedError = error as {
       statusCode?: unknown
