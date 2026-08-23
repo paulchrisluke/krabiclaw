@@ -120,11 +120,11 @@ const usageLabel = computed(() => {
   return `${percentLeft}% left`
 })
 
-let creditsRequestId = 0
+const creditsRequestId = useState('dashboard-account-credits-request-id', () => 0)
 
 if (import.meta.client) {
   watch(() => dashboard.organization.value?.id, async (organizationId) => {
-    const requestId = ++creditsRequestId
+    const requestId = ++creditsRequestId.value
     const orgSlug = dashboard.organization.value?.slug
     if (!organizationId || !orgSlug) {
       credits.value = null
@@ -139,12 +139,12 @@ if (import.meta.client) {
         method: 'GET',
         validate: isOrganizationCreditsResource,
       })
-      if (requestId === creditsRequestId) {
+      if (requestId === creditsRequestId.value) {
         credits.value = resource
         creditsOrganizationId.value = organizationId
       }
     } catch {
-      if (requestId === creditsRequestId) credits.value = null
+      if (requestId === creditsRequestId.value) credits.value = null
     }
   }, { immediate: true })
 }

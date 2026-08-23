@@ -615,7 +615,10 @@ const navigationItems = computed(() => {
   if (isAdminRoute.value) return [adminGroup.value]
   if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
   return [
-    mobileNavItems.value.map(({ key: _key, active: _active, exact: _exact, ...item }) => item),
+    mobileNavItems.value
+      .filter(item => !(scope.value === 'site' && ['children', 'inbox'].includes(item.key))
+        && !(scope.value === 'location' && item.key === 'inbox'))
+      .map(({ key: _key, active: _active, exact: _exact, ...item }) => item),
     _siteOverviewGroup.value,
     _locationOverviewGroup.value,
   ]
