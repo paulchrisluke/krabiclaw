@@ -5,7 +5,7 @@
         <template #leading>
           <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>
-        <template #right><DashboardAccountMenu mobile-only class="md:hidden" /></template>
+        <template #right><DashboardAccountMenu mobile-only class="lg:hidden" /></template>
       </UDashboardNavbar>
     </template>
 
@@ -20,12 +20,12 @@
           <div class="min-w-0 flex-1" :class="editingRow === 'name' ? 'space-y-3.5' : ''">
             <div class="flex items-start justify-between gap-4">
               <div><h3 class="profile-label">Display name</h3><p v-if="editingRow !== 'name'" class="profile-value">{{ sessionData?.user?.name || 'Not set' }}</p></div>
-              <button v-if="editingRow === 'name'" type="button" class="account-action" @click="cancelEdit">Cancel</button>
+              <UButton v-if="editingRow === 'name'" variant="link" color="neutral" @click="cancelEdit">Cancel</UButton>
             </div>
-            <UInput v-if="editingRow === 'name'" v-model="nameInput" class="max-w-md" size="xl" autofocus @input="nameTouched = true" @keydown.enter="saveNameAndClose" />
+            <UInput v-if="editingRow === 'name'" v-model="nameInput" size="xl" autofocus @input="nameTouched = true" @keydown.enter="saveNameAndClose" />
             <UButton v-if="editingRow === 'name'" size="sm" :disabled="!nameDirty" :loading="nameSaving" @click="saveNameAndClose">Save</UButton>
           </div>
-          <button v-if="editingRow !== 'name'" type="button" class="account-action" @click="editingRow = 'name'">Edit</button>
+          <UButton v-if="editingRow !== 'name'" variant="link" color="neutral" @click="editingRow = 'name'">Edit</UButton>
         </section>
 
         <section class="profile-row" :class="rowTone('email')">
@@ -35,20 +35,20 @@
         <section class="profile-row items-start" :class="rowTone('phone')">
           <div class="min-w-0 flex-1 space-y-3">
             <div><h3 class="profile-label">Phone number</h3><p v-if="editingRow !== 'phone'" class="profile-value">{{ sessionData?.user?.phoneNumber || 'Not set' }}</p><p v-if="editingRow !== 'phone'" class="profile-meta" :class="sessionData?.user?.phoneNumberVerified ? 'text-success' : 'text-warning'"><span class="size-1.5 rounded-full bg-current" />{{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}</p></div>
-            <UInput v-if="editingRow === 'phone'" v-model="phoneInput" class="max-w-md" size="xl" placeholder="+1234567890" autofocus @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
-            <div v-if="editingRow === 'phone'" class="flex items-center gap-3"><UButton size="sm" :disabled="!phoneDirty || !phoneInput.trim()" :loading="phoneSaving" @click="requestPhoneVerify">Verify & Save</UButton><button type="button" class="account-action" @click="cancelEdit">Cancel</button></div>
+            <UInput v-if="editingRow === 'phone'" v-model="phoneInput" size="xl" placeholder="+1234567890" autofocus @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
+            <div v-if="editingRow === 'phone'" class="flex items-center gap-3"><UButton size="sm" :disabled="!phoneDirty || !phoneInput.trim()" :loading="phoneSaving" @click="requestPhoneVerify">Verify & Save</UButton><UButton variant="link" color="neutral" @click="cancelEdit">Cancel</UButton></div>
           </div>
-          <button v-if="editingRow !== 'phone'" type="button" class="account-action" @click="editingRow = 'phone'">Edit</button>
+          <UButton v-if="editingRow !== 'phone'" variant="link" color="neutral" @click="editingRow = 'phone'">Edit</UButton>
         </section>
 
         <section class="profile-row" :class="rowTone('user-id')">
           <div class="min-w-0"><h3 class="profile-label">User ID</h3><p class="profile-value font-mono">{{ sessionData?.user?.id }}</p></div>
-          <button type="button" class="account-action" @click="copyUserId">Copy</button>
+          <UButton variant="link" color="neutral" @click="copyUserId">Copy</UButton>
         </section>
 
         <section class="profile-row" :class="rowTone('delete')">
           <div><h3 class="profile-label text-error">Delete account</h3><p class="profile-value whitespace-normal">Removes your account, organization, site, locations and menu data.</p></div>
-          <button type="button" class="account-action text-error" @click="deleteModalOpen = true">Delete</button>
+          <UButton variant="link" color="error" @click="deleteModalOpen = true">Delete</UButton>
         </section>
       </div>
     </template>

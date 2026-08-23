@@ -1,15 +1,6 @@
 <template>
-  <UDashboardPanel id="org-settings-chatgpt">
-    <template #header>
-      <UDashboardNavbar title="ChatGPT">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="max-w-4xl space-y-8">
+  <OrganizationSettingsShell detail-title="ChatGPT">
+    <div class="max-w-4xl space-y-8">
         <section class="space-y-2">
           <p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">ChatGPT setup</p>
           <h1 class="text-2xl font-semibold text-highlighted">Connect KrabiClaw to ChatGPT</h1>
@@ -58,12 +49,13 @@
             </div>
           </div>
         </UCard>
-      </div>
-    </template>
-  </UDashboardPanel>
+    </div>
+  </OrganizationSettingsShell>
 </template>
 
 <script setup lang="ts">
+import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
+
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'ChatGPT Setup | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 

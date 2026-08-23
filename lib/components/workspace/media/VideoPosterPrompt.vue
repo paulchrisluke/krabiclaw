@@ -15,14 +15,14 @@
         </p>
         <p v-if="videoName" class="mt-3 truncate text-xs text-muted">Video: {{ videoName }}</p>
         <div class="mt-6 flex flex-wrap gap-2">
-          <UButton icon="i-lucide-image" :loading="uploading" :disabled="uploading" @click="posterInput?.click()">
+          <UButton icon="i-lucide-image" :loading="uploading" :disabled="uploading" @click="posterInput?.inputRef?.click()">
             Choose poster image
           </UButton>
           <UButton v-if="allowSkip" color="neutral" variant="soft" :disabled="uploading" @click="emit('submit', null)">
             Skip
           </UButton>
         </div>
-        <input ref="posterInput" type="file" accept="image/*" class="hidden" @change="onPosterSelect" />
+        <UInput ref="posterInput" type="file" accept="image/*" class="hidden" @change="onPosterSelect" />
       </div>
     </template>
   </UModal>
@@ -43,11 +43,11 @@ const emit = defineEmits<{
   submit: [poster: File | null]
 }>()
 
-const posterInput = ref<HTMLInputElement | null>(null)
+const posterInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 
 watch(() => props.open, (isOpen) => {
-  if (!isOpen && posterInput.value) {
-    posterInput.value.value = ''
+  if (!isOpen && posterInput.value?.inputRef) {
+    posterInput.value.inputRef.value = ''
   }
 })
 

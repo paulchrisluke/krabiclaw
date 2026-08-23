@@ -176,7 +176,7 @@
               variant="ghost"
               size="xs"
               :disabled="isLoading || isUploading || !siteId || isBlocked || setupMode"
-              @click="fileInputRef?.click()"
+              @click="fileInputRef?.inputRef?.click()"
             />
           </UTooltip>
           <span v-if="isUploading" class="text-xs text-muted">Extracting menu…</span>
@@ -188,13 +188,13 @@
         </template>
       </ChowBotConversation>
 
-      <input
+      <UInput
         ref="fileInputRef"
         type="file"
         class="hidden"
         accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,.txt"
         @change="handleFileInput"
-      />
+       />
     </div>
   </Transition>
 </template>
@@ -230,7 +230,7 @@ watch(draftMessage, (text: string | null) => {
   input.value = text
   draftMessage.value = null
 })
-const fileInputRef = ref<HTMLInputElement | null>(null)
+const fileInputRef = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const pendingFile = ref<File | null>(null)
 const pendingText = ref<{ name: string; content: string } | null>(null)
 const isUploading = ref(false)
@@ -511,7 +511,7 @@ const onDrop = (e: DragEvent) => {
 const handleFileInput = (e: Event) => {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (file) stageFile(file)
-  if (fileInputRef.value) fileInputRef.value.value = ''
+  if (fileInputRef.value?.inputRef) fileInputRef.value.inputRef.value = ''
 }
 
 const stageFile = (file: File) => {

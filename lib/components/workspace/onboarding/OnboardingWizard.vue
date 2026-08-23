@@ -156,31 +156,23 @@
                 </div>
               </div>
               <div v-if="messages[index]?.choiceCard" class="grid gap-2">
-                <button
+                <UButton
                   v-for="choice in messages[index]?.choiceCard?.choices"
                   :key="choice.action"
-                  type="button"
-                  :class="[
-                    'flex w-full items-center gap-3 rounded-lg border bg-elevated px-3 py-3 text-left transition-colors duration-150 ease-out hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none',
-                    selectedChoiceAction === choice.action || (isPastMessage(index) && isSelectedChoice(messages[index]!, choice)) ? 'border-primary bg-primary/10 text-highlighted shadow-sm' : 'border-default',
-                  ]"
+                  block
+                  :color="choice.primary ? 'primary' : 'neutral'"
+                  :variant="isSelectedChoice(messages[index]!, choice) ? 'soft' : choice.ghost ? 'ghost' : choice.primary ? 'solid' : 'outline'"
+                  :aria-pressed="isSelectedChoice(messages[index]!, choice)"
                   :disabled="importing || Boolean(selectedChoiceAction)"
                   @click="selectChoice(choice, index)"
                 >
-                  <span
-                    :class="[
-                      'flex size-9 shrink-0 items-center justify-center rounded-lg border bg-default text-primary transition-colors duration-150',
-                      selectedChoiceAction === choice.action || (isPastMessage(index) && isSelectedChoice(messages[index]!, choice)) ? 'border-primary bg-primary/10' : 'border-default',
-                    ]"
-                  >
-                    <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
-                  </span>
+                  <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
                   <span class="min-w-0 flex-1">
                     <span class="block text-[13px] font-semibold leading-5 text-highlighted">{{ choice.label }}</span>
                     <span v-if="choice.sub" class="mt-0.5 block text-[12px] leading-5 text-muted">{{ choice.sub }}</span>
                   </span>
                   <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
-                </button>
+                </UButton>
               </div>
               <div v-if="messages[index]?.detailsCard || messages[index]?.hoursCard || messages[index]?.brandDraftCard" class="onboarding-step-widget">
                 <IntakeDetailsCard
@@ -214,10 +206,11 @@
                   @brand-color-change="queueBrandColorSave"
                 />
               </div>
-              <button
+              <UButton
                 v-if="messages[index]?.draftReadyCard"
-                type="button"
-                class="block w-full overflow-hidden rounded-xl border border-default bg-elevated text-left shadow-sm transition-colors duration-150 ease-out hover:border-primary"
+                block
+                color="neutral"
+                variant="outline"
                 @click="openDraftPreview"
               >
                 <div
@@ -242,7 +235,7 @@
                   </div>
                   <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
                 </div>
-              </button>
+              </UButton>
           </div>
         </div>
         <UChatMessage
@@ -289,7 +282,7 @@
         >
           <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
           <span>{{ importError }}</span>
-          <button class="ml-auto shrink-0 underline underline-offset-2" @click="retryImport">Try again</button>
+          <UButton size="xs" variant="link" color="error" @click="retryImport">Try again</UButton>
         </div>
       </template>
       </ChowBotConversation>

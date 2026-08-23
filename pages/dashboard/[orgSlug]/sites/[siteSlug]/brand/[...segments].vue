@@ -1,5 +1,5 @@
 <template>
-  <SiteSettingsPage />
+  <SiteSettingsPage surface="brand" />
 </template>
 
 <script setup lang="ts">
