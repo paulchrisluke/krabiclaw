@@ -6,7 +6,7 @@ import { loadSettingsPayload } from '~/server/utils/site-settings'
 import { listTenantPages } from '~/server/utils/tenant-pages'
 import { listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getLinksPage } from '~/server/utils/site-links'
-import { generatedDashboardOgUrl } from '~/server/utils/dashboard-context'
+import { generatedDashboardPreviewUrl } from '~/server/utils/dashboard-context'
 
 export interface DashboardHomeLocation {
   id: string
@@ -22,7 +22,7 @@ export interface DashboardHomeLocation {
   latitude: number | null
   longitude: number | null
   map_embed_url: string | null
-  og_image_url: string
+  preview_image_url: string
 }
 
 export interface DashboardHomeEvent {
@@ -114,7 +114,7 @@ export async function getDashboardHomeData(
       latitude: number | null; longitude: number | null
       vertical: string | null; theme_id: string | null; brand_name: string | null
       logo_url: string | null; favicon_url: string | null; brand_color: string | null
-      og_background_url: string | null; seo_title: string | null
+      hero_image_url: string | null; seo_title: string | null
       seo_description: string | null; short_description: string | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
@@ -125,13 +125,13 @@ export async function getDashboardHomeData(
              COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
              json_extract(s.settings, '$.favicon_url') AS favicon_url,
              (SELECT value FROM site_config WHERE organization_id = s.organization_id AND site_id = s.id AND key = 'brand_color' LIMIT 1) AS brand_color,
-             ma_og.public_url AS og_background_url
+             ma_hero.public_url AS hero_image_url
       FROM business_locations bl
       JOIN sites s ON s.id = bl.site_id AND s.organization_id = bl.organization_id
       LEFT JOIN media_assets ma_logo ON ma_logo.id = s.logo_asset_id
         AND ma_logo.organization_id = s.organization_id AND ma_logo.site_id = s.id AND ma_logo.status = 'active'
-      LEFT JOIN media_assets ma_og ON ma_og.id = bl.og_image_asset_id
-        AND ma_og.organization_id = bl.organization_id AND ma_og.site_id = bl.site_id AND ma_og.status = 'active'
+      LEFT JOIN media_assets ma_hero ON ma_hero.id = bl.hero_media_asset_id
+        AND ma_hero.organization_id = bl.organization_id AND ma_hero.site_id = bl.site_id AND ma_hero.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
@@ -177,7 +177,7 @@ export async function getDashboardHomeData(
         is_primary: Boolean(l.is_primary),
         address,
         map_embed_url: calculateMapEmbedUrl({ ...l, address: address?.addressLines?.[0] ?? null }),
-        og_image_url: generatedDashboardOgUrl(principal.ogOrigin, l, {
+        preview_image_url: generatedDashboardPreviewUrl(principal.ogOrigin, l, {
           title: l.seo_title?.trim() || `${l.title} | Locations`,
           description: l.seo_description || l.short_description,
           location: l.title,

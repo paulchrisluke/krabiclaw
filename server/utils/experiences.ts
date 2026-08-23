@@ -6,7 +6,6 @@ import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
-import { validateMediaAsset } from '~/server/utils/location-management'
 import {
   buildReplaceExperienceMediaQueries,
   hydrateMediaAssetsForExperiences,
@@ -56,12 +55,8 @@ export interface Experience {
   seo_description: string | null
   canonical_url: string | null
   robots: string | null
-  og_image_asset_id: string | null
   created_at: string
   updated_at: string
-  // Only present on the public bootstrap payload (resolved via a media_assets join) —
-  // absent on raw rows from create/update/CMS/MCP paths, which only have og_image_asset_id.
-  og_image_public_url?: string | null
   // Only present once attachAvailabilitySummaries has run (public list/detail/bootstrap
   // responses) — absent on raw rows from create/update/CMS/MCP paths.
   availability_state?: AvailabilityState
@@ -103,7 +98,6 @@ interface ExperienceRow {
   seo_description: string | null
   canonical_url: string | null
   robots: string | null
-  og_image_asset_id: string | null
   created_at: string
   updated_at: string
 }
@@ -150,7 +144,7 @@ const SELECT = `
          e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
-         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.og_image_asset_id, e.created_at, e.updated_at
+         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
   FROM experiences e
 `
 
@@ -261,7 +255,6 @@ export interface CreateExperienceInput {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
-  og_image_asset_id?: string | null
 }
 
 function assertExperienceStatus(value: unknown, fieldName: string): ExperienceStatus {
@@ -385,7 +378,6 @@ export async function createExperience(
   assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
-  await validateMediaAsset(db, organizationId, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
   const mediaRefs = input.media ?? []
   const media = input.media !== undefined
     ? await hydrateMediaAssetRefs(db, {
@@ -414,8 +406,8 @@ export async function createExperience(
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
         price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots,
         available_note, highlights, included_items, what_to_bring, meeting_point, status, sort_order, featured, featured_sort_order,
-        seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        seo_title, seo_description, canonical_url, robots, created_at, updated_at, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       params: [
         id, organizationId, siteId,
         input.location_id,
@@ -445,7 +437,6 @@ export async function createExperience(
         input.seo_description ?? null,
         input.canonical_url ?? null,
         input.robots ?? null,
-        input.og_image_asset_id ?? null,
         now, now, userId,
       ],
     },
@@ -496,9 +487,6 @@ export async function updateExperience(
   assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
   const owner = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
   if (!owner) return null
-  if (input.og_image_asset_id !== undefined) {
-    await validateMediaAsset(db, owner.organization_id, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
-  }
   const media = input.media !== undefined
     ? await hydrateMediaAssetRefs(db, {
       organizationId: owner.organization_id,
@@ -563,7 +551,6 @@ export async function updateExperience(
   if (input.seo_description !== undefined) { sets.push('seo_description = ?'); params.push(input.seo_description ?? null) }
   if (input.canonical_url !== undefined) { sets.push('canonical_url = ?'); params.push(input.canonical_url ?? null) }
   if (input.robots !== undefined) { sets.push('robots = ?'); params.push(input.robots ?? null) }
-  if (input.og_image_asset_id !== undefined) { sets.push('og_image_asset_id = ?'); params.push(input.og_image_asset_id ?? null) }
 
   if (sets.length === 0) {
     if (media) {

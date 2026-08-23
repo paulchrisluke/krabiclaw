@@ -25,8 +25,7 @@ export interface BlogPost {
   visibility?: 'public' | 'unlisted'
   tags?: string[]
   seo_title?: string | null
-  social_image_asset_id?: string | null
-  social_image?: { public_url?: string | null; thumbnail_url?: string | null } | null
+  primary_image?: { public_url?: string | null; thumbnail_url?: string | null; kind?: string | null } | null
   featured_image?: { public_url?: string | null; kind?: string | null } | null
   edit_url?: string | null
   content_document?: {
@@ -87,7 +86,6 @@ export interface PlatformBlogCreateInput {
   hide_from_nav?: boolean | number | null
   featured_order?: number | null
   visibility?: 'public' | 'unlisted'
-  social_image_asset_id?: string | null
   site_author_id?: string | null
 }
 
@@ -109,7 +107,6 @@ export interface PlatformBlogUpdateInput {
   hide_from_nav?: boolean | number | null
   featured_order?: number | null
   visibility?: 'public' | 'unlisted'
-  social_image_asset_id?: string | null
   slug?: string | null
   redirect_old_slug?: boolean
   reset_slug_override?: boolean

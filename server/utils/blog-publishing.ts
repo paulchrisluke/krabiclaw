@@ -113,22 +113,19 @@ export async function createBlogRedirect(db: D1Database, postId: string, siteId:
   }
 }
 
-export async function resolveBlogSocialImage(db: DbClient, input: {
-  siteId: string | null
-  explicitAssetId?: string | null
-  legacyAssetId?: string | null
+export async function resolveBlogPrimaryImage(db: DbClient, input: {
+  featuredAssetId?: string | null
   blocks?: ContentBlockSnapshot[] | null
 }) {
   const firstImage = input.blocks?.find(block => block.type === 'image' && block.data.status !== 'inactive')
   const firstImageId = typeof firstImage?.data.asset_id === 'string' ? firstImage.data.asset_id : null
-  let siteDefaultId: string | null = null
-  if (input.siteId) {
-    siteDefaultId = (await queryFirst<{ og_image_asset_id: string | null } | null>(db, 'SELECT og_image_asset_id FROM sites WHERE id = ? LIMIT 1', [input.siteId]))?.og_image_asset_id ?? null
-  }
-  const assetId = input.explicitAssetId || firstImageId || input.legacyAssetId || siteDefaultId
-  if (!assetId) return null
-  return await queryFirst<{ asset_id: string; public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null>(db, `
-    SELECT id AS asset_id, public_url, thumbnail_url, width, height
+  const resolveAsset = async (assetId: string) => await queryFirst<{ asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null>(db, `
+    SELECT id AS asset_id, public_url, thumbnail_url, kind, width, height
       FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1
   `, [assetId])
+  if (input.featuredAssetId) {
+    const featured = await resolveAsset(input.featuredAssetId)
+    if (featured) return featured
+  }
+  return firstImageId ? await resolveAsset(firstImageId) : null
 }

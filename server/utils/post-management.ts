@@ -60,7 +60,6 @@ export interface Post {
   image_asset_id: string | null
   seo_title: string | null
   seo_description: string | null
-  og_image_asset_id: string | null
   /** Resolved cover-media URL injected by joins, not a DB column. */
   public_url?: string | null
   thumbnail_url?: string | null
@@ -139,7 +138,6 @@ interface PublishedPostRow {
   image_asset_id: string | null
   seo_title: string | null
   seo_description: string | null
-  og_image_asset_id: string | null
   cta_type: string | null
   cta_url: string | null
   event_title: string | null
@@ -529,7 +527,7 @@ export async function createPost(
   data: {
     title?: string; body: string; image_asset_id?: string | null; scheduled_for?: string
     location_id?: string; post_type?: string
-    slug?: string | null; seo_title?: string | null; seo_description?: string | null; og_image_asset_id?: string | null
+    slug?: string | null; seo_title?: string | null; seo_description?: string | null
     cta_type?: string; cta_url?: string
     event_title?: string; event_start?: string; event_end?: string
     offer_coupon?: string; offer_terms?: string
@@ -550,10 +548,7 @@ export async function createPost(
   const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
   const galleryCoverId = galleryMedia.find(item => item.role === 'cover')?.media_asset_id ?? null
   const imageAssetId = cleanString(data.image_asset_id) ?? galleryCoverId
-  const ogImageAssetId = cleanString(data.og_image_asset_id) ?? imageAssetId
-
   if (imageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, imageAssetId, 'image_asset_id')
-  if (ogImageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, ogImageAssetId, 'og_image_asset_id')
   for (const item of galleryMedia) await requireActiveMediaAsset(db, organizationId, siteId, item.media_asset_id, 'gallery media asset')
 
   // Retry slug allocation on unique constraint conflict (race condition)
@@ -562,16 +557,16 @@ export async function createPost(
       await executeBatch(db, [{
         query: `
         INSERT INTO posts (id, organization_id, site_id, location_id, slug, post_type, title, body, image_asset_id,
-          seo_title, seo_description, og_image_asset_id,
+          seo_title, seo_description,
           cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
           status, scheduled_for, published_at, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
         params: [
           id, organizationId, siteId,
           data.location_id ?? null, slug, data.post_type ?? 'standard',
           title, body, imageAssetId,
-          cleanString(data.seo_title), cleanString(data.seo_description), ogImageAssetId,
+          cleanString(data.seo_title), cleanString(data.seo_description),
           data.cta_type ?? null, data.cta_url ?? null,
           data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
           data.offer_coupon ?? null, data.offer_terms ?? null,
@@ -632,7 +627,7 @@ export async function updatePost(
   data: {
     title?: string; body?: string; image_asset_id?: string | null; scheduled_for?: string | null
     location_id?: string | null; post_type?: string
-    slug?: string | null; seo_title?: string | null; seo_description?: string | null; og_image_asset_id?: string | null
+    slug?: string | null; seo_title?: string | null; seo_description?: string | null
     cta_type?: string | null; cta_url?: string | null
     event_title?: string | null; event_start?: string | null; event_end?: string | null
     offer_coupon?: string | null; offer_terms?: string | null
@@ -654,12 +649,9 @@ export async function updatePost(
   const sets: string[] = ['updated_at = ?']
   const params: SqlBindValue[] = [now]
   const imageAssetId = data.image_asset_id !== undefined ? cleanString(data.image_asset_id) : undefined
-  const ogImageAssetId = data.og_image_asset_id !== undefined ? cleanString(data.og_image_asset_id) : undefined
   const imageAssetChanged = imageAssetId !== undefined && imageAssetId !== existing.image_asset_id
-  const ogImageAssetChanged = ogImageAssetId !== undefined && ogImageAssetId !== existing.og_image_asset_id
 
   if (imageAssetChanged && imageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, imageAssetId, 'image_asset_id')
-  if (ogImageAssetChanged && ogImageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, ogImageAssetId, 'og_image_asset_id')
 
   if (data.slug !== undefined || !existing.slug) {
     const nextSlug = await allocatePostSlug(
@@ -676,7 +668,7 @@ export async function updatePost(
     ['title', data.title], ['body', data.body], ['image_asset_id', imageAssetId],
     ['scheduled_for', data.scheduled_for], ['location_id', data.location_id],
     ['post_type', data.post_type], ['seo_title', data.seo_title], ['seo_description', data.seo_description],
-    ['og_image_asset_id', ogImageAssetId], ['cta_type', data.cta_type], ['cta_url', data.cta_url],
+    ['cta_type', data.cta_type], ['cta_url', data.cta_url],
     ['event_title', data.event_title], ['event_start', data.event_start], ['event_end', data.event_end],
     ['offer_coupon', data.offer_coupon], ['offer_terms', data.offer_terms],
   ]
@@ -685,7 +677,7 @@ export async function updatePost(
   }
 
   const hasContentChange = data.title !== undefined || data.body !== undefined || data.image_asset_id !== undefined ||
-    data.slug !== undefined || data.seo_title !== undefined || data.seo_description !== undefined || data.og_image_asset_id !== undefined ||
+    data.slug !== undefined || data.seo_title !== undefined || data.seo_description !== undefined ||
     data.gallery_media !== undefined || data.post_type !== undefined || data.cta_type !== undefined || data.cta_url !== undefined ||
     data.event_title !== undefined || data.event_start !== undefined || data.event_end !== undefined ||
     data.offer_coupon !== undefined || data.offer_terms !== undefined
@@ -829,7 +821,7 @@ export async function getPublishedPosts(
   let query = `
     SELECT p.id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
            p.slug, p.post_type, p.title, p.body, p.image_asset_id,
-           p.seo_title, p.seo_description, p.og_image_asset_id,
+           p.seo_title, p.seo_description,
            p.cta_type, p.cta_url, p.event_title, p.event_start, p.event_end,
            p.offer_coupon, p.offer_terms, p.published_at, p.created_at, p.updated_at,
            ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
@@ -865,7 +857,7 @@ export async function getPublishedPostBySlug(
     `
     SELECT p.id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
            p.slug, p.post_type, p.title, p.body, p.image_asset_id,
-           p.seo_title, p.seo_description, p.og_image_asset_id,
+           p.seo_title, p.seo_description,
            p.cta_type, p.cta_url, p.event_title, p.event_start, p.event_end,
            p.offer_coupon, p.offer_terms, p.published_at, p.created_at, p.updated_at,
            ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
@@ -888,7 +880,6 @@ export async function getPublishedPostBySlug(
     ...summary,
     seo_title: row.seo_title,
     seo_description: row.seo_description,
-    og_image_asset_id: row.og_image_asset_id,
     cover: summary.media[0] ?? null,
   }
 }

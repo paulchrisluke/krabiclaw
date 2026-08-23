@@ -500,8 +500,8 @@ async function copyExperiences(
 
     statements.push({
       query: `
-        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, source)
-        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, canonical_url, robots, og_image_asset_id, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, source
+        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, canonical_url, robots, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, source)
+        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, canonical_url, robots, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, source
         FROM experiences WHERE id = ?
       `,
       params: [newId, targetLocationId, newSlug, now, exp.id],

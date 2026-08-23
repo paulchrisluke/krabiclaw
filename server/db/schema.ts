@@ -146,6 +146,7 @@ export const business_locations = sqliteTable("business_locations", {
 	google_place_id: text(),
 	google_review_url: text(),
 	hero_media_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
+	retired_share_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
@@ -155,7 +156,6 @@ export const business_locations = sqliteTable("business_locations", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts).
 	// NULL means "inherit the parent site's effective feature set" — never the vertical defaults
@@ -713,7 +713,7 @@ export const menu_items = sqliteTable("menu_items", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 }, (table) => [
 	check("menu_items_source_check", sql`source IN ('manual', 'template')`),
 	index("menu_items_menu_id_idx").on(table.menu_id),
@@ -1119,7 +1119,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	author_id: text().references(() => user.id, { onDelete: "set null" } ), // CMS creator identity (Better Auth user), not the displayed byline
 	site_author_id: text().references(() => site_authors.id, { onDelete: "set null" } ), // displayed byline, tenant-scoped
 	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	social_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	published_at: text(),
 	first_published_at: text(),
 	scheduled_for: text(),
@@ -1235,7 +1235,7 @@ export const posts = sqliteTable("posts", {
 	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	seo_title: text(),
 	seo_description: text(),
-	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	cta_type: text(),
 	cta_url: text(),
 	event_title: text(),
@@ -2011,6 +2011,7 @@ export const sites = sqliteTable("sites", {
 	brand_description: text(),
 	logo_url: text(),
 	logo_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
+	retired_share_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	contact_email: text(),
 	contact_phone: text(),
 	source_locale: text().default("en").notNull(),
@@ -2027,7 +2028,6 @@ export const sites = sqliteTable("sites", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_by: text(),
-	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
@@ -2272,7 +2272,7 @@ export const experiences = sqliteTable("experiences", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),

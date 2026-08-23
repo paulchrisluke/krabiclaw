@@ -34,7 +34,7 @@ interface DashboardSiteSummary {
   onboarding_status: string | null
   plan: string | null
   logo_url: string | null
-  og_image_url: string
+  preview_image_url: string
 }
 
 interface DashboardLocation {
@@ -45,7 +45,7 @@ interface DashboardLocation {
   status: string
   city: string | null
   address: { addressLines?: string[] } | null
-  og_image_url: string
+  preview_image_url: string
   feature_overrides: string | null
 }
 
@@ -86,7 +86,7 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   && typeof value.title === 'string'
   && typeof value.is_primary === 'boolean'
   && typeof value.status === 'string'
-  && typeof value.og_image_url === 'string'
+  && typeof value.preview_image_url === 'string'
 
 const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
   isRecord(value)
@@ -100,7 +100,7 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     && (site.brand_name === null || typeof site.brand_name === 'string')
     && (site.subdomain === null || typeof site.subdomain === 'string')
     && (site.logo_url === null || typeof site.logo_url === 'string')
-    && typeof site.og_image_url === 'string')
+    && typeof site.preview_image_url === 'string')
   && Array.isArray(value.locations)
   && value.locations.every(isDashboardLocation)
   && typeof value.managedServiceEnabled === 'boolean'

@@ -31,17 +31,12 @@ export function appendPublicShellQueries(
                      bl.foodpanda_url, bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
                      bl.canonical_url, bl.robots, ma.public_url AS hero_public_url,
-                     ma.thumbnail_url AS hero_thumbnail_url, ma.kind AS hero_kind,
-                     ma_og.public_url AS og_image_public_url
+                     ma.thumbnail_url AS hero_thumbnail_url, ma.kind AS hero_kind
                 FROM business_locations bl
                 LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id
                   AND ma.status = 'active'
                   AND ma.organization_id = bl.organization_id
                   AND ma.site_id = bl.site_id
-                LEFT JOIN media_assets ma_og ON bl.og_image_asset_id = ma_og.id
-                  AND ma_og.status = 'active'
-                  AND ma_og.organization_id = bl.organization_id
-                  AND ma_og.site_id = bl.site_id
                WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
                ORDER BY bl.is_primary DESC, bl.title ASC`, [organizationId, siteId]),
     config: push(`SELECT key, value
@@ -113,7 +108,6 @@ export function buildPublicShellPayload(
       seo_description: location.seo_description ?? null,
       canonical_url: location.canonical_url ?? null,
       robots: location.robots ?? null,
-      og_image_public_url: location.og_image_public_url ?? null,
     }
   })
   const configRows = (results[indexes.config]?.results ?? []) as Array<{ key: string, value: string }>
@@ -127,7 +121,7 @@ export function buildPublicShellPayload(
   if (site.brand_description) config.brand_description = site.brand_description
   if (site.logo_url) config.logo_url = site.logo_url
   if (site.favicon_url) config.favicon_url = site.favicon_url
-  if (site.og_image_url) config.og_image_url = site.og_image_url
+  if (site.hero_image_url) config.hero_image_url = site.hero_image_url
   if (site.seo_title) config.seo_title = site.seo_title
   if (site.seo_description) config.seo_description = site.seo_description
   if (site.canonical_url) config.canonical_url = site.canonical_url

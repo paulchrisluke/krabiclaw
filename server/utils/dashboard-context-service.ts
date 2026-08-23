@@ -4,7 +4,7 @@ import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   getDashboardContext,
-  requiredDashboardOgOrigin,
+  requiredDashboardPreviewOrigin,
   listOrganizationSites,
   listDashboardLocations,
 } from '~/server/utils/dashboard-context'
@@ -56,7 +56,7 @@ export async function loadDashboardContext(
     ? null
     : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
   const principal = { memberId: organization.memberId, role: organization.role, teamIds }
-  const ogOrigin = requiredDashboardOgOrigin(cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN)
+  const ogOrigin = requiredDashboardPreviewOrigin(cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN)
   const sites = await listOrganizationSites(db, organization.id, ogOrigin, principal)
   if (!site) {
     return {

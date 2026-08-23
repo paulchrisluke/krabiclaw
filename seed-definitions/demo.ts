@@ -1369,8 +1369,7 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   public_url, brand_name, brand_description,
   status, plan, onboarding_status, primary_location_id,
-  contact_email, default_currency, vertical, content_source, media_source,
-  og_image_asset_id
+  contact_email, default_currency, vertical, content_source, media_source
 ) VALUES (
   ${sqlValue(compiledDemoSeed.identity.siteId)},
   ${sqlValue(compiledDemoSeed.identity.organizationId)},
@@ -1389,8 +1388,7 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(compiledDemoSeed.site.defaultCurrency)},
   ${sqlValue(compiledDemoSeed.site.vertical)},
   ${sqlValue(compiledDemoSeed.site.contentSource)},
-  ${sqlValue(compiledDemoSeed.site.mediaSource)},
-  NULL
+  ${sqlValue(compiledDemoSeed.site.mediaSource)}
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -1462,7 +1460,7 @@ export function renderCompiledDemoMediaBlock(): string {
 
   const heroUpdates = compiledDemoSeed.locations
     .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
-    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)}, og_image_asset_id = ${sqlValue(l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
+    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
     .join('\n')
 
   return `-- BEGIN GENERATED: demo_media
@@ -1494,7 +1492,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET og_image_asset_id = 'media-demo-hero', logo_asset_id = ${sqlValue(compiledDemoSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledDemoSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
 -- END GENERATED: demo_media`
 }
 

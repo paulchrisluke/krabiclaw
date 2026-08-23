@@ -94,7 +94,6 @@ function fakeExperience(index: number): Experience {
     seo_description: null,
     canonical_url: null,
     robots: null,
-    og_image_asset_id: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   }

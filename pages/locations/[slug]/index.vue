@@ -537,8 +537,8 @@ useTenantSocialMetadata(() => ({
     faviconUrl: pageConfig.value?.favicon_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: location.value?.og_image_public_url
-    ? { url: location.value.og_image_public_url }
+  heroImage: location.value?.hero_public_url
+    ? { url: location.value.hero_public_url }
     : null,
 }))
 

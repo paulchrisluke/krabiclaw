@@ -666,7 +666,7 @@ INSERT OR REPLACE INTO sites (
   public_url, brand_name, brand_description,
   status, plan, onboarding_status, primary_location_id,
   contact_email, contact_phone, default_currency, vertical, content_source, media_source,
-  logo_asset_id, og_image_asset_id
+  logo_asset_id
 ) VALUES (
   ${sqlValue(identity.siteId)},
   ${sqlValue(identity.organizationId)},
@@ -687,7 +687,6 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.vertical)},
   ${sqlValue(site.contentSource)},
   ${sqlValue(site.mediaSource)},
-  NULL,
   NULL
 );
 
@@ -765,7 +764,7 @@ export function renderKikuzukiMediaBlock(): string {
 
   const heroUpdates = compiledKikuzukiSeed.locations
     .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
-    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)}, og_image_asset_id = ${sqlValue(l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
+    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
     .join('\n')
 
   return `-- BEGIN GENERATED: kikuzuki_media
@@ -796,7 +795,7 @@ ${mediaRows};
 
 ${heroUpdates}
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, og_image_asset_id = 'media-kiku-about', primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
+UPDATE sites SET logo_asset_id = ${sqlValue(compiledKikuzukiSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.primaryLocationId)} WHERE id = ${sqlValue(identity.siteId)};
 -- END GENERATED: kikuzuki_media`
 }
 
