@@ -63,9 +63,6 @@ function normalizeFixtureBaseUrl(rawUrl, slug) {
   const url = new URL(rawUrl)
   const environmentAlias = environmentTenantAliasHostname(url.hostname, slug)
   if (environmentAlias) url.hostname = environmentAlias
-  if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
-    url.hostname = `${slug}.localhost`
-  }
   return url.toString().replace(/\/$/, '')
 }
 

@@ -5,6 +5,7 @@ import {
   getContentDocumentById,
   getContentDocumentByOwner,
   getContentEditorSnapshot,
+  getContentEditorSnapshotForDocument,
   prepareContentDocumentBlocksReplacement,
   prepareContentDocumentWithBlocks,
   replaceContentDocumentBlocks,
@@ -442,18 +443,9 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
   if (!row.document_id) return null
   const document = await getContentDocumentByOwner(db, 'tenant_page', row.variant_id)
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
-  const snapshot = await getContentEditorSnapshot(db, 'tenant_page', row.variant_id)
+  const snapshot = await getContentEditorSnapshotForDocument(db, document)
   if (!snapshot) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
-  const identity = await canonicalTenantPageIdentity(db, row, {
-    pageType: row.page_type as TenantPageType,
-    recipe: row.recipe,
-  })
-  const publishedRow: TenantPageVariantRow = {
-    ...row,
-    page_type: identity.pageType,
-    recipe: identity.recipe,
-  }
-  return pageDto(publishedRow, document, snapshot.blocks as TenantPageBlock[])
+  return pageDto(row, document, snapshot.blocks as TenantPageBlock[])
 }
 
 export async function resolvePublishedTenantPageIdentity(

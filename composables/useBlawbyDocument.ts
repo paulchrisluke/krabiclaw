@@ -1,26 +1,6 @@
-import type { BlawbyRouteRecipe, PublicBlawbyRouteData, PublicBlawbyShellData } from '~/types/blawby'
-import { isRecord, publicApiRequest } from '~/utils/api-clients'
-
-export interface BlawbyDocumentPayload {
-  success: true
-  shell: PublicBlawbyShellData
-  route: PublicBlawbyRouteData
-}
-
-export const isBlawbyDocumentPayload = (value: unknown): value is BlawbyDocumentPayload =>
-  isRecord(value)
-  && value.success === true
-  && isRecord(value.shell)
-  && isRecord(value.route)
-  && isRecord(value.shell.identity)
-  && isRecord(value.shell.consultation)
-  && isRecord(value.shell.themeTokens)
-  && Array.isArray(value.shell.offeringLinks)
-  && typeof value.route.recipe === 'string'
-  && Array.isArray(value.route.offerings)
-  && Array.isArray(value.route.qa)
-  && Array.isArray(value.route.reviews)
-  && Array.isArray(value.route.posts)
+import type { BlawbyRouteRecipe } from '~/types/blawby'
+import { publicApiRequest } from '~/utils/api-clients'
+import { isBlawbyDocumentPayload, type BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
 
 export interface BlawbyRouteTarget {
   recipe: BlawbyRouteRecipe
@@ -79,13 +59,11 @@ export async function useBlawbyDocument(
           return await loadPublicDraftBlawbyDocument(requestEvent, draftId, previewToken ?? undefined, recipe)
         }
         if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
-        const [{ cloudflareEnv }, { resolvePublicBlawbyDocumentOrThrow }] = await Promise.all([
-          import('~/server/utils/api-response'),
-          import('~/server/utils/professional-services'),
-        ])
-        const db = cloudflareEnv(requestEvent).db
-        if (!db) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
-        return await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug: normalizedSlug })
+        const { loadPublicBlawbyDocument } = await import('~/server/utils/public-blawby-document')
+        return await loadPublicBlawbyDocument(requestEvent, siteId, recipe, {
+          slug: normalizedSlug,
+          mutateResponseHeaders: false,
+        })
       }
       if (draftId) {
         return await publicApiRequest<BlawbyDocumentPayload>('/api/public/drafts/' + encodeURIComponent(draftId) + '/blawby/document', {

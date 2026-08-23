@@ -21,8 +21,7 @@ function splitBranches(source: string) {
 test('Blawby SSR composables read public data directly instead of self-fetching API routes', () => {
   const file = 'composables/useBlawbyDocument.ts'
   const branches = splitBranches(read(file))
-  assert.match(branches.server, /cloudflareEnv\(requestEvent\)\.db/, `${file} should use Cloudflare db binding directly`)
-  assert.match(branches.server, /resolvePublicBlawbyDocumentOrThrow\(db, siteId/, `${file} should call the combined Blawby document service`)
+  assert.match(branches.server, /loadPublicBlawbyDocument\(requestEvent, siteId/, `${file} should call the canonical Blawby document loader`)
   assert.doesNotMatch(branches.server, /\/api\/public\/sites\//, `${file} must not self-fetch Blawby public APIs during SSR`)
   assert.match(branches.client, /publicApiRequest/, `${file} should use the canonical client request wrapper`)
   assert.match(branches.client, /\/api\/public\/sites\/.*\/blawby\/document/, `${file} should use the combined public Blawby API`)
@@ -30,7 +29,12 @@ test('Blawby SSR composables read public data directly instead of self-fetching 
 
 test('Blawby document API route uses the same combined source of truth as SSR', () => {
   const source = read('server/api/public/sites/[siteId]/blawby/document.get.ts')
-  assert.match(source, /resolvePublicBlawbyDocumentOrThrow\(db, siteId/)
+  const loader = read('server/utils/public-blawby-document.ts')
+  assert.match(source, /loadPublicBlawbyDocument\(event, siteId/)
+  assert.match(source, /finalizeRequestMetrics\(event, 'public-blawby-document'/)
   assert.match(source, /BLAWBY_DOCUMENT_FAILED/)
   assert.doesNotMatch(source, /getPublicBlawbyShellData|getPublicBlawbyRouteData/)
+  assert.match(loader, /cloudflareEnv\(event\)/)
+  assert.match(loader, /resolvePublicBlawbyDocumentOrThrow\(db, siteId/)
+  assert.doesNotMatch(loader, /\$fetch|\/api\/public\/sites\//)
 })
