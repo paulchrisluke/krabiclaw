@@ -1,6 +1,6 @@
 import { HTTPError } from 'nitro';
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { listPageQa } from '~/server/utils/location-qa'
+import { listPageQa, type LocationQaRow } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
@@ -22,11 +22,58 @@ export interface PublicTenantPage {
   updated_at: string
 }
 
+export interface PublicTenantPageOfferingRow {
+  id: string
+  name: string
+  label: string | null
+  summary: string | null
+  short_description: string | null
+  body: string | null
+  slug: string
+  canonical_path: string | null
+  thumbnail_asset_id: string | null
+  hero_image_asset_id: string | null
+  media_asset_ids: string | null
+  thumbnail_url: string | null
+  sort_order: number
+  featured: number
+}
+
+export interface PublicTenantPageHydrationResources {
+  offerings?: Promise<PublicTenantPageOfferingRow[]>
+  qaRows?: Promise<LocationQaRow[]>
+}
+
+export async function listPublicTenantPageOfferingRows(
+  db: DbClient,
+  siteId: string,
+  offeringIds?: readonly string[],
+): Promise<PublicTenantPageOfferingRow[]> {
+  if (offeringIds?.length === 0) return []
+  return await queryAll<PublicTenantPageOfferingRow>(db, `
+    SELECT o.id, o.name, o.label, o.summary, o.short_description, o.body, o.slug,
+           o.canonical_path, o.thumbnail_asset_id, o.hero_image_asset_id,
+           o.media_asset_ids, thumb.public_url AS thumbnail_url,
+           o.sort_order, o.featured
+      FROM offerings o
+      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
+     WHERE o.site_id = ?
+       ${offeringIds ? `AND o.id IN (${offeringIds.map(() => '?').join(',')})` : ''}
+     ORDER BY o.sort_order ASC, o.name ASC
+  `, [siteId, ...(offeringIds ?? [])])
+}
+
 export function selectPublicTenantPageBlocks(blocks: TenantPageBlock[]): TenantPageBlock[] {
   return blocks.filter(block => !(block.type === 'callout' && block.data.type === 'legal_meta'))
 }
 
-async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blocks: TenantPageBlock[]): Promise<TenantPageBlock[]> {
+async function hydrateBlocks(
+  db: DbClient,
+  siteId: string,
+  pagePath: string,
+  blocks: TenantPageBlock[],
+  resources: PublicTenantPageHydrationResources = {},
+): Promise<TenantPageBlock[]> {
   const publicBlocks = selectPublicTenantPageBlocks(blocks)
   const assetIds = new Set<string>()
   const offeringIds = new Set<string>()
@@ -52,14 +99,9 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
     }
   }
   const offerings = offeringIds.size || hasOfferingSource
-    ? await queryAll<{ id: string; name: string; label: string | null; summary: string | null; short_description: string | null; body: string | null; slug: string; canonical_path: string | null; thumbnail_asset_id: string | null; hero_image_asset_id: string | null; media_asset_ids: string | null }>(db, `
-        SELECT id, name, label, summary, short_description, body, slug, canonical_path,
-               thumbnail_asset_id, hero_image_asset_id, media_asset_ids
-          FROM offerings
-         WHERE site_id = ?
-           ${hasOfferingSource ? '' : `AND id IN (${Array.from(offeringIds).map(() => '?').join(',')})`}
-         ORDER BY sort_order ASC, name ASC
-      `, [siteId, ...(hasOfferingSource ? [] : offeringIds)])
+    ? resources.offerings
+      ? (await resources.offerings).filter(offering => hasOfferingSource || offeringIds.has(offering.id))
+      : await listPublicTenantPageOfferingRows(db, siteId, hasOfferingSource ? undefined : [...offeringIds])
     : []
   const locations = locationIds.size
     ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; hero_media_asset_id: string | null }>(db, `
@@ -70,7 +112,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
     : []
   if (locations.length !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
   const [qaRows, reviewRows, postRows] = await Promise.all([
-    hasQaSource ? listPageQa(db, siteId, pagePath, true) : Promise.resolve([]),
+    hasQaSource ? (resources.qaRows ?? listPageQa(db, siteId, pagePath, true)) : Promise.resolve([]),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; featured_image_asset_id: string | null }>(db, `
       SELECT id, title, slug, excerpt, canonical_url, featured_image_asset_id
@@ -212,13 +254,17 @@ export async function getPublicTenantPageForPath(
   db: DbClient,
   siteId: string,
   path: string,
-  options: { locale?: string | null; preview?: boolean } = {},
+  options: {
+    locale?: string | null
+    preview?: boolean
+    hydrationResources?: PublicTenantPageHydrationResources
+  } = {},
 ): Promise<PublicTenantPage | null> {
   const page = options.preview
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
-  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks))
+  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources))
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {

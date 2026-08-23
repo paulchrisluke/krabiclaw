@@ -85,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import type { BlawbyDocumentPayload } from '~/composables/useBlawbyDocument'
+import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
 
 const data = inject<Ref<BlawbyDocumentPayload>>('blawby-document')
 if (!data) throw createError({ statusCode: 500, statusMessage: 'Blawby document context is unavailable' })

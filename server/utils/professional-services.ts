@@ -5,7 +5,13 @@ import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
-import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
+import {
+  getPublicTenantPageForPath,
+  listCanonicalTenantPages,
+  listPublicTenantPageOfferingRows,
+  type PublicTenantPageHydrationResources,
+  type PublicTenantPageOfferingRow,
+} from '~/server/utils/public-tenant-pages'
 import { listPublishedTenantPagePaths } from '~/server/utils/tenant-pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
 import type {
@@ -168,14 +174,10 @@ export async function listPublicOfferingLinks(db: DbClient, siteId: string): Pro
 }
 
 export async function listPublicOfferingSummaries(db: DbClient, siteId: string): Promise<PublicOfferingSummary[]> {
-  const rows = await queryAll<ApiRecord>(db, `
-    SELECT o.id, o.name, o.slug, o.label, o.summary, o.short_description,
-           thumb.public_url AS thumbnail_url, o.canonical_path, o.sort_order, o.featured
-      FROM offerings o
-      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
-     WHERE o.site_id = ?
-     ORDER BY o.sort_order ASC, o.name ASC
-  `, [siteId])
+  return mapPublicOfferingSummaries(await listPublicTenantPageOfferingRows(db, siteId))
+}
+
+function mapPublicOfferingSummaries(rows: PublicTenantPageOfferingRow[]): PublicOfferingSummary[] {
   return rows.map(row => ({
     id: String(row.id),
     name: String(row.name),
@@ -261,8 +263,13 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
   }))
 }
 
-export async function getPublicTenantPageByPath(db: DbClient, siteId: string, path: string): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(db, siteId, path)
+export async function getPublicTenantPageByPath(
+  db: DbClient,
+  siteId: string,
+  path: string,
+  hydrationResources?: PublicTenantPageHydrationResources,
+): Promise<PublicTenantPage | null> {
+  const page = await getPublicTenantPageForPath(db, siteId, path, { hydrationResources })
   if (!page) return null
   return {
     id: page.id,
@@ -570,20 +577,32 @@ export async function getPublicBlawbyRouteData(
   const needsReviews = ['home', 'offering', 'about', 'contact', 'schedule'].includes(recipe)
   const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
   const pagePath = ROUTE_PAGE_PATHS[recipe]
+  const offeringRowsPromise = needsOfferings
+    ? listPublicTenantPageOfferingRows(db, siteId)
+    : Promise.resolve([])
+  const qaRowsPromise = needsQa && pagePath
+    ? listPageQa(db, siteId, pagePath, true)
+    : Promise.resolve([])
 
-  const [page, offerings, offering, qaRows, reviewRows, initialPosts, postRow] = await Promise.all([
-    pagePath ? getPublicTenantPageByPath(db, siteId, pagePath) : Promise.resolve(null),
-    needsOfferings ? listPublicOfferingSummaries(db, siteId) : Promise.resolve([]),
+  const [page, offeringRows, offering, qaRows, reviewRows, initialPosts, postRow] = await Promise.all([
+    pagePath
+      ? getPublicTenantPageByPath(db, siteId, pagePath, {
+          offerings: needsOfferings ? offeringRowsPromise : undefined,
+          qaRows: needsQa ? qaRowsPromise : undefined,
+        })
+      : Promise.resolve(null),
+    offeringRowsPromise,
     recipe === 'offering' && options.slug
       ? getPublicOfferingBySlug(db, siteId, options.slug)
       : Promise.resolve(null),
-    needsQa && pagePath ? listPageQa(db, siteId, pagePath, true) : Promise.resolve([]),
+    qaRowsPromise,
     needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, siteId, postLimit) : Promise.resolve([]),
     recipe === 'article' && options.slug
       ? getPublishedSiteBlogPost(db, siteId, options.slug)
       : Promise.resolve(null),
   ])
+  const offerings = mapPublicOfferingSummaries(offeringRows)
   let posts = initialPosts
   if (recipe === 'article' && postRow) {
     const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])

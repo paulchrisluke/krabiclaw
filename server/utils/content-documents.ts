@@ -649,6 +649,10 @@ export async function renderContentPreview(db: DbClient, documentId: string) {
 export async function getContentEditorSnapshot(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) return null
+  return await getContentEditorSnapshotForDocument(db, document)
+}
+
+export async function getContentEditorSnapshotForDocument(db: DbClient, document: ContentDocumentRow) {
   const blocks = await listBlocksForDocument(db, document.id)
   return { document, blocks: blocks.map(formatBlockOutline) }
 }
