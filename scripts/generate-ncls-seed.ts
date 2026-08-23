@@ -66,7 +66,6 @@ export function renderNclsFixtureSql(): string {
     ...row,
     primary_location_id: null,
     logo_asset_id: null,
-    og_image_asset_id: null,
   })
 
   const afterCore = [
@@ -92,7 +91,7 @@ DELETE FROM content_documents
  WHERE (owner_type = 'tenant_page' AND owner_id IN (SELECT id FROM tenant_page_variants WHERE site_id = ${sqlValue(nclsFixture.siteId)}))
     OR (owner_type = 'tenant_blog' AND owner_id IN (SELECT id FROM blog_posts WHERE site_id = ${sqlValue(nclsFixture.siteId)}));
 UPDATE sites
-   SET primary_location_id = NULL, logo_asset_id = NULL, og_image_asset_id = NULL
+   SET primary_location_id = NULL, logo_asset_id = NULL
  WHERE id = ${sqlValue(nclsFixture.siteId)} OR subdomain = 'ncls';
 DELETE FROM sites WHERE id = ${sqlValue(nclsFixture.siteId)} OR subdomain = 'ncls';
 DELETE FROM organization WHERE id = ${sqlValue(nclsFixture.organizationId)} OR slug = 'north-carolina-legal-services';
@@ -120,8 +119,7 @@ ${renderRows(table('media_assets'))}
 
 UPDATE sites
    SET primary_location_id = ${sqlValue(site.primary_location_id ?? null)},
-       logo_asset_id = ${sqlValue(site.logo_asset_id ?? null)},
-       og_image_asset_id = ${sqlValue(site.og_image_asset_id ?? null)}
+       logo_asset_id = ${sqlValue(site.logo_asset_id ?? null)}
  WHERE id = ${sqlValue(nclsFixture.siteId)};
 
 ${renderRows(table('tenant_pages'), canonicalTenantPage)}

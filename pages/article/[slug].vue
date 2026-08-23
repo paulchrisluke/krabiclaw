@@ -37,7 +37,7 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.social_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby" />
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.primary_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -146,11 +146,11 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },
-  heroImage: post.value.social_image?.public_url
+  heroImage: post.value.primary_image?.public_url
     ? {
-        url: post.value.social_image.public_url,
-        width: post.value.social_image.width || undefined,
-        height: post.value.social_image.height || undefined,
+        url: post.value.primary_image.public_url,
+        width: post.value.primary_image.width || undefined,
+        height: post.value.primary_image.height || undefined,
       }
     : null,
   robots: resolvedSeo.value.robots,
@@ -165,9 +165,9 @@ useProfessionalServiceSchema(() => ({
   pageUrl: canonicalUrl.value,
   pageTitle: post.value.title,
   pageDescription: resolvedSeo.value.description,
-  imageUrl: post.value.social_image?.public_url || post.value.featured_image?.public_url || null,
-  imageWidth: post.value.social_image?.width || post.value.featured_image?.width || null,
-  imageHeight: post.value.social_image?.height || post.value.featured_image?.height || null,
+  imageUrl: post.value.primary_image?.public_url || post.value.featured_image?.public_url || null,
+  imageWidth: post.value.primary_image?.width || post.value.featured_image?.width || null,
+  imageHeight: post.value.primary_image?.height || post.value.featured_image?.height || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Blog', url: blogUrl.value },

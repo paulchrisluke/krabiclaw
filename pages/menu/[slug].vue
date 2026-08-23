@@ -283,7 +283,6 @@ interface MenuItemType {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
-  og_image_public_url?: string | null
   media?: MenuItem['media']
 }
 
@@ -505,7 +504,8 @@ const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name
 const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
 useTenantSocialMetadata(() => {
-  const heroImageUrl = item.value?.og_image_public_url || null
+  const cover = item.value?.media?.[0]
+  const heroImageUrl = cover?.kind === 'video' ? cover.thumbnail_url : cover?.public_url
   return {
     path: item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'),
     title: seoTitle(),

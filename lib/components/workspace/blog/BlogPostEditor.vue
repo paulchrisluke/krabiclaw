@@ -25,7 +25,7 @@
           :author-name="resolvedAuthorName"
           :author-image="post?.author_image || null"
           :site-name="resolvedSiteName"
-          :media-url="resolvedSocialImageUrl"
+          :media-url="resolvedPrimaryMediaUrl"
           :media-kind="resolvedMediaKind"
           :read-minutes="readMinutes"
           :blocks="blocks"
@@ -98,7 +98,7 @@
             <div class="rounded-lg border border-default bg-muted p-3"><p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p><p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p><p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p></div>
             <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" /></UFormField>
             <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :placeholder="resolvedExcerpt" /></UFormField>
-            <UFormField label="Social image"><img v-if="resolvedSocialImageUrl" :src="resolvedSocialImageUrl" alt="Resolved social preview" class="mb-2 aspect-video w-full rounded-lg object-cover"><component :is="mediaPickerComponent || PlatformMediaPicker" :site-id="siteId" v-model="form.social_image_asset_id" accept="image" /></UFormField>
+            <UFormField label="Share preview"><img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover"><video v-else-if="resolvedPrimaryVideoUrl" :src="resolvedPrimaryVideoUrl" controls muted playsinline class="aspect-video w-full rounded-lg object-cover" /><p v-else class="text-xs text-dimmed">Add a featured or content image to use it in the generated share card.</p></UFormField>
             </div>
           </UCard>
           <UCard>
@@ -153,7 +153,7 @@ let serverPostUpdatedAt: string | undefined
 let serverDocumentUpdatedAt: string | undefined
 const slugResetRequested = ref(false)
 
-const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', social_image_asset_id: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true, site_author_id: '' })
+const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true, site_author_id: '' })
 const authors = ref<SiteAuthor[]>([])
 const authorItems = computed(() => [{ label: 'Site default', value: '' }, ...authors.value.map(author => ({ label: author.name, value: author.id }))])
 const addingAuthor = ref(false)
@@ -223,20 +223,29 @@ const resolvedAuthorName = computed(() => {
 const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
 const publicPath = computed(() => resolveBlogPublicPath({ scope: props.siteId ? 'tenant' : 'platform', template: templateName.value, slug: slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, category: form.category }))
 const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
-const resolvedSocialImageUrl = computed<string | null>(() => {
+const resolvedPrimaryImageUrl = computed<string | null>(() => {
   const block = blocks.value.find(item => item.type === 'image')
-  const candidate = post.value?.social_image?.thumbnail_url || post.value?.social_image?.public_url || block?.data.thumbnail_url || block?.data.public_url || post.value?.featured_image?.public_url
+  const primary = post.value?.primary_image
+  const candidate = primary?.thumbnail_url
+    || (primary?.kind !== 'video' ? primary?.public_url : null)
+    || block?.data.thumbnail_url
+    || block?.data.public_url
+    || (post.value?.featured_image?.kind !== 'video' ? post.value?.featured_image?.public_url : null)
   return typeof candidate === 'string' && candidate ? candidate : null
 })
+const resolvedPrimaryVideoUrl = computed<string | null>(() => {
+  if (resolvedPrimaryImageUrl.value) return null
+  const primary = post.value?.primary_image
+  const candidate = primary?.kind === 'video'
+    ? primary.public_url
+    : post.value?.featured_image?.kind === 'video'
+      ? post.value.featured_image.public_url
+      : null
+  return typeof candidate === 'string' && candidate ? candidate : null
+})
+const resolvedPrimaryMediaUrl = computed(() => resolvedPrimaryImageUrl.value || resolvedPrimaryVideoUrl.value)
 const resolvedMediaKind = computed(() => {
-  const block = blocks.value.find(item => item.type === 'image')
-  const hasImageOverride = Boolean(
-    post.value?.social_image?.thumbnail_url
-    || post.value?.social_image?.public_url
-    || block?.data.thumbnail_url
-    || block?.data.public_url,
-  )
-  return !hasImageOverride && post.value?.featured_image?.kind === 'video' ? 'video' : 'image'
+  return resolvedPrimaryVideoUrl.value ? 'video' : 'image'
 })
 const saveLabel = computed(() => {
   if (saveState.value === 'saving') return 'Saving…'
@@ -276,7 +285,6 @@ watch([
     excerpt: form.excerpt,
     seo_title: form.seo_title,
     seo_description: form.seo_description,
-    social_image_asset_id: form.social_image_asset_id,
     slug: form.slug,
     canonical_url: form.canonical_url,
     robots: form.robots,
@@ -309,7 +317,7 @@ function applyLoadedPost(loaded: BlogPost) {
   try {
     syncServerVersions(loaded)
     post.value = loaded
-    Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true, site_author_id: loaded.site_author_id || '' })
+    Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true, site_author_id: loaded.site_author_id || '' })
     slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
@@ -375,7 +383,7 @@ async function flushSave() {
   }
 }
 function buildSaveSnapshot(id = persistedPostId.value): SaveSnapshot {
-  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: structuredClone(toRaw(blocks.value)), site_author_id: form.site_author_id || null } }
+  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: structuredClone(toRaw(blocks.value)), site_author_id: form.site_author_id || null } }
 }
 function lifecycleVersionInput() {
   if (!serverPostUpdatedAt || !serverDocumentUpdatedAt) throw new Error('Blog lifecycle version is unavailable. Reload the editor.')
@@ -455,7 +463,7 @@ async function createDraft(publishNow: boolean) {
     if (saveTimer) clearTimeout(saveTimer)
     saveState.value = 'saving'
     dirty = false
-    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, site_author_id: form.site_author_id || null })
+    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, site_author_id: form.site_author_id || null })
     applyingServerSnapshot = true
     post.value = created
     syncServerVersions(created)

@@ -604,7 +604,8 @@ const seoDescription = computed(() =>
 )
 
 const { canonicalUrl } = useTenantSocialMetadata(() => {
-  const heroImageUrl = experience.value?.og_image_public_url || null
+  const cover = experience.value?.media?.[0]
+  const heroImageUrl = cover?.kind === 'video' ? cover.thumbnail_url : cover?.public_url
   return {
     path: experience.value?.canonical_url || `/experiences/${slug}`,
     title: seoTitle.value,
@@ -644,9 +645,8 @@ useHead({
         const experienceId = `${experienceUrl}#experience`
         const currency = siteConfig.value?.default_currency || 'THB'
 
-        // Collect all image URLs in order: og override, then primary, then gallery images
+        // Preserve the canonical media order used by the page.
         const images = [
-          ...(val.og_image_public_url ? [val.og_image_public_url] : []),
           ...mediaItems.value
             .map(item => item.kind === 'video' ? item.poster : item.url)
             .filter((url): url is string => Boolean(url)),

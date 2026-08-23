@@ -47,7 +47,7 @@ export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDr
     ...payload.preview.config,
     brand_name: payload.preview.brandName,
     logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
-    og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
+    hero_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
   }
   const config = Object.fromEntries(
     Object.entries(rawConfig).map(([key, value]) => [key, value ?? '']),
@@ -252,7 +252,7 @@ export async function loadPublicDraftPage(
     ...payload.preview.config,
     brand_name: payload.preview.brandName,
     logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
-    og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
+    hero_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
   }
   return {
     kind: page,

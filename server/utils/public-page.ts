@@ -437,12 +437,10 @@ async function loadPublicPageSource(
               NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured,
               mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
               mi.preparation, mi.serving_note,
-              mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, ma_og.public_url AS og_image_public_url,
+              mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
               mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
        FROM menu_items mi
        JOIN menus m ON m.id = mi.menu_id
-       LEFT JOIN media_assets ma_og ON mi.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
-         AND ma_og.organization_id = m.organization_id AND ma_og.site_id = m.site_id
        WHERE m.organization_id = ? AND m.site_id = ? AND m.is_visible = 1
        ORDER BY mi.sort_order, mi.name`,
       [orgId, siteId],
@@ -476,11 +474,8 @@ async function loadPublicPageSource(
                          e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
                          e.status, e.sort_order, e.featured, e.featured_sort_order,
-                         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
-                         og.public_url AS og_image_public_url
+                         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
                   FROM experiences e
-                  LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
-         AND og.organization_id = e.organization_id AND og.site_id = e.site_id
                   WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
     if (locationId) {
       expSql += ` AND e.location_id = ?`;
@@ -497,11 +492,8 @@ async function loadPublicPageSource(
               e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
               e.status, e.sort_order, e.featured, e.featured_sort_order,
-              e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
-              og.public_url AS og_image_public_url
+              e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
        FROM experiences e
-       LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
-         AND og.organization_id = e.organization_id AND og.site_id = e.site_id
        WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
        LIMIT 1`,
       [orgId, siteId, experienceSlug],
@@ -799,7 +791,6 @@ async function loadPublicPageSource(
     const publicUrl = loc.hero_public_url as string | null;
     const thumbnailUrl = loc.hero_thumbnail_url as string | null;
     const heroKind = loc.hero_kind as string | null;
-    const ogImagePublicUrl = loc.og_image_public_url as string | null;
 
     const address = loc.address as string | null
     const openingHours = loc.opening_hours as string | null
@@ -845,7 +836,6 @@ async function loadPublicPageSource(
       seo_description: (loc.seo_description as string | null) ?? null,
       canonical_url: (loc.canonical_url as string | null) ?? null,
       robots: (loc.robots as string | null) ?? null,
-      og_image_public_url: ogImagePublicUrl,
     };
   });
 

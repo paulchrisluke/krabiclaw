@@ -56,7 +56,6 @@ export interface MenuItem {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
-  og_image_asset_id?: string | null
   created_at: string
   updated_at: string
   created_by: string
@@ -103,7 +102,6 @@ export interface CreateMenuItemRequest {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
-  og_image_asset_id?: string | null
 }
 
 export interface UpdateMenuItemRequest {
@@ -129,7 +127,6 @@ export interface UpdateMenuItemRequest {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
-  og_image_asset_id?: string | null
 }
 
 export interface ReorderMenuItemsRequest {

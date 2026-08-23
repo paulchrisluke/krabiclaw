@@ -7,7 +7,7 @@ import { queryFirst } from '~/server/db'
 
 interface EditorPostBody {
   title?: string; body?: string; image_asset_id?: string | null; slug?: string | null
-  seo_title?: string | null; seo_description?: string | null; og_image_asset_id?: string | null
+  seo_title?: string | null; seo_description?: string | null
   gallery_media?: unknown; scheduled_for?: string; location_id?: string
   post_type?: string; cta_type?: string; cta_url?: string; event_title?: string
   event_start?: string; event_end?: string; offer_coupon?: string; offer_terms?: string
@@ -25,6 +25,7 @@ export default defineHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const body = await readRequiredBody<EditorPostBody>(event)
+  if ('og_image_asset_id' in body) return jsonResponse({ error: 'og_image_asset_id is retired' }, { status: 400 })
   if (!body.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
@@ -55,7 +56,7 @@ export default defineHandler(async (event) => {
   let post
   try {
     post = await createPost(db, site.organization_id, siteId, {
-      title: body.title?.trim() || undefined, body: body.body.trim(), image_asset_id: imageAssetId || undefined, slug: body.slug || undefined, seo_title: body.seo_title || undefined, seo_description: body.seo_description || undefined, og_image_asset_id: body.og_image_asset_id || undefined, gallery_media: body.gallery_media, scheduled_for: body.scheduled_for || undefined, location_id: body.location_id || undefined, post_type: body.post_type || undefined, cta_type: body.cta_type || undefined, cta_url: body.cta_url || undefined, event_title: body.event_title || undefined, event_start: body.event_start || undefined, event_end: body.event_end || undefined, offer_coupon: body.offer_coupon || undefined, offer_terms: body.offer_terms || undefined, }, session.user.id, env)
+      title: body.title?.trim() || undefined, body: body.body.trim(), image_asset_id: imageAssetId || undefined, slug: body.slug || undefined, seo_title: body.seo_title || undefined, seo_description: body.seo_description || undefined, gallery_media: body.gallery_media, scheduled_for: body.scheduled_for || undefined, location_id: body.location_id || undefined, post_type: body.post_type || undefined, cta_type: body.cta_type || undefined, cta_url: body.cta_url || undefined, event_title: body.event_title || undefined, event_start: body.event_start || undefined, event_end: body.event_end || undefined, offer_coupon: body.offer_coupon || undefined, offer_terms: body.offer_terms || undefined, }, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

@@ -46,7 +46,6 @@ interface FullSiteRow extends SiteSettingsRow {
   seo_description: string | null
   canonical_url: string | null
   robots: string | null
-  og_image_asset_id: string | null
   social_facebook_url: string | null
   social_instagram_url: string | null
   social_tiktok_url: string | null
@@ -88,7 +87,7 @@ export async function loadSettingsPayload(
              logo_url
            ) AS logo_url,
            logo_asset_id, contact_email,
-           seo_title, seo_description, canonical_url, robots, og_image_asset_id,
+           seo_title, seo_description, canonical_url, robots,
            social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, settings, last_published_at, created_at, updated_at,
            vertical, theme_id
@@ -137,7 +136,6 @@ export async function loadSettingsPayload(
     seo_description: updatedSite.seo_description,
     canonical_url: updatedSite.canonical_url,
     robots: updatedSite.robots,
-    og_image_asset_id: updatedSite.og_image_asset_id,
     social_facebook_url: updatedSite.social_facebook_url,
     social_instagram_url: updatedSite.social_instagram_url,
     social_tiktok_url: updatedSite.social_tiktok_url,
@@ -410,26 +408,6 @@ async function attemptSiteUpdate(
     setParts.push('feature_overrides = ?')
     params.push(newDelta ? JSON.stringify(newDelta) : null)
   }
-  if (updates.og_image_asset_id !== undefined) {
-    if (updates.og_image_asset_id !== null && updates.og_image_asset_id !== '') {
-      const asset = await queryFirst(db, `
-        SELECT id
-        FROM media_assets
-        WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = 'image'
-        LIMIT 1
-      `, [updates.og_image_asset_id, organizationId, siteId])
-
-      if (!asset) {
-        return {
-          status: 400,
-          data: { error: 'og_image_asset_id not found, unauthorized, or not an image' },
-        }
-      }
-    }
-    setParts.push('og_image_asset_id = ?')
-    params.push(updates.og_image_asset_id || null)
-  }
-
   if (setParts.length === 0) {
     const settings = await loadSettingsPayload(db, organizationId, siteId)
     return {

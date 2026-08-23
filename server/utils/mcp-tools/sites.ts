@@ -117,7 +117,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               seo_description: { type: ['string', 'null'] },
               canonical_url: { type: ['string', 'null'] },
               robots: { type: ['string', 'null'] },
-              og_image_asset_id: { type: ['string', 'null'] },
               created_at: { type: 'string' },
               updated_at: { type: 'string' },
             },

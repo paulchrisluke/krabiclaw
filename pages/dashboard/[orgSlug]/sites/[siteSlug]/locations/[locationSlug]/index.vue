@@ -179,7 +179,7 @@ const tabs = [
 ]
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
-const locationImage = computed(() => dashboardLocationRow.value?.og_image_url ?? '')
+const locationImage = computed(() => dashboardLocationRow.value?.preview_image_url ?? '')
 const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Address not set')
 
 const capabilities = computed(() => {

@@ -552,8 +552,8 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
     components: Array.isArray(row.components) ? row.components as ApiRecord[] : [],
     content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/lib/components/workspace/blog/types').BlogEditorBlock[] : [],
-    social_image: row.social_image && typeof row.social_image === 'object'
-      ? row.social_image as PublicBlogPost['social_image']
+    primary_image: row.primary_image && typeof row.primary_image === 'object'
+      ? row.primary_image as PublicBlogPost['primary_image']
       : null,
     author_image: typeof row.author_image === 'string' ? row.author_image : null,
     featured_image: featured && typeof featured.public_url === 'string'

@@ -49,11 +49,14 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       }
     case "create_post":
       {
+        if ("og_image_asset_id" in args) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, "og_image_asset_id is retired");
+        }
         const post = await asMcpValidationError(() => createPost(
           site.db,
           site.organizationId,
           site.siteId,
-          omit(args, ["image_asset_id", "gallery_media", "og_image_asset_id"]) as never,
+          omit(args, ["image_asset_id", "gallery_media"]) as never,
           site.userId,
           site.env,
         ));
@@ -77,12 +80,15 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       }
     case "update_post":
       {
+        if ("og_image_asset_id" in args) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, "og_image_asset_id is retired");
+        }
         const post = await asMcpValidationError(() => updatePost(
           site.db,
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
-          omit(args, ["post_id", "image_asset_id", "gallery_media", "og_image_asset_id"]) as never,
+          omit(args, ["post_id", "image_asset_id", "gallery_media"]) as never,
           site.userId,
           site.env,
         ));

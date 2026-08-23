@@ -183,7 +183,7 @@ useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: config.value?.og_image_url ? { url: config.value.og_image_url } : null,
+  heroImage: config.value?.hero_image_url ? { url: config.value.hero_image_url } : null,
   robots: siteRobots.value,
 }))
 

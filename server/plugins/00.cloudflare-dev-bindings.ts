@@ -8,7 +8,7 @@ async function createPlatformProxy() {
   const { getPlatformProxy } = await import(/* @vite-ignore */ packageName) as typeof import('wrangler')
   return await getPlatformProxy({
     configPath: 'wrangler.toml',
-    persist: { path: '.wrangler/state/v3' },
+    persist: true,
     remoteBindings: false,
   })
 }
