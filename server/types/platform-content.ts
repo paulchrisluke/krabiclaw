@@ -41,7 +41,6 @@ export interface PlatformBlogPostRequestBody extends PlatformContentNavRequestBo
   canonical_url?: string
   robots?: string
   featured_image_asset_id?: string
-  social_image_asset_id?: string | null
   visibility?: 'public' | 'unlisted'
 }
 

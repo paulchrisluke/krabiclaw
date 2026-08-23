@@ -493,21 +493,19 @@ function buildMediaClusterQueries(
         UPDATE business_locations
            SET organization_id = ?,
                hero_media_asset_id = ? || hero_media_asset_id,
-               og_image_asset_id = ? || og_image_asset_id,
                notification_phone = NULL,
                team_id = NULL
          WHERE site_id = ? AND organization_id = ?
       `,
-      params: [toOrgId, transferPrefix, transferPrefix, siteId, fromOrgId],
+      params: [toOrgId, transferPrefix, siteId, fromOrgId],
     },
     {
       query: `
         UPDATE experiences
-           SET organization_id = ?,
-               og_image_asset_id = ? || og_image_asset_id
+           SET organization_id = ?
          WHERE site_id = ? AND organization_id = ?
       `,
-      params: [toOrgId, transferPrefix, siteId, fromOrgId],
+      params: [toOrgId, siteId, fromOrgId],
     },
     {
       query: `
@@ -541,21 +539,6 @@ function buildMediaClusterQueries(
            SET hero_media_asset_id = CASE
                  WHEN substr(hero_media_asset_id, 1, length(?)) = ? THEN substr(hero_media_asset_id, length(?) + 1)
                  ELSE hero_media_asset_id
-               END,
-               og_image_asset_id = CASE
-                 WHEN substr(og_image_asset_id, 1, length(?)) = ? THEN substr(og_image_asset_id, length(?) + 1)
-                 ELSE og_image_asset_id
-               END
-         WHERE site_id = ? AND organization_id = ?
-      `,
-      params: [transferPrefix, transferPrefix, transferPrefix, transferPrefix, transferPrefix, transferPrefix, siteId, toOrgId],
-    },
-    {
-      query: `
-        UPDATE experiences
-           SET og_image_asset_id = CASE
-                 WHEN substr(og_image_asset_id, 1, length(?)) = ? THEN substr(og_image_asset_id, length(?) + 1)
-                 ELSE og_image_asset_id
                END
          WHERE site_id = ? AND organization_id = ?
       `,

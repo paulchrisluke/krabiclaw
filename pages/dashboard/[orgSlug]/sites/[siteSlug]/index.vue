@@ -46,7 +46,7 @@
                 class="group relative aspect-[40/21] min-w-0 overflow-hidden rounded-2xl border border-default bg-elevated shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
               >
                 <img
-                  :src="location.og_image_url"
+                  :src="location.preview_image_url"
                   :alt="`${location.title} preview`"
                   class="size-full object-cover transition duration-300 group-hover:scale-[1.02]"
                   loading="lazy"
@@ -169,7 +169,7 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
     if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { requiredDashboardOgOrigin }] = await Promise.all([
+    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { requiredDashboardPreviewOrigin }] = await Promise.all([
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-home'),
       import('~/server/utils/member-access'),
@@ -187,7 +187,7 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     return await getDashboardHomeData(db, organization.id, siteId, {
       memberId: organization.memberId,
       role: organization.role,
-      ogOrigin: requiredDashboardOgOrigin(environment.NUXT_PUBLIC_PLATFORM_DOMAIN),
+      ogOrigin: requiredDashboardPreviewOrigin(environment.NUXT_PUBLIC_PLATFORM_DOMAIN),
     })
   }
   return await dashboardApi<DashboardHomeData>('/api/dashboard/home', {

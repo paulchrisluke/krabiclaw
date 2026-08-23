@@ -89,7 +89,7 @@ interface BlogPost {
     width: number | null
     height: number | null
   } | null
-  social_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
+  primary_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
@@ -196,12 +196,12 @@ const wasUpdated = computed(() => {
 })
 
 const selectedPostImage = computed(() => {
-  const social = post.value?.social_image
-  if (social?.public_url) return { public_url: social.public_url, kind: 'image', width: social.width, height: social.height }
+  const primary = post.value?.primary_image
+  if (primary?.public_url) return { public_url: primary.public_url, kind: 'image', width: primary.width, height: primary.height }
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const socialBackground = computed(() => post.value?.social_image?.public_url || null)
+const primaryBackground = computed(() => post.value?.primary_image?.public_url || null)
 
 const categorySlug = computed(() => blogCategoryToSlug(post.value?.category) || String(route.params.category))
 const postPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || '/blog')
@@ -234,7 +234,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   label: post.value?.category || null,
   author: post.value?.author_name || null,
   publishedAt: post.value?.published_at || null,
-  heroImage: socialBackground.value ? { url: socialBackground.value } : null,
+  heroImage: primaryBackground.value ? { url: primaryBackground.value } : null,
   robots: resolvedSeo.value.robots,
   indexable: post.value?.visibility !== 'unlisted' && (!post.value?.robots || !/noindex/i.test(post.value.robots)),
 }), platformOrigin)

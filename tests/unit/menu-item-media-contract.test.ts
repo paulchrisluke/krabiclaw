@@ -68,7 +68,6 @@ const itemRow = {
   seo_description: null,
   canonical_url: null,
   robots: null,
-  og_image_asset_id: null,
   created_at: '2026-07-31T00:00:00.000Z',
   updated_at: '2026-07-31T00:00:00.000Z',
   created_by: 'user-1',

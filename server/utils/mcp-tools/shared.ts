@@ -57,7 +57,6 @@ export function seoOverrideFieldsSchema() {
     seo_description: { type: ['string', 'null'], description: 'Optional SEO meta description override. Falls back to the computed default if unset.' },
     canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
     robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
-    og_image_asset_id: { type: ['string', 'null'], description: 'Optional asset id from get_site_media_assets used as the background inside this page\'s generated social card. It never replaces the generated title and branding.' },
   }
 }
 
@@ -113,7 +112,6 @@ export const locationObject = {
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
-    og_image_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
@@ -172,7 +170,6 @@ export const menuItemObject = {
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
-    og_image_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     created_by: { type: ['string', 'null'] },
@@ -502,7 +499,6 @@ export const postObject = {
     view_url: { type: ['string', 'null'] },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
-    og_image_asset_id: { type: ['string', 'null'] },
     media: {
       type: 'array',
       items: {
@@ -656,7 +652,6 @@ export const experienceObject = {
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
-    og_image_asset_id: { type: ['string', 'null'] },
     public_path: { type: ['string', 'null'] },
     public_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
@@ -731,7 +726,6 @@ export const experienceWriteSchema = {
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
   canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
   robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
-  og_image_asset_id: { type: ['string', 'null'], description: 'Optional asset id from get_site_media_assets used as the background inside this experience\'s generated social card. It never replaces the generated title and branding.' },
 } as const
 
 export const renderedBookingPolicySummaryObject = {

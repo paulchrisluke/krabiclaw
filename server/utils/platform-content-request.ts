@@ -29,7 +29,6 @@ export function platformBlogDraftCreateInput(body: PlatformBlogPostRequestBody):
     canonical_url: body.canonical_url ?? null,
     robots: body.robots ?? null,
     featured_image_asset_id: body.featured_image_asset_id ?? null,
-    social_image_asset_id: body.social_image_asset_id ?? null,
     visibility: body.visibility ?? 'public',
   }
 }

@@ -21,7 +21,7 @@ import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categorie
 import { categoryToSlug } from '~/utils/docs-categories'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { normalizeBlogSlug, parseScheduledFor, resolveBlogPublicPath, resolveSlugMutation, structuredComponentsFromBlocks } from '~/utils/blog-editor'
-import { createBlogRedirect, resolveBlogSocialImage } from '~/server/utils/blog-publishing'
+import { createBlogRedirect, resolveBlogPrimaryImage } from '~/server/utils/blog-publishing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 
 const BLOG_TITLE_MAX = 200
@@ -67,7 +67,6 @@ const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> = [
   'canonical_url',
   'robots',
   'featured_image_asset_id',
-  'social_image_asset_id',
   'visibility',
   'slug',
   'redirect_old_slug',
@@ -273,7 +272,6 @@ export interface PlatformBlogCreateInput extends PlatformContentNavInput {
   canonical_url?: string | null
   robots?: string | null
   featured_image_asset_id?: string | null
-  social_image_asset_id?: string | null
   visibility?: 'public' | 'unlisted'
   site_author_id?: string | null
 }
@@ -289,7 +287,6 @@ export interface PlatformBlogUpdateInput extends PlatformContentNavInput {
   canonical_url?: string | null
   robots?: string | null
   featured_image_asset_id?: string | null
-  social_image_asset_id?: string | null
   visibility?: 'public' | 'unlisted'
   slug?: string | null
   redirect_old_slug?: boolean
@@ -1271,7 +1268,7 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots, p.visibility, p.social_image_asset_id,
+      p.canonical_url, p.robots, p.visibility,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
@@ -1292,9 +1289,9 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_blog', String(post.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const components = structuredComponentsFromBlocks(contentBlocks)
-  const socialImage = await resolveBlogSocialImage(db, { siteId: null, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
+  const primaryImage = await resolveBlogPrimaryImage(db, { featuredAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
-  return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, social_image: socialImage })
+  return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, primary_image: primaryImage })
 }
 
 /**
@@ -1581,7 +1578,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     db,
     `SELECT
        p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.status, p.visibility, p.scheduled_for,
-       p.first_published_at, p.slug_manually_overridden, p.social_image_asset_id, u.name AS author_name, u.image AS author_image,
+       p.first_published_at, p.slug_manually_overridden, u.name AS author_name, u.image AS author_image,
        p.site_author_id, sa.name AS site_author_name, sa.title AS site_author_title, sa.bio AS site_author_bio,
        sma.public_url AS site_author_image_url,
        p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
@@ -1617,10 +1614,8 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
      LIMIT 1
   `, [siteId, editorTemplate.slug]) : null
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
-  const socialImage = await resolveBlogSocialImage(db, {
-    siteId,
-    explicitAssetId: typeof post.social_image_asset_id === 'string' ? post.social_image_asset_id : null,
-    legacyAssetId: typeof post.featured_image_asset_id === 'string' ? post.featured_image_asset_id : null,
+  const primaryImage = await resolveBlogPrimaryImage(db, {
+    featuredAssetId: typeof post.featured_image_asset_id === 'string' ? post.featured_image_asset_id : null,
     blocks: contentDocument.blocks,
   })
   return {
@@ -1631,7 +1626,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     editor_theme_tokens: editorThemeTokens,
     editor_site_name: siteId ? (editorTheme?.brand_name || '') : 'KrabiClaw',
     editor_brand_color: editorTheme?.brand_color ?? null,
-    social_image: socialImage,
+    primary_image: primaryImage,
   }
 }
 
@@ -1639,7 +1634,7 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots, p.featured_order, p.visibility, p.social_image_asset_id,
+      p.canonical_url, p.robots, p.featured_order, p.visibility,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
       COALESCE(sa.name, u.name) AS author_name,
@@ -1665,9 +1660,9 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
   const contentBlocks = await getContentBlocksForOwner(db, 'tenant_blog', String(post.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const components = structuredComponentsFromBlocks(contentBlocks)
-  const socialImage = await resolveBlogSocialImage(db, { siteId, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
+  const primaryImage = await resolveBlogPrimaryImage(db, { featuredAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
-  return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, social_image: socialImage })
+  return attachFeaturedImageFromBareJoin({ ...post, components, content_blocks: contentBlocks, primary_image: primaryImage })
 }
 
 export async function createPlatformBlogPost(
@@ -1686,7 +1681,6 @@ export async function createPlatformBlogPost(
     assertValidBlogCategory(input.category)
   }
   if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', scope.site_id ?? null)
-  if (input.social_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.social_image_asset_id, 'social_image_asset_id', scope.site_id ?? null)
   if (input.site_author_id) await ensureSiteAuthorExists(db, input.site_author_id, scope.site_id ?? null)
 
   const siteId = scope.site_id ?? null
@@ -1703,8 +1697,8 @@ export async function createPlatformBlogPost(
     try {
       const blogPostInsert: BatchQuery = {
         query: `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, social_image_asset_id, author_id, site_author_id, published_at, first_published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, site_author_id, published_at, first_published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id,
           organizationId,
@@ -1730,7 +1724,6 @@ export async function createPlatformBlogPost(
           input.canonical_url ?? null,
           input.robots ?? null,
           input.featured_image_asset_id ?? null,
-          input.social_image_asset_id ?? null,
           authorId,
           input.site_author_id ?? null,
           null,
@@ -2002,7 +1995,6 @@ export async function updatePlatformBlogPost(
     'canonical_url',
     'robots',
     'featured_image_asset_id',
-    'social_image_asset_id',
     'visibility',
     'site_author_id',
   ]
@@ -2019,10 +2011,6 @@ export async function updatePlatformBlogPost(
   if (input.hide_from_nav !== undefined) {
     updates.push('hide_from_nav = ?')
     params.push(normalizeHideFromNav(input.hide_from_nav) ?? 0)
-  }
-
-  if (input.social_image_asset_id !== undefined && input.social_image_asset_id) {
-    await ensureBlogFeaturedImageAssetExists(db, input.social_image_asset_id, 'social_image_asset_id', siteId)
   }
 
   if (normalizedBlocks && current.status !== 'published') {

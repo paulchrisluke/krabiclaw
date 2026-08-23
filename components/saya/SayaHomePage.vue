@@ -425,7 +425,7 @@ if (siteId) {
       faviconUrl: pageConfig.value?.favicon_url || null,
       primaryColor: pageConfig.value?.brand_color || null,
     },
-    heroImage: pageConfig.value?.og_image_url ? { url: pageConfig.value.og_image_url } : null,
+    heroImage: pageConfig.value?.hero_image_url ? { url: pageConfig.value.hero_image_url } : null,
     robots: pageConfig.value?.robots || null,
   }))
 }

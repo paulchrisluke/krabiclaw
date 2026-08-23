@@ -11,7 +11,6 @@ import type {
 import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
-import { validateMediaAsset } from "~/server/utils/location-management";
 import {
   buildReplaceMenuItemMediaQueries,
   hydrateMediaAssetsForMenuItems,
@@ -446,7 +445,7 @@ export async function getMenuWithItems(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
-           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     WHERE mi.menu_id = ?
@@ -484,7 +483,7 @@ async function loadPublishedMenuById(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
-           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     WHERE mi.menu_id = ?
@@ -566,7 +565,7 @@ export async function getPublicMenuItem(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
-           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     JOIN menus m ON m.id = mi.menu_id
@@ -754,7 +753,6 @@ export async function createMenuItem(
   );
   if (!menuOwner) throw new HTTPError({ statusCode: 404, statusMessage: "Menu not found" });
   assertValidSaleWindow(item.sale_starts_at, item.sale_ends_at);
-  await validateMediaAsset(db, organizationId, siteId, item.og_image_asset_id, "image", "og_image_asset_id");
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -772,8 +770,8 @@ export async function createMenuItem(
     db,
     `
     INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, image_asset_id, available, featured, featured_sort_order, sort_order,
-      allergens, ingredients, dietary_notes, preparation, serving_note, seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      allergens, ingredients, dietary_notes, preparation, serving_note, seo_title, seo_description, canonical_url, robots, created_at, updated_at, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
     [
       id,
@@ -800,7 +798,6 @@ export async function createMenuItem(
       item.seo_description || null,
       item.canonical_url || null,
       item.robots || null,
-      item.og_image_asset_id || null,
       now,
       now,
       createdBy,
@@ -831,7 +828,7 @@ export async function createMenuItem(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
-           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     WHERE mi.id = ?
@@ -896,9 +893,6 @@ export async function updateMenuItem(
     throw new Error(`Menu item not found: ${menuItemId}`);
   }
 
-  if (updates.og_image_asset_id !== undefined) {
-    await validateMediaAsset(db, organizationId, siteId, updates.og_image_asset_id, "image", "og_image_asset_id");
-  }
   const mediaRefs = menuItemMediaRefsFromInput(updates);
 
   // Build dynamic update query
@@ -997,11 +991,6 @@ export async function updateMenuItem(
     setParts.push("robots = ?");
     params.push(updates.robots || null);
   }
-  if (updates.og_image_asset_id !== undefined) {
-    setParts.push("og_image_asset_id = ?");
-    params.push(updates.og_image_asset_id || null);
-  }
-
   setParts.push("updated_at = ?");
   setParts.push("updated_by = ?");
   params.push(now, updatedBy);
@@ -1053,7 +1042,7 @@ export async function updateMenuItem(
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
            NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
-           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
+           mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     WHERE mi.id = ?

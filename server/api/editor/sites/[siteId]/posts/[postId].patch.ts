@@ -6,7 +6,7 @@ import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 interface EditorPostUpdateBody {
   title?: string; body?: string; image_asset_id?: string | null; slug?: string | null
-  seo_title?: string | null; seo_description?: string | null; og_image_asset_id?: string | null
+  seo_title?: string | null; seo_description?: string | null
   gallery_media?: unknown; scheduled_for?: string | null; location_id?: string | null
   post_type?: string; cta_type?: string | null; cta_url?: string | null
   event_title?: string | null; event_start?: string | null; event_end?: string | null
@@ -44,7 +44,7 @@ export default defineHandler(async (event) => {
   let post
   try {
     post = await updatePost(db, site.organization_id, siteId, postId, {
-      title: body.title, body: body.body, image_asset_id: body.image_asset_id, slug: body.slug, seo_title: body.seo_title, seo_description: body.seo_description, og_image_asset_id: body.og_image_asset_id, gallery_media: body.gallery_media, scheduled_for: body.scheduled_for, location_id: body.location_id, post_type: body.post_type, cta_type: body.cta_type, cta_url: body.cta_url, event_title: body.event_title, event_start: body.event_start, event_end: body.event_end, offer_coupon: body.offer_coupon, offer_terms: body.offer_terms, }, session.user.id, env)
+      title: body.title, body: body.body, image_asset_id: body.image_asset_id, slug: body.slug, seo_title: body.seo_title, seo_description: body.seo_description, gallery_media: body.gallery_media, scheduled_for: body.scheduled_for, location_id: body.location_id, post_type: body.post_type, cta_type: body.cta_type, cta_url: body.cta_url, event_title: body.event_title, event_start: body.event_start, event_end: body.event_end, offer_coupon: body.offer_coupon, offer_terms: body.offer_terms, }, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

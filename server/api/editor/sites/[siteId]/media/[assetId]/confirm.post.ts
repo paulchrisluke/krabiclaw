@@ -46,8 +46,8 @@ export default defineHandler(async (event) => {
   const activated = await activateMediaAsset(db, assetId, siteId, { public_url: publicUrl, thumbnail_url: thumbnailUrl })
   if (!activated) return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
 
-  const siteRecord = await queryFirst<{ logo_asset_id: string | null; og_image_asset_id: string | null }>(
-    db, `SELECT logo_asset_id, og_image_asset_id FROM sites WHERE id = ? LIMIT 1`, [siteId], )
+  const siteRecord = await queryFirst<{ logo_asset_id: string | null }>(
+    db, `SELECT logo_asset_id FROM sites WHERE id = ? LIMIT 1`, [siteId], )
 
   if (siteRecord && asset.category === 'logo' && !siteRecord.logo_asset_id) {
     await assignSiteLogoWithFavicon(db, {

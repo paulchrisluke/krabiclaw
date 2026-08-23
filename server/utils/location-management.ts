@@ -166,7 +166,6 @@ export interface CreateLocationInput {
   seo_description?: string | null;
   canonical_url?: string | null;
   robots?: string | null;
-  og_image_asset_id?: string | null;
   // Additive/subtractive delta layered on top of the parent site's effective feature set
   // (config/cms-registry.ts) — null clears the override back to pure inheritance. `enabled`
   // entries must be a subset of the site's effective feature set; validated below.
@@ -213,7 +212,6 @@ export interface LocationRecord {
   seo_description?: string | null;
   canonical_url?: string | null;
   robots?: string | null;
-  og_image_asset_id?: string | null;
   feature_overrides?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -548,7 +546,7 @@ async function loadLocation(
            rating, review_count, description, short_description, status, is_primary,
            address, opening_hours, special_hours, hero_media_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots, og_image_asset_id,
+           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots,
            feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
@@ -651,14 +649,6 @@ export async function createLocation(
       undefined,
       "hero_media_asset_id",
     );
-    await validateMediaAsset(
-      db,
-      organizationId,
-      siteId,
-      input.og_image_asset_id,
-      "image",
-      "og_image_asset_id",
-    );
   } catch (error) {
     return {
       status: 400,
@@ -726,9 +716,9 @@ export async function createLocation(
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
             hero_media_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
-            seo_title, seo_description, canonical_url, robots, og_image_asset_id, feature_overrides, created_at, updated_at
+            seo_title, seo_description, canonical_url, robots, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -767,7 +757,6 @@ export async function createLocation(
           input.seo_description ?? null,
           input.canonical_url ?? null,
           input.robots ?? null,
-          input.og_image_asset_id ?? null,
           normalizedEnabledFeatures,
           now,
           now,
@@ -939,14 +928,6 @@ export async function updateLocation(
       undefined,
       "hero_media_asset_id",
     );
-    await validateMediaAsset(
-      db,
-      organizationId,
-      siteId,
-      input.og_image_asset_id,
-      "image",
-      "og_image_asset_id",
-    );
   } catch (error) {
     return {
       status: 400,
@@ -1010,7 +991,6 @@ export async function updateLocation(
     "seo_description",
     "canonical_url",
     "robots",
-    "og_image_asset_id",
   ] as const;
 
   for (const field of simpleFields) {
