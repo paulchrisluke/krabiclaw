@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a7f5a1d5-0a09-4891-9c47-3cf29b35492c",
-  "prevId": "643ba05a-4833-4f58-9e9a-61c68a61785c",
+  "id": "8b7e0d43-78f4-4ed9-8f35-7ed5f3897d23",
+  "prevId": "a7f5a1d5-0a09-4891-9c47-3cf29b35492c",
   "tables": {
     "account": {
       "name": "account",
@@ -537,7 +537,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'draft'"
+          "default": "'published'"
         },
         "visibility": {
           "name": "visibility",
@@ -11303,7 +11303,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'draft'"
+          "default": "'published'"
         },
         "scheduled_for": {
           "name": "scheduled_for",
@@ -15022,7 +15022,7 @@
       "checkConstraints": {
         "site_locales_status_check": {
           "name": "site_locales_status_check",
-          "value": "status IN ('published', 'disabled')"
+          "value": "status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')"
         }
       }
     },

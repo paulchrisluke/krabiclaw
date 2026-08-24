@@ -13,6 +13,11 @@ function databaseBeforeCleanup() {
   return db
 }
 
+function applyPublicationMigrations(db: Database.Database) {
+  db.exec(readFileSync('migrations/0125_dark_talisman.sql', 'utf8'))
+  db.exec(readFileSync('migrations/0126_remarkable_shotgun.sql', 'utf8'))
+}
+
 test('0125 deletes every retired publication state and dependent current row', () => {
   const db = databaseBeforeCleanup()
   db.prepare('INSERT INTO organization (id, name, slug) VALUES (?, ?, ?)').run('org-cleanup', 'Cleanup', 'cleanup')
@@ -35,7 +40,7 @@ test('0125 deletes every retired publication state and dependent current row', (
   db.prepare("INSERT INTO content_documents (id, owner_type, owner_id) VALUES (?, 'platform_doc', ?)").run('duplicate-doc', 'doc-live')
   db.prepare("INSERT INTO content_blocks (id, document_id, type, data_json) VALUES (?, ?, 'markdown', '{}')").run('duplicate-block', 'duplicate-doc')
 
-  db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES (?, ?, ?, 'en', 1, 'published')").run('locale-source', 'org-cleanup', 'site-cleanup')
+  db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES (?, ?, ?, 'en', 1, 'disabled')").run('locale-source', 'org-cleanup', 'site-cleanup')
   db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES (?, ?, ?, 'th', 0, 'draft')").run('locale-hidden', 'org-cleanup', 'site-cleanup')
   db.prepare("INSERT INTO tenant_pages (id, organization_id, site_id, title, page_type, source) VALUES (?, ?, ?, ?, 'custom', 'manual')").run('page-cleanup', 'org-cleanup', 'site-cleanup', 'Page')
   db.prepare("INSERT INTO content_documents (id, owner_type, owner_id) VALUES (?, 'tenant_page', ?)").run('locale-doc-hidden', 'variant-hidden')
@@ -43,7 +48,7 @@ test('0125 deletes every retired publication state and dependent current row', (
   db.prepare("INSERT INTO content_blocks (id, document_id, type, data_json) VALUES (?, ?, 'markdown', '{}')").run('locale-block-hidden', 'locale-doc-hidden')
   db.prepare("INSERT INTO tenant_redirects (id, organization_id, site_id, locale, from_path, to_path) VALUES (?, ?, ?, 'th', '/old', '/th')").run('locale-redirect-hidden', 'org-cleanup', 'site-cleanup')
 
-  db.exec(readFileSync('migrations/0125_dark_talisman.sql', 'utf8'))
+  applyPublicationMigrations(db)
 
   for (const [table, id] of [
     ['posts', 'post-hidden'], ['post_channel_jobs', 'job-hidden'], ['post_media', 'post-media-hidden'],
@@ -58,12 +63,13 @@ test('0125 deletes every retired publication state and dependent current row', (
   assert.equal(db.prepare("SELECT status FROM posts WHERE id = 'post-live'").get().status, 'published')
   assert.equal(db.prepare("SELECT status FROM blog_posts WHERE id = 'blog-scheduled'").get().status, 'scheduled')
   assert.equal(db.prepare("SELECT title FROM platform_docs WHERE id = 'doc-live'").get().title, 'Live')
+  assert.equal(db.prepare("SELECT status FROM site_locales WHERE id = 'locale-source'").get().status, 'published')
   assert.equal(db.pragma('foreign_key_check').length, 0)
 })
 
-test('0125 final schemas and triggers reject retired states and duplicate platform-doc storage', () => {
+test('0125 and 0126 final schemas and triggers reject retired states and duplicate platform-doc storage', () => {
   const db = databaseBeforeCleanup()
-  db.exec(readFileSync('migrations/0125_dark_talisman.sql', 'utf8'))
+  applyPublicationMigrations(db)
 
   const docColumns = db.pragma('table_info(platform_docs)').map(column => column.name)
   assert.equal(docColumns.includes('status'), false)
@@ -76,4 +82,5 @@ test('0125 final schemas and triggers reject retired states and duplicate platfo
   assert.throws(() => db.prepare("INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, category, status) VALUES ('bad-blog', 'org-guard', 'site-guard', 'bad', 'bad', 'bad', 'News', 'archived')").run(), /published or scheduled/)
   assert.throws(() => db.prepare("INSERT INTO content_documents (id, owner_type, owner_id) VALUES ('bad-doc', 'platform_doc', 'doc')").run(), /platform docs do not use content_documents/)
   assert.throws(() => db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, status) VALUES ('bad-locale', 'org-guard', 'site-guard', 'th', 'draft')").run(), /CHECK constraint failed/)
+  assert.throws(() => db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES ('bad-source', 'org-guard', 'site-guard', 'en', 1, 'disabled')").run(), /CHECK constraint failed/)
 })

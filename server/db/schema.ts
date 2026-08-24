@@ -1114,7 +1114,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	nav_section_order: integer(),
 	hide_from_nav: integer().default(0).notNull(),
 	featured_order: integer(),
-	status: text().default("draft").notNull(), // draft | published | scheduled | archived
+	status: text().default("published").notNull(),
 	visibility: text().default("public").notNull(), // public | unlisted
 	author_id: text().references(() => user.id, { onDelete: "set null" } ), // CMS creator identity (Better Auth user), not the displayed byline
 	site_author_id: text().references(() => site_authors.id, { onDelete: "set null" } ), // displayed byline, tenant-scoped
@@ -1240,7 +1240,7 @@ export const posts = sqliteTable("posts", {
 	event_end: text(),
 	offer_coupon: text(),
 	offer_terms: text(),
-	status: text().default("draft").notNull(),
+	status: text().default("published").notNull(),
 	scheduled_for: text(),
 	published_at: text(),
 	source: text().default("manual").notNull(),
@@ -1867,7 +1867,7 @@ export const site_locales = sqliteTable("site_locales", {
 }, (table) => [
 	unique("site_locales_organization_id_site_id_locale_unique").on(table.organization_id, table.site_id, table.locale),
 	uniqueIndex("idx_site_locales_one_source_per_site").on(table.organization_id, table.site_id).where(sql`is_source = 1`),
-	check("site_locales_status_check", sql`status IN ('published', 'disabled')`),
+	check("site_locales_status_check", sql`status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')`),
 ]);
 
 export const platform_pageview_events = sqliteTable("platform_pageview_events", {

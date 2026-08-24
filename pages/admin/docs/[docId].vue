@@ -464,6 +464,5 @@ async function remove() {
   }
 }
 
-onMounted(loadDoc)
 useSeoMeta({ title: 'Edit Documentation | Admin' })
 </script>

@@ -1,11 +1,11 @@
-# ChatGPT plugin submission checklist
+# ChatGPT app submission checklist
 
 This checklist complements the live MCP catalog and the OpenAI submission portal scan. Do not copy a tool catalog or store a tool count here.
 
 ## Connection and listing
 
 - Confirm the production HTTPS MCP endpoint initializes through streamable HTTP and OAuth discovery succeeds.
-- In ChatGPT, enable Developer mode under **Settings → Security and login**, add the endpoint from **ChatGPT Plugins**, review discovered metadata, connect, and rerun the cases below in a new conversation.
+- In ChatGPT web, have a workspace admin allow custom MCP apps under **Workspace Settings → Permissions & Roles → Connected Data**. Enable Developer mode under **Settings → Apps → Advanced Settings**, create KrabiClaw under **Workspace Settings → Apps → Create**, review the discovered tools, publish it to the intended users, connect through OAuth, and rerun the cases below in a new conversation.
 - Verify the publisher identity, public listing, support URL, privacy policy, terms, logo, category, availability, release notes, demo credentials, and domain challenge.
 - Scan the deployed MCP endpoint in the submission portal. Resolve every schema, annotation, authentication, and domain validation result before submitting.
 - Inspect results for secrets, debug payloads, unnecessary personal data, and undisclosed identifiers.
@@ -26,4 +26,4 @@ This checklist complements the live MCP catalog and the OpenAI submission portal
 
 Record the selected tool, arguments, confirmation behavior, structured result, error, and sanitized telemetry for every case. The continuous `yarn test:mcp:chatgpt` workflow is the recordable acceptance pass.
 
-References: [Connect and test your plugin](https://developers.openai.com/plugins/deploy/connect-chatgpt) and [Submit plugins](https://developers.openai.com/plugins/deploy/submission).
+References: [Connect your app to ChatGPT](https://developers.openai.com/apps-sdk/deploy/connect-chatgpt) and [Submit your app](https://developers.openai.com/apps-sdk/deploy/submission).

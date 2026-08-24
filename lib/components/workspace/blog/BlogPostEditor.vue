@@ -87,8 +87,8 @@
             <template #header><h3 class="font-semibold text-highlighted">Publishing</h3></template>
             <div class="space-y-4">
             <UFormField label="Status"><p class="text-sm text-muted">{{ statusLabel }}</p></UFormField>
-            <UFormField label="Publish timing"><USelect v-model="publishTiming" :items="['Now', 'Scheduled']" /></UFormField>
-            <UFormField v-if="publishTiming === 'Scheduled'" label="Scheduled for"><UInput v-model="form.scheduled_for" type="datetime-local" /></UFormField>
+            <UFormField v-if="!post || post.status === 'scheduled'" label="Publish timing"><USelect v-model="publishTiming" :items="['Now', 'Scheduled']" /></UFormField>
+            <UFormField v-if="(!post || post.status === 'scheduled') && publishTiming === 'Scheduled'" label="Scheduled for"><UInput v-model="form.scheduled_for" type="datetime-local" /></UFormField>
             <UFormField label="Visibility"><USelect v-model="form.visibility" :items="['public', 'unlisted']" /></UFormField>
             </div>
           </UCard>

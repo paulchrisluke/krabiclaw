@@ -243,24 +243,11 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'get_blog_post', args: { site_id: siteId, post_id: postId },
       })
       expect(updatedRead.status()).toBe(200)
-      const updatedReadPost = mcpData<{ post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await updatedRead.json()).post
+      const updatedReadPost = mcpData<{ post: { status: string; public_url: string | null; content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await updatedRead.json()).post
       expect(updatedReadPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
       expect(updatedReadPost.content_blocks[0]?.data.text).toBe('Edited through MCP')
-
-      const publish = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'publish_blog_post',
-        args: {
-          site_id: siteId,
-          post_id: postId,
-          expected_updated_at: updatedPost.updated_at,
-          expected_document_updated_at: updatedPost.document_updated_at,
-        },
-      })
-      expect(publish.status()).toBe(200)
-      const published = mcpData<{ post: { status: string; public_url: string | null; content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await publish.json()).post
-      expect(published.status).toBe('published')
-      expect(published.public_url).toEqual(expect.any(String))
-      expect(published.content_blocks[0]?.data.text).toBe('Edited through MCP')
+      expect(updatedReadPost.status).toBe('published')
+      expect(updatedReadPost.public_url).toEqual(expect.any(String))
 
       // Regression for the 2026-07-22 incident: update_blog_post sent `body`
       // instead of `content_blocks` and reported success without persisting

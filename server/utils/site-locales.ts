@@ -84,7 +84,8 @@ export async function upsertSiteLocale(
   if (!locale) throw new Error('Invalid locale.')
 
   const sourceLocale = await getSourceLocale(db, organizationId, siteId)
-  const status = input.is_source || locale === sourceLocale ? 'published' : assertStatus(input.status)
+  const isSource = input.is_source === true || locale === sourceLocale
+  const status = isSource ? 'published' : assertStatus(input.status)
   const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim().slice(0, 80) : null
   const now = new Date().toISOString()
   const id = `locale::${organizationId}::${siteId}::${locale}`
@@ -128,7 +129,7 @@ export async function upsertSiteLocale(
       siteId,
       locale,
       label,
-      input.is_source ? 1 : 0,
+      isSource ? 1 : 0,
       status,
       now,
       now,

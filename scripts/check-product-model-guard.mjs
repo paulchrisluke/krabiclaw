@@ -79,7 +79,7 @@ const FORBIDDEN_SEED_NAMING_PATTERNS = [
   /\bSeedTenantPageTranslation\b/,
   /\b(?:translations|translatedRows)\b/,
 ]
-const PUBLICATION_MODEL_PATH = /(?:^seed-definitions\/|(?:blog|post|locale|platform-content|mcp-catalog|mcp-tools|mcp-executor|mcp-prompts|facebook)[^/]*\.(?:ts|js|mjs|vue|json)$|\/(?:blog|posts|docs|locales)\/|\/(?:blog|posts|docs|locales)\.(?:ts|vue)$)/i
+const PUBLICATION_MODEL_PATH = /(?:^seed-definitions\/|\/(?:chowbot-tools|mcp-catalog-snapshots|mcp-tools|mcp-executor|mcp-prompts)\/|(?:blog|post|locale|platform-content|mcp-catalog|mcp-tools|mcp-executor|mcp-prompts|mcp-workflows|chowbot-agent|facebook)[^/]*\.(?:ts|js|mjs|vue|json)$|\/(?:blog|posts|docs|locales)\/|\/(?:blog|posts|docs|locales)\.(?:ts|vue)$)/i
 const FORBIDDEN_PUBLICATION_PATTERNS = [
   /\b(?:Publication|Publishing)Status\b[^\n]{0,160}['"](?:draft|archived)['"]/,
   /\bstatus\b[^\n]{0,100}['"](?:draft|archived)['"]/,

@@ -133,7 +133,9 @@ async function main() {
 
     const readEvent = await runPrompt(rl, 'Read scheduled announcement', `Read back post_id ${postId} from KrabiClaw site_id ${siteId} and report its exact title, status, and scheduled time.`, 'get_post')
     const readResult = parseSummary(readEvent.result_summary_json, 'get_post')
-    if (readResult.post?.status !== 'scheduled' || readResult.post?.title !== title) throw new Error('Scheduled announcement was not returned with the expected title and status.')
+    if (readResult.post?.status !== 'scheduled' || readResult.post?.title !== title || readResult.post?.scheduled_for !== scheduledFor) {
+      throw new Error('Scheduled announcement was not returned with the expected title, status, and scheduled time.')
+    }
 
     const publishEvent = await runPrompt(rl, 'Publish immediately', `I confirm publication. Publish post_id ${postId} immediately to the website for KrabiClaw site_id ${siteId}.`, 'publish_post')
     const published = parseSummary(publishEvent.result_summary_json, 'publish_post')
