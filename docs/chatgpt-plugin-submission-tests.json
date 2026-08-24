@@ -30,14 +30,14 @@
       "name": "Schedule and verify an announcement",
       "fixture": "Freshly reset site-mcp-growth-service; substitute the current UTC timestamp for TIMESTAMP so the title is unique",
       "prompt": "On KrabiClaw site_id site-mcp-growth-service, create a standard announcement titled 'Submission scheduled announcement TIMESTAMP' with body 'Created for the ChatGPT app submission review.' scheduled exactly 24 hours from now. Then read the returned post_id back and report its exact title, status, and scheduled_for. Do not publish it.",
-      "workflow": ["Call create_post with site_id and a future scheduled_for", "Call get_post with the returned post_id", "Delete the post through fixture-authenticated cleanup after recording the result"],
+      "workflow": ["Show the ChatGPT approval UI for create_post", "After approval, call create_post with site_id and a future scheduled_for", "Call get_post with the returned post_id", "Delete the post through fixture-authenticated cleanup after recording the result"],
       "expected_result": { "tools": ["create_post", "get_post"], "mutation": true, "shape": "create_post returns an ID; get_post returns the unique title, scheduled status, and the persisted future scheduled_for" }
     },
     {
       "name": "Publish to the website only",
       "fixture": "Freshly reset site-mcp-growth-service; substitute the current UTC timestamp for TIMESTAMP so the title is unique",
       "prompt": "On KrabiClaw site_id site-mcp-growth-service, create a standard announcement titled 'Submission publish announcement TIMESTAMP' with body 'Created for the ChatGPT app submission review.' scheduled exactly 24 hours from now. Read it back, then publish that post immediately to the website only. Open the returned public URL and verify the unique title.",
-      "workflow": ["Call create_post", "Call get_post", "Show the ChatGPT approval UI", "Call publish_post with channels set to site only", "Open public_url", "Delete the post through fixture-authenticated cleanup"],
+      "workflow": ["Show the ChatGPT approval UI for create_post", "After approval, call create_post", "Call get_post", "Show a second ChatGPT approval UI for publish_post", "After approval, call publish_post with channels set to site only", "Open public_url", "Delete the post through fixture-authenticated cleanup"],
       "expected_result": { "tools": ["create_post", "get_post", "publish_post"], "mutation": true, "shape": "public_url renders the unique title; no social channel is called" }
     }
   ],

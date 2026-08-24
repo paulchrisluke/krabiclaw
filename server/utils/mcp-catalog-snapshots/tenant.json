@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:8c17c4dd728c658244c6634265952c055f814411e9accfcee7a1d89eb818eaa0",
+  "fingerprint": "sha256:d1511a9020fc152a99695823b7e06d4c9a638f5db1e5f1b6cdd088d1cd6a88b5",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -5734,35 +5734,39 @@
           }
         },
         "required": [
-          "asset_id"
+          "asset_id",
+          "menu_name"
         ],
         "type": "object"
       },
       "outputSchema": {
         "properties": {
-          "items_created": {
+          "count": {
             "description": "Number of menu items extracted and created.",
             "type": "number"
           },
-          "menu": {
-            "description": "Created menu.",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "name"
-            ],
-            "type": "object"
+          "creditsRemaining": {
+            "type": "number"
+          },
+          "menuId": {
+            "description": "Created menu ID, or null when no items were detected.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "warning": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
-          "menu"
+          "menuId",
+          "count",
+          "warning",
+          "creditsRemaining"
         ],
         "type": "object"
       }

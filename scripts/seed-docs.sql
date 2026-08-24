@@ -110,7 +110,7 @@ VALUES (
   '{"items":[
     {"question":"I clicked the KrabiClaw server URL and got an error","answer":"That is normal. Do not open the server URL directly. Copy and paste https://krabiclaw.com/api/mcp into the custom app MCP server URL field instead.","position":0},
     {"question":"ChatGPT says the connection is wrong","answer":"Check three things: use https not http, use krabiclaw.com not your own site domain, and delete any extra spaces in the field and paste the URL again.","position":1},
-    {"question":"I cannot find Developer mode","answer":"Ask a workspace admin to confirm your ChatGPT plan, role, RBAC grant, and the custom MCP app policy under Workspace Settings → Permissions & Roles → Connected Data. Authorized users enable Developer mode under Settings → Apps → Advanced Settings.","position":2},
+    {"question":"I cannot find Developer mode","answer":"For Business, ask a workspace admin or owner to enable Developer mode, create and test the app, and publish it. For Enterprise/Edu, an admin grants Developer mode through RBAC and controls access to the published app; enabled members turn on Developer mode under Settings → Apps → Advanced Settings.","position":2},
     {"question":"I am on a different device","answer":"Use ChatGPT on the web. Custom MCP apps are not currently available in the mobile app.","position":3},
     {"question":"I created the app but cannot use it in chat","answer":"Confirm that an admin published it to your workspace access group, connect it from Apps, then start a new conversation and select KrabiClaw from Apps.","position":4},
     {"question":"Can I use KrabiClaw in the ChatGPT mobile app?","answer":"No. Custom MCP apps are currently available on ChatGPT web only.","position":5},
@@ -133,9 +133,9 @@ VALUES (
   1,
   1,
   '{"steps":[
-    {"name":"Enable developer access","text":"A workspace admin enables custom MCP apps under Workspace Settings → Permissions & Roles → Connected Data. Authorized users enable Developer mode under Settings → Apps → Advanced Settings.","position":0},
-    {"name":"Create the custom app","text":"Open Workspace Settings → Apps → Create and enter https://krabiclaw.com/api/mcp as the MCP server URL.","position":1},
-    {"name":"Review and authorize KrabiClaw","text":"Review the discovered read and write tools, publish the app to the intended users, connect, sign in with KrabiClaw, and approve OAuth access.","position":2},
+    {"name":"Enable developer access","text":"For Business, a workspace admin or owner enables Developer mode. For Enterprise/Edu, an admin grants Developer mode through RBAC; enabled members then turn it on under Settings → Apps → Advanced Settings.","position":0},
+    {"name":"Create the custom app","text":"Admins and owners use Workspace Settings → Apps → Create. Authorized Enterprise/Edu users use Settings → Apps → Create for testing. Enter https://krabiclaw.com/api/mcp as the MCP server URL.","position":1},
+    {"name":"Review and authorize KrabiClaw","text":"An admin or owner reviews the discovered tools and publishes the app to the intended users. Those users connect, sign in with KrabiClaw, and approve OAuth access.","position":2},
     {"name":"Start a conversation","text":"Start a new conversation, select KrabiClaw from Apps, and begin with a read-only site request.","position":3}
   ],"estimated_time":"PT3M"}',
   datetime('now'),

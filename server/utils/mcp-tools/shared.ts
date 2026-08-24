@@ -1135,14 +1135,14 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'save_generated_image_file',
   'upload_user_media',
   'create_blog_author',
-  'create_site',
   'update_media_asset',
-  'import_menu_from_media',
   'update_experience_booking',
   'update_notification_settings',
 ] as const
 
 export const OPEN_WORLD_WRITE_TOOL_NAMES = [
+  'create_site',
+  'import_menu_from_media',
   'set_brand_color',
   'create_blog_post',
   'update_blog_metadata',
@@ -1191,11 +1191,10 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'sync_domain',
 ] as const
 
-export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [
-  'delete_media_asset',
-] as const
+export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [] as const
 
 export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
+  'delete_media_asset',
   'set_media',
   'sync_menu_items',
   'update_blog_post',

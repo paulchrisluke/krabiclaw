@@ -134,9 +134,12 @@ export async function extractMenuFromMediaAsset(
     userId: string
     assetId: string
     sessionId?: string | null
-    menuName?: string
+    menuName: string
   }
 ): Promise<{ menuId: string | null; count: number; warning: string | null; creditsRemaining: number }> {
+  const menuName = opts.menuName.trim()
+  if (!menuName) throw new Error('menu_name is required when importing a menu')
+
   const asset = await getMediaAsset(db, opts.assetId, opts.siteId)
   if (!asset?.public_url || !asset.mime_type) throw new Error('Media asset not found')
 
@@ -191,12 +194,11 @@ export async function extractMenuFromMediaAsset(
   }
 
   const extractedItems = Array.isArray(parsed.items) ? parsed.items : []
+  const warning = typeof parsed.warning === 'string' ? parsed.warning : null
   if (!extractedItems.length) {
-    return { menuId: null, count: 0, warning: parsed.warning ?? 'No items detected in the image.', creditsRemaining: charged.newBalance }
+    return { menuId: null, count: 0, warning: warning ?? 'No items detected in the image.', creditsRemaining: charged.newBalance }
   }
 
-  const menuName = opts.menuName?.trim()
-  if (!menuName) throw new Error('menu_name is required when importing a menu')
   const menu = await createMenu(db, opts.organizationId, opts.siteId, { name: menuName }, opts.userId)
   const createdItems: string[] = []
   try {
@@ -230,7 +232,7 @@ export async function extractMenuFromMediaAsset(
     throw new Error(`Menu import failed after creating ${createdItems.length} item${createdItems.length === 1 ? '' : 's'}; menu was removed. ${reason}`)
   }
 
-  return { menuId: menu.id, count: createdItems.length, warning: parsed.warning ?? null, creditsRemaining: charged.newBalance }
+  return { menuId: menu.id, count: createdItems.length, warning, creditsRemaining: charged.newBalance }
 }
 
 const DOCUMENT_ANALYSIS_SYSTEM = `You are a document analysis assistant for a small-business owner's ChowBot assistant. The user has uploaded a Markdown document. You are given its content tagged with structural markers:
