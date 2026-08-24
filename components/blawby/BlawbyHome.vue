@@ -178,7 +178,7 @@ function trackConsultation(pageType: string, destination: string) {
 const seoTitle = computed(() => criticalPage.value.seo_title || identity.value.brand_name || '')
 const seoDescription = computed(() => criticalPage.value.seo_description || criticalPage.value.summary || identity.value.brand_description || '')
 
-const { canonicalUrl } = useTenantSocialMetadata(() => ({
+const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/',
   title: seoTitle.value,
   description: seoDescription.value,

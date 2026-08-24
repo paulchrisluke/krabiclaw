@@ -183,7 +183,6 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
               required: ['label', 'path'],
             },
           },
-          ogImageUrl: { type: ['string', 'null'], description: 'Hero image URL for the OG preview.' },
         },
         required: ['site', 'pages'],
       },

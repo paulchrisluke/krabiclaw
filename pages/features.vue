@@ -203,7 +203,8 @@ const faqItems = [
   }
 ]
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/features',
   title: 'Platform Features',
   description: 'KrabiClaw features: edit your local business site through ChatGPT, take bookings, import Google Places data, manage localized content, and track real-time analytics.',

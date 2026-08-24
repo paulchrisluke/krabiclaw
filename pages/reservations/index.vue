@@ -444,7 +444,7 @@ const primaryLocationSocialImage = computed(() => {
   return getLocationMediaUrl(primary)
 })
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/reservations',
   title: `${brandName.value} | ${resCopy.value.reserveCta}`,
   description: resCopy.value.seoReservationDescription(brandName.value),

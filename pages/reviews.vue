@@ -85,7 +85,7 @@ function loadMore() { visibleCount.value += PAGE_SIZE }
 
 const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/reviews',
   title: `Reviews | ${siteName.value}`,
   description: `Guest reviews for ${siteName.value}.`,

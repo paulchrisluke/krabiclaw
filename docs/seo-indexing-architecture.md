@@ -79,7 +79,7 @@ Individual page-level `robots` metadata may be retained for defense in depth, bu
 
 ## Canonicals
 
-Platform marketing pages use `usePlatformPageSeo()` and platform content pages use `usePlatformSeoUrl()`.
+Every public page uses `useSocialMetadata()` for its canonical and social metadata.
 
 Tenant pages receive a canonical link from `layouts/saya.vue`. The canonical strips query parameters by using `route.path` and resolves against the current request origin.
 
@@ -96,7 +96,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 ## Adding a public platform route
 
 1. Build the page with server-rendered primary content.
-2. Add canonical, title, and description through `usePlatformPageSeo()`.
+2. Add canonical, title, and description through `useSocialMetadata()`.
 3. Add the route to `PLATFORM_SITEMAP_ROUTES` only when it should appear in search results.
 4. Add or update regression tests.
 5. Do not enable automatic Nuxt route discovery for the sitemap.
@@ -104,7 +104,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 ## Adding a tenant route
 
 1. Ensure the route requires a resolved tenant/site.
-2. Add page-specific canonical and social metadata through `useTenantSocialMetadata()`; every social image is rendered by `/og-image-render.png`, with any selected media used only as its background input.
+2. Add page-specific canonical and social metadata through `useSocialMetadata()`; every social image is rendered by `/og-image-render.png`, with that page's media used only as its background input.
 3. Add the platform-host route classification when the path is tenant-only.
 4. Add the route to `server/plugins/sitemap.ts` only when it has durable public search value and can avoid empty/thin output.
 5. Query and filter tenant-owned records explicitly.

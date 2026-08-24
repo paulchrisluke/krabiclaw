@@ -524,8 +524,7 @@ const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.v
 
 const runtimeConfig = useRuntimeConfig()
 const siteUrl = runtimeConfig.public.siteUrl
-
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
   title: location.value?.seo_title || (location.value ? `${location.value.title} | Locations` : 'Location'),
   description: location.value?.seo_description || (location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : ''),
@@ -538,7 +537,11 @@ useTenantSocialMetadata(() => ({
     primaryColor: pageConfig.value?.brand_color || null,
   },
   heroImage: location.value?.hero_public_url
-    ? { url: location.value.hero_public_url }
+    ? {
+        url: location.value.hero_public_url,
+        kind: location.value.kind === 'video' ? 'video' : 'image',
+        thumbnailUrl: location.value.thumbnail_url,
+      }
     : null,
 }))
 

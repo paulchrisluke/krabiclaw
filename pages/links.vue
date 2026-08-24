@@ -141,17 +141,12 @@ function trackLinkClick(item: PublicLinksItem) {
   }).catch(() => {})
 }
 
-const canonicalUrl = useSeoUrl('/links')
-useSeoMeta({
-  title: computed(() => linksPage.value?.page.seo_title || `${brandName.value} Links`),
-  description: computed(() => linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || ''),
-  robots: computed(() => linksPage.value?.page.robots || 'noindex,follow'),
-  ogTitle: computed(() => linksPage.value?.page.seo_title || `${brandName.value} Links`),
-  ogDescription: computed(() => linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || ''),
-  ogImage: computed(() => profileImageUrl.value || undefined),
-  ogUrl: canonicalUrl,
-})
-useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
+useSocialMetadata(() => ({
+  path: '/links',
+  title: linksPage.value?.page.seo_title || `${brandName.value} Links`,
+  description: linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || '',
+  robots: linksPage.value?.page.robots || 'noindex,follow',
+  brand: { siteName: brandName.value, logoUrl: linksPage.value?.site.logo_url || null },
+  heroImage: profileImageUrl.value ? { url: profileImageUrl.value } : null,
 }))
 </script>

@@ -40,7 +40,8 @@ definePageMeta({
   layout: 'platform'
 })
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/privacy',
   title: 'Privacy Policy',
   description: 'Privacy Policy for KrabiClaw website builder platform. Learn how we collect, use, and protect your personal information.',

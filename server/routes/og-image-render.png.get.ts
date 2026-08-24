@@ -1,5 +1,5 @@
-import { getQuery, setHeader } from 'nitro/h3';
-import { parseOgImageQuery } from '~/utils/social-metadata'
+import { getQuery, HTTPError, setHeader } from 'nitro/h3';
+import { parseOgImageQuery, type OgImageRenderPayload } from '~/utils/social-metadata'
 import { resolveOgImage } from '~/server/utils/og-image/pipeline'
 
 /**
@@ -9,7 +9,15 @@ import { resolveOgImage } from '~/server/utils/og-image/pipeline'
  */
 export default defineHandler(async (event) => {
   const query = getQuery(event) as Record<string, string | string[] | undefined>
-  const payload = parseOgImageQuery(query)
+  let payload: OgImageRenderPayload
+  try {
+    payload = parseOgImageQuery(query)
+  } catch (error) {
+    throw new HTTPError({
+      statusCode: 400,
+      statusMessage: error instanceof Error ? error.message : 'Invalid OG image request',
+    })
+  }
   const result = await resolveOgImage(event, payload)
 
   setHeader(event, 'Content-Type', result.contentType)

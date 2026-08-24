@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:df31deaa6e1ceb739d186e713f7b1923526acd2ddfd14a7d0e342a730a328988",
+  "fingerprint": "sha256:9ab82dc1dee5ad3aeb431a71b3baf2aef5f492feec31c3baed3c33aa04cdfa7d",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -1868,7 +1868,7 @@
     {
       "name": "create_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "body": {
             "type": "string"
@@ -11122,13 +11122,6 @@
       },
       "outputSchema": {
         "properties": {
-          "ogImageUrl": {
-            "description": "Hero image URL for the OG preview.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "pages": {
             "description": "Navigable pages shown in the preview tabs.",
             "items": {
@@ -14382,7 +14375,7 @@
     {
       "name": "update_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "body": {
             "type": "string"

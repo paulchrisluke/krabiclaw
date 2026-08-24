@@ -173,7 +173,7 @@ const siteRobots = computed(() => {
   return config.value?.robots || null
 })
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: route.path,
   title: config.value?.seo_title || config.value?.brand_name || resolvedSite.value?.brand_name || '',
   description: config.value?.seo_description || config.value?.brand_description || '',
@@ -183,7 +183,6 @@ useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: config.value?.hero_image_url ? { url: config.value.hero_image_url } : null,
   robots: siteRobots.value,
 }))
 

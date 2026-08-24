@@ -233,7 +233,7 @@ function formatReviewDate(ts: string | null) {
 }
 
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: `/locations/${slug.value}/reviews`,
   title: `Reviews · ${location.value?.title || slug.value}`,
   description: `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`,

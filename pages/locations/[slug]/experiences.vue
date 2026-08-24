@@ -109,7 +109,7 @@ useSchemaOrg(computed(() => ({
   ],
 })))
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: `/locations/${slug.value}/experiences`,
   title: location.value
     ? `${expCopy.value.experiencesPageTitle} at ${location.value.title} | ${siteName.value}`

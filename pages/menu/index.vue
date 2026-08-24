@@ -201,7 +201,7 @@ const defaultCurrency = computed(() => {
 const formatMenuPrice = (amount: unknown, emptyLabel = 'TBD') =>
   formatMoneyAmount(amount, defaultCurrency.value, emptyLabel)
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/menu',
   title: `Menu · ${restaurantName.value}`,
   description: `Full menu at ${restaurantName.value}.`,

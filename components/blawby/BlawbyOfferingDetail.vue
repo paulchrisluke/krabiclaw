@@ -186,7 +186,7 @@ function trackConsultation(destination: string) {
   trackConsultationClick('service', `/services/${offering.value.slug}`, destination)
 }
 
-const { canonicalUrl } = useTenantSocialMetadata(() => ({
+const { canonicalUrl } = useSocialMetadata(() => ({
   path: offering.value.canonical_path,
   title: offering.value.seo_title || `${offering.value.name} | ${identity.value.brand_name}`,
   description: offering.value.seo_description || offering.value.summary || '',

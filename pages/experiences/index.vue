@@ -52,7 +52,7 @@ useBreadcrumbSchema([
   { name: 'Experiences', url: '/experiences' },
 ])
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/experiences',
   title: `Experiences | ${siteName.value}`,
   description: expCopy.value.seoExperiencesDescription(siteName.value),

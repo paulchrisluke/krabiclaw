@@ -215,7 +215,7 @@ function getDietaryTags(item: ApiValue): string[] {
 }
 
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: `/locations/${slug.value}/menu`,
   title: `Menu · ${location.value?.title || slug.value}`,
   description: `Full menu for ${location.value?.title || slug.value} at ${siteName.value}.`,

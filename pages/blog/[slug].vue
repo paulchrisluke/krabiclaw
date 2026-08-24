@@ -56,6 +56,7 @@
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
@@ -81,8 +82,8 @@ interface TenantBlogPost {
   author_name?: string | null
   updated_at?: string | null
   featured_order?: number | null
-  featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
-  primary_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
+  featured_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
+  primary_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
@@ -187,11 +188,11 @@ const renderableComponents = computed(() =>
 
 const selectedPostImage = computed(() => {
   const primary = post.value?.primary_image
-  if (primary?.public_url) return { public_url: primary.public_url, kind: 'image', width: primary.width, height: primary.height }
+  if (primary?.public_url) return primary
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const primaryBackground = computed(() => post.value?.primary_image?.public_url || null)
+const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
@@ -202,7 +203,7 @@ const resolvedSeo = computed(() => resolveBlogSeo({
   robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
 }))
 
-const { canonicalUrl } = useTenantSocialMetadata(() => ({
+const { canonicalUrl } = useSocialMetadata(() => ({
   path: resolvedSeo.value.canonicalUrl,
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
@@ -217,7 +218,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: primaryBackground.value ? { url: primaryBackground.value } : null,
+  heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
 }))
 
 useHead(() => ({
@@ -233,7 +234,7 @@ useContentPageSchema(computed(() => {
     url: canonicalUrl.value,
     title: post.value.title,
     description: resolvedSeo.value.description,
-    imageUrl: postMedia.value.url || undefined,
+    imageUrl: postImageUrl.value || undefined,
     imageWidth: selectedPostImage.value?.width ?? undefined,
     imageHeight: selectedPostImage.value?.height ?? undefined,
     datePublished: post.value.published_at,

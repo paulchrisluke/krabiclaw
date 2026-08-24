@@ -341,18 +341,19 @@ const siteUrl = requestURL.origin || config.public.siteUrl
 // that builder needs a real tenant org identity and is not applicable to a
 // platform page describing the template product itself, so it is reused by
 // reference here, not duplicated.
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: `/templates/${template.slug}`,
   title: template.seo.title,
   description: template.seo.description,
-  // No `ogImage` override here — usePlatformPageSeo's shared #259 composer
+  // No `ogImage` override here — useSocialMetadata's shared #259 composer
   // (utils/social-metadata.ts's resolveSocialOgImage) generates a real
   // per-template 1200x630 card from this title/description via the
   // `platform` renderer whenever no override is supplied, so each template
   // slug gets its own distinct generated OG image rather than falling back
   // to the static shared platform image. Same pattern as the isPlatform
   // branches in pages/index.vue and pages/about.vue.
-  pageType: 'ItemPage',
+  schemaPageType: 'ItemPage',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Templates', url: '/templates' },

@@ -7,9 +7,8 @@
  * and Twitter tags. Routes/composables provide data to this contract; they must not
  * assemble independent tag sets or image URLs themselves.
  *
- * `usePlatformPageSeo` (composables/usePlatformPageSeo.ts) and `useTenantSocialMetadata`
- * (composables/useTenantSocialMetadata.ts) are the two supported adapters over this
- * contract — one per platform/tenant origin-resolution rule (see useSeoUrls.ts).
+ * `useSocialMetadata` is the only adapter over this contract and resolves both
+ * platform and tenant origins before applying the normalized tags.
  */
 
 /** Registered render templates. Keep in sync with server/utils/og-image/renderers/index.ts. */
@@ -22,10 +21,29 @@ export type SocialImageMimeType = 'image/jpeg' | 'image/png' | 'image/gif'
 
 export interface SocialImageSource {
   url: string
+  kind?: 'image' | 'video'
+  thumbnailUrl?: string | null
   width?: number
   height?: number
   type?: SocialImageMimeType
   alt?: string
+}
+
+export interface SocialMediaSource {
+  kind?: string | null
+  url?: string | null
+  public_url?: string | null
+  thumbnailUrl?: string | null
+  thumbnail_url?: string | null
+}
+
+export function resolveSocialImageUrl(source: SocialMediaSource | null | undefined): string | null {
+  const value = source?.kind === 'video'
+    ? source.thumbnailUrl ?? source.thumbnail_url
+    : source?.kind === 'image' || !source?.kind
+      ? source?.url ?? source?.public_url
+      : null
+  return value?.trim() || null
 }
 
 export interface SocialBrand {
@@ -113,7 +131,7 @@ export function resolveRobots(input: Pick<SocialPageMetadataInput, 'robots' | 'i
 /**
  * Pure composer: turns the shared contract into the exact tag set every page must emit.
  * Does not touch Vue/Nuxt APIs — composables/useSocialMetadata.ts applies this output via
- * useSeoMeta/useHead so the same logic is testable without a component context.
+ * useHead so the same logic is testable without a component context.
  */
 export function composeSocialMetadata(
   input: SocialPageMetadataInput,
@@ -218,7 +236,7 @@ export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: str
     location: input.location,
     logoUrl: input.brand.logoUrl,
     faviconUrl: input.brand.faviconUrl,
-    backgroundImageUrl: input.heroImage?.url,
+    backgroundImageUrl: resolveSocialImageUrl(input.heroImage),
     primaryColor: input.brand.primaryColor,
     secondaryColor: input.brand.secondaryColor,
   }
@@ -247,11 +265,18 @@ export function parseOgImageQuery(query: Record<string, string | string[] | unde
     return raw ? raw.slice(0, maxLength) : raw
   }
   const template = get('template')
+  const title = get('title')?.trim()
+  const siteName = get('siteName')?.trim()
+  if (template !== 'platform' && template !== 'saya' && template !== 'blawby') {
+    throw new Error('OG image template is required')
+  }
+  if (!title) throw new Error('OG image title is required')
+  if (!siteName) throw new Error('OG image site name is required')
   return {
-    template: template === 'saya' || template === 'blawby' ? template : 'platform',
-    title: get('title') || '',
+    template,
+    title,
     description: get('description') || null,
-    siteName: get('siteName') || 'KrabiClaw',
+    siteName,
     label: get('label') || null,
     location: get('location') || null,
     logoUrl: get('logoUrl', MAX_QUERY_URL_LENGTH) || null,

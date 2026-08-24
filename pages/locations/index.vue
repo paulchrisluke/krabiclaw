@@ -119,7 +119,7 @@ function formatAddress(address: AddressInput) {
 
 const siteName = computed(() => unref(site)?.brand_name || '')
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/locations',
   title: `Locations · ${siteName.value}`,
   description: 'Find all our locations.',

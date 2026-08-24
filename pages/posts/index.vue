@@ -56,7 +56,7 @@ const hasMore = computed(() => visibleCount.value < googlePosts.value.length)
 const remaining = computed(() => googlePosts.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/posts',
   title: `Updates | ${siteName.value}`,
   description: `Latest news and updates from ${siteName.value}.`,

@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
 
   const sql = `
     SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order, p.featured_image_asset_id, ma.public_url, ma.kind, ma.width, ma.height
+      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order, p.featured_image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
     FROM blog_posts p
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'

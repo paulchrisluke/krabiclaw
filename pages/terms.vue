@@ -42,7 +42,8 @@ definePageMeta({
   layout: 'platform'
 })
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/terms',
   title: 'Terms and Conditions',
   description: 'Terms and Conditions for KrabiClaw website builder platform. Read our terms of service for using our SaaS platform.',

@@ -561,7 +561,7 @@ async function loadPublicPageSource(
       `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.updated_at, p.featured_order,
               COALESCE(sa.name, u.name) AS author_name, p.featured_image_asset_id,
-              ma.public_url, ma.kind, ma.width, ma.height,
+              ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height,
               CAST(MAX(1, ROUND((LENGTH(COALESCE(p.body, '')) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
        FROM blog_posts p
        LEFT JOIN user u ON u.id = p.author_id
@@ -580,7 +580,7 @@ async function loadPublicPageSource(
               p.featured_image_asset_id,
               COALESCE(sa.name, u.name) AS author_name, COALESCE(sma.public_url, u.image) AS author_image,
               sa.title AS author_title, sa.bio AS author_bio,
-              ma.public_url, ma.kind, ma.width, ma.height
+              ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
        FROM blog_posts p
        LEFT JOIN user u ON u.id = p.author_id
        LEFT JOIN site_authors sa ON sa.id = p.site_author_id
