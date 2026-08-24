@@ -86,7 +86,7 @@ export interface SocialPageMetadataInput {
   author?: string | null
   /** ISO 8601 date string. Only meaningful when pageType is 'article'. */
   publishedAt?: string | null
-  /** Defaults to true. Set false for draft/unpublished/noindex pages. */
+  /** Defaults to true. Set false for pages that should not be indexed. */
   indexable?: boolean
   /** Explicit robots override string; takes precedence over `indexable` when set. */
   robots?: string | null

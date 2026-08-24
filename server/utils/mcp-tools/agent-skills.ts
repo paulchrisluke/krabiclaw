@@ -10,7 +10,7 @@ import {
 export const AGENT_SKILL_TOOLS: McpToolDefinition[] = [
   siteTool({
     name: 'resolve_agent_guidance',
-    description: 'Resolve the reusable scoped Agent Skill guidance for this tenant site and task. Use before drafting blog content or preparing an AI-generated image brief. Returns each applicable source document separately; MCP cannot create, edit, activate, or archive skills.',
+    description: 'Resolve the reusable scoped Agent Skill guidance for this tenant site and task. Use before composing blog content or preparing an AI-generated image brief. Returns each applicable source document separately; MCP cannot create, edit, activate, or archive skills.',
     domain: 'agent_skills',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -23,7 +23,7 @@ export const AGENT_SKILL_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'review_agent_guidance_candidate',
-    description: 'Run a scoped advisory review of a tenant blog draft or image-generation brief against the exact resolved Agent Skill guidance. This scaffold does not persist provenance; use the returned fingerprints as review evidence only.',
+    description: 'Run a scoped advisory review of a tenant blog article or image-generation brief against the exact resolved Agent Skill guidance. This scaffold does not persist provenance; use the returned fingerprints as review evidence only.',
     domain: 'agent_skills',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -32,7 +32,7 @@ export const AGENT_SKILL_TOOLS: McpToolDefinition[] = [
       candidate_type: AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
       candidate: {
         type: 'object',
-        description: 'The exact draft or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.',
+        description: 'The exact article or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.',
         additionalProperties: true,
       },
     },

@@ -10,7 +10,7 @@ export interface SiteSettings {
   site_id: string
   subdomain: string
   theme: string
-  status: 'active' | 'pending' | 'failed'
+  status: 'active' | 'inactive' | 'suspended'
   primary_location_id: string | null
   public_url: string
   custom_domain_status: 'none' | 'pending' | 'active' | 'failed'

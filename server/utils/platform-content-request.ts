@@ -15,9 +15,10 @@ export function platformContentNavInput(
   }
 }
 
-export function platformBlogDraftCreateInput(body: PlatformBlogPostRequestBody): PlatformBlogCreateInput {
+export function platformBlogCreateInput(body: PlatformBlogPostRequestBody): PlatformBlogCreateInput {
   return {
     title: body.title ?? '',
+    slug: body.slug ?? null,
     content_blocks: body.content_blocks ?? [],
     excerpt: body.excerpt ?? null,
     category: body.category ?? null,
@@ -30,5 +31,6 @@ export function platformBlogDraftCreateInput(body: PlatformBlogPostRequestBody):
     robots: body.robots ?? null,
     featured_image_asset_id: body.featured_image_asset_id ?? null,
     visibility: body.visibility ?? 'public',
+    scheduled_for: body.scheduled_for ?? null,
   }
 }

@@ -216,14 +216,8 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">
-          <UButton color="neutral" variant="soft" :loading="saving" :disabled="!canSave" @click="update(false)">
-            Save changes
-          </UButton>
-          <UButton :loading="saving" :disabled="!canPublish" @click="update(true)">
-            Publish
-          </UButton>
-          <UButton v-if="doc?.status === 'published'" color="neutral" variant="ghost" :loading="saving" @click="unpublish">
-            Unpublish
+          <UButton :loading="saving" :disabled="!canSave" @click="update">
+            Save live changes
           </UButton>
           <UButton color="error" variant="ghost" :loading="saving" @click="remove">
             Delete
@@ -275,8 +269,6 @@ interface Doc {
   robots?: string | null
   featured_image_asset_id?: string | null
   body: string
-  status?: string | null
-  published_at?: string | null
   components?: DocComponent[]
 }
 
@@ -296,7 +288,7 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const docId = route.params.docId as string
 
-const { form, canSave, canPublish, handleImageChange } = useDocForm()
+const { form, canSave, handleImageChange } = useDocForm()
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
 const difficultyItems = computed(() => difficultyLevels.map((item) => ({ label: item, value: item })))
 const navSectionItems = computed(() => [
@@ -430,7 +422,7 @@ async function loadDoc() {
   }
 }
 
-async function update(publish = false) {
+async function update() {
   if (!form.title.trim() || !form.body.trim()) {
     errorMessage.value = 'Title and body are required.'
     return
@@ -441,36 +433,15 @@ async function update(publish = false) {
   try {
     const updated = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`, {
       method: 'PATCH',
-      body: { ...buildPayload(), ...(publish ? { publish: true } : {}) },
+      body: buildPayload(),
       validate: isDocResponse,
     })
     if (!updated.doc) throw new Error('Doc not found after save')
     doc.value = updated.doc
     hydrateStructuredContent(updated.doc.components)
-    successMessage.value = publish ? 'Published.' : 'Saved.'
+    successMessage.value = 'Live changes saved.'
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to save.')
-  } finally {
-    saving.value = false
-  }
-}
-
-async function unpublish() {
-  saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-  try {
-    const updated = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`, {
-      method: 'PATCH',
-      body: { ...buildPayload(), unpublish: true },
-      validate: isDocResponse,
-    })
-    if (!updated.doc) throw new Error('Doc not found after unpublish')
-    doc.value = updated.doc
-    hydrateStructuredContent(updated.doc.components)
-    successMessage.value = 'Doc unpublished.'
-  } catch (err) {
-    errorMessage.value = getErrorMessage(err, 'Failed to unpublish.')
   } finally {
     saving.value = false
   }

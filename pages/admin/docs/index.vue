@@ -18,10 +18,7 @@
         <div v-else class="divide-y divide-default rounded-xl border border-default overflow-hidden">
           <div v-for="doc in docs" :key="doc.id" class="flex items-center justify-between px-5 py-4">
             <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <p class="font-medium text-default truncate">{{ doc.title }}</p>
-                <UBadge :color="doc.status === 'published' ? 'success' : 'neutral'" variant="soft" size="xs">{{ doc.status }}</UBadge>
-              </div>
+              <p class="font-medium text-default truncate">{{ doc.title }}</p>
               <p class="text-xs text-muted truncate">{{ doc.category }}<template v-if="doc.slug"> · {{ doc.slug }}</template></p>
             </div>
             <div class="flex gap-2 shrink-0">
@@ -54,7 +51,7 @@ useSeoMeta({ title: 'Docs | KrabiClaw Admin', robots: 'noindex, nofollow' })
 
 const toast = useToast()
 
-interface Doc { id: string; title: string; slug: string | null; category: string | null; status: string }
+interface Doc { id: string; title: string; slug: string | null; category: string | null }
 
 const isDocsResponse = (value: unknown): value is { docs: Doc[] } =>
   isRecord(value)
@@ -62,8 +59,7 @@ const isDocsResponse = (value: unknown): value is { docs: Doc[] } =>
   && value.docs.every(doc =>
     isRecord(doc)
     && typeof doc.id === 'string'
-    && typeof doc.title === 'string'
-    && typeof doc.status === 'string',
+    && typeof doc.title === 'string',
   )
 
 const docs = ref<Doc[]>([])

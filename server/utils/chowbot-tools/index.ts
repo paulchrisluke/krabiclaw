@@ -36,6 +36,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
 ]
 
 export const CHOWBOT_CONFIRM_REQUIRED = new Set([
+  "import_menu_from_media",
   "create_post",
   "publish_post",
   "delete_post",
@@ -54,6 +55,6 @@ export const CHOWBOT_CONFIRM_REQUIRED = new Set([
   "create_work_request",
   "update_page_content",
   "create_tenant_page",
-  "update_tenant_page_draft",
+  "update_tenant_page",
   "change_tenant_page_path",
 ]);

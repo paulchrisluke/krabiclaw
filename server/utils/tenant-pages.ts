@@ -799,7 +799,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   return { page: await getTenantPageForEditor(db, variantId) }
 }
 
-export async function updateTenantPageDraft(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope }) {
+export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope }) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
   if (!row.document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })

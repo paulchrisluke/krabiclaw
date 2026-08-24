@@ -7,7 +7,7 @@ import {
   createTenantPage,
   getTenantPageById,
   listTenantPages,
-  updateTenantPageDraft,
+  updateTenantPage,
 } from '~/server/utils/tenant-pages'
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -21,7 +21,7 @@ function nullableStringArg(args: Record<string, unknown>, key: string, fallback:
   return value.trim()
 }
 
-function tenantPageDraftData(args: Record<string, unknown>, page: Awaited<ReturnType<typeof getTenantPageById>>) {
+function tenantPageDocumentData(args: Record<string, unknown>, page: Awaited<ReturnType<typeof getTenantPageById>>) {
   const blocks = args.blocks === undefined ? page.blocks : args.blocks
   return {
     path: typeof args.path === 'string' ? args.path : page.path,
@@ -184,7 +184,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "update_tenant_page_draft":
+    case "update_tenant_page":
       try {
         const variantId = requiredString(args, "variant_id");
         const page = await getTenantPageById(site.db, variantId, {
@@ -192,10 +192,10 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           organizationId: site.organizationId,
         });
         assertTenantPageReplacementConfirmed(page, args)
-        const updated = await updateTenantPageDraft(site.db, variantId, {
+        const updated = await updateTenantPage(site.db, variantId, {
           userId: site.userId,
           scope: { siteId: site.siteId, organizationId: site.organizationId },
-          data: tenantPageDraftData(args, page),
+          data: tenantPageDocumentData(args, page),
         });
         return tenantPageLifecycleResponse("Updated", updated);
       } catch (error) {
@@ -208,10 +208,10 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           siteId: site.siteId,
           organizationId: site.organizationId,
         });
-        const updated = await updateTenantPageDraft(site.db, variantId, {
+        const updated = await updateTenantPage(site.db, variantId, {
           userId: site.userId,
           scope: { siteId: site.siteId, organizationId: site.organizationId },
-          data: tenantPageDraftData({ ...args, path: requiredString(args, "new_path") }, page),
+          data: tenantPageDocumentData({ ...args, path: requiredString(args, "new_path") }, page),
         });
         return tenantPageLifecycleResponse("Changed path for", updated);
       } catch (error) {

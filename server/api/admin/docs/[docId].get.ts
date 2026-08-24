@@ -1,4 +1,4 @@
-// GET /api/admin/docs/[docId] - Fetch single platform doc (including draft)
+// GET /api/admin/docs/[docId] - Fetch one public platform document for editing
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { anonymizeId } from '~/server/utils/platform-telemetry'

@@ -12,6 +12,7 @@ import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
 type ToolContract = {
   name: string
   inputSchema: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
 }
 
 function tool(tools: readonly unknown[], name: string): ToolContract {
@@ -87,7 +88,17 @@ test('create_platform_blog_post requires a non-empty content_blocks array', () =
   const properties = createTool.inputSchema.properties as Record<string, { minItems?: number }>
   assert.equal(properties.content_blocks?.minItems, 1)
   assert.equal(Object.hasOwn(properties, 'publish'), false)
-  assert.equal(Object.hasOwn(properties, 'scheduled_for'), false)
+  assert.equal(Object.hasOwn(properties, 'scheduled_for'), true)
+})
+
+test('platform blog list exposes final publication timing', () => {
+  const list = tool(PLATFORM_MCP_TOOLS, 'list_platform_blog_posts')
+  const output = list.outputSchema as { properties: { posts: { items: { properties: Record<string, unknown>; required: string[] } } } }
+  const summary = output.properties.posts.items
+  assert.deepEqual(summary.properties.status, { type: 'string', enum: ['published', 'scheduled'] })
+  assert.deepEqual(summary.properties.scheduled_for, { type: ['string', 'null'] })
+  assert.ok(summary.required.includes('status'))
+  assert.ok(summary.required.includes('scheduled_for'))
 })
 
 test('PLATFORM_PUBLIC_MCP_TOOLS and PLATFORM_INTERNAL_MCP_TOOLS are disjoint and together form PLATFORM_MCP_TOOLS', () => {
@@ -102,7 +113,8 @@ test('PLATFORM_PUBLIC_MCP_TOOLS and PLATFORM_INTERNAL_MCP_TOOLS are disjoint and
 })
 
 test('platform blog lifecycle tools require both exact concurrency tokens', () => {
-  for (const name of ['publish_platform_blog_post', 'unpublish_platform_blog_post']) {
+  assert.equal(getPlatformMcpTool('unpublish_platform_blog_post'), null)
+  for (const name of ['publish_platform_blog_post']) {
     const lifecycleTool = tool(PLATFORM_MCP_TOOLS, name)
     assert.deepEqual(lifecycleTool.inputSchema.required, [
       'post_id',

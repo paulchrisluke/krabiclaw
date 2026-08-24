@@ -1017,7 +1017,7 @@ export function workspaceSitesPayload(
     subdomain: site.subdomain ?? "",
     orgSlug: site.organization_slug ?? "",
     publicUrl: resolveSitePublicOrigin(site, env),
-    status: site.status ?? "draft",
+    status: site.status ?? "inactive",
     active: site.id === workspace.site?.id,
   }));
 }

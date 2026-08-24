@@ -75,7 +75,7 @@ export interface Post {
   event_end: string | null
   offer_coupon: string | null
   offer_terms: string | null
-  status: 'draft' | 'published' | 'scheduled' | 'archived'
+  status: 'published' | 'scheduled'
   scheduled_for: string | null
   published_at: string | null
   created_by: string
@@ -168,6 +168,7 @@ type PostWritableInput = {
   event_end?: string | null
   offer_coupon?: string | null
   offer_terms?: string | null
+  scheduled_for?: string | null
 }
 
 export function validatePostInput(data: PostWritableInput, existing?: PostWritableInput) {
@@ -194,6 +195,13 @@ export function validatePostInput(data: PostWritableInput, existing?: PostWritab
     const terms = data.offer_terms !== undefined ? cleanString(data.offer_terms) : cleanString(existing?.offer_terms)
     if (!coupon && !terms) {
       throw new PostValidationError('offer_coupon or offer_terms is required when post_type is "offer"')
+    }
+  }
+
+  if (data.scheduled_for) {
+    const scheduledTime = Date.parse(data.scheduled_for)
+    if (!Number.isFinite(scheduledTime) || scheduledTime <= Date.now()) {
+      throw new PostValidationError('scheduled_for must be a future ISO 8601 datetime')
     }
   }
 }
@@ -469,6 +477,9 @@ export async function listPosts(
   status?: string,
   locationId?: string,
 ): Promise<Post[]> {
+  if (status && status !== 'published' && status !== 'scheduled') {
+    throw new PostValidationError('status must be published or scheduled')
+  }
   let query = `
     SELECT p.*, ma.public_url, ma.thumbnail_url, ma.kind
     FROM posts p
@@ -531,7 +542,6 @@ export async function createPost(
     cta_type?: string; cta_url?: string
     event_title?: string; event_start?: string; event_end?: string
     offer_coupon?: string; offer_terms?: string
-    status?: 'draft' | 'published'
     gallery_media?: PostMediaInput[] | unknown
   },
   createdBy: string,
@@ -540,7 +550,7 @@ export async function createPost(
   validatePostInput(data)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  const status = data.status ?? (data.scheduled_for ? 'scheduled' : 'published')
+  const status = data.scheduled_for ? 'scheduled' : 'published'
   const publishedAt = status === 'published' ? now : null
   const title = cleanString(data.title)
   const body = data.body.trim()
@@ -675,6 +685,14 @@ export async function updatePost(
   for (const [col, val] of fields) {
     if (val !== undefined) { sets.push(`${col} = ?`); params.push(val ?? null) }
   }
+  if (data.scheduled_for !== undefined) {
+    if (data.scheduled_for) {
+      sets.push("status = 'scheduled'", 'published_at = NULL')
+    } else if (existing.status === 'scheduled') {
+      sets.push("status = 'published'", 'published_at = ?')
+      params.push(now)
+    }
+  }
 
   const hasContentChange = data.title !== undefined || data.body !== undefined || data.image_asset_id !== undefined ||
     data.slug !== undefined || data.seo_title !== undefined || data.seo_description !== undefined ||
@@ -745,16 +763,17 @@ export async function publishPost(
   const now = new Date().toISOString()
   const slug = existing.slug ?? await allocatePostSlug(db, siteId, existing.title ?? existing.body.slice(0, 80) ?? postId, postId)
 
-  const updateResult = await execute(
-    db,
-    `
-    UPDATE posts SET status = 'published', slug = ?, published_at = COALESCE(published_at, ?), updated_at = ?
-    WHERE id = ? AND organization_id = ? AND site_id = ?
-  `,
-    [slug, now, now, postId, organizationId, siteId],
-  )
-
-  if (Number(updateResult.meta.changes ?? 0) === 0) return null
+  if (channels.includes('site')) {
+    const updateResult = await execute(
+      db,
+      `UPDATE posts
+          SET status = 'published', slug = ?, scheduled_for = NULL,
+              published_at = COALESCE(published_at, ?), updated_at = ?
+        WHERE id = ? AND organization_id = ? AND site_id = ?`,
+      [slug, now, now, postId, organizationId, siteId],
+    )
+    if (Number(updateResult.meta.changes ?? 0) === 0) return null
+  }
 
   const jobQueries = channels.map((channel) => ({
     query: `
@@ -777,7 +796,7 @@ export async function publishPost(
   const publishedChannels = channels.filter(channel => channel === 'site')
 
   const post = await getPost(db, organizationId, siteId, postId, env)
-  if (post && existing.status !== 'published') {
+  if (post && channels.includes('site') && existing.status !== 'published') {
     await fireSiteEventSafe({
       db,
       organizationId,

@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { normalizeLocale } from '~/server/utils/site-i18n'
-import { upsertSiteLocale, type SiteLocaleInput } from '~/server/utils/site-locales'
+import { upsertSiteLocale, validateSiteLocaleInput, type SiteLocaleInput } from '~/server/utils/site-locales'
 import { isDemoOrg } from '~/server/utils/demo'
 import { queryFirst } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
@@ -12,7 +12,12 @@ export default defineHandler(async (event) => {
   const locale = normalizeLocale(localeParam)
   if (!siteId || !locale) return jsonResponse({ error: 'Site ID and locale are required' }, { status: 400 })
 
-  const body = await readBody(event) as Omit<SiteLocaleInput, 'locale'>
+  let body: Omit<SiteLocaleInput, 'locale'>
+  try {
+    body = validateSiteLocaleInput(await readBody(event) as Omit<SiteLocaleInput, 'locale'>)
+  } catch (error) {
+    return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid is_source' }, { status: 400 })
+  }
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })

@@ -125,7 +125,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   siteTool({
-      name: 'update_tenant_page_draft',
+      name: 'update_tenant_page',
       description: 'Update canonical tenant-page content with optimistic concurrency. Provide the complete blocks array and expected_document_updated_at from the last read. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
       domain: 'content',
       minimumRole: 'editor',

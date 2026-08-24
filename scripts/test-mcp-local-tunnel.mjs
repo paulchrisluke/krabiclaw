@@ -245,8 +245,8 @@ async function main() {
   await run('yarn', ['playwright', 'test', 'tests/e2e/tenant-favicons.spec.ts', '--project=chromium', '--workers=1'], gateEnv)
 
   if (runChatGPTGate) {
-    console.log('# Running the actual ChatGPT normal-browser connector gate')
-    console.log(`# Configure or refresh ${process.env.CHATGPT_CONNECTOR_NAME || 'devkrabiclaw'} with: ${origin}/api/mcp`)
+    console.log('# Running the automated ChatGPT Chrome and telemetry gate')
+    console.log(`# The ${process.env.CHATGPT_CONNECTOR_NAME || 'devkrabiclaw'} connection must use: ${origin}/api/mcp`)
     await run('node', ['scripts/demo-recording/chatgpt-connector-test.mjs'], gateEnv)
   }
 

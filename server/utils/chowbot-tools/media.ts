@@ -22,12 +22,13 @@ export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
     {
       name: "import_menu_from_media",
       description:
-        "Import menu items from the currently pending WhatsApp image or document. Use only when the user asks to import, extract, or read menu items from the pending file.",
+        "Import menu items from the currently pending WhatsApp image or document. A menu name is required. Use only when the user asks to import, extract, or read menu items from the pending file.",
       input_schema: {
         type: "object",
         properties: {
-          menu_name: { type: "string", description: "Optional menu name." },
+          menu_name: { type: "string", description: "Required name for the new menu." },
         },
+        required: ["menu_name"],
       },
     },
   // analyze_document: MCP requires asset_id directly (ChatGPT already

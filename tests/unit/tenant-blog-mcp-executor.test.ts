@@ -46,9 +46,9 @@ function canonicalPost() {
     robots: null,
     author_name: null,
     site_author_id: null,
-    published: false,
+    published: true,
     published_at: null,
-    status: 'draft',
+    status: 'published',
     visibility: 'public',
     scheduled_for: null,
     created_at: '2026-07-23T00:00:00.000Z',
@@ -140,7 +140,7 @@ test('tenant blog projection rejects missing documents and malformed blocks inst
 })
 
 test('tenant blog lifecycle tools require both concurrency tokens before touching the backend', async () => {
-  for (const toolName of ['publish_blog_post', 'unpublish_blog_post']) {
+  for (const toolName of ['publish_blog_post']) {
     await assert.rejects(
       () => handleBlogTools(ctx(toolName, { site_id: 'site-1', post_id: 'post-1' })),
       invalidParamsContaining('Invalid expected_updated_at'),

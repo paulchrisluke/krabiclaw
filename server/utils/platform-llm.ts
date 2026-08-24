@@ -24,7 +24,6 @@ interface PlatformLlmDocSummary {
   difficulty_level?: string | null
   canonical_url?: string | null
   seo_description?: string | null
-  published_at?: string | null
   updated_at?: string | null
 }
 
@@ -247,7 +246,6 @@ export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: str
       optionalFrontMatterLine('markdown_url', markdownPath),
       optionalFrontMatterLine('canonical_url', canonicalUrl),
       optionalFrontMatterLine('last_updated', formatDateOnly(doc.updated_at)),
-      optionalFrontMatterLine('published_at', formatDateOnly(doc.published_at)),
       optionalFrontMatterLine('type', 'documentation'),
       optionalFrontMatterLine('summary', doc.seo_description || doc.excerpt || ''),
     ]),
@@ -305,10 +303,9 @@ export async function listPublishedPlatformDocsForLlm(db: DbClient) {
   return await queryAll<PlatformLlmDocSummary>(
     db,
     `SELECT
-      id, title, slug, excerpt, category, difficulty_level, canonical_url, seo_description, published_at, updated_at
+      id, title, slug, excerpt, category, difficulty_level, canonical_url, seo_description, updated_at
      FROM platform_docs
-     WHERE status = 'published'
-     ORDER BY category, sort_order, published_at DESC`,
+     ORDER BY category, sort_order, updated_at DESC`,
   )
 }
 
@@ -345,9 +342,9 @@ export async function getPublishedPlatformDocBySlug(db: DbClient, categorySlug: 
   const detail = await queryFirst<PlatformLlmDocDetail>(
     db,
     `SELECT
-      id, title, slug, body, excerpt, category, difficulty_level, canonical_url, seo_description, published_at, updated_at
+      id, title, slug, body, excerpt, category, difficulty_level, canonical_url, seo_description, updated_at
      FROM platform_docs
-     WHERE slug = ? AND category = ? AND status = 'published'`,
+     WHERE slug = ? AND category = ?`,
     [slug, category],
   )
   if (!detail) return null
@@ -401,7 +398,6 @@ export function buildPlatformDocLinkEntries(docs: PlatformLlmDocSummary[], origi
       canonicalUrl: doc.canonical_url?.trim() || absoluteUrl(origin, path),
       summary: safeSummary(doc.seo_description || doc.excerpt, 'KrabiClaw documentation.'),
       category: doc.category,
-      publishedAt: doc.published_at,
       updatedAt: doc.updated_at,
       difficultyLevel: doc.difficulty_level,
     }]
@@ -553,7 +549,6 @@ export function buildDocsIndexJson(docs: PlatformLlmLinkEntry[]) {
       markdown_url: doc.markdownPath,
       canonical_url: doc.canonicalUrl,
       summary: doc.summary,
-      published_at: doc.publishedAt ?? null,
       updated_at: doc.updatedAt ?? null,
     })),
   }

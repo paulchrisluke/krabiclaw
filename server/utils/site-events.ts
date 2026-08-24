@@ -6,7 +6,6 @@ export type SiteEventType =
   // Posts
   | 'post.created'
   | 'post.published'
-  | 'post.archived'
   // Menu
   | 'menu.created'
   | 'menu.item_added'

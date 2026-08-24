@@ -1114,7 +1114,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	nav_section_order: integer(),
 	hide_from_nav: integer().default(0).notNull(),
 	featured_order: integer(),
-	status: text().default("draft").notNull(), // draft | published | scheduled | archived
+	status: text().default("published").notNull(),
 	visibility: text().default("public").notNull(), // public | unlisted
 	author_id: text().references(() => user.id, { onDelete: "set null" } ), // CMS creator identity (Better Auth user), not the displayed byline
 	site_author_id: text().references(() => site_authors.id, { onDelete: "set null" } ), // displayed byline, tenant-scoped
@@ -1133,7 +1133,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	robots: text(),
 }, (table) => [
 	check("blog_posts_scope_check", sql`(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
-	check("blog_posts_status_check", sql`status IN ('draft', 'published', 'scheduled', 'archived')`),
+	check("blog_posts_status_check", sql`status IN ('published', 'scheduled')`),
 	check("blog_posts_visibility_check", sql`visibility IN ('public', 'unlisted')`),
 	check("blog_posts_category_check", sql`site_id IS NOT NULL OR category IS NOT NULL`),
 	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
@@ -1196,10 +1196,7 @@ export const platform_docs = sqliteTable("platform_docs", {
 	seo_keywords: text(),
 	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	sort_order: integer().default(0),
-	parent_doc_id: text(),
 	difficulty_level: text(),
-	status: text().default("draft").notNull(),
-	published_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	canonical_url: text(),
@@ -1243,7 +1240,7 @@ export const posts = sqliteTable("posts", {
 	event_end: text(),
 	offer_coupon: text(),
 	offer_terms: text(),
-	status: text().default("draft").notNull(),
+	status: text().default("published").notNull(),
 	scheduled_for: text(),
 	published_at: text(),
 	source: text().default("manual").notNull(),
@@ -1252,6 +1249,7 @@ export const posts = sqliteTable("posts", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug),
+	check("posts_status_check", sql`status IN ('published', 'scheduled')`),
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 	index("posts_org_site_idx").on(table.organization_id, table.site_id),
 ]);
@@ -1864,12 +1862,13 @@ export const site_locales = sqliteTable("site_locales", {
 	locale: text().notNull(),
 	label: text(),
 	is_source: numeric().default(sql`false`).notNull(),
-	status: text().default("draft").notNull(),
+	status: text().default("disabled").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	unique("site_locales_organization_id_site_id_locale_unique").on(table.organization_id, table.site_id, table.locale),
 	uniqueIndex("idx_site_locales_one_source_per_site").on(table.organization_id, table.site_id).where(sql`is_source = 1`),
+	check("site_locales_status_check", sql`status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')`),
 ]);
 
 export const platform_pageview_events = sqliteTable("platform_pageview_events", {

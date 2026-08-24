@@ -147,24 +147,18 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       description: 'Extract and add menu items from a menu photo or PDF.',
       domain: 'media',
       minimumRole: 'editor',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: { asset_id: { type: 'string' }, menu_name: { type: 'string' } },
-      required: ['asset_id'],
+      required: ['asset_id', 'menu_name'],
       outputSchema: {
         type: 'object',
         properties: {
-          menu: {
-            type: 'object',
-            description: 'Created menu.',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-            },
-            required: ['id', 'name'],
-          },
-          items_created: { type: 'number', description: 'Number of menu items extracted and created.' },
+          menuId: { type: ['string', 'null'], description: 'Created menu ID, or null when no items were detected.' },
+          count: { type: 'number', description: 'Number of menu items extracted and created.' },
+          warning: { type: ['string', 'null'] },
+          creditsRemaining: { type: 'number' },
         },
-        required: ['menu'],
+        required: ['menuId', 'count', 'warning', 'creditsRemaining'],
       },
     }),
   siteTool({

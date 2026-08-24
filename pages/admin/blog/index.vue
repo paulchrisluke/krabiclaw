@@ -19,7 +19,7 @@
           <div v-for="post in blogPosts" :key="post.id" class="flex items-center justify-between px-5 py-4">
             <div>
               <p class="font-medium text-default">{{ post.title }}</p>
-              <p class="text-xs text-muted">{{ post.published_at ? formatDate(post.published_at) : 'Draft' }}</p>
+              <p class="text-xs text-muted">{{ post.status === 'scheduled' ? `Scheduled ${formatDate(post.scheduled_for)}` : formatDate(post.published_at) }}</p>
             </div>
             <div class="flex gap-2">
               <UButton size="xs" variant="outline" :to="`/admin/blog/${post.id}`">Edit</UButton>
@@ -52,7 +52,7 @@ useSeoMeta({ title: 'Blog | KrabiClaw Admin', robots: 'noindex, nofollow' })
 
 const toast = useToast()
 
-interface BlogPost { id: string; title: string; published_at: string | null }
+interface BlogPost { id: string; title: string; status: 'published' | 'scheduled'; published_at: string | null; scheduled_for: string | null }
 
 const blogPosts = ref<BlogPost[]>([])
 const blogError = ref('')

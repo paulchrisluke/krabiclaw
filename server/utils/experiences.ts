@@ -158,7 +158,7 @@ export async function listExperiences(
 
   if (opts.activeOnly) {
     // "active-only" means publicly visible, not "bookable" — sold_out experiences
-    // stay visible with sold-out messaging; only inactive/draft experiences are hidden.
+    // stay visible with sold-out messaging; inactive experiences are hidden.
     sql += ` AND e.status != 'inactive'`
   }
   if (opts.locationId) {

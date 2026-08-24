@@ -23,7 +23,7 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
   const isLifecycleState = (value: unknown): value is BlogLifecycleState =>
     isRecord(value)
     && typeof value.id === 'string'
-    && ['draft', 'published', 'scheduled'].includes(String(value.status))
+    && ['published', 'scheduled'].includes(String(value.status))
     && (value.published_at === null || typeof value.published_at === 'string')
     && (value.scheduled_for === null || typeof value.scheduled_for === 'string')
     && typeof value.updated_at === 'string'
@@ -78,15 +78,6 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
     async publish(postId: string, input): Promise<BlogLifecycleState> {
       const response = await dashboardFetch<{ success: true; lifecycle: BlogLifecycleState }>(
         `/api/editor/sites/${siteId}/blog/${postId}/publish`,
-        scope,
-        { method: 'POST', body: input, validate: isLifecycleResponse },
-      )
-      return response.lifecycle
-    },
-
-    async unpublish(postId: string, input): Promise<BlogLifecycleState> {
-      const response = await dashboardFetch<{ success: true; lifecycle: BlogLifecycleState }>(
-        `/api/editor/sites/${siteId}/blog/${postId}/unpublish`,
         scope,
         { method: 'POST', body: input, validate: isLifecycleResponse },
       )

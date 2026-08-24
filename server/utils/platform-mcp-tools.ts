@@ -28,7 +28,7 @@ const COMPONENT_STATUS_ENUM = ['active', 'inactive']
 const ROBOTS_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
 const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
-const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'platform_doc', 'tenant_blog']
+const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'tenant_blog']
 const CONTENT_BLOCK_TYPE_ENUM = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
 
 const SEO_FIELDS_SCHEMA = {
@@ -51,7 +51,7 @@ const NAV_FIELDS_SCHEMA = {
 // Docs-only: gives docs a curated Section → Group → Page hierarchy (max 3 levels).
 // Blog posts do not get this — blog nav stays flat/category-grouped.
 const DOC_NAV_GROUP_FIELDS_SCHEMA = {
-  nav_group: { type: ['string', 'null'], description: 'Optional collapsible subgroup within nav_section (e.g. section "Manage your site" → group "Branding"). Omit for a doc that sits directly under its section with no subgroup. Docs support Section → Group → Page (max 3 levels) — do not attempt deeper nesting via parent_doc_id, which is unused by nav rendering.' },
+  nav_group: { type: ['string', 'null'], description: 'Optional collapsible subgroup within nav_section. Omit for a doc that sits directly under its section with no subgroup. Docs support Section → Group → Page.' },
   nav_group_order: { type: ['number', 'null'], description: 'Sort position of this subgroup among other groups in the same nav_section. Only meaningful if nav_group is set.' },
 }
 
@@ -369,6 +369,8 @@ const BLOG_SUMMARY_SCHEMA = {
     body: NULLABLE_STRING,
     category: NULLABLE_STRING,
     ...NAV_FIELDS_SCHEMA,
+    status: { type: 'string', enum: ['published', 'scheduled'] },
+    scheduled_for: NULLABLE_STRING,
     published: { type: 'boolean' },
     published_at: NULLABLE_STRING,
     created_at: { type: 'string' },
@@ -393,6 +395,8 @@ const BLOG_SUMMARY_SCHEMA = {
     'nav_section_order',
     'hide_from_nav',
     'featured_order',
+    'status',
+    'scheduled_for',
     'published',
     'published_at',
     'created_at',
@@ -416,7 +420,7 @@ const BLOG_SUMMARY_SCHEMA = {
 // only structured-content representation. updated_at and document_updated_at
 // are the exact concurrency tokens — no body, no components, no internal document/
 // revision ids. Used as the single `post` shape returned by every high-level
-// blog tool (get/create/update-metadata/replace-content/publish/unpublish),
+// blog tool (get/create/update-metadata/replace-content/publish),
 // so callers see one vocabulary everywhere instead of a different shape per
 // operation.
 const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
@@ -425,7 +429,7 @@ const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
     id: { type: 'string' },
     title: { type: 'string' },
     slug: { type: 'string' },
-    status: { type: 'string', enum: ['draft', 'published', 'scheduled', 'archived'] },
+    status: { type: 'string', enum: ['published', 'scheduled'] },
     visibility: { type: 'string', enum: ['public', 'unlisted'] },
     excerpt: NULLABLE_STRING,
     category: NULLABLE_STRING,
@@ -475,8 +479,6 @@ const DOC_SUMMARY_SCHEMA = {
     ...DOC_NAV_GROUP_FIELDS_SCHEMA,
     difficulty_level: NULLABLE_STRING,
     sort_order: NULLABLE_NUMBER,
-    parent_doc_id: NULLABLE_STRING,
-    status: NULLABLE_STRING,
     published: { type: 'boolean' },
     published_at: NULLABLE_STRING,
     created_at: { type: 'string' },
@@ -486,7 +488,6 @@ const DOC_SUMMARY_SCHEMA = {
     admin_edit_url: { type: 'string' },
     public_path: NULLABLE_STRING,
     public_url: NULLABLE_STRING,
-    preview_url: NULLABLE_STRING,
   },
   required: [
     'id',
@@ -504,8 +505,6 @@ const DOC_SUMMARY_SCHEMA = {
     'featured_order',
     'difficulty_level',
     'sort_order',
-    'parent_doc_id',
-    'status',
     'published',
     'published_at',
     'created_at',
@@ -519,7 +518,6 @@ const DOC_SUMMARY_SCHEMA = {
     'admin_edit_url',
     'public_path',
     'public_url',
-    'preview_url',
   ],
   additionalProperties: false,
 }
@@ -545,15 +543,12 @@ const DOC_WRITE_RESPONSE_SCHEMA = {
     success: { type: 'boolean' },
     id: { type: 'string' },
     slug: { type: 'string' },
-    status: { type: 'string' },
-    published_at: NULLABLE_STRING,
     admin_edit_url: { type: 'string' },
     public_path: NULLABLE_STRING,
     public_url: NULLABLE_STRING,
-    preview_url: NULLABLE_STRING,
     doc: DOC_RECORD_SCHEMA,
   },
-  required: ['success', 'id', 'slug', 'status', 'published_at', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
+  required: ['success', 'id', 'slug', 'admin_edit_url', 'public_path', 'public_url', 'doc'],
   additionalProperties: false,
 }
 
@@ -568,8 +563,8 @@ const DELETE_RESPONSE_SCHEMA = {
 
 const SHARED_TOOL_DESCRIPTION_LINES = [
   'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id only when the user has selected or uploaded a real platform media asset; otherwise leave it null.',
-  'Default writer workflow is draft first: create or update the draft, then report admin_edit_url so the writer can review it. If published, also report public_url or public_path. preview_url is null until draft previews are supported.',
-  'Once the user has supplied or approved final content and you have computed the SEO fields, call this tool directly with those values — do not respond with a description of the call you would make instead of making it. If the user also asked to publish, follow this call with the corresponding publish tool in the same turn rather than waiting for a second request.',
+  'Compose and review the complete content with the user before writing. Existing published content changes are public immediately.',
+  'Once the user has supplied or approved final content and you have computed the SEO fields, call this tool directly with those values.',
 ]
 
 const PLATFORM_BLOG_TOOL_DESCRIPTION = [
@@ -577,7 +572,7 @@ const PLATFORM_BLOG_TOOL_DESCRIPTION = [
   SHARED_TOOL_DESCRIPTION_LINES[0],
   'Use content_blocks[] as the only structured-content authoring shape — there is no separate body field and no separate structured-component array. Each block is { type, data, id?, level?, parent_block_id? } and blocks render in array order, so place a block at the exact index where it should appear on the page instead of embedding a placeholder tag in prose. Block types: heading, markdown, image, gallery, faq, how_to, ai_assistance, cta, callout.',
   'FAQ blocks (type: "faq") contain data.items[], each item { question: string, answer: string, position?: number }. How-To blocks (type: "how_to") contain data.steps[], each step { name: string, text: string, image_asset_id?: string|null, url?: string|null, position?: number } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), and data may also include estimated_time, tool_items, and supply_items. AI Assistance blocks (type: "ai_assistance") contain data.prompts[], each prompt { prompt: string, title?: string|null, description?: string|null, copy_label?: string|null, position?: number }; each prompt is a writer-authored suggested prompt, not a generated answer. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
-  'On update: omitting content_blocks preserves the existing draft content exactly as-is; sending a non-empty content_blocks array replaces the complete draft block set (this is a full replace, not a merge — include every block that should remain, not just the ones changing). content_blocks: [] is rejected, not treated as "clear the document." expected_document_updated_at is required whenever content_blocks is sent — call get_platform_blog_post first to get the current token; a stale token is rejected with a conflict so two writers can\'t silently overwrite each other.',
+  'On update: omitting content_blocks preserves the existing content exactly; sending a non-empty content_blocks array replaces the complete block set. expected_document_updated_at is required whenever content_blocks is sent.',
   SHARED_TOOL_DESCRIPTION_LINES[1],
   SHARED_TOOL_DESCRIPTION_LINES[2],
 ].join(' ')
@@ -659,7 +654,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'review_platform_agent_guidance_candidate',
-    description: 'Run a scoped advisory review of a platform or tenant-targeted blog draft or image-generation brief against the exact resolved Agent Skill guidance. This scaffold does not persist provenance; use the returned fingerprints as review evidence only.',
+    description: 'Run a scoped advisory review of a platform or tenant-targeted blog article or image-generation brief against the exact resolved Agent Skill guidance. This scaffold does not persist provenance; use the returned fingerprints as review evidence only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -667,7 +662,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         candidate_type: AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
         candidate: {
           type: 'object',
-          description: 'The exact draft or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.',
+          description: 'The exact article or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.',
           additionalProperties: true,
         },
         organization_id: { type: 'string', description: 'Optional organization scope when reviewing outside a specific site.' },
@@ -680,7 +675,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'get_recent_changes',
-    description: 'Fetch recently merged KrabiClaw GitHub pull requests, newest first, categorized by conventional-commit title type. Use this source data to draft release notes, social posts, and product updates for human review; this tool does not draft or publish anything.',
+    description: 'Fetch recently merged KrabiClaw GitHub pull requests, newest first, categorized by conventional-commit title type. Use this source data to compose release notes, social posts, and product updates for human review; this tool does not create or publish content.',
     openWorld: true,
     inputSchema: {
       type: 'object',
@@ -873,11 +868,11 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'list_platform_blog_posts',
-    description: 'List KrabiClaw platform blog posts. Optionally filter by published or draft status. For tenant sites, provide site_id to list site-scoped blog posts.',
+    description: 'List published or scheduled KrabiClaw platform blog articles. For tenant sites, provide site_id.',
     inputSchema: {
       type: 'object',
       properties: {
-        status: { type: 'string', enum: ['published', 'draft'] },
+        status: { type: 'string', enum: ['published', 'scheduled'] },
         site_id: { type: 'string', description: 'Optional site id to list tenant blog posts instead of platform posts.' },
       },
       additionalProperties: false,
@@ -917,6 +912,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         ...NAV_FIELDS_SCHEMA,
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         ...SEO_FIELDS_SCHEMA,
+        scheduled_for: { type: ['string', 'null'], description: 'Optional future ISO 8601 datetime. Omit or pass null to publish immediately.' },
         site_id: { type: 'string', description: 'Optional site id to create tenant blog posts instead of platform posts.' },
       },
       required: ['title', 'content_blocks'],
@@ -926,7 +922,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   writeTool({
     name: 'update_platform_blog_metadata',
-    description: 'Update a platform blog post\'s metadata (title, excerpt, category, nav, SEO fields, visibility, slug). Does not touch content — use replace_platform_blog_content for that — and does not publish/unpublish — use publish_platform_blog_post/unpublish_platform_blog_post for that. At least one metadata field besides post_id/expected_updated_at is required.',
+    description: 'Save metadata changes to a live or scheduled platform blog article. Does not touch content; use replace_platform_blog_content for that. Changes to a live article are public immediately.',
     openWorld: true,
     inputSchema: {
       type: 'object',
@@ -958,7 +954,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         post_id: { type: 'string', description: 'Post id or slug.' },
-        content_blocks: { type: 'array', description: 'Canonical ordered article blocks, replacing the complete draft block set.', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false }, minItems: 1 },
+        content_blocks: { type: 'array', description: 'Canonical ordered article blocks, replacing the complete block set.', items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false }, minItems: 1 },
         expected_document_updated_at: { type: 'string', description: 'Concurrency token from the post\'s document_updated_at (get_platform_blog_post). A stale token is rejected with a conflict.' },
         site_id: { type: 'string', description: 'Optional site id to update tenant blog posts instead of platform posts.' },
       },
@@ -969,7 +965,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   writeTool({
     name: 'publish_platform_blog_post',
-    description: 'Publish a platform blog post immediately, or schedule it with scheduled_for. Requires the exact updated_at and document_updated_at tokens from the latest successful blog read or mutation.',
+    description: 'Publish an already-scheduled platform blog article immediately, or reschedule it with scheduled_for. Requires current concurrency tokens.',
     openWorld: true,
     inputSchema: {
       type: 'object',
@@ -978,23 +974,6 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         expected_updated_at: { type: 'string', description: 'Exact post.updated_at token from the latest successful get_platform_blog_post or blog mutation.' },
         expected_document_updated_at: { type: 'string', description: 'Exact post.document_updated_at token from the latest successful get_platform_blog_post or blog mutation.' },
         scheduled_for: { type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.' },
-        site_id: { type: 'string', description: 'Optional site id for a tenant blog post.' },
-      },
-      required: ['post_id', 'expected_updated_at', 'expected_document_updated_at'],
-      additionalProperties: false,
-    },
-    outputSchema: PLATFORM_BLOG_POST_RESPONSE_SCHEMA,
-  }),
-  writeTool({
-    name: 'unpublish_platform_blog_post',
-    description: 'Move a published platform blog post back to draft. Requires the exact updated_at and document_updated_at tokens from the latest successful blog read or mutation.',
-    openWorld: true,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        post_id: { type: 'string', description: 'Post id or slug.' },
-        expected_updated_at: { type: 'string', description: 'Exact post.updated_at token from the latest successful get_platform_blog_post or blog mutation.' },
-        expected_document_updated_at: { type: 'string', description: 'Exact post.document_updated_at token from the latest successful get_platform_blog_post or blog mutation.' },
         site_id: { type: 'string', description: 'Optional site id for a tenant blog post.' },
       },
       required: ['post_id', 'expected_updated_at', 'expected_document_updated_at'],
@@ -1058,12 +1037,10 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   }),
   readTool({
     name: 'list_platform_docs',
-    description: 'List KrabiClaw platform docs. Optionally filter by published or draft status.',
+    description: 'List public KrabiClaw platform documentation pages.',
     inputSchema: {
       type: 'object',
-      properties: {
-        status: { type: 'string', enum: ['published', 'draft'] },
-      },
+      properties: {},
       additionalProperties: false,
     },
     outputSchema: {
@@ -1104,10 +1081,8 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         ...DOC_NAV_GROUP_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
-        parent_doc_id: { type: 'string' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
-        publish: { type: 'boolean' },
       },
       required: ['title', 'body'],
       additionalProperties: false,
@@ -1130,11 +1105,8 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         ...DOC_NAV_GROUP_FIELDS_SCHEMA,
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
-        parent_doc_id: { type: 'string' },
         ...SEO_FIELDS_SCHEMA,
         components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
-        publish: { type: 'boolean' },
-        unpublish: { type: 'boolean' },
       },
       required: ['doc_id'],
       additionalProperties: false,
@@ -1146,64 +1118,15 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         admin_edit_url: { type: 'string' },
         public_path: NULLABLE_STRING,
         public_url: NULLABLE_STRING,
-        preview_url: NULLABLE_STRING,
         doc: DOC_RECORD_SCHEMA,
       },
-      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
-      additionalProperties: false,
-    },
-  }),
-  writeTool({
-    name: 'publish_platform_doc',
-    description: 'Publish a platform doc immediately.',
-    openWorld: true,
-    inputSchema: {
-      type: 'object',
-      properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },
-      required: ['doc_id'],
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        admin_edit_url: { type: 'string' },
-        public_path: NULLABLE_STRING,
-        public_url: NULLABLE_STRING,
-        preview_url: NULLABLE_STRING,
-        doc: DOC_RECORD_SCHEMA,
-      },
-      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
-      additionalProperties: false,
-    },
-  }),
-  writeTool({
-    name: 'unpublish_platform_doc',
-    description: 'Move a published platform doc back to draft.',
-    openWorld: true,
-    inputSchema: {
-      type: 'object',
-      properties: { doc_id: { type: 'string', description: 'Doc id or slug.' } },
-      required: ['doc_id'],
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        admin_edit_url: { type: 'string' },
-        public_path: NULLABLE_STRING,
-        public_url: NULLABLE_STRING,
-        preview_url: NULLABLE_STRING,
-        doc: DOC_RECORD_SCHEMA,
-      },
-      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'preview_url', 'doc'],
+      required: ['success', 'admin_edit_url', 'public_path', 'public_url', 'doc'],
       additionalProperties: false,
     },
   }),
   writeTool({
     name: 'reorder_platform_docs',
-    description: 'Set editorial navigation (section, group, title, order, visibility) for platform docs without changing their taxonomy category, parent_doc_id (unused by nav rendering), or public URL. nav_group nests under nav_section; leave unset for docs with no subgroup.',
+    description: 'Set editorial navigation (section, group, title, order, visibility) for platform docs without changing their taxonomy category or public URL.',
     openWorld: true,
     inputSchema: {
       type: 'object',
@@ -1259,7 +1182,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
 export const PLATFORM_INTERNAL_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   readTool({
     name: 'get_content_document_outline',
-    description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    description: 'Get the block outline for a platform_blog or tenant_blog content document. Provide either document_id, or owner_type plus owner_id. Use get_platform_doc to read a platform document.',
     inputSchema: {
       type: 'object',
       properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,

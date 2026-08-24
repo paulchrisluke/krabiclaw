@@ -36,7 +36,7 @@ function sqlJson(value: unknown) {
   return sqlValue(JSON.stringify(value))
 }
 
-function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: string, plan: 'free' | 'growth') {
+function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: string, plan: 'free' | 'growth', includeSelectionSite = false) {
   const siteId = `site-${orgId.replace(/^org-/, '')}`
   const locationId = `loc-${orgId.replace(/^org-/, '')}`
   const status = plan === 'free' ? 'free' : 'active'
@@ -74,6 +74,15 @@ function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: 
     sqlValue,
     sqlJson,
   })
+  const selectionSite = includeSelectionSite ? `
+INSERT OR REPLACE INTO sites (id, organization_id, theme_id, theme, slug, subdomain, brand_name, public_url, status, plan, onboarding_status, source_locale, default_currency, vertical, created_at, updated_at)
+VALUES ('site-mcp-growth-service-selection', ${sqlValue(orgId)}, 'saya-theme-v1', 'saya', 'mcp-growth-service-selection', 'mcp-growth-service-selection', 'MCP Selection Fixture', 'https://mcp-growth-service-selection.krabiclaw.com', 'active', ${sqlValue(plan)}, 'active', 'en', 'THB', 'restaurant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT OR REPLACE INTO site_locales
+  (id, organization_id, site_id, locale, label, is_source, status)
+VALUES
+  ('locale::org-mcp-growth-service::site-mcp-growth-service-selection::en', ${sqlValue(orgId)}, 'site-mcp-growth-service-selection', 'en', 'English', 1, 'published');
+` : ''
   return `INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
 VALUES (${sqlValue(userId)}, ${sqlValue(name)}, ${sqlValue(`${userId}@example.test`)}, 1, 'user', unixepoch(), unixepoch());
 
@@ -117,7 +126,8 @@ VALUES
 
 ${renderCanonicalBillingSql(siteId, orgId, { status, plan }, sqlValue, aiCredits)}
 
-${tenantPages}`
+${tenantPages}
+${selectionSite}`
 }
 
 const isStdout = process.argv.includes('--stdout')
@@ -183,7 +193,7 @@ ${renderMcpFixtureOrg('org-mcp-free', 'user-mcp-free', 'MCP Free Fixture', 'mcp-
 
 ${renderMcpFixtureOrg('org-mcp-growth', 'user-mcp-growth', 'MCP Growth Fixture', 'mcp-growth-fixture', 'growth')}
 
-${renderMcpFixtureOrg('org-mcp-growth-service', 'user-mcp-growth-service', 'MCP Growth Service Fixture', 'mcp-growth-service-fixture', 'growth')}
+${renderMcpFixtureOrg('org-mcp-growth-service', 'user-mcp-growth-service', 'MCP Growth Service Fixture', 'mcp-growth-service-fixture', 'growth', true)}
 
 -- Organization
 INSERT INTO organization (id, name, slug, createdAt)

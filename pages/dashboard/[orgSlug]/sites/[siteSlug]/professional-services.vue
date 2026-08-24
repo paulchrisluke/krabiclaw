@@ -22,7 +22,6 @@
               <UFormField label="Slug"><UInput v-model="offering.slug" /></UFormField>
               <UFormField class="sm:col-span-2" label="Summary"><UTextarea v-model="offering.summary" :rows="3" autoresize /></UFormField>
               <UFormField class="sm:col-span-2" label="Description"><UTextarea v-model="offering.short_description" :rows="4" autoresize /></UFormField>
-              <UFormField label="Status"><USelect v-model="offering.status" :items="statusOptions" /></UFormField>
               <UFormField label="Sort order"><UInput v-model.number="offering.sort_order" type="number" /></UFormField>
             </div>
           </UCard>
@@ -38,7 +37,7 @@
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.services' })
 useSeoMeta({ title: 'Services | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
-interface Offering { id: string; name: string; slug: string; summary: string; short_description: string; status: string; sort_order: number; featured: boolean }
+interface Offering { id: string; name: string; slug: string; summary: string; short_description: string; sort_order: number; featured: boolean }
 interface Response { offerings: Offering[] }
 const dashboardApi = useDashboardApi()
 const route = useRoute()
@@ -47,7 +46,6 @@ const offerings = ref<Offering[]>([])
 const pending = ref(true)
 const saving = ref(false)
 const error = ref<string | null>(null)
-const statusOptions = ['published', 'draft', 'archived'].map(value => ({ label: value, value }))
 const pagesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`)
 
 const isResponse = (value: unknown): value is Response => isRecord(value) && Array.isArray(value.offerings)
@@ -62,7 +60,7 @@ async function save() {
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/professional-services`, {
       method: 'PATCH',
-      body: { offerings: offerings.value },
+      body: { offerings: offerings.value.map(({ id, name, slug, summary, short_description, sort_order, featured }) => ({ id, name, slug, summary, short_description, sort_order, featured })) },
       validate: (value): value is Record<string, unknown> => isRecord(value),
     })
     await load()
@@ -70,5 +68,5 @@ async function save() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Unable to save services' }
   finally { saving.value = false }
 }
-await load()
+onMounted(load)
 </script>
