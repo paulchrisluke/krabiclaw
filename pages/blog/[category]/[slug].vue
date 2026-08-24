@@ -53,7 +53,7 @@ import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
-import { resolveMediaImageUrl } from '~/utils/media-image'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import type { ContentComponent } from '~/utils/content-blocks'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 
@@ -203,7 +203,7 @@ const selectedPostImage = computed(() => {
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const postImageUrl = computed(() => resolveMediaImageUrl(selectedPostImage.value))
+const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
 
 const categorySlug = computed(() => blogCategoryToSlug(post.value?.category) || String(route.params.category))
 const postPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || '/blog')
@@ -213,10 +213,7 @@ const breadcrumbs = computed(() => [
   ...(post.value ? [{ name: post.value.title, url: postPath.value }] : []),
 ])
 
-// useSocialMetadata directly (not usePlatformPageSeo) — this page already emits its own
-// complete schema.org @graph via useContentPageSchema below; usePlatformPageSeo would add
-// a second WebSite/WebPage graph with the same @id values, so only the OG/tag layer is
-// wanted here, not the schema-emitting half.
+// This page emits its content-specific schema.org graph separately.
 const runtimeConfig = useRuntimeConfig()
 const requestURL = useRequestURL()
 const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
@@ -228,10 +225,11 @@ const resolvedSeo = computed(() => resolveBlogSeo({
 }))
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
+  schema: false,
   pageType: 'article' as const,
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
-  canonicalUrl: resolvedSeo.value.canonicalUrl,
+  path: resolvedSeo.value.canonicalUrl,
   brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
   label: post.value?.category || null,
   author: post.value?.author_name || null,
@@ -239,7 +237,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
   robots: resolvedSeo.value.robots,
   indexable: post.value?.visibility !== 'unlisted' && (!post.value?.robots || !/noindex/i.test(post.value.robots)),
-}), platformOrigin)
+}))
 
 useHead(() => ({
   meta: [

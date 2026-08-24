@@ -24,6 +24,22 @@ export async function readRequiredBody<T>(event: H3Event): Promise<T> {
   return body as T
 }
 
+export async function readStrictBody<T>(event: H3Event, allowedFields: readonly string[]): Promise<T> {
+  const body = await readRequiredBody<Record<string, unknown>>(event)
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Request body must be an object' })
+  }
+  const allowed = new Set(allowedFields)
+  const unknown = Object.keys(body).filter(key => !allowed.has(key)).sort()
+  if (unknown.length) {
+    throw new HTTPError({
+      statusCode: 400,
+      statusMessage: `Unknown request field${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}`,
+    })
+  }
+  return body as T
+}
+
 export const textResponse = (
   body: string,
   init: ResponseInit = {},

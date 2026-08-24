@@ -122,13 +122,17 @@ function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/schedule', destination)
 }
 
-useSeoMeta({
-  title: computed(() => page.value.seo_title || `Consultation | ${identity.value.brand_name}`),
-  description: computed(() => page.value.seo_description || page.value.summary || ''),
-})
-const canonicalUrl = useSeoUrl(() => '/schedule')
+const { canonicalUrl } = useSocialMetadata(() => ({
+  path: '/schedule',
+  title: page.value.seo_title || `Consultation | ${identity.value.brand_name}`,
+  description: page.value.seo_description || page.value.summary || '',
+  brand: {
+    siteName: identity.value.brand_name,
+    logoUrl: identity.value.logo_url || null,
+    faviconUrl: identity.value.favicon_url || null,
+  },
+}))
 const homeUrl = useSeoUrl(() => '/')
-useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
 
 useProfessionalServiceSchema(() => ({
   recipe: 'schedule',

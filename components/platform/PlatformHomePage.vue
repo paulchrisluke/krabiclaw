@@ -175,7 +175,8 @@ const features = [
 
 const { plans } = usePlans()
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/',
   title: 'Local SEO Websites Managed Through ChatGPT',
   description: 'Beautiful local business websites edited through ChatGPT. Google Places imports, bookings, and real-time analytics included.',

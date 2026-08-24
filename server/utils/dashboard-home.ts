@@ -6,7 +6,8 @@ import { loadSettingsPayload } from '~/server/utils/site-settings'
 import { listTenantPages } from '~/server/utils/tenant-pages'
 import { listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getLinksPage } from '~/server/utils/site-links'
-import { generatedDashboardPreviewUrl } from '~/server/utils/dashboard-context'
+import { resolveSocialImageUrl, resolveSocialOgImage } from '~/utils/social-metadata'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 
 export interface DashboardHomeLocation {
   id: string
@@ -175,16 +176,32 @@ export async function getDashboardHomeData(
   return {
     locations: locations.map((l) => {
       const address = parseLocationAddress(l.address)
+      const siteName = l.brand_name?.trim()
+      if (!siteName) throw new Error('Cannot generate dashboard preview: site brand name is missing')
+      const heroImageUrl = resolveSocialImageUrl({
+        kind: l.hero_kind,
+        public_url: l.hero_public_url,
+        thumbnail_url: l.hero_thumbnail_url,
+      })
       return {
         ...l,
         is_primary: Boolean(l.is_primary),
         address,
         map_embed_url: calculateMapEmbedUrl({ ...l, address: address?.addressLines?.[0] ?? null }),
-        preview_image_url: generatedDashboardPreviewUrl(principal.ogOrigin, l, {
+        preview_image_url: resolveSocialOgImage({
+          template: resolvePublicTemplate({ themeId: l.theme_id, vertical: l.vertical }).slug,
           title: l.seo_title?.trim() || `${l.title} | Locations`,
           description: l.seo_description || l.short_description,
+          canonicalUrl: principal.ogOrigin,
           location: l.title,
-        }),
+          brand: {
+            siteName,
+            logoUrl: l.logo_url,
+            faviconUrl: l.favicon_url,
+            primaryColor: l.brand_color,
+          },
+          heroImage: heroImageUrl ? { url: heroImageUrl } : null,
+        }, principal.ogOrigin).url,
       }
     }),
     events: events.map(e => ({

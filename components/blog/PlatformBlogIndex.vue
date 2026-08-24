@@ -143,7 +143,8 @@ const visibleCategories = computed(() => {
   }))
 })
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/blog',
   title: 'Local AI Growth Notes',
   description: 'How local businesses use ChatGPT, Google Maps, social sync, and analytics to keep their web presence growing.',

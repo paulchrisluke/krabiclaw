@@ -57,13 +57,17 @@ function trackConsultation() {
   trackConsultationClick('services_list', '/services', optionalString(ctaBlock.value?.url) || consultation.value.schedule_path)
 }
 
-useSeoMeta({
-  title: computed(() => page.value?.seo_title || `Services | ${identity.value.brand_name}`),
-  description: computed(() => page.value?.seo_description || page.value?.summary || ''),
-})
-const canonicalUrl = useSeoUrl(() => '/services')
+const { canonicalUrl } = useSocialMetadata(() => ({
+  path: '/services',
+  title: page.value?.seo_title || `Services | ${identity.value.brand_name}`,
+  description: page.value?.seo_description || page.value?.summary || '',
+  brand: {
+    siteName: identity.value.brand_name,
+    logoUrl: identity.value.logo_url || null,
+    faviconUrl: identity.value.favicon_url || null,
+  },
+}))
 const homeUrl = useSeoUrl(() => '/')
-useHead(() => ({ link: [{ rel: 'canonical', href: canonicalUrl.value }] }))
 
 useProfessionalServiceSchema(() => ({
   recipe: 'services-index',

@@ -56,7 +56,8 @@ definePageMeta({ layout: 'standalone' })
 
 const routeCards = PUBLIC_SUPPORT_ROUTE_CARDS
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/help',
   title: 'Support',
   description: 'Get help with KrabiClaw, browse docs and product updates, or open a support request through ChowBot support.',

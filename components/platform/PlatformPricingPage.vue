@@ -72,7 +72,8 @@ const OFFER_DESCRIPTIONS: Record<string, string> = {
   growth: 'Custom domain, messaging notifications, and Google Places imports',
 }
 
-usePlatformPageSeo(() => ({
+useSocialMetadata(() => ({
+  template: 'platform',
   path: '/pricing',
   title: 'Pricing',
   description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, messaging notifications, and Google Places imports on Growth — or start free. No contracts.',

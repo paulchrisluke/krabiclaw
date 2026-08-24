@@ -115,7 +115,7 @@ const lightboxItems = computed(() =>
   }))
 )
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/photos',
   title: `Photos | ${siteName.value}`,
   description: `Photo gallery from ${siteName.value}.`,

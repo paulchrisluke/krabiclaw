@@ -56,7 +56,7 @@
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
-import { resolveMediaImageUrl } from '~/utils/media-image'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
@@ -192,7 +192,7 @@ const selectedPostImage = computed(() => {
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const postImageUrl = computed(() => resolveMediaImageUrl(selectedPostImage.value))
+const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
@@ -203,7 +203,7 @@ const resolvedSeo = computed(() => resolveBlogSeo({
   robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
 }))
 
-const { canonicalUrl } = useTenantSocialMetadata(() => ({
+const { canonicalUrl } = useSocialMetadata(() => ({
   path: resolvedSeo.value.canonicalUrl,
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,

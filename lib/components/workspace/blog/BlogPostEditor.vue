@@ -124,7 +124,7 @@ import PlatformMediaPicker from '~/lib/components/workspace/media/PlatformMediaP
 import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput, SiteAuthor } from './types'
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, scheduledLifecycleValue, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
-import { resolveMediaImageUrl } from '~/utils/media-image'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; backLabel?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
   initialPost: null, deferLoad: false, postId: undefined, siteId: '', isEdit: false, backUrl: '/admin', backLabel: 'Posts', mediaPickerComponent: undefined, freeTextCategory: false,
@@ -232,9 +232,9 @@ const resolvedPrimaryImageUrl = computed<string | null>(() => {
     : typeof block?.data.public_url === 'string'
       ? block.data.public_url
       : null
-  return resolveMediaImageUrl(primary)
+  return resolveSocialImageUrl(primary)
     || blockImage
-    || resolveMediaImageUrl(post.value?.featured_image)
+    || resolveSocialImageUrl(post.value?.featured_image)
 })
 const resolvedPrimaryVideoUrl = computed<string | null>(() => {
   if (resolvedPrimaryImageUrl.value) return null

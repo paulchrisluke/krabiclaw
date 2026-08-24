@@ -273,7 +273,8 @@ const relatedResources = computed(() => [
   },
 ].filter((resource): resource is { title: string; to: string; description: string } => Boolean(resource.to)))
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/docs',
   title: 'Documentation',
   description: 'Launch and manage your local business site with KrabiClaw. Set up your site, edit pages, publish updates, connect tools, and manage daily operations.',

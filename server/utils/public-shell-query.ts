@@ -121,7 +121,6 @@ export function buildPublicShellPayload(
   if (site.brand_description) config.brand_description = site.brand_description
   if (site.logo_url) config.logo_url = site.logo_url
   if (site.favicon_url) config.favicon_url = site.favicon_url
-  if (site.hero_image_url) config.hero_image_url = site.hero_image_url
   if (site.seo_title) config.seo_title = site.seo_title
   if (site.seo_description) config.seo_description = site.seo_description
   if (site.canonical_url) config.canonical_url = site.canonical_url

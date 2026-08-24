@@ -81,7 +81,7 @@ import PlatformCommandSearchModal from '~/components/platform/search/PlatformCom
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
-import { resolveMediaImageUrl } from '~/utils/media-image'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const { isBlawby } = usePublicTemplate()
 if (!isBlawby.value) throw createError({ statusCode: 404 })
@@ -105,8 +105,8 @@ const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blo
 if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
 const articleDisplayMedia = computed(() => post.value.primary_image?.public_url ? post.value.primary_image : post.value.featured_image)
-const articleSocialMedia = computed(() => resolveMediaImageUrl(post.value.primary_image) ? post.value.primary_image : post.value.featured_image)
-const articleSocialImage = computed(() => resolveMediaImageUrl(articleSocialMedia.value))
+const articleSocialMedia = computed(() => resolveSocialImageUrl(post.value.primary_image) ? post.value.primary_image : post.value.featured_image)
+const articleSocialImage = computed(() => resolveSocialImageUrl(articleSocialMedia.value))
 const ctaBlock = computed(() => {
   const page = data.value.page
   if (!page) return null
@@ -137,7 +137,7 @@ function trackConsultation() {
   trackConsultationClick('article', `/article/${slug}`, consultation.value.external_url || consultation.value.schedule_path)
 }
 
-const { canonicalUrl } = useTenantSocialMetadata(() => ({
+const { canonicalUrl } = useSocialMetadata(() => ({
   path: resolvedSeo.value.canonicalUrl,
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,

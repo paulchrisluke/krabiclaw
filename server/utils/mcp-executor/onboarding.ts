@@ -35,14 +35,10 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       const locationRows = await queryAll<{
         slug: string;
         title: string;
-        hero_public_url: string | null;
-        hero_kind: string | null;
       }>(
         site.db,
-        `SELECT bl.slug, bl.title, ma.public_url AS hero_public_url, ma.kind AS hero_kind
+        `SELECT bl.slug, bl.title
          FROM business_locations bl
-         LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
-           AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
          WHERE bl.site_id = ?
          ORDER BY bl.is_primary DESC, bl.title ASC
          LIMIT 5`,
@@ -53,8 +49,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         path: `/locations/${loc.slug}`,
       }));
       const pages = [{ label: "Home", path: "/" }, ...locationPages];
-      const firstHero = locationRows.find((loc) => loc.hero_public_url && loc.hero_kind !== "video");
-      const ogImageUrl = firstHero?.hero_public_url ?? null;
       const siteName = String((siteRow as Record<string, unknown>).brand_name ?? subdomain ?? site.siteId);
       return renderStructuredResponse(
         {
@@ -66,7 +60,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
             previewUrl,
           },
           pages,
-          ogImageUrl,
         },
         subdomain ? `Your site is live at ${publicUrl}` : `Your site preview is ready — ${siteName}`,
       );

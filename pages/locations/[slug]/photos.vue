@@ -133,7 +133,7 @@ function toAbsoluteUrl(value?: string | null): string | null {
   }
 }
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: `/locations/${slug.value}/photos`,
   title: `Photos · ${location.value?.title || slug.value}`,
   description: `${photos.value.length} photos from ${location.value?.title || slug.value} at ${siteName.value}.`,

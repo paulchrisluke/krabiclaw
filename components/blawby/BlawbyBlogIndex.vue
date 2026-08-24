@@ -41,7 +41,7 @@ const disclaimerBlock = computed(() => block('disclaimer'))
 const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || ''))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
 
-const { canonicalUrl } = useTenantSocialMetadata(() => ({
+const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/blog',
   title: page.value?.seo_title || `Articles | ${identity.value.brand_name}`,
   description: page.value?.seo_description || page.value?.summary || '',

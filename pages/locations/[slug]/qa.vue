@@ -126,7 +126,7 @@ function formatQaDate(ts: string | null) {
 const runtimeConfig = useRuntimeConfig()
 const siteUrl = runtimeConfig.public.siteUrl
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: `/locations/${slug.value}/qa`,
   title: `Questions and answers · ${location.value?.title || slug.value}`,
   description: `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`,

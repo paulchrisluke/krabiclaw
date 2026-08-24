@@ -41,7 +41,7 @@
             previewImageUrl, captured from the template's live demo site) — falls back to
             a letter avatar otherwise. This is static screenshot art, not routed through the
             #259 OG-image pipeline (server/utils/og-image/pipeline.ts), which generates a
-            title/description social-share card (see /templates/[slug].vue's usePlatformPageSeo
+            title/description social-share card (see /templates/[slug].vue's useSocialMetadata
             call), a different shape of asset than a gallery preview image.
           -->
           <div class="relative flex aspect-[16/9] items-center justify-center overflow-hidden" style="background: linear-gradient(135deg, var(--ui-bg-muted) 0%, var(--ui-bg-elevated) 100%);">
@@ -116,11 +116,12 @@ const requestURL = useRequestURL()
 const config = useRuntimeConfig()
 const siteUrl = requestURL.origin || config.public.siteUrl
 
-usePlatformPageSeo({
+useSocialMetadata({
+  template: 'platform',
   path: '/templates',
   title: 'Templates',
   description: 'Browse KrabiClaw templates — Saya for restaurants and experiences, Blawby for professional services. Pick a template, connect ChatGPT, go live.',
-  pageType: 'CollectionPage',
+  schemaPageType: 'CollectionPage',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Templates', url: '/templates' },
