@@ -272,15 +272,16 @@ async function uploadVideo(file: File) {
 
   const controller = new AbortController()
   activeVideoUploads.add(controller)
+  let assetId: string | null = null
   try {
+    const poster = await generateVideoThumbnail(file)
+    const form = new FormData()
+    form.append('token', token.value)
+    form.append('video', file)
+    form.append('thumbnail', poster)
     const response = await fetch(`/api/public/review-requests/${encodeURIComponent(requestId)}/media/upload`, {
       method: 'POST',
-      headers: {
-        'content-type': file.type,
-        'x-file-name': encodeURIComponent(file.name),
-        'x-review-token': token.value,
-      },
-      body: file,
+      body: form,
       cache: 'no-store',
       credentials: 'same-origin',
       redirect: 'error',
@@ -308,9 +309,9 @@ async function uploadVideo(file: File) {
       || typeof payload.assetId !== 'string'
       || typeof payload.mediaId !== 'string'
       || typeof payload.publicUrl !== 'string'
-      || payload.thumbnailUrl !== null
+      || typeof payload.thumbnailUrl !== 'string'
       || payload.kind !== 'video'
-      || payload.status !== 'pending'
+      || payload.status !== 'active'
     ) {
       throw normalizeApiError({
         statusCode: 502,
@@ -319,9 +320,16 @@ async function uploadVideo(file: File) {
         data: isRecord(payload) ? payload : {},
       })
     }
-
-    media.value.push({ assetId: payload.assetId, kind: 'video', previewUrl: null })
+    assetId = payload.assetId
+    media.value.push({ assetId, kind: 'video', previewUrl: payload.thumbnailUrl })
   } catch (error) {
+    if (assetId) {
+      try {
+        await discardReviewMedia(requestId, assetId)
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'Video upload and cleanup failed.')
+      }
+    }
     throw normalizeApiError(error, 'Video upload failed.')
   } finally {
     activeVideoUploads.delete(controller)

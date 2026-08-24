@@ -10,7 +10,11 @@ export const useMedia = () => {
   } | null) => {
     const url = asset?.public_url ?? null
     const kind = asset?.kind ?? 'image'
-    const thumb = asset?.thumbnail_url ?? (kind === 'image' ? url : null)
+    const thumbnailUrl = asset?.thumbnail_url?.trim() || null
+    if (kind === 'video' && !thumbnailUrl) {
+      throw new Error('Video media requires a thumbnail URL')
+    }
+    const thumb = kind === 'video' ? thumbnailUrl : url
 
     return {
       url,

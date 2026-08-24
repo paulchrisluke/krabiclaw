@@ -1,4 +1,4 @@
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { createOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
@@ -8,10 +8,11 @@ export default defineHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const { db, session, site } = await requireSiteAccess(event, siteId, 'context')
   assertOrganizationAccess(site.member_role)
-  const body = await readBody(event)
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
-  }
+  const body = await readStrictBody(event, {
+    author_name: 'string', rating: 'number', title: 'nullable-string', content: 'string',
+    collection_method: 'string', original_review_date: 'nullable-string',
+    original_reference: 'nullable-string', publication_authorized: 'boolean', status: 'string',
+  })
   try {
     const result = await createOwnerEnteredSiteReview(db, {
       organizationId: site.organization_id, siteId, enteredByUserId: session.user.id, }, body as never)
@@ -21,4 +22,4 @@ export default defineHandler(async (event) => {
   }
 })
 import { defineHandler } from 'nitro';
-import { getRouterParam, readBody  } from 'nitro/h3';
+import { getRouterParam  } from 'nitro/h3';

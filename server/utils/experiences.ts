@@ -385,7 +385,6 @@ export async function createExperience(
       siteId,
       refs: mediaRefs,
       allowedKinds: ['image', 'video'],
-      requireCoverPoster: true,
       fieldName: 'media',
     })
     : null
@@ -493,7 +492,6 @@ export async function updateExperience(
       siteId,
       refs: input.media ?? [],
       allowedKinds: ['image', 'video'],
-      requireCoverPoster: true,
       fieldName: 'media',
     })
     : null

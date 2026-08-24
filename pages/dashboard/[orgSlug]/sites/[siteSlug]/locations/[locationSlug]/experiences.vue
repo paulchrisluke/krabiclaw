@@ -130,18 +130,6 @@
                 />
                 <UButton size="sm" color="error" variant="ghost" icon="i-lucide-x" @click="removeGalleryMedia(index)" />
               </div>
-              <div v-if="posterlessCoverVideo" class="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
-                <div class="flex items-start gap-3">
-                  <UIcon name="i-lucide-image-off" class="mt-0.5 size-4 shrink-0 text-warning" />
-                  <div class="min-w-0 flex-1">
-                    <p class="font-medium text-highlighted">Cover video needs a poster image</p>
-                    <p class="mt-1 text-muted">Upload or replace the video from the media library with a poster before saving it as the first gallery item.</p>
-                  </div>
-                  <UButton size="xs" color="warning" variant="soft" icon="i-lucide-image-plus" :loading="posterUploading" @click="openCoverPosterPrompt">
-                    Add poster
-                  </UButton>
-                </div>
-              </div>
               <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-plus" @click="addGalleryMedia">
                 Add media
               </UButton>
@@ -261,19 +249,10 @@
       <template #footer>
         <div class="flex justify-end gap-3 px-6 py-4">
           <UButton color="neutral" variant="ghost" @click="sliderOpen = false">Cancel</UButton>
-          <UButton :loading="saving" :disabled="posterlessCoverVideo" @click="save">{{ editing ? 'Save changes' : 'Create' }}</UButton>
+          <UButton :loading="saving" @click="save">{{ editing ? 'Save changes' : 'Create' }}</UButton>
         </div>
       </template>
     </USlideover>
-
-    <VideoPosterPrompt
-      :open="coverPosterPromptOpen"
-      :uploading="posterUploading"
-      :video-name="posterlessCoverVideoAsset?.asset_id ?? null"
-      :allow-skip="false"
-      @update:open="coverPosterPromptOpen = $event"
-      @submit="submitCoverPoster"
-    />
 
     <!-- Delete confirm -->
     <UModal v-model:open="deleteOpen" title="Delete experience">
@@ -357,7 +336,6 @@ const dashboardApi = useDashboardApi()
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
-import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
 import { getErrorMessage } from '~/utils/errors'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
@@ -370,8 +348,6 @@ const isSlotsResponse = (value: unknown): value is { slots: string[] } =>
   isRecord(value)
   && Array.isArray(value.slots)
   && value.slots.every(slot => typeof slot === 'string')
-const isPosterResponse = (value: unknown): value is { thumbnailUrl: string } =>
-  isRecord(value) && typeof value.thumbnailUrl === 'string'
 const isExperienceResponse = (value: unknown): value is { experience: ApiRecord } =>
   isRecord(value)
   && isRecord(value.experience)
@@ -493,8 +469,6 @@ const intervalOptions = [
 ]
 const generating = ref(false)
 const draggingMediaIndex = ref<number | null>(null)
-const coverPosterPromptOpen = ref(false)
-const posterUploading = ref(false)
 
 async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
   generating.value = true
@@ -565,11 +539,6 @@ const emptyForm = () => ({
 const form = reactive(emptyForm())
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
-const posterlessCoverVideo = computed(() => {
-  const cover = form.media[0]
-  return cover?.kind === 'video' && !cover.thumbnail_url
-})
-const posterlessCoverVideoAsset = computed(() => posterlessCoverVideo.value ? form.media[0] : null)
 
 watch(currentLocationId, () => {
   sliderOpen.value = false
@@ -618,35 +587,6 @@ function dropGalleryMedia(targetIndex: number) {
   if (sourceIndex < 0 || sourceIndex >= form.media.length || targetIndex < 0 || targetIndex >= form.media.length) return
   const [item] = form.media.splice(sourceIndex, 1)
   if (item) form.media.splice(targetIndex, 0, item)
-}
-
-function openCoverPosterPrompt() {
-  if (!posterlessCoverVideoAsset.value?.asset_id) return
-  coverPosterPromptOpen.value = true
-}
-
-async function submitCoverPoster(poster: File | null) {
-  if (!poster) return
-  const cover = posterlessCoverVideoAsset.value
-  if (!cover?.asset_id) return
-  posterUploading.value = true
-  try {
-    const body = new FormData()
-    body.append('poster', poster)
-    const response = await dashboardApi<{ thumbnailUrl: string }>(`/api/editor/sites/${siteId}/media/${cover.asset_id}/poster`, {
-      method: 'POST',
-      body,
-      validate: isPosterResponse,
-    })
-    cover.thumbnail_url = response.thumbnailUrl
-    cover.url = cover.url ?? response.thumbnailUrl
-    coverPosterPromptOpen.value = false
-    toast.add({ description: 'Poster image added.', color: 'success' })
-  } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to add poster image.'), color: 'error' })
-  } finally {
-    posterUploading.value = false
-  }
 }
 
 function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
@@ -717,10 +657,6 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
 }
 
 async function save() {
-  if (posterlessCoverVideo.value) {
-    toast.add({ description: 'Add a poster image before saving a video as the cover.', color: 'error' })
-    return
-  }
   if (!form.title.trim()) {
     toast.add({ description: 'Title is required.', color: 'error' })
     return

@@ -6,7 +6,6 @@ export const VIDEO_MAX_SIZE_BYTES = 50 * 1024 * 1024
 export interface MediaUploadOptions {
   locationId?: string | null
   category?: string | null
-  poster?: File | null
 }
 
 export interface PendingMediaUpload {
@@ -18,7 +17,7 @@ export interface MediaUploadResult {
   id: string
   kind: 'image' | 'video'
   publicUrl?: string | null
-  thumbnailUrl?: string | null
+  thumbnailUrl?: string
 }
 
 function operationAndCleanupError(
@@ -134,15 +133,21 @@ export function useMediaUpload(siteApiBase: string) {
         }
       }
 
+      const poster = await generateVideoThumbnail(file)
       const response = await dashboardApi<{
         id: string
         kind: 'video'
         publicUrl: string
-        thumbnailUrl: null
+        thumbnailUrl: string
+        status: 'active'
       }>(`${siteApiBase}/media/upload`, {
         method: 'POST',
-        body: file,
-        headers: { 'content-type': file.type },
+        body: (() => {
+          const form = new FormData()
+          form.append('video', file)
+          form.append('thumbnail', poster)
+          return form
+        })(),
         query: {
           filename: file.name,
           locationId: options.locationId || undefined,
@@ -153,46 +158,21 @@ export function useMediaUpload(siteApiBase: string) {
           id: string
           kind: 'video'
           publicUrl: string
-          thumbnailUrl: null
+          thumbnailUrl: string
+          status: 'active'
         } => isRecord(value)
           && typeof value.id === 'string'
           && value.kind === 'video'
           && typeof value.publicUrl === 'string'
-          && value.thumbnailUrl === null,
+          && typeof value.thumbnailUrl === 'string'
+          && value.status === 'active',
       })
-
-      let thumbnailUrl: string | null = null
-      if (options.poster) {
-        const posterForm = new FormData()
-        posterForm.append('poster', options.poster)
-        try {
-          const posterResponse = await dashboardApi<{ id: string; thumbnailUrl: string }>(
-            `${siteApiBase}/media/${response.id}/poster`,
-            {
-              method: 'POST',
-              body: posterForm,
-              validate: (value): value is { id: string; thumbnailUrl: string } =>
-                isRecord(value)
-                && value.id === response.id
-                && typeof value.thumbnailUrl === 'string',
-            },
-          )
-          thumbnailUrl = posterResponse.thumbnailUrl
-        } catch (posterError) {
-          try {
-            await cleanupPendingUpload(response.id)
-          } catch (cleanupError) {
-            throw operationAndCleanupError('Video poster upload failed', posterError, cleanupError)
-          }
-          throw posterError
-        }
-      }
 
       return {
         id: response.id,
         kind: response.kind,
         publicUrl: response.publicUrl,
-        thumbnailUrl,
+        thumbnailUrl: response.thumbnailUrl,
       }
     } catch (uploadError) {
       error.value = getErrorMessage(uploadError, 'Upload failed.')

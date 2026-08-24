@@ -147,8 +147,8 @@ This entire flow runs within the current conversation — do not tell the user t
 
 **Videos:**
 - Ask the user to attach the video directly in ChatGPT with the paperclip.
-- Ask where the video should appear before uploading it. A video used as a hero or as the first item in an ordered placement needs a poster image; ask the user to attach that image too.
-- Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) when the target requires a poster. For a non-cover video, omit poster_file.
+- Every video requires a poster image. Ask the user to attach one before uploading the video.
+- Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) for every video upload.
 - Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
 - After upload_user_media returns asset_id/public_url, call set_media with the matching target_type and the exact required entity id from a read tool. For ordered placements, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
 

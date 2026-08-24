@@ -536,11 +536,11 @@ useSocialMetadata(() => ({
     faviconUrl: pageConfig.value?.favicon_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: location.value?.hero_public_url
+  heroImage: heroMedia.value.url
     ? {
-        url: location.value.hero_public_url,
-        kind: location.value.kind === 'video' ? 'video' : 'image',
-        thumbnailUrl: location.value.thumbnail_url,
+        url: heroMedia.value.url,
+        kind: heroMedia.value.kind === 'video' ? 'video' : 'image',
+        thumbnailUrl: heroMedia.value.thumb,
       }
     : null,
 }))

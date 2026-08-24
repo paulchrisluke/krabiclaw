@@ -107,13 +107,6 @@
         </template>
       </UModal>
 
-      <VideoPosterPrompt
-        :open="posterPromptOpen"
-        :uploading="uploading"
-        :video-name="pendingVideoFile?.name ?? null"
-        @update:open="posterPromptOpen = $event"
-        @submit="submitVideoUpload"
-      />
     </template>
   </UDashboardPanel>
 </template>
@@ -122,7 +115,6 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
 
-import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
 
 interface MediaAsset {
   id: string
@@ -148,8 +140,6 @@ const attachOpen = ref(false)
 const attachLoading = ref(false)
 const categoryFilter = ref('all')
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
-const posterPromptOpen = ref(false)
-const pendingVideoFile = ref<File | null>(null)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
@@ -213,30 +203,16 @@ function onFileSelect(event: Event) {
 }
 
 function handleSelectedFile(file: File) {
-  if (file.type.startsWith('video/')) {
-    pendingVideoFile.value = file
-    posterPromptOpen.value = true
-    return
-  }
-
   void uploadSelectedFile(file)
-}
-
-async function submitVideoUpload(poster: File | null) {
-  posterPromptOpen.value = false
-  const videoFile = pendingVideoFile.value
-  pendingVideoFile.value = null
-  if (!videoFile) return
-  await uploadSelectedFile(videoFile, poster)
 }
 
 async function retryPendingUpload() {
   const pendingUpload = pendingRetryFile.value
   if (!pendingUpload) return
-  await uploadSelectedFile(pendingUpload.file, pendingUpload.options.poster ?? null, pendingUpload.options)
+  await uploadSelectedFile(pendingUpload.file, pendingUpload.options)
 }
 
-async function uploadSelectedFile(file: File, poster: File | null = null, existingOptions?: { category?: string | null, locationId?: string | null }) {
+async function uploadSelectedFile(file: File, existingOptions?: { category?: string | null, locationId?: string | null }) {
   try {
     const options = existingOptions ?? {
       locationId: locationId.value,
@@ -244,7 +220,6 @@ async function uploadSelectedFile(file: File, poster: File | null = null, existi
     }
     const result = await upload(file, {
       ...options,
-      poster,
     })
     if (!result) {
       if (uploadError.value) toast.add({ description: uploadError.value, color: 'error' })
@@ -255,13 +230,6 @@ async function uploadSelectedFile(file: File, poster: File | null = null, existi
       description: result.kind === 'video' ? 'Video uploaded' : 'Photo uploaded',
       color: 'success'
     })
-    if (result.kind === 'video' && !poster) {
-      toast.add({
-        title: 'Video uploaded without a poster image',
-        description: 'Without a poster, this video may appear blank while it loads.',
-        color: 'warning'
-      })
-    }
     await loadPhotos()
   } catch (error) {
     toast.add({ description: uploadError.value ?? (error instanceof Error ? error.message : 'Failed to upload file'), color: 'error' })

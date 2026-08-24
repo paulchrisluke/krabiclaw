@@ -65,24 +65,29 @@ export function compileCuratedSiteFixture(
     if (asset.locationId && !locationIds.has(asset.locationId)) {
       throw new Error(`Media asset "${asset.id}" references unknown location "${asset.locationId}"`)
     }
-    return {
+    if (asset.kind === 'video' && !asset.thumbnailUrl.trim()) {
+      throw new Error(`Video media asset "${asset.id}" requires thumbnailUrl`)
+    }
+    const common = {
       id: asset.id,
       organizationId: fixture.organizationId,
       siteId: fixture.siteId,
       locationId: asset.locationId,
-      kind: asset.kind ?? 'image',
       provider: asset.provider ?? 'external_url',
       source: asset.source ?? 'external',
       r2Key: asset.r2Key ?? null,
       cloudflareImageId: asset.cloudflareImageId ?? null,
       publicUrl: asset.publicUrl,
-      thumbnailUrl: asset.thumbnailUrl,
       mimeType: asset.mimeType,
       fileName: asset.fileName,
       altText: asset.altText,
       category: asset.category,
-      status: 'active',
+      status: 'active' as const,
     }
+    if (asset.kind === 'video') {
+      return { ...common, kind: 'video', thumbnailUrl: asset.thumbnailUrl }
+    }
+    return { ...common, kind: 'image', thumbnailUrl: asset.thumbnailUrl }
   })
 
   const tenantPageContent: CompiledSeedTenantPageContent[] = fixture.tenantPageContent.map((entry) => {

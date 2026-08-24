@@ -24,18 +24,33 @@ export async function readRequiredBody<T>(event: H3Event): Promise<T> {
   return body as T
 }
 
-export async function readStrictBody<T>(event: H3Event, allowedFields: readonly string[]): Promise<T> {
+export type StrictBodyFieldType = 'string' | 'nullable-string' | 'number' | 'boolean' | 'unknown'
+
+function matchesStrictBodyField(value: unknown, type: StrictBodyFieldType): boolean {
+  if (type === 'unknown') return true
+  if (type === 'nullable-string') return value === null || typeof value === 'string'
+  if (type === 'string') return typeof value === 'string'
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value)
+  return typeof value === 'boolean'
+}
+
+export async function readStrictBody<T>(event: H3Event, fields: Readonly<Record<string, StrictBodyFieldType>>): Promise<T> {
   const body = await readRequiredBody<Record<string, unknown>>(event)
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Request body must be an object' })
   }
-  const allowed = new Set(allowedFields)
+  const allowed = new Set(Object.keys(fields))
   const unknown = Object.keys(body).filter(key => !allowed.has(key)).sort()
   if (unknown.length) {
     throw new HTTPError({
       statusCode: 400,
       statusMessage: `Unknown request field${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}`,
     })
+  }
+  for (const [field, value] of Object.entries(body)) {
+    if (!matchesStrictBodyField(value, fields[field]!)) {
+      throw new HTTPError({ statusCode: 400, statusMessage: `Invalid type for request field: ${field}` })
+    }
   }
   return body as T
 }

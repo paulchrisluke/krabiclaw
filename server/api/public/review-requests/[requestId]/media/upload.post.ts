@@ -1,14 +1,12 @@
-import { HTTPError } from 'nitro';
-import { getHeader, getRequestWebStream } from 'nitro/h3';
+import { readMultipartFormData } from 'nitro/h3';
 import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-limits'
 import { cleanString, cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { executeBatch, queryFirst } from '~/server/db'
 import { getAuthSession } from '~/server/utils/auth'
-import { buildR2Key, getR2Url } from '~/server/utils/cloudflare-r2'
-import { sniffMediaMimeType, VIDEO_MIME_TYPES } from '~/server/utils/media-mime'
+import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
+import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
+import { sniffMediaMimeType, VIDEO_MIME_TYPES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
-
-const SIGNATURE_BYTES = 1024
 
 function sanitizeFilename(raw: string): string {
   const sanitized = raw
@@ -22,15 +20,6 @@ function sanitizeFilename(raw: string): string {
   return sanitized || 'review-video'
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function uploadAndCleanupError(uploadError: unknown, cleanupError: unknown): AggregateError {
-  return new AggregateError(
-    [uploadError, cleanupError], `Review video upload failed: ${errorMessage(uploadError)}; R2 cleanup failed: ${errorMessage(cleanupError)}`, )
-}
-
 export default defineHandler(async (event) => {
   try {
     const requestId = getRouterParam(event, 'requestId')
@@ -39,13 +28,15 @@ export default defineHandler(async (event) => {
     const env = cloudflareEnv(event)
     const db = env.DB
     if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-    if (!env.MEDIA_BUCKET) return jsonResponse({ error: 'MEDIA_BUCKET binding not available' }, { status: 500 })
 
     const session = await getAuthSession(event, env)
     const sessionUser = session?.user as ({ id?: string; isAnonymous?: boolean } | undefined)
     if (!sessionUser?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-    const token = cleanString((event.req.headers.get('x-review-token')), 300)
+    const formData = await readMultipartFormData(event)
+    if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
+    const tokenPart = formData.find(part => part.name === 'token')
+    const token = cleanString(tokenPart?.data ? new TextDecoder().decode(tokenPart.data) : null, 300)
     if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
 
     const result = await getReviewRequestByToken(db, token)
@@ -60,103 +51,75 @@ export default defineHandler(async (event) => {
     `, [requestId])
     if (Number(existingVideos?.count ?? 0) >= 2) return jsonResponse({ error: 'You can upload up to 2 videos.' }, { status: 400 })
 
-    const contentLengthHeader = (event.req.headers.get('content-length'))
-    if (!contentLengthHeader) return jsonResponse({ error: 'Content-Length header required' }, { status: 411 })
-    if (!/^\d+$/.test(contentLengthHeader)) return jsonResponse({ error: 'Invalid Content-Length header' }, { status: 400 })
-    const contentLength = Number(contentLengthHeader)
-    if (!Number.isSafeInteger(contentLength) || contentLength <= 0) {
-      return jsonResponse({ error: 'Invalid Content-Length header' }, { status: 400 })
-    }
-    if (contentLength > REVIEW_VIDEO_MAX_BYTES) {
+    const videoPart = formData.find(part => part.name === 'video' && part.data)
+    const thumbnailPart = formData.find(part => part.name === 'thumbnail' && part.data)
+    if (!videoPart?.data || !thumbnailPart?.data) return jsonResponse({ error: 'video and thumbnail fields are required' }, { status: 400 })
+    if (videoPart.data.byteLength > REVIEW_VIDEO_MAX_BYTES) {
       return jsonResponse({ error: `Videos must be ${REVIEW_VIDEO_MAX_LABEL} or smaller.` }, { status: 413 })
     }
-
-    const declaredContentType = ((event.req.headers.get('content-type')) ?? '')
-      .split(';', 1)[0]
-      ?.toLowerCase()
-      .trim() ?? ''
-    if (!VIDEO_MIME_TYPES.has(declaredContentType)) {
+    if (thumbnailPart.data.byteLength > MAX_POSTER_BYTES) return jsonResponse({ error: 'Thumbnail image too large (max 10 MB)' }, { status: 413 })
+    const videoContentType = sniffMediaMimeType(videoPart.data)
+    if (!VIDEO_MIME_TYPES.has(videoContentType)) {
       return jsonResponse({ error: 'Accepted video formats are MP4 and WebM. .mov files are not supported.' }, { status: 415 })
     }
+    const thumbnailContentType = sniffMediaMimeType(thumbnailPart.data)
+    if (!POSTER_IMAGE_MIME_TYPES.has(thumbnailContentType)) return jsonResponse({ error: 'Unsupported thumbnail image type' }, { status: 415 })
+    const filename = sanitizeFilename(videoPart.filename || 'review-video')
 
-    const encodedFilename = (event.req.headers.get('x-file-name'))
-    if (!encodedFilename) return jsonResponse({ error: 'File name required' }, { status: 400 })
-    let decodedFilename: string
-    try {
-      decodedFilename = decodeURIComponent(encodedFilename)
-    } catch {
-      return jsonResponse({ error: 'Invalid file name' }, { status: 400 })
-    }
-    const filename = sanitizeFilename(decodedFilename)
-
-    const body = event.req.body
-    if (!body) return jsonResponse({ error: 'Video body required' }, { status: 400 })
-
-    const assetId = crypto.randomUUID()
     const mediaLinkId = crypto.randomUUID()
-    const eventId = crypto.randomUUID()
-    const r2Key = buildR2Key(result.context.site_id, assetId, filename)
-    const publicUrl = getR2Url(env, r2Key)
-    let uploadAttempted = false
-
+    const uploaded = await uploadResolvedMediaToAssetStore({
+      db,
+      env,
+      siteId: result.context.site_id,
+      organizationId: result.context.organization_id,
+      userId: sessionUser.id,
+      buffer: Uint8Array.from(videoPart.data),
+      contentType: videoContentType,
+      filename,
+      kind: 'video',
+      source: 'uploaded',
+      category: 'other',
+      locationId: result.context.location_id,
+      fileSize: videoPart.data.byteLength,
+      poster: {
+        buffer: Uint8Array.from(thumbnailPart.data),
+        contentType: thumbnailContentType,
+        filename: sanitizeFilename(thumbnailPart.filename || `${filename}-thumbnail.jpg`),
+      },
+    })
     try {
-      uploadAttempted = true
-      const uploadedObject = await env.MEDIA_BUCKET.put(r2Key, body, {
-        httpMetadata: { contentType: declaredContentType }, })
-
-      if (uploadedObject.size !== contentLength) {
-        throw new HTTPError({ statusCode: 400, statusMessage: 'Content-Length did not match the uploaded video' })
-      }
-
-      const signatureObject = await env.MEDIA_BUCKET.get(r2Key, {
-        range: { offset: 0, length: Math.min(SIGNATURE_BYTES, contentLength) }, })
-      if (!signatureObject) throw new Error('Uploaded video was not readable from R2')
-
-      const signature = new Uint8Array(await signatureObject.arrayBuffer())
-      if (sniffMediaMimeType(signature) !== declaredContentType) {
-        throw new HTTPError({ statusCode: 400, statusMessage: 'File type mismatch' })
-      }
-
       const now = new Date().toISOString()
       await executeBatch(db, [
         {
-          query: `
-            INSERT INTO media_assets (
-              id, organization_id, site_id, location_id, kind, provider, source, r2_key, public_url, thumbnail_url, mime_type, file_name, file_size, category, status, created_by_user_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'video', 'cloudflare_r2', 'uploaded', ?, ?, NULL, ?, ?, ?, 'other', 'active', ?, ?, ?)
-          `, params: [
-            assetId, result.context.organization_id, result.context.site_id, result.context.location_id, r2Key, publicUrl, declaredContentType, filename, contentLength, sessionUser.id, now, now, ], }, {
           query: `
             INSERT INTO review_media (
               id, review_request_id, customer_id, media_asset_id, kind, sort_order, status, created_at, updated_at
             ) VALUES (?, ?, ?, ?, 'video', ?, 'pending', ?, ?)
           `, params: [
-            mediaLinkId, requestId, result.request.customer_id, assetId, Number(existingVideos?.count ?? 0), now, now, ], }, {
+            mediaLinkId, requestId, result.request.customer_id, uploaded.assetId, Number(existingVideos?.count ?? 0), now, now, ], }, {
           query: `
             UPDATE review_requests
             SET user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
             WHERE id = ?
           `, params: [
-            sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, requestId, ], }, {
-          query: `
-            INSERT INTO site_events (
-              id, organization_id, site_id, location_id, actor_id, event_type, entity_type, entity_id, metadata, created_at
-            ) VALUES (?, ?, ?, ?, ?, 'media.uploaded', 'media_asset', ?, ?, ?)
-          `, params: [
-            eventId, result.context.organization_id, result.context.site_id, result.context.location_id, sessionUser.id, assetId, JSON.stringify({ kind: 'video', provider: 'cloudflare_r2', source: 'uploaded', status: 'active' }), now, ], }, ])
-    } catch (uploadError) {
-      if (uploadAttempted) {
-        try {
-          await env.MEDIA_BUCKET.delete(r2Key)
-        } catch (cleanupError) {
-          throw uploadAndCleanupError(uploadError, cleanupError)
-        }
+            sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, requestId, ], }, ])
+    } catch (linkError) {
+      try {
+        await deleteMediaAsset(db, env, uploaded.assetId, result.context.site_id, sessionUser.id)
+      } catch (cleanupError) {
+        throw new AggregateError([linkError, cleanupError], 'Review video could not be linked or cleaned up')
       }
-      throw uploadError
+      throw linkError
     }
 
     return jsonResponse({
-      assetId, mediaId: mediaLinkId, publicUrl, thumbnailUrl: null, kind: 'video', status: 'pending', }, { status: 201 })
+      assetId: uploaded.assetId,
+      mediaId: mediaLinkId,
+      publicUrl: uploaded.publicUrl,
+      thumbnailUrl: uploaded.thumbnailUrl,
+      kind: 'video',
+      status: 'active',
+    }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown review video upload error')

@@ -24,11 +24,13 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readStrictBody<EditorPostBody>(event, [
-    'title', 'body', 'image_asset_id', 'slug', 'seo_title', 'seo_description',
-    'gallery_media', 'scheduled_for', 'location_id', 'post_type', 'cta_type',
-    'cta_url', 'event_title', 'event_start', 'event_end', 'offer_coupon', 'offer_terms',
-  ])
+  const body = await readStrictBody<EditorPostBody>(event, {
+    title: 'string', body: 'string', image_asset_id: 'nullable-string', slug: 'nullable-string',
+    seo_title: 'nullable-string', seo_description: 'nullable-string', gallery_media: 'unknown',
+    scheduled_for: 'string', location_id: 'string', post_type: 'string', cta_type: 'string',
+    cta_url: 'string', event_title: 'string', event_start: 'string', event_end: 'string',
+    offer_coupon: 'string', offer_terms: 'string',
+  })
   if (!body.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)

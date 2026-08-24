@@ -1,5 +1,5 @@
 import { HTTPError } from 'nitro';
-import { deleteImage, uploadImageBuffer } from './cloudflare-images'
+import { deleteImage } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
@@ -39,11 +39,9 @@ export interface MediaAsset {
   updated_at: string
 }
 
-export interface ResolvedMediaAsset {
+interface ResolvedMediaAssetBase {
   id: string
-  kind: 'image' | 'video'
   public_url: string
-  thumbnail_url: string | null
   mime_type: string | null
   width: number | null
   height: number | null
@@ -52,6 +50,11 @@ export interface ResolvedMediaAsset {
   provider: string
   status: 'active'
 }
+
+export type ResolvedMediaAsset = ResolvedMediaAssetBase & (
+  | { kind: 'image'; thumbnail_url: string | null }
+  | { kind: 'video'; thumbnail_url: string }
+)
 
 export interface MediaAssetRefInput {
   asset_id: string
@@ -72,20 +75,25 @@ export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   if (row.status !== 'active') {
     throw new HTTPError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not active` })
   }
+  if (row.kind === 'video' && !row.thumbnail_url?.trim()) {
+    throw new HTTPError({ statusCode: 500, statusMessage: `Active video asset ${row.id} does not have a thumbnail` })
+  }
 
-  return {
+  const base = {
     id: row.id,
-    kind: row.kind,
     public_url: row.public_url,
-    thumbnail_url: row.thumbnail_url,
     mime_type: row.mime_type,
     width: row.width,
     height: row.height,
     duration: row.duration,
     alt_text: row.alt_text,
     provider: row.provider,
-    status: 'active',
+    status: 'active' as const,
   }
+  if (row.kind === 'video') {
+    return { ...base, kind: 'video', thumbnail_url: row.thumbnail_url! }
+  }
+  return { ...base, kind: 'image', thumbnail_url: row.thumbnail_url }
 }
 
 export async function hydrateMediaAssetRefs(
@@ -95,7 +103,6 @@ export async function hydrateMediaAssetRefs(
     siteId: string
     refs: MediaAssetRefInput[]
     allowedKinds?: Array<ResolvedMediaAsset['kind']>
-    requireCoverPoster?: boolean
     fieldName?: string
   },
 ): Promise<ResolvedMediaAsset[]> {
@@ -135,10 +142,6 @@ export async function hydrateMediaAssetRefs(
     }
     return asset
   })
-
-  if (input.requireCoverPoster && resolved[0]?.kind === 'video' && !resolved[0].thumbnail_url) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} cover video requires a poster thumbnail` })
-  }
 
   return resolved
 }
@@ -217,7 +220,6 @@ export async function replaceExperienceMedia(
     siteId: input.siteId,
     refs: input.refs,
     allowedKinds: ['image', 'video'],
-    requireCoverPoster: true,
     fieldName: 'media',
   })
   await executeBatch(db, buildReplaceExperienceMediaQueries({
@@ -278,6 +280,9 @@ export function buildReplaceMenuItemMediaQueries(input: {
 }
 
 export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
+  if (data.kind === 'video' && !data.thumbnail_url?.trim()) {
+    throw new Error(`Video asset ${data.id} requires a thumbnail URL`)
+  }
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO media_assets (
@@ -447,98 +452,6 @@ async function getMediaStorageReferenceState(
     r2ReferencedElsewhere: parseReferenceFlag(row.r2_referenced_elsewhere, 'R2'),
     cloudflareImageReferencedElsewhere: parseReferenceFlag(row.cloudflare_image_referenced_elsewhere, 'Cloudflare Images'),
   }
-}
-
-export async function replaceVideoPoster(
-  db: DbClient,
-  env: MediaProviderEnv,
-  input: {
-    assetId: string
-    siteId: string
-    userId: string | null
-    buffer: ArrayBuffer
-    filename: string
-    contentType: string
-  },
-): Promise<string> {
-  const asset = await queryFirst<Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'location_id' | 'kind' | 'cloudflare_image_id'>>(
-    db,
-    `SELECT id, organization_id, site_id, location_id, kind, cloudflare_image_id
-       FROM media_assets
-      WHERE id = ? AND site_id = ? AND status != 'deleted'
-      LIMIT 1`,
-    [input.assetId, input.siteId],
-  )
-  if (!asset) throw new HTTPError({ statusCode: 404, statusMessage: 'Asset not found' })
-  if (asset.kind !== 'video') throw new HTTPError({ statusCode: 400, statusMessage: 'Poster images can only be added to videos' })
-
-  const uploaded = await uploadImageBuffer(env, input.buffer, input.filename, input.contentType)
-  try {
-    const result = await execute(
-      db,
-      `UPDATE media_assets SET cloudflare_image_id = ?, thumbnail_url = ?, updated_at = ? WHERE id = ? AND site_id = ? AND kind = 'video' AND status != 'deleted'`,
-      [uploaded.imageId, uploaded.publicUrl, new Date().toISOString(), input.assetId, input.siteId],
-    )
-    if (Number(result?.meta?.changes ?? 0) !== 1) {
-      throw new HTTPError({ statusCode: 409, statusMessage: 'Poster update did not persist' })
-    }
-  } catch (error) {
-    try {
-      await deleteImage(env, uploaded.imageId)
-    } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        `Poster update failed for asset ${input.assetId}, and uploaded Cloudflare image ${uploaded.imageId} could not be deleted`,
-      )
-    }
-    throw error
-  }
-
-  await fireSiteEventSafe({
-    db,
-    organizationId: asset.organization_id,
-    siteId: input.siteId,
-    locationId: asset.location_id,
-    actorId: input.userId,
-    eventType: 'media.uploaded',
-    entityType: 'media_asset',
-    entityId: input.assetId,
-    metadata: {
-      provider: 'cloudflare_images',
-      action: 'poster_updated',
-    },
-  })
-
-  const previousPosterImageId = asset.cloudflare_image_id
-  if (previousPosterImageId && previousPosterImageId !== uploaded.imageId) {
-    let references: MediaStorageReferenceState
-    try {
-      references = await getMediaStorageReferenceState(db, {
-        assetId: input.assetId,
-        r2Key: null,
-        cloudflareImageId: previousPosterImageId,
-      })
-    } catch (referenceError) {
-      const detail = referenceError instanceof Error ? referenceError.message : String(referenceError)
-      throw new Error(
-        `Poster updated for asset ${input.assetId}, but references to previous Cloudflare image ${previousPosterImageId} could not be checked; the previous image was retained: ${detail}`,
-        { cause: referenceError },
-      )
-    }
-    if (references.cloudflareImageReferencedElsewhere) return uploaded.publicUrl
-
-    try {
-      await deleteImage(env, previousPosterImageId)
-    } catch (cleanupError) {
-      const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
-      throw new Error(
-        `Poster updated for asset ${input.assetId}, but previous Cloudflare image ${previousPosterImageId} could not be deleted: ${detail}`,
-        { cause: cleanupError },
-      )
-    }
-  }
-
-  return uploaded.publicUrl
 }
 
 /** Soft-delete in DB and delete each owned Cloudflare object once. */

@@ -95,7 +95,7 @@ const coverMedia = computed(() => post.value?.cover || post.value?.media?.[0] ||
 const pagePath = computed(() => post.value?.public_path || post.value?.publicPath || `/posts/${slug.value}`)
 const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)
 const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${siteName.value}.`)
-const { canonicalUrl } = useSocialMetadata(() => ({
+const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   path: post.value?.canonical_url || post.value?.canonicalUrl || pagePath.value,
   title: seoTitle.value,
   description: seoDescription.value,
@@ -113,7 +113,7 @@ useSchemaOrg([
     headline: seoTitle.value,
     description: seoDescription.value,
     datePublished: post.value?.createTime,
-    image: coverMedia.value?.url,
+    image: ogImageUrl.value,
     url: canonicalUrl.value,
     author: { '@type': 'Organization', name: siteName.value },
     publisher: {
