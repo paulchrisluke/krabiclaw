@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed inset-0 z-50 flex min-h-0 flex-col bg-default text-default">
+  <div :inert="publishing" class="fixed inset-0 z-50 flex min-h-0 flex-col bg-default text-default">
     <header class="sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-2 border-b border-default bg-elevated px-2 pb-[env(safe-area-inset-top)] sm:px-4">
       <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" :disabled="!interactive" @click="goBack">{{ backLabel }}</UButton>
       <p class="min-w-0 flex-1 truncate text-xs text-muted sm:text-sm">
@@ -145,8 +145,9 @@ const settingsOpen = ref(false)
 const settingsButton = ref<{ $el?: HTMLElement } | null>(null)
 const settingsPanel = ref<HTMLElement | null>(null)
 const categoryInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
-let dirty = false
-const dirtyState = ref(false)
+const contentDirty = ref(false)
+const lifecycleDirty = ref(false)
+const dirtyState = computed(() => contentDirty.value || lifecycleDirty.value)
 let applyingServerSnapshot = false
 let serverPostUpdatedAt: string | undefined
 let serverDocumentUpdatedAt: string | undefined
@@ -273,8 +274,7 @@ const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
     form.slug = updated.slug || form.slug
     slugResetRequested.value = false
     if (updated.content_document?.blocks) blocks.value = structuredClone(updated.content_document.blocks)
-    dirty = false
-    dirtyState.value = false
+    contentDirty.value = false
     saveState.value = 'saved'
     void nextTick(() => { applyingServerSnapshot = false })
   },
@@ -291,8 +291,6 @@ watch([
     canonical_url: form.canonical_url,
     robots: form.robots,
     visibility: form.visibility,
-    scheduled_for: form.scheduled_for,
-    publish_timing: publishTiming.value,
     redirect_old_slug: form.redirect_old_slug,
     site_author_id: form.site_author_id,
   }),
@@ -301,11 +299,15 @@ watch([
   slugResetRequested,
 ], () => {
   if (applyingServerSnapshot) return
-  markDirty()
+  markContentDirty()
   if (post.value && !loadPending.value && saveState.value !== 'conflict') {
     saveQueue.mark(buildSaveSnapshot())
   }
 }, { deep: true, flush: 'sync' })
+watch([() => form.scheduled_for, publishTiming], () => {
+  if (applyingServerSnapshot) return
+  markLifecycleDirty()
+}, { flush: 'sync' })
 onMounted(async () => {
   interactive.value = true
   window.addEventListener('beforeunload', beforeUnload)
@@ -334,8 +336,8 @@ function applyLoadedPost(loaded: BlogPost) {
     if (!loaded.content_document) throw new Error('Blog content document is missing')
     blocks.value = structuredClone(loaded.content_document.blocks || [])
     ensureTrailingTextBlock()
-    dirty = false
-    dirtyState.value = false
+    contentDirty.value = false
+    lifecycleDirty.value = false
   } finally {
     void nextTick(() => { applyingServerSnapshot = false })
   }
@@ -351,13 +353,16 @@ watch(() => props.initialPost, (loaded) => {
     loadPending.value = false
   }
 }, { immediate: true })
-function markDirty() {
+function markContentDirty() {
   if (loadPending.value || saveState.value === 'conflict') return
-  dirty = true
-  dirtyState.value = true
+  contentDirty.value = true
+}
+function markLifecycleDirty() {
+  if (loadPending.value || saveState.value === 'conflict') return
+  lifecycleDirty.value = true
 }
 async function flushSave() {
-  if (!dirty) return post.value
+  if (!contentDirty.value) return post.value
   if (!post.value) return null
   saveState.value = 'saving'
   try {
@@ -378,6 +383,7 @@ function lifecycleVersionInput() {
 }
 function applyLifecycle(lifecycle: BlogLifecycleState) {
   if (!post.value?.content_document) throw new Error('Blog content document is missing')
+  applyingServerSnapshot = true
   post.value = {
     ...post.value,
     status: lifecycle.status,
@@ -397,6 +403,7 @@ function applyLifecycle(lifecycle: BlogLifecycleState) {
   serverDocumentUpdatedAt = lifecycle.content_document_updated_at
   form.scheduled_for = toLocalDatetime(lifecycle.scheduled_for)
   publishTiming.value = lifecycle.scheduled_for ? 'Scheduled' : 'Now'
+  applyingServerSnapshot = false
 }
 function recordLifecycleError(error: unknown) {
   const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
@@ -404,7 +411,7 @@ function recordLifecycleError(error: unknown) {
   actionError.value = getErrorMessage(error, 'Failed to change publishing status.')
 }
 async function saveLiveChanges() {
-  if (!post.value || !dirty) return
+  if (!post.value || !contentDirty.value) return
   actionError.value = ''
   savingExplicitly.value = true
   try {
@@ -437,8 +444,8 @@ async function publish() {
         scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for),
       })
       applyLoadedPost(created)
-      dirty = false
-      dirtyState.value = false
+      contentDirty.value = false
+      lifecycleDirty.value = false
       saveState.value = 'saved'
       await navigateTo(props.repository.editUrl(created.id), { replace: true })
       return
@@ -451,6 +458,7 @@ async function publish() {
       applyLifecycle(lifecycle)
       return lifecycle
     })
+    lifecycleDirty.value = false
     saveState.value = 'saved'
   } catch (error: unknown) {
     recordLifecycleError(error)
@@ -537,7 +545,6 @@ function changeImage(index: number, value: unknown) { const asset = value && typ
 async function share() { if (!post.value || !persistedPostId.value) return; const url = new URL(post.value.edit_url || props.repository.editUrl(persistedPostId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
 async function goBack() {
   if (settingsOpen.value) { closeSettings(); return }
-  if (dirty && !confirm('You have unsaved changes. Leave without saving them?')) return
   await navigateTo(props.backUrl)
 }
 function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, '') }
@@ -559,7 +566,7 @@ function onSettingsKeydown(event: KeyboardEvent) {
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
 }
 function onPopState() { if (settingsOpen.value) closeSettings() }
-function beforeUnload(event: BeforeUnloadEvent) { if (dirty) event.preventDefault() }
+function beforeUnload(event: BeforeUnloadEvent) { if (dirtyState.value) event.preventDefault() }
 async function remove() { if (!post.value || !persistedPostId.value || !confirm('Delete this post permanently?')) return; await props.repository.delete(persistedPostId.value); await navigateTo(props.backUrl) }
 function windowOrigin() { return import.meta.client ? window.location.origin : 'https://krabiclaw.com' }
 function toLocalDatetime(value?: string | null) { if (!value) return ''; const d = new Date(value); const offset = d.getTimezoneOffset() * 60_000; return new Date(d.getTime() - offset).toISOString().slice(0, 16) }
@@ -568,7 +575,7 @@ function syncServerVersions(value: BlogPost) { serverPostUpdatedAt = value.updat
 
 onBeforeRouteLeave(async () => {
   if (settingsOpen.value) { settingsOpen.value = false; return false }
-  if (dirty) return confirm('You have unsaved changes. Leave without saving them?')
+  if (dirtyState.value) return confirm('You have unsaved changes. Leave without saving them?')
   return true
 })
 </script>

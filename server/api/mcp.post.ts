@@ -1,5 +1,5 @@
 import { HTTPError, defineHandler  } from 'nitro';
-import {  readBody  } from 'nitro/h3';
+import { readBody, setResponseHeader } from 'nitro/h3';
 import type { H3Event } from "nitro";
 import { asMcpError, mcpSuccess, MCP_ERROR, negotiatedMcpProtocolVersion, parseMcpToolCallArguments, readMcpRequest, } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
@@ -114,8 +114,10 @@ export default defineHandler(async (event) => {
     if (request.method === "initialize") {
       const user = await requireMcpUser(event, tenantAuthOptions);
       const protocolVersion = negotiatedMcpProtocolVersion(request);
+      const sessionId = crypto.randomUUID();
+      setResponseHeader(event, "Mcp-Session-Id", sessionId);
       logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId, requestId: request.id, method: request.method, status: "success", httpStatus: 200, protocolVersion, oauthClientId: user.oauthClientId ?? null, });
+        userId: user.userId, requestId: request.id, method: request.method, status: "success", httpStatus: 200, protocolVersion, sessionId, oauthClientId: user.oauthClientId ?? null, });
       return mcpSuccess(request.id, {
         protocolVersion, capabilities: { tools: {}, resources: {}, prompts: {} }, serverInfo: { name: "krabiclaw-mcp", version: "phase-5" }, _meta: catalogMeta(MCP_PUBLIC_TOOLS), instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 

@@ -44,7 +44,10 @@ Custom MCP apps with write actions are available on ChatGPT web for Business and
 
 ## 2. Create the custom app
 
-Open **Workspace Settings → Apps → Create** and enter:
+- **Admins and owners:** open **Workspace Settings → Apps → Create**.
+- **Authorized users:** open **Settings → Apps → Create**.
+
+Only an admin or owner can publish the app. Enter:
 
 | Field | Value |
 |---|---|
@@ -68,7 +71,7 @@ ChatGPT may ask for confirmation based on the app permissions, action, and impac
 
 ## Files and media
 
-Attach photos and videos with ChatGPT''s native attachment control. Ask KrabiClaw to upload and place the attachment after it appears in the conversation. KrabiClaw does not provide a separate upload widget.
+Attach photos with ChatGPT''s native attachment control. For every video, attach both the video and its poster image. If the poster is missing, the assistant asks you to attach it before uploading. Ask KrabiClaw to upload and place the attachments after they appear in the conversation. KrabiClaw does not provide a separate upload widget.
 
 ## Troubleshooting
 

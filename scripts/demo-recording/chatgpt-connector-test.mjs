@@ -72,6 +72,7 @@ async function waitForTelemetry(since, predicate, sessionIdHash, timeoutMs = 15_
 }
 
 async function waitForTelemetryQuietPeriod({ since, sessionIdHash, quietMs = 5_000, timeoutMs = 30_000 }) {
+  required(sessionIdHash, 'conversation session_id_hash')
   const deadline = Date.now() + timeoutMs
   let lastChange = Date.now()
   let lastFingerprint = ''
@@ -128,7 +129,7 @@ async function runNoMutationPrompt(rl, title, prompt, { expectedReadTool, expect
     const firstEvents = await waitForTelemetry(since, candidates => candidates.some(event => event.tool_name === expectedReadTool), sessionIdHash)
     const firstEvent = firstEvents.find(event => event.tool_name === expectedReadTool)
     if (!firstEvent) throw new Error(`${title} did not call ${expectedReadTool}.`)
-    sessionIdHash ??= firstEvent.session_id_hash || undefined
+    sessionIdHash ??= required(firstEvent.session_id_hash, `${title} session_id_hash`)
   }
   const settledEvents = await waitForTelemetryQuietPeriod({ since, sessionIdHash })
   const mutations = settledEvents.filter(event => event.is_mutating === 1 || event.is_mutating === true)
@@ -179,7 +180,7 @@ async function main() {
     await waitForManualAction(rl, 'Open the authorized connector-enabled conversation.')
 
     const listEvent = await runPrompt(rl, 'Identify fixture site', `Use ${connectorName}. List my accessible KrabiClaw sites and identify the one whose id is ${siteId}. Do not change anything.`, 'list_sites', {})
-    const primarySessionIdHash = listEvent.session_id_hash || undefined
+    const primarySessionIdHash = required(listEvent.session_id_hash, 'primary conversation session_id_hash')
     const sites = parseSummary(listEvent.result_summary_json, 'list_sites').sites
     if (!Array.isArray(sites) || sites.length !== 2 || !sites.some(site => site?.id === siteId)) throw new Error(`Recording account must return exactly two sites including ${siteId}.`)
 

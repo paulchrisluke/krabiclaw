@@ -248,6 +248,11 @@ test.describe('stateless MCP server', () => {
       expect(updatedReadPost.content_blocks[0]?.data.text).toBe('Edited through MCP')
       expect(updatedReadPost.status).toBe('published')
       expect(updatedReadPost.public_url).toEqual(expect.any(String))
+      const editorRead = await request.get(`${baseURL}/api/editor/sites/${siteId}/blog/${postId}`)
+      expect(editorRead.status()).toBe(200)
+      const editorPost = (await editorRead.json() as { post: { body: string } }).post
+      expect(editorPost.body).toContain('Edited through MCP')
+      expect(editorPost.body).toContain('Still one shared **document**.')
 
       // Regression for the 2026-07-22 incident: update_blog_post sent `body`
       // instead of `content_blocks` and reported success without persisting

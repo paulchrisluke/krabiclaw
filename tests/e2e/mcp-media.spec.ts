@@ -21,16 +21,18 @@ test.describe('stateless MCP server', () => {
     expect(initializeBody.result?.protocolVersion).toBe(MCP_VERSION)
     expect(initializeBody.result?.capabilities?.tools).toBeDefined()
     expect(initializeBody.result?.capabilities?.resources).toBeDefined()
+    const sessionId = initialize.headers()['mcp-session-id']
+    expect(sessionId).toEqual(expect.any(String))
 
     const initialized = await mcpRequest(request, baseURL!, {
       method: 'notifications/initialized',
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0', 'mcp-session-id': sessionId! },
     })
     expect(initialized.status()).toBe(202)
 
     const tools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0', 'mcp-session-id': sessionId! },
     })
     expect(tools.status()).toBe(200)
     const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, inputSchema?: { required?: string[], properties?: Record<string, unknown>, additionalProperties?: boolean }, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }

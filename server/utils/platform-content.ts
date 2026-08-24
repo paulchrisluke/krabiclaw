@@ -1878,7 +1878,7 @@ export async function updatePlatformBlogPost(
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
   const isTenant = Boolean(siteId)
   validateBlogCommon(input, isTenant)
-  const current = await queryFirst<{ category: string | null; title: string; slug: string; status: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, 'SELECT category, title, slug, status, published_at, first_published_at, slug_manually_overridden, updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
+  const current = await queryFirst<{ category: string | null; title: string; slug: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, 'SELECT category, title, slug, published_at, first_published_at, slug_manually_overridden, updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
   if (!current) notFound('Post not found')
   if (input.expected_updated_at && current.updated_at !== input.expected_updated_at) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
@@ -1988,7 +1988,7 @@ export async function updatePlatformBlogPost(
     params.push(normalizeHideFromNav(input.hide_from_nav) ?? 0)
   }
 
-  if (normalizedBlocks && current.status !== 'published') {
+  if (normalizedBlocks) {
     updates.push('body = ?')
     params.push(renderCanonicalBlogBody(normalizedBlocks))
   }

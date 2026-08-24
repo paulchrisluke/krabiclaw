@@ -22,7 +22,7 @@
           </UCard>
           <UCard>
             <template #header><h2 class="text-lg font-bold">Use native attachments</h2></template>
-            <p class="text-sm leading-relaxed text-muted">Attach a photo or video in ChatGPT, then ask KrabiClaw to upload and place it. There is no separate upload widget.</p>
+            <p class="text-sm leading-relaxed text-muted">Attach a photo in ChatGPT, or attach a video together with its poster image, then ask KrabiClaw to upload and place it. Every video requires a poster; if it is missing, the assistant asks you to attach one before uploading. There is no separate upload widget.</p>
           </UCard>
           <UCard>
             <template #header><h2 class="text-lg font-bold">Keep control</h2></template>
@@ -44,7 +44,7 @@
           <li class="rounded-2xl border border-default bg-elevated p-6">
             <span class="flex size-10 items-center justify-center rounded-xl bg-(--kc-teal) text-lg font-bold text-white">2</span>
             <h3 class="mt-4 font-bold text-default">Create the custom app</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted">Open <strong>Workspace Settings → Apps → Create</strong>, name the app KrabiClaw, describe its website-management purpose, and enter this HTTPS MCP endpoint.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted"><strong>Admins and owners:</strong> open <strong>Workspace Settings → Apps → Create</strong>. <strong>Authorized users:</strong> open <strong>Settings → Apps → Create</strong>. Name the app KrabiClaw, describe its website-management purpose, and enter this HTTPS MCP endpoint. Only an admin or owner can publish it.</p>
             <div class="mt-4 flex items-center gap-2 rounded-xl border border-default bg-muted/50 px-3 py-2 font-mono text-xs">
               <span class="truncate">https://krabiclaw.com/api/mcp</span>
               <button class="ml-auto cursor-pointer" aria-label="Copy MCP server URL" @click="copyUrl"><PlatformIcon :name="copied ? 'check' : 'clipboard'" class="size-4" /></button>
