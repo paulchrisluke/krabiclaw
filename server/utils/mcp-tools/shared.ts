@@ -1143,7 +1143,6 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
 ] as const
 
 export const OPEN_WORLD_WRITE_TOOL_NAMES = [
-  'set_media',
   'set_brand_color',
   'create_blog_post',
   'update_blog_metadata',
@@ -1162,7 +1161,6 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'update_menu',
   'create_menu_item',
   'add_menu_items_batch',
-  'sync_menu_items',
   'update_menu_item',
   'rename_menu_section',
   'reorder_menu_items',
@@ -1198,6 +1196,8 @@ export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [
 ] as const
 
 export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
+  'set_media',
+  'sync_menu_items',
   'update_blog_post',
   'replace_blog_content',
   'delete_location',

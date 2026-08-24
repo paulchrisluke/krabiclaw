@@ -69,6 +69,7 @@ export interface BlogComponent {
 
 export interface PlatformBlogCreateInput {
   title: string
+  slug?: string | null
   content_blocks: BlogEditorBlock[]
   excerpt?: string | null
   category?: string | null

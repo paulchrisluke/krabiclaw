@@ -291,13 +291,21 @@ watch([
     canonical_url: form.canonical_url,
     robots: form.robots,
     visibility: form.visibility,
+    scheduled_for: form.scheduled_for,
+    publish_timing: publishTiming.value,
     redirect_old_slug: form.redirect_old_slug,
     site_author_id: form.site_author_id,
   }),
   blocks,
   tagsText,
   slugResetRequested,
-], () => { if (!applyingServerSnapshot) markDirty() }, { deep: true, flush: 'sync' })
+], () => {
+  if (applyingServerSnapshot) return
+  markDirty()
+  if (post.value && !loadPending.value && saveState.value !== 'conflict') {
+    saveQueue.mark(buildSaveSnapshot())
+  }
+}, { deep: true, flush: 'sync' })
 onMounted(async () => {
   interactive.value = true
   window.addEventListener('beforeunload', beforeUnload)
@@ -351,7 +359,6 @@ function markDirty() {
 async function flushSave() {
   if (!dirty) return post.value
   if (!post.value) return null
-  saveQueue.mark(buildSaveSnapshot())
   saveState.value = 'saving'
   try {
     await saveQueue.flush()
@@ -416,6 +423,7 @@ async function publish() {
     if (!post.value) {
       const created = await props.repository.create({
         title: form.title,
+        slug: form.slug || undefined,
         content_blocks: structuredClone(toRaw(blocks.value)),
         category: form.category || null,
         tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean),
@@ -435,7 +443,6 @@ async function publish() {
       await navigateTo(props.repository.editUrl(created.id), { replace: true })
       return
     }
-    if (dirty) saveQueue.mark(buildSaveSnapshot())
     await saveQueue.runExclusive(async () => {
       const lifecycle = await props.repository.publish(persistedPostId.value, {
         ...lifecycleVersionInput(),

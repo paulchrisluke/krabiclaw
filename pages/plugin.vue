@@ -39,7 +39,7 @@
           <li class="rounded-2xl border border-default bg-elevated p-6">
             <span class="flex size-10 items-center justify-center rounded-xl bg-(--kc-navy) text-lg font-bold text-white">1</span>
             <h3 class="mt-4 font-bold text-default">Enable developer access</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted">A workspace admin enables custom MCP apps under <strong>Workspace Settings → Permissions &amp; Roles → Connected Data</strong>. Authorized users then enable Developer mode under <strong>Settings → Apps → Advanced Settings</strong>.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted"><strong>Business:</strong> a workspace admin or owner enables Developer mode, creates and tests the app, and publishes it to the workspace. <strong>Enterprise/Edu:</strong> an admin grants Developer mode through RBAC and controls access to the published app; enabled members can then turn on Developer mode in their user settings and test apps.</p>
           </li>
           <li class="rounded-2xl border border-default bg-elevated p-6">
             <span class="flex size-10 items-center justify-center rounded-xl bg-(--kc-teal) text-lg font-bold text-white">2</span>
@@ -53,7 +53,7 @@
           <li class="rounded-2xl border border-default bg-elevated p-6">
             <span class="flex size-10 items-center justify-center rounded-xl bg-(--kc-coral) text-lg font-bold text-white">3</span>
             <h3 class="mt-4 font-bold text-default">Authorize and test</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted">Review the discovered read and write tools, publish the app to the permitted workspace users, then connect and sign in through KrabiClaw OAuth. Start a new conversation and select KrabiClaw from Apps.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted">A workspace admin or owner reviews the discovered tools and publishes the app to permitted users. Those users can then connect, sign in through KrabiClaw OAuth, and select KrabiClaw from Apps in a new conversation.</p>
           </li>
         </ol>
 

@@ -37,7 +37,10 @@ The endpoint belongs in the custom app MCP server field. It is not a page to ope
 
 ## 1. Confirm workspace access
 
-Custom MCP apps with write actions are available on ChatGPT web for Business and Enterprise/Edu workspaces. A workspace admin must allow custom MCP apps under **Workspace Settings → Permissions & Roles → Connected Data**. On Enterprise/Edu, the admin can grant developer access through RBAC. Authorized users then enable Developer mode under **Settings → Apps → Advanced Settings**.
+Custom MCP apps with write actions are available on ChatGPT web for Business and Enterprise/Edu workspaces.
+
+- **Business:** a workspace admin or owner enables Developer mode, creates and tests the app, and publishes it to the workspace.
+- **Enterprise/Edu:** an admin grants Developer mode through RBAC and controls access to the published app. Enabled members can then turn on Developer mode in their user settings and test apps.
 
 ## 2. Create the custom app
 
@@ -53,7 +56,7 @@ Create the app. ChatGPT discovers KrabiClaw OAuth authentication and tool metada
 
 ## 3. Review and authorize
 
-Publish the reviewed app to the intended workspace users, choose Connect, sign in with your KrabiClaw account, and approve access. OAuth limits the connection to sites your account can manage.
+A workspace admin or owner publishes the reviewed app to the intended workspace users. Those users choose Connect, sign in with their KrabiClaw account, and approve access. OAuth limits the connection to sites their account can manage.
 
 ## 4. Start a new conversation
 
@@ -61,7 +64,7 @@ Start a new ChatGPT conversation, select KrabiClaw from Apps, and try:
 
 > List my KrabiClaw sites and summarize the homepage of the first one. Do not change anything.
 
-ChatGPT asks for confirmation before publishing, deleting, or making other consequential changes.
+ChatGPT may ask for confirmation based on the app permissions, action, and impact.
 
 ## Files and media
 

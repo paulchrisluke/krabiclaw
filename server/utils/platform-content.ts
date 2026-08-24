@@ -243,6 +243,7 @@ export interface PlatformDocNavGroupInput {
 
 export interface PlatformBlogCreateInput extends PlatformContentNavInput {
   title: string
+  slug?: string | null
   content_blocks: Array<ContentBlockInput & { id?: string }>
   excerpt?: string | null
   category?: string | null
@@ -1653,7 +1654,10 @@ export async function createPlatformBlogPost(
   const siteId = scope.site_id ?? null
   const organizationId = scope.organization_id ?? null
   const id = crypto.randomUUID()
-  const slugBase = normalizeSlugFromTitle(input.title, 'post')
+  const customSlug = typeof input.slug === 'string' && input.slug.trim()
+    ? normalizeBlogSlug(input.slug)
+    : null
+  const slugBase = customSlug ?? normalizeSlugFromTitle(input.title, 'post')
   const now = new Date().toISOString()
   let scheduledFor: string | null = null
   try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
@@ -1664,13 +1668,14 @@ export async function createPlatformBlogPost(
   const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, input, siteId)
   const canonicalBody = renderCanonicalBlogBody(canonicalBlocks)
 
-  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
+  const slugAttempts = customSlug ? 1 : MAX_SLUG_ATTEMPTS
+  for (let attempt = 0; attempt < slugAttempts; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       const blogPostInsert: BatchQuery = {
         query: `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, site_author_id, published_at, first_published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, slug_manually_overridden, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, author_id, site_author_id, published_at, first_published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id,
           organizationId,
@@ -1690,6 +1695,7 @@ export async function createPlatformBlogPost(
           status,
           input.visibility ?? 'public',
           scheduledFor,
+          customSlug ? 1 : 0,
           input.seo_title ?? null,
           input.seo_description ?? null,
           input.seo_keywords ?? null,
@@ -1724,7 +1730,8 @@ export async function createPlatformBlogPost(
         post,
       }
     } catch (err) {
-      if (isUniqueConstraintError(err, 'blog_posts') && attempt < MAX_SLUG_ATTEMPTS - 1) continue
+      if (customSlug && isUniqueConstraintError(err, 'blog_posts')) badRequest('slug is already in use')
+      if (isUniqueConstraintError(err, 'blog_posts') && attempt < slugAttempts - 1) continue
       throw err
     }
   }

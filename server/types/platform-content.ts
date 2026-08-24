@@ -29,6 +29,7 @@ export interface PlatformContentNavRequestBody {
 
 export interface PlatformBlogPostRequestBody extends PlatformContentNavRequestBody {
   title?: string
+  slug?: string | null
   content_blocks?: ContentBlockInput[]
   expected_document_updated_at?: string
   expected_updated_at?: string

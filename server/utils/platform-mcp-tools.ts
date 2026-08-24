@@ -1182,7 +1182,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
 export const PLATFORM_INTERNAL_MCP_TOOLS: PlatformMcpToolDefinition[] = [
   readTool({
     name: 'get_content_document_outline',
-    description: 'Get the block outline for a platform blog, platform doc, or tenant blog content document. Provide either document_id, or owner_type plus owner_id.',
+    description: 'Get the block outline for a platform_blog or tenant_blog content document. Provide either document_id, or owner_type plus owner_id. Use get_platform_doc to read a platform document.',
     inputSchema: {
       type: 'object',
       properties: CONTENT_DOCUMENT_LOOKUP_SCHEMA,

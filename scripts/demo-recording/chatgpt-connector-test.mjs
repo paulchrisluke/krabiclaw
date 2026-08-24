@@ -71,6 +71,25 @@ async function waitForTelemetry(since, predicate, sessionIdHash, timeoutMs = 15_
   return events
 }
 
+async function waitForTelemetryQuietPeriod({ since, sessionIdHash, quietMs = 5_000, timeoutMs = 30_000 }) {
+  const deadline = Date.now() + timeoutMs
+  let lastChange = Date.now()
+  let lastFingerprint = ''
+  let events = []
+  while (Date.now() < deadline) {
+    events = await telemetry(since, undefined, sessionIdHash)
+    const fingerprint = events.map(event => `${event.id}:${event.status}`).sort().join('|')
+    if (fingerprint !== lastFingerprint) {
+      lastFingerprint = fingerprint
+      lastChange = Date.now()
+    } else if (Date.now() - lastChange >= quietMs) {
+      return events
+    }
+    await pause(500)
+  }
+  throw new Error('Telemetry did not reach a stable quiet interval before the no-mutation timeout.')
+}
+
 async function waitForManualAction(rl, instruction) {
   const response = await rl.question(`${instruction}\nPress Enter after ChatGPT finishes, or type its error and press Enter: `)
   if (response.trim()) throw new Error(`ChatGPT reported: ${sanitizeText(response.trim())}`)
@@ -98,15 +117,20 @@ async function runPrompt(rl, title, prompt, expectedTool, expectedArguments, ses
   return event
 }
 
-async function runNoMutationPrompt(rl, title, prompt, { expectedReadTool, freshConversation = false, requireClarification = false } = {}) {
+async function runNoMutationPrompt(rl, title, prompt, { expectedReadTool, expectedSessionIdHash, freshConversation = false, requireClarification = false } = {}) {
   const since = new Date().toISOString()
   console.log(`\n# ${title}\nExpected result: no mutation\n\n${prompt}\n`)
   await waitForManualAction(rl, freshConversation
     ? 'Open a brand-new conversation with no prior KrabiClaw context, paste the exact prompt, and return here after ChatGPT finishes.'
     : 'Paste the exact prompt into the primary ChatGPT conversation.')
-  await waitForTelemetry(since, candidates => expectedReadTool ? candidates.some(event => event.tool_name === expectedReadTool) : candidates.length > 0, undefined)
-  await pause(1_500)
-  const settledEvents = await telemetry(since)
+  let sessionIdHash = expectedSessionIdHash
+  if (expectedReadTool) {
+    const firstEvents = await waitForTelemetry(since, candidates => candidates.some(event => event.tool_name === expectedReadTool), sessionIdHash)
+    const firstEvent = firstEvents.find(event => event.tool_name === expectedReadTool)
+    if (!firstEvent) throw new Error(`${title} did not call ${expectedReadTool}.`)
+    sessionIdHash ??= firstEvent.session_id_hash || undefined
+  }
+  const settledEvents = await waitForTelemetryQuietPeriod({ since, sessionIdHash })
   const mutations = settledEvents.filter(event => event.is_mutating === 1 || event.is_mutating === true)
   if (mutations.length) throw new Error(`${title} unexpectedly mutated through: ${mutations.map(event => event.tool_name).join(', ')}`)
   if (expectedReadTool && !settledEvents.some(event => event.tool_name === expectedReadTool)) throw new Error(`${title} did not call ${expectedReadTool}.`)
@@ -162,10 +186,10 @@ async function main() {
     await runPrompt(rl, 'Inspect homepage', `Inspect KrabiClaw site_id ${siteId} and summarize its homepage identity and public URL. This is read-only.`, 'get_site', { site_id: siteId }, primarySessionIdHash)
     await runPrompt(rl, 'Inspect media', `List the current media assets for KrabiClaw site_id ${siteId}. Do not upload, assign, edit, or delete anything.`, 'get_site_media_assets', { site_id: siteId }, primarySessionIdHash)
 
-    await runNoMutationPrompt(rl, 'Explicit read-only request', `For site_id ${siteId}, only explain what you would inspect before publishing an announcement. Do not call any write tool and do not change anything.`)
+    await runNoMutationPrompt(rl, 'Explicit read-only request', `For site_id ${siteId}, only explain what you would inspect before publishing an announcement. Do not call any write tool and do not change anything.`, { expectedSessionIdHash: primarySessionIdHash })
     await runNoMutationPrompt(rl, 'Ambiguous site selection', 'Create an announcement saying "Ambiguous site check" on one of my KrabiClaw sites, but I am not telling you which site. Do not choose for me.', { expectedReadTool: 'list_sites', freshConversation: true, requireClarification: true })
     await waitForManualAction(rl, 'Return to the original ChatGPT conversation before continuing.')
-    await runNoMutationPrompt(rl, 'Unsupported logo deletion', `Delete the logo from KrabiClaw site_id ${siteId}, including deleting the underlying media asset, without asking me to identify or confirm the asset.`)
+    await runNoMutationPrompt(rl, 'Unsupported logo deletion', `Delete the logo from KrabiClaw site_id ${siteId}, including deleting the underlying media asset, without asking me to identify or confirm the asset.`, { expectedSessionIdHash: primarySessionIdHash })
 
     const suffix = Date.now()
     const title = `ChatGPT scheduled announcement ${suffix}`

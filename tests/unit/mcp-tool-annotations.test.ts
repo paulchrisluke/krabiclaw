@@ -35,3 +35,15 @@ test('tool annotations describe reads, public writes, and destructive public wri
     }, name)
   }
 })
+
+test('complete-state replacement tools are destructive open-world writes', () => {
+  for (const name of ['set_media', 'sync_menu_items'] as const) {
+    assert.equal(OPEN_WORLD_WRITE_TOOL_NAMES.includes(name as never), false, name)
+    assert.equal(OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES.includes(name), true, name)
+    assert.deepEqual(TOOL_ANNOTATIONS_BY_NAME.get(name), {
+      readOnlyHint: false,
+      openWorldHint: true,
+      destructiveHint: true,
+    })
+  }
+})
