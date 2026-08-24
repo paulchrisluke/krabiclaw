@@ -38,6 +38,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: false,
+      strict: true,
       inputSchema: {
         body: { type: 'string' },
         title: { type: 'string' },
@@ -64,6 +65,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: false,
+      strict: true,
       inputSchema: {
         post_id: { type: 'string' },
         body: { type: 'string' },

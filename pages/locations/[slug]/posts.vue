@@ -59,7 +59,7 @@ const posts = postsList
 const runtimeConfig = useRuntimeConfig()
 const siteUrl = runtimeConfig.public.siteUrl
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: `/locations/${slug.value}/posts`,
   title: `Updates · ${location.value?.title || slug.value}`,
   description: `Latest news and updates from ${location.value?.title || slug.value} at ${siteName.value}.`,

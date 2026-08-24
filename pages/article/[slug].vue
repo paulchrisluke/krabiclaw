@@ -37,7 +37,7 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.primary_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby" />
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="articleDisplayMedia?.public_url" :media-kind="articleDisplayMedia?.kind || 'image'" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -81,6 +81,7 @@ import PlatformCommandSearchModal from '~/components/platform/search/PlatformCom
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const { isBlawby } = usePublicTemplate()
 if (!isBlawby.value) throw createError({ statusCode: 404 })
@@ -103,6 +104,9 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
 if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
+const articleDisplayMedia = computed(() => post.value.primary_image?.public_url ? post.value.primary_image : post.value.featured_image)
+const articleSocialMedia = computed(() => resolveSocialImageUrl(post.value.primary_image) ? post.value.primary_image : post.value.featured_image)
+const articleSocialImage = computed(() => resolveSocialImageUrl(articleSocialMedia.value))
 const ctaBlock = computed(() => {
   const page = data.value.page
   if (!page) return null
@@ -133,7 +137,7 @@ function trackConsultation() {
   trackConsultationClick('article', `/article/${slug}`, consultation.value.external_url || consultation.value.schedule_path)
 }
 
-const { canonicalUrl } = useTenantSocialMetadata(() => ({
+const { canonicalUrl } = useSocialMetadata(() => ({
   path: resolvedSeo.value.canonicalUrl,
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
@@ -146,11 +150,11 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },
-  heroImage: post.value.primary_image?.public_url
+  heroImage: articleSocialImage.value
     ? {
-        url: post.value.primary_image.public_url,
-        width: post.value.primary_image.width || undefined,
-        height: post.value.primary_image.height || undefined,
+        url: articleSocialImage.value,
+        width: articleSocialMedia.value?.width || undefined,
+        height: articleSocialMedia.value?.height || undefined,
       }
     : null,
   robots: resolvedSeo.value.robots,
@@ -165,9 +169,9 @@ useProfessionalServiceSchema(() => ({
   pageUrl: canonicalUrl.value,
   pageTitle: post.value.title,
   pageDescription: resolvedSeo.value.description,
-  imageUrl: post.value.primary_image?.public_url || post.value.featured_image?.public_url || null,
-  imageWidth: post.value.primary_image?.width || post.value.featured_image?.width || null,
-  imageHeight: post.value.primary_image?.height || post.value.featured_image?.height || null,
+  imageUrl: articleSocialImage.value,
+  imageWidth: articleSocialMedia.value?.width || null,
+  imageHeight: articleSocialMedia.value?.height || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Blog', url: blogUrl.value },

@@ -22,20 +22,8 @@ const { isBlawby } = usePublicTemplate()
 const siteShell = isBlawby.value ? null : useSiteShellState()
 const config = siteShell?.config
 const route = useRoute()
-const defaultOgImage = useSharedOgImage()
-const defaultPageUrl = useSeoUrl(() => route.path)
-const defaultSiteName = isPlatform ? 'KrabiClaw' : (site?.brand_name || 'KrabiClaw')
 const tenantLogoUrl = computed(() => config?.value.logo_url || site?.logo_url || null)
 const tenantBrandName = computed(() => config?.value.brand_name || site?.brand_name || '')
-
-useSeoMeta({
-  ogImage: defaultOgImage,
-  ogUrl: defaultPageUrl,
-  ogType: 'website',
-  ogSiteName: defaultSiteName,
-  twitterCard: 'summary_large_image',
-  twitterImage: defaultOgImage
-})
 
 useHead(() => {
   return {

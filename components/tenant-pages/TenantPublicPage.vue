@@ -116,13 +116,15 @@ useProfessionalServiceSchema(() => {
     donationUrl,
   }
 })
-const canonicalUrl = useSeoUrl(() => page.value.canonical_url || page.value.path)
-useSeoMeta({
-  title: computed(() => page.value.seo_title || `${page.value.title} | ${site?.brand_name || ''}`),
-  description: computed(() => page.value.seo_description || page.value.summary || ''),
-})
-useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
-  meta: page.value.robots ? [{ name: 'robots', content: page.value.robots }] : [],
+useSocialMetadata(() => ({
+  path: page.value.canonical_url || page.value.path,
+  title: page.value.seo_title || `${page.value.title} | ${site?.brand_name || ''}`,
+  description: page.value.seo_description || page.value.summary || '',
+  robots: page.value.robots,
+  brand: {
+    siteName: site?.brand_name || '',
+    logoUrl: site?.logo_url || null,
+    faviconUrl: site?.favicon_url || null,
+  },
 }))
 </script>

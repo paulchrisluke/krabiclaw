@@ -6,7 +6,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole } from '~/server/utils/member-access'
-import { resolveSocialOgImage } from '~/utils/social-metadata'
+import { resolveSocialImageUrl, resolveSocialOgImage } from '~/utils/social-metadata'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 
 function safeJsonParse(value: string): unknown {
@@ -397,7 +397,9 @@ interface DashboardPreviewSource {
   logo_url: string | null
   favicon_url: string | null
   brand_color: string | null
-  hero_image_url: string | null
+  hero_kind: string | null
+  hero_public_url: string | null
+  hero_thumbnail_url: string | null
 }
 
 function requiredPreviewText(value: string | null, field: string): string {
@@ -412,31 +414,6 @@ export function requiredDashboardPreviewOrigin(platformDomain: string | undefine
   return new URL(value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`).origin
 }
 
-export function generatedDashboardPreviewUrl(
-  origin: string,
-  source: DashboardPreviewSource,
-  page: { title: string; description?: string | null; label?: string | null; location?: string | null },
-): string {
-  const siteName = requiredPreviewText(source.brand_name, 'site brand name')
-  const backgroundImageUrl = source.hero_image_url?.trim() || null
-  const template = resolvePublicTemplate({ themeId: source.theme_id, vertical: source.vertical }).slug
-  return resolveSocialOgImage({
-    template,
-    title: page.title,
-    description: page.description,
-    canonicalUrl: origin,
-    label: page.label,
-    location: page.location,
-    brand: {
-      siteName,
-      logoUrl: source.logo_url,
-      faviconUrl: source.favicon_url,
-      primaryColor: source.brand_color,
-    },
-    heroImage: backgroundImageUrl ? { url: backgroundImageUrl } : null,
-  }, origin).url
-}
-
 export async function listOrganizationSites(
   db: DbClient,
   organizationId: string,
@@ -446,36 +423,12 @@ export async function listOrganizationSites(
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
-  const rows = await queryAll<DashboardSiteSummaryRow & DashboardPreviewSource & {
-    seo_title: string | null
-    seo_description: string | null
-    brand_description: string | null
-  }>(db, `
+  const rows = await queryAll<DashboardSiteSummaryRow & Omit<DashboardPreviewSource, 'hero_kind' | 'hero_public_url' | 'hero_thumbnail_url'>>(db, `
     SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.status,
-           s.onboarding_status, s.plan, s.theme_id, s.seo_title,
-           s.seo_description, s.brand_description,
+           s.onboarding_status, s.plan, s.theme_id,
            COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
            json_extract(s.settings, '$.favicon_url') AS favicon_url,
-           (SELECT value FROM site_config WHERE organization_id = s.organization_id AND site_id = s.id AND key = 'brand_color' LIMIT 1) AS brand_color,
-           (SELECT ma_hero.public_url
-              FROM business_locations bl_hero
-              JOIN sites s_hero
-                ON s_hero.id = bl_hero.site_id
-               AND s_hero.organization_id = bl_hero.organization_id
-              JOIN media_assets ma_hero
-                ON ma_hero.id = bl_hero.hero_media_asset_id
-               AND ma_hero.organization_id = bl_hero.organization_id
-               AND ma_hero.site_id = bl_hero.site_id
-               AND ma_hero.status = 'active'
-             WHERE bl_hero.organization_id = s.organization_id
-               AND bl_hero.site_id = s.id
-               AND bl_hero.status = 'active'
-             ORDER BY CASE
-               WHEN bl_hero.id = s_hero.primary_location_id THEN 0
-               WHEN bl_hero.is_primary = 1 THEN 1
-               ELSE 2
-             END, bl_hero.id
-             LIMIT 1) AS hero_image_url
+           (SELECT value FROM site_config WHERE organization_id = s.organization_id AND site_id = s.id AND key = 'brand_color' LIMIT 1) AS brand_color
     FROM sites s
     LEFT JOIN media_assets ma_logo
       ON ma_logo.id = s.logo_asset_id
@@ -487,20 +440,73 @@ export async function listOrganizationSites(
     ORDER BY s.created_at ASC, s.id ASC
   `, scopedTeamIds ? [organizationId, ...scopedTeamIds] : [organizationId])
 
-  return rows.map(row => ({
-    id: row.id,
-    brand_name: row.brand_name,
-    subdomain: row.subdomain,
-    vertical: row.vertical,
-    status: row.status,
-    onboarding_status: row.onboarding_status,
-    plan: row.plan,
-    logo_url: row.logo_url,
-    preview_image_url: generatedDashboardPreviewUrl(origin, row, {
-      title: row.seo_title?.trim() || requiredPreviewText(row.brand_name, 'site brand name'),
-      description: row.seo_description || row.brand_description,
-    }),
-  }))
+  const homeRows = await queryAll<{
+    site_id: string
+    title: string
+    seo_title: string | null
+    summary: string | null
+    seo_description: string | null
+    canonical_url: string | null
+    hero_kind: string | null
+    hero_public_url: string | null
+    hero_thumbnail_url: string | null
+  }>(db, `
+    SELECT v.site_id, v.title, v.seo_title, v.summary, v.seo_description, v.canonical_url,
+           ma.kind AS hero_kind, ma.public_url AS hero_public_url, ma.thumbnail_url AS hero_thumbnail_url
+      FROM tenant_page_variants v
+      JOIN site_locales sl
+        ON sl.site_id = v.site_id
+       AND sl.organization_id = v.organization_id
+       AND sl.locale = v.locale
+       AND sl.is_source = 1
+      LEFT JOIN content_blocks cb
+        ON cb.document_id = v.document_id
+       AND cb.type = 'hero'
+      LEFT JOIN media_assets ma
+        ON ma.id = json_extract(cb.data_json, '$.asset_id')
+       AND ma.organization_id = v.organization_id
+       AND ma.site_id = v.site_id
+       AND ma.status = 'active'
+     WHERE v.organization_id = ? AND v.path = '/'
+     ORDER BY v.site_id, cb.position ASC
+  `, [organizationId])
+  const homeBySite = new Map<string, (typeof homeRows)[number]>()
+  for (const home of homeRows) if (!homeBySite.has(home.site_id)) homeBySite.set(home.site_id, home)
+
+  return rows.map(row => {
+    const home = homeBySite.get(row.id)
+    if (!home) throw new Error(`Cannot generate dashboard preview: homepage is missing for site ${row.id}`)
+    const siteName = requiredPreviewText(row.brand_name, 'site brand name')
+    const backgroundImageUrl = resolveSocialImageUrl({
+      kind: home.hero_kind,
+      public_url: home.hero_public_url,
+      thumbnail_url: home.hero_thumbnail_url,
+    })
+    const previewImage = resolveSocialOgImage({
+      template: resolvePublicTemplate({ themeId: row.theme_id, vertical: row.vertical }).slug,
+      title: requiredPreviewText(home.seo_title?.trim() || home.title, 'homepage title'),
+      description: home.seo_description || home.summary,
+      canonicalUrl: home.canonical_url || origin,
+      brand: {
+        siteName,
+        logoUrl: row.logo_url,
+        faviconUrl: row.favicon_url,
+        primaryColor: row.brand_color,
+      },
+      heroImage: backgroundImageUrl ? { url: backgroundImageUrl } : null,
+    }, origin).url
+    return {
+      id: row.id,
+      brand_name: row.brand_name,
+      subdomain: row.subdomain,
+      vertical: row.vertical,
+      status: row.status,
+      onboarding_status: row.onboarding_status,
+      plan: row.plan,
+      logo_url: row.logo_url,
+      preview_image_url: previewImage,
+    }
+  })
 }
 
 export async function getDashboardSite(event: H3Event) {
@@ -600,7 +606,9 @@ export async function listDashboardLocations(
            sites.brand_name, COALESCE(ma_logo.public_url, sites.logo_url) AS logo_url,
            json_extract(sites.settings, '$.favicon_url') AS favicon_url,
            (SELECT value FROM site_config WHERE organization_id = sites.organization_id AND site_id = sites.id AND key = 'brand_color' LIMIT 1) AS brand_color,
-           ma_hero.public_url AS hero_image_url
+           ma_hero.kind AS hero_kind,
+           ma_hero.public_url AS hero_public_url,
+           ma_hero.thumbnail_url AS hero_thumbnail_url
     FROM business_locations
     JOIN sites ON sites.id = business_locations.site_id AND sites.organization_id = business_locations.organization_id
     LEFT JOIN media_assets ma_logo ON ma_logo.id = sites.logo_asset_id
@@ -612,19 +620,36 @@ export async function listDashboardLocations(
     ORDER BY is_primary DESC, title ASC
   `, scopedTeamIds ? [organizationId, siteId, ...scopedTeamIds, ...scopedTeamIds] : [organizationId, siteId])
 
-  return locations.map((location) => ({
-    id: location.id,
-    slug: location.slug,
-    title: location.title,
-    is_primary: Boolean(location.is_primary),
-    status: location.status,
-    city: location.city,
-    address: parseLocationAddress(location.address),
-    feature_overrides: location.feature_overrides,
-    preview_image_url: generatedDashboardPreviewUrl(origin, location, {
-      title: location.seo_title?.trim() || `${location.title} | Locations`,
-      description: location.seo_description || location.short_description,
-      location: location.title,
-    }),
-  }))
+  return locations.map((location) => {
+    const siteName = requiredPreviewText(location.brand_name, 'site brand name')
+    const backgroundImageUrl = resolveSocialImageUrl({
+      kind: location.hero_kind,
+      public_url: location.hero_public_url,
+      thumbnail_url: location.hero_thumbnail_url,
+    })
+    return {
+      id: location.id,
+      slug: location.slug,
+      title: location.title,
+      is_primary: Boolean(location.is_primary),
+      status: location.status,
+      city: location.city,
+      address: parseLocationAddress(location.address),
+      feature_overrides: location.feature_overrides,
+      preview_image_url: resolveSocialOgImage({
+        template: resolvePublicTemplate({ themeId: location.theme_id, vertical: location.vertical }).slug,
+        title: location.seo_title?.trim() || `${location.title} | Locations`,
+        description: location.seo_description || location.short_description,
+        canonicalUrl: origin,
+        location: location.title,
+        brand: {
+          siteName,
+          logoUrl: location.logo_url,
+          faviconUrl: location.favicon_url,
+          primaryColor: location.brand_color,
+        },
+        heroImage: backgroundImageUrl ? { url: backgroundImageUrl } : null,
+      }, origin).url,
+    }
+  })
 }

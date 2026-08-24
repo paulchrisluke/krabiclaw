@@ -503,7 +503,7 @@ watch(() => item.value?.slug, async () => {
 const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name} | Menu | ${siteName.value}` : `Menu Item Not Found | ${siteName.value}`)
 const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
-useTenantSocialMetadata(() => {
+useSocialMetadata(() => {
   const cover = item.value?.media?.[0]
   const heroImageUrl = cover?.kind === 'video' ? cover.thumbnail_url : cover?.public_url
   return {

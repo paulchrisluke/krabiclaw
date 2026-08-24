@@ -1,4 +1,4 @@
-import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { PostValidationError, getPost, updatePost } from '~/server/utils/post-management'
 import { assertResourceAccess } from '~/server/utils/member-access'
@@ -25,8 +25,11 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readRequiredBody<EditorPostUpdateBody>(event)
-  if ('og_image_asset_id' in body) return jsonResponse({ error: 'og_image_asset_id is retired' }, { status: 400 })
+  const body = await readStrictBody<EditorPostUpdateBody>(event, [
+    'title', 'body', 'image_asset_id', 'slug', 'seo_title', 'seo_description',
+    'gallery_media', 'scheduled_for', 'location_id', 'post_type', 'cta_type',
+    'cta_url', 'event_title', 'event_start', 'event_end', 'offer_coupon', 'offer_terms',
+  ])
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })

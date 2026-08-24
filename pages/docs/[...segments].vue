@@ -339,25 +339,23 @@ const breadcrumbs = computed(() => [
   ...(doc.value && !isOverviewDoc.value ? [{ name: doc.value.title, url: `/docs/${categorySlug.value}/${doc.value.slug}` }] : []),
 ])
 
-// useSocialMetadata directly (not usePlatformPageSeo) — this page already emits its own
-// complete schema.org @graph via useContentPageSchema below; usePlatformPageSeo would add
-// a second WebSite/WebPage graph with the same @id values, so only the OG/tag layer is
-// wanted here, not the schema-emitting half.
+// This page emits its content-specific schema.org graph separately.
 const runtimeConfig = useRuntimeConfig()
 const requestURL = useRequestURL()
 const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
+  schema: false,
   pageType: 'article' as const,
   title: seoTitle.value,
   description: seoDescription.value,
-  canonicalUrl: resolveSeoUrl(docPath.value, platformOrigin.value),
+  path: resolveSeoUrl(docPath.value, platformOrigin.value),
   brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
   label: doc.value?.category || null,
   heroImage: docMedia.value.thumb ? { url: docMedia.value.thumb } : null,
   robots: doc.value?.robots?.trim() || null,
   indexable: !doc.value?.robots || !/noindex/i.test(doc.value.robots),
-}), platformOrigin)
+}))
 
 useHead(() => ({
   meta: [

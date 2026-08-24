@@ -603,7 +603,7 @@ const seoDescription = computed(() =>
   truncateForSeo(experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`, 160)
 )
 
-const { canonicalUrl } = useTenantSocialMetadata(() => {
+const { canonicalUrl } = useSocialMetadata(() => {
   const cover = experience.value?.media?.[0]
   const heroImageUrl = cover?.kind === 'video' ? cover.thumbnail_url : cover?.public_url
   return {

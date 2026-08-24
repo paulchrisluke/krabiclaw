@@ -415,7 +415,7 @@ if (siteId) {
     pageConfig.value?.seo_description || businessSubtitle.value || ''
   )
 
-  useTenantSocialMetadata(() => ({
+  useSocialMetadata(() => ({
     path: pageConfig.value?.canonical_url || '/',
     title: seoTitle.value,
     description: seoDescription.value,
@@ -425,7 +425,11 @@ if (siteId) {
       faviconUrl: pageConfig.value?.favicon_url || null,
       primaryColor: pageConfig.value?.brand_color || null,
     },
-    heroImage: pageConfig.value?.hero_image_url ? { url: pageConfig.value.hero_image_url } : null,
+    heroImage: hero.value.video
+      ? { url: hero.value.video, kind: 'video', thumbnailUrl: hero.value.thumbnail_url }
+      : hero.value.image
+        ? { url: hero.value.image, kind: 'image' }
+        : null,
     robots: pageConfig.value?.robots || null,
   }))
 }

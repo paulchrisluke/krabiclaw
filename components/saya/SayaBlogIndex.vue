@@ -45,7 +45,7 @@ const siteName = computed(() => site?.brand_name?.trim() ?? '')
 const { blogList, error, pending, config } = await usePublicPageData()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/blog',
   title: `Blog | ${siteName.value}`,
   description: `Stories, news, and updates from ${siteName.value}.`,

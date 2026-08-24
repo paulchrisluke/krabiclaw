@@ -190,7 +190,7 @@ export interface TemplateMarketingMetadata {
   sortOrder: number
   /**
    * SEO copy for this template's detail page. Consumed as-is by
-   * usePlatformPageSeo (the shared platform SEO composer, itself a thin
+   * useSocialMetadata (the shared public-page metadata composer, itself a thin
    * adapter over the #259 composeSocialMetadata contract) — this is data,
    * not a new metadata/OG pipeline.
    *

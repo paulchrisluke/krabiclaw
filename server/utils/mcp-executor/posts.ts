@@ -49,9 +49,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       }
     case "create_post":
       {
-        if ("og_image_asset_id" in args) {
-          throw mcpProtocolError(MCP_ERROR.invalidParams, "og_image_asset_id is retired");
-        }
         const post = await asMcpValidationError(() => createPost(
           site.db,
           site.organizationId,
@@ -80,9 +77,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       }
     case "update_post":
       {
-        if ("og_image_asset_id" in args) {
-          throw mcpProtocolError(MCP_ERROR.invalidParams, "og_image_asset_id is retired");
-        }
         const post = await asMcpValidationError(() => updatePost(
           site.db,
           site.organizationId,

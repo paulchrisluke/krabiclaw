@@ -93,26 +93,18 @@ if (error.value) throw error.value
 const post = computed(() => data.value?.post ?? null)
 const coverMedia = computed(() => post.value?.cover || post.value?.media?.[0] || null)
 const pagePath = computed(() => post.value?.public_path || post.value?.publicPath || `/posts/${slug.value}`)
-const canonicalUrl = useSeoUrl(() => post.value?.canonical_url || post.value?.canonicalUrl || pagePath.value)
 const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)
 const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${siteName.value}.`)
-const ogImage = useSeoUrl(() => coverMedia.value?.url || undefined)
-
-useSeoMeta({
-  title: seoTitle,
-  description: seoDescription,
-  ogTitle: seoTitle,
-  ogDescription: seoDescription,
-  ogSiteName: () => siteName.value,
-  ogImage: () => ogImage.value,
-  ogUrl: canonicalUrl,
-  twitterTitle: seoTitle,
-  twitterDescription: seoDescription,
-  twitterImage: () => ogImage.value,
-})
-
-useHead(() => ({
-  link: [{ rel: 'canonical', href: canonicalUrl.value }],
+const { canonicalUrl } = useSocialMetadata(() => ({
+  path: post.value?.canonical_url || post.value?.canonicalUrl || pagePath.value,
+  title: seoTitle.value,
+  description: seoDescription.value,
+  pageType: 'article',
+  brand: { siteName: siteName.value, logoUrl: site?.logo_url || null },
+  heroImage: coverMedia.value
+    ? { url: coverMedia.value.url, kind: coverMedia.value.kind, thumbnailUrl: coverMedia.value.thumbnailUrl }
+    : null,
+  publishedAt: post.value?.createTime || null,
 }))
 
 useSchemaOrg([

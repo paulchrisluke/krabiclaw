@@ -97,7 +97,7 @@ const orderableLocations = computed(() =>
 
 const hasOrderLinks = computed(() => orderableLocations.value.length > 0)
 
-useTenantSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/order',
   title: `Order Online | ${site?.brand_name?.trim() ?? ''}`,
   description: orderCopy.value.seoOrderDescription(site?.brand_name?.trim() ?? ''),
