@@ -1177,7 +1177,7 @@ export function attachFeaturedImage(record: ApiRecord) {
  * featured_image_-prefixed aliases used by the admin/MCP service layer.
  */
 export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
-  const { public_url: publicUrl, kind, width, height, featured_image_asset_id: assetId, ...rest } = record
+  const { public_url: publicUrl, thumbnail_url: thumbnailUrl, kind, width, height, featured_image_asset_id: assetId, ...rest } = record
 
   return {
     ...normalizeNavVisibility(rest),
@@ -1185,6 +1185,7 @@ export function attachFeaturedImageFromBareJoin(record: ApiRecord) {
     featured_image: {
       asset_id: assetId ?? null,
       public_url: publicUrl ?? null,
+      thumbnail_url: thumbnailUrl ?? null,
       kind: kind ?? null,
       width: width ?? null,
       height: height ?? null,
@@ -1275,6 +1276,7 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
       u.name AS author_name,
       u.image AS author_image,
       ma.public_url,
+      ma.thumbnail_url,
       ma.kind,
       ma.width,
       ma.height
@@ -1307,7 +1309,7 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
        p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.nav_group, p.nav_group_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, p.published_at, p.updated_at,
-       ma.public_url, ma.kind, ma.width, ma.height
+       ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
      FROM platform_docs p
      LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
      WHERE p.slug = ? AND p.category = ? AND p.status = 'published'`,
@@ -1642,6 +1644,7 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
       sa.title AS author_title,
       sa.bio AS author_bio,
       ma.public_url,
+      ma.thumbnail_url,
       ma.kind,
       ma.width,
       ma.height

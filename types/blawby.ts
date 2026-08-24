@@ -93,6 +93,8 @@ export interface PublicBlogSummary {
   canonical_url: string
   featured_image: {
     public_url: string
+    thumbnail_url: string | null
+    kind: string | null
     width: number | null
     height: number | null
   } | null

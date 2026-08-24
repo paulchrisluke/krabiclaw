@@ -82,7 +82,7 @@ interface TenantBlogPost {
   author_name?: string | null
   updated_at?: string | null
   featured_order?: number | null
-  featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
+  featured_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   primary_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
@@ -192,7 +192,7 @@ const selectedPostImage = computed(() => {
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const primaryBackground = computed(() => resolveMediaImageUrl(post.value?.primary_image))
+const postImageUrl = computed(() => resolveMediaImageUrl(selectedPostImage.value))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
@@ -218,7 +218,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: primaryBackground.value ? { url: primaryBackground.value } : null,
+  heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
 }))
 
 useHead(() => ({
@@ -234,7 +234,7 @@ useContentPageSchema(computed(() => {
     url: canonicalUrl.value,
     title: post.value.title,
     description: resolvedSeo.value.description,
-    imageUrl: postMedia.value.url || undefined,
+    imageUrl: postImageUrl.value || undefined,
     imageWidth: selectedPostImage.value?.width ?? undefined,
     imageHeight: selectedPostImage.value?.height ?? undefined,
     datePublished: post.value.published_at,

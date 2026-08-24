@@ -37,7 +37,7 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.primary_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby" />
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="articleDisplayMedia?.public_url" :media-kind="articleDisplayMedia?.kind || 'image'" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -104,7 +104,9 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
 if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
-const articleSocialImage = computed(() => resolveMediaImageUrl(post.value.primary_image))
+const articleDisplayMedia = computed(() => post.value.primary_image?.public_url ? post.value.primary_image : post.value.featured_image)
+const articleSocialMedia = computed(() => resolveMediaImageUrl(post.value.primary_image) ? post.value.primary_image : post.value.featured_image)
+const articleSocialImage = computed(() => resolveMediaImageUrl(articleSocialMedia.value))
 const ctaBlock = computed(() => {
   const page = data.value.page
   if (!page) return null
@@ -151,8 +153,8 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
   heroImage: articleSocialImage.value
     ? {
         url: articleSocialImage.value,
-        width: post.value.primary_image?.width || undefined,
-        height: post.value.primary_image?.height || undefined,
+        width: articleSocialMedia.value?.width || undefined,
+        height: articleSocialMedia.value?.height || undefined,
       }
     : null,
   robots: resolvedSeo.value.robots,
@@ -167,9 +169,9 @@ useProfessionalServiceSchema(() => ({
   pageUrl: canonicalUrl.value,
   pageTitle: post.value.title,
   pageDescription: resolvedSeo.value.description,
-  imageUrl: articleSocialImage.value || resolveMediaImageUrl(post.value.featured_image) || null,
-  imageWidth: post.value.primary_image?.width || post.value.featured_image?.width || null,
-  imageHeight: post.value.primary_image?.height || post.value.featured_image?.height || null,
+  imageUrl: articleSocialImage.value,
+  imageWidth: articleSocialMedia.value?.width || null,
+  imageHeight: articleSocialMedia.value?.height || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Blog', url: blogUrl.value },

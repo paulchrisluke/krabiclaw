@@ -26,7 +26,7 @@ export interface BlogPost {
   tags?: string[]
   seo_title?: string | null
   primary_image?: { public_url?: string | null; thumbnail_url?: string | null; kind?: string | null } | null
-  featured_image?: { public_url?: string | null; kind?: string | null } | null
+  featured_image?: { public_url?: string | null; thumbnail_url?: string | null; kind?: string | null } | null
   edit_url?: string | null
   content_document?: {
     document: { id: string; updated_at: string }

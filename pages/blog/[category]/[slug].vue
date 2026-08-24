@@ -86,6 +86,7 @@ interface BlogPost {
   featured_image?: {
     asset_id: string | null
     public_url: string | null
+    thumbnail_url: string | null
     kind: string | null
     width: number | null
     height: number | null
@@ -202,7 +203,7 @@ const selectedPostImage = computed(() => {
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const primaryBackground = computed(() => resolveMediaImageUrl(post.value?.primary_image))
+const postImageUrl = computed(() => resolveMediaImageUrl(selectedPostImage.value))
 
 const categorySlug = computed(() => blogCategoryToSlug(post.value?.category) || String(route.params.category))
 const postPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || '/blog')
@@ -235,7 +236,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   label: post.value?.category || null,
   author: post.value?.author_name || null,
   publishedAt: post.value?.published_at || null,
-  heroImage: primaryBackground.value ? { url: primaryBackground.value } : null,
+  heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
   robots: resolvedSeo.value.robots,
   indexable: post.value?.visibility !== 'unlisted' && (!post.value?.robots || !/noindex/i.test(post.value.robots)),
 }), platformOrigin)
@@ -253,7 +254,7 @@ useContentPageSchema(computed(() => {
     url: canonicalUrl.value,
     title: post.value.title,
     description: resolvedSeo.value.description,
-    imageUrl: postMedia.value.url || undefined,
+    imageUrl: postImageUrl.value || undefined,
     imageWidth: selectedPostImage.value?.width ?? undefined,
     imageHeight: selectedPostImage.value?.height ?? undefined,
     datePublished: post.value.published_at,

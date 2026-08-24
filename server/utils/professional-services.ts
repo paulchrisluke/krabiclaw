@@ -195,7 +195,8 @@ function mapPublicOfferingSummaries(rows: PublicTenantPageOfferingRow[]): Public
 export async function listPublicBlogSummaries(db: DbClient, siteId: string, limit = 50): Promise<PublicBlogSummary[]> {
   const rows = await queryAll<ApiRecord>(db, `
     SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.published_at, p.canonical_url, p.featured_order,
-           u.name AS author_name, u.image AS author_image, media.public_url, media.width, media.height
+           u.name AS author_name, u.image AS author_image,
+           media.public_url, media.thumbnail_url, media.kind, media.width, media.height
       FROM blog_posts p
       LEFT JOIN user u ON u.id = p.author_id
       LEFT JOIN media_assets media ON media.id = p.featured_image_asset_id AND media.status = 'active'
@@ -218,6 +219,8 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     featured_image: typeof row.public_url === 'string' && row.public_url
       ? {
           public_url: row.public_url,
+          thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
+          kind: typeof row.kind === 'string' ? row.kind : null,
           width: Number.isFinite(Number(row.width)) ? Number(row.width) : null,
           height: Number.isFinite(Number(row.height)) ? Number(row.height) : null,
         }
@@ -559,6 +562,8 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     featured_image: featured && typeof featured.public_url === 'string'
       ? {
           public_url: featured.public_url,
+          thumbnail_url: typeof featured.thumbnail_url === 'string' ? featured.thumbnail_url : null,
+          kind: typeof featured.kind === 'string' ? featured.kind : null,
           width: Number.isFinite(Number(featured.width)) ? Number(featured.width) : null,
           height: Number.isFinite(Number(featured.height)) ? Number(featured.height) : null,
         }
