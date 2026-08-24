@@ -36,6 +36,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
 ]
 
 export const CHOWBOT_CONFIRM_REQUIRED = new Set([
+  "import_menu_from_media",
   "create_post",
   "publish_post",
   "delete_post",

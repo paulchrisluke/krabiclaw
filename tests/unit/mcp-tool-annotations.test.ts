@@ -68,3 +68,15 @@ test('site creation, menu import, and media deletion expose their public impact'
     destructiveHint: true,
   })
 })
+
+test('public media uploads are open-world writes', () => {
+  for (const name of ['save_generated_image', 'save_generated_image_file', 'upload_user_media'] as const) {
+    assert.equal(BOUNDED_WRITE_TOOL_NAMES.includes(name as never), false, name)
+    assert.equal(OPEN_WORLD_WRITE_TOOL_NAMES.includes(name), true, name)
+    assert.deepEqual(TOOL_ANNOTATIONS_BY_NAME.get(name), {
+      readOnlyHint: false,
+      openWorldHint: true,
+      destructiveHint: false,
+    })
+  }
+})

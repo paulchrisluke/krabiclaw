@@ -33,18 +33,18 @@
 
       <section class="mx-auto mt-20 max-w-4xl border-t border-default px-4 pt-14 sm:px-6">
         <h2 class="text-3xl font-extrabold text-default">Connect in ChatGPT</h2>
-        <p class="mt-3 text-muted">Custom MCP apps with write actions are available on ChatGPT web for Business and Enterprise/Edu workspaces. Workspace role and policy determine who can create and use them.</p>
+        <p class="mt-3 text-muted">Use ChatGPT on the web. Developer mode availability depends on your account and workspace policy.</p>
 
         <ol class="mt-10 grid gap-6 md:grid-cols-3">
           <li class="rounded-2xl border border-default bg-elevated p-6">
             <span class="flex size-10 items-center justify-center rounded-xl bg-(--kc-navy) text-lg font-bold text-white">1</span>
-            <h3 class="mt-4 font-bold text-default">Enable developer access</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted"><strong>Business:</strong> a workspace admin or owner enables Developer mode, creates and tests the app, and publishes it to the workspace. <strong>Enterprise/Edu:</strong> an admin grants Developer mode through RBAC and controls access to the published app; enabled members can then turn on Developer mode in their user settings and test apps.</p>
+            <h3 class="mt-4 font-bold text-default">Enable Developer mode</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Open <strong>Settings → Security and login</strong>, then turn on <strong>Developer mode</strong>. If the control is unavailable, ask your workspace administrator about its policy.</p>
           </li>
           <li class="rounded-2xl border border-default bg-elevated p-6">
             <span class="flex size-10 items-center justify-center rounded-xl bg-(--kc-teal) text-lg font-bold text-white">2</span>
-            <h3 class="mt-4 font-bold text-default">Create the custom app</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted"><strong>Admins and owners:</strong> open <strong>Workspace Settings → Apps → Create</strong>. <strong>Authorized users:</strong> open <strong>Settings → Apps → Create</strong>. Name the app KrabiClaw, describe its website-management purpose, and enter this HTTPS MCP endpoint. Only an admin or owner can publish it.</p>
+            <h3 class="mt-4 font-bold text-default">Add the connection</h3>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Open <strong>ChatGPT Plugins</strong>, select the plus button, name the connection <strong>KrabiClaw</strong>, describe it as “Manage your KrabiClaw website,” and enter this HTTPS MCP endpoint. Create it and review the discovered tools.</p>
             <div class="mt-4 flex items-center gap-2 rounded-xl border border-default bg-muted/50 px-3 py-2 font-mono text-xs">
               <span class="truncate">https://krabiclaw.com/api/mcp</span>
               <button class="ml-auto cursor-pointer" aria-label="Copy MCP server URL" @click="copyUrl"><PlatformIcon :name="copied ? 'check' : 'clipboard'" class="size-4" /></button>
@@ -53,7 +53,7 @@
           <li class="rounded-2xl border border-default bg-elevated p-6">
             <span class="flex size-10 items-center justify-center rounded-xl bg-(--kc-coral) text-lg font-bold text-white">3</span>
             <h3 class="mt-4 font-bold text-default">Authorize and test</h3>
-            <p class="mt-2 text-sm leading-relaxed text-muted">A workspace admin or owner reviews the discovered tools and publishes the app to permitted users. Those users can then connect, sign in through KrabiClaw OAuth, and select KrabiClaw from Apps in a new conversation.</p>
+            <p class="mt-2 text-sm leading-relaxed text-muted">Start a new conversation, add KrabiClaw from the tools menu, and complete KrabiClaw OAuth when prompted. Begin with a read-only request before trying a write action.</p>
           </li>
         </ol>
 
@@ -61,6 +61,11 @@
           <h3 class="font-bold text-default">Try a safe first request</h3>
           <p class="mt-2 text-sm text-muted">“List my KrabiClaw sites and summarize the homepage of the first one. Do not change anything.”</p>
           <p class="mt-4 text-sm text-muted">ChatGPT sends native attachments to the app when a workflow needs a file. KrabiClaw returns model-readable results and public URLs; it does not simulate a custom file picker.</p>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-default bg-elevated p-6">
+          <h3 class="font-bold text-default">Publishing the public plugin</h3>
+          <p class="mt-2 text-sm text-muted">Public listing is a separate publisher workflow. Authorized publishers submit KrabiClaw through the OpenAI plugin submission portal; approved releases appear in the Plugins Directory.</p>
         </div>
       </section>
     </main>

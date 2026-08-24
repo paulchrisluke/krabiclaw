@@ -424,9 +424,13 @@ async function executeTool(
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
         return { error: "No pending WhatsApp media is available to import." };
       }
+      const menuName = toSqlText(input.menu_name)?.trim();
+      if (!menuName) {
+        return { error: "menu_name is required." };
+      }
       const result = await runMcpExecutorToolForChowbot(executorSite, "import_menu_from_media", {
         asset_id: ctx.pendingMedia.assetId,
-        menu_name: toSqlText(input.menu_name)?.trim() || undefined,
+        menu_name: menuName,
       }) as { error?: string; menuId?: string; count?: number; warning?: unknown; creditsRemaining?: unknown };
       if (result.error) return result;
       if (ctx.channel === "whatsapp") {

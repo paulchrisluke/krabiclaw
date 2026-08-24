@@ -35,19 +35,13 @@ https://krabiclaw.com/api/mcp
 
 The endpoint belongs in the custom app MCP server field. It is not a page to open directly.
 
-## 1. Confirm workspace access
+## 1. Enable Developer mode
 
-Custom MCP apps with write actions are available on ChatGPT web for Business and Enterprise/Edu workspaces.
+Open **Settings → Security and login**, then turn on **Developer mode**. Availability depends on your account and workspace policy; ask your workspace administrator if the control is unavailable.
 
-- **Business:** a workspace admin or owner enables Developer mode, creates and tests the app, and publishes it to the workspace.
-- **Enterprise/Edu:** an admin grants Developer mode through RBAC and controls access to the published app. Enabled members can then turn on Developer mode in their user settings and test apps.
+## 2. Add the MCP connection
 
-## 2. Create the custom app
-
-- **Admins and owners:** open **Workspace Settings → Apps → Create**.
-- **Authorized users:** open **Settings → Apps → Create**.
-
-Only an admin or owner can publish the app. Enter:
+Open **ChatGPT Plugins**, select the plus button, and enter:
 
 | Field | Value |
 |---|---|
@@ -55,19 +49,23 @@ Only an admin or owner can publish the app. Enter:
 | Description | `Manage your KrabiClaw website.` |
 | MCP server URL | `https://krabiclaw.com/api/mcp` |
 
-Create the app. ChatGPT discovers KrabiClaw OAuth authentication and tool metadata from the server. Review the discovered read and write tools before making the app available.
+Create the connection. ChatGPT discovers KrabiClaw OAuth authentication and tool metadata from the server. Review the discovered read and write tools.
 
-## 3. Review and authorize
+## 3. Authorize and test
 
-A workspace admin or owner publishes the reviewed app to the intended workspace users. Those users choose Connect, sign in with their KrabiClaw account, and approve access. OAuth limits the connection to sites their account can manage.
+Start a new conversation, add KrabiClaw from the tools menu, and complete KrabiClaw OAuth when prompted. OAuth limits the connection to sites your account can manage.
 
 ## 4. Start a new conversation
 
-Start a new ChatGPT conversation, select KrabiClaw from Apps, and try:
+Try:
 
 > List my KrabiClaw sites and summarize the homepage of the first one. Do not change anything.
 
 ChatGPT may ask for confirmation based on the app permissions, action, and impact.
+
+## Publisher workflow
+
+Public plugin publication is separate from developer-mode testing. Authorized publishers submit KrabiClaw through the OpenAI plugin submission portal; approved releases appear in the Plugins Directory.
 
 ## Files and media
 
@@ -76,8 +74,8 @@ Attach photos with ChatGPT''s native attachment control. For every video, attach
 ## Troubleshooting
 
 - Confirm the endpoint uses `https`, the `krabiclaw.com` host, and the exact `/api/mcp` path.
-- If metadata changed, recreate and republish the custom app, then start a new conversation. Business workspaces cannot currently update a published app in place.
-- If Developer mode or Create is missing, confirm the ChatGPT plan, workspace role, RBAC grant, and Connected Data policy with a workspace admin.
+- If metadata changed, open the connection in ChatGPT Plugins, select Refresh, confirm the discovered metadata changed, and start a new conversation.
+- If Developer mode is missing, confirm your account and workspace policy with a workspace administrator.
 - If authorization fails, disconnect KrabiClaw and connect again with the intended KrabiClaw account.
 
 You can revoke the connection from your KrabiClaw connected-app settings at any time.',
@@ -110,9 +108,9 @@ VALUES (
   '{"items":[
     {"question":"I clicked the KrabiClaw server URL and got an error","answer":"That is normal. Do not open the server URL directly. Copy and paste https://krabiclaw.com/api/mcp into the custom app MCP server URL field instead.","position":0},
     {"question":"ChatGPT says the connection is wrong","answer":"Check three things: use https not http, use krabiclaw.com not your own site domain, and delete any extra spaces in the field and paste the URL again.","position":1},
-    {"question":"I cannot find Developer mode","answer":"For Business, ask a workspace admin or owner to enable Developer mode, create and test the app, and publish it. For Enterprise/Edu, an admin grants Developer mode through RBAC and controls access to the published app; enabled members turn on Developer mode under Settings → Apps → Advanced Settings.","position":2},
+    {"question":"I cannot find Developer mode","answer":"Open Settings → Security and login. If Developer mode is unavailable there, ask your workspace administrator whether account or workspace policy permits it.","position":2},
     {"question":"I am on a different device","answer":"Use ChatGPT on the web. Custom MCP apps are not currently available in the mobile app.","position":3},
-    {"question":"I created the app but cannot use it in chat","answer":"Confirm that an admin published it to your workspace access group, connect it from Apps, then start a new conversation and select KrabiClaw from Apps.","position":4},
+    {"question":"I created the connection but cannot use it in chat","answer":"Open ChatGPT Plugins and refresh the connection metadata, then start a new conversation and add KrabiClaw from the tools menu.","position":4},
     {"question":"Can I use KrabiClaw in the ChatGPT mobile app?","answer":"No. Custom MCP apps are currently available on ChatGPT web only.","position":5},
     {"question":"I see a safety warning","answer":"That is expected. KrabiClaw uses ChatGPT developer mode because it can make real changes to your website. Only connect KrabiClaw if you trust the KrabiClaw account and website you are signing in to.","position":6},
     {"question":"Can I disconnect ChatGPT later?","answer":"Yes. Open your KrabiClaw account settings and remove the connected app at any time.","position":7}
@@ -133,10 +131,10 @@ VALUES (
   1,
   1,
   '{"steps":[
-    {"name":"Enable developer access","text":"For Business, a workspace admin or owner enables Developer mode. For Enterprise/Edu, an admin grants Developer mode through RBAC; enabled members then turn it on under Settings → Apps → Advanced Settings.","position":0},
-    {"name":"Create the custom app","text":"Admins and owners use Workspace Settings → Apps → Create. Authorized Enterprise/Edu users use Settings → Apps → Create for testing. Enter https://krabiclaw.com/api/mcp as the MCP server URL.","position":1},
-    {"name":"Review and authorize KrabiClaw","text":"An admin or owner reviews the discovered tools and publishes the app to the intended users. Those users connect, sign in with KrabiClaw, and approve OAuth access.","position":2},
-    {"name":"Start a conversation","text":"Start a new conversation, select KrabiClaw from Apps, and begin with a read-only site request.","position":3}
+    {"name":"Enable Developer mode","text":"Open Settings → Security and login and turn on Developer mode. Availability depends on account and workspace policy.","position":0},
+    {"name":"Add the MCP connection","text":"Open ChatGPT Plugins, select the plus button, and enter https://krabiclaw.com/api/mcp with the KrabiClaw name and description.","position":1},
+    {"name":"Review and authorize KrabiClaw","text":"Create the connection, review the discovered tools, and complete KrabiClaw OAuth when prompted.","position":2},
+    {"name":"Start a conversation","text":"Start a new conversation, add KrabiClaw from the tools menu, and begin with a read-only site request.","position":3}
   ],"estimated_time":"PT3M"}',
   datetime('now'),
   datetime('now')

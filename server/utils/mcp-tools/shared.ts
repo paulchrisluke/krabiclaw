@@ -1131,9 +1131,6 @@ export const READ_ONLY_TOOL_NAMES = [
 export const BOUNDED_WRITE_TOOL_NAMES = [
   'set_workspace_context',
   'analyze_document',
-  'save_generated_image',
-  'save_generated_image_file',
-  'upload_user_media',
   'create_blog_author',
   'update_media_asset',
   'update_experience_booking',
@@ -1141,6 +1138,9 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
 ] as const
 
 export const OPEN_WORLD_WRITE_TOOL_NAMES = [
+  'save_generated_image',
+  'save_generated_image_file',
+  'upload_user_media',
   'create_site',
   'import_menu_from_media',
   'set_brand_color',
