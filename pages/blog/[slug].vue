@@ -56,6 +56,7 @@
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
+import { resolveMediaImageUrl } from '~/utils/media-image'
 
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
@@ -82,7 +83,7 @@ interface TenantBlogPost {
   updated_at?: string | null
   featured_order?: number | null
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
-  primary_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
+  primary_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
@@ -187,11 +188,11 @@ const renderableComponents = computed(() =>
 
 const selectedPostImage = computed(() => {
   const primary = post.value?.primary_image
-  if (primary?.public_url) return { public_url: primary.public_url, kind: 'image', width: primary.width, height: primary.height }
+  if (primary?.public_url) return primary
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const primaryBackground = computed(() => post.value?.primary_image?.public_url || null)
+const primaryBackground = computed(() => resolveMediaImageUrl(post.value?.primary_image))
 
 const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()

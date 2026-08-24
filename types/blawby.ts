@@ -109,7 +109,7 @@ export interface PublicBlogPost extends PublicBlogSummary {
   updated_at: string | null
   components: ApiRecord[]
   content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
-  primary_image: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
+  primary_image: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
 }
 
 export const BLAWBY_ROUTE_RECIPES = [

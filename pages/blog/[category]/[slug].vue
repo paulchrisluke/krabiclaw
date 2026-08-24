@@ -53,6 +53,7 @@ import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
+import { resolveMediaImageUrl } from '~/utils/media-image'
 import type { ContentComponent } from '~/utils/content-blocks'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 
@@ -89,7 +90,7 @@ interface BlogPost {
     width: number | null
     height: number | null
   } | null
-  primary_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
+  primary_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
@@ -197,11 +198,11 @@ const wasUpdated = computed(() => {
 
 const selectedPostImage = computed(() => {
   const primary = post.value?.primary_image
-  if (primary?.public_url) return { public_url: primary.public_url, kind: 'image', width: primary.width, height: primary.height }
+  if (primary?.public_url) return primary
   return post.value?.featured_image ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
-const primaryBackground = computed(() => post.value?.primary_image?.public_url || null)
+const primaryBackground = computed(() => resolveMediaImageUrl(post.value?.primary_image))
 
 const categorySlug = computed(() => blogCategoryToSlug(post.value?.category) || String(route.params.category))
 const postPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || '/blog')

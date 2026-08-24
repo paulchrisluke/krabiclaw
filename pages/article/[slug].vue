@@ -81,6 +81,7 @@ import PlatformCommandSearchModal from '~/components/platform/search/PlatformCom
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
+import { resolveMediaImageUrl } from '~/utils/media-image'
 
 const { isBlawby } = usePublicTemplate()
 if (!isBlawby.value) throw createError({ statusCode: 404 })
@@ -103,6 +104,7 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
 if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
+const articleSocialImage = computed(() => resolveMediaImageUrl(post.value.primary_image))
 const ctaBlock = computed(() => {
   const page = data.value.page
   if (!page) return null
@@ -146,11 +148,11 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },
-  heroImage: post.value.primary_image?.public_url
+  heroImage: articleSocialImage.value
     ? {
-        url: post.value.primary_image.public_url,
-        width: post.value.primary_image.width || undefined,
-        height: post.value.primary_image.height || undefined,
+        url: articleSocialImage.value,
+        width: post.value.primary_image?.width || undefined,
+        height: post.value.primary_image?.height || undefined,
       }
     : null,
   robots: resolvedSeo.value.robots,
@@ -165,7 +167,7 @@ useProfessionalServiceSchema(() => ({
   pageUrl: canonicalUrl.value,
   pageTitle: post.value.title,
   pageDescription: resolvedSeo.value.description,
-  imageUrl: post.value.primary_image?.public_url || post.value.featured_image?.public_url || null,
+  imageUrl: articleSocialImage.value || resolveMediaImageUrl(post.value.featured_image) || null,
   imageWidth: post.value.primary_image?.width || post.value.featured_image?.width || null,
   imageHeight: post.value.primary_image?.height || post.value.featured_image?.height || null,
   breadcrumbs: [

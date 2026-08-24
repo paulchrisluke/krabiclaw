@@ -304,6 +304,7 @@ import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialC
 import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+import { resolveMediaImageUrl } from '~/utils/media-image'
 import type { Experience } from '~/server/utils/experiences'
 
 const DOMPurify = useHtmlSanitizer()
@@ -524,6 +525,11 @@ const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.v
 
 const runtimeConfig = useRuntimeConfig()
 const siteUrl = runtimeConfig.public.siteUrl
+const locationSocialImage = computed(() => resolveMediaImageUrl({
+  kind: location.value?.kind,
+  public_url: location.value?.hero_public_url,
+  thumbnail_url: location.value?.thumbnail_url,
+}))
 
 useTenantSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
@@ -537,8 +543,8 @@ useTenantSocialMetadata(() => ({
     faviconUrl: pageConfig.value?.favicon_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: location.value?.hero_public_url
-    ? { url: location.value.hero_public_url }
+  heroImage: locationSocialImage.value
+    ? { url: locationSocialImage.value }
     : null,
 }))
 
