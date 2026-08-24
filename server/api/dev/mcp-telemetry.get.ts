@@ -16,10 +16,12 @@ export default defineHandler(async (event) => {
   const toolName = typeof query.tool_name === 'string' ? query.tool_name : null
   const surface = typeof query.mcp_surface === 'string' ? query.mcp_surface : null
   const status = typeof query.status === 'string' ? query.status : null
+  const userId = typeof query.user_id === 'string' ? query.user_id : null
+  const sessionIdHash = typeof query.session_id_hash === 'string' ? query.session_id_hash : null
 
   let sql = `
     SELECT
-      id, organization_id, site_id, location_id, user_id, mcp_surface, request_id, method, tool_name, tool_domain, is_mutating, arguments_summary_json, result_summary_json, status, error_code, error_message, duration_ms, created_at
+      id, organization_id, site_id, location_id, user_id, mcp_surface, request_id, method, tool_name, tool_domain, is_mutating, arguments_summary_json, result_summary_json, status, error_code, error_message, session_id_hash, duration_ms, created_at
     FROM mcp_tool_call_events
     WHERE 1 = 1
   `
@@ -44,6 +46,14 @@ export default defineHandler(async (event) => {
   if (status) {
     sql += ' AND status = ?'
     binds.push(status)
+  }
+  if (userId) {
+    sql += ' AND user_id = ?'
+    binds.push(userId)
+  }
+  if (sessionIdHash) {
+    sql += ' AND session_id_hash = ?'
+    binds.push(sessionIdHash)
   }
 
   sql += ' ORDER BY created_at DESC LIMIT ?'

@@ -841,6 +841,13 @@
       "when": 1787562692110,
       "tag": "0126_remarkable_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "6",
+      "when": 1787565329114,
+      "tag": "0127_chunky_maximus",
+      "breakpoints": true
     }
   ]
 }

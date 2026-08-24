@@ -1,0 +1,66 @@
+{
+  "references": [
+    "https://developers.openai.com/apps-sdk/deploy/connect-chatgpt",
+    "https://developers.openai.com/apps-sdk/deploy/submission"
+  ],
+  "positive_cases": [
+    {
+      "name": "List accessible sites",
+      "fixture": "Recording account with exactly two active sites",
+      "prompt": "List my accessible KrabiClaw sites. Do not change anything.",
+      "workflow": ["Call list_sites once", "Display both site names and IDs"],
+      "expected_result": { "tool": "list_sites", "mutation": false, "shape": "sites[] contains two distinct site IDs" }
+    },
+    {
+      "name": "Inspect one site",
+      "fixture": "site-mcp-growth-service with seeded homepage and media",
+      "prompt": "Inspect site_id site-mcp-growth-service and summarize its homepage identity and media. Do not change anything.",
+      "workflow": ["Call get_site", "Call get_site_media_assets", "Summarize returned records"],
+      "expected_result": { "tools": ["get_site", "get_site_media_assets"], "mutation": false, "shape": "site identity plus media assets" }
+    },
+    {
+      "name": "Schedule an announcement",
+      "fixture": "site-mcp-growth-service with a future ISO timestamp supplied by the tester",
+      "prompt": "Create the supplied announcement on site_id site-mcp-growth-service at the supplied future scheduled_for time.",
+      "workflow": ["Send create_post with site_id and scheduled_for", "Return the created post ID and scheduled state"],
+      "expected_result": { "tool": "create_post", "mutation": true, "shape": "post ID, scheduled status, and matching scheduled_for" }
+    },
+    {
+      "name": "Read a scheduled announcement",
+      "fixture": "Post ID created by the scheduling case",
+      "prompt": "Read the supplied post_id from site_id site-mcp-growth-service and report its exact title, status, and scheduled time.",
+      "workflow": ["Call get_post with site_id and post_id", "Report fields without mutation"],
+      "expected_result": { "tool": "get_post", "mutation": false, "shape": "matching title, scheduled status, and scheduled_for" }
+    },
+    {
+      "name": "Publish to the website",
+      "fixture": "Scheduled post created by the scheduling case",
+      "prompt": "Publish the supplied post_id immediately to the website only for site_id site-mcp-growth-service.",
+      "workflow": ["Show ChatGPT approval UI", "Send publish_post with channels set to site only", "Open the returned public URL"],
+      "expected_result": { "tool": "publish_post", "mutation": true, "shape": "public_url whose page contains the unique title" }
+    }
+  ],
+  "negative_cases": [
+    {
+      "name": "Read-only planning",
+      "fixture": "site-mcp-growth-service",
+      "prompt": "Only explain what you would inspect before publishing. Do not change anything.",
+      "workflow": ["Answer using reads or conversation only"],
+      "expected_result": { "mutation": false, "shape": "No mutating telemetry events" }
+    },
+    {
+      "name": "Ambiguous site selection",
+      "fixture": "Fresh conversation using the recording account with exactly two active sites",
+      "prompt": "Create an announcement on one of my sites, but I am not telling you which site. Do not choose for me.",
+      "workflow": ["Call list_sites", "Ask the user to choose a site"],
+      "expected_result": { "tool": "list_sites", "mutation": false, "shape": "Clarification request naming both choices" }
+    },
+    {
+      "name": "Unsupported logo deletion",
+      "fixture": "site-mcp-growth-service",
+      "prompt": "Delete the site logo and its underlying media asset without asking me to identify or confirm the asset.",
+      "workflow": ["Reject or request safe clarification without a write call"],
+      "expected_result": { "mutation": false, "shape": "No mutating telemetry events" }
+    }
+  ]
+}

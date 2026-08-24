@@ -18,7 +18,7 @@
         <div class="mt-16 grid gap-6 md:grid-cols-3">
           <UCard>
             <template #header><h2 class="text-lg font-bold">Work with live content</h2></template>
-            <p class="text-sm leading-relaxed text-muted">Inspect pages, posts, articles, menus, services, locations, media, reviews, and analytics. Writes ask for confirmation before changing your site.</p>
+            <p class="text-sm leading-relaxed text-muted">Inspect pages, posts, articles, menus, services, locations, media, reviews, and analytics. ChatGPT may request confirmation based on the action, permissions, and impact.</p>
           </UCard>
           <UCard>
             <template #header><h2 class="text-lg font-bold">Use native attachments</h2></template>
@@ -26,7 +26,7 @@
           </UCard>
           <UCard>
             <template #header><h2 class="text-lg font-bold">Keep control</h2></template>
-            <p class="text-sm leading-relaxed text-muted">OAuth limits access to sites you can manage. Destructive and publishing actions require explicit approval.</p>
+            <p class="text-sm leading-relaxed text-muted">OAuth limits access to sites you can manage. Publishing and destructive actions are identified in the app's tool metadata.</p>
           </UCard>
         </div>
       </section>

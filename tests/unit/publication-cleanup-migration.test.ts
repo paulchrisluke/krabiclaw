@@ -16,6 +16,7 @@ function databaseBeforeCleanup() {
 function applyPublicationMigrations(db: Database.Database) {
   db.exec(readFileSync('migrations/0125_dark_talisman.sql', 'utf8'))
   db.exec(readFileSync('migrations/0126_remarkable_shotgun.sql', 'utf8'))
+  db.exec(readFileSync('migrations/0127_chunky_maximus.sql', 'utf8'))
 }
 
 test('0125 deletes every retired publication state and dependent current row', () => {
@@ -67,7 +68,7 @@ test('0125 deletes every retired publication state and dependent current row', (
   assert.equal(db.pragma('foreign_key_check').length, 0)
 })
 
-test('0125 and 0126 final schemas and triggers reject retired states and duplicate platform-doc storage', () => {
+test('publication cleanup migrations reject retired states and duplicate platform-doc storage', () => {
   const db = databaseBeforeCleanup()
   applyPublicationMigrations(db)
 

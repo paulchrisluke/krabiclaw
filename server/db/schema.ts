@@ -1133,7 +1133,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	robots: text(),
 }, (table) => [
 	check("blog_posts_scope_check", sql`(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
-	check("blog_posts_status_check", sql`status IN ('draft', 'published', 'scheduled', 'archived')`),
+	check("blog_posts_status_check", sql`status IN ('published', 'scheduled')`),
 	check("blog_posts_visibility_check", sql`visibility IN ('public', 'unlisted')`),
 	check("blog_posts_category_check", sql`site_id IS NOT NULL OR category IS NOT NULL`),
 	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
@@ -1249,6 +1249,7 @@ export const posts = sqliteTable("posts", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug),
+	check("posts_status_check", sql`status IN ('published', 'scheduled')`),
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 	index("posts_org_site_idx").on(table.organization_id, table.site_id),
 ]);

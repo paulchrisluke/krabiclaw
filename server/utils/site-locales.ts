@@ -26,6 +26,16 @@ export interface SiteLocaleInput {
   is_source?: boolean
 }
 
+export function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) return undefined
+  if (typeof value === 'boolean') return value
+  throw new Error(`${field} must be a boolean.`)
+}
+
+export function validateSiteLocaleInput<T extends { is_source?: unknown }>(input: T): T & { is_source?: boolean } {
+  return { ...input, is_source: optionalBoolean(input.is_source, 'is_source') }
+}
+
 function mapLocale(row: SiteLocaleRow): SiteLocale {
   return {
     ...row,
@@ -83,8 +93,9 @@ export async function upsertSiteLocale(
   const locale = normalizeLocale(input.locale)
   if (!locale) throw new Error('Invalid locale.')
 
+  const requestedAsSource = optionalBoolean(input.is_source, 'is_source') === true
   const sourceLocale = await getSourceLocale(db, organizationId, siteId)
-  const isSource = input.is_source === true || locale === sourceLocale
+  const isSource = requestedAsSource || locale === sourceLocale
   const status = isSource ? 'published' : assertStatus(input.status)
   const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim().slice(0, 80) : null
   const now = new Date().toISOString()
@@ -92,7 +103,7 @@ export async function upsertSiteLocale(
 
   const batch: BatchQuery[] = []
 
-  if (input.is_source) {
+  if (requestedAsSource) {
     batch.push({
       query: `
         INSERT INTO site_config (organization_id, site_id, key, value)
