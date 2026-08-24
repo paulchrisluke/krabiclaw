@@ -81,14 +81,14 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. The returned asset_id is active. Video cover/hero placement requires poster_file so the asset has thumbnail_url metadata.',
+      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. The returned asset_id is active. Every video requires poster_file so the asset always has thumbnail_url metadata.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
       strict: true,
       inputSchema: {
         file: chatgptFileInput,
-        poster_file: { ...chatgptFileInput, description: 'Optional poster/thumbnail image. Only valid for video uploads.' },
+        poster_file: { ...chatgptFileInput, description: 'Required poster/thumbnail image for video uploads. Invalid for non-video uploads.' },
         category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
         description: { type: 'string', description: 'Description of the media (stored as alt text).' },
       },

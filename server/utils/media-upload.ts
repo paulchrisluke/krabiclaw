@@ -4,7 +4,7 @@ import { uploadImageBuffer, deleteImage } from "~/server/utils/cloudflare-images
 import { uploadToR2, buildR2Key, deleteFromR2 } from "~/server/utils/cloudflare-r2";
 import { createMediaAsset, type MediaAsset } from "~/server/utils/media-asset-manager";
 
-export interface UploadResolvedMediaInput {
+interface UploadResolvedMediaInputBase {
   db: DbClient;
   env: Parameters<typeof uploadImageBuffer>[0];
   siteId: string;
@@ -13,33 +13,30 @@ export interface UploadResolvedMediaInput {
   buffer: ArrayBuffer | Uint8Array<ArrayBuffer>;
   contentType: string;
   filename: string;
-  kind: MediaAsset["kind"];
   source: MediaAsset["source"];
-  /**
-   * Provider override. Defaults to cloudflare_images for kind "image" and
-   * cloudflare_r2 for kind "video"/"file". Pass "cloudflare_r2" explicitly
-   * for image kinds Cloudflare Images can't ingest (e.g. avif), matching the
-   * dashboard's video/file upload route.
-   */
-  provider?: MediaAsset["provider"];
   category?: MediaAsset["category"] | null;
   locationId?: string | null;
   altText?: string | null;
   fileSize?: number | null;
-  /**
-   * Optional poster/thumbnail image for a video upload. Uploaded via
-   * Cloudflare Images and stored as the video asset's thumbnail_url — this
-   * does NOT create a separate media_asset row, matching how the dashboard's
-   * upload route embeds a video's poster.
-   */
-  poster?: { buffer: ArrayBuffer | Uint8Array<ArrayBuffer>; contentType: string; filename: string };
 }
 
-export interface UploadResolvedMediaResult {
+export type UploadResolvedMediaInput = UploadResolvedMediaInputBase & (
+  | { kind: 'image'; provider?: 'cloudflare_images' | 'cloudflare_r2'; poster?: never }
+  | { kind: 'file'; provider?: 'cloudflare_r2'; poster?: never }
+  | {
+      kind: 'video'
+      provider?: 'cloudflare_r2'
+      poster: { buffer: ArrayBuffer | Uint8Array<ArrayBuffer>; contentType: string; filename: string }
+    }
+)
+
+export type UploadResolvedMediaResult = {
   assetId: string;
   publicUrl: string;
-  thumbnailUrl: string | null;
-}
+} & (
+  | { kind: 'image' | 'file'; thumbnailUrl: string | null }
+  | { kind: 'video'; thumbnailUrl: string }
+)
 
 function uploadFailure(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
@@ -51,7 +48,7 @@ export async function uploadResolvedMediaToAssetStore(
   const assetId = crypto.randomUUID();
   const provider = input.provider ?? (input.kind === "image" ? "cloudflare_images" : "cloudflare_r2");
 
-  if (provider === "cloudflare_images") {
+  if (input.kind === 'image' && provider === "cloudflare_images") {
     const uploaded = await uploadImageBuffer(input.env, input.buffer, input.filename, input.contentType);
     try {
       await createMediaAsset(input.db, {
@@ -84,7 +81,7 @@ export async function uploadResolvedMediaToAssetStore(
       }
       throw persistError;
     }
-    return { assetId, publicUrl: uploaded.publicUrl, thumbnailUrl: uploaded.thumbnailUrl };
+    return { assetId, publicUrl: uploaded.publicUrl, thumbnailUrl: uploaded.thumbnailUrl, kind: 'image' };
   }
 
   const r2Key = buildR2Key(input.siteId, assetId, input.filename);
@@ -93,7 +90,7 @@ export async function uploadResolvedMediaToAssetStore(
   let posterImageId: string | null = null;
 
   try {
-    if (input.poster) {
+    if (input.kind === 'video') {
       const uploadedPoster = await uploadImageBuffer(
         input.env,
         input.poster.buffer,
@@ -149,5 +146,9 @@ export async function uploadResolvedMediaToAssetStore(
     throw persistError;
   }
 
-  return { assetId, publicUrl, thumbnailUrl };
+  if (input.kind === 'video') {
+    if (!thumbnailUrl) throw new Error(`Video asset ${assetId} did not produce a thumbnail URL`)
+    return { assetId, publicUrl, thumbnailUrl, kind: 'video' }
+  }
+  return { assetId, publicUrl, thumbnailUrl, kind: input.kind };
 }

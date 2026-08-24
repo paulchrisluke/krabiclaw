@@ -194,7 +194,6 @@ async function validateMenuItemMediaRefs(
     siteId: input.siteId,
     refs: input.refs,
     allowedKinds: ['image', 'video'],
-    requireCoverPoster: true,
     fieldName: 'media',
   });
 }

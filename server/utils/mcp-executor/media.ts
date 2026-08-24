@@ -67,10 +67,12 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
           "poster_file is only valid when file is a video.",
         );
       }
-
-      const provider = resolved.kind === "image"
-        ? resolveImageUploadProvider(resolved.contentType, site.env)
-        : resolved.kind === "file" ? "cloudflare_r2" : undefined;
+      if (resolved.kind === "video" && !posterReference) {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "Video uploads require poster_file so every video has a thumbnail.",
+        );
+      }
 
       let poster: { buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
@@ -88,7 +90,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       }
 
       const context = await mutationContextPayload(site);
-      const uploaded = await uploadResolvedMediaToAssetStore({
+      const uploadInput = {
         db: site.db,
         env: site.env as never,
         siteId: site.siteId,
@@ -97,13 +99,32 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         buffer: resolved.buffer,
         contentType: resolved.contentType,
         filename: resolved.filename,
-        kind: resolved.kind,
         source: "uploaded",
-        provider,
         category: (category as never) ?? null,
         altText: description ?? fileReference.file_name ?? fileReference.file_id,
-        poster,
-      });
+      } as const
+      let uploaded
+      if (resolved.kind === 'video') {
+        if (!poster) throw new Error('Resolved video upload did not include its required thumbnail')
+        uploaded = await uploadResolvedMediaToAssetStore({
+          ...uploadInput,
+          kind: 'video',
+          provider: 'cloudflare_r2',
+          poster,
+        })
+      } else if (resolved.kind === 'image') {
+        uploaded = await uploadResolvedMediaToAssetStore({
+          ...uploadInput,
+          kind: 'image',
+          provider: resolveImageUploadProvider(resolved.contentType, site.env),
+        })
+      } else {
+        uploaded = await uploadResolvedMediaToAssetStore({
+          ...uploadInput,
+          kind: 'file',
+          provider: 'cloudflare_r2',
+        })
+      }
 
       return {
         asset_id: uploaded.assetId,
@@ -113,9 +134,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         kind: resolved.kind,
         next_step: resolved.kind === "file"
           ? "Upload complete. Call analyze_document with this asset_id to summarize it or answer questions grounded in it."
-          : resolved.kind === "video" && !uploaded.thumbnailUrl
-            ? "Upload complete. This video is in the media library but cannot be assigned as a cover or hero until it has a poster thumbnail."
-            : "Upload complete. This asset is in the media library but not assigned yet. Call set_media with this asset_id and the desired target.",
+          : "Upload complete. This asset is in the media library but not assigned yet. Call set_media with this asset_id and the desired target.",
         context,
       };
     }

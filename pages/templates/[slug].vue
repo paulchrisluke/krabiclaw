@@ -331,7 +331,7 @@ onUnmounted(() => {
 })
 
 const requestURL = useRequestURL()
-const siteUrl = requestURL.origin || config.public.siteUrl
+const siteUrl = config.public.siteUrl || requestURL.origin
 
 // Marketing-page schema only: a Product node describing the template
 // offering itself. This is intentionally not the ProfessionalService/
