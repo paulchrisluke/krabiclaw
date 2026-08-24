@@ -51,17 +51,21 @@ yarn test:mcp:chatgpt
 ```
 
 The gate starts the isolated local fixture and tunnel, connects to the prepared
-Chrome session, selects the connection, and drives one continuous ChatGPT
-workflow. It waits on DOM state, captures each approval card, clicks **Allow**
-once, captures every completed response, and verifies each expected call through
-sanitized server telemetry:
+Chrome session, records the selected inline plugin pill, and drives one
+continuous ChatGPT workflow. It waits for completed telemetry and a stable idle
+DOM state, captures each approval card, clicks **Allow** once, captures every
+completed response, and verifies each expected call through sanitized server
+telemetry. Approval cards remain visible for two seconds and final public proof
+for three seconds by default; override these with `CHATGPT_APPROVAL_HOLD_MS` and
+`CHATGPT_PUBLIC_PROOF_HOLD_MS` when needed:
 
 1. Identify the fixture site.
 2. Inspect homepage and media information.
 3. Create a uniquely titled future-scheduled announcement.
 4. Read it back.
 5. Confirm and publish it immediately.
-6. Open the returned public URL in the same Chrome session and verify the title.
+6. Open the local fixture's tunnel-rendered posts page in the same Chrome session
+   and verify the title while retaining the returned public URL in evidence.
 7. Clean up through the fixture-authenticated MCP path.
 
 It also checks that a read-only request, ambiguous site selection, and an

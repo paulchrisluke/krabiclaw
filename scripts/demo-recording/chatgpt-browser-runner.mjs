@@ -5,6 +5,15 @@ import { chromium } from '@playwright/test'
 const DEFAULT_CDP_URL = 'http://127.0.0.1:9222'
 const CHATGPT_URL = 'https://chatgpt.com/'
 const RESPONSE_TIMEOUT_MS = 120_000
+const RESPONSE_IDLE_MS = 3_000
+
+function holdDuration(name, fallback) {
+  const value = Number(process.env[name] || fallback)
+  return Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+const APPROVAL_HOLD_MS = holdDuration('CHATGPT_APPROVAL_HOLD_MS', 2_000)
+const PUBLIC_PROOF_HOLD_MS = holdDuration('CHATGPT_PUBLIC_PROOF_HOLD_MS', 3_000)
 
 function slug(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -45,6 +54,7 @@ export async function connectChatGptRecordingBrowser({ artifactDir, connectorNam
     page = await context.newPage()
     pagesCreated.push(page)
     await page.goto(CHATGPT_URL, { waitUntil: 'domcontentloaded' })
+    await page.bringToFront()
     if (await visible(page.getByRole('button', { name: 'Log in', exact: true }))) {
       throw new Error(`Chrome at ${cdpUrl} is not signed in to ChatGPT.`)
     }
@@ -63,12 +73,23 @@ export async function connectChatGptRecordingBrowser({ artifactDir, connectorNam
       const count = await assistants.count()
       const stop = page.getByRole('button', { name: /stop generating/i })
       const allow = page.getByRole('button', { name: /^Allow(?: once)?$/i }).filter({ visible: true })
+      const progress = page.locator('[aria-busy="true"], [role="progressbar"], [data-state="loading"]').filter({ visible: true })
+      const input = await composer()
+      const send = page.getByRole('button', { name: 'Send prompt', exact: true }).filter({ visible: true })
       if (count > previousAssistantCount) {
         const response = await assistants.last().innerText()
         if (response !== lastText) {
           lastText = response
           lastChange = Date.now()
-        } else if (response.trim() && !await visible(stop) && !await visible(allow) && Date.now() - lastChange >= 750) {
+        } else if (
+          response.trim()
+          && !await visible(stop)
+          && !await visible(allow)
+          && !await visible(progress)
+          && await input.isEditable()
+          && (!await visible(send) || await send.first().isEnabled())
+          && Date.now() - lastChange >= RESPONSE_IDLE_MS
+        ) {
           return response
         }
       }
@@ -77,15 +98,22 @@ export async function connectChatGptRecordingBrowser({ artifactDir, connectorNam
     throw new Error('ChatGPT did not complete its response before the DOM-state timeout.')
   }
 
-  async function sendPrompt(title, prompt, { requireApproval = false } = {}) {
+  async function sendPrompt(title, prompt, { requireApproval = false, completionSignal } = {}) {
     const assistants = page.locator('[data-message-author-role="assistant"]')
     const previousAssistantCount = await assistants.count()
     const input = await composer()
+    let connectorScreenshot = null
     if (needsConnectorMention) {
       await input.fill(`@${connectorName}`)
-      await input.getByRole('link', { name: connectorName, exact: true }).waitFor({ state: 'visible', timeout: 15_000 })
-      await input.pressSequentially(` ${prompt}`)
+      const selectedPlugin = input.getByRole('link', { name: connectorName, exact: true })
+      await selectedPlugin.waitFor({ state: 'visible', timeout: 15_000 })
+      const selectedHref = await selectedPlugin.getAttribute('href')
+      if (!selectedHref?.includes('plugin_detail_origin=inline_selection_pill')) {
+        throw new Error(`${connectorName} did not become the selected inline plugin.`)
+      }
+      connectorScreenshot = await screenshot(`${title}-connector-selected`)
       needsConnectorMention = false
+      await input.pressSequentially(` ${prompt}`)
     } else {
       await input.fill(prompt)
     }
@@ -99,12 +127,14 @@ export async function connectChatGptRecordingBrowser({ artifactDir, connectorNam
       approvalScreenshot = await screenshot(`${title}-approval`)
       if (await allow.count() !== 1) throw new Error(`${title} displayed more than one active Allow control.`)
       if (await assistants.count() > previousAssistantCount) approvalText = await assistants.last().innerText()
+      await page.waitForTimeout(APPROVAL_HOLD_MS)
       await allow.click()
     }
 
+    if (completionSignal) await completionSignal
     const response = await waitForResponse(previousAssistantCount, approvalText)
     const completedScreenshot = await screenshot(`${title}-completed`)
-    return { response, approvalScreenshot, completedScreenshot, conversationUrl: page.url() }
+    return { response, connectorScreenshot, approvalScreenshot, completedScreenshot, conversationUrl: page.url() }
   }
 
   async function resumeConversation(url) {
@@ -113,6 +143,7 @@ export async function connectChatGptRecordingBrowser({ artifactDir, connectorNam
     if (existing) {
       await currentPage.close()
       page = existing
+      await page.bringToFront()
       await composer()
       return
     }
@@ -120,6 +151,7 @@ export async function connectChatGptRecordingBrowser({ artifactDir, connectorNam
     page = await context.newPage()
     pagesCreated.push(page)
     await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await page.bringToFront()
     await composer()
   }
 
@@ -127,13 +159,30 @@ export async function connectChatGptRecordingBrowser({ artifactDir, connectorNam
     const publicPage = await context.newPage()
     pagesCreated.push(publicPage)
     await publicPage.goto(publicUrl, { waitUntil: 'domcontentloaded' })
+    await publicPage.bringToFront()
     await publicPage.getByText(expectedTitle, { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 })
     page = publicPage
-    return { publicUrl, screenshot: await screenshot('published-announcement') }
+    const proofScreenshot = await screenshot('published-announcement')
+    await page.waitForTimeout(PUBLIC_PROOF_HOLD_MS)
+    return { publicUrl, screenshot: proofScreenshot }
   }
 
   async function close() {
-    await Promise.all(pagesCreated.filter(candidate => !candidate.isClosed()).map(candidate => candidate.close()))
+    const failures = []
+    for (const candidate of pagesCreated) {
+      if (candidate.isClosed()) continue
+      try {
+        await candidate.close()
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    try {
+      await browser.close()
+    } catch (error) {
+      failures.push(error)
+    }
+    if (failures.length) throw new AggregateError(failures, 'ChatGPT browser teardown failed.')
   }
 
   return { cdpUrl, newConversation, sendPrompt, resumeConversation, openAndVerify, close }

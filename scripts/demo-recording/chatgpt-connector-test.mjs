@@ -12,6 +12,7 @@ const baseUrl = (process.env.MCP_BASE_URL ?? '').replace(/\/$/, '')
 const devSecret = process.env.E2E_DEV_ROUTE_SECRET ?? ''
 const connectorName = process.env.CHATGPT_CONNECTOR_NAME ?? 'devkrabiclaw'
 const siteId = process.env.MCP_CHATGPT_SITE_ID ?? 'site-mcp-growth-service'
+const fixtureName = process.env.MCP_CHATGPT_FIXTURE_NAME ?? 'MCP Growth Service Fixture'
 const userId = process.env.MCP_CHATGPT_USER_ID ?? 'user-mcp-growth-service'
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const artifactDir = path.join(rootDir, '.wrangler', 'chatgpt-connector', runId)
@@ -94,8 +95,11 @@ async function waitForTelemetryQuietPeriod({ since, sessionIdHash, quietMs = 5_0
 async function runPrompt(browserRunner, title, prompt, expectedTool, expectedArguments, sessionIdHash, requireApproval = false) {
   const since = new Date().toISOString()
   console.log(`\n# ${title}\nExpected tool: ${expectedTool}\n\n${prompt}\n`)
-  const browserResult = await browserRunner.sendPrompt(title, prompt, { requireApproval })
-  const events = await waitForTelemetry(since, candidates => candidates.some(candidate => candidate.tool_name === expectedTool), sessionIdHash)
+  const telemetry = waitForTelemetry(since, candidates => candidates.some(candidate => candidate.tool_name === expectedTool), sessionIdHash)
+  const [browserResult, events] = await Promise.all([
+    browserRunner.sendPrompt(title, prompt, { requireApproval, completionSignal: telemetry }),
+    telemetry,
+  ])
   const event = events.find(candidate => candidate.tool_name === expectedTool && (!candidate.site_id || candidate.site_id === siteId))
   if (!event) throw new Error(`No ${expectedTool} telemetry event matched the completed ChatGPT action.`)
   if (event.status !== 'success') throw new Error(`${expectedTool} telemetry status was ${event.status}: ${String(event.error_message)}`)
@@ -150,18 +154,32 @@ async function mcpCall(cookie, name, args) {
   return body?.result?.structuredContent
 }
 
+function fixtureProofUrl() {
+  return `${baseUrl}/preview/site/${encodeURIComponent(siteId)}/posts`
+}
+
+async function verifyFixtureOrigin() {
+  const publicUrl = fixtureProofUrl()
+  const response = await fetch(publicUrl)
+  if (!response.ok) throw new Error(`Fixture public origin is not reachable through the local tunnel: ${response.status}`)
+  const html = await response.text()
+  if (!html.includes(fixtureName)) throw new Error('Fixture public origin is not serving the local recording tenant.')
+  evidence.browser.fixtureProofUrl = publicUrl
+}
+
 async function main() {
   required(baseUrl, 'MCP_BASE_URL')
   required(devSecret, 'E2E_DEV_ROUTE_SECRET')
   fs.mkdirSync(artifactDir, { recursive: true })
 
-  const browserRunner = await connectChatGptRecordingBrowser({ artifactDir, connectorName })
-  evidence.browser.cdpUrl = browserRunner.cdpUrl
+  let browserRunner
   let postId = ''
   let primaryError
   const cleanupErrors = []
 
   try {
+    browserRunner = await connectChatGptRecordingBrowser({ artifactDir, connectorName })
+    evidence.browser.cdpUrl = browserRunner.cdpUrl
     console.log('\n# Automated recordable ChatGPT MCP gate')
     console.log(`Using the existing ${connectorName} connection for ${baseUrl}/api/mcp.`)
     await browserRunner.newConversation()
@@ -172,6 +190,7 @@ async function main() {
     required(primaryConversationUrl, 'primary ChatGPT conversation URL')
     const sites = parseSummary(listEvent.result_summary_json, 'list_sites').sites
     if (!Array.isArray(sites) || sites.length !== 2 || !sites.some(site => site?.id === siteId)) throw new Error(`Recording account must return exactly two sites including ${siteId}.`)
+    await verifyFixtureOrigin()
 
     await runPrompt(browserRunner, 'Inspect homepage', `Inspect KrabiClaw site_id ${siteId} and summarize its homepage identity and public URL. This is read-only.`, 'get_site', { site_id: siteId }, primarySessionIdHash)
     await runPrompt(browserRunner, 'Inspect media', `List the current media assets for KrabiClaw site_id ${siteId}. Do not upload, assign, edit, or delete anything.`, 'get_site_media_assets', { site_id: siteId }, primarySessionIdHash)
@@ -197,14 +216,25 @@ async function main() {
 
     const publishEvent = await runPrompt(browserRunner, 'Publish immediately', `Publish post_id ${postId} immediately to the website only for KrabiClaw site_id ${siteId}.`, 'publish_post', { site_id: siteId, post_id: postId, channels: ['site'] }, primarySessionIdHash, true)
     const published = parseSummary(publishEvent.result_summary_json, 'publish_post')
-    const publicUrl = required(published.public_url, 'publish_post public_url')
-    evidence.publicVerification = { ...await browserRunner.openAndVerify(publicUrl, title), titleFound: true }
-    console.log(`# Verified public URL contains "${title}": ${publicUrl}`)
+    const returnedPublicUrl = required(published.public_url, 'publish_post public_url')
+    const renderedPublicUrl = fixtureProofUrl()
+    evidence.publicVerification = {
+      returnedPublicUrl,
+      ...await browserRunner.openAndVerify(renderedPublicUrl, title),
+      titleFound: true,
+    }
+    console.log(`# Verified the tunnel-rendered public posts page contains "${title}": ${renderedPublicUrl}`)
   } catch (error) {
     primaryError = error
     evidence.error = sanitizeText(error instanceof Error ? error.stack ?? error.message : error)
   } finally {
-    await browserRunner.close()
+    if (browserRunner) {
+      try {
+        await browserRunner.close()
+      } catch (error) {
+        cleanupErrors.push(new Error(`Browser teardown failed: ${sanitizeText(error instanceof Error ? error.message : error)}`))
+      }
+    }
     if (postId) {
       try {
         const cookie = await cleanupSession()
@@ -214,7 +244,7 @@ async function main() {
         cleanupErrors.push(error)
       }
     }
-    if (cleanupErrors.length) evidence.cleanup.errors = cleanupErrors.map(error => sanitizeText(error instanceof Error ? error.message : error))
+    evidence.cleanup.errors = cleanupErrors.map(error => sanitizeText(error instanceof Error ? error.message : error))
     fs.writeFileSync(path.join(artifactDir, 'evidence.json'), JSON.stringify(evidence, null, 2))
   }
 
