@@ -37,13 +37,23 @@ export interface SocialMediaSource {
   thumbnail_url?: string | null
 }
 
+function firstNonBlank(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const normalized = value?.trim()
+    if (normalized) return normalized
+  }
+  return null
+}
+
 export function resolveSocialImageUrl(source: SocialMediaSource | null | undefined): string | null {
-  const value = source?.kind === 'video'
-    ? source.thumbnailUrl ?? source.thumbnail_url
-    : source?.kind === 'image' || !source?.kind
-      ? source?.url ?? source?.public_url
-      : null
-  return value?.trim() || null
+  if (source?.kind === 'video') {
+    const thumbnailUrl = firstNonBlank(source.thumbnailUrl, source.thumbnail_url)
+    if (!thumbnailUrl) throw new Error('Video media requires a thumbnail URL')
+    return thumbnailUrl
+  }
+  return source?.kind === 'image' || !source?.kind
+    ? firstNonBlank(source?.url, source?.public_url)
+    : null
 }
 
 export interface SocialBrand {

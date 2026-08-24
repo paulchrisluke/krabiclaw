@@ -19,7 +19,9 @@ export const ogImageRenderers: Record<SocialTemplate, OgImageRenderer> = {
 }
 
 export function resolveOgImageRenderer(template: string): OgImageRenderer {
+  if (!Object.hasOwn(ogImageRenderers, template)) {
+    throw new Error(`Unsupported OG image template: ${template}`)
+  }
   const renderer = ogImageRenderers[template as SocialTemplate]
-  if (!renderer) throw new Error(`Unsupported OG image template: ${template}`)
   return renderer
 }

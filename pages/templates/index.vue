@@ -114,7 +114,7 @@ const templates = listPublishedTemplateMarketing()
 
 const requestURL = useRequestURL()
 const config = useRuntimeConfig()
-const siteUrl = requestURL.origin || config.public.siteUrl
+const siteUrl = config.public.siteUrl || requestURL.origin
 
 useSocialMetadata({
   template: 'platform',

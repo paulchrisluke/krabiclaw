@@ -122,21 +122,24 @@ export interface CuratedLocationDefinition {
   notificationPhone?: string | null
 }
 
-export interface CuratedMediaAssetDefinition {
+interface CuratedMediaAssetDefinitionBase {
   id: string
   locationId: string | null
-  kind?: 'image' | 'video'
   provider?: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
   source?: 'external' | 'uploaded'
   r2Key?: string | null
   cloudflareImageId?: string | null
   publicUrl: string
-  thumbnailUrl: string | null
   mimeType: string
   fileName: string
   altText: string
   category: 'food' | 'interior' | 'exterior' | 'team' | 'other'
 }
+
+export type CuratedMediaAssetDefinition = CuratedMediaAssetDefinitionBase & (
+  | { kind?: 'image'; thumbnailUrl: string | null }
+  | { kind: 'video'; thumbnailUrl: string }
+)
 
 export interface CuratedTenantPageContentDefinition {
   id: string
@@ -312,24 +315,27 @@ export interface CuratedMenuItemTranslationDefinition {
 
 // Compiled/normalized interfaces
 
-export interface CompiledSeedMediaAsset {
+interface CompiledSeedMediaAssetBase {
   id: string
   organizationId: string
   siteId: string
   locationId: string | null
-  kind: 'image' | 'video'
   provider: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
   source: 'external' | 'uploaded'
   r2Key: string | null
   cloudflareImageId: string | null
   publicUrl: string
-  thumbnailUrl: string | null
   mimeType: string
   fileName: string
   altText: string
   category: CuratedMediaAssetDefinition['category']
   status: 'active'
 }
+
+export type CompiledSeedMediaAsset = CompiledSeedMediaAssetBase & (
+  | { kind: 'image'; thumbnailUrl: string | null }
+  | { kind: 'video'; thumbnailUrl: string }
+)
 
 export interface CompiledSeedTenantPageContent {
   id: string

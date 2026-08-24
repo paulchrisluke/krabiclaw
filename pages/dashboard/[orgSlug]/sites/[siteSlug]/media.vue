@@ -150,13 +150,6 @@
         <UButton color="neutral" variant="ghost" :loading="loadingMore" @click="loadMore">Load more</UButton>
       </div>
 
-      <VideoPosterPrompt
-        :open="posterPromptOpen"
-        :uploading="uploadLoading"
-        :video-name="pendingVideoFile?.name ?? null"
-        @update:open="posterPromptOpen = $event"
-        @submit="submitVideoUpload"
-      />
     </template>
   </UDashboardPanel>
 </template>
@@ -165,7 +158,6 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
-import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 import { getErrorMessage } from '~/utils/errors'
 
@@ -207,8 +199,6 @@ const deleting = ref(false)
 const isDragging = ref(false)
 const dragCounter = ref(0)
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
-const posterPromptOpen = ref(false)
-const pendingVideoFile = ref<File | null>(null)
 const search = ref('')
 const kindFilter = ref('')
 const selected = ref(new Set<string>())
@@ -357,41 +347,20 @@ function openUploadPicker() {
 }
 
 function handleSelectedFile(file: File) {
-  if (file.type.startsWith('video/')) {
-    pendingVideoFile.value = file
-    posterPromptOpen.value = true
-    return
-  }
-
   void uploadFile(file)
-}
-
-async function submitVideoUpload(poster: File | null) {
-  posterPromptOpen.value = false
-  const videoFile = pendingVideoFile.value
-  pendingVideoFile.value = null
-  if (!videoFile) return
-  await uploadFile(videoFile, poster)
 }
 
 async function retryPendingUpload() {
   const pendingUpload = pendingRetryFile.value
   if (!pendingUpload) return
-  await uploadFile(pendingUpload.file, pendingUpload.options.poster ?? null)
+  await uploadFile(pendingUpload.file)
 }
 
-async function uploadFile(file: File, poster: File | null = null) {
+async function uploadFile(file: File) {
   try {
-    const result = await upload(file, { poster })
+    const result = await upload(file)
     if (!result) return
     toast.add({ title: 'File uploaded', icon: 'i-lucide-circle-check', color: 'success' })
-    if (result.kind === 'video' && !poster) {
-      toast.add({
-        title: 'Video uploaded without a poster image',
-        description: 'Without a poster, this video may appear blank while it loads.',
-        color: 'warning'
-      })
-    }
     await load()
   } catch (err) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')

@@ -17,7 +17,8 @@ export interface OwnerEnteredReviewInput {
 
 function optionalString(value: unknown, maxLength: number) {
   if (value == null) return null
-  const normalized = String(value).trim()
+  if (typeof value !== 'string') throw new Error('value must be a string or null')
+  const normalized = value.trim()
   return normalized ? normalized.slice(0, maxLength) : null
 }
 
@@ -28,19 +29,22 @@ function requiredString(value: unknown, field: string, maxLength: number) {
 }
 
 function parseRating(value: unknown) {
-  const rating = Number(value)
+  if (typeof value !== 'number') throw new Error('rating must be an integer from 1 through 5')
+  const rating = value
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error('rating must be an integer from 1 through 5')
   return rating
 }
 
 function parseCollectionMethod(value: unknown): OwnerReviewCollectionMethod {
-  const method = String(value ?? '') as OwnerReviewCollectionMethod
+  if (typeof value !== 'string') throw new Error('collection_method is invalid')
+  const method = value as OwnerReviewCollectionMethod
   if (!OWNER_REVIEW_COLLECTION_METHODS.includes(method)) throw new Error('collection_method is invalid')
   return method
 }
 
 function parseStatus(value: unknown) {
-  const status = value == null ? 'pending' : String(value)
+  if (value != null && typeof value !== 'string') throw new Error('status is invalid')
+  const status = value ?? 'pending'
   if (!['pending', 'approved', 'rejected'].includes(status)) throw new Error('status is invalid')
   return status
 }

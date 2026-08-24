@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9ab82dc1dee5ad3aeb431a71b3baf2aef5f492feec31c3baed3c33aa04cdfa7d",
+  "fingerprint": "sha256:ed4ec066f08d44b56ad1fa5b0dbdd14e1baad66b3681fd62d88991a171ee8d9f",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -15055,7 +15055,7 @@
             "type": "object"
           },
           "poster_file": {
-            "description": "Optional poster/thumbnail image. Only valid for video uploads.",
+            "description": "Required poster/thumbnail image for video uploads. Invalid for non-video uploads.",
             "properties": {
               "download_url": {
                 "type": "string"

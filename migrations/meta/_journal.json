@@ -820,6 +820,13 @@
       "when": 1787483506024,
       "tag": "0123_young_romulus",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "6",
+      "when": 1787544840957,
+      "tag": "0124_video_thumbnail_contract",
+      "breakpoints": true
     }
   ]
 }

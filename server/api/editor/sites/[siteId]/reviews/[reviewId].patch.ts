@@ -1,6 +1,6 @@
 // PATCH /api/editor/sites/[siteId]/reviews/[reviewId]
 // Allows owners/admins to set owner_reply, change status (approve/hide)
-import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
+import { jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { replyToReview } from '~/server/utils/review-management'
@@ -14,10 +14,12 @@ export default defineHandler(async (event) => {
   const { db, site } = await requireSiteAccess(event, siteId!, 'context')
   assertOrganizationAccess(site.member_role)
 
-  const body = await readRequiredBody<ApiRecord>(event)
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
-  }
+  const body = await readStrictBody<ApiRecord>(event, {
+    author_name: 'string', rating: 'number', title: 'nullable-string', content: 'string',
+    collection_method: 'string', original_review_date: 'nullable-string',
+    original_reference: 'nullable-string', publication_authorized: 'boolean', status: 'string',
+    owner_reply: 'nullable-string',
+  })
 
   const ownerEntryFields = [
     'author_name', 'rating', 'title', 'content', 'collection_method', 'original_review_date', 'original_reference', 'publication_authorized', ]

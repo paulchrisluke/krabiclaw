@@ -51,7 +51,6 @@ type PlacementDefinition = {
   entity: string
   cardinality: 'single' | 'ordered'
   allowedKinds: Array<ResolvedMediaAsset['kind']>
-  requireCoverPoster: boolean
 }
 
 export function replaceStoryImageBlock(
@@ -84,14 +83,14 @@ export function mediaPlacementDefinition(target: MediaPlacementTarget): Placemen
     case 'about_story_image':
     case 'post_image':
     case 'blog_post_image':
-      return { entity: target.type, cardinality: 'single', allowedKinds: ['image'], requireCoverPoster: true }
+      return { entity: target.type, cardinality: 'single', allowedKinds: ['image'] }
     case 'menu_item_media':
-      return { entity: 'menu_item', cardinality: 'ordered', allowedKinds: ['image', 'video'], requireCoverPoster: true }
+      return { entity: 'menu_item', cardinality: 'ordered', allowedKinds: ['image', 'video'] }
     case 'home_hero':
     case 'location_hero':
-      return { entity: target.type, cardinality: 'single', allowedKinds: ['image', 'video'], requireCoverPoster: true }
+      return { entity: target.type, cardinality: 'single', allowedKinds: ['image', 'video'] }
     case 'experience_media':
-      return { entity: 'experience', cardinality: 'ordered', allowedKinds: ['image', 'video'], requireCoverPoster: true }
+      return { entity: 'experience', cardinality: 'ordered', allowedKinds: ['image', 'video'] }
   }
 }
 
@@ -121,7 +120,6 @@ export async function validateAndHydrateMediaPlacement(
     siteId: input.siteId,
     refs,
     allowedKinds: definition.allowedKinds,
-    requireCoverPoster: definition.requireCoverPoster,
     fieldName: 'asset_ids',
   })
 }

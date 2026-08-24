@@ -120,16 +120,14 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const breadcrumbId = `${url}#breadcrumb`
     const graph: ApiRecord[] = []
 
-    if (value.isHomepage) {
-      graph.push({
-        '@type': 'Organization',
-        '@id': organizationId,
-        name: PLATFORM_NAME,
-        url: siteRoot,
-        logo: `${siteRoot}/krabi-claw-logo.png`,
-        description: PLATFORM_DESCRIPTION,
-      })
-    }
+    graph.push({
+      '@type': 'Organization',
+      '@id': organizationId,
+      name: PLATFORM_NAME,
+      url: siteRoot,
+      logo: `${siteRoot}/krabi-claw-logo.png`,
+      description: PLATFORM_DESCRIPTION,
+    })
     graph.push({
       '@type': 'WebSite',
       '@id': websiteId,

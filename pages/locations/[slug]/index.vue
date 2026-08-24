@@ -480,7 +480,7 @@ function experienceCoverImage(exp: Experience): string | null {
 // Content hero fields take precedence; fall back to the imported primary photo
 const contentHero = computed(() => getContentHero({ title: '', subtitle: '', image: '', video: '' }))
 const heroMedia = computed(() => {
-  if (contentHero.value.video) return resolveMedia({ public_url: contentHero.value.video, kind: contentHero.value.videoKind || 'video' })
+  if (contentHero.value.video) return resolveMedia({ public_url: contentHero.value.video, thumbnail_url: contentHero.value.thumbnail_url, kind: contentHero.value.videoKind || 'video' })
   if (contentHero.value.image) return resolveMedia({ public_url: contentHero.value.image, kind: contentHero.value.imageKind || 'image' })
   return resolveMedia({ public_url: location.value?.public_url, kind: location.value?.kind })
 })
@@ -536,11 +536,11 @@ useSocialMetadata(() => ({
     faviconUrl: pageConfig.value?.favicon_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: location.value?.hero_public_url
+  heroImage: heroMedia.value.url
     ? {
-        url: location.value.hero_public_url,
-        kind: location.value.kind === 'video' ? 'video' : 'image',
-        thumbnailUrl: location.value.thumbnail_url,
+        url: heroMedia.value.url,
+        kind: heroMedia.value.kind === 'video' ? 'video' : 'image',
+        thumbnailUrl: heroMedia.value.thumb,
       }
     : null,
 }))

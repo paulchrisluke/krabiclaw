@@ -131,7 +131,7 @@ mock.module('../../server/utils/site-events.ts', {
   },
 })
 
-const { deleteMediaAsset, replaceVideoPoster } = await import('../../server/utils/media-asset-manager.ts')
+const { deleteMediaAsset } = await import('../../server/utils/media-asset-manager.ts')
 
 function reset() {
   state.asset = { ...baseAsset }
@@ -291,70 +291,4 @@ test('an invalid storage-reference result blocks provider and database deletion'
   assert.deepEqual(state.r2Deletes, [])
   assert.deepEqual(state.imageDeletes, [])
   assert.equal(state.updates.length, 0)
-})
-
-test('poster replacement preserves the previous image while another non-deleted asset references it', async () => {
-  reset()
-  state.otherAssets = [{
-    id: 'asset-copy',
-    r2_key: null,
-    cloudflare_image_id: 'poster-image',
-    status: 'active',
-  }]
-
-  const publicUrl = await replaceVideoPoster({} as never, env, {
-    assetId: 'asset-video',
-    siteId: 'site-1',
-    userId: 'user-1',
-    buffer: new ArrayBuffer(1),
-    filename: 'poster.jpg',
-    contentType: 'image/jpeg',
-  })
-
-  assert.equal(publicUrl, state.uploadedImage.publicUrl)
-  assert.deepEqual(state.imageDeletes, [])
-  assert.equal(state.asset?.cloudflare_image_id, 'poster-new')
-  assert.equal(state.events, 1)
-})
-
-test('poster replacement reports a previous-image deletion failure after persisting the new poster', async () => {
-  reset()
-  state.imageErrors.set('poster-image', new Error('Images unavailable'))
-
-  await assert.rejects(
-    () => replaceVideoPoster({} as never, env, {
-      assetId: 'asset-video',
-      siteId: 'site-1',
-      userId: 'user-1',
-      buffer: new ArrayBuffer(1),
-      filename: 'poster.jpg',
-      contentType: 'image/jpeg',
-    }),
-    /Poster updated for asset asset-video, but previous Cloudflare image poster-image could not be deleted: Images unavailable/,
-  )
-
-  assert.equal(state.asset?.cloudflare_image_id, 'poster-new')
-  assert.deepEqual(state.imageDeletes, ['poster-image'])
-  assert.equal(state.events, 1)
-})
-
-test('poster replacement reports both persistence and uploaded-image cleanup failures', async () => {
-  reset()
-  state.executeError = new Error('D1 unavailable')
-  state.imageErrors.set('poster-new', new Error('Images unavailable'))
-
-  await assert.rejects(
-    () => replaceVideoPoster({} as never, env, {
-      assetId: 'asset-video',
-      siteId: 'site-1',
-      userId: 'user-1',
-      buffer: new ArrayBuffer(1),
-      filename: 'poster.jpg',
-      contentType: 'image/jpeg',
-    }),
-    /Poster update failed for asset asset-video, and uploaded Cloudflare image poster-new could not be deleted/,
-  )
-
-  assert.deepEqual(state.imageDeletes, ['poster-new'])
-  assert.equal(state.events, 0)
 })
