@@ -17,6 +17,7 @@ const userId = process.env.MCP_CHATGPT_USER_ID ?? 'user-mcp-growth-service'
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const artifactDir = path.join(rootDir, '.wrangler', 'chatgpt-connector', runId)
 const MCP_VERSION = '2025-06-18'
+const TELEMETRY_TIMEOUT_MS = Number(process.env.CHATGPT_TELEMETRY_TIMEOUT_MS || 180_000)
 const evidence = { runId, baseUrl, connectorName, browserMode: 'automated Chrome over CDP', prompts: [], browser: {}, cleanup: {} }
 
 function required(value, name) {
@@ -61,7 +62,7 @@ async function telemetry(since, toolName, sessionIdHash) {
   return payload.events
 }
 
-async function waitForTelemetry(since, predicate, sessionIdHash, timeoutMs = 15_000) {
+async function waitForTelemetry(since, predicate, sessionIdHash, timeoutMs = TELEMETRY_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs
   let events = []
   while (Date.now() < deadline) {
@@ -69,7 +70,7 @@ async function waitForTelemetry(since, predicate, sessionIdHash, timeoutMs = 15_
     if (predicate(events)) return events
     await pause(500)
   }
-  return events
+  throw new Error(`Expected MCP telemetry did not arrive within ${timeoutMs} ms.`)
 }
 
 async function waitForTelemetryQuietPeriod({ since, sessionIdHash, quietMs = 5_000, timeoutMs = 30_000 }) {
