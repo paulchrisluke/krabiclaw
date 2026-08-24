@@ -29,36 +29,6 @@ function renderRows(definition: NclsSeedTable, transform?: (_row: Record<string,
   }).join('\n')
 }
 
-function omitColumns(
-  row: Record<string, NclsSeedValue>,
-  columns: string[],
-): Record<string, NclsSeedValue> {
-  const omitted = new Set(columns)
-  return Object.fromEntries(Object.entries(row).filter(([column]) => !omitted.has(column)))
-}
-
-function canonicalPageVariant(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
-  const result = omitColumns(row, [
-    'draft_document_id',
-    'published_revision_id',
-    'published_path',
-    'draft_path',
-    'ever_published',
-    'status',
-  ])
-  result.document_id = row.draft_document_id ?? null
-  result.path = row.published_path ?? row.draft_path ?? '/'
-  return result
-}
-
-function canonicalTenantPage(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
-  return omitColumns(row, ['path', 'status'])
-}
-
-function canonicalOffering(row: Record<string, NclsSeedValue>): Record<string, NclsSeedValue> {
-  return omitColumns(row, ['status'])
-}
-
 export function renderNclsFixtureSql(): string {
   const site = table('sites').rows[0]
   if (!site) throw new Error('NCLS fixture has no site row')
@@ -77,7 +47,7 @@ export function renderNclsFixtureSql(): string {
     'location_qa',
     'reviews',
     'offerings',
-  ].map(name => renderRows(table(name), name === 'offerings' ? canonicalOffering : undefined)).filter(Boolean).join('\n\n')
+  ].map(name => renderRows(table(name))).filter(Boolean).join('\n\n')
 
   return `PRAGMA foreign_keys = ON;
 
@@ -122,15 +92,15 @@ UPDATE sites
        logo_asset_id = ${sqlValue(site.logo_asset_id ?? null)}
  WHERE id = ${sqlValue(nclsFixture.siteId)};
 
-${renderRows(table('tenant_pages'), canonicalTenantPage)}
+${renderRows(table('tenant_pages'))}
 
-${renderRows(table('blog_posts'), row => omitColumns(row, ['scheduled_revision_id']))}
+${renderRows(table('blog_posts'))}
 
-${renderRows(table('content_documents'), row => omitColumns(row, ['draft_revision_id', 'published_revision_id']))}
+${renderRows(table('content_documents'))}
 
 ${renderRows(table('content_blocks'))}
 
-${renderRows(table('tenant_page_variants'), canonicalPageVariant)}
+${renderRows(table('tenant_page_variants'))}
 
 ${renderRows(table('blog_post_redirects'))}
 

@@ -87,7 +87,7 @@ test('create_platform_blog_post requires a non-empty content_blocks array', () =
   const properties = createTool.inputSchema.properties as Record<string, { minItems?: number }>
   assert.equal(properties.content_blocks?.minItems, 1)
   assert.equal(Object.hasOwn(properties, 'publish'), false)
-  assert.equal(Object.hasOwn(properties, 'scheduled_for'), false)
+  assert.equal(Object.hasOwn(properties, 'scheduled_for'), true)
 })
 
 test('PLATFORM_PUBLIC_MCP_TOOLS and PLATFORM_INTERNAL_MCP_TOOLS are disjoint and together form PLATFORM_MCP_TOOLS', () => {
@@ -102,7 +102,8 @@ test('PLATFORM_PUBLIC_MCP_TOOLS and PLATFORM_INTERNAL_MCP_TOOLS are disjoint and
 })
 
 test('platform blog lifecycle tools require both exact concurrency tokens', () => {
-  for (const name of ['publish_platform_blog_post', 'unpublish_platform_blog_post']) {
+  assert.equal(getPlatformMcpTool('unpublish_platform_blog_post'), null)
+  for (const name of ['publish_platform_blog_post']) {
     const lifecycleTool = tool(PLATFORM_MCP_TOOLS, name)
     assert.deepEqual(lifecycleTool.inputSchema.required, [
       'post_id',

@@ -17,11 +17,11 @@ const blogContentBlockSchema = {
 export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'list_blog_posts',
-      description: 'List this site\'s blog posts (draft and published). This is the site\'s own long-form content blog — distinct from list_posts, which is the social-update feed (events/offers/announcements that can publish to Facebook/Instagram).',
+      description: 'List this site\'s published and scheduled blog articles. This is the site\'s own long-form content blog — distinct from list_posts, which is the social-update feed.',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { status: { type: 'string', enum: ['draft', 'published', 'scheduled'] } },
+      inputSchema: { status: { type: 'string', enum: ['published', 'scheduled'] } },
       outputSchema: {
         type: 'object',
         properties: { posts: { type: 'array', items: blogPostSummaryObject } },
@@ -48,10 +48,10 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_blog_post',
-      description: 'Create a long-form, evergreen, SEO-indexed article (site history, guides, "why choose us") as a draft using content_blocks as the only authoring shape. Always review the draft at edit_url in the tenant-themed editor. Publishing or scheduling is a separate dual-token operation through publish_blog_post. category is free text for tenant blogs. For time-boxed, social-style announcements (tonight\'s event, a limited offer) that publish immediately and can publish to Facebook/Instagram, use create_post instead.',
+      description: 'Create a long-form, evergreen, SEO-indexed article using content_blocks as the only authoring shape. Omit scheduled_for to publish immediately, or provide a future ISO 8601 datetime to schedule it. Compose and review the complete article with the user before calling this tool. category is free text for tenant blogs.',
       domain: 'blog',
       minimumRole: 'editor',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         title: { type: 'string' },
         excerpt: { type: 'string' },
@@ -65,6 +65,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
         visibility: { type: 'string', enum: ['public', 'unlisted'], description: 'Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.' },
         site_author_id: { type: ['string', 'null'], description: 'Id of a tenant author (from list_blog_authors) to display as the byline. Leave unset to fall back to the site name.' },
+        scheduled_for: { type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.' },
       },
       required: ['title', 'content_blocks'],
       strict: true,
@@ -72,7 +73,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_blog_post',
-      description: 'Update a blog post draft. Only provided fields are changed, and at least one mutation field besides post_id/site_id/concurrency tokens is required. Always review the draft at edit_url. Sending content_blocks replaces the complete draft block snapshot and requires expected_document_updated_at from document_updated_at. Publishing and scheduling are separate token-checked lifecycle operations through publish_blog_post.',
+      description: 'Save changes to an existing live or scheduled blog article. Only provided fields are changed. Sending content_blocks replaces the complete block snapshot and requires expected_document_updated_at. Changes to a live article are public immediately; compose and review them with the user first.',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -82,7 +83,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         excerpt: { type: 'string' },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
-        content_blocks: { type: 'array', minItems: 1, description: 'Canonical ordered article blocks. Sending this replaces the complete draft block snapshot.', items: blogContentBlockSchema },
+        content_blocks: { type: 'array', minItems: 1, description: 'Canonical ordered article blocks. Sending this replaces the complete block snapshot.', items: blogContentBlockSchema },
         expected_document_updated_at: { type: 'string', description: 'Required with content_blocks. Use document_updated_at returned by get_blog_post; stale tokens are rejected with a conflict.' },
         expected_updated_at: { type: 'string', description: 'Optional metadata concurrency token from the post updated_at field.' },
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
@@ -137,7 +138,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
-        content_blocks: { type: 'array', minItems: 1, description: 'Canonical ordered article blocks, replacing the complete draft block set.', items: blogContentBlockSchema },
+        content_blocks: { type: 'array', minItems: 1, description: 'Canonical ordered article blocks, replacing the complete block set.', items: blogContentBlockSchema },
         expected_document_updated_at: { type: 'string', description: 'Concurrency token from the post document_updated_at (get_blog_post). A stale token is rejected with a conflict.' },
       },
       required: ['post_id', 'content_blocks', 'expected_document_updated_at'],
@@ -146,26 +147,13 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'publish_blog_post',
-      description: 'Publish a tenant blog post immediately, or schedule it with scheduled_for. Requires both current concurrency tokens from the latest get_blog_post or successful blog mutation. Use only after the writer has approved the final article.',
-      domain: 'blog', minimumRole: 'editor', confirmRequired: false,
+      description: 'Publish a scheduled tenant blog article immediately, or reschedule it with scheduled_for. Requires both current concurrency tokens. Use only after the writer has approved the final article.',
+      domain: 'blog', minimumRole: 'editor', confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         expected_updated_at: { type: 'string', description: 'Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.' },
         expected_document_updated_at: { type: 'string', description: 'Exact post.document_updated_at concurrency token from the latest get_blog_post or successful blog mutation.' },
         scheduled_for: { type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.' },
-      },
-      required: ['post_id', 'expected_updated_at', 'expected_document_updated_at'],
-      strict: true,
-      outputSchema: blogPostMutationResultObject,
-    }),
-  siteTool({
-      name: 'unpublish_blog_post',
-      description: 'Move a published tenant blog post back to draft. Requires both current concurrency tokens from the latest get_blog_post or successful blog mutation.',
-      domain: 'blog', minimumRole: 'editor', confirmRequired: false,
-      inputSchema: {
-        post_id: { type: 'string', description: 'Post id or slug.' },
-        expected_updated_at: { type: 'string', description: 'Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.' },
-        expected_document_updated_at: { type: 'string', description: 'Exact post.document_updated_at concurrency token from the latest get_blog_post or successful blog mutation.' },
       },
       required: ['post_id', 'expected_updated_at', 'expected_document_updated_at'],
       strict: true,

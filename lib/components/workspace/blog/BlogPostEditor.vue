@@ -7,8 +7,8 @@
       </p>
       <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" :disabled="!interactive || !post" @click="share"><span class="hidden sm:inline">Share</span></UButton>
       <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" :disabled="!interactive" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
-      <UButton v-if="post && (post.status === 'published' || post.status === 'scheduled')" color="neutral" variant="soft" size="sm" :loading="unpublishing" :disabled="!interactive || publishing || unpublishing" @click="unpublish">Unpublish</UButton>
-      <UButton size="sm" :loading="publishing" :disabled="!interactive || publishing || unpublishing || loadPending || saveState === 'conflict'" @click="publish">Publish</UButton>
+      <UButton v-if="post?.status === 'published'" size="sm" :loading="savingExplicitly" :disabled="!interactive || savingExplicitly || loadPending || saveState === 'conflict' || !dirtyState" @click="saveLiveChanges">Save live changes</UButton>
+      <UButton v-else size="sm" :loading="publishing" :disabled="!interactive || publishing || loadPending || saveState === 'conflict'" @click="publish">{{ publishTiming === 'Scheduled' ? (post ? 'Reschedule' : 'Schedule') : 'Publish now' }}</UButton>
     </header>
     <p v-if="actionError" role="alert" class="shrink-0 border-b border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
@@ -140,16 +140,14 @@ const loadError = ref('')
 const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
 const actionError = ref('')
 const publishing = ref(false)
-const unpublishing = ref(false)
+const savingExplicitly = ref(false)
 const settingsOpen = ref(false)
 const settingsButton = ref<{ $el?: HTMLElement } | null>(null)
 const settingsPanel = ref<HTMLElement | null>(null)
 const categoryInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
-let saveTimer: ReturnType<typeof setTimeout> | undefined
 let dirty = false
+const dirtyState = ref(false)
 let applyingServerSnapshot = false
-let createDraftPromise: Promise<BlogPost | null> | null = null
-let publishAfterCreateRequested = false
 let serverPostUpdatedAt: string | undefined
 let serverDocumentUpdatedAt: string | undefined
 const slugResetRequested = ref(false)
@@ -212,8 +210,8 @@ const editorCanvasStyle = computed(() => {
     '--ui-text-highlighted': ink, '--ui-text-muted': `color-mix(in srgb, ${ink} 70%, transparent)`, '--ui-text-dimmed': `color-mix(in srgb, ${ink} 55%, transparent)`,
   }
 })
-const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Scheduled' : post.value?.published_at ? 'Published' : 'Draft')
-const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : unpublishing.value ? 'Unpublishing…' : statusLabel.value)
+const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Scheduled' : post.value ? 'Published' : 'Not published')
+const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : statusLabel.value)
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? '' : 'KrabiClaw'))
@@ -254,7 +252,7 @@ const saveLabel = computed(() => {
   if (saveState.value === 'saving') return 'Saving…'
   if (saveState.value === 'failed') return 'Save failed'
   if (saveState.value === 'conflict') return 'Conflict — reload to reconcile'
-  return 'Saved'
+  return dirtyState.value ? 'Unsaved changes' : 'Saved'
 })
 type InserterBlockType = 'image' | 'faq' | 'how_to' | 'divider'
 
@@ -276,6 +274,7 @@ const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
     slugResetRequested.value = false
     if (updated.content_document?.blocks) blocks.value = structuredClone(updated.content_document.blocks)
     dirty = false
+    dirtyState.value = false
     saveState.value = 'saved'
     void nextTick(() => { applyingServerSnapshot = false })
   },
@@ -298,7 +297,7 @@ watch([
   blocks,
   tagsText,
   slugResetRequested,
-], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true, flush: 'sync' })
+], () => { if (!applyingServerSnapshot) markDirty() }, { deep: true, flush: 'sync' })
 onMounted(async () => {
   interactive.value = true
   window.addEventListener('beforeunload', beforeUnload)
@@ -306,7 +305,7 @@ onMounted(async () => {
   void loadAuthors()
   if (!props.initialPost && !props.deferLoad) await load()
 })
-onBeforeUnmount(() => { if (saveTimer) clearTimeout(saveTimer); if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
+onBeforeUnmount(() => { if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
 
 async function load() {
   if (!postId.value || !props.isEdit) { loadPending.value = false; return }
@@ -327,6 +326,8 @@ function applyLoadedPost(loaded: BlogPost) {
     if (!loaded.content_document) throw new Error('Blog content document is missing')
     blocks.value = structuredClone(loaded.content_document.blocks || [])
     ensureTrailingTextBlock()
+    dirty = false
+    dirtyState.value = false
   } finally {
     void nextTick(() => { applyingServerSnapshot = false })
   }
@@ -342,39 +343,15 @@ watch(() => props.initialPost, (loaded) => {
     loadPending.value = false
   }
 }, { immediate: true })
-function queueSave() {
+function markDirty() {
   if (loadPending.value || saveState.value === 'conflict') return
   dirty = true
-  if (saveTimer) clearTimeout(saveTimer)
-  if (!post.value && !props.isEdit) {
-    if (isDraftValid()) saveTimer = setTimeout(() => {
-      void createDraft(false).catch((error: unknown) => {
-        actionError.value = getErrorMessage(error, 'Failed to create the draft.')
-      })
-    }, 900)
-    return
-  }
-  if (post.value) {
-    saveQueue.mark(buildSaveSnapshot())
-    saveTimer = setTimeout(() => {
-      void flushSaveAndNavigate().catch((error: unknown) => {
-        actionError.value = getErrorMessage(error, 'Failed to save the draft.')
-      })
-    }, 900)
-  }
-}
-async function flushSaveAndNavigate() {
-  const saved = await flushSave()
-  if (!props.isEdit && !postId.value && saved?.id) await navigateTo(props.repository.editUrl(saved.id))
-  return saved
+  dirtyState.value = true
 }
 async function flushSave() {
   if (!dirty) return post.value
-  if (!post.value) {
-    if (!isDraftValid()) throw new Error('Complete the title, article body, and category before leaving this draft.')
-    return await createDraft(false)
-  }
-  if (saveTimer) clearTimeout(saveTimer)
+  if (!post.value) return null
+  saveQueue.mark(buildSaveSnapshot())
   saveState.value = 'saving'
   try {
     await saveQueue.flush()
@@ -419,11 +396,45 @@ function recordLifecycleError(error: unknown) {
   saveState.value = status === 409 ? 'conflict' : 'failed'
   actionError.value = getErrorMessage(error, 'Failed to change publishing status.')
 }
+async function saveLiveChanges() {
+  if (!post.value || !dirty) return
+  actionError.value = ''
+  savingExplicitly.value = true
+  try {
+    await flushSave()
+  } catch (error: unknown) {
+    actionError.value = getErrorMessage(error, 'Failed to save live changes.')
+  } finally {
+    savingExplicitly.value = false
+  }
+}
 async function publish() {
   actionError.value = ''
   publishing.value = true
   try {
-    if (!post.value) { await createDraft(true); return }
+    if (!isArticleValid()) throw new Error('Complete the title, article body, and category before publishing.')
+    if (!post.value) {
+      const created = await props.repository.create({
+        title: form.title,
+        content_blocks: structuredClone(toRaw(blocks.value)),
+        category: form.category || null,
+        tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean),
+        excerpt: form.excerpt || null,
+        seo_title: form.seo_title || null,
+        seo_description: form.seo_description || null,
+        canonical_url: form.canonical_url || null,
+        robots: form.robots || null,
+        visibility: form.visibility,
+        site_author_id: form.site_author_id || null,
+        scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for),
+      })
+      applyLoadedPost(created)
+      dirty = false
+      dirtyState.value = false
+      saveState.value = 'saved'
+      await navigateTo(props.repository.editUrl(created.id), { replace: true })
+      return
+    }
     if (dirty) saveQueue.mark(buildSaveSnapshot())
     await saveQueue.runExclusive(async () => {
       const lifecycle = await props.repository.publish(persistedPostId.value, {
@@ -440,75 +451,7 @@ async function publish() {
     publishing.value = false
   }
 }
-async function unpublish() {
-  if (!post.value) return
-  actionError.value = ''
-  unpublishing.value = true
-  try {
-    if (dirty) saveQueue.mark(buildSaveSnapshot())
-    await saveQueue.runExclusive(async () => {
-      const lifecycle = await props.repository.unpublish(persistedPostId.value, lifecycleVersionInput())
-      applyLifecycle(lifecycle)
-      return lifecycle
-    })
-    saveState.value = 'saved'
-  } catch (error: unknown) {
-    recordLifecycleError(error)
-  } finally {
-    unpublishing.value = false
-  }
-}
-async function createDraft(publishNow: boolean) {
-  if (!isDraftValid()) return null
-  publishAfterCreateRequested ||= publishNow
-  if (createDraftPromise) return await createDraftPromise
-  createDraftPromise = (async () => {
-    if (saveTimer) clearTimeout(saveTimer)
-    saveState.value = 'saving'
-    dirty = false
-    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, site_author_id: form.site_author_id || null })
-    applyingServerSnapshot = true
-    post.value = created
-    syncServerVersions(created)
-    form.slug = created.slug || form.slug
-    await nextTick()
-    applyingServerSnapshot = false
-    if (dirty) {
-      saveQueue.mark(buildSaveSnapshot(created.id))
-      await flushSave()
-      created = post.value || created
-    }
-    if (publishAfterCreateRequested) {
-      await saveQueue.runExclusive(async () => {
-        const lifecycle = await props.repository.publish(created.id, {
-          ...lifecycleVersionInput(),
-          scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for),
-        })
-        applyLifecycle(lifecycle)
-        return lifecycle
-      })
-      created = post.value || created
-    }
-    dirty = false
-    saveState.value = 'saved'
-    saveTimer = setTimeout(() => {
-      void flushSaveAndNavigate().catch((error: unknown) => {
-        actionError.value = getErrorMessage(error, 'Failed to save the draft.')
-      })
-    }, 900)
-    return created
-  })().catch((error: unknown) => {
-    dirty = true
-    const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
-    saveState.value = status === 409 ? 'conflict' : 'failed'
-    throw error
-  }).finally(() => {
-    createDraftPromise = null
-    publishAfterCreateRequested = false
-  })
-  return await createDraftPromise
-}
-function isDraftValid() { return Boolean(form.title.trim() && serializeBody().trim() && (props.freeTextCategory || form.category.trim())) }
+function isArticleValid() { return Boolean(form.title.trim() && serializeBody().trim() && (props.freeTextCategory || form.category.trim())) }
 function serializeBody() { return blocks.value.map(block => block.type === 'heading' ? `${'#'.repeat(Math.max(2, Math.min(6, block.level || 2)))} ${String(block.data.text || '')}` : block.type === 'markdown' ? String(block.data.markdown || '') : block.type === 'divider' ? '---' : `{{component type="${block.type}"}}`).filter(Boolean).join('\n\n') }
 function updateBlock(index: number, block: BlogEditorBlock) { blocks.value[index] = block }
 function setBlockData(index: number, key: string, value: unknown) { blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, [key]: value } } }
@@ -585,7 +528,11 @@ function handleMergeBlock(index: number, direction: 'back' | 'forward') {
 }
 function changeImage(index: number, value: unknown) { const asset = value && typeof value === 'object' ? value as { id?: unknown; publicUrl?: unknown; thumbnailUrl?: unknown } : null; blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, asset_id: typeof asset?.id === 'string' ? asset.id : '', public_url: typeof asset?.publicUrl === 'string' ? asset.publicUrl : typeof asset?.thumbnailUrl === 'string' ? asset.thumbnailUrl : '' } } }
 async function share() { if (!post.value || !persistedPostId.value) return; const url = new URL(post.value.edit_url || props.repository.editUrl(persistedPostId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
-async function goBack() { if (settingsOpen.value) { closeSettings(); return } try { await flushSave(); await navigateTo(props.backUrl) } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } }
+async function goBack() {
+  if (settingsOpen.value) { closeSettings(); return }
+  if (dirty && !confirm('You have unsaved changes. Leave without saving them?')) return
+  await navigateTo(props.backUrl)
+}
 function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, '') }
 function closeSettings() { settingsOpen.value = false }
 function settingsFocusableElements() {
@@ -614,7 +561,7 @@ function syncServerVersions(value: BlogPost) { serverPostUpdatedAt = value.updat
 
 onBeforeRouteLeave(async () => {
   if (settingsOpen.value) { settingsOpen.value = false; return false }
-  if (dirty && !post.value && !isDraftValid()) return confirm('This draft is incomplete and cannot be saved yet. Leave without saving it?')
-  try { await flushSave(); return true } catch { return false }
+  if (dirty) return confirm('You have unsaved changes. Leave without saving them?')
+  return true
 })
 </script>

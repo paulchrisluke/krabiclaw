@@ -11,10 +11,6 @@ export default defineHandler(async (event) => {
   const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['content'] })
   if (permissionDenied) return permissionDenied
 
-  const query = getQuery(event)
-  const status = query.status as string | undefined
-
-  return jsonResponse({ docs: await listPlatformDocs(db, status) })
+  return jsonResponse({ docs: await listPlatformDocs(db) })
 })
 import { defineHandler } from 'nitro';
-import { getQuery } from 'nitro/h3';

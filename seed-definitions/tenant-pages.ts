@@ -17,12 +17,12 @@ export interface SeedTenantPageLocaleField {
   value?: string | null
   heroTitle?: string | null
   heroSubtitle?: string | null
-  status: 'draft' | 'published' | 'stale'
+  status: 'published' | 'stale'
 }
 
 interface SeedTenantPageLocale {
   locale: string
-  status: 'draft' | 'published' | 'disabled'
+  status: 'published' | 'disabled'
 }
 
 type SqlValue = (_value: string | number | boolean | null) => string

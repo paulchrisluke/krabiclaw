@@ -21,7 +21,7 @@ export interface BlogPost {
   first_published_at?: string | null
   slug_manually_overridden?: boolean | number | null
   scheduled_for?: string | null
-  status?: 'draft' | 'published' | 'scheduled' | 'archived'
+  status?: 'published' | 'scheduled'
   visibility?: 'public' | 'unlisted'
   tags?: string[]
   seo_title?: string | null
@@ -87,6 +87,7 @@ export interface PlatformBlogCreateInput {
   featured_order?: number | null
   visibility?: 'public' | 'unlisted'
   site_author_id?: string | null
+  scheduled_for?: string | null
 }
 
 export interface PlatformBlogUpdateInput {
@@ -128,7 +129,7 @@ export interface SiteAuthor {
 
 export interface BlogLifecycleState {
   id: string
-  status: 'draft' | 'published' | 'scheduled'
+  status: 'published' | 'scheduled'
   published_at: string | null
   scheduled_for: string | null
   updated_at: string
@@ -143,7 +144,6 @@ export interface BlogPostRepository {
   update(_postId: string, _input: PlatformBlogUpdateInput): Promise<BlogPost>
   delete(_postId: string): Promise<void>
   publish(_postId: string, _input: { expected_updated_at: string; expected_document_updated_at: string; scheduled_for?: string | null }): Promise<BlogLifecycleState>
-  unpublish(_postId: string, _input: { expected_updated_at: string; expected_document_updated_at: string }): Promise<BlogLifecycleState>
   listAuthors?(): Promise<SiteAuthor[]>
   createAuthor?(_input: { name: string; title?: string | null }): Promise<SiteAuthor>
 }

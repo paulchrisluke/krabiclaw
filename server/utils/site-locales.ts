@@ -1,7 +1,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { getConfiguredSourceLocale, normalizeLocale } from '~/server/utils/site-i18n'
 
-export type SiteLocaleStatus = 'draft' | 'published' | 'disabled'
+export type SiteLocaleStatus = 'published' | 'disabled'
 
 export interface SiteLocale {
   id: string
@@ -34,8 +34,8 @@ function mapLocale(row: SiteLocaleRow): SiteLocale {
 }
 
 function assertStatus(value: unknown): SiteLocaleStatus {
-  if (value === undefined || value === null || value === '') return 'draft'
-  if (value === 'draft' || value === 'published' || value === 'disabled') return value
+  if (value === undefined || value === null || value === '') return 'disabled'
+  if (value === 'published' || value === 'disabled') return value
   throw new Error('Invalid locale status.')
 }
 
@@ -83,7 +83,8 @@ export async function upsertSiteLocale(
   const locale = normalizeLocale(input.locale)
   if (!locale) throw new Error('Invalid locale.')
 
-  const status = input.is_source ? 'published' : assertStatus(input.status)
+  const sourceLocale = await getSourceLocale(db, organizationId, siteId)
+  const status = input.is_source || locale === sourceLocale ? 'published' : assertStatus(input.status)
   const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim().slice(0, 80) : null
   const now = new Date().toISOString()
   const id = `locale::${organizationId}::${siteId}::${locale}`

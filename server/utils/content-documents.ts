@@ -2,7 +2,7 @@ import { HTTPError } from 'nitro';
 
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../db/index.ts'
 
-export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog' | 'tenant_page'
+export type ContentDocumentOwnerType = 'platform_blog' | 'tenant_blog' | 'tenant_page'
 export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'divider' | 'ai_assistance' | 'cta' | 'callout' | 'hero' | 'button_group' | 'feature_grid' | 'testimonial_grid' | 'contact_cta' | 'booking_cta' | 'donation_choices' | 'offering_grid' | 'location_grid'
 
 export interface ContentDocumentRow {

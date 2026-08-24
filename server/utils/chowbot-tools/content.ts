@@ -8,7 +8,7 @@ const CONTENT_DOMAIN_TOOL_NAMES = new Set([
   'list_tenant_pages',
   'get_tenant_page',
   'create_tenant_page',
-  'update_tenant_page_draft',
+  'update_tenant_page',
   'change_tenant_page_path',
   'update_home_hero',
   'get_professional_service_content',

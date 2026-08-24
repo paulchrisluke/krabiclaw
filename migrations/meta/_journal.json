@@ -827,6 +827,13 @@
       "when": 1787544840957,
       "tag": "0124_video_thumbnail_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "6",
+      "when": 1787556567336,
+      "tag": "0125_dark_talisman",
+      "breakpoints": true
     }
   ]
 }

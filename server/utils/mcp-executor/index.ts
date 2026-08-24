@@ -125,7 +125,7 @@ export async function executeMcpToolCall(
         custom_domain: typeof s.custom_domain === 'string' ? s.custom_domain : null,
         subdomain: typeof s.subdomain === 'string' ? s.subdomain : null,
       }, user.env),
-      status: s.status ?? "draft",
+      status: s.status ?? "inactive",
       active: s.id === workspace.site?.id,
     }));
     const currentUser = {

@@ -58,7 +58,7 @@ const BLOG_CONTENT_BLOCK_TYPES = new Set([
   'callout',
 ])
 
-const BLOG_POST_STATUSES = new Set(['draft', 'published', 'scheduled', 'archived'])
+const BLOG_POST_STATUSES = new Set(['published', 'scheduled'])
 const BLOG_VISIBILITIES = new Set(['public', 'unlisted'])
 
 function hasAnyField(args: Record<string, unknown>, fields: readonly string[]) {
@@ -233,7 +233,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const hydratedBlogPost = attachViewUrlToRecord(result.post, site, {}, site.env);
       return renderStructuredResponse(
         { post: projectBlogPostForMcp(hydratedBlogPost) },
-        `Created blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
+        `${result.post.status === 'scheduled' ? 'Scheduled' : 'Published'} blog article "${result.post.title ?? result.post.id}".`,
       );
     }
     case "update_blog_post": {
@@ -247,7 +247,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const hydratedUpdatedBlogPost = attachViewUrlToRecord(result.post, site, {}, site.env);
       return renderStructuredResponse(
         { post: projectBlogPostForMcp(hydratedUpdatedBlogPost) },
-        `Updated blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
+        `Saved changes to blog article "${result.post.title ?? result.post.id}".`,
       );
     }
     case "update_blog_metadata": {
@@ -277,25 +277,22 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       return blogPostResponse(
         result.post,
         site,
-        `Replaced blog post content for "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
+        `Saved live content changes for blog article "${result.post.title ?? result.post.id}".`,
       )
     }
-    case "publish_blog_post":
-    case "unpublish_blog_post": {
-      const publish = toolName === "publish_blog_post";
+    case "publish_blog_post": {
       const postId = requiredString(args, "post_id")
       const scheduledFor = args.scheduled_for
-      if (publish && Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
+      if (Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
         && scheduledFor !== null
         && (typeof scheduledFor !== 'string' || !scheduledFor.trim())) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'Invalid scheduled_for')
       }
       const normalizedScheduledFor = typeof scheduledFor === 'string' ? scheduledFor.trim() : scheduledFor
       await updatePlatformBlogLifecycle(site.db, postId, {
-        action: publish ? 'publish' : 'unpublish',
         expected_updated_at: requiredString(args, 'expected_updated_at'),
         expected_document_updated_at: requiredString(args, 'expected_document_updated_at'),
-        ...(publish && Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
+        ...(Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
           ? { scheduled_for: normalizedScheduledFor as string | null }
           : {}),
       }, site.siteId)
@@ -303,7 +300,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const post = attachViewUrlToRecord(result, site, {}, site.env)
       return renderStructuredResponse(
         { post: projectBlogPostForMcp(post) },
-        `${publish ? (result.status === 'scheduled' ? 'Scheduled' : 'Published') : 'Unpublished'} blog post "${result.title}".`,
+        `${result.status === 'scheduled' ? 'Rescheduled' : 'Published'} blog article "${result.title}".`,
       )
     }
     case "reorder_blog_posts": {

@@ -201,10 +201,7 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">
-          <UButton color="neutral" variant="soft" :loading="saving" :disabled="!canSave" @click="save(false)">
-            Save draft
-          </UButton>
-          <UButton :loading="saving" :disabled="!canPublish" @click="save(true)">
+          <UButton :loading="saving" :disabled="!canPublish" @click="save">
             Publish
           </UButton>
         </div>
@@ -232,7 +229,7 @@ const isCreateDocResponse = (value: unknown): value is CreateDocResponse =>
 
 definePageMeta({ layout: 'dashboard' })
 
-const { form, canSave, canPublish, handleImageChange } = useDocForm()
+const { form, canPublish, handleImageChange } = useDocForm()
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
 const difficultyItems = computed(() => difficultyLevels.map((item) => ({ label: item, value: item })))
 const navSectionItems = computed(() => [
@@ -306,7 +303,7 @@ function buildPayload() {
   }
 }
 
-async function save(publish: boolean) {
+async function save() {
   if (!form.title.trim() || !form.body.trim()) {
     errorMessage.value = 'Title and body are required.'
     return
@@ -317,12 +314,12 @@ async function save(publish: boolean) {
   try {
     const res = await applicationFetch<CreateDocResponse>('/api/admin/docs', {
       method: 'POST',
-      body: { ...buildPayload(), publish },
+      body: buildPayload(),
       validate: isCreateDocResponse,
     })
     await navigateTo(`/admin/docs/${res.id}`)
   } catch (err) {
-    errorMessage.value = getErrorMessage(err, publish ? 'Failed to publish.' : 'Failed to save draft.')
+    errorMessage.value = getErrorMessage(err, 'Failed to publish.')
   } finally {
     saving.value = false
   }

@@ -1196,10 +1196,7 @@ export const platform_docs = sqliteTable("platform_docs", {
 	seo_keywords: text(),
 	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	sort_order: integer().default(0),
-	parent_doc_id: text(),
 	difficulty_level: text(),
-	status: text().default("draft").notNull(),
-	published_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	canonical_url: text(),
@@ -1864,12 +1861,13 @@ export const site_locales = sqliteTable("site_locales", {
 	locale: text().notNull(),
 	label: text(),
 	is_source: numeric().default(sql`false`).notNull(),
-	status: text().default("draft").notNull(),
+	status: text().default("disabled").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	unique("site_locales_organization_id_site_id_locale_unique").on(table.organization_id, table.site_id, table.locale),
 	uniqueIndex("idx_site_locales_one_source_per_site").on(table.organization_id, table.site_id).where(sql`is_source = 1`),
+	check("site_locales_status_check", sql`status IN ('published', 'disabled')`),
 ]);
 
 export const platform_pageview_events = sqliteTable("platform_pageview_events", {

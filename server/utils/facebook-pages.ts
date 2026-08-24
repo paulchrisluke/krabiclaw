@@ -221,11 +221,11 @@ export const getPagePosts = async (
 export const publishToPage = async (
   pageToken: string,
   pageId: string,
-  opts: { message: string; link?: string; published?: boolean }
+  opts: { message: string; link?: string }
 ): Promise<{ id: string }> => {
   const body: Record<string, string | boolean> = {
     message: opts.message,
-    published: opts.published ?? true,
+    published: true,
   }
   if (opts.link) body.link = opts.link
 

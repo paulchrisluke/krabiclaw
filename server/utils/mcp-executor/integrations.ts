@@ -64,7 +64,6 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         {
           message: requiredString(args, "message"),
           link: optionalString(args, "link") ?? undefined,
-          published: args.published !== false,
         },
       );
       return {

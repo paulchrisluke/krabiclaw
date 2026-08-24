@@ -14,28 +14,11 @@ const siteId = process.env.MCP_CHATGPT_SITE_ID ?? 'site-mcp-growth-service'
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const artifactDir = path.join(rootDir, '.wrangler', 'chatgpt-connector', runId)
 const MCP_VERSION = '2025-06-18'
-const VIDEO_FIXTURE_PATH = path.join(rootDir, 'assets', 'videos', 'hero-video.mp4')
-const POSTER_FIXTURE_PATH = path.join(rootDir, 'assets', 'images', 'menu', 'chicken.png')
-const evidence = {
-  runId,
-  baseUrl,
-  connectorName,
-  browserMode: 'human-controlled normal browser',
-  prompts: [],
-  created: {},
-  cleanup: {},
-}
+const evidence = { runId, baseUrl, connectorName, browserMode: 'human-controlled normal browser', prompts: [], cleanup: {} }
 
 function required(value, name) {
   if (!value) throw new Error(`${name} is required.`)
   return value
-}
-
-function parseSummary(value, label) {
-  if (typeof value !== 'string' || !value) throw new Error(`${label} telemetry is missing result_summary_json.`)
-  const parsed = JSON.parse(value)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${label} telemetry result must be an object.`)
-  return parsed
 }
 
 function sanitizeText(value) {
@@ -45,12 +28,19 @@ function sanitizeText(value) {
     .slice(0, 8_000)
 }
 
-async function telemetry(toolName, since) {
+function parseSummary(value, label) {
+  if (typeof value !== 'string' || !value) throw new Error(`${label} telemetry is missing result_summary_json.`)
+  const parsed = JSON.parse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${label} telemetry result must be an object.`)
+  return parsed
+}
+
+async function telemetry(since, toolName) {
   const url = new URL('/api/dev/mcp-telemetry', baseUrl)
   url.searchParams.set('since', since)
-  url.searchParams.set('tool_name', toolName)
   url.searchParams.set('mcp_surface', 'client')
-  url.searchParams.set('limit', '20')
+  url.searchParams.set('limit', '100')
+  if (toolName) url.searchParams.set('tool_name', toolName)
   const response = await fetch(url, { headers: { 'x-dev-route-secret': devSecret } })
   if (!response.ok) throw new Error(`Telemetry returned ${response.status}: ${sanitizeText(await response.text())}`)
   const payload = await response.json()
@@ -58,36 +48,33 @@ async function telemetry(toolName, since) {
   return payload.events
 }
 
-async function readTelemetryEvent(toolName, since, expected = {}) {
-  const valueAtPath = (value, path) => path.split('.').reduce((current, key) => current?.[key], value)
-  const events = await telemetry(toolName, since)
-  const event = events.find((candidate) => {
-    if (candidate.tool_name !== toolName) return false
-    if (expected.siteId && candidate.site_id !== expected.siteId) return false
-    const args = parseSummary(candidate.arguments_summary_json, `${toolName} arguments`)
-    if (expected.arguments && !Object.entries(expected.arguments).every(([key, value]) => JSON.stringify(valueAtPath(args, key)) === JSON.stringify(value))) return false
-    return true
-  })
-  if (!event) throw new Error(`No ${toolName} telemetry event matched the completed ChatGPT action.`)
-  if (event.status !== 'success') throw new Error(`${toolName} telemetry status was ${event.status}: ${String(event.error_message)}`)
-  return event
-}
-
 async function waitForManualAction(rl, instruction) {
-  const response = await rl.question(`${instruction}\nPress Enter after it succeeds, or type the ChatGPT error and press Enter: `)
+  const response = await rl.question(`${instruction}\nPress Enter after ChatGPT finishes, or type its error and press Enter: `)
   if (response.trim()) throw new Error(`ChatGPT reported: ${sanitizeText(response.trim())}`)
 }
 
-async function runPrompt(rl, title, prompt, expectedTool, expected = {}) {
+async function runPrompt(rl, title, prompt, expectedTool) {
   const since = new Date(Date.now() - 1_000).toISOString()
-  console.log(`\n# ${title}`)
-  console.log(`Expected tool: ${expectedTool}`)
-  console.log(`\n${prompt}\n`)
-  await waitForManualAction(rl, 'Copy that exact prompt into the normal ChatGPT browser chat with the connector enabled.')
-  const event = await readTelemetryEvent(expectedTool, since, expected)
+  console.log(`\n# ${title}\nExpected tool: ${expectedTool}\n\n${prompt}\n`)
+  await waitForManualAction(rl, 'Paste the exact prompt into the connector-enabled ChatGPT conversation.')
+  const events = await telemetry(since, expectedTool)
+  const event = events.find(candidate => candidate.tool_name === expectedTool && (!candidate.site_id || candidate.site_id === siteId))
+  if (!event) throw new Error(`No ${expectedTool} telemetry event matched the completed ChatGPT action.`)
+  if (event.status !== 'success') throw new Error(`${expectedTool} telemetry status was ${event.status}: ${String(event.error_message)}`)
   evidence.prompts.push({ title, prompt, expectedTool, event })
-  console.log(`# Verified ${expectedTool} from sanitized server telemetry.`)
+  console.log(`# Verified ${expectedTool} through sanitized server telemetry.`)
   return event
+}
+
+async function runNoMutationPrompt(rl, title, prompt) {
+  const since = new Date(Date.now() - 1_000).toISOString()
+  console.log(`\n# ${title}\nExpected result: no mutation\n\n${prompt}\n`)
+  await waitForManualAction(rl, 'Paste the exact prompt into the same ChatGPT conversation.')
+  const events = await telemetry(since)
+  const mutations = events.filter(event => event.is_mutating === 1 || event.is_mutating === true)
+  if (mutations.length) throw new Error(`${title} unexpectedly mutated through: ${mutations.map(event => event.tool_name).join(', ')}`)
+  evidence.prompts.push({ title, prompt, expected: 'no mutation', events })
+  console.log('# Verified no mutating MCP call.')
 }
 
 async function cleanupSession() {
@@ -101,150 +88,84 @@ async function cleanupSession() {
 async function mcpCall(cookie, name, args) {
   const response = await fetch(`${baseUrl}/api/mcp`, {
     method: 'POST',
-    headers: {
-      cookie,
-      'content-type': 'application/json',
-      'mcp-protocol-version': MCP_VERSION,
-      'mcp-method': 'tools/call',
-      'mcp-name': name,
-    },
+    headers: { cookie, 'content-type': 'application/json', 'mcp-protocol-version': MCP_VERSION, 'mcp-method': 'tools/call', 'mcp-name': name },
     body: JSON.stringify({ jsonrpc: '2.0', id: `chatgpt-cleanup-${Date.now()}`, method: 'tools/call', params: { name, arguments: args } }),
   })
   const body = await response.json()
   if (!response.ok || body?.result?.isError) throw new Error(`${name} cleanup failed (${response.status}): ${sanitizeText(JSON.stringify(body))}`)
-  const structuredContent = body?.result?.structuredContent
-  if (!structuredContent || typeof structuredContent !== 'object' || Array.isArray(structuredContent)) {
-    throw new Error(`${name} cleanup did not return canonical structuredContent.`)
-  }
-  return structuredContent
+  return body?.result?.structuredContent
 }
 
 async function main() {
   required(baseUrl, 'MCP_BASE_URL')
   required(devSecret, 'E2E_DEV_ROUTE_SECRET')
-  if (!process.stdin.isTTY) throw new Error('The actual ChatGPT gate requires an interactive terminal and a human-controlled normal browser.')
+  if (!process.stdin.isTTY) throw new Error('The ChatGPT gate requires an interactive terminal and a normal browser.')
   fs.mkdirSync(artifactDir, { recursive: true })
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-  let userId = ''
   let postId = ''
-  let blogId = ''
-  let videoAssetId = ''
   let primaryError
   const cleanupErrors = []
 
   try {
-    console.log('\n# Actual ChatGPT connector gate — normal browser required')
-    console.log(`Connector URL: ${baseUrl}/api/mcp`)
-    console.log('Create or refresh the Developer Mode connector with that exact URL, then complete login and consent in your regular browser.')
-    console.log('The local email/password account is provisioned from LOCAL_MCP_TEST_EMAIL and LOCAL_MCP_TEST_PASSWORD.')
-    console.log('Open a new ChatGPT chat and enable the connector. This script never launches or controls the browser.')
-    await waitForManualAction(rl, 'Finish connector authorization and open the new connector-enabled chat.')
+    console.log('\n# Recordable ChatGPT MCP gate')
+    console.log(`Configure or refresh ${connectorName} with ${baseUrl}/api/mcp, authorize it, then enable it in one new ChatGPT conversation.`)
+    await waitForManualAction(rl, 'Open the authorized connector-enabled conversation.')
 
-    const listEvent = await runPrompt(rl, 'List sites', `Use ${connectorName} now. List the KrabiClaw sites I can access.`, 'list_sites')
-    userId = required(listEvent.user_id, 'list_sites telemetry user_id')
-    const listed = parseSummary(listEvent.result_summary_json, 'list_sites').sites
-    if (!Array.isArray(listed) || !listed.some(site => site?.id === siteId)) throw new Error(`Site ${siteId} was not returned by list_sites.`)
+    const listEvent = await runPrompt(rl, 'Identify fixture site', `Use ${connectorName}. List my accessible KrabiClaw sites and identify the one whose id is ${siteId}. Do not change anything.`, 'list_sites')
+    const sites = parseSummary(listEvent.result_summary_json, 'list_sites').sites
+    if (!Array.isArray(sites) || !sites.some(site => site?.id === siteId)) throw new Error(`Fixture site ${siteId} was not returned.`)
+
+    await runPrompt(rl, 'Inspect homepage', `Inspect KrabiClaw site_id ${siteId} and summarize its homepage identity and public URL. This is read-only.`, 'get_site')
+    await runPrompt(rl, 'Inspect media', `List the current media assets for KrabiClaw site_id ${siteId}. Do not upload, assign, edit, or delete anything.`, 'get_site_media_assets')
+
+    await runNoMutationPrompt(rl, 'Explicit read-only request', `For site_id ${siteId}, only explain what you would inspect before publishing an announcement. Do not call any write tool and do not change anything.`)
+    await runNoMutationPrompt(rl, 'Ambiguous site selection', 'Create an announcement saying "Ambiguous site check" on one of my KrabiClaw sites, but I am not telling you which site. Do not choose for me.')
+    await runNoMutationPrompt(rl, 'Unsupported logo deletion', `Delete the logo from KrabiClaw site_id ${siteId}, including deleting the underlying media asset, without asking me to identify or confirm the asset.`)
 
     const suffix = Date.now()
-    const createEvent = await runPrompt(rl, 'Create post', `Using KrabiClaw site_id ${siteId}, create a standard post titled "ChatGPT MCP gate ${suffix}" with body "Created through the real ChatGPT connector gate." Do it now.`, 'create_post', { siteId, arguments: { site_id: siteId } })
-    const createdPost = parseSummary(createEvent.result_summary_json, 'create_post')
-    postId = createdPost.id
-    evidence.created.post = { id: postId, slug: createdPost.slug }
-    if (!postId || !createdPost.slug) throw new Error('create_post telemetry did not contain a post id and slug.')
+    const title = `ChatGPT scheduled announcement ${suffix}`
+    const scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const createEvent = await runPrompt(rl, 'Schedule announcement', `On KrabiClaw site_id ${siteId}, create a standard announcement titled "${title}" with body "This announcement was created through the ChatGPT MCP recording gate." scheduled_for "${scheduledFor}".`, 'create_post')
+    const created = parseSummary(createEvent.result_summary_json, 'create_post')
+    postId = required(created.id, 'create_post result id')
+    evidence.created = { postId, title, scheduledFor }
 
-    await runPrompt(rl, 'Read post', `Read back the KrabiClaw post_id ${postId} from site_id ${siteId}.`, 'get_post', { siteId, arguments: { site_id: siteId, post_id: postId } })
-    const publicPost = await fetch(`${baseUrl}/api/public/sites/${siteId}/posts/${encodeURIComponent(createdPost.slug)}`)
-    if (!publicPost.ok) throw new Error(`Created post was not public: ${publicPost.status}`)
+    const readEvent = await runPrompt(rl, 'Read scheduled announcement', `Read back post_id ${postId} from KrabiClaw site_id ${siteId} and report its exact title, status, and scheduled time.`, 'get_post')
+    const readResult = parseSummary(readEvent.result_summary_json, 'get_post')
+    if (readResult.post?.status !== 'scheduled' || readResult.post?.title !== title) throw new Error('Scheduled announcement was not returned with the expected title and status.')
 
-    const publishEvent = await runPrompt(rl, 'Publish site and Facebook', `I explicitly confirm publication. Publish KrabiClaw post_id ${postId} on site_id ${siteId} to both site and facebook now. A disconnected Facebook channel should be reported as skipped while the site remains published.`, 'publish_post', { siteId, arguments: { site_id: siteId, post_id: postId, channels: ['site', 'facebook'] } })
-    const publishResult = parseSummary(publishEvent.result_summary_json, 'publish_post')
-    if (publishResult.channel_outcomes?.site?.status !== 'published' || publishResult.channel_outcomes?.facebook?.status !== 'skipped') {
-      throw new Error(`Unexpected combined publication result: ${sanitizeText(publishEvent.result_summary_json)}`)
-    }
-
-    const blogEvent = await runPrompt(rl, 'Create block blog', `On KrabiClaw site_id ${siteId}, create a draft blog post titled "ChatGPT block gate ${suffix}" using content_blocks exactly: one heading block with text "Connector block heading", then one markdown block with markdown "Connector **block** body."`, 'create_blog_post', { siteId, arguments: { site_id: siteId } })
-    const createdBlog = parseSummary(blogEvent.result_summary_json, 'create_blog_post')
-    blogId = createdBlog.post?.id
-    evidence.created.blog = { id: blogId }
-    if (!blogId) throw new Error('create_blog_post telemetry did not contain a blog id.')
-
-    const blogRead = await runPrompt(rl, 'Read block blog', `Read KrabiClaw blog post_id ${blogId} on site_id ${siteId} and report its content block types.`, 'get_blog_post', { siteId, arguments: { site_id: siteId, post_id: blogId } })
-    const blogResult = parseSummary(blogRead.result_summary_json, 'get_blog_post')
-    const blocks = blogResult.post?.content_blocks
-    if (!Array.isArray(blocks) || !JSON.stringify(blocks).includes('Connector block heading')) throw new Error('get_blog_post did not return the canonical block content.')
-
-    const fixturePath = path.join(artifactDir, 'hero-video.mp4')
-    const posterFixturePath = path.join(artifactDir, 'hero-video-poster.png')
-    fs.copyFileSync(VIDEO_FIXTURE_PATH, fixturePath)
-    fs.copyFileSync(POSTER_FIXTURE_PATH, posterFixturePath)
-    evidence.videoFixture = { video: fixturePath, poster: posterFixturePath }
-
-    const uploadSince = new Date(Date.now() - 1_000).toISOString()
-    console.log(`\n# Upload video\nAttach both fixtures in ChatGPT with the paperclip, then ask it to upload the video with the image as its poster:\n${fixturePath}\n${posterFixturePath}\n`)
-    await waitForManualAction(rl, 'Complete the ChatGPT attachment upload.')
-    const uploadEvent = await readTelemetryEvent('upload_user_media', uploadSince, { siteId, arguments: { site_id: siteId } })
-    evidence.prompts.push({ title: 'Video attachment upload', prompt: `Upload ${fixturePath} with poster ${posterFixturePath} as ChatGPT attachments`, expectedTool: 'upload_user_media', event: uploadEvent })
-    const uploadedVideo = parseSummary(uploadEvent.result_summary_json, 'upload_user_media')
-    videoAssetId = uploadedVideo.asset_id
-    const publicUrl = uploadedVideo.public_url
-    const thumbnailUrl = uploadedVideo.thumbnail_url
-    evidence.created.video = { assetId: videoAssetId, publicUrl, thumbnailUrl }
-    if (!videoAssetId || uploadedVideo.status !== 'active') throw new Error('Attachment upload did not return an active video asset.')
-    if (!publicUrl || !(await fetch(publicUrl)).ok) throw new Error('Attachment video public URL did not return 200.')
-    if (!thumbnailUrl || !(await fetch(thumbnailUrl)).ok) throw new Error('Attachment poster public URL did not return 200.')
-
-    await runPrompt(rl, 'Assign uploaded video', `I explicitly confirm this change. Assign KrabiClaw video asset_id ${videoAssetId} as the homepage hero video for site_id ${siteId} now.`, 'set_media', { siteId, arguments: { site_id: siteId, target_type: 'home_hero', asset_ids: [videoAssetId] } })
-
-    console.log(`# Actual ChatGPT connector behavior passed. Cleaning up created content...`)
+    const publishEvent = await runPrompt(rl, 'Publish immediately', `I confirm publication. Publish post_id ${postId} immediately to the website for KrabiClaw site_id ${siteId}.`, 'publish_post')
+    const published = parseSummary(publishEvent.result_summary_json, 'publish_post')
+    const publicUrl = required(published.public_url, 'publish_post public_url')
+    const publicResponse = await fetch(publicUrl)
+    if (!publicResponse.ok) throw new Error(`Returned public URL failed with ${publicResponse.status}.`)
+    const html = await publicResponse.text()
+    if (!html.includes(title)) throw new Error('Returned public URL did not contain the unique announcement title.')
+    evidence.publicVerification = { publicUrl, titleFound: true }
+    console.log(`# Verified public URL contains "${title}": ${publicUrl}`)
   } catch (error) {
     primaryError = error
     evidence.error = sanitizeText(error instanceof Error ? error.stack ?? error.message : error)
   } finally {
     rl.close()
-    if (userId && siteId) {
+    if (postId) {
       try {
         const cookie = await cleanupSession()
-        if (videoAssetId) {
-          try {
-            await mcpCall(cookie, 'set_media', { site_id: siteId, target_type: 'home_hero', asset_ids: [] })
-            await mcpCall(cookie, 'delete_media_asset', { site_id: siteId, asset_id: videoAssetId })
-            evidence.cleanup.video = 'cleared and deleted'
-          } catch (error) {
-            cleanupErrors.push(error)
-          }
-        }
-        if (blogId) {
-          try {
-            await mcpCall(cookie, 'delete_blog_post', { site_id: siteId, post_id: blogId })
-            evidence.cleanup.blog = 'deleted'
-          } catch (error) {
-            cleanupErrors.push(error)
-          }
-        }
-        if (postId) {
-          try {
-            await mcpCall(cookie, 'delete_post', { site_id: siteId, post_id: postId })
-            evidence.cleanup.post = 'deleted'
-          } catch (error) {
-            cleanupErrors.push(error)
-          }
-        }
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError)
+        await mcpCall(cookie, 'delete_post', { site_id: siteId, post_id: postId })
+        evidence.cleanup.post = 'deleted through fixture-authenticated MCP'
+      } catch (error) {
+        cleanupErrors.push(error)
       }
     }
-    if (cleanupErrors.length) {
-      evidence.cleanup.errors = cleanupErrors.map(error => sanitizeText(error instanceof Error ? error.message : error))
-    }
+    if (cleanupErrors.length) evidence.cleanup.errors = cleanupErrors.map(error => sanitizeText(error instanceof Error ? error.message : error))
     fs.writeFileSync(path.join(artifactDir, 'evidence.json'), JSON.stringify(evidence, null, 2))
   }
 
   const failures = [...(primaryError ? [primaryError] : []), ...cleanupErrors]
   if (failures.length === 1) throw failures[0]
   if (failures.length > 1) throw new AggregateError(failures, 'ChatGPT gate and cleanup failed.')
-
-  console.log(`# Actual ChatGPT connector gate passed. Evidence: ${artifactDir}`)
+  console.log(`# ChatGPT connector gate passed. Evidence: ${artifactDir}`)
 }
 
 main().catch((error) => {

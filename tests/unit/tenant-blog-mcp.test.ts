@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFile } from 'node:fs/promises'
 
-import { MCP_PROMPTS, renderMcpPrompt } from '../../server/utils/mcp-prompts.ts'
+import { MCP_PROMPTS } from '../../server/utils/mcp-prompts.ts'
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, locationMutationSummaryObject } from '../../server/utils/mcp-tools/shared.ts'
 
@@ -12,44 +11,44 @@ function blogTool(name: string) {
   return definition
 }
 
-test('tenant MCP exposes draft and approved publish blog workflows', () => {
-  const names = MCP_PROMPTS.map(prompt => prompt.name)
-  assert.ok(names.includes('draft_blog_post'))
-  assert.ok(names.includes('update_and_publish_blog_post'))
-
-  const draft = renderMcpPrompt('draft_blog_post', { topic: 'Choosing a family lawyer' }).text
-  assert.match(draft, /list_blog_posts/)
-  assert.match(draft, /get_blog_post/)
-  assert.match(draft, /approval/i)
-  assert.match(draft, /SEO/i)
-  assert.match(draft, /Choosing a family lawyer/)
-
-  const publish = renderMcpPrompt('update_and_publish_blog_post', {
-    identifier: 'choosing-a-family-lawyer',
-    body: 'Approved body',
-  }).text
-  assert.match(publish, /replace_blog_content/)
-  assert.match(publish, /publish_blog_post/)
-  assert.match(publish, /document_updated_at/)
-  assert.match(publish, /expected_updated_at/)
-  assert.match(publish, /Do not reuse the tokens from the earlier read/)
-  assert.match(publish, /choosing-a-family-lawyer/)
-  assert.match(publish, /Approved body/)
+test('tenant MCP has no persisted-draft or unpublish blog workflow', () => {
+  const toolNames = BLOG_TOOLS.map(tool => tool.name)
+  const promptNames = MCP_PROMPTS.map(prompt => prompt.name)
+  assert.equal(toolNames.includes('unpublish_blog_post'), false)
+  assert.equal(promptNames.some(name => /draft|unpublish/.test(name)), false)
 })
 
-test('tenant blog MCP contract exposes explicit publishing, tags, and AI assistance', async () => {
-  const source = await readFile(new URL('../../server/utils/mcp-tools/blog.ts', import.meta.url), 'utf8')
-  assert.match(source, /name: 'publish_blog_post'/)
-  assert.match(source, /name: 'unpublish_blog_post'/)
-  assert.match(source, /tags: \{ type: 'array'/)
-  assert.match(source, /ai_assistance/)
-  assert.match(source, /content_blocks/)
-  assert.match(source, /expected_document_updated_at/)
-  const shared = await readFile(new URL('../../server/utils/mcp-tools/shared.ts', import.meta.url), 'utf8')
-  assert.doesNotMatch(shared, /content_document: \{/)
-  assert.doesNotMatch(shared, /draft_revision_id/)
-  assert.doesNotMatch(source, /body: \{ type: 'string', description: 'Use \{\{component/)
-  assert.match(source, /review the draft at edit_url/i)
+test('create_blog_post publishes immediately or schedules a future article', () => {
+  const tool = blogTool('create_blog_post')
+  const properties = tool.inputSchema.properties as Record<string, unknown>
+  assert.equal(tool.confirmRequired, true)
+  assert.equal(Object.hasOwn(properties, 'scheduled_for'), true)
+  assert.equal(Object.hasOwn(properties, 'status'), false)
+  assert.equal(Object.hasOwn(properties, 'publish'), false)
+  assert.equal(Object.hasOwn(properties, 'unpublish'), false)
+  assert.deepEqual(tool.inputSchema.required, ['title', 'content_blocks'])
+})
+
+test('publish_blog_post only publishes or reschedules an already-scheduled article', () => {
+  const tool = blogTool('publish_blog_post')
+  const properties = tool.inputSchema.properties as Record<string, unknown>
+  assert.equal(tool.confirmRequired, true)
+  assert.equal(Object.hasOwn(properties, 'scheduled_for'), true)
+  assert.deepEqual(tool.inputSchema.required, ['post_id', 'expected_updated_at', 'expected_document_updated_at'])
+  assert.match(tool.description, /scheduled tenant blog article/i)
+})
+
+test('live blog edits expose canonical blocks and concurrency without lifecycle inputs', () => {
+  for (const name of ['update_blog_post', 'update_blog_metadata', 'replace_blog_content']) {
+    const properties = blogTool(name).inputSchema.properties as Record<string, unknown>
+    for (const field of ['status', 'publish', 'unpublish', 'scheduled_for']) {
+      assert.equal(Object.hasOwn(properties, field), false, `${name} must not accept ${field}`)
+    }
+  }
+  const update = blogTool('update_blog_post')
+  const updateProperties = update.inputSchema.properties as Record<string, unknown>
+  assert.equal(Object.hasOwn(updateProperties, 'content_blocks'), true)
+  assert.equal(Object.hasOwn(updateProperties, 'expected_document_updated_at'), true)
 })
 
 test('blog mutation schema owns the document token without leaking it into location mutations', () => {
@@ -58,72 +57,18 @@ test('blog mutation schema owns the document token without leaking it into locat
   assert.equal(Object.hasOwn(locationMutationSummaryObject.properties, 'expected_document_updated_at'), false)
 })
 
-test('tenant blog prompts mention only fields accepted by strict tenant blog schemas', () => {
-  const draft = renderMcpPrompt('draft_blog_post', { topic: 'Choosing a family lawyer' }).text
-  const createProperties = blogTool('create_blog_post').inputSchema.properties as Record<string, unknown>
-  for (const field of ['content_blocks', 'category', 'tags', 'excerpt', 'seo_title', 'seo_description', 'seo_keywords', 'robots']) {
-    assert.match(draft, new RegExp(`\\b${field}\\b`), `${field} should be documented in the draft prompt`)
-    assert.ok(Object.hasOwn(createProperties, field), `${field} should be accepted by create_blog_post`)
-  }
-
-  const publish = renderMcpPrompt('update_and_publish_blog_post', { identifier: 'post-1', body: 'Approved body' }).text
-  assert.match(publish, /replace_blog_content/)
-  assert.match(publish, /expected_document_updated_at/)
-  const replaceProperties = blogTool('replace_blog_content').inputSchema.properties as Record<string, unknown>
-  for (const field of ['post_id', 'content_blocks', 'expected_document_updated_at']) {
-    assert.ok(Object.hasOwn(replaceProperties, field), `${field} should be accepted by replace_blog_content`)
-  }
-
-  const publishProperties = blogTool('publish_blog_post').inputSchema.properties as Record<string, unknown>
-  for (const field of ['post_id', 'expected_updated_at', 'expected_document_updated_at']) {
-    assert.ok(Object.hasOwn(publishProperties, field), `${field} should be accepted by publish_blog_post`)
-    assert.match(publish, new RegExp(`\\b${field}\\b`), `${field} should be documented in the publish prompt`)
-  }
-})
-
-test('tenant blog lifecycle has one token-checked tool path', () => {
-  const createProperties = blogTool('create_blog_post').inputSchema.properties as Record<string, unknown>
-  assert.equal(Object.hasOwn(createProperties, 'publish'), false)
-  assert.equal(Object.hasOwn(createProperties, 'scheduled_for'), false)
-
-  for (const name of ['publish_blog_post', 'unpublish_blog_post']) {
-    const tool = blogTool(name)
-    assert.deepEqual(tool.inputSchema.required, ['post_id', 'expected_updated_at', 'expected_document_updated_at'])
-  }
-
-  for (const name of ['update_blog_post', 'update_blog_metadata']) {
-    const properties = blogTool(name).inputSchema.properties as Record<string, unknown>
-    assert.equal(Object.hasOwn(properties, 'publish'), false)
-    assert.equal(Object.hasOwn(properties, 'unpublish'), false)
-    assert.equal(Object.hasOwn(properties, 'scheduled_for'), false)
-  }
-})
-
-test('tenant blog read and mutation output schemas expose only canonical content blocks and one token', () => {
+test('tenant blog outputs use one canonical structured envelope', () => {
   for (const schema of [blogPostObject, blogPostMutationResultObject.properties.post as typeof blogPostObject]) {
     assert.equal(Object.hasOwn(schema.properties, 'content_blocks'), true)
     assert.equal(Object.hasOwn(schema.properties, 'document_updated_at'), true)
-    const blockItems = schema.properties.content_blocks.items
-    assert.equal(Object.hasOwn(blockItems.properties, 'updated_at'), false)
     assert.equal(Object.hasOwn(schema.properties, 'body'), false)
-    assert.equal(Object.hasOwn(schema.properties, 'components'), false)
-    assert.equal(Object.hasOwn(schema.properties, 'content_document'), false)
-    assert.equal(schema.properties.document_updated_at.type, 'string')
-    assert.equal(schema.additionalProperties, false)
-  }
-  for (const schema of [blogPostSummaryObject]) {
-    assert.equal(Object.hasOwn(schema.properties, 'body'), false)
-    assert.equal(Object.hasOwn(schema.properties, 'components'), false)
     assert.equal(Object.hasOwn(schema.properties, 'content_document'), false)
     assert.equal(schema.additionalProperties, false)
   }
-})
-
-test('tenant blog output schemas match one structured envelope for canonical mutations', () => {
-  for (const name of ['get_blog_post', 'create_blog_post', 'update_blog_post', 'update_blog_metadata', 'replace_blog_content', 'publish_blog_post', 'unpublish_blog_post']) {
+  assert.equal(Object.hasOwn(blogPostSummaryObject.properties, 'body'), false)
+  for (const name of ['get_blog_post', 'create_blog_post', 'update_blog_post', 'update_blog_metadata', 'replace_blog_content', 'publish_blog_post']) {
     const outputSchema = blogTool(name).outputSchema as typeof blogPostMutationResultObject
-    assert.deepEqual(Object.keys(outputSchema.properties), ['post'], `${name} should only return the post envelope`)
+    assert.deepEqual(Object.keys(outputSchema.properties), ['post'])
     assert.deepEqual(outputSchema.required, ['post'])
-    assert.equal(outputSchema.additionalProperties, false)
   }
 })

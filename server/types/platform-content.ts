@@ -42,6 +42,7 @@ export interface PlatformBlogPostRequestBody extends PlatformContentNavRequestBo
   robots?: string
   featured_image_asset_id?: string
   visibility?: 'public' | 'unlisted'
+  scheduled_for?: string | null
 }
 
 export interface PlatformDocRequestBody extends PlatformStructuredContentRequestBody, PlatformContentNavRequestBody {
@@ -55,8 +56,5 @@ export interface PlatformDocRequestBody extends PlatformStructuredContentRequest
   robots?: string
   difficulty_level?: string
   sort_order?: number
-  parent_doc_id?: string
   featured_image_asset_id?: string
-  publish?: boolean
-  unpublish?: boolean
 }

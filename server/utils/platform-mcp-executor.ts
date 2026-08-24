@@ -61,8 +61,8 @@ function requiredAgentSkillTask(args: Record<string, unknown>): AgentSkillTask {
 }
 
 function requiredAgentGuidanceCandidateType(args: Record<string, unknown>): AgentGuidanceCandidateType {
-  if (args.candidate_type === 'blog_draft' || args.candidate_type === 'image_brief') return args.candidate_type
-  throw mcpProtocolError(MCP_ERROR.invalidParams, 'candidate_type must be one of: blog_draft, image_brief.')
+  if (args.candidate_type === 'blog_article' || args.candidate_type === 'image_brief') return args.candidate_type
+  throw mcpProtocolError(MCP_ERROR.invalidParams, 'candidate_type must be one of: blog_article, image_brief.')
 }
 
 function requiredCandidate(args: Record<string, unknown>) {
@@ -101,9 +101,9 @@ function optionalArray(args: Record<string, unknown>, key: string) {
   return Array.isArray(value) ? value : undefined
 }
 
-const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'platform_doc', 'tenant_blog']
+const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'tenant_blog']
 const CONTENT_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
-const PLATFORM_BLOG_POST_STATUSES = new Set(['draft', 'published', 'scheduled', 'archived'])
+const PLATFORM_BLOG_POST_STATUSES = new Set(['published', 'scheduled'])
 const PLATFORM_BLOG_VISIBILITIES = new Set(['public', 'unlisted'])
 const PLATFORM_BLOG_ROBOTS = new Set(['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'])
 
@@ -255,13 +255,10 @@ export function projectPlatformBlogPostForMcp(post: Record<string, unknown>) {
 
 export function platformBlogLifecycleCall(
   args: Record<string, unknown>,
-  action: 'publish' | 'unpublish',
+  _action: 'publish' = 'publish',
 ) {
   const scheduledFor = args.scheduled_for
-  if (action === 'unpublish' && Object.prototype.hasOwnProperty.call(args, 'scheduled_for')) {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, 'scheduled_for is only valid when publishing.')
-  }
-  if (action === 'publish' && scheduledFor !== undefined && scheduledFor !== null
+  if (scheduledFor !== undefined && scheduledFor !== null
     && (typeof scheduledFor !== 'string' || !scheduledFor.trim())) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, 'scheduled_for must be a non-empty string or null when provided.')
   }
@@ -269,10 +266,9 @@ export function platformBlogLifecycleCall(
     postId: requiredString(args, 'post_id'),
     siteId: Object.prototype.hasOwnProperty.call(args, 'site_id') ? requiredString(args, 'site_id') : null,
     input: {
-      action,
       expected_updated_at: requiredString(args, 'expected_updated_at'),
       expected_document_updated_at: requiredString(args, 'expected_document_updated_at'),
-      ...(action === 'publish' && Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
+      ...(Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
         ? { scheduled_for: typeof scheduledFor === 'string' ? scheduledFor.trim() : null }
         : {}),
     },
@@ -905,6 +901,7 @@ export async function executePlatformMcpToolCall(
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
         robots: optionalString(rawArguments, 'robots') ?? null,
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
+        scheduled_for: optionalNullableString(rawArguments, 'scheduled_for') ?? null,
       }, blogScope)
       return { post: projectPlatformBlogPostForMcp(result.post) }
     }
@@ -946,17 +943,12 @@ export async function executePlatformMcpToolCall(
       await updatePlatformBlogLifecycle(user.db, call.postId, call.input, call.siteId)
       return { post: projectPlatformBlogPostForMcp(await getPlatformBlogPost(user.db, call.postId, call.siteId)) }
     }
-    case 'unpublish_platform_blog_post': {
-      const call = platformBlogLifecycleCall(rawArguments, 'unpublish')
-      await updatePlatformBlogLifecycle(user.db, call.postId, call.input, call.siteId)
-      return { post: projectPlatformBlogPostForMcp(await getPlatformBlogPost(user.db, call.postId, call.siteId)) }
-    }
     case 'reorder_platform_blog_posts':
       return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>, optionalString(rawArguments, 'site_id'))
     case 'delete_platform_blog_post':
       return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'))
     case 'list_platform_docs':
-      return { docs: await listPlatformDocs(user.db, optionalString(rawArguments, 'status')) }
+      return { docs: await listPlatformDocs(user.db) }
     case 'get_platform_doc':
       return { doc: await getPlatformDoc(user.db, requiredString(rawArguments, 'doc_id')) }
     case 'create_platform_doc':
@@ -974,10 +966,8 @@ export async function executePlatformMcpToolCall(
         robots: optionalString(rawArguments, 'robots') ?? null,
         difficulty_level: optionalString(rawArguments, 'difficulty_level') ?? null,
         sort_order: optionalNumber(rawArguments, 'sort_order') ?? 0,
-        parent_doc_id: optionalString(rawArguments, 'parent_doc_id') ?? null,
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
         ...structuredContentInput(rawArguments),
-        publish: optionalBoolean(rawArguments, 'publish') ?? false,
       })
     case 'update_platform_doc':
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), {
@@ -994,16 +984,9 @@ export async function executePlatformMcpToolCall(
         robots: optionalString(rawArguments, 'robots'),
         difficulty_level: optionalString(rawArguments, 'difficulty_level'),
         sort_order: optionalNumber(rawArguments, 'sort_order'),
-        parent_doc_id: optionalString(rawArguments, 'parent_doc_id'),
         featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id'),
         ...structuredContentInput(rawArguments),
-        publish: optionalBoolean(rawArguments, 'publish'),
-        unpublish: optionalBoolean(rawArguments, 'unpublish'),
       })
-    case 'publish_platform_doc':
-      return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { publish: true })
-    case 'unpublish_platform_doc':
-      return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), { unpublish: true })
     case 'reorder_platform_docs':
       return await reorderPlatformDocs(user.db, reorderItems(rawArguments, 'doc_id', { navGroup: true }) as Array<{ doc_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; nav_group?: string | null; nav_group_order?: number | null; hide_from_nav?: boolean | null }>)
     case 'delete_platform_doc':

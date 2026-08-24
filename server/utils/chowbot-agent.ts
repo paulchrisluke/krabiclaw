@@ -566,7 +566,7 @@ async function executeTool(
     case "list_tenant_pages":
     case "get_tenant_page":
     case "create_tenant_page":
-    case "update_tenant_page_draft":
+    case "update_tenant_page":
     case "change_tenant_page_path":
       return runMcpExecutorToolForChowbot(executorSite, name, input);
 
@@ -638,9 +638,8 @@ async function executeTool(
       }, {});
       return {
         posts: {
-          draft: byStatus.draft ?? 0,
           published: byStatus.published ?? 0,
-          archived: byStatus.archived ?? 0,
+          scheduled: byStatus.scheduled ?? 0,
         },
         menus: menuCount?.count ?? 0,
         menu_items: itemCount?.count ?? 0,

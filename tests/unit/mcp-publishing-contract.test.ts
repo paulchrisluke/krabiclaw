@@ -13,6 +13,8 @@ import { CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/index.ts'
 import { MEDIA_CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/media.ts'
 import { PostValidationError, validatePostInput } from '../../server/utils/post-management.ts'
 import { normalizeMenuItemArgs } from '../../server/utils/mcp-executor/shared.ts'
+import { INTEGRATIONS_TOOLS } from '../../server/utils/mcp-tools/integrations.ts'
+import { publishToPage } from '../../server/utils/facebook-pages.ts'
 
 type ToolContract = {
   name: string
@@ -144,6 +146,32 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.match(upload.description, /native ChatGPT file argument/i)
   assert.match(upload.description, /never pass a bare file_id/i)
   assert.match(upload.description, /one download attempt/i)
+})
+
+test('Facebook publication is immediate and has no persisted-draft argument', async (t) => {
+  const publish = tool(INTEGRATIONS_TOOLS, 'publish_to_facebook')
+  assert.equal(publish.inputSchema.properties?.published, undefined)
+
+  let requestBody: Record<string, unknown> | null = null
+  t.mock.method(globalThis, 'fetch', async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+    return new Response(JSON.stringify({ id: 'facebook-post-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  })
+
+  const result = await publishToPage('page-token', 'page-id', {
+    message: 'Open this weekend',
+    link: 'https://example.com/weekend',
+  })
+
+  assert.deepEqual(result, { id: 'facebook-post-1' })
+  assert.deepEqual(requestBody, {
+    message: 'Open this weekend',
+    link: 'https://example.com/weekend',
+    published: true,
+  })
 })
 
 test('media placement contract does not reintroduce entity-specific assignment tools', () => {

@@ -1,5 +1,4 @@
 export type BlogVisibility = 'public' | 'unlisted'
-export type BlogPublishingStatus = 'draft' | 'published' | 'scheduled' | 'archived'
 
 export interface EditorContentBlock {
   id?: string

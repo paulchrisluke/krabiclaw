@@ -67,7 +67,7 @@ export interface CuratedSiteLocaleDefinition {
   locale: string
   label: string
   isSource: boolean
-  status: 'draft' | 'published' | 'disabled'
+  status: 'published' | 'disabled'
 }
 
 export interface CuratedSiteDomainDefinition {
@@ -215,7 +215,7 @@ export interface CuratedMenuDefinition {
   name: string
   description: string
   sectionOrder: string[]
-  status: 'draft' | 'published'
+  status: 'published'
   items: CuratedMenuItemDefinition[]
 }
 
@@ -247,7 +247,7 @@ export interface CuratedPostDefinition {
   title: string | null
   body: string
   imageAssetId: string | null
-  status: 'published' | 'draft'
+  status: 'published' | 'scheduled'
   publishedAt: string
   createdBy: string
   channelJobs: CuratedPostChannelJobDefinition[]
@@ -264,7 +264,7 @@ export interface CuratedTenantPageLocaleFieldDefinition {
   heroSubtitle?: string | null
   value: string | null
   type: 'text' | 'textarea' | 'richtext' | 'media'
-  status: 'draft' | 'published' | 'stale'
+  status: 'published' | 'stale'
   sourceHash: string
   translatedAt: string | null
   reviewedAt: string | null
@@ -279,7 +279,7 @@ export interface CuratedBusinessLocationTranslationDefinition {
   city: string | null
   description: string | null
   shortDescription: string | null
-  status: 'draft' | 'published' | 'stale'
+  status: 'published' | 'stale'
   sourceHash: string
   translatedAt: string | null
   reviewedAt: string | null
@@ -292,7 +292,7 @@ export interface CuratedMenuTranslationDefinition {
   name: string | null
   description: string | null
   sectionOrder: string[] | null
-  status: 'draft' | 'published' | 'stale'
+  status: 'published' | 'stale'
   sourceHash: string
   translatedAt: string | null
   reviewedAt: string | null
@@ -307,7 +307,7 @@ export interface CuratedMenuItemTranslationDefinition {
   description: string | null
   allergens: string | null
   dietaryNotes: string | null
-  status: 'draft' | 'published' | 'stale'
+  status: 'published' | 'stale'
   sourceHash: string
   translatedAt: string | null
   reviewedAt: string | null
