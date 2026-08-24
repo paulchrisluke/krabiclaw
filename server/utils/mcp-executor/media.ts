@@ -74,10 +74,6 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         );
       }
 
-      const provider = resolved.kind === "image"
-        ? resolveImageUploadProvider(resolved.contentType, site.env)
-        : resolved.kind === "file" ? "cloudflare_r2" : undefined;
-
       let poster: { buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
         if (!hasCloudflareImagesConfig(site.env)) {
@@ -104,7 +100,6 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         contentType: resolved.contentType,
         filename: resolved.filename,
         source: "uploaded",
-        provider,
         category: (category as never) ?? null,
         altText: description ?? fileReference.file_name ?? fileReference.file_id,
       } as const
@@ -114,12 +109,20 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         uploaded = await uploadResolvedMediaToAssetStore({
           ...uploadInput,
           kind: 'video',
+          provider: 'cloudflare_r2',
           poster,
+        })
+      } else if (resolved.kind === 'image') {
+        uploaded = await uploadResolvedMediaToAssetStore({
+          ...uploadInput,
+          kind: 'image',
+          provider: resolveImageUploadProvider(resolved.contentType, site.env),
         })
       } else {
         uploaded = await uploadResolvedMediaToAssetStore({
           ...uploadInput,
-          kind: resolved.kind,
+          kind: 'file',
+          provider: 'cloudflare_r2',
         })
       }
 

@@ -1,5 +1,5 @@
 import { defineHandler } from 'nitro';
-import { getQuery, getRouterParam, readMultipartFormData } from 'nitro/h3';
+import { getQuery, getRouterParam } from 'nitro/h3';
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -8,6 +8,7 @@ import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'])
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024
 type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo'
 
 function sanitizeFilename(raw: string | undefined): string {
@@ -73,40 +74,55 @@ export default defineHandler(async (event) => {
       category = rawCategory as MediaCategory
     }
 
-    const formData = await readMultipartFormData(event)
-    if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
-    const videoPart = formData.find(part => part.name === 'video' && part.data)
-    const thumbnailPart = formData.find(part => part.name === 'thumbnail' && part.data)
-    if (!videoPart?.data || !thumbnailPart?.data) {
+    const contentLengthHeader = event.req.headers.get('content-length')
+    const contentLength = contentLengthHeader && /^\d+$/.test(contentLengthHeader)
+      ? Number(contentLengthHeader)
+      : contentLengthHeader ? Number.NaN : null
+    if (contentLength !== null && (!Number.isSafeInteger(contentLength) || contentLength <= 0)) {
+      return jsonResponse({ error: 'Invalid Content-Length header' }, { status: 400 })
+    }
+    if (contentLength !== null && contentLength > MAX_VIDEO_BYTES + MAX_POSTER_BYTES + MULTIPART_OVERHEAD_BYTES) {
+      return jsonResponse({ error: 'Upload too large (max 60 MB)' }, { status: 413 })
+    }
+
+    const formData = await event.req.formData()
+    const videoPart = formData.get('video')
+    const thumbnailPart = formData.get('thumbnail')
+    if (!(videoPart instanceof File) || !(thumbnailPart instanceof File)) {
       return jsonResponse({ error: 'video and thumbnail fields are required' }, { status: 400 })
     }
-    if (videoPart.data.byteLength > MAX_VIDEO_BYTES) return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
-    if (thumbnailPart.data.byteLength > MAX_POSTER_BYTES) return jsonResponse({ error: 'Thumbnail too large (max 10 MB)' }, { status: 413 })
+    if (videoPart.size > MAX_VIDEO_BYTES) return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
+    if (thumbnailPart.size > MAX_POSTER_BYTES) return jsonResponse({ error: 'Thumbnail too large (max 10 MB)' }, { status: 413 })
 
-    const videoContentType = sniffMediaMimeType(videoPart.data)
+    const [videoData, thumbnailData] = await Promise.all([
+      videoPart.arrayBuffer().then(buffer => new Uint8Array(buffer)),
+      thumbnailPart.arrayBuffer().then(buffer => new Uint8Array(buffer)),
+    ])
+
+    const videoContentType = sniffMediaMimeType(videoData)
     if (!VIDEO_MIME_TYPES.has(videoContentType)) return jsonResponse({ error: 'Unsupported video file type' }, { status: 415 })
-    const thumbnailContentType = sniffMediaMimeType(thumbnailPart.data)
+    const thumbnailContentType = sniffMediaMimeType(thumbnailData)
     if (!POSTER_IMAGE_MIME_TYPES.has(thumbnailContentType)) return jsonResponse({ error: 'Unsupported thumbnail file type' }, { status: 415 })
 
-    const filename = sanitizeFilename(videoPart.filename || queryValue(query.filename) || undefined)
+    const filename = sanitizeFilename(videoPart.name || queryValue(query.filename) || undefined)
     const uploaded = await uploadResolvedMediaToAssetStore({
       db,
       env,
       siteId,
       organizationId: site.organization_id,
       userId: session.user.id,
-      buffer: Uint8Array.from(videoPart.data),
+      buffer: videoData,
       contentType: videoContentType,
       filename,
       kind: 'video',
       source: 'uploaded',
       category,
       locationId,
-      fileSize: videoPart.data.byteLength,
+      fileSize: videoData.byteLength,
       poster: {
-        buffer: Uint8Array.from(thumbnailPart.data),
+        buffer: thumbnailData,
         contentType: thumbnailContentType,
-        filename: sanitizeFilename(thumbnailPart.filename || `${filename}-thumbnail.jpg`),
+        filename: sanitizeFilename(thumbnailPart.name || `${filename}-thumbnail.jpg`),
       },
     })
 

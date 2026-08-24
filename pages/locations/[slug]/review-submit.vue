@@ -276,11 +276,11 @@ async function uploadVideo(file: File) {
   try {
     const poster = await generateVideoThumbnail(file)
     const form = new FormData()
-    form.append('token', token.value)
     form.append('video', file)
     form.append('thumbnail', poster)
     const response = await fetch(`/api/public/review-requests/${encodeURIComponent(requestId)}/media/upload`, {
       method: 'POST',
+      headers: { 'x-review-token': token.value },
       body: form,
       cache: 'no-store',
       credentials: 'same-origin',
@@ -304,6 +304,7 @@ async function uploadVideo(file: File) {
     if (!response.ok) {
       throw normalizeApiError({ statusCode: response.status, response, data: payload })
     }
+    if (isRecord(payload) && typeof payload.assetId === 'string') assetId = payload.assetId
     if (
       !isRecord(payload)
       || typeof payload.assetId !== 'string'
@@ -320,8 +321,7 @@ async function uploadVideo(file: File) {
         data: isRecord(payload) ? payload : {},
       })
     }
-    assetId = payload.assetId
-    media.value.push({ assetId, kind: 'video', previewUrl: payload.thumbnailUrl })
+    media.value.push({ assetId: payload.assetId, kind: 'video', previewUrl: payload.thumbnailUrl })
   } catch (error) {
     if (assetId) {
       try {

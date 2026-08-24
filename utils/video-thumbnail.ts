@@ -1,10 +1,12 @@
 const THUMBNAIL_WIDTH = 1280
 const THUMBNAIL_HEIGHT = 720
 const THUMBNAIL_SEEK_SECONDS = 0.1
+const VIDEO_EVENT_TIMEOUT_MS = 15_000
 
 function waitForVideoEvent(video: HTMLVideoElement, event: 'loadedmetadata' | 'seeked'): Promise<void> {
   return new Promise((resolve, reject) => {
     const cleanup = () => {
+      clearTimeout(timer)
       video.removeEventListener(event, handleEvent)
       video.removeEventListener('error', handleError)
     }
@@ -18,6 +20,10 @@ function waitForVideoEvent(video: HTMLVideoElement, event: 'loadedmetadata' | 's
     }
     video.addEventListener(event, handleEvent, { once: true })
     video.addEventListener('error', handleError, { once: true })
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new Error('The video could not be read to generate its thumbnail.'))
+    }, VIDEO_EVENT_TIMEOUT_MS)
   })
 }
 

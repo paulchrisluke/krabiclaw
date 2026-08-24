@@ -1,4 +1,3 @@
-import { readMultipartFormData } from 'nitro/h3';
 import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-limits'
 import { cleanString, cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { executeBatch, queryFirst } from '~/server/db'
@@ -7,6 +6,8 @@ import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
+
+const MULTIPART_OVERHEAD_BYTES = 64 * 1024
 
 function sanitizeFilename(raw: string): string {
   const sanitized = raw
@@ -33,10 +34,7 @@ export default defineHandler(async (event) => {
     const sessionUser = session?.user as ({ id?: string; isAnonymous?: boolean } | undefined)
     if (!sessionUser?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-    const formData = await readMultipartFormData(event)
-    if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
-    const tokenPart = formData.find(part => part.name === 'token')
-    const token = cleanString(tokenPart?.data ? new TextDecoder().decode(tokenPart.data) : null, 300)
+    const token = cleanString(event.req.headers.get('x-review-token'), 300)
     if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
 
     const result = await getReviewRequestByToken(db, token)
@@ -51,20 +49,37 @@ export default defineHandler(async (event) => {
     `, [requestId])
     if (Number(existingVideos?.count ?? 0) >= 2) return jsonResponse({ error: 'You can upload up to 2 videos.' }, { status: 400 })
 
-    const videoPart = formData.find(part => part.name === 'video' && part.data)
-    const thumbnailPart = formData.find(part => part.name === 'thumbnail' && part.data)
-    if (!videoPart?.data || !thumbnailPart?.data) return jsonResponse({ error: 'video and thumbnail fields are required' }, { status: 400 })
-    if (videoPart.data.byteLength > REVIEW_VIDEO_MAX_BYTES) {
+    const contentLengthHeader = event.req.headers.get('content-length')
+    const contentLength = contentLengthHeader && /^\d+$/.test(contentLengthHeader)
+      ? Number(contentLengthHeader)
+      : contentLengthHeader ? Number.NaN : null
+    if (contentLength !== null && (!Number.isSafeInteger(contentLength) || contentLength <= 0)) {
+      return jsonResponse({ error: 'Invalid Content-Length header' }, { status: 400 })
+    }
+    if (contentLength !== null && contentLength > REVIEW_VIDEO_MAX_BYTES + MAX_POSTER_BYTES + MULTIPART_OVERHEAD_BYTES) {
       return jsonResponse({ error: `Videos must be ${REVIEW_VIDEO_MAX_LABEL} or smaller.` }, { status: 413 })
     }
-    if (thumbnailPart.data.byteLength > MAX_POSTER_BYTES) return jsonResponse({ error: 'Thumbnail image too large (max 10 MB)' }, { status: 413 })
-    const videoContentType = sniffMediaMimeType(videoPart.data)
+
+    const formData = await event.req.formData()
+    const videoPart = formData.get('video')
+    const thumbnailPart = formData.get('thumbnail')
+    if (!(videoPart instanceof File) || !(thumbnailPart instanceof File)) return jsonResponse({ error: 'video and thumbnail fields are required' }, { status: 400 })
+    if (videoPart.size > REVIEW_VIDEO_MAX_BYTES) {
+      return jsonResponse({ error: `Videos must be ${REVIEW_VIDEO_MAX_LABEL} or smaller.` }, { status: 413 })
+    }
+    if (thumbnailPart.size > MAX_POSTER_BYTES) return jsonResponse({ error: 'Thumbnail image too large (max 10 MB)' }, { status: 413 })
+
+    const [videoData, thumbnailData] = await Promise.all([
+      videoPart.arrayBuffer().then(buffer => new Uint8Array(buffer)),
+      thumbnailPart.arrayBuffer().then(buffer => new Uint8Array(buffer)),
+    ])
+    const videoContentType = sniffMediaMimeType(videoData)
     if (!VIDEO_MIME_TYPES.has(videoContentType)) {
       return jsonResponse({ error: 'Accepted video formats are MP4 and WebM. .mov files are not supported.' }, { status: 415 })
     }
-    const thumbnailContentType = sniffMediaMimeType(thumbnailPart.data)
+    const thumbnailContentType = sniffMediaMimeType(thumbnailData)
     if (!POSTER_IMAGE_MIME_TYPES.has(thumbnailContentType)) return jsonResponse({ error: 'Unsupported thumbnail image type' }, { status: 415 })
-    const filename = sanitizeFilename(videoPart.filename || 'review-video')
+    const filename = sanitizeFilename(videoPart.name || 'review-video')
 
     const mediaLinkId = crypto.randomUUID()
     const uploaded = await uploadResolvedMediaToAssetStore({
@@ -73,18 +88,18 @@ export default defineHandler(async (event) => {
       siteId: result.context.site_id,
       organizationId: result.context.organization_id,
       userId: sessionUser.id,
-      buffer: Uint8Array.from(videoPart.data),
+      buffer: videoData,
       contentType: videoContentType,
       filename,
       kind: 'video',
       source: 'uploaded',
       category: 'other',
       locationId: result.context.location_id,
-      fileSize: videoPart.data.byteLength,
+      fileSize: videoData.byteLength,
       poster: {
-        buffer: Uint8Array.from(thumbnailPart.data),
+        buffer: thumbnailData,
         contentType: thumbnailContentType,
-        filename: sanitizeFilename(thumbnailPart.filename || `${filename}-thumbnail.jpg`),
+        filename: sanitizeFilename(thumbnailPart.name || `${filename}-thumbnail.jpg`),
       },
     })
     try {
