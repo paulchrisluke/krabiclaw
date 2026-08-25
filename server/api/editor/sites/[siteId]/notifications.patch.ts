@@ -22,14 +22,14 @@ export default defineHandler(async (event) => {
     }
   }
 
-  const { env, db, site } = await requireSiteAccess(event, siteId)
+  const { db, site } = await requireSiteAccess(event, siteId)
 
   const wantsWhatsApp = Boolean(body.whatsapp_phone?.trim()) || (body.channels?.includes('whatsapp') ?? false)
   if (wantsWhatsApp && !(await hasSiteEntitlement(db, siteId, 'messaging'))) {
     return jsonResponse({ error: 'WhatsApp notifications require a Growth plan or higher.' }, { status: 403 })
   }
 
-  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels, env, Object.fromEntries(event.req.headers.entries()) as HeadersInit)
+  const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels)
   return jsonResponse({ success: true, notifications })
 })
 import { defineHandler } from 'nitro';

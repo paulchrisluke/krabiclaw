@@ -9,7 +9,7 @@ export const authClient = createAuthClient({
   plugins: [
     adminClient(),
     anonymousClient(),
-    organizationClient({ ac: organizationAccessControl, roles: organizationRoles }),
+    organizationClient({ ac: organizationAccessControl, roles: organizationRoles, teams: { enabled: true } }),
     phoneNumberClient(),
     oauthProviderClient(),
     stripeClient({ subscription: true }),

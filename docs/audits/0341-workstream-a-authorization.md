@@ -64,7 +64,6 @@ aggregate across locations), never from the URL shape alone.
 **Fixed compiler blockers (deleted-export references) and MCP/ChowBot/WhatsApp access this pass:**
 - `server/utils/mcp-auth.ts` — `requireMcpSite` now requires site resource-team membership for non-org-wide roles (MCP tools have no location-scoped permission model at this layer, so a location-only editor is rejected).
 - `server/utils/chowbot-conversations.ts` — `getSiteForMember`/`listSitesForMember` same site-wide requirement (ChowBot is whole-site conversational, no location scoping at this layer).
-- `server/utils/whatsapp-access.ts`, `server/utils/whatsapp-revocation.ts` — `LOCATION_MANAGER_ROLE` → `'editor'` literal / `isScopedRole()`.
 - `server/api/dashboard/organizations/members/[memberId]/remove.post.ts` — same.
 
 ## `/api/dashboard/**` scoped-editor boundary

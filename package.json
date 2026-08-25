@@ -54,8 +54,6 @@
     "seed:kikuzuki": "node --experimental-strip-types scripts/generate-kikuzuki-seed.ts",
     "seed:kikuzuki:preview": "node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview",
     "platform-admin:break-glass-promote": "node scripts/break-glass-promote-platform-admin.mjs",
-    "site:invite-member": "node scripts/invite-site-member.mjs",
-    "site:backfill-whatsapp-members": "node --experimental-strip-types scripts/backfill-whatsapp-members.mjs",
     "client:replay": "node scripts/client-replay.mjs",
     "client:import": "node scripts/client-import.mjs",
     "client:onboard": "node scripts/client-onboard.mjs",

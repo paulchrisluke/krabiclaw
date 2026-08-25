@@ -773,14 +773,12 @@ export function buildSiteTransferMutationBatch(input: {
 
   const facebookConnections = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'facebook_pages_connections')
   const googleAnalyticsConnections = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'google_analytics_connections')
-  const invitationScopes = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'invitation_access_scope')
-  if (!facebookConnections || !googleAnalyticsConnections || !invitationScopes) {
+  if (!facebookConnections || !googleAnalyticsConnections) {
     throw new Error('Site transfer policy is missing a revoke table')
   }
   batch.push(
     { query: `DELETE FROM ${facebookConnections} WHERE site_id = ?`, params: [input.siteId] },
     { query: `DELETE FROM ${googleAnalyticsConnections} WHERE site_id = ?`, params: [input.siteId] },
-    { query: `DELETE FROM ${invitationScopes} WHERE site_id = ?`, params: [input.siteId] },
     {
       query: `UPDATE mcp_workspace_preferences
                  SET site_id = NULL, location_id = NULL, updated_at = ?
