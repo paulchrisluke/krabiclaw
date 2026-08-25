@@ -40,8 +40,6 @@ export async function handleNotificationsTools(ctx: McpExecutorContext): Promise
             site.siteId,
             whatsappPhone,
             channels,
-            site.env,
-            ctx.event ? (Object.fromEntries(ctx.event.req.headers.entries()) as HeadersInit) : undefined,
           );
         } catch (error) {
           // setOrgWhatsAppPhone rejects an invalid/impossible number outright (issue #293

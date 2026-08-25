@@ -6,7 +6,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
-import { createLocation, syncLocationWhatsAppAccess } from '~/server/utils/location-management'
+import { createLocation } from '~/server/utils/location-management'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
@@ -20,7 +20,6 @@ function slugify(name: string) {
 
 // Normalize to canonical E.164 at this write boundary (issue #293 Section D), // mirroring server/api/dashboard/locations/[id].patch.ts — this create path
 // previously stored the raw trimmed input, which silently broke the E.164
-// comparisons ensureWhatsAppRecipientAccess/isAuthorizedWhatsAppRecipient rely on.
 function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
   if (raw === null || raw === undefined || raw === '') return { ok: true, value: null }
   if (typeof raw !== 'string') return { ok: false, error: 'Phone number must be a string' }
@@ -31,17 +30,6 @@ function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | n
     return { ok: false, error: 'Enter a valid notification phone number, including country code' }
   }
   return { ok: true, value: parsed.e164 }
-}
-
-// A new location has no previous notification_phone, so this is always a
-// create-shaped call into the shared server/utils/location-management.ts
-// sync boundary (issue #293 Sections A/D/G, CodeRabbit follow-up on PR #295)
-// — provisioning access for the new number, with scope recalculation as a
-// no-op since there's nothing to revoke yet.
-async function provisionLocationWhatsAppAccess(
-  env: SetupEnv, db: DbClient, opts: { organizationId: string; siteId: string; locationId: string; phone: string; inviterUserId: string }, ): Promise<void> {
-  await syncLocationWhatsAppAccess(env, db, {
-    organizationId: opts.organizationId, siteId: opts.siteId, locationId: opts.locationId, previousPhone: null, newPhone: opts.phone, inviterUserId: opts.inviterUserId, })
 }
 
 async function uniqueLocationSlug(db: DbClient, siteId: string, base: string): Promise<string> {
@@ -108,11 +96,6 @@ export default defineHandler(async (event) => {
 
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
-    }
-    const createdLocationId = (result.data as { location?: { id: string } }).location?.id
-    if (notificationPhone.value && createdLocationId) {
-      await provisionLocationWhatsAppAccess(env as SetupEnv, db, {
-        organizationId, siteId, locationId: createdLocationId, phone: notificationPhone.value, inviterUserId: session.user.id, })
     }
     await purgePublicResourceCacheSafe(env, siteId)
 
@@ -196,10 +179,6 @@ export default defineHandler(async (event) => {
   }
   // Upsert reviews for the new location
   const locationId = (result.data as { location?: { id: string } }).location?.id
-  if (notificationPhone.value && locationId) {
-    await provisionLocationWhatsAppAccess(env as SetupEnv, db, {
-      organizationId, siteId, locationId, phone: notificationPhone.value, inviterUserId: session.user.id, })
-  }
   if (locationId) {
     const now = new Date().toISOString()
     for (const review of place.reviews ?? []) {

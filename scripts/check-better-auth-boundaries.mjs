@@ -74,11 +74,7 @@ const MIGRATED_TEAM_PROVISIONING_FILES = [
   'server/utils/member-access.ts',
   'server/utils/site-creation.ts',
   'server/utils/location-management.ts',
-  'server/utils/whatsapp-access.ts',
   'server/utils/whatsapp.ts',
-  'server/api/dashboard/invitations/[invitationId]/replace.post.ts',
-  'server/api/dashboard/invitations/[invitationId]/retry.post.ts',
-  'server/api/invitations/[invitationId]/accept.post.ts',
   'server/api/dashboard/organizations/members/[memberId]/role.post.ts',
 ]
 

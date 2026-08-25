@@ -2,10 +2,9 @@
 
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
-import { resolveLocationCapabilitySummary, syncLocationWhatsAppAccess, updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
+import { resolveLocationCapabilitySummary, updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
-import { queryFirst } from '~/server/db'
 import { assertMemberScope } from '~/server/utils/member-access'
 import { parsePhone } from '~/utils/phone'
 import type { ProductFeature } from '~/config/cms-registry'
@@ -25,11 +24,6 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  // Normalize to canonical E.164 at this write boundary (issue #293 Section D)
-  // — `ensureWhatsAppRecipientAccess`/`isAuthorizedWhatsAppRecipient` already
-  // compare against E.164, but the raw trimmed input was previously stored
-  // as-is in `business_locations.notification_phone`, which silently broke
-  // that comparison for any input that wasn't already E.164-shaped.
   let normalizedNotificationPhone: string | null | undefined
   if (typeof body.notification_phone === 'string' && body.notification_phone.trim()) {
     const parsed = parsePhone(body.notification_phone, { defaultCountry: 'TH' })
@@ -40,11 +34,6 @@ export default defineHandler(async (event) => {
   } else if (body.notification_phone === null) {
     normalizedNotificationPhone = null
   }
-
-  const previousLocation = await queryFirst<{ notification_phone: string | null }>(db, `
-    SELECT notification_phone FROM business_locations WHERE id = ? LIMIT 1
-  `, [locationId])
-  const previousNotificationPhone = previousLocation?.notification_phone ?? null
 
   const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''
     ? undefined
@@ -93,40 +82,12 @@ export default defineHandler(async (event) => {
     return jsonResponse(result.data, { status: result.status })
   }
 
-  // Provisioning/scope-recalculation for a notification_phone change only
-  // runs AFTER the location write above has committed (CodeRabbit follow-up
-  // on issue #293 Section G/I): provisioning the new number before the save
-  // could leave access/invitations for a phone value that never actually
-  // got persisted, and running scope cleanup for the old number before the
-  // save could revoke a manager's access for a change that then failed to
-  // save. This also only runs when the field was actually touched (idempotency
-  // — Section I) — a save that doesn't touch notification_phone, or resubmits
-  // the same number, must not remove or re-audit anything (the no-op case is
-  // also handled inside syncLocationWhatsAppAccess itself).
-  let whatsappSyncWarning: string | undefined
-  let whatsappSyncError: string | undefined
-  if (normalizedNotificationPhone !== undefined) {
-    const sync = await syncLocationWhatsAppAccess(env as unknown as Parameters<typeof syncLocationWhatsAppAccess>[0], db, {
-      organizationId, siteId, locationId, previousPhone: previousNotificationPhone, newPhone: normalizedNotificationPhone, inviterUserId: session.user.id, actorHeaders: Object.fromEntries(event.req.headers.entries()) as HeadersInit, })
-    if (!sync.ok) {
-      // The location save above already committed — do not hide this behind
-      // a clean 200. A provisioning failure means the new manager may not
-      // have gotten access; a scope-recalc failure means a previous manager
-      // may still be authorized under the number that was just replaced.
-      // Record the error for retry/recovery rather than only logging it.
-      whatsappSyncError = sync.scopeRecalcError
-        ? 'Location saved, but a previous manager\'s WhatsApp access could not be fully revoked. Please retry or check access manually.'
-        : 'Location saved, but WhatsApp access could not be provisioned for the new number. Please retry.'
-      whatsappSyncWarning = whatsappSyncError
-    }
-  }
-
   await purgePublicResourceCacheSafe(env, siteId)
 
   const location = (result.data as { location?: { feature_overrides?: string | null } }).location
   const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, siteId, location.feature_overrides ?? null) : null
   return jsonResponse({
-    success: true, location: location ? parseLocationPayload(location) : null, ...capabilitySummary, ...(whatsappSyncWarning ? { warning: whatsappSyncWarning } : {}), }, { status: whatsappSyncWarning ? 207 : result.status })
+    success: true, location: location ? parseLocationPayload(location) : null, ...capabilitySummary, }, { status: result.status })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam, readBody  } from 'nitro/h3';

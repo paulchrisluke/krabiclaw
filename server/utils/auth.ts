@@ -11,7 +11,6 @@ import { HTTPError, type H3Event } from 'nitro';
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
-import { phoneTemporaryEmail } from '~/server/utils/phone-invitations'
 import { parsePhoneOrThrow, PHONE_METADATA_VERSION } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
@@ -28,6 +27,7 @@ import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
+import { notifyOrganizationInvited } from '~/server/utils/notifications'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -232,6 +232,28 @@ export function createAuth(env: CloudflareEnv) {
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = d1 === env.DB && env.db ? env.db : createDb(d1)
+  const configuredOrganizationOptions = {
+    ...organizationOptions,
+    sendInvitationEmail: async (data: {
+      id: string
+      role: string
+      email: string
+      organization: { id: string; name: string }
+      inviter: { user: { name: string; email: string } }
+    }) => {
+      const siteId = await resolvePrimarySiteForEvent(db, data.organization.id)
+      if (!siteId) throw new Error('Organization invitation requires a site')
+      await notifyOrganizationInvited(env, db, {
+        organizationId: data.organization.id,
+        siteId,
+        invitationId: data.id,
+        email: data.email,
+        role: data.role,
+        organizationName: data.organization.name,
+        inviterName: data.inviter.user.name || data.inviter.user.email,
+      })
+    },
+  } as const
   const authBaseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
   if (!authBaseUrl) throw new Error('BETTER_AUTH_URL is required')
   const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
@@ -449,7 +471,7 @@ export function createAuth(env: CloudflareEnv) {
         onClientCreated: normalizeCimdClientAuthentication,
         onClientRefreshed: normalizeCimdClientAuthentication,
       }),
-      organization(organizationOptions),
+      organization(configuredOrganizationOptions),
       betterAuthStripe({
         stripeClient,
         stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
@@ -459,7 +481,7 @@ export function createAuth(env: CloudflareEnv) {
           plans: () => loadStripePlans(),
           requireEmailVerification: true,
           authorizeReference: async ({ user, referenceId }, ctx) => {
-            const member = await getOrgAdapter(ctx.context, organizationOptions).findMemberByOrgId({
+            const member = await getOrgAdapter(ctx.context, configuredOrganizationOptions).findMemberByOrgId({
               userId: user.id,
               organizationId: referenceId,
             })
@@ -467,7 +489,7 @@ export function createAuth(env: CloudflareEnv) {
             return await hasPermission({
               organizationId: referenceId,
               role: member.role,
-              options: organizationOptions,
+              options: configuredOrganizationOptions,
               permissions: { billing: ['update'] },
             }, ctx)
           },
@@ -546,7 +568,7 @@ export function createAuth(env: CloudflareEnv) {
         signUpOnVerification: {
           getTempEmail: (phone) => {
             try {
-              return phoneTemporaryEmail(phone)
+              return `phone-${parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')}@phone.krabiclaw.local`
             } catch {
               return 'phone-unknown@phone.krabiclaw.local'
             }

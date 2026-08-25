@@ -1,47 +1,10 @@
 import type { McpExecutorContext } from './shared'
 import { copyLocationBatch, type CopyEntityType } from '~/server/utils/copy-paste'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createLocation, deleteLocation, syncLocationWhatsAppAccess, updateLocation, type LocationRecord } from '~/server/utils/location-management'
+import { createLocation, deleteLocation, updateLocation, type LocationRecord } from '~/server/utils/location-management'
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requiredString, requiredStringArray, workspaceLocationsPayload } from './shared'
-import { queryFirst } from '~/server/db'
-
-// MCP's create_location/update_location tools write notification_phone
-// through the same location-management.ts write boundary the dashboard HTTP
-// routes use (validation lives there — see location-management.ts), and now
-// also share that file's syncLocationWhatsAppAccess for provisioning WhatsApp
-// access and recalculating scopes on change (issue #293 Sections A/G,
-// CodeRabbit follow-up on PR #295 — this used to be a separate copy of the
-// same provisioning/revocation logic as the dashboard PATCH route and
-// add-location flow). This keeps a manager number set/changed via
-// ChowBot/MCP on the same invitation + revocation treatment as one set via
-// the dashboard, instead of silently going inert or drifting out of sync.
-async function syncLocationWhatsAppPhone(
-  site: McpExecutorContext['site'],
-  locationId: string,
-  previousNotificationPhone: string | null,
-): Promise<{ ok: boolean; provisioningError?: string; scopeRecalcError?: string }> {
-  const current = await queryFirst<{ notification_phone: string | null }>(site.db, `
-    SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
-  `, [locationId, site.organizationId, site.siteId])
-  const newPhone = current?.notification_phone ?? null
-
-  return await syncLocationWhatsAppAccess(site.env, site.db, {
-    organizationId: site.organizationId,
-    siteId: site.siteId,
-    locationId,
-    previousPhone: previousNotificationPhone,
-    newPhone,
-    inviterUserId: site.userId,
-  })
-}
-
-export function whatsAppSyncWarning(result: { ok: boolean; provisioningError?: string; scopeRecalcError?: string }): string | undefined {
-  if (result.ok) return undefined
-  const detail = result.provisioningError || result.scopeRecalcError || 'unknown error'
-  return `The location was saved, but syncing WhatsApp manager access failed: ${detail}. Retry updating the notification phone to re-sync it.`
-}
 
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -95,9 +58,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       }
       assertDomainSuccess(result);
       const createdLocation = (result.data as { location: LocationRecord }).location;
-      const createWhatsAppWarning = createdLocation.notification_phone
-        ? whatsAppSyncWarning(await syncLocationWhatsAppPhone(site, createdLocation.id, null))
-        : undefined;
       const createContext = await mutationContextPayload(site, { locationId: createdLocation.id });
       return renderStructuredResponse(
         {
@@ -107,7 +67,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           slug: createdLocation.slug,
           updated_at: createdLocation.updated_at,
           context: createContext,
-          ...(createWhatsAppWarning ? { warning: createWhatsAppWarning } : {}),
         },
         `Created location "${createdLocation.title}".`,
         { ...result.data, context: createContext },
@@ -116,12 +75,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
     case "update_location": {
       const locationId = requiredString(args, "location_id");
       const updateFields = omit(args, ["location_id"]) as Record<string, unknown>;
-      const touchesNotificationPhone = Object.prototype.hasOwnProperty.call(updateFields, "notification_phone");
-      const previousLocationRow = touchesNotificationPhone
-        ? await queryFirst<{ notification_phone: string | null }>(site.db, `
-            SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
-          `, [locationId, site.organizationId, site.siteId])
-        : null;
       const result = await updateLocation(
         site.db,
         site.organizationId,
@@ -132,9 +85,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       );
       assertDomainSuccess(result);
       const updatedLocation = (result.data as { location: LocationRecord }).location;
-      const updateWhatsAppWarning = touchesNotificationPhone
-        ? whatsAppSyncWarning(await syncLocationWhatsAppPhone(site, locationId, previousLocationRow?.notification_phone ?? null))
-        : undefined;
       const updateContext = await mutationContextPayload(site, { locationId });
       return renderStructuredResponse(
         {
@@ -145,7 +95,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           changed_fields: Object.keys(omit(args, ["location_id"])),
           updated_at: updatedLocation.updated_at,
           context: updateContext,
-          ...(updateWhatsAppWarning ? { warning: updateWhatsAppWarning } : {}),
         },
         `Updated "${updatedLocation.title}".`,
         { ...result.data, context: updateContext },

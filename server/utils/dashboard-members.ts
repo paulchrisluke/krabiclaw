@@ -1,7 +1,5 @@
 import { queryAll, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
-import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail } from '~/server/utils/phone-invitations'
-import { formatForDisplay } from '~/utils/phone'
 
 export interface DashboardMemberRow {
   id: string
@@ -21,10 +19,6 @@ export interface DashboardInvitationRow {
   expiresAt: string
   createdAt: string
   inviterName: string | null
-  deliveryStatus: string | null
-  deliveryError: string | null
-  isPhoneInvite: boolean
-  phoneDisplay: string | null
 }
 
 // Shared by server/api/dashboard/members.get.ts and settings/members.vue's SSR
@@ -54,39 +48,19 @@ export async function getOrganizationMembersData(db: DbClient, organizationId: s
     id: string; email: string; role: string | null
     status: string; expiresAt: BetterAuthTimestamp; createdAt: BetterAuthTimestamp
     inviterName: string | null
-    deliveryStatus: string | null
-    deliveryError: string | null
   }>(db, `
     SELECT i.id, i.email, i.role, i.status, i.expiresAt, i.createdAt,
-           u.name as inviterName,
-           (
-             SELECT COALESCE(n.whatsapp_delivery_status, n.status) FROM notifications n
-             WHERE n.related_submission_type = 'invitation' AND n.related_submission_id = i.id
-             ORDER BY n.created_at DESC LIMIT 1
-           ) AS deliveryStatus,
-           (
-             SELECT COALESCE(n.whatsapp_delivery_error, n.error) FROM notifications n
-             WHERE n.related_submission_type = 'invitation' AND n.related_submission_id = i.id
-             ORDER BY n.created_at DESC LIMIT 1
-           ) AS deliveryError
+           u.name as inviterName
     FROM invitation i
     LEFT JOIN user u ON u.id = i.inviterId
     WHERE i.organizationId = ? AND i.status = 'pending'
     ORDER BY i.createdAt DESC
   `, [organizationId])
-  const invitations = invitationRows.map(i => {
-    const digits = phoneDigitsFromInvitationEmail(i.email)
-    return {
-      ...i,
-      expiresAt: betterAuthTimestampToIso(i.expiresAt, 'invitation.expiresAt'),
-      createdAt: betterAuthTimestampToIso(i.createdAt, 'invitation.createdAt'),
-      isPhoneInvite: isPhoneInvitationEmail(i.email),
-      // Masked display phone for WhatsApp/manager invitations — never expose
-      // the full number in a list response (mirrors the pre-send disclosure
-      // rule used for guest-thread reply confirmations).
-      phoneDisplay: digits ? formatForDisplay(`+${digits}`) : null,
-    }
-  })
+  const invitations = invitationRows.map(i => ({
+    ...i,
+    expiresAt: betterAuthTimestampToIso(i.expiresAt, 'invitation.expiresAt'),
+    createdAt: betterAuthTimestampToIso(i.createdAt, 'invitation.createdAt'),
+  }))
 
   return { members, invitations }
 }

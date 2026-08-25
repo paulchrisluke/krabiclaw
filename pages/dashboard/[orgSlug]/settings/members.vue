@@ -98,33 +98,6 @@
                 :description="roleUpdateError"
               />
 
-              <UAlert
-                v-if="pendingRemoval && pendingRemoval.memberId === member.id"
-                color="warning"
-                variant="soft"
-                icon="i-lucide-triangle-alert"
-              >
-                <template #title>
-                  Removing {{ member.name || member.email }} will also clear these WhatsApp notification assignments
-                </template>
-                <template #description>
-                  <ul class="mt-1 list-disc pl-4 text-sm">
-                    <li v-for="(assignment, index) in pendingRemoval.assignments" :key="index">
-                      {{ assignment.locationName ? `${assignment.siteName} · ${assignment.locationName}` : `${assignment.siteName} (site-wide)` }}
-                    </li>
-                  </ul>
-                  <div class="mt-3 flex items-center gap-2">
-                    <UButton
-                      label="Clear assignments and remove"
-                      color="error"
-                      size="xs"
-                      :loading="removingMemberId === member.id"
-                      @click="confirmRemoveMember(member.id)"
-                    />
-                    <UButton label="Cancel" color="neutral" variant="ghost" size="xs" @click="pendingRemoval = null" />
-                  </div>
-                </template>
-              </UAlert>
             </div>
           </div>
 
@@ -170,7 +143,7 @@
               <div class="flex items-center justify-between gap-4">
                 <div class="min-w-0">
                   <p class="truncate font-medium text-highlighted">
-                    {{ invitation.isPhoneInvite ? `WhatsApp · ${invitation.phoneDisplay}` : invitation.email }}
+                    {{ invitation.email }}
                   </p>
                   <p class="truncate text-sm text-muted">
                     Invited by {{ invitation.inviterName || 'team member' }} · Expires {{ formatDate(invitation.expiresAt) }}
@@ -178,14 +151,7 @@
                 </div>
                 <div class="flex items-center gap-2">
                   <UBadge :label="invitation.role || 'member'" color="neutral" variant="soft" class="capitalize" />
-                  <UBadge
-                    v-if="invitation.isPhoneInvite"
-                    :label="deliveryLabel(invitation.deliveryStatus)"
-                    :color="deliveryColor(invitation.deliveryStatus)"
-                    variant="soft"
-                  />
                   <UButton
-                    v-if="!invitation.isPhoneInvite"
                     icon="i-lucide-x"
                     color="neutral"
                     variant="ghost"
@@ -196,54 +162,6 @@
                   />
                 </div>
               </div>
-
-              <div v-if="invitation.isPhoneInvite" class="flex flex-wrap items-center gap-2">
-                <UButton
-                  label="Retry"
-                  icon="i-lucide-refresh-cw"
-                  color="neutral"
-                  variant="soft"
-                  size="xs"
-                  :loading="invitationActionId === invitation.id && invitationAction === 'retry'"
-                  @click="retryInvitation(invitation.id)"
-                />
-                <UButton
-                  label="Replace number"
-                  icon="i-lucide-phone"
-                  color="neutral"
-                  variant="soft"
-                  size="xs"
-                  @click="toggleReplaceForm(invitation.id)"
-                />
-                <UButton
-                  label="Clear"
-                  icon="i-lucide-x"
-                  color="error"
-                  variant="soft"
-                  size="xs"
-                  :loading="invitationActionId === invitation.id && invitationAction === 'clear'"
-                  @click="clearInvitation(invitation.id)"
-                />
-              </div>
-
-              <div v-if="replaceFormInvitationId === invitation.id" class="flex items-center gap-2">
-                <UInput v-model="replacePhone" placeholder="+66 81 234 5678" size="xs" class="max-w-56" />
-                <UButton
-                  label="Save"
-                  color="primary"
-                  size="xs"
-                  :loading="invitationActionId === invitation.id && invitationAction === 'replace'"
-                  @click="replaceInvitation(invitation.id)"
-                />
-                <UButton label="Cancel" color="neutral" variant="ghost" size="xs" @click="replaceFormInvitationId = null" />
-              </div>
-
-              <UAlert
-                v-if="invitationActionError && invitationActionErrorId === invitation.id"
-                color="error"
-                variant="soft"
-                :description="invitationActionError"
-              />
             </div>
           </div>
 
@@ -373,19 +291,6 @@ interface InvitationRow {
   expiresAt: string
   createdAt: string
   inviterName: string | null
-  isPhoneInvite: boolean
-  phoneDisplay: string | null
-  deliveryStatus: string | null
-  deliveryError: string | null
-}
-
-interface PhoneAssignment {
-  kind: 'location' | 'site'
-  organizationId: string
-  siteId: string
-  siteName: string | null
-  locationId: string | null
-  locationName: string | null
 }
 
 const isMembersResponse = (
@@ -398,6 +303,7 @@ const isMembersResponse = (
   && value.invitations.every(invitation => isRecord(invitation) && typeof invitation.id === 'string')
 
 const route = useRoute()
+const dashboard = useDashboardSite()
 const requestEvent = useRequestEvent()
 const membersKey = computed(() => `dashboard-org-members-${String(route.params.orgSlug ?? '')}`)
 
@@ -476,8 +382,8 @@ const inviteSuccessTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 // Editor invites are always scoped to a site team (and optionally a single
 // location team), so the invite form must collect that scope up front rather
 // than leaving a new editor with no access to anything.
-interface OrgSiteSummary { id: string; brand_name: string | null; subdomain: string | null }
-interface OrgLocationSummary { id: string; title: string }
+interface OrgSiteSummary { id: string; team_id: string | null; brand_name: string | null; subdomain: string | null }
+interface OrgLocationSummary { id: string; team_id: string | null; title: string }
 
 const sitesPending = ref(false)
 const orgSites = ref<OrgSiteSummary[]>([])
@@ -508,7 +414,11 @@ async function loadOrgSites() {
       validate: (value): value is { sites: OrgSiteSummary[] } =>
         isRecord(value)
         && Array.isArray(value.sites)
-        && value.sites.every(site => isRecord(site) && typeof site.id === 'string'),
+        && value.sites.every(site =>
+          isRecord(site)
+          && typeof site.id === 'string'
+          && (site.team_id === null || typeof site.team_id === 'string'),
+        ),
     })
     if (requestId !== sitesRequestId) return
     orgSites.value = response.sites ?? []
@@ -545,7 +455,8 @@ watch(() => inviteForm.siteId, async (siteId) => {
           && value.locations.every(location =>
             isRecord(location)
             && typeof location.id === 'string'
-            && typeof location.title === 'string',
+            && typeof location.title === 'string'
+            && (location.team_id === null || typeof location.team_id === 'string'),
           ),
       },
     )
@@ -576,7 +487,6 @@ const removingMemberId = ref<string | null>(null)
 const cancellingInviteId = ref<string | null>(null)
 const memberError = ref<string | null>(null)
 const pendingInvitationError = ref<string | null>(null)
-const pendingRemoval = ref<{ memberId: string; assignments: PhoneAssignment[] } | null>(null)
 
 const editingRoleMemberId = ref<string | null>(null)
 const memberRoleForm = reactive({ siteId: '', locationId: '' })
@@ -616,7 +526,8 @@ watch(() => memberRoleForm.siteId, async (siteId) => {
           && value.locations.every(location =>
             isRecord(location)
             && typeof location.id === 'string'
-            && typeof location.title === 'string',
+            && typeof location.title === 'string'
+            && (location.team_id === null || typeof location.team_id === 'string'),
           ),
       },
     )
@@ -682,102 +593,6 @@ async function submitRoleChange(member: MemberRow, role: string, scope?: { siteI
   }
 }
 
-const invitationActionId = ref<string | null>(null)
-const invitationAction = ref<'retry' | 'replace' | 'clear' | null>(null)
-const invitationActionError = ref<string | null>(null)
-const invitationActionErrorId = ref<string | null>(null)
-const replaceFormInvitationId = ref<string | null>(null)
-const replacePhone = ref('')
-
-function deliveryLabel(status: string | null): string {
-  if (status === 'sent') return 'Sent'
-  if (status === 'failed') return 'Failed'
-  return 'Sending…'
-}
-
-function deliveryColor(status: string | null): 'success' | 'error' | 'neutral' {
-  if (status === 'sent') return 'success'
-  if (status === 'failed') return 'error'
-  return 'neutral'
-}
-
-function toggleReplaceForm(invitationId: string) {
-  replaceFormInvitationId.value = replaceFormInvitationId.value === invitationId ? null : invitationId
-  replacePhone.value = ''
-  invitationActionError.value = null
-}
-
-async function retryInvitation(invitationId: string) {
-  invitationActionId.value = invitationId
-  invitationAction.value = 'retry'
-  invitationActionError.value = null
-  invitationActionErrorId.value = null
-  try {
-    await dashboardApi(`/api/dashboard/invitations/${invitationId}/retry`, {
-      method: 'POST',
-      validate: (value): value is { success: true; status: string } =>
-        isRecord(value) && value.success === true && typeof value.status === 'string',
-    })
-    await refresh()
-  } catch (err: unknown) {
-    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
-      ? err.data.error
-      : err instanceof Error ? err.message : 'Failed to resend the invitation.'
-    invitationActionErrorId.value = invitationId
-  } finally {
-    invitationActionId.value = null
-    invitationAction.value = null
-  }
-}
-
-async function replaceInvitation(invitationId: string) {
-  if (!replacePhone.value.trim()) return
-  invitationActionId.value = invitationId
-  invitationAction.value = 'replace'
-  invitationActionError.value = null
-  invitationActionErrorId.value = null
-  try {
-    await dashboardApi(`/api/dashboard/invitations/${invitationId}/replace`, {
-      method: 'POST',
-      body: { phone: replacePhone.value.trim() },
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
-    })
-    replaceFormInvitationId.value = null
-    replacePhone.value = ''
-    await refresh()
-  } catch (err: unknown) {
-    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
-      ? err.data.error
-      : err instanceof Error ? err.message : 'Failed to replace the phone number.'
-    invitationActionErrorId.value = invitationId
-  } finally {
-    invitationActionId.value = null
-    invitationAction.value = null
-  }
-}
-
-async function clearInvitation(invitationId: string) {
-  invitationActionId.value = invitationId
-  invitationAction.value = 'clear'
-  invitationActionError.value = null
-  invitationActionErrorId.value = null
-  try {
-    await dashboardApi(`/api/dashboard/invitations/${invitationId}/clear`, {
-      method: 'POST',
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
-    })
-    await refresh()
-  } catch (err: unknown) {
-    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
-      ? err.data.error
-      : err instanceof Error ? err.message : 'Failed to clear this invitation.'
-    invitationActionErrorId.value = invitationId
-  } finally {
-    invitationActionId.value = null
-    invitationAction.value = null
-  }
-}
-
 async function sendInvite() {
   if (inviteForm.role === 'editor' && !inviteForm.siteId) {
     inviteError.value = 'Pick a site for this editor before sending.'
@@ -788,20 +603,21 @@ async function sendInvite() {
   inviteSuccess.value = false
 
   try {
-    await dashboardApi('/api/dashboard/invitations', {
-      method: 'POST',
-      body: {
-        email: inviteForm.email,
-        role: inviteForm.role as 'member' | 'admin' | 'editor' | 'owner',
-        siteId: inviteForm.role === 'editor' ? inviteForm.siteId : undefined,
-        locationId: inviteForm.role === 'editor' ? inviteForm.locationId || null : undefined,
-      },
-      validate: (value): value is { success: true; invitationId: string; reused: boolean } =>
-        isRecord(value)
-        && value.success === true
-        && typeof value.invitationId === 'string'
-        && typeof value.reused === 'boolean',
+    const organizationId = dashboard.organization.value?.id
+    if (!organizationId) throw new Error('Organization context is unavailable')
+    const selectedSite = orgSites.value.find(site => site.id === inviteForm.siteId)
+    const selectedLocation = orgLocations.value.find(location => location.id === inviteForm.locationId)
+    const teamId = inviteForm.role === 'editor'
+      ? selectedLocation?.team_id || selectedSite?.team_id || undefined
+      : undefined
+    if (inviteForm.role === 'editor' && !teamId) throw new Error('The selected site or location has no Better Auth team')
+    const result = await authClient.organization.inviteMember({
+      email: inviteForm.email,
+      role: inviteForm.role as 'member' | 'admin' | 'editor' | 'owner',
+      organizationId,
+      teamId,
     })
+    if (result.error) throw new Error(result.error.message || 'Failed to send invite.')
 
     inviteForm.email = ''
     inviteForm.role = 'member'
@@ -840,46 +656,24 @@ async function cancelInvitation(invitationId: string) {
   }
 }
 
-// Routes through a dedicated server endpoint rather than calling
-// authClient.organization.removeMember directly — Better Auth's org-plugin
-// after-hook can't block/veto, so this server route is the only place that
-// can check for active WhatsApp notification assignments before removing a
-// scoped editor and require a deliberate confirm-and-clear step (issue
-// #293 Section H).
-async function submitRemoveMember(memberId: string, options?: { confirmed?: boolean }) {
+async function removeMember(memberId: string) {
   removingMemberId.value = memberId
   memberError.value = null
 
   try {
-    await dashboardApi(`/api/dashboard/organizations/members/${memberId}/remove`, {
-      method: 'POST',
-      body: options?.confirmed ? { action: 'clear', confirmed: true } : {},
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    const organizationId = dashboard.organization.value?.id
+    if (!organizationId) throw new Error('Organization context is unavailable')
+    const { error } = await authClient.organization.removeMember({
+      memberIdOrEmail: memberId,
+      organizationId,
     })
-    pendingRemoval.value = null
+    if (error) throw new Error(error.message || 'Failed to remove member.')
     await refresh()
   } catch (err: unknown) {
-    const errorData = err instanceof ApiClientError ? err.data : {}
-    const assignments = Array.isArray(errorData.assignments) ? errorData.assignments as PhoneAssignment[] : null
-    if (errorData.requiresConfirmation === true && assignments) {
-      pendingRemoval.value = { memberId, assignments }
-    } else {
-      pendingRemoval.value = null
-      memberError.value = typeof errorData.error === 'string'
-        ? errorData.error
-        : err instanceof Error ? err.message : 'Failed to remove member.'
-    }
+    memberError.value = err instanceof Error ? err.message : 'Failed to remove member.'
   } finally {
     removingMemberId.value = null
   }
-}
-
-async function removeMember(memberId: string) {
-  await submitRemoveMember(memberId)
-}
-
-async function confirmRemoveMember(memberId: string) {
-  await submitRemoveMember(memberId, { confirmed: true })
 }
 
 function formatDate(value: string) {
