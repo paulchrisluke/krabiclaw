@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
 
     // Get business locations
     const locations = await queryAll<ApiValue>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.hero_media_asset_id, ma.public_url, ma.thumbnail_url, ma.kind
+      SELECT bl.id, bl.team_id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.hero_media_asset_id, ma.public_url, ma.thumbnail_url, ma.kind
       FROM business_locations bl
       LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
         AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id

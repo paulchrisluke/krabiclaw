@@ -554,20 +554,6 @@ export const invitation = sqliteTable("invitation", {
 	uniqueIndex("idx_invitation_org_email_pending_unique").on(table.organizationId, sql`lower(${table.email})`).where(sql`status = 'pending'`),
 ]);
 
-export const invitation_access_scope = sqliteTable("invitation_access_scope", {
-	id: text().primaryKey(),
-	invitation_id: text().notNull().references(() => invitation.id, { onDelete: "cascade" }),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
-	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
-	grant_source: text().default("manual").notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	uniqueIndex("idx_invitation_access_scope_unique").on(table.invitation_id, table.site_id, table.location_id),
-	uniqueIndex("idx_invitation_access_scope_site_unique").on(table.invitation_id, table.site_id).where(sql`location_id IS NULL`),
-	index("idx_invitation_access_scope_invitation_id").on(table.invitation_id),
-]);
-
 export const jwks = sqliteTable("jwks", {
 	id: text().primaryKey(),
 	publicKey: text().notNull(),

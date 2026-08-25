@@ -27,6 +27,7 @@ interface DashboardSite {
 
 interface DashboardSiteSummary {
   id: string
+  team_id: string | null
   brand_name: string | null
   subdomain: string | null
   vertical: 'restaurant' | 'experience' | 'service' | 'professional_service' | null
@@ -97,6 +98,7 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
   && value.sites.every(site =>
     isRecord(site)
     && typeof site.id === 'string'
+    && (site.team_id === null || typeof site.team_id === 'string')
     && (site.brand_name === null || typeof site.brand_name === 'string')
     && (site.subdomain === null || typeof site.subdomain === 'string')
     && (site.logo_url === null || typeof site.logo_url === 'string')

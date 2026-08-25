@@ -380,6 +380,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
 
 export interface DashboardSiteSummaryRow {
   id: string
+  team_id: string | null
   brand_name: string | null
   subdomain: string | null
   vertical: string | null
@@ -424,7 +425,7 @@ export async function listOrganizationSites(
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
   const rows = await queryAll<DashboardSiteSummaryRow & Omit<DashboardPreviewSource, 'hero_kind' | 'hero_public_url' | 'hero_thumbnail_url'>>(db, `
-    SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.status,
+    SELECT s.id, s.team_id, s.brand_name, s.subdomain, s.vertical, s.status,
            s.onboarding_status, s.plan, s.theme_id,
            COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
            json_extract(s.settings, '$.favicon_url') AS favicon_url,
@@ -497,6 +498,7 @@ export async function listOrganizationSites(
     }, origin).url
     return {
       id: row.id,
+      team_id: row.team_id,
       brand_name: row.brand_name,
       subdomain: row.subdomain,
       vertical: row.vertical,

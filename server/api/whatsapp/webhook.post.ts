@@ -700,10 +700,6 @@ function formatStatusError(errors: WhatsAppStatusError[] | undefined): string | 
   }
 }
 
-// Meta status webhooks (value.statuses[]) reference outbound messages by
-// provider_message_id, not by anything tied to a manager/session — a failed
-// or missing lookup here must never touch member/scope/OTP state (see
-// server/utils/whatsapp-access.ts, untouched by this function).
 async function handleStatus(db: D1Database, status: WhatsAppStatus): Promise<void> {
   const providerMessageId = status.id
   const incomingStatus = status.status

@@ -66,7 +66,6 @@ export const SITE_TRANSFER_RETAIN_TABLES = [
 export const SITE_TRANSFER_REVOKE_TABLES = [
   'facebook_pages_connections',
   'google_analytics_connections',
-  'invitation_access_scope',
   'mcp_workspace_preferences',
 ] as const
 
