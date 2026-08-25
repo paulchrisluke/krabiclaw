@@ -230,7 +230,7 @@ export async function listPlatformAdminUsers(authApi: AdminApi, headers: Headers
   }
 }
 
-async function findUserByEmail(authApi: AdminApi, headers: HeadersInit, email: string): Promise<PlatformAdminUser | null> {
+export async function findPlatformUserByEmail(authApi: AdminApi, headers: HeadersInit, email: string): Promise<PlatformAdminUser | null> {
   const result = await listPlatformUsers(authApi, headers, {
     search: email,
     limit: 10,
@@ -248,7 +248,7 @@ export async function addPlatformAdminUser(
   const name = input.name?.trim()
   if (!email) throw new HTTPError({ statusCode: 400, statusMessage: 'Email is required' })
 
-  const existing = await findUserByEmail(authApi, headers, email)
+  const existing = await findPlatformUserByEmail(authApi, headers, email)
   if (existing) {
     if (hasPlatformAdminPermission(existing.role)) {
       throw new HTTPError({ statusCode: 409, statusMessage: 'This user is already an admin' })
