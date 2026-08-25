@@ -8,16 +8,21 @@ import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
 import { ONBOARDING_TOOLS } from '../../server/utils/mcp-tools/onboarding.ts'
+import { SITES_TOOLS } from '../../server/utils/mcp-tools/sites.ts'
 import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
 import { CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/index.ts'
 import { MEDIA_CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/media.ts'
 import { PostValidationError, validatePostInput } from '../../server/utils/post-management.ts'
 import { normalizeMenuItemArgs } from '../../server/utils/mcp-executor/shared.ts'
+import { INTEGRATIONS_TOOLS } from '../../server/utils/mcp-tools/integrations.ts'
+import { publishToPage } from '../../server/utils/facebook-pages.ts'
+import { handleMediaTools } from '../../server/utils/mcp-executor/media.ts'
 
 type ToolContract = {
   name: string
+  confirmRequired?: boolean
   inputSchema: { required?: readonly string[], properties?: Record<string, unknown>, additionalProperties?: boolean, oneOf?: unknown[] }
-  outputSchema?: { properties?: Record<string, unknown> }
+  outputSchema?: { properties?: Record<string, unknown>, required?: readonly string[] }
 }
 
 function tool(tools: readonly unknown[], name: string): ToolContract {
@@ -104,6 +109,24 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
     ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'],
   )
 
+  const importMenu = tool(MEDIA_TOOLS, 'import_menu_from_media')
+  assert.equal(importMenu.confirmRequired, true)
+  assert.deepEqual(importMenu.inputSchema.required, ['asset_id', 'menu_name'])
+  assert.deepEqual(Object.keys(importMenu.outputSchema?.properties ?? {}), [
+    'menuId',
+    'count',
+    'warning',
+    'creditsRemaining',
+  ])
+  assert.deepEqual(importMenu.outputSchema?.required, [
+    'menuId',
+    'count',
+    'warning',
+    'creditsRemaining',
+  ])
+
+  assert.equal(tool(SITES_TOOLS, 'create_site').confirmRequired, true)
+
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'open_video_upload'), false)
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name.startsWith('open_') && candidate.name.includes('upload')), false)
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'set_media'), true)
@@ -144,6 +167,61 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.match(upload.description, /native ChatGPT file argument/i)
   assert.match(upload.description, /never pass a bare file_id/i)
   assert.match(upload.description, /one download attempt/i)
+})
+
+test('menu import rejects a missing menu name before any external work', async (t) => {
+  let fetchCalls = 0
+  t.mock.method(globalThis, 'fetch', async () => {
+    fetchCalls += 1
+    throw new Error('fetch must not run')
+  })
+  const db = new Proxy({}, {
+    get() {
+      throw new Error('database must not be touched')
+    },
+  })
+
+  await assert.rejects(
+    () => handleMediaTools({
+      toolName: 'import_menu_from_media',
+      args: { asset_id: 'asset-1' },
+      site: {
+        db,
+        env: {},
+        organizationId: 'org-1',
+        siteId: 'site-1',
+        userId: 'user-1',
+      },
+    } as Parameters<typeof handleMediaTools>[0]),
+    /Invalid menu_name/,
+  )
+  assert.equal(fetchCalls, 0)
+})
+
+test('Facebook publication is immediate and has no persisted-draft argument', async (t) => {
+  const publish = tool(INTEGRATIONS_TOOLS, 'publish_to_facebook')
+  assert.equal(publish.inputSchema.properties?.published, undefined)
+
+  let requestBody: Record<string, unknown> | null = null
+  t.mock.method(globalThis, 'fetch', async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+    return new Response(JSON.stringify({ id: 'facebook-post-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  })
+
+  const result = await publishToPage('page-token', 'page-id', {
+    message: 'Open this weekend',
+    link: 'https://example.com/weekend',
+  })
+
+  assert.deepEqual(result, { id: 'facebook-post-1' })
+  assert.deepEqual(requestBody, {
+    message: 'Open this weekend',
+    link: 'https://example.com/weekend',
+    published: true,
+  })
 })
 
 test('media placement contract does not reintroduce entity-specific assignment tools', () => {

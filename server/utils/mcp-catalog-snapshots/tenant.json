@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:ed4ec066f08d44b56ad1fa5b0dbdd14e1baad66b3681fd62d88991a171ee8d9f",
+  "fingerprint": "sha256:d1511a9020fc152a99695823b7e06d4c9a638f5db1e5f1b6cdd088d1cd6a88b5",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -564,6 +564,13 @@
               "null"
             ]
           },
+          "scheduled_for": {
+            "description": "Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "seo_description": {
             "type": "string"
           },
@@ -872,10 +879,8 @@
               },
               "status": {
                 "enum": [
-                  "draft",
                   "published",
-                  "scheduled",
-                  "archived"
+                  "scheduled"
                 ],
                 "type": "string"
               },
@@ -3016,10 +3021,8 @@
               },
               "status": {
                 "enum": [
-                  "draft",
                   "published",
-                  "scheduled",
-                  "archived"
+                  "scheduled"
                 ],
                 "type": "string"
               },
@@ -4669,10 +4672,8 @@
               },
               "status": {
                 "enum": [
-                  "draft",
                   "published",
-                  "scheduled",
-                  "archived"
+                  "scheduled"
                 ],
                 "type": "string"
               },
@@ -5587,9 +5588,9 @@
                 },
                 "status": {
                   "enum": [
-                    "draft",
-                    "live",
-                    "paused"
+                    "active",
+                    "inactive",
+                    "suspended"
                   ],
                   "type": "string"
                 },
@@ -5733,35 +5734,39 @@
           }
         },
         "required": [
-          "asset_id"
+          "asset_id",
+          "menu_name"
         ],
         "type": "object"
       },
       "outputSchema": {
         "properties": {
-          "items_created": {
+          "count": {
             "description": "Number of menu items extracted and created.",
             "type": "number"
           },
-          "menu": {
-            "description": "Created menu.",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "name"
-            ],
-            "type": "object"
+          "creditsRemaining": {
+            "type": "number"
+          },
+          "menuId": {
+            "description": "Created menu ID, or null when no items were detected.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "warning": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
-          "menu"
+          "menuId",
+          "count",
+          "warning",
+          "creditsRemaining"
         ],
         "type": "object"
       }
@@ -5983,7 +5988,6 @@
           },
           "status": {
             "enum": [
-              "draft",
               "published",
               "scheduled"
             ],
@@ -6179,10 +6183,8 @@
                 },
                 "status": {
                   "enum": [
-                    "draft",
                     "published",
-                    "scheduled",
-                    "archived"
+                    "scheduled"
                   ],
                   "type": "string"
                 },
@@ -6988,6 +6990,10 @@
             "type": "string"
           },
           "status": {
+            "enum": [
+              "published",
+              "scheduled"
+            ],
             "type": "string"
           }
         },
@@ -7251,10 +7257,8 @@
                 },
                 "status": {
                   "enum": [
-                    "draft",
                     "published",
-                    "scheduled",
-                    "archived"
+                    "scheduled"
                   ],
                   "type": "string"
                 },
@@ -7528,9 +7532,9 @@
                 },
                 "status": {
                   "enum": [
-                    "draft",
-                    "live",
-                    "paused"
+                    "active",
+                    "inactive",
+                    "suspended"
                   ],
                   "type": "string"
                 },
@@ -8269,10 +8273,8 @@
               },
               "status": {
                 "enum": [
-                  "draft",
                   "published",
-                  "scheduled",
-                  "archived"
+                  "scheduled"
                 ],
                 "type": "string"
               },
@@ -8459,10 +8461,6 @@
           "message": {
             "description": "Post text content.",
             "type": "string"
-          },
-          "published": {
-            "description": "Publish immediately (true, default). Pass false to save as draft.",
-            "type": "boolean"
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -8784,10 +8782,8 @@
                 },
                 "status": {
                   "enum": [
-                    "draft",
                     "published",
-                    "scheduled",
-                    "archived"
+                    "scheduled"
                   ],
                   "type": "string"
                 },
@@ -8975,7 +8971,7 @@
         "additionalProperties": false,
         "properties": {
           "content_blocks": {
-            "description": "Canonical ordered article blocks, replacing the complete draft block set.",
+            "description": "Canonical ordered article blocks, replacing the complete block set.",
             "items": {
               "properties": {
                 "data": {
@@ -9303,10 +9299,8 @@
               },
               "status": {
                 "enum": [
-                  "draft",
                   "published",
-                  "scheduled",
-                  "archived"
+                  "scheduled"
                 ],
                 "type": "string"
               },
@@ -9646,12 +9640,12 @@
         "properties": {
           "candidate": {
             "additionalProperties": true,
-            "description": "The exact draft or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.",
+            "description": "The exact article or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.",
             "type": "object"
           },
           "candidate_type": {
             "enum": [
-              "blog_draft",
+              "blog_article",
               "image_brief"
             ],
             "type": "string"
@@ -9865,7 +9859,7 @@
               },
               "candidate_type": {
                 "enum": [
-                  "blog_draft",
+                  "blog_article",
                   "image_brief"
                 ],
                 "type": "string"
@@ -10747,9 +10741,9 @@
                 },
                 "status": {
                   "enum": [
-                    "draft",
-                    "live",
-                    "paused"
+                    "active",
+                    "inactive",
+                    "suspended"
                   ],
                   "type": "string"
                 },
@@ -11607,369 +11601,6 @@
       }
     },
     {
-      "name": "unpublish_blog_post",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "expected_document_updated_at": {
-            "description": "Exact post.document_updated_at concurrency token from the latest get_blog_post or successful blog mutation.",
-            "type": "string"
-          },
-          "expected_updated_at": {
-            "description": "Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.",
-            "type": "string"
-          },
-          "post_id": {
-            "description": "Post id or slug.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "post_id",
-          "expected_updated_at",
-          "expected_document_updated_at"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "post": {
-            "additionalProperties": false,
-            "properties": {
-              "admin_edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "author_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "category": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "content_blocks": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "level": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "parent_block_id": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "position": {
-                      "type": "number"
-                    },
-                    "type": {
-                      "enum": [
-                        "heading",
-                        "markdown",
-                        "image",
-                        "gallery",
-                        "faq",
-                        "how_to",
-                        "divider",
-                        "ai_assistance",
-                        "cta",
-                        "callout"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "parent_block_id",
-                    "type",
-                    "position",
-                    "level",
-                    "data"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "created_at": {
-                "type": "string"
-              },
-              "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
-                "type": "string"
-              },
-              "edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "excerpt": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "featured_image": {
-                "additionalProperties": false,
-                "properties": {
-                  "asset_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "height": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  },
-                  "kind": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "public_url": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "width": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  }
-                },
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "featured_order": {
-                "description": "Sort position in featured/homepage placements, independent of nav ordering.",
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hide_from_nav": {
-                "description": "Excludes this post from nav rendering only. Does NOT deindex it or remove it from the sitemap — use robots=\"noindex,...\" for that.",
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "nav_order": {
-                "description": "Sort position within its section. Lower sorts first.",
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "nav_section": {
-                "description": "Top-level sidebar section label for this site's blog. Falls back to category if unset. Does not affect the public URL.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "nav_section_order": {
-                "description": "Sort position of the section itself among all sections.",
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "nav_title": {
-                "description": "Sidebar label override. Falls back to the post title if unset. Does not affect the public URL.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "preview_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_path": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "published": {
-                "type": "boolean"
-              },
-              "published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "scheduled_for": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "site_author_id": {
-                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "slug": {
-                "type": "string"
-              },
-              "status": {
-                "enum": [
-                  "draft",
-                  "published",
-                  "scheduled",
-                  "archived"
-                ],
-                "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "title": {
-                "type": "string"
-              },
-              "updated_at": {
-                "type": "string"
-              },
-              "view_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "visibility": {
-                "enum": [
-                  "public",
-                  "unlisted"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "title",
-              "slug",
-              "excerpt",
-              "category",
-              "tags",
-              "nav_section",
-              "nav_title",
-              "nav_order",
-              "nav_section_order",
-              "hide_from_nav",
-              "featured_order",
-              "seo_title",
-              "seo_description",
-              "seo_keywords",
-              "canonical_url",
-              "robots",
-              "author_name",
-              "site_author_id",
-              "published",
-              "published_at",
-              "status",
-              "visibility",
-              "scheduled_for",
-              "created_at",
-              "updated_at",
-              "featured_image",
-              "admin_edit_url",
-              "edit_url",
-              "public_path",
-              "public_url",
-              "preview_url",
-              "view_url",
-              "content_blocks",
-              "document_updated_at"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "post"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "update_blog_metadata",
       "inputSchema": {
         "additionalProperties": false,
@@ -12372,10 +12003,8 @@
               },
               "status": {
                 "enum": [
-                  "draft",
                   "published",
-                  "scheduled",
-                  "archived"
+                  "scheduled"
                 ],
                 "type": "string"
               },
@@ -12463,7 +12092,7 @@
             "type": "string"
           },
           "content_blocks": {
-            "description": "Canonical ordered article blocks. Sending this replaces the complete draft block snapshot.",
+            "description": "Canonical ordered article blocks. Sending this replaces the complete block snapshot.",
             "items": {
               "properties": {
                 "data": {
@@ -12864,10 +12493,8 @@
               },
               "status": {
                 "enum": [
-                  "draft",
                   "published",
-                  "scheduled",
-                  "archived"
+                  "scheduled"
                 ],
                 "type": "string"
               },
@@ -14902,7 +14529,7 @@
       }
     },
     {
-      "name": "update_tenant_page_draft",
+      "name": "update_tenant_page",
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
@@ -15149,9 +14776,8 @@
             "type": "string"
           },
           "status": {
-            "description": "Lifecycle status of the locale.",
+            "description": "Published exposes the locale publicly; disabled hides it. New non-source locales default to disabled.",
             "enum": [
-              "draft",
               "published",
               "disabled"
             ],

@@ -17,12 +17,12 @@ export interface SeedTenantPageLocaleField {
   value?: string | null
   heroTitle?: string | null
   heroSubtitle?: string | null
-  status: 'draft' | 'published' | 'stale'
+  status: 'published' | 'stale'
 }
 
 interface SeedTenantPageLocale {
   locale: string
-  status: 'draft' | 'published' | 'disabled'
+  status: 'published' | 'disabled'
 }
 
 type SqlValue = (_value: string | number | boolean | null) => string
@@ -137,8 +137,12 @@ export function renderTenantPagesSeedSql(input: {
   sqlValue: SqlValue
   sqlJson: SqlJson
 }) {
-  if (!input.locales.some(locale => locale.locale === input.sourceLocale)) {
+  const sourceLocale = input.locales.find(locale => locale.locale === input.sourceLocale)
+  if (!sourceLocale) {
     throw new Error(`Source locale "${input.sourceLocale}" is not configured for this site`)
+  }
+  if (sourceLocale.status !== 'published') {
+    throw new Error(`Source locale "${input.sourceLocale}" must be published`)
   }
   const pages = Array.from(new Set([...input.rows.map(row => row.page), ...(input.pages ?? []), 'home', 'about', 'contact']))
   const chunks: string[] = []

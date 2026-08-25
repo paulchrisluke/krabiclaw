@@ -11,7 +11,7 @@ const password = process.env.LOCAL_MCP_TEST_PASSWORD || ''
 const userId = process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service'
 
 if (!email || !password) {
-  throw new Error('LOCAL_MCP_TEST_EMAIL and LOCAL_MCP_TEST_PASSWORD are required for the manual ChatGPT gate.')
+  throw new Error('LOCAL_MCP_TEST_EMAIL and LOCAL_MCP_TEST_PASSWORD are required for the automated ChatGPT gate.')
 }
 if (password.length < 8) {
   throw new Error('LOCAL_MCP_TEST_PASSWORD must be at least 8 characters.')

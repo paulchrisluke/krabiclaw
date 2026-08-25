@@ -27,7 +27,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       description: 'Create a new site in the caller\'s organization.',
       domain: 'sites',
       minimumRole: 'editor',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         type: 'object',
         properties: {

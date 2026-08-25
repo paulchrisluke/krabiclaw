@@ -1,7 +1,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { getConfiguredSourceLocale, normalizeLocale } from '~/server/utils/site-i18n'
 
-export type SiteLocaleStatus = 'draft' | 'published' | 'disabled'
+export type SiteLocaleStatus = 'published' | 'disabled'
 
 export interface SiteLocale {
   id: string
@@ -26,6 +26,16 @@ export interface SiteLocaleInput {
   is_source?: boolean
 }
 
+export function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) return undefined
+  if (typeof value === 'boolean') return value
+  throw new Error(`${field} must be a boolean.`)
+}
+
+export function validateSiteLocaleInput<T extends { is_source?: unknown }>(input: T): T & { is_source?: boolean } {
+  return { ...input, is_source: optionalBoolean(input.is_source, 'is_source') }
+}
+
 function mapLocale(row: SiteLocaleRow): SiteLocale {
   return {
     ...row,
@@ -34,8 +44,8 @@ function mapLocale(row: SiteLocaleRow): SiteLocale {
 }
 
 function assertStatus(value: unknown): SiteLocaleStatus {
-  if (value === undefined || value === null || value === '') return 'draft'
-  if (value === 'draft' || value === 'published' || value === 'disabled') return value
+  if (value === undefined || value === null || value === '') return 'disabled'
+  if (value === 'published' || value === 'disabled') return value
   throw new Error('Invalid locale status.')
 }
 
@@ -83,14 +93,17 @@ export async function upsertSiteLocale(
   const locale = normalizeLocale(input.locale)
   if (!locale) throw new Error('Invalid locale.')
 
-  const status = input.is_source ? 'published' : assertStatus(input.status)
+  const requestedAsSource = optionalBoolean(input.is_source, 'is_source') === true
+  const sourceLocale = await getSourceLocale(db, organizationId, siteId)
+  const isSource = requestedAsSource || locale === sourceLocale
+  const status = isSource ? 'published' : assertStatus(input.status)
   const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim().slice(0, 80) : null
   const now = new Date().toISOString()
   const id = `locale::${organizationId}::${siteId}::${locale}`
 
   const batch: BatchQuery[] = []
 
-  if (input.is_source) {
+  if (requestedAsSource) {
     batch.push({
       query: `
         INSERT INTO site_config (organization_id, site_id, key, value)
@@ -127,7 +140,7 @@ export async function upsertSiteLocale(
       siteId,
       locale,
       label,
-      input.is_source ? 1 : 0,
+      isSource ? 1 : 0,
       status,
       now,
       now,

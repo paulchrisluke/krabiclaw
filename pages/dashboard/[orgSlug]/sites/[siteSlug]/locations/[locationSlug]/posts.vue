@@ -51,14 +51,14 @@
             <div class="flex items-center justify-between gap-4 border-b border-default bg-elevated px-4 py-2.5">
               <div class="flex items-center gap-3">
                 <UButton
-                  v-for="tab in ['all','published','archived']"
-                  :key="tab"
+                  v-for="tab in postTabs"
+                  :key="tab.value"
                   size="xs"
-                  :variant="activeTab === tab ? 'soft' : 'ghost'"
+                  :variant="activeTab === tab.value ? 'soft' : 'ghost'"
                   color="neutral"
-                  :aria-pressed="activeTab === tab"
-                  @click="activeTab = tab; loadPosts()"
-                >{{ tab }}</UButton>
+                  :aria-pressed="activeTab === tab.value"
+                  @click="activeTab = tab.value; loadPosts()"
+                >{{ tab.label }}</UButton>
               </div>
               <div class="flex items-center gap-2">
                 <UButton v-if="loading" size="xs" color="neutral" variant="ghost" loading />
@@ -122,7 +122,7 @@
                 <p class="truncate text-sm font-medium text-highlighted">{{ post.title || post.body?.slice(0, 60) }}</p>
                 <p class="truncate text-xs text-muted">{{ formatDate(post.updated_at) }}</p>
               </div>
-              <UBadge :color="post.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs" class="shrink-0">{{ post.status }}</UBadge>
+              <UBadge :color="post.status === 'published' ? 'success' : 'warning'" variant="soft" size="xs" class="shrink-0">{{ post.status === 'published' ? 'Live' : 'Scheduled' }}</UBadge>
             </div>
           </div>
         </div>
@@ -154,6 +154,7 @@
             body-placeholder="What's the post about?"
             :body-rows="6"
             :publish-label="selectedChannels.length > 1 ? `Publish to ${selectedChannels.length} channels` : 'Publish'"
+            :save-label="selectedPost ? 'Save live changes' : 'Publish to website'"
             @save="handleSave"
             @publish="handlePublish"
             @delete="handleDelete"
@@ -208,7 +209,12 @@ const loading = ref(false)
 const postsLoadError = ref<string | null>(null)
 const facebookLoadError = ref<string | null>(null)
 const facebookConnected = ref(false)
-const activeTab = ref('all')
+const postTabs = [
+  { value: 'all', label: 'All' },
+  { value: 'published', label: 'Live' },
+  { value: 'scheduled', label: 'Scheduled' },
+] as const
+const activeTab = ref<(typeof postTabs)[number]['value']>('all')
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 let postsLoadGeneration = 0
 const isPostsResponse = (value: unknown): value is { posts: ApiRecord[] } =>

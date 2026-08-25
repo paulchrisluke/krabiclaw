@@ -64,15 +64,15 @@ test('image guidance review rejects raw base64 transport and local file paths', 
   assert.ok(result.review.findings.some(finding => /file reference/i.test(finding.message)))
 })
 
-test('blog guidance review passes a minimal canonical content_blocks draft', async () => {
+test('blog guidance review passes a minimal canonical article', async () => {
   const result = await reviewAgentGuidanceCandidate({
     task: 'blog.write',
-    candidateType: 'blog_draft',
+    candidateType: 'blog_article',
     surface: 'platform_mcp',
     candidate: {
       title: 'How Restaurant Websites Turn Searches Into Reservations',
       content_blocks: [
-        { type: 'markdown', data: { markdown: 'A useful draft for human review.' } },
+        { type: 'markdown', data: { markdown: 'A useful article for human review.' } },
       ],
     },
   })

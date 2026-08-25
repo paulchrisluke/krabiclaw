@@ -29,7 +29,6 @@ export const INTEGRATIONS_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         message: { type: 'string', description: 'Post text content.' },
         link: { type: 'string', description: 'Optional URL to attach to the post.' },
-        published: { type: 'boolean', description: 'Publish immediately (true, default). Pass false to save as draft.' },
       },
       required: ['message'],
       outputSchema: {

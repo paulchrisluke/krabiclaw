@@ -9,7 +9,7 @@ import {
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
-import { getTenantPageForEditorByPath, updateTenantPageDraft } from '~/server/utils/tenant-pages'
+import { getTenantPageForEditorByPath, updateTenantPage } from '~/server/utils/tenant-pages'
 import { materializeTenantFavicon } from '~/server/utils/favicon-derivative'
 import { deleteFromR2 } from '~/server/utils/cloudflare-r2'
 import { syncPostCoverMedia } from '~/server/utils/post-management'
@@ -158,7 +158,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
     case 'home_hero': {
       if (input.target.location_id) throw new HTTPError({ statusCode: 400, statusMessage: 'Home hero media is site-scoped.' })
       const home = await getTenantPageForEditorByPath(db, input.siteId, '/')
-      await updateTenantPageDraft(db, home.id, {
+      await updateTenantPage(db, home.id, {
         userId: null,
         scope: { siteId: input.siteId, organizationId: input.organizationId },
         data: {
@@ -182,7 +182,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
     case 'about_story_image': {
       const page = input.target.type === 'home_story_image' ? 'home' : 'about'
       const canonicalPage = await getTenantPageForEditorByPath(db, input.siteId, page === 'home' ? '/' : '/about')
-      await updateTenantPageDraft(db, canonicalPage.id, {
+      await updateTenantPage(db, canonicalPage.id, {
         userId: null,
         scope: { siteId: input.siteId, organizationId: input.organizationId },
         data: {

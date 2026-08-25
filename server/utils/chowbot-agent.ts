@@ -424,9 +424,13 @@ async function executeTool(
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
         return { error: "No pending WhatsApp media is available to import." };
       }
+      const menuName = toSqlText(input.menu_name)?.trim();
+      if (!menuName) {
+        return { error: "menu_name is required." };
+      }
       const result = await runMcpExecutorToolForChowbot(executorSite, "import_menu_from_media", {
         asset_id: ctx.pendingMedia.assetId,
-        menu_name: toSqlText(input.menu_name)?.trim() || undefined,
+        menu_name: menuName,
       }) as { error?: string; menuId?: string; count?: number; warning?: unknown; creditsRemaining?: unknown };
       if (result.error) return result;
       if (ctx.channel === "whatsapp") {
@@ -566,7 +570,7 @@ async function executeTool(
     case "list_tenant_pages":
     case "get_tenant_page":
     case "create_tenant_page":
-    case "update_tenant_page_draft":
+    case "update_tenant_page":
     case "change_tenant_page_path":
       return runMcpExecutorToolForChowbot(executorSite, name, input);
 
@@ -638,9 +642,8 @@ async function executeTool(
       }, {});
       return {
         posts: {
-          draft: byStatus.draft ?? 0,
           published: byStatus.published ?? 0,
-          archived: byStatus.archived ?? 0,
+          scheduled: byStatus.scheduled ?? 0,
         },
         menus: menuCount?.count ?? 0,
         menu_items: itemCount?.count ?? 0,

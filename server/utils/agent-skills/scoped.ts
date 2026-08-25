@@ -1,7 +1,7 @@
 export const AGENT_SKILL_TASKS = ['blog.write', 'image.generate'] as const
 export type AgentSkillTask = typeof AGENT_SKILL_TASKS[number]
 
-export const AGENT_GUIDANCE_CANDIDATE_TYPES = ['blog_draft', 'image_brief'] as const
+export const AGENT_GUIDANCE_CANDIDATE_TYPES = ['blog_article', 'image_brief'] as const
 export type AgentGuidanceCandidateType = typeof AGENT_GUIDANCE_CANDIDATE_TYPES[number]
 
 export type AgentGuidanceSurface = 'tenant_mcp' | 'platform_mcp'
@@ -67,14 +67,14 @@ export interface AgentGuidanceReviewResult {
 
 const BLOG_WRITE_BASELINE = `# Blog Writing Baseline
 
-Use this skill when drafting or revising long-form, evergreen blog content for a tenant site or the KrabiClaw platform.
+Use this skill when composing or revising long-form, evergreen blog content for a tenant site or the KrabiClaw platform.
 
 ## Workflow
 
-- Resolve scoped guidance before drafting.
+- Resolve scoped guidance before composing.
 - Treat platform, organization, and site guidance as separate source documents.
 - When guidance conflicts, prefer the more specific scope: site, then organization, then platform.
-- Draft for human review before publishing.
+- Compose for human review before publishing.
 - Preserve KrabiClaw's canonical content_blocks authoring model; do not invent body/component shadow shapes.
 
 ## Quality Bar
@@ -110,7 +110,7 @@ const BASELINE_BY_TASK: Record<AgentSkillTask, { slug: string; name: string; des
   'blog.write': {
     slug: 'blog-writing-baseline',
     name: 'Blog Writing Baseline',
-    description: 'Default reusable guidance for long-form blog drafting and revision across tenant and platform MCP surfaces.',
+    description: 'Default reusable guidance for long-form blog composition and revision across tenant and platform MCP surfaces.',
     instructions: BLOG_WRITE_BASELINE,
   },
   'image.generate': {
@@ -152,7 +152,7 @@ async function sha256Hex(value: unknown): Promise<string> {
 }
 
 function taskCandidateType(task: AgentSkillTask): AgentGuidanceCandidateType {
-  return task === 'blog.write' ? 'blog_draft' : 'image_brief'
+  return task === 'blog.write' ? 'blog_article' : 'image_brief'
 }
 
 function requestedScope(input: {
@@ -288,10 +288,10 @@ export async function reviewAgentGuidanceCandidate(input: {
 
   if (input.task === 'blog.write') {
     if (!hasMeaningfulString(input.candidate, ['title'])) {
-      findings.push({ severity: 'medium', skill_version_id: baselineVersionId, message: 'Blog draft should include a non-empty title for review.' })
+      findings.push({ severity: 'medium', skill_version_id: baselineVersionId, message: 'Blog article should include a non-empty title for review.' })
     }
     if (!hasContentBlocks(input.candidate) && !hasMeaningfulString(input.candidate, ['markdown', 'body'])) {
-      findings.push({ severity: 'high', skill_version_id: baselineVersionId, message: 'Blog draft should include canonical content_blocks or reviewable markdown content.' })
+      findings.push({ severity: 'high', skill_version_id: baselineVersionId, message: 'Blog article should include canonical content_blocks or reviewable markdown content.' })
     }
   }
 

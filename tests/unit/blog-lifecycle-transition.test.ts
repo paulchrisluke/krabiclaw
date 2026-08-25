@@ -8,17 +8,19 @@ const end = source.indexOf('export async function updatePlatformBlogPost', start
 const lifecycle = source.slice(start, end)
 
 test('blog lifecycle preflights both current concurrency tokens', () => {
-  assert.match(lifecycle, /p\.updated_at AS updated_at|SELECT p\.id, p\.updated_at/)
+  assert.match(lifecycle, /SELECT p\.id, p\.status, p\.updated_at/)
   assert.match(lifecycle, /d\.updated_at AS document_updated_at/)
   assert.match(lifecycle, /source\.updated_at !== input\.expected_updated_at/)
   assert.match(lifecycle, /source\.document_updated_at !== input\.expected_document_updated_at/)
 })
 
-test('publish, schedule, and unpublish mutate only lifecycle state', () => {
+test('publish and reschedule mutate only final lifecycle state', () => {
   assert.match(lifecycle, /status = 'scheduled'/)
-  assert.match(lifecycle, /status = '\$\{input\.action === 'publish' \? 'published' : 'draft'\}'/)
+  assert.match(lifecycle, /status = 'published'/)
+  assert.match(lifecycle, /source\.status !== 'scheduled'/)
   assert.match(lifecycle, /scheduled_for = NULL/)
   assert.match(lifecycle, /first_published_at = COALESCE/)
+  assert.doesNotMatch(lifecycle, /draft|archived|unpublish/)
   assert.doesNotMatch(lifecycle, /content_revisions|draft_revision_id|published_revision_id|UPDATE content_documents/)
 })
 

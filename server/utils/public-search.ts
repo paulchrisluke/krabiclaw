@@ -446,8 +446,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
     queryAll<PlatformDocSearchRow>(db, `
       SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
       FROM platform_docs
-      WHERE status = 'published'
-      ORDER BY category, sort_order, published_at DESC, updated_at DESC
+      ORDER BY category, sort_order, updated_at DESC
     `),
     queryAll<PlatformBlogSearchRow>(db, `
       SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords

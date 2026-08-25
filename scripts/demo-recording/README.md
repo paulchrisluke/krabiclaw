@@ -1,129 +1,82 @@
-# Demo Recording Workflow
+# ChatGPT MCP recording
 
-This folder helps capture the web portion of the OpenAI app submission demo.
+The acceptance run attaches to a normal, signed-in Chrome session through CDP.
+It drives ChatGPT from visible DOM state and records screenshots beside the
+sanitized MCP telemetry evidence. The FFmpeg recording remains a real screen
+capture, not a synthetic video.
 
-What it does:
+## Prepare Chrome and the connection
 
-- records the screen with `ffmpeg`
-- includes a legacy Playwright-guided recording helper, which ChatGPT may block
-- provides a normal-browser, telemetry-asserted connector gate via `yarn test:mcp:chatgpt`
+Start a dedicated Chrome profile with remote debugging enabled:
 
-What it does not do:
+```bash
+open -na "Google Chrome" --args \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$PWD/.playwright/chatgpt-cdp-profile"
+```
 
-- it does not fully automate ChatGPT login
-- it does not turn Developer Mode on for you
-- it does not automate iOS or Android app capture
+Sign in to ChatGPT in that Chrome profile. Open **Settings → Security and
+login**, enable **Developer mode**, then open **ChatGPT Plugins** and select the
+plus button. Create or refresh the `devkrabiclaw` connection using the MCP URL
+printed by the test harness. Developer mode availability depends on account and
+workspace policy.
 
-## Why this setup
+Override `CHATGPT_CDP_URL` or `CHATGPT_CONNECTOR_NAME` when Chrome or the
+connection uses a different value.
 
-OpenAI's testing guide says to:
+## Record the screen
 
-- link the connector in `Settings -> Connectors -> Developer mode`
-- run your golden prompts in a new conversation
-- record whether the model picks the right tool, passes the right arguments, and shows confirmation prompts
-- test mobile layouts in the ChatGPT iOS and Android apps
-
-This toolkit is designed around that flow.
-
-## 1. Find your macOS capture device
+List macOS AVFoundation devices:
 
 ```bash
 yarn demo:record:list-devices
 ```
 
-Usually the built-in full-screen capture device is `"Capture screen 0"`.
-
-## 2. Start the screen recording
-
-In terminal 1:
+Start a recording:
 
 ```bash
 yarn demo:record:web demo-web.mp4
 ```
 
-Optional environment variables:
+The FFmpeg recorder captures the selected screen, cursor, and mouse clicks. It
+does **not** capture a microphone or system audio. Press `q` in its terminal to
+stop cleanly. Override `VIDEO_DEVICE`, `FRAMERATE`, or `SIZE` when needed.
 
-```bash
-VIDEO_DEVICE="Capture screen 0" FRAMERATE=60 SIZE=1920x1080 yarn demo:record:web demo-web.mp4
-```
+## Run the recordable gate
 
-Press `q` in that terminal to stop the recording.
-
-## 3. Run the guided ChatGPT web demo
-
-In terminal 2:
-
-```bash
-yarn demo:chatgpt:web
-```
-
-For acceptance testing rather than a guided recording, use the normal-browser
-telemetry gate documented in
-[`docs/local-mcp-harness.md`](../../docs/local-mcp-harness.md):
+In a second terminal:
 
 ```bash
 yarn test:mcp:chatgpt
 ```
 
-That command starts the existing local tunnel, runs the automated API/Playwright
-prerequisites, prints the exact `/api/mcp` URL to use for `devkrabiclaw`, and
-then pauses while you use a normal ChatGPT browser and verifies each expected
-tool call through KrabiClaw telemetry before stopping the tunnel.
+The gate starts the isolated local fixture and tunnel, connects to the prepared
+Chrome session, records the selected inline plugin pill, and drives one
+continuous ChatGPT workflow. It waits for completed telemetry and a stable idle
+DOM state, captures each approval card, clicks **Allow** once, captures every
+completed response, and verifies each expected call through sanitized server
+telemetry. Approval cards remain visible for two seconds and final public proof
+for three seconds by default; override these with `CHATGPT_APPROVAL_HOLD_MS` and
+`CHATGPT_PUBLIC_PROOF_HOLD_MS` when needed:
 
-The older `yarn demo:chatgpt:web` recording helper will:
+1. Identify the fixture site.
+2. Inspect homepage and media information.
+3. Create a uniquely titled future-scheduled announcement.
+4. Read it back.
+5. Confirm and publish it immediately.
+6. Open the local fixture's tunnel-rendered posts page in the same Chrome session
+   and verify the title while retaining the returned public URL in evidence.
+7. Clean up through the fixture-authenticated MCP path.
 
-- reuse a persistent profile in `.playwright/chatgpt-profile`
-- open `https://chatgpt.com/`
-- wait for you to sign in and turn on your Developer Mode connector
-- send prompts from `scripts/demo-recording/prompts.example.json`
+It also checks that a read-only request, ambiguous site selection, and an
+unsupported logo-deletion request produce no mutation. Browser screenshots and
+`evidence.json` are written under `.wrangler/chatgpt-connector/`.
 
-ChatGPT and Google may detect and block that Playwright-launched browser. It is
-not MCP acceptance evidence and is not used by `yarn test:mcp:chatgpt`.
+The detailed local prerequisites are in
+[`docs/local-mcp-harness.md`](../../docs/local-mcp-harness.md).
 
-You can customize the prompt sequence:
-
-```bash
-CHATGPT_PROMPTS_FILE=./my-prompts.json yarn demo:chatgpt:web
-```
-
-You can also force a specific browser channel if installed:
-
-```bash
-PLAYWRIGHT_CHANNEL=chrome yarn demo:chatgpt:web
-```
-
-## 4. Recommended recording structure
-
-For the review video, keep the web recording short and deliberate:
-
-1. Show the connector enabled in Developer Mode.
-2. Run a read-only prompt like listing sites.
-3. Run a non-destructive workflow like summarizing settings.
-4. Run a write workflow like creating a draft post.
-5. Run a triage workflow.
-6. Run a destructive or publish workflow and show the confirmation behavior.
-
-## 5. iOS and Android
-
-Playwright is good for the web recording, but not for the native ChatGPT apps.
-
-For iOS and Android, the simplest path is manual device capture:
-
-- iPhone/iPad: use built-in screen recording from Control Center
-- Android: use built-in screen recording or `adb shell screenrecord`
-
-If you want later, you can automate mobile with emulators and Appium, but that is a separate setup and not included here.
-
-## 6. Post-process with ffmpeg
-
-Trim a raw recording:
+## Trim the result
 
 ```bash
 ffmpeg -ss 00:00:05 -to 00:01:20 -i demo-web.mp4 -c copy demo-web-trimmed.mp4
-```
-
-Scale to a submission-friendly 1080p output:
-
-```bash
-ffmpeg -i demo-web-trimmed.mp4 -vf "scale=1920:-2" -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p demo-web-final.mp4
 ```

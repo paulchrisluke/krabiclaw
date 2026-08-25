@@ -47,13 +47,13 @@
               <div class="flex-1">
                 <h3 class="font-medium text-default">{{ post.title }}</h3>
                 <div class="mt-1 flex items-center gap-2 text-xs text-muted">
-                  <span v-if="post.published_at" class="flex items-center gap-1">
+                  <span v-if="post.status === 'published'" class="flex items-center gap-1">
                     <UIcon name="i-lucide-check-circle" class="size-3 text-green-500" />
                     Published
                   </span>
                   <span v-else class="flex items-center gap-1">
-                    <UIcon name="i-lucide-file-text" class="size-3" />
-                    Draft
+                    <UIcon name="i-lucide-clock" class="size-3" />
+                    Scheduled
                   </span>
                   <span v-if="post.category">{{ post.category }}</span>
                 </div>
@@ -81,6 +81,7 @@ interface BlogPost {
   slug?: string | null
   category?: string | null
   published_at?: string | null
+  status: 'published' | 'scheduled'
 }
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })

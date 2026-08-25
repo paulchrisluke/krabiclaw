@@ -15,7 +15,7 @@ export function platformBlogRepository(): BlogPostRepository {
   const isLifecycleState = (value: unknown): value is BlogLifecycleState =>
     isRecord(value)
     && typeof value.id === 'string'
-    && ['draft', 'published', 'scheduled'].includes(String(value.status))
+    && ['published', 'scheduled'].includes(String(value.status))
     && (value.published_at === null || typeof value.published_at === 'string')
     && (value.scheduled_for === null || typeof value.scheduled_for === 'string')
     && typeof value.updated_at === 'string'
@@ -67,13 +67,5 @@ export function platformBlogRepository(): BlogPostRepository {
       return response.lifecycle
     },
 
-    async unpublish(postId: string, input): Promise<BlogLifecycleState> {
-      const response = await applicationFetch<{ success: true; lifecycle: BlogLifecycleState }>(`/api/admin/blog/posts/${postId}/unpublish`, {
-        method: 'POST',
-        body: input,
-        validate: isLifecycleResponse,
-      })
-      return response.lifecycle
-    },
   }
 }

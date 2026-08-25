@@ -67,7 +67,7 @@ const props = defineProps<{
   iframeSrc: string
   /** The public-facing URL a visitor would actually see (tenant domain/
    *  subdomain + page path) — distinct from iframeSrc, which points at the
-   *  internal /preview/site/:id route that actually serves draft content. */
+   *  internal preview route used by the editor. */
   displayUrl: string
   chrome?: boolean
 }>()

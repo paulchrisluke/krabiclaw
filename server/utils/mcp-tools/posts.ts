@@ -9,7 +9,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
-        status: { type: 'string' },
+        status: { type: 'string', enum: ['published', 'scheduled'] },
         location_id: { type: 'string', description: 'Filter to posts restricted to this location.' },
       },
       outputSchema: {
@@ -34,10 +34,10 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_post',
-      description: 'Create a time-boxed, social-style announcement (tonight\'s event, a limited offer, quick news) and publish it to the website immediately unless scheduled_for is provided. This does not publish to social channels; use publish_post with explicit channels for social publication. Use post_type "offer" for a discount/special (requires offer_coupon or offer_terms), "event" for a scheduled happening (requires event_start), or "update" for general news. Defaults to "standard". For long-form, evergreen, SEO-indexed articles (site history, guides, "why choose us") use create_blog_post instead — this tool has no SEO fields and does not appear in site navigation.',
+      description: 'Create a time-boxed, social-style announcement (tonight\'s event, a limited offer, quick news) and publish it to the website immediately unless scheduled_for is provided. This does not publish to social channels; use publish_post with explicit channels for social publication. Use post_type "offer" for a discount/special (requires offer_coupon or offer_terms), "event" for a scheduled happening (requires event_start), or "update" for general news. Defaults to "standard". Optional SEO title and description fields customize the public post page. For long-form, evergreen articles (site history, guides, "why choose us") use create_blog_post instead; announcements do not appear in site navigation.',
       domain: 'posts',
       minimumRole: 'editor',
-      confirmRequired: false,
+      confirmRequired: true,
       strict: true,
       inputSchema: {
         body: { type: 'string' },

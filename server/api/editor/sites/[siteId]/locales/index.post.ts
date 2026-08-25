@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { normalizeLocale } from '~/server/utils/site-i18n'
-import { upsertSiteLocale, type SiteLocaleInput } from '~/server/utils/site-locales'
+import { upsertSiteLocale, validateSiteLocaleInput, type SiteLocaleInput } from '~/server/utils/site-locales'
 import { isDemoOrg } from '~/server/utils/demo'
 import { queryFirst } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
@@ -10,7 +10,12 @@ export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
-  const body = await readBody(event) as SiteLocaleInput
+  let body: SiteLocaleInput
+  try {
+    body = validateSiteLocaleInput(await readBody(event) as SiteLocaleInput)
+  } catch (error) {
+    return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid is_source' }, { status: 400 })
+  }
   const locale = normalizeLocale(body?.locale)
   if (!locale) return jsonResponse({ error: 'A valid locale is required' }, { status: 400 })
   body.locale = locale

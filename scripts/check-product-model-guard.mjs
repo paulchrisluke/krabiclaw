@@ -68,12 +68,23 @@ export const FORBIDDEN_ACTIVE_PATTERNS = [
   /รวมอยู่ในแผน\s+(?:Managed|SEO Accelerator)/u,
   /\bunlimited Growth\b/i,
   /\bchargeFlatCredits(?:ForUser)?\s*\([\s\S]{0,260}?\.catch\s*\(/,
+  /\bupdate_tenant_page_draft\b/,
+  /\bblog_draft\b/,
+  /\bunpublish_(?:blog_post|platform_blog_post|platform_doc)\b/,
+  /\bowner(?:_|)type\b[^\n]{0,80}['"]platform_doc['"]/i,
 ]
 const FORBIDDEN_SEED_NAMING_PATTERNS = [
   /\bsiteContent\b/,
   /\bsiteLocaleVariants\b/,
   /\bSeedTenantPageTranslation\b/,
   /\b(?:translations|translatedRows)\b/,
+]
+const PUBLICATION_MODEL_PATH = /(?:^seed-definitions\/|\/(?:chowbot-tools|mcp-catalog-snapshots|mcp-tools|mcp-executor|mcp-prompts)\/|(?:blog|post|locale|platform-content|mcp-catalog|mcp-tools|mcp-executor|mcp-prompts|mcp-workflows|chowbot-agent|facebook)[^/]*\.(?:ts|js|mjs|vue|json)$|\/(?:blog|posts|docs|locales)\/|\/(?:blog|posts|docs|locales)\.(?:ts|vue)$)/i
+const FORBIDDEN_PUBLICATION_PATTERNS = [
+  /\b(?:Publication|Publishing)Status\b[^\n]{0,160}['"](?:draft|archived)['"]/,
+  /\bstatus\b[^\n]{0,100}['"](?:draft|archived)['"]/,
+  /['"](?:draft|archived)['"][^\n]{0,100}\bstatus\b/,
+  /\bstatus\s+(?:=|IN\s*\()[^\n;]{0,100}['"](?:draft|archived)['"]/i,
 ]
 
 function walk(directory) {
@@ -152,8 +163,17 @@ export function collectSiteTransferPolicyViolations(root = ROOT) {
 }
 
 export function findProductModelViolations(relativePath, source) {
-  if (relativePath.replaceAll('\\', '/') === 'scripts/check-product-model-guard.mjs') return []
-  return FORBIDDEN_ACTIVE_PATTERNS
+  if (['scripts/check-product-model-guard.mjs', 'scripts/report-publication-cleanup.mjs'].includes(relativePath.replaceAll('\\', '/'))) return []
+  const normalizedPath = relativePath.replaceAll('\\', '/')
+  if (
+    normalizedPath.includes('onboarding')
+    || normalizedPath.includes('public-draft-bootstrap')
+    || normalizedPath === 'server/db/schema.ts'
+  ) return []
+  const patterns = PUBLICATION_MODEL_PATH.test(normalizedPath)
+    ? [...FORBIDDEN_ACTIVE_PATTERNS, ...FORBIDDEN_PUBLICATION_PATTERNS]
+    : FORBIDDEN_ACTIVE_PATTERNS
+  return patterns
     .filter((pattern) => pattern.test(source))
     .map((pattern) => `${relativePath}: ${pattern}`)
 }
@@ -197,7 +217,7 @@ export function runProductModelGuard(root = ROOT, log = console) {
     return false
   }
 
-  log.log('Product-model guard passed: recurring subscription/quota paths are the only active billing model.')
+  log.log('Product-model guard passed: retired billing and publication-state contracts are absent from active runtime code.')
   return true
 }
 

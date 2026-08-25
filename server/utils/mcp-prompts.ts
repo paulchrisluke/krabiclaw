@@ -14,24 +14,6 @@ export interface McpPromptDefinition {
 
 export const MCP_PROMPTS: McpPromptDefinition[] = [
   {
-    name: "draft_blog_post",
-    description: "Study this tenant's existing articles and draft a new SEO-ready blog post for approval without publishing.",
-    arguments: [
-      { name: "topic", description: "What the article should be about.", required: true },
-      { name: "target_keyword", description: "Primary search phrase, if any.", required: false },
-      { name: "reference_post_id", description: "Existing tenant post id or slug whose voice should be followed.", required: false },
-    ],
-  },
-  {
-    name: "update_and_publish_blog_post",
-    description: "Apply writer-approved content to an existing tenant blog post and publish it.",
-    arguments: [
-      { name: "identifier", description: "Post id or slug.", required: true },
-      { name: "body", description: "Final writer-approved Markdown body.", required: true },
-      { name: "notes", description: "Additional editorial instructions.", required: false },
-    ],
-  },
-  {
     name: "onboard_new_site",
     description: "Set up a brand-new KrabiClaw site end-to-end from a Google Maps listing.",
     arguments: [
@@ -109,36 +91,6 @@ function requireArg(args: Record<string, string>, name: string): string {
 
 export function renderMcpPrompt(name: string, args: Record<string, string>): { description: string; text: string } {
   switch (name) {
-    case "draft_blog_post": {
-      const topic = requireArg(args, "topic");
-      const keyword = args.target_keyword?.trim();
-      const reference = args.reference_post_id?.trim();
-      return {
-        description: `Draft a tenant blog post about: ${topic}`,
-        text: [
-          "Call get_workspace_context to confirm the tenant site, then call list_blog_posts with status published.",
-          reference
-            ? `Call get_blog_post with post_id "${reference}" and use its voice, terminology, structure, and SEO field usage as the primary reference.`
-            : "Call get_blog_post for the 1-2 most relevant published articles and infer the tenant's established voice and terminology; do not copy KrabiClaw platform voice or invent a generic brand voice.",
-          `Draft a complete block-structured article about "${topic}"${keyword ? ` targeting "${keyword}"` : ""}. Use ordered heading, markdown, image, FAQ, How-To, callout, and divider blocks as appropriate. Markdown blocks require editor_mode "rich" for visual-editor-safe prose or "source" for tables/raw HTML. Include category, a short deduplicated tags list, excerpt, seo_title, seo_description, seo_keywords, and robots.`,
-          "Present the full article and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post with content_blocks so the writer can review the returned admin_edit_url. Publish only when explicitly requested, using the separate dual-token publish_blog_post operation.",
-        ].join(" "),
-      };
-    }
-    case "update_and_publish_blog_post": {
-      const identifier = requireArg(args, "identifier");
-      const body = requireArg(args, "body");
-      const notes = args.notes?.trim();
-      return {
-        description: `Update and publish tenant blog post: ${identifier}`,
-        text: [
-          `Call get_blog_post with post_id "${identifier}", convert this writer-approved body into the complete canonical content_blocks array, and call replace_blog_content with post.document_updated_at as expected_document_updated_at: ${body}`,
-          "Preserve existing category, navigation, tags, and structural blocks unless the approved content requires changing them.",
-          notes ? `Additional instructions: ${notes}` : "",
-          `Immediately after the replacement succeeds, call publish_blog_post with post_id "${identifier}", expected_updated_at from the returned post.updated_at, and expected_document_updated_at from the returned post.document_updated_at. Do not reuse the tokens from the earlier read. Report the public_url and admin_edit_url.`,
-        ].filter(Boolean).join(" "),
-      };
-    }
     case "onboard_new_site": {
       const mapsUrl = requireArg(args, "maps_url");
       return {
@@ -192,7 +144,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Create a new bookable experience",
         text: [
           `Based on this description, call create_experience with a sensible title, tagline, body, and any of price_amount/duration_minutes/max_capacity/time_slots that are implied or stated: ${description}`,
-          "Use a status appropriate to whether this should go live immediately or stay as a draft — ask the user if it's not obvious.",
+          "Use active only when the user has approved making the experience public; otherwise use inactive.",
           "If the user has media ready, call set_media after creation with target_type experience_media, the exact experience_id, and the complete ordered asset_ids list.",
           "Report back what was created, its current status, and the live URL when one is available.",
         ].join(" "),
@@ -206,7 +158,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Call list_locations, then list_location_reviews for each location, and pull out any review that has no owner reply yet.",
           "Summarize what's new, grouped by type (messages, reservations, bookings, reviews needing a reply), oldest first.",
           "For pending experience bookings only, update_experience_booking exists to confirm or decline — offer to do that with the user's explicit approval for each one, don't act unilaterally.",
-          "For unreplied reviews, offer to draft a reply for any the user wants to answer now, and call reply_to_review only after they approve the exact wording.",
+          "For unreplied reviews, offer to compose a reply for any the user wants to answer now, and call reply_to_review only after they approve the exact wording.",
           "There is no tool on this connection to reply to or change the status of contact or reservation submissions — for those, tell the user what's waiting and point them to the dashboard inbox and reservations pages to respond. Do not attempt to call a tool that doesn't exist for this.",
         ].join(" "),
       };

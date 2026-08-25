@@ -6,7 +6,7 @@ interface PublicLocale {
   code: string
   display_name: string | null
   is_source: boolean
-  status: 'draft' | 'published' | 'disabled'
+  status: 'published' | 'disabled'
 }
 
 export default defineHandler(async (event) => {

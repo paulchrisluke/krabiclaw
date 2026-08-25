@@ -446,7 +446,7 @@ export async function updatePageContent(
   if (!Array.isArray(input.changes.blocks)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Tenant page updates must provide the canonical blocks array.' });
   }
-  const { getTenantPageForEditorByPath, updateTenantPageDraft } = await import('~/server/utils/tenant-pages');
+  const { getTenantPageForEditorByPath, updateTenantPage } = await import('~/server/utils/tenant-pages');
   const canonicalPath = await resolveTenantPagePath(db, siteId, input.page, locationId ?? undefined);
   const page = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
   const incomingBlockIds = new Set(
@@ -484,7 +484,7 @@ export async function updatePageContent(
     : typeof input.changes.expectedDocumentUpdatedAt === 'string'
       ? input.changes.expectedDocumentUpdatedAt
       : page.document.updated_at
-  const result = await updateTenantPageDraft(db, page.id, {
+  const result = await updateTenantPage(db, page.id, {
     userId: actorId ?? null,
     scope: { siteId, organizationId },
     data: {
@@ -576,12 +576,12 @@ export async function updateHomeHero(
   },
 ) {
   if (input.location_id) throw new HTTPError({ statusCode: 400, statusMessage: 'The canonical home page is site-scoped; update a location page for location-specific content.' })
-  const { getTenantPageForEditorByPath, updateTenantPageDraft } = await import('~/server/utils/tenant-pages')
+  const { getTenantPageForEditorByPath, updateTenantPage } = await import('~/server/utils/tenant-pages')
   const page = await getTenantPageForEditorByPath(db, siteId, '/')
   const blocks = page.blocks.map(block => block.type === 'hero'
     ? { ...block, data: { ...block.data, ...(input.title !== undefined ? { title: input.title } : {}), ...(input.subtitle !== undefined ? { subtitle: input.subtitle } : {}) } }
     : block)
-  const result = await updateTenantPageDraft(db, page.id, {
+  const result = await updateTenantPage(db, page.id, {
     userId: null,
     scope: { siteId, organizationId },
     data: {
@@ -686,7 +686,7 @@ export async function deleteContentField(
   actorId?: string | null,
 ) {
   void db; void organizationId; void siteId; void input; void actorId
-  throw new HTTPError({ statusCode: 410, statusMessage: 'Field-based page deletion has been removed. Delete a block in the Pages manager and save the complete draft.' });
+  throw new HTTPError({ statusCode: 410, statusMessage: 'Field-based page deletion has been removed. Delete a block in the Pages manager and save the complete document.' });
 }
 
 function safeJson(value: unknown) {

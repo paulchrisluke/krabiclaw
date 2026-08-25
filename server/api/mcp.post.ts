@@ -1,5 +1,5 @@
 import { HTTPError, defineHandler  } from 'nitro';
-import {  readBody  } from 'nitro/h3';
+import { readBody, setResponseHeader } from 'nitro/h3';
 import type { H3Event } from "nitro";
 import { asMcpError, mcpSuccess, MCP_ERROR, negotiatedMcpProtocolVersion, parseMcpToolCallArguments, readMcpRequest, } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
@@ -114,8 +114,10 @@ export default defineHandler(async (event) => {
     if (request.method === "initialize") {
       const user = await requireMcpUser(event, tenantAuthOptions);
       const protocolVersion = negotiatedMcpProtocolVersion(request);
+      const sessionId = crypto.randomUUID();
+      setResponseHeader(event, "Mcp-Session-Id", sessionId);
       logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId, requestId: request.id, method: request.method, status: "success", httpStatus: 200, protocolVersion, oauthClientId: user.oauthClientId ?? null, });
+        userId: user.userId, requestId: request.id, method: request.method, status: "success", httpStatus: 200, protocolVersion, sessionId, oauthClientId: user.oauthClientId ?? null, });
       return mcpSuccess(request.id, {
         protocolVersion, capabilities: { tools: {}, resources: {}, prompts: {} }, serverInfo: { name: "krabiclaw-mcp", version: "phase-5" }, _meta: catalogMeta(MCP_PUBLIC_TOOLS), instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
@@ -159,7 +161,7 @@ KrabiClaw has three distinct content-creation tools — do not default to whiche
 - **create_experience** — a permanent, bookable offering with its own page: a class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if left priceless) CTA. Use for "we want a dedicated page for X" when X is something people book or inquire about, even if there's no fixed price yet — leave price/price_amount unset for a "contact us for pricing" experience rather than writing a post or blog entry about it.
 If a request is ambiguous, ask a brief clarifying question rather than guessing.
 
-For create_blog_post, update_blog_post, or replace_blog_content, call resolve_agent_guidance({ site_id, task: "blog.write" }) before drafting and review_agent_guidance_candidate({ site_id, task: "blog.write", candidate_type: "blog_draft", candidate: <exact draft> }) before persisting a newly generated or materially rewritten draft. Skill guidance is advisory and scoped; tool schemas, authorization, publication approval, and content_blocks remain enforced by backend code.
+For create_blog_post, update_blog_post, or replace_blog_content, call resolve_agent_guidance({ site_id, task: "blog.write" }) before composing and review_agent_guidance_candidate({ site_id, task: "blog.write", candidate_type: "blog_article", candidate: <exact approved article> }) before writing newly generated or materially rewritten content. Skill guidance is advisory and scoped; tool schemas, authorization, publication approval, and content_blocks remain enforced by backend code.
 
 ## Session start
 Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
