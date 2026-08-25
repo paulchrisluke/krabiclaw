@@ -51,6 +51,34 @@
           </template>
         </UCard>
 
+        <UCard>
+          <template #header>
+            <div>
+              <h2 class="font-semibold text-highlighted">Add organization member</h2>
+              <p class="mt-0.5 text-sm text-muted">Add an existing user directly without sending an invitation.</p>
+            </div>
+          </template>
+
+          <div class="grid gap-3 sm:grid-cols-3">
+            <UFormField label="Organization ID">
+              <UInput v-model="organizationMemberForm.organizationId" class="w-full" />
+            </UFormField>
+            <UFormField label="User email">
+              <UInput v-model="organizationMemberForm.email" type="email" class="w-full" />
+            </UFormField>
+            <UFormField label="Role">
+              <USelect v-model="organizationMemberForm.role" :items="organizationRoleOptions" class="w-full" />
+            </UFormField>
+          </div>
+
+          <template #footer>
+            <UButton :loading="addingOrganizationMember" @click="addOrganizationMember">Add member</UButton>
+            <p v-if="organizationMemberResult" class="mt-2 text-sm" :class="organizationMemberResult.error ? 'text-error' : 'text-success'">
+              {{ organizationMemberResult.message }}
+            </p>
+          </template>
+        </UCard>
+
       </div>
     </template>
   </UDashboardPanel>
@@ -72,6 +100,15 @@ const teamInviteEmail = ref('')
 const teamInviteName = ref('')
 const invitingTeam = ref(false)
 const teamInviteResult = ref<{ error?: boolean; message: string } | null>(null)
+const organizationMemberForm = reactive({ organizationId: '', email: '', role: 'member' })
+const organizationRoleOptions = [
+  { label: 'Owner', value: 'owner' },
+  { label: 'Admin', value: 'admin' },
+  { label: 'Member', value: 'member' },
+  { label: 'Editor', value: 'editor' },
+]
+const addingOrganizationMember = ref(false)
+const organizationMemberResult = ref<{ error?: boolean; message: string } | null>(null)
 
 const isMembersResponse = (value: unknown): value is { team: TeamMember[] } =>
   isRecord(value)
@@ -81,6 +118,8 @@ const isMembersResponse = (value: unknown): value is { team: TeamMember[] } =>
   )
 const isTeamInviteResponse = (value: unknown): value is { action: string; email: string } =>
   isRecord(value) && typeof value.action === 'string' && typeof value.email === 'string'
+const isOrganizationMemberResponse = (value: unknown): value is { success: true; email: string } =>
+  isRecord(value) && value.success === true && typeof value.email === 'string'
 
 async function loadMembers() {
   membersLoading.value = true
@@ -114,6 +153,24 @@ async function inviteTeamMember() {
     teamInviteResult.value = { error: true, message: getErrorMessage(err, 'Failed to add team member') }
   } finally {
     invitingTeam.value = false
+  }
+}
+
+async function addOrganizationMember() {
+  addingOrganizationMember.value = true
+  organizationMemberResult.value = null
+  try {
+    const result = await applicationFetch<{ success: true; email: string }>('/api/admin/organization-members', {
+      method: 'POST',
+      body: organizationMemberForm,
+      validate: isOrganizationMemberResponse,
+    })
+    organizationMemberResult.value = { message: `${result.email} added to the organization` }
+    organizationMemberForm.email = ''
+  } catch (error) {
+    organizationMemberResult.value = { error: true, message: getErrorMessage(error, 'Failed to add organization member') }
+  } finally {
+    addingOrganizationMember.value = false
   }
 }
 
