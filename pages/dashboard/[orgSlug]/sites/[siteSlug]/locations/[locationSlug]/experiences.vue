@@ -589,12 +589,12 @@ function dropGalleryMedia(targetIndex: number) {
   if (item) form.media.splice(targetIndex, 0, item)
 }
 
-function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
+function handleGalleryMediaChange(index: number, asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null) {
   const item = form.media[index]
   if (!item) return
-  item.asset_id = asset?.id ?? null
-  item.url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
-  item.thumbnail_url = asset?.thumbnailUrl ?? null
+  item.asset_id = asset?.asset_id ?? null
+  item.url = asset?.public_url ?? asset?.thumbnail_url ?? null
+  item.thumbnail_url = asset?.thumbnail_url ?? null
   item.kind = asset?.kind === 'video' ? 'video' : 'image'
 }
 
@@ -607,7 +607,7 @@ function openEdit(exp: ApiRecord) {
     body: exp.body ?? '',
     media: (Array.isArray(exp.media) ? exp.media : []).map(asset => ({
       _key: crypto.randomUUID(),
-      asset_id: asset.id,
+      asset_id: asset.asset_id,
       url: asset.public_url ?? asset.thumbnail_url ?? null,
       thumbnail_url: asset.thumbnail_url ?? null,
       kind: asset.kind === 'video' ? 'video' : 'image',

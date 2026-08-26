@@ -123,17 +123,17 @@ function block(type: string): ApiRecord | null {
     data.label = data.cta_label ?? data.label
     data.url = data.cta_url ?? data.url
   }
-  return data
+  return { ...data, media: pageBlock.media }
 }
 
 function asOptionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null
 }
 
-function assetUrl(value: unknown) {
-  return value && typeof value === 'object' && typeof (value as ApiRecord).url === 'string'
-    ? String((value as ApiRecord).url)
-    : null
+function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
+  const media = Array.isArray(value?.media) ? value.media : []
+  const item = media.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
+  return typeof item?.public_url === 'string' ? item.public_url : null
 }
 
 const heroBlock = block('home_hero')
@@ -144,13 +144,13 @@ const videoFeature = computed(() => block('video_feature'))
 const reviewsBlock = computed(() => block('reviews'))
 const qaBlock = computed(() => block('qa'))
 const ctaBlock = computed(() => block('consultation_cta'))
-const heroBackground = computed(() => assetUrl(hero.value.background))
+const heroBackground = computed(() => mediaUrl(hero.value, 'media'))
 const heroBackgroundSrc = heroBackground
-const servicesDecoration = computed(() => assetUrl(services.value.decoration))
+const servicesDecoration = computed(() => mediaUrl(services.value, 'decoration'))
 const servicesDecorationSrc = servicesDecoration
-const qaDecorationSrc = computed(() => assetUrl(qaBlock.value?.decoration))
-const ctaBackgroundSrc = computed(() => assetUrl(ctaBlock.value?.background))
-const ctaFeaturedSrc = computed(() => assetUrl(ctaBlock.value?.featured))
+const qaDecorationSrc = computed(() => mediaUrl(qaBlock.value, 'decoration'))
+const ctaBackgroundSrc = computed(() => mediaUrl(ctaBlock.value, 'background'))
+const ctaFeaturedSrc = computed(() => mediaUrl(ctaBlock.value, 'featured'))
 const heroDestination = computed(() => String(hero.value.url || ''))
 const heroTitle = computed(() => {
   const title = String(hero.value.title || '')
@@ -163,11 +163,11 @@ const heroTitle = computed(() => {
 const videoFeatures = computed(() => Array.isArray(videoFeature.value?.features)
   ? videoFeature.value.features.map((item: ApiRecord) => ({ name: String(item.name || ''), desc: String(item.desc || '') }))
   : [])
-const videoImages = computed(() => Array.isArray(videoFeature.value?.images)
-  ? videoFeature.value.images
-      .map((item: ApiRecord) => ({ url: assetUrl(item) || '', alt: asOptionalString(item.alt) }))
-      .filter((item: { url: string }) => item.url)
-  : [])
+const videoImages = computed(() => (Array.isArray(videoFeature.value?.media) ? videoFeature.value.media : [])
+  .filter((item: unknown): item is ApiRecord => Boolean(item && typeof item === 'object' && String((item as ApiRecord).slot).startsWith('images.')))
+  .sort((a: ApiRecord, b: ApiRecord) => String(a.slot).localeCompare(String(b.slot), undefined, { numeric: true }))
+  .map((item: ApiRecord) => ({ url: typeof item.public_url === 'string' ? item.public_url : '', alt: asOptionalString(item.alt_text) }))
+  .filter((item: { url: string }) => item.url))
 const reviewsDescription = computed(() => String(reviewsBlock.value?.description || ''))
 
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
@@ -184,8 +184,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   description: seoDescription.value,
   brand: {
     siteName: identity.value.brand_name || '',
-    logoUrl: identity.value.logo_url || null,
-    faviconUrl: identity.value.favicon_url || null,
+    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
   heroImage: heroBackground.value ? { url: heroBackground.value } : null,
 }))

@@ -19,7 +19,7 @@
 
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
-        <p class="text-sm font-semibold text-default">{{ authorName }}</p>
+        <p v-if="authorName" class="text-sm font-semibold text-default">{{ authorName }}</p>
         <p class="text-sm text-dimmed">More stories and updates from {{ siteName }}</p>
       </div>
       <PlatformButton to="/blog" variant="outline" size="sm">More Posts</PlatformButton>
@@ -79,11 +79,10 @@ interface TenantBlogPost {
   robots?: string | null
   visibility?: 'public' | 'unlisted'
   published_at?: string | null
-  author_name?: string | null
   updated_at?: string | null
   featured_order?: number | null
-  featured_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
-  primary_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
+  author?: { id: string; name: string | null; image: string | null } | null
+  media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null }>
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
@@ -161,14 +160,17 @@ if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_bl
 }
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList, config } = await usePublicPageData()
+const { blogList, config, site: publicSite } = await usePublicPageData()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
-const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
+const authorName = computed(() => post.value?.author?.name ?? null)
 const readTime = computed(() => {
-  const words = (post.value?.body ?? '')
+  const words = (post.value?.content_blocks ?? [])
+    .map(block => block.type === 'heading' ? block.data.text : block.data.markdown)
+    .filter(value => typeof value === 'string')
+    .join(' ')
     .trim()
     .split(/\s+/)
     .filter(Boolean).length
@@ -187,9 +189,7 @@ const renderableComponents = computed(() =>
 )
 
 const selectedPostImage = computed(() => {
-  const primary = post.value?.primary_image
-  if (primary?.public_url) return primary
-  return post.value?.featured_image ?? null
+  return post.value?.media?.find(item => item.slot === 'featured') ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
 const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
@@ -214,8 +214,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   robots: resolvedSeo.value.robots,
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
   heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
@@ -249,7 +249,7 @@ useContentPageSchema(computed(() => {
     ],
     components: renderableComponents.value,
     siteName: siteName.value,
-    siteLogoUrl: site?.logo_url || undefined,
+    siteLogoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || undefined,
     siteDescription: site?.brand_description || undefined,
   }
 }))

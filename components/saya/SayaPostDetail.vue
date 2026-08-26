@@ -44,8 +44,8 @@
 
             <video
               v-if="activeMedia.kind === 'video'"
-              :key="activeMedia.url"
-              :src="activeMedia.url"
+              :key="activeMedia.public_url"
+              :src="activeMedia.public_url"
               autoplay
               muted
               loop
@@ -56,9 +56,9 @@
             />
             <img
               v-else
-              :key="activeMedia.url"
-              :src="activeMedia.url"
-              :alt="activeMedia.alt || post.title || t('saya.posts.image_alt')"
+              :key="activeMedia.public_url"
+              :src="activeMedia.public_url"
+              :alt="activeMedia.alt_text || post.title || t('saya.posts.image_alt')"
               class="relative z-10 max-h-[78vh] w-full object-contain"
             >
 
@@ -89,13 +89,6 @@
               <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
             </button>
 
-            <p
-              v-if="activeMedia.caption"
-              class="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/85 to-transparent px-5 pb-12 pt-20 text-sm text-white/90"
-            >
-              {{ activeMedia.caption }}
-            </p>
-
             <div v-if="hasMultipleMedia" class="absolute inset-x-0 bottom-4 z-30 flex justify-center gap-2" aria-label="Media pagination">
               <button
                 v-for="(_, index) in mediaItems"
@@ -120,7 +113,7 @@
         <div v-if="hasMultipleMedia" class="hidden gap-2 overflow-x-auto border-t border-white/10 bg-black p-3 scrollbar-hide sm:flex">
           <button
             v-for="(item, index) in mediaItems"
-            :key="item.id || item.mediaAssetId || `${item.url}-${index}`"
+            :key="item.asset_id || `${item.public_url}-${index}`"
             type="button"
             :class="[
               'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 bg-black transition',
@@ -131,9 +124,9 @@
             @click="goToMedia(index)"
           >
             <img
-              v-if="item.thumbnailUrl || item.kind === 'image'"
-              :src="item.thumbnailUrl || item.url"
-              :alt="item.alt || ''"
+              v-if="item.thumbnail_url || item.kind === 'image'"
+              :src="item.thumbnail_url || item.public_url"
+              :alt="item.alt_text || ''"
               class="size-full object-cover"
             >
             <div v-else class="flex size-full items-center justify-center text-white/70">
@@ -168,8 +161,8 @@
                 {{ post.location.title }}
               </NuxtLink>
               <p v-else-if="post.location?.title" class="mt-0.5 truncate text-sm text-muted">{{ post.location.title }}</p>
-              <time v-if="post.createTime" :datetime="post.createTime" class="mt-0.5 block text-xs text-dimmed">
-                {{ formatDate(post.createTime) }}
+              <time v-if="post.published_at" :datetime="post.published_at" class="mt-0.5 block text-xs text-dimmed">
+                {{ formatDate(post.published_at) }}
               </time>
             </div>
           </div>
@@ -211,41 +204,41 @@
           </div>
         </div>
 
-        <div v-if="post.event" class="mt-6 rounded-xl border border-default bg-elevated p-4">
+        <div v-if="post.post_type === 'event'" class="mt-6 rounded-xl border border-default bg-elevated p-4">
           <div class="flex items-start gap-3">
             <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0 text-default" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
             <div>
               <p class="text-xs font-bold uppercase tracking-widest text-muted">{{ t('saya.posts.event_details_label') }}</p>
-              <p v-if="post.event.title" class="mt-1 font-semibold text-default">{{ post.event.title }}</p>
-              <p v-if="post.event.startDate" class="mt-1 text-sm text-muted">
-                {{ formatDate(post.event.startDate) }}<span v-if="post.event.endDate"> – {{ formatDate(post.event.endDate) }}</span>
+              <p v-if="post.event_title" class="mt-1 font-semibold text-default">{{ post.event_title }}</p>
+              <p v-if="post.event_start" class="mt-1 text-sm text-muted">
+                {{ formatDate(post.event_start) }}<span v-if="post.event_end"> – {{ formatDate(post.event_end) }}</span>
               </p>
             </div>
           </div>
         </div>
 
-        <div v-else-if="post.offer" class="mt-6 rounded-xl border border-default bg-elevated p-4">
+        <div v-else-if="post.post_type === 'offer'" class="mt-6 rounded-xl border border-default bg-elevated p-4">
           <div class="flex items-start gap-3">
             <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0 text-default" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" aria-hidden="true"><path d="M20.59 13.41 11 3.83V3H4v7h.83l9.58 9.59a2 2 0 0 0 2.82 0l3.36-3.36a2 2 0 0 0 0-2.82Z"/><circle cx="7.5" cy="6.5" r=".5" fill="currentColor"/></svg>
             <div>
               <p class="text-xs font-bold uppercase tracking-widest text-muted">{{ t('saya.posts.special_offer_label') }}</p>
-              <p v-if="post.offer.title" class="mt-1 font-semibold text-default">{{ post.offer.title }}</p>
-              <p v-if="post.offer.couponCode" class="mt-1 text-sm font-semibold text-default">
-                {{ t('saya.posts.code_label') }} {{ post.offer.couponCode }}
+              <p v-if="post.title" class="mt-1 font-semibold text-default">{{ post.title }}</p>
+              <p v-if="post.offer_coupon" class="mt-1 text-sm font-semibold text-default">
+                {{ t('saya.posts.code_label') }} {{ post.offer_coupon }}
               </p>
-              <p v-if="post.offer.terms" class="mt-1 text-sm leading-6 text-muted">{{ post.offer.terms }}</p>
+              <p v-if="post.offer_terms" class="mt-1 text-sm leading-6 text-muted">{{ post.offer_terms }}</p>
             </div>
           </div>
         </div>
 
-        <div v-if="post.callToAction?.url || $slots.cta" class="mt-6">
-          <slot name="cta" :cta="post.callToAction" :label="post.callToAction ? formatCta(post.callToAction.actionType) : null">
+        <div v-if="post.cta_url || $slots.cta" class="mt-6">
+          <slot name="cta" :cta="post.cta_url ? { actionType: post.cta_type, url: post.cta_url } : null" :label="post.cta_url ? formatCta(post.cta_type) : null">
             <NuxtLink
-              v-if="post.callToAction?.url"
-              :to="post.callToAction.url"
+              v-if="post.cta_url"
+              :to="post.cta_url"
               class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--saya-surface-dark)] px-5 py-3.5 text-sm font-bold text-[var(--saya-on-surface-dark)] no-underline transition hover:opacity-90"
             >
-              {{ formatCta(post.callToAction.actionType) }}
+              {{ formatCta(post.cta_type) }}
               <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
             </NuxtLink>
           </slot>
@@ -283,29 +276,31 @@
 
 <script setup lang="ts">
 interface SayaPostDetailMedia {
-  id?: string
-  mediaAssetId?: string
-  url: string
-  thumbnailUrl?: string | null
+  asset_id: string
+  public_url: string
+  thumbnail_url: string | null
   kind: 'image' | 'video'
-  role?: 'cover' | 'gallery'
-  caption?: string | null
-  alt?: string | null
-  width?: number | null
-  height?: number | null
+  slot: 'cover' | 'gallery'
+  sort_order: number
+  alt_text: string | null
+  width: number | null
+  height: number | null
 }
 
 interface SayaPostDetailPost {
   title: string
   body: string
   summary: string
-  createTime: string | null
-  cover?: SayaPostDetailMedia | null
+  post_type: 'standard' | 'offer' | 'event' | 'update'
+  published_at: string | null
   media: SayaPostDetailMedia[]
-  gallery: SayaPostDetailMedia[]
-  callToAction?: { actionType: string | null; url: string } | null
-  event?: { title: string | null; startDate: string | null; endDate: string | null } | null
-  offer?: { title: string | null; couponCode: string | null; terms: string | null } | null
+  cta_type: string | null
+  cta_url: string | null
+  event_title: string | null
+  event_start: string | null
+  event_end: string | null
+  offer_coupon: string | null
+  offer_terms: string | null
   location?: { id: string; title: string | null; slug: string | null } | null
 }
 
@@ -322,7 +317,7 @@ const props = withDefaults(defineProps<{
 })
 
 defineSlots<{
-  cta(_slotProps: { cta: SayaPostDetailPost['callToAction']; label: string | null }): unknown
+  cta(_slotProps: { cta: { actionType: string | null; url: string } | null; label: string | null }): unknown
 }>()
 
 const { t } = useI18n()
@@ -338,11 +333,7 @@ const backTo = computed(() => props.post.location?.slug ? `/locations/${props.po
 const description = computed(() => props.post.summary || props.post.body || '')
 
 const mediaItems = computed<SayaPostDetailMedia[]>(() => {
-  const source = props.post.media?.length ? props.post.media : props.post.gallery ?? []
-  const items = [...source]
-  const cover = props.post.cover
-  if (cover && !items.some(item => mediaKey(item) === mediaKey(cover))) items.unshift(cover)
-  return items.filter(item => item.url)
+  return [...props.post.media].filter(item => item.public_url)
 })
 
 const currentIndex = ref(0)
@@ -350,7 +341,7 @@ const activeMedia = computed(() => mediaItems.value[currentIndex.value] ?? null)
 const activeBackdropUrl = computed(() => {
   const item = activeMedia.value
   if (!item) return null
-  return item.thumbnailUrl || (item.kind === 'image' ? item.url : null)
+  return item.thumbnail_url || (item.kind === 'image' ? item.public_url : null)
 })
 const hasMultipleMedia = computed(() => mediaItems.value.length > 1)
 const hasPreviousMedia = computed(() => currentIndex.value > 0)
@@ -359,10 +350,6 @@ const hasNextMedia = computed(() => currentIndex.value < mediaItems.value.length
 watch(mediaItems, (items) => {
   if (currentIndex.value >= items.length) currentIndex.value = Math.max(0, items.length - 1)
 })
-
-function mediaKey(item: SayaPostDetailMedia) {
-  return item.id || item.mediaAssetId || item.url
-}
 
 function goToMedia(index: number) {
   if (index < 0 || index >= mediaItems.value.length) return

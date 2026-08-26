@@ -3,7 +3,7 @@
     <div class="mb-6 max-h-80 overflow-hidden rounded-md bg-[var(--blawby-primary-dark)]">
       <img
         v-if="active"
-        :src="active.url"
+        :src="active.public_url"
         :alt="active.alt_text || fallbackAlt"
         :width="active.width || 960"
         :height="active.height || 720"
@@ -28,7 +28,7 @@
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-6" role="tablist" aria-label="Service media">
         <button
           v-for="(item, index) in media"
-          :key="item.id"
+          :key="item.asset_id"
           type="button"
           role="tab"
           class="relative flex aspect-square cursor-pointer rounded bg-white text-sm font-medium uppercase text-gray-900 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)]"
@@ -37,19 +37,19 @@
           @click="select(index)"
           @keydown="onKeydown($event, index)"
         >
-          <span class="absolute inset-0 overflow-hidden rounded-md"><img :src="item.url" :alt="item.alt_text || fallbackAlt" loading="lazy" class="size-full object-cover object-center"></span>
+          <span class="absolute inset-0 overflow-hidden rounded-md"><img :src="item.public_url" :alt="item.alt_text || fallbackAlt" loading="lazy" class="size-full object-cover object-center"></span>
           <span class="pointer-events-none absolute inset-0 rounded ring-2 ring-offset-2" :class="index === modelValue ? 'ring-[var(--blawby-accent)]' : 'ring-transparent'" aria-hidden="true" />
         </button>
       </div>
     </div>
     <div v-if="active" class="mt-3 w-full px-4 sm:p-0" role="tabpanel">
-      <img :src="active.url" :alt="active.alt_text || fallbackAlt" :width="active.width || 960" :height="active.height || 720" fetchpriority="high" class="max-w-full rounded-md border-none align-middle shadow">
+      <img :src="active.public_url" :alt="active.alt_text || fallbackAlt" :width="active.width || 960" :height="active.height || 720" fetchpriority="high" class="max-w-full rounded-md border-none align-middle shadow">
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-type GalleryItem = { id: string; url: string; alt_text: string | null; width: number | null; height: number | null }
+type GalleryItem = { asset_id: string; public_url: string; alt_text: string | null; width: number | null; height: number | null }
 const props = defineProps<{ modelValue: number, media: GalleryItem[], fallbackAlt: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: number] }>()
 const active = computed(() => props.media[props.modelValue] || props.media[0] || null)

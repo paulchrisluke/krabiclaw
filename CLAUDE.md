@@ -64,7 +64,7 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
 - MCP flow:
   1. Generate natively with `image_generation`
   2. Call `save_generated_image_file({ site_id, attachment_id: <file-reference>, prompt })` — pass the generated image as a file reference (not raw base64)
-  3. Call `show_generated_images` with returned `asset_id` and `public_url`
+  3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
 
@@ -232,26 +232,6 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
-### Local authenticated browser development
-
-The seeded local database does not contain a reusable plaintext password.
-Before manually testing an authenticated dashboard flow, provision the Better
-Auth fixture credentials with a caller-chosen local-only password:
-
-```bash
-yarn schema:local
-yarn seed:local
-E2E_TEST_PASSWORD='choose-a-local-only-password' yarn auth:e2e:local:provision
-yarn dev
-```
-
-Sign in at `/login` as `demo-owner@playwright.example` with that password.
-Playwright's automatically generated password is process-local and is not a
-manual-browser credential. Reprovisioning replaces fixture credential hashes
-and deletes their sessions. Do not add an auth bypass or look for a committed
-fixture password. The complete contributor and agent workflow is in
-`docs/agents/development-workflow.md`.
-
 Release qualification covers only Pottery House, Kikuzuki, and NCLS public
 rendering/navigation; Pottery booking/contact and Kikuzuki reservation journeys;
 and tenant MCP/OAuth/content/media. Admin, dashboard, CMS, ChowBot, billing,
@@ -264,9 +244,8 @@ Four environment gates exist in `.github/workflows/ci.yml`:
 
 Runs checks, builds for preview, and may migrate, seed, and deploy only the
 isolated preview environment. Shared staging and production are never changed
-by a feature PR. Tenant rendering/navigation plus the specs selected from the
-three-group `config/e2e-impact-map.mjs` run against deployed preview.
-Documentation-only changes skip Worker deployment.
+by a feature PR. Tenant rendering/navigation plus affected coverage from the
+three-group impact map runs against deployed preview.
 
 ### Staging lane
 
@@ -276,18 +255,14 @@ It does not sweep, reseed customer fixtures, provision auth, or run write tests.
 
 ### Staging release-qualification lane
 
-The ordinary `staging` to `main` pull request reuses the checks already attached
-to its exact staging SHA. It does not deploy, reprovision fixtures, or start a
-second qualification cycle. Production promotion is blocked until the exact
-staging SHA is green.
+The ordinary `staging` to `main` pull request reuses checks attached to its exact
+staging SHA. It does not deploy or start a second qualification cycle.
 
 ### Production lane
 
-Runs on pushes to `main`. One job deploys the production Worker normally,
-applies pending migrations, and refreshes search. A dependent verification job
-waits for the exact Nuxt build and assets to converge across the three customer
-custom domains, then runs read-only rendering/navigation. Retrying verification
-must not redeploy production.
+Runs on pushes to `main`. It deploys the production Worker normally, applies
+pending migrations, and runs read-only rendering/navigation against the three
+customer custom domains.
 
 The contract is `docs/operations/release-flow.md`.
 
@@ -350,12 +325,11 @@ UCard `:ui` prop only accepts:
 
 Use `class` for border, background, rounded, and shadow styling.
 
-### Nuxt UI component internals must be verified, not assumed — props, slots, events, refs, and exposed instance members
+### Nuxt UI props/slots/events must be verified, not assumed
 
-Before using any Nuxt UI component prop, slot, event, template ref, or exposed instance member (`$el`, anything returned by the component's own `expose()`), verify it against the live docs (`ui.nuxt.com/docs/components/<name>`) or the `nuxt-ui` MCP tools. Do not guess based on a similar library, an older Nuxt UI major version, or what "seems like it should exist." Existing usage elsewhere in this codebase is not proof of correctness — copy-pasted mistakes have already propagated across multiple files this way (see the `UModal` `@close` incident below). Verify against the docs directly, every time, regardless of what the codebase already does.
+Before using any Nuxt UI component prop, slot, or event, verify it against the live docs (`ui.nuxt.com/docs/components/<name>`) or the `nuxt-ui` MCP tools. Do not guess based on a similar library, an older Nuxt UI major version, or what "seems like it should exist." Existing usage elsewhere in this codebase is not proof of correctness — copy-pasted mistakes have already propagated across multiple files this way (see the `UModal` `@close` incident below). Verify against the docs directly, every time, regardless of what the codebase already does.
 
 - `UModal` has no plain `close` event. Of its close-related emits, only `close:prevent` (fired when a dismiss attempt is blocked, e.g. `dismissible: false`) and `update:open` (fired on every open/close transition) exist — it also emits `enter`/`after:enter`/`leave`/`after:leave` lifecycle events, which are unrelated to closing. To react to a dismiss from any path (button click, Escape, outside-click), watch the `v-model:open` ref itself; a `@close` handler will silently never fire.
-- A `ref` on a Nuxt UI component does not reliably expose `$el` pointing at its rendered root — `UDashboardSidebar`'s component ref returned `$el` as an internal placeholder text/comment node, silently breaking a `ResizeObserver` attached to it with no error thrown anywhere. The fix was a stable marker class added via the component's own `:ui` prop, queried with `document.querySelector`, not trusting the ref's `$el`. Treat any exposed instance member exactly like a prop/slot/event: verify it renders what you think it does before relying on it, especially for anything that only fails silently (wrong measurement, no-op) rather than throwing.
 - If a fix involves reacting to a component closing/changing/submitting, confirm the actual emitted event name in the docs before wiring a handler to it.
 - If CodeRabbit (or any reviewer) suggests an API that doesn't hold up against the real docs, correct it and move on — do not adopt an unverified suggestion just because it was proposed with confidence.
 
@@ -378,7 +352,6 @@ Use this for every new client:
 ```bash
 yarn client:onboard \
   --slug pottery-house-krabi \
-  --organization-id "<existing-better-auth-organization-id>" \
   --vertical experience \
   --maps-url "https://www.google.com/maps/place/Pottery+House+Krabi/..." \
   --maps-url "https://www.google.com/maps/place/Beachfront+Pottery+Krabi/..." \

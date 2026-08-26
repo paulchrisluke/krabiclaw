@@ -26,7 +26,7 @@
   <article v-else class="rounded-3xl border border-default bg-default p-8 sm:p-9">
     <div class="mb-5 flex items-start gap-4">
       <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-sm font-semibold text-muted">
-        <img v-if="review.avatarUrl" :src="review.avatarUrl" :alt="review.author" class="size-full object-cover" loading="lazy" decoding="async">
+        <img v-if="portrait" :src="portrait" :alt="review.author" class="size-full object-cover" loading="lazy" decoding="async">
         <span v-else>{{ getInitials(review.author) }}</span>
       </div>
       <div class="min-w-0 flex-1">
@@ -77,11 +77,11 @@ import { getInitials } from '~/utils/formatters'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   review: {
     id?: string | number
     author: string
-    avatarUrl?: string | null
+    media?: Array<{ slot: string; public_url?: string | null }>
     rating: number
     content: string
     title?: string | null
@@ -91,4 +91,6 @@ defineProps<{
   }
   variant?: 'compact' | 'full'
 }>()
+
+const portrait = computed(() => props.review.media?.find(item => item.slot === 'portrait')?.public_url || null)
 </script>

@@ -171,7 +171,6 @@ interface BusinessLocation {
   is_primary: boolean
   status: string
   last_synced_at: string | null
-  hero_media_asset_id?: string | null
   notification_phone?: string | null
   timezone?: string | null
 }

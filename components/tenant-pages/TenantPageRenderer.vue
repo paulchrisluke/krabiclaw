@@ -16,15 +16,15 @@
             {{ text(block.data.subtitle) || text(block.data.description) || page.summary }}
           </p>
           <TenantPageButton v-if="text(block.data.cta_label) && text(block.data.cta_url)" class="mt-8" :label="text(block.data.cta_label)" :url="text(block.data.cta_url)" />
-          <img v-if="text(block.data.url)" :src="text(block.data.url)" :alt="text(block.data.alt) || page.title" class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl">
+          <img v-if="blockMedia(block, 'media')" :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl">
         </div>
       </template>
 
       <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" :page-title="page.title" />
 
       <template v-else-if="block.type === 'image'">
-        <figure v-if="text(block.data.url)" class="my-12">
-          <img :src="text(block.data.url)" :alt="text(block.data.alt) || page.title" class="w-full rounded-2xl object-cover shadow-lg">
+        <figure v-if="blockMedia(block, 'media')" class="my-12">
+          <img :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="w-full rounded-2xl object-cover shadow-lg">
           <figcaption v-if="text(block.data.caption)" class="mt-3 text-center text-sm text-muted">{{ text(block.data.caption) }}</figcaption>
         </figure>
       </template>
@@ -87,7 +87,7 @@
           <h2 v-if="text(block.data.title)" class="mb-6 text-2xl font-semibold">{{ text(block.data.title) }}</h2>
           <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             <article v-for="(item, index) in gridItems(block)" :key="item.id || item.title || index" class="rounded-2xl border border-default bg-default p-6 shadow-sm">
-              <img v-if="item.image_url" :src="item.image_url" :alt="item.title || page.title" class="mb-5 aspect-[4/3] w-full rounded-xl object-cover">
+              <img v-if="gridItemMedia(item)" :src="gridItemMedia(item)!" :alt="item.title || page.title" class="mb-5 aspect-[4/3] w-full rounded-xl object-cover">
               <p v-if="item.value" class="text-3xl font-bold text-primary">{{ item.value }}</p>
               <h3 v-if="item.title" class="text-lg font-semibold">{{ item.title }}</h3>
               <p v-if="item.description" class="mt-2 text-sm leading-6 text-muted">{{ item.description }}</p>
@@ -133,7 +133,7 @@ const sanitizer = useHtmlSanitizer()
 const canonicalBlawbyPaths = new Set(['/about', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
 const isCanonicalBlawbyPage = (path: string) => canonicalBlawbyPaths.has(path)
 
-type GridItem = { id?: string; title?: string; description?: string; value?: string; image_url?: string; label?: string; url?: string; amount?: string }
+type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null }>; label?: string; url?: string; amount?: string }
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -148,9 +148,13 @@ function sectionKey(block: TenantPageBlock): string | undefined {
 }
 
 function galleryImages(block: TenantPageBlock): Array<{ id?: string; url: string; alt?: string; caption?: string }> {
-  const value = block.data.images
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is { id?: string; url: string; alt?: string; caption?: string } => Boolean(item && typeof item === 'object' && typeof (item as Record<string, unknown>).url === 'string'))
+  return block.media
+    .filter(item => item.slot === 'gallery' && item.public_url)
+    .map(item => ({ id: item.asset_id, url: item.public_url!, alt: item.alt_text ?? undefined }))
+}
+
+function blockMedia(block: TenantPageBlock, slot: string) {
+  return block.media.find(item => item.slot === slot && item.public_url) ?? null
 }
 
 function asItems(value: unknown): GridItem[] {
@@ -160,18 +164,27 @@ function asItems(value: unknown): GridItem[] {
     title: text(item.title) || text(item.name) || undefined,
     description: text(item.description) || text(item.summary) || text(item.body) || undefined,
     value: text(item.value) || undefined,
-    image_url: text(item.image_url) || undefined,
+    media: Array.isArray(item.media) ? item.media as GridItem['media'] : [],
     label: text(item.label) || text(item.cta_label) || undefined,
     url: text(item.url) || text(item.cta_url) || undefined,
     amount: item.amount == null ? undefined : String(item.amount),
   }))
 }
 
+function gridItemMedia(item: GridItem) {
+  const media = item.media ?? []
+  const asset = media.find(candidate => ['thumbnail', 'hero', 'featured', 'cover'].includes(candidate.slot ?? '')) ?? media[0]
+  return asset?.thumbnail_url || asset?.public_url || null
+}
+
 function gridItems(block: TenantPageBlock): GridItem[] {
-  if (block.type === 'feature_grid') {
-    return asItems(block.data.items ?? block.data.features ?? block.data.statistics ?? block.data.people)
-  }
-  return asItems(block.data.items)
+  const items = block.type === 'feature_grid'
+    ? asItems(block.data.items ?? block.data.features ?? block.data.statistics ?? block.data.people)
+    : asItems(block.data.items)
+  return items.map((item, index) => {
+    const media = block.media.filter(asset => asset.slot === `items.${index}.image`)
+    return { ...item, media: media.length ? media : item.media }
+  })
 }
 
 function donationItems(block: TenantPageBlock): GridItem[] {

@@ -164,7 +164,7 @@ import { getVerticalCopy } from '~/utils/vertical-copy'
 interface Site {
   brand_name?: string | null
   brand_description?: string | null
-  logo_url?: string | null
+  media?: Array<{ slot?: string; public_url?: string | null }>
   plan?: string | null
   vertical?: string | null
   config?: { phone?: string | null } | null
@@ -249,7 +249,9 @@ const locationsError = computed(() => props.error)
 
 const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
 const year = new Date().getFullYear()
-const logoUrl = computed(() => props.site?.logo_url || null)
+const logoUrl = computed(() => Array.isArray(props.site?.media)
+  ? (props.site.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
+  : null)
 const restaurantName = computed(() => props.site?.brand_name?.trim() || '')
 const tagline = computed(() => props.site?.brand_description?.trim() || '')
 const sitePlan = computed(() => props.site?.plan)

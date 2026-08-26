@@ -29,12 +29,11 @@ interface TenantBlogPost {
   title: string
   excerpt?: string | null
   category?: string | null
-  author_name?: string | null
   updated_at?: string | null
   published_at?: string | null
   read_time_minutes?: number | null
   featured_order?: number | null
-  featured_image?: { public_url: string | null; kind: string | null } | null
+  media?: Array<{ asset_id: string; slot: string; public_url: string | null; kind: string | null }>
 }
 
 const { siteId, draftId, site } = useTenantSite()
@@ -42,7 +41,7 @@ if (!siteId && !draftId) throw createError({ statusCode: 404 })
 
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
 
-const { blogList, error, pending, config } = await usePublicPageData()
+const { blogList, error, pending, config, site: publicSite } = await usePublicPageData()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
 useSocialMetadata(() => ({
@@ -52,8 +51,8 @@ useSocialMetadata(() => ({
   label: 'Blog',
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
 }))

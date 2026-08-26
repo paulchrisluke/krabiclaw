@@ -48,7 +48,7 @@
 
           <div v-else-if="detailKey === 'logo'" class="space-y-6">
             <p class="text-base text-muted">Choose an image from the site media library or upload a new logo.</p>
-            <MediaPicker v-model="form.logo_asset_id" :site-id="siteId" accept="image" title="Select logo" />
+            <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
           </div>
 
           <div v-else-if="detailKey === 'description'" class="space-y-6">
@@ -157,8 +157,7 @@ const siteId = await useDashboardSiteId()
 interface SiteSettingsResponse {
   brand_name?: string | null
   brand_description?: string | null
-  logo_url?: string | null
-  logo_asset_id?: string | null
+  media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
   contact_email?: string | null
   brand_color?: string | null
   default_currency?: string | null
@@ -226,7 +225,7 @@ const loadedSettings = ref<SiteSettingsResponse | null>(null)
 const loadedNotifications = ref<{ whatsapp_phone: string | null; channels: string[] } | null>(null)
 const originalSignature = ref('')
 const form = reactive({
-  brand_name: '', brand_description: '', logo_asset_id: null as string | null, contact_email: '', brand_color: '',
+  brand_name: '', brand_description: '', logoAssetId: null as string | null, contact_email: '', brand_color: '',
   default_currency: DEFAULT_CURRENCY as CurrencyCode, google_analytics_measurement_id: '', google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
@@ -248,7 +247,7 @@ const searchSummary = computed(() => loadedSettings.value?.robots === 'noindex,n
 const domainSummary = computed(() => dashboard.site.value?.custom_domain || dashboard.site.value?.public_url || 'Not connected')
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.brand_name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
-  { id: 'logo', label: 'Logo', summary: loadedSettings.value?.logo_asset_id ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
+  { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
@@ -294,7 +293,7 @@ function navigateFromNavbar() {
 function editorSignature(key: string | null) {
   switch (key) {
     case 'name': return JSON.stringify(form.brand_name)
-    case 'logo': return JSON.stringify(form.logo_asset_id)
+    case 'logo': return JSON.stringify(form.logoAssetId)
     case 'description': return JSON.stringify(form.brand_description)
     case 'color': return JSON.stringify(form.brand_color)
     case 'contact': return JSON.stringify(form.contact_email)
@@ -330,7 +329,7 @@ function fillForm(settings: SiteSettingsResponse) {
   loadedSettings.value = settings
   form.brand_name = settings.brand_name ?? ''
   form.brand_description = settings.brand_description ?? ''
-  form.logo_asset_id = settings.logo_asset_id ?? null
+  form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : DEFAULT_CURRENCY
@@ -401,7 +400,7 @@ async function saveCurrentEditor() {
   try {
     switch (detailKey.value) {
       case 'name': await patchSettings({ brand_name: form.brand_name.trim() }, 'Brand name saved'); break
-      case 'logo': await patchSettings({ logo_asset_id: form.logo_asset_id || '' }, 'Logo saved'); break
+      case 'logo': await patchSettings({ media: form.logoAssetId ? [{ asset_id: form.logoAssetId, slot: 'logo' }] : [] }, 'Logo saved'); break
       case 'description': await patchSettings({ brand_description: form.brand_description }, 'Description saved'); break
       case 'color': await patchSettings({ brand_color: form.brand_color }, 'Brand color saved'); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }, 'Contact details saved'); break

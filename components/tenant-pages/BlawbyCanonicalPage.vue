@@ -73,9 +73,8 @@ function block(type: string, predicate?: (_data: RecordValue) => boolean) {
   return props.page.blocks.find(candidate => candidate.type === type && (!predicate || predicate(candidate.data))) ?? null
 }
 
-function assetUrl(value: unknown): string | null {
-  const record = recordValue(value)
-  return stringValue(record.url) || null
+function mediaUrl(block: PublicTenantPage['blocks'][number] | null | undefined, slot: string): string | null {
+  return block?.media.find(item => item.slot === slot)?.public_url || null
 }
 
 const heroBlock = computed(() => block('hero'))
@@ -84,18 +83,18 @@ const heroTitle = computed(() => stringValue(heroBlock.value?.data.title) || pro
 const heroDescription = computed(() => stringValue(heroBlock.value?.data.description) || props.page.summary || '')
 
 const teamBlock = computed(() => block('feature_grid', data => data.type === 'team' || Array.isArray(data.people)))
-const teamFeatures = computed(() => arrayRecords(teamBlock.value?.data.features).map(feature => ({
+const teamFeatures = computed(() => arrayRecords(teamBlock.value?.data.features).map((feature, index) => ({
   title: stringValue(feature.title),
   description: stringValue(feature.description),
-  icon_url: assetUrl(feature.icon),
+  media: teamBlock.value?.media.filter(item => item.slot === `features.${index}.icon`) ?? [],
 })).filter(feature => feature.title))
-const teamPeople = computed(() => arrayRecords(teamBlock.value?.data.people).map(person => ({
+const teamPeople = computed(() => arrayRecords(teamBlock.value?.data.people).map((person, index) => ({
   first_name: stringValue(person.first_name),
   last_name: stringValue(person.last_name),
   title: stringValue(person.title) || null,
   bio: stringValue(person.bio) || null,
   url: stringValue(person.url) || null,
-  image_url: assetUrl(person.image),
+  media: teamBlock.value?.media.filter(item => item.slot === `people.${index}.image`) ?? [],
 })).filter(person => person.first_name || person.last_name))
 
 const impactBlock = computed(() => block('feature_grid', data => data.section === 'donation' && Array.isArray(data.items)))
@@ -114,7 +113,14 @@ const offerings = computed<PublicOfferingSummary[]>(() => arrayRecords(servicesB
   label: stringValue(item.label) || null,
   summary: stringValue(item.description) || null,
   short_description: stringValue(item.description) || null,
-  thumbnail_url: stringValue(item.image_url) || null,
+  media: arrayRecords(item.media).map(media => ({
+    asset_id: stringValue(media.asset_id),
+    slot: stringValue(media.slot),
+    public_url: stringValue(media.public_url),
+    thumbnail_url: stringValue(media.thumbnail_url) || null,
+    kind: stringValue(media.kind),
+    alt_text: stringValue(media.alt_text) || null,
+  })).filter(media => media.asset_id && media.slot && media.public_url && media.kind),
   canonical_path: stringValue(item.url),
   sort_order: 0,
   featured: false,
@@ -123,7 +129,7 @@ const servicesProps = computed(() => ({
   title: stringValue(servicesBlock.value?.data.title),
   accent: stringValue(servicesBlock.value?.data.accent),
   description: stringValue(servicesBlock.value?.data.description),
-  decorationUrl: assetUrl(servicesBlock.value?.data.decoration),
+  decorationUrl: mediaUrl(servicesBlock.value, 'decoration'),
 }))
 
 const faqBlock = computed(() => block('faq'))
@@ -133,14 +139,14 @@ const faqs = computed<PublicSiteQa[]>(() => arrayRecords(faqBlock.value?.data.it
   answer: stringValue(item.description) || null,
   sort_order: 0,
 })).filter(item => item.id && item.question))
-const faqDecoration = computed(() => assetUrl(faqBlock.value?.data.decoration))
+const faqDecoration = computed(() => mediaUrl(faqBlock.value, 'decoration'))
 
 const reviewsBlock = computed(() => block('testimonial_grid'))
 const reviewsDescription = computed(() => stringValue(reviewsBlock.value?.data.description) || undefined)
 const reviews = computed<PublicSiteReview[]>(() => arrayRecords(reviewsBlock.value?.data.items).map(item => ({
   id: stringValue(item.id),
   author_name: stringValue(item.title),
-  reviewer_photo_url: null,
+  media: [],
   rating: Number(item.value) || 5,
   title: null,
   content: stringValue(item.description),
@@ -183,8 +189,8 @@ const ctaProps = computed(() => ({
   description: stringValue(ctaBlock.value?.data.description) || null,
   label: stringValue(ctaBlock.value?.data.label),
   destination: stringValue(ctaBlock.value?.data.url),
-  backgroundUrl: assetUrl(ctaBlock.value?.data.background),
-  featuredUrl: assetUrl(ctaBlock.value?.data.featured),
+  backgroundUrl: mediaUrl(ctaBlock.value, 'background'),
+  featuredUrl: mediaUrl(ctaBlock.value, 'featured'),
 }))
 
 const legalVariant = computed<BlawbyShieldVariant>(() => {

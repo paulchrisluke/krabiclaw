@@ -178,7 +178,7 @@ const { site, siteId } = useTenantSite()
 const route = useRoute()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
+const { locations, config, getField, reservationPolicyByLocation, site: publicSite } = await usePublicPageData()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Pure experience-vertical sites book per-experience on /experiences/[slug].
@@ -237,19 +237,24 @@ function getLocationLabel(location: ApiRecord): string | null {
 }
 
 function getLocationMediaKind(location: ApiRecord): 'image' | 'video' | null {
-  if (location.kind === 'video') return 'video'
-  if (location.kind === 'image' || location.public_url || location.thumbnail_url) return 'image'
-  return null
+  const media = getLocationMedia(location)
+  return media?.kind === 'video' ? 'video' : media?.public_url ? 'image' : null
 }
 
 function getLocationMediaUrl(location: ApiRecord): string | null {
-  const kind = getLocationMediaKind(location)
-  if (kind === 'video') return String(location.public_url ?? '') || null
-  return String(location.public_url ?? location.thumbnail_url ?? '') || null
+  const media = getLocationMedia(location)
+  return String(media?.public_url ?? media?.thumbnail_url ?? '') || null
 }
 
 function getLocationPoster(location: ApiRecord): string | null {
-  return String(location.thumbnail_url ?? (location.kind === 'image' ? location.public_url : '') ?? '') || null
+  const media = getLocationMedia(location)
+  return String(media?.thumbnail_url ?? (media?.kind === 'image' ? media.public_url : '') ?? '') || null
+}
+
+function getLocationMedia(location: ApiRecord): ApiRecord | null {
+  return Array.isArray(location.media)
+    ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
+    : null
 }
 
 const heroSubtitle = computed(() => {
@@ -450,8 +455,8 @@ useSocialMetadata(() => ({
   description: resCopy.value.seoReservationDescription(brandName.value),
   brand: {
     siteName: brandName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
   heroImage: primaryLocationSocialImage.value ? { url: primaryLocationSocialImage.value } : null,

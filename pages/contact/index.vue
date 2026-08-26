@@ -264,7 +264,7 @@ const businessName = computed(() => site?.brand_name?.trim() ?? '')
 const isDraftPreview = computed(() => Boolean(draftId && !siteId))
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig } = await usePublicPageData()
+const { locations, config: siteConfig, site: publicSite } = await usePublicPageData()
 
 interface ContactLocation {
   address?: string | {
@@ -394,8 +394,8 @@ useSocialMetadata(() => ({
   description: siteConfig.value?.brand_description || '',
   brand: {
     siteName: businessName.value,
-    logoUrl: siteConfig.value?.logo_url || null,
-    faviconUrl: siteConfig.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: siteConfig.value?.brand_color || null,
   },
 }))

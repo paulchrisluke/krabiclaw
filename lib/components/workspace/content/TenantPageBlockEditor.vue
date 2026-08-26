@@ -11,19 +11,19 @@
 
     <template v-else-if="block.type === 'image'">
       <UFormField label="Media asset">
-        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @change="setAsset" />
+        <MediaPicker :site-id="siteId" :model-value="mediaAt('media', 0)?.asset_id" accept="image" @change="setAsset" />
       </UFormField>
       <UFormField label="Caption"><UInput :model-value="stringField('caption')" @update:model-value="setString('caption', $event)" /></UFormField>
     </template>
 
     <template v-else-if="block.type === 'gallery'">
       <div class="space-y-3">
-        <div v-for="(assetId, index) in stringArray('asset_ids')" :key="`${assetId}-${index}`" class="flex items-center gap-3">
+        <div v-for="(media, index) in mediaForSlot('gallery')" :key="`${media.asset_id}-${index}`" class="flex items-center gap-3">
           <span class="w-6 text-center text-xs text-muted">{{ index + 1 }}</span>
-          <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="assetId" accept="image" @update:model-value="setArrayItem('asset_ids', index, $event ?? '')" />
-          <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove gallery image" @click="removeArrayItem('asset_ids', index)" />
+          <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" accept="image" @update:model-value="setMediaAt('gallery', index, $event)" />
+          <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove gallery image" @click="removeMediaAt('gallery', index)" />
         </div>
-        <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" @click="addArrayItem('asset_ids', '')">Add image</UButton>
+        <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" @click="addMedia('gallery')">Add image</UButton>
       </div>
     </template>
 
@@ -71,7 +71,7 @@
         <UFormField class="md:col-span-2" label="Subtitle"><UTextarea :model-value="stringField('subtitle')" :rows="3" autoresize @update:model-value="setString('subtitle', $event)" /></UFormField>
       </div>
       <UFormField label="Hero image">
-        <MediaPicker :site-id="siteId" :model-value="stringField('asset_id')" accept="image" @change="setAsset" />
+        <MediaPicker :site-id="siteId" :model-value="mediaAt('media', 0)?.asset_id" accept="image" @change="setAsset" />
       </UFormField>
       <div class="grid gap-4 md:grid-cols-2">
         <UFormField label="CTA label"><UInput :model-value="stringField('cta_label')" @update:model-value="setString('cta_label', $event)" /></UFormField>
@@ -113,12 +113,12 @@
               <UFormField label="Title"><UInput :model-value="objectField(index, 'items', 'title', ['name'])" @update:model-value="setObjectField('items', index, 'title', $event)" /></UFormField>
               <UFormField label="Value"><UInput :model-value="objectField(index, 'items', 'value')" @update:model-value="setObjectField('items', index, 'value', $event)" /></UFormField>
               <UFormField class="md:col-span-2" label="Description"><UTextarea :model-value="objectField(index, 'items', 'description', ['summary', 'body'])" :rows="2" autoresize @update:model-value="setObjectField('items', index, 'description', $event)" /></UFormField>
-              <UFormField label="Image URL"><UInput :model-value="objectField(index, 'items', 'image_url')" @update:model-value="setObjectField('items', index, 'image_url', $event)" /></UFormField>
+              <UFormField label="Image"><MediaPicker :site-id="siteId" :model-value="mediaAt(`items.${index}.image`, 0)?.asset_id" accept="image" @update:model-value="setMediaAt(`items.${index}.image`, 0, $event)" /></UFormField>
               <UFormField label="Link URL"><UInput :model-value="objectField(index, 'items', 'url', ['cta_url'])" @update:model-value="setObjectField('items', index, 'url', $event)" /></UFormField>
               <UFormField label="Link label"><UInput :model-value="objectField(index, 'items', 'label', ['cta_label'])" @update:model-value="setObjectField('items', index, 'label', $event)" /></UFormField>
             </div>
           </div>
-          <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" @click="addObjectItem('items', { title: '', description: '', value: '', image_url: '', label: '', url: '' })">Add item</UButton>
+          <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" @click="addObjectItem('items', { title: '', description: '', value: '', label: '', url: '' })">Add item</UButton>
         </div>
       </template>
 
@@ -201,15 +201,35 @@ function setString(key: string, value: unknown) {
   emitBlock({ ...props.block, data: { ...props.block.data, [key]: value == null ? '' : String(value) } })
 }
 
-function setAsset(asset: { id: string; altText?: string } | null) {
+function setAsset(asset: { asset_id: string; alt_text?: string } | null) {
   emitBlock({
     ...props.block,
-    data: {
-      ...props.block.data,
-      asset_id: asset?.id ?? '',
-      alt: asset?.altText ?? '',
-    },
+    data: { ...props.block.data, alt: asset?.alt_text ?? '' },
+    media: asset ? [{ asset_id: asset.asset_id, slot: 'media', sort_order: 0 }, ...props.block.media.filter(item => item.slot !== 'media')] : props.block.media.filter(item => item.slot !== 'media'),
   })
+}
+
+function mediaForSlot(slot: string) {
+  return props.block.media.filter(item => item.slot === slot).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+}
+
+function mediaAt(slot: string, index: number) {
+  return mediaForSlot(slot)[index]
+}
+
+function setMediaAt(slot: string, index: number, assetId: string | null | undefined) {
+  const slotMedia = mediaForSlot(slot)
+  if (assetId !== null && assetId !== undefined) slotMedia[index] = { asset_id: assetId, slot, sort_order: index }
+  else slotMedia.splice(index, 1)
+  emitBlock({ ...props.block, media: [...props.block.media.filter(item => item.slot !== slot), ...slotMedia.map((item, sort_order) => ({ ...item, sort_order }))] })
+}
+
+function addMedia(slot: string) {
+  setMediaAt(slot, mediaForSlot(slot).length, '')
+}
+
+function removeMediaAt(slot: string, index: number) {
+  setMediaAt(slot, index, null)
 }
 
 function setNumber(key: string, value: unknown) {
@@ -225,20 +245,6 @@ function stringArray(key: string): string[] {
 function setStringList(key: string, value: unknown) {
   const list = String(value ?? '').split('\n').map(item => item.trim()).filter(Boolean)
   emitBlock({ ...props.block, data: { ...props.block.data, [key]: list } })
-}
-
-function setArrayItem(key: string, index: number, value: string) {
-  const list = stringArray(key)
-  list[index] = value
-  emitBlock({ ...props.block, data: { ...props.block.data, [key]: list } })
-}
-
-function addArrayItem(key: string, value: string) {
-  emitBlock({ ...props.block, data: { ...props.block.data, [key]: [...stringArray(key), value] } })
-}
-
-function removeArrayItem(key: string, index: number) {
-  emitBlock({ ...props.block, data: { ...props.block.data, [key]: stringArray(key).filter((_, itemIndex) => itemIndex !== index) } })
 }
 
 function objectArray(key: string): Array<Record<string, unknown>> {
@@ -285,7 +291,16 @@ function addObjectItem(key: string, item: Record<string, unknown>) {
 }
 
 function removeObjectItem(key: string, index: number) {
-  emitBlock({ ...props.block, data: { ...props.block.data, [key]: objectArray(key).filter((_, itemIndex) => itemIndex !== index) } })
+  const media = key === 'items'
+    ? props.block.media.flatMap((item) => {
+        const match = /^items\.(\d+)\.image$/.exec(item.slot)
+        if (!match) return [item]
+        const itemIndex = Number(match[1])
+        if (itemIndex === index) return []
+        return [{ ...item, slot: itemIndex > index ? `items.${itemIndex - 1}.image` : item.slot }]
+      })
+    : props.block.media
+  emitBlock({ ...props.block, data: { ...props.block.data, [key]: objectArray(key).filter((_, itemIndex) => itemIndex !== index) }, media })
 }
 
 function setObjectArray(key: string, items: Array<Record<string, unknown>>) {

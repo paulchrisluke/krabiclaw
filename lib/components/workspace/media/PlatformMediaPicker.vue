@@ -80,7 +80,7 @@
             :key="image.id"
             type="button"
             class="relative aspect-square overflow-hidden rounded-lg border-2 transition-all"
-            :class="pendingAsset?.id === image.id ? 'border-primary' : 'border-transparent hover:border-default'"
+            :class="pendingAsset?.asset_id === image.id ? 'border-primary' : 'border-transparent hover:border-default'"
             @click="onSelect(image)"
           >
             <UImage :src="image.thumbnail_url || image.public_url || ''" alt="" class="h-full w-full object-cover" />
@@ -111,7 +111,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [assetId: string | null]
-  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string; altText: string } | null]
+  change: [asset: { asset_id: string; public_url: string; thumbnail_url: string; alt_text: string } | null]
 }>()
 
 interface PlatformMediaAsset {
@@ -133,7 +133,7 @@ const isPlatformMediaResponse = (value: unknown): value is { media: PlatformMedi
   )
 
 const isOpen = ref(false)
-const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; altText: string } | null>(null)
+const pendingAsset = ref<{ asset_id: string; public_url: string; thumbnail_url: string; alt_text: string } | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const images = ref<PlatformMediaAsset[]>([])
@@ -231,24 +231,19 @@ function open() {
 
 function onSelect(asset: PlatformMediaAsset) {
   pendingAsset.value = {
-    id: asset.id,
-    publicUrl: asset.public_url ?? '',
-    thumbnailUrl: asset.thumbnail_url ?? '',
-    altText: asset.alt_text || '',
+    asset_id: asset.id,
+    public_url: asset.public_url ?? '',
+    thumbnail_url: asset.thumbnail_url ?? '',
+    alt_text: asset.alt_text || '',
   }
 }
 
 function confirm() {
   if (!pendingAsset.value) return
-  selectedUrl.value = pendingAsset.value.thumbnailUrl || pendingAsset.value.publicUrl
-  selectedAlt.value = pendingAsset.value.altText
-  emit('update:modelValue', pendingAsset.value.id)
-  emit('change', {
-    id: pendingAsset.value.id,
-    publicUrl: pendingAsset.value.publicUrl,
-    thumbnailUrl: pendingAsset.value.thumbnailUrl,
-    altText: pendingAsset.value.altText,
-  })
+  selectedUrl.value = pendingAsset.value.thumbnail_url || pendingAsset.value.public_url
+  selectedAlt.value = pendingAsset.value.alt_text
+  emit('update:modelValue', pendingAsset.value.asset_id)
+  emit('change', pendingAsset.value)
   isOpen.value = false
 }
 

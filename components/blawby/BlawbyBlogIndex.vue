@@ -48,8 +48,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   label: 'Blog',
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.logo_url || null,
-    faviconUrl: identity.value.favicon_url || null,
+    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

@@ -17,25 +17,25 @@
         @click="$emit('update:modelValue', loc.id)"
       >
         <!-- Location image if available -->
-        <div v-if="loc.public_url" class="aspect-16/7 w-full overflow-hidden bg-muted shrink-0">
+        <div v-if="locationMedia(loc)?.public_url" class="aspect-16/7 w-full overflow-hidden bg-muted shrink-0">
           <img
-            v-if="loc.kind === 'image'"
-            :src="loc.public_url ?? ''"
+            v-if="locationMedia(loc)?.kind === 'image'"
+            :src="locationMedia(loc)?.public_url ?? ''"
             :alt="loc.title ?? ''"
             class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           />
           <div
-            v-else-if="loc.kind === 'video'"
+            v-else-if="locationMedia(loc)?.kind === 'video'"
             class="relative h-full w-full bg-muted"
           >
             <img
-              v-if="loc.thumbnail_url"
-              :src="loc.thumbnail_url"
+              v-if="locationMedia(loc)?.thumbnail_url"
+              :src="locationMedia(loc)?.thumbnail_url || ''"
               :alt="loc.title ?? ''"
               class="h-full w-full object-cover"
             />
             <div class="absolute inset-0 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" class="w-12 h-12" :class="loc.thumbnail_url ? 'text-white drop-shadow' : 'text-muted'" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+              <svg viewBox="0 0 24 24" class="w-12 h-12" :class="locationMedia(loc)?.thumbnail_url ? 'text-white drop-shadow' : 'text-muted'" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
               </svg>
             </div>
@@ -101,9 +101,7 @@ export interface BookingLocation {
   title?: string | null
   address?: unknown
   phone?: string | null
-  public_url?: string | null
-  kind?: 'image' | 'video' | null
-  thumbnail_url?: string | null
+  media?: Array<{ slot: string; public_url?: string | null; thumbnail_url?: string | null; kind?: 'image' | 'video' | null }>
   opening_hours?: unknown
   timezone?: string | null
 }
@@ -117,6 +115,8 @@ defineEmits<{
   'update:modelValue': [id: string]
   next: []
 }>()
+
+const locationMedia = (location: BookingLocation) => location.media?.find(item => item.slot === 'hero') ?? null
 
 function formatAddress(address: unknown): string {
   if (!address) return ''

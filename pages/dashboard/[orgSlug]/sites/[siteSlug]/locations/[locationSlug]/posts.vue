@@ -135,10 +135,7 @@
             v-model:slug="editForm.slug"
             v-model:seo-title="editForm.seo_title"
             v-model:seo-description="editForm.seo_description"
-            v-model:image-asset-id="editForm.image_asset_id"
-            v-model:image-preview-url="editForm.imagePreviewUrl"
-            v-model:image-kind="editForm.imageKind"
-            v-model:gallery-media="editForm.gallery_media"
+            v-model:media="editForm.media"
             v-model:selected-channels="selectedChannels"
             :eyebrow="composing ? 'New location post' : 'Location post'"
             :status-text="String(selectedPost?.status ?? '')"
@@ -316,14 +313,13 @@ watch([postsResource, postsPending, postsResourceError], ([resource, pending, er
 // Selection / compose
 const selectedPost = ref<ApiRecord | null>(null)
 const composing = ref(false)
-interface GalleryFormItem {
-  media_asset_id: string
-  caption: string
+interface MediaFormItem {
+  asset_id: string
+  slot: 'cover' | 'gallery'
   alt_text: string
   public_url?: string | null
   thumbnail_url?: string | null
   kind?: string | null
-  role?: string | null
 }
 
 const editForm = reactive({
@@ -332,10 +328,7 @@ const editForm = reactive({
   slug: '',
   seo_title: '',
   seo_description: '',
-  image_asset_id: '' as string | null,
-  imagePreviewUrl: '' as string | null,
-  imageKind: 'image' as string | null,
-  gallery_media: [] as GalleryFormItem[],
+  media: [] as MediaFormItem[],
 })
 const selectedChannels = ref<string[]>(['site'])
 
@@ -351,10 +344,7 @@ function resetEditForm() {
   editForm.slug = ''
   editForm.seo_title = ''
   editForm.seo_description = ''
-  editForm.image_asset_id = null
-  editForm.imagePreviewUrl = null
-  editForm.imageKind = 'image'
-  editForm.gallery_media = []
+  editForm.media = []
 }
 
 const openCompose = () => {
@@ -379,10 +369,8 @@ const selectPost = (post: ApiRecord) => {
   editForm.slug = post.slug ?? ''
   editForm.seo_title = post.seo_title ?? ''
   editForm.seo_description = post.seo_description ?? ''
-  editForm.image_asset_id = post.image_asset_id ?? null
-  editForm.imagePreviewUrl = post.public_url ?? null
-  editForm.imageKind = post.kind ?? 'image'
-  editForm.gallery_media = normalizeGalleryForForm(post.gallery_media ?? post.gallery ?? [])
+  const media = Array.isArray(post.media) ? post.media : []
+  editForm.media = normalizeMediaForForm(media)
   selectedChannels.value = ['site']
 }
 
@@ -390,29 +378,23 @@ const selectPost = (post: ApiRecord) => {
 const saving = ref(false)
 const publishing = ref(false)
 
-function normalizeGalleryForForm(items: unknown): GalleryFormItem[] {
+function normalizeMediaForForm(items: unknown): MediaFormItem[] {
   if (!Array.isArray(items)) return []
-  const gallery: GalleryFormItem[] = []
+  const media: MediaFormItem[] = []
   for (const item of items) {
     if (!item || typeof item !== 'object') continue
     const record = item as Record<string, unknown>
-    if (record.role === 'cover') continue
-    const mediaAssetId = typeof record.mediaAssetId === 'string'
-      ? record.mediaAssetId
-      : typeof record.media_asset_id === 'string'
-        ? record.media_asset_id
-        : ''
-    if (!mediaAssetId) continue
-    gallery.push({
-      media_asset_id: mediaAssetId,
-      caption: typeof record.caption === 'string' ? record.caption : '',
-      alt_text: typeof record.alt === 'string' ? record.alt : typeof record.alt_text === 'string' ? record.alt_text : '',
-      public_url: typeof record.url === 'string' ? record.url : typeof record.public_url === 'string' ? record.public_url : null,
-      thumbnail_url: typeof record.thumbnailUrl === 'string' ? record.thumbnailUrl : typeof record.thumbnail_url === 'string' ? record.thumbnail_url : null,
+    if ((record.slot !== 'cover' && record.slot !== 'gallery') || typeof record.asset_id !== 'string') continue
+    media.push({
+      asset_id: record.asset_id,
+      slot: record.slot,
+      alt_text: typeof record.alt_text === 'string' ? record.alt_text : '',
+      public_url: typeof record.public_url === 'string' ? record.public_url : null,
+      thumbnail_url: typeof record.thumbnail_url === 'string' ? record.thumbnail_url : null,
       kind: typeof record.kind === 'string' ? record.kind : null,
     })
   }
-  return gallery
+  return media
 }
 
 function buildPostPayload(locationId: string, postId?: string) {
@@ -422,14 +404,10 @@ function buildPostPayload(locationId: string, postId?: string) {
     slug: editForm.slug || undefined,
     seo_title: editForm.seo_title || null,
     seo_description: editForm.seo_description || null,
-    image_asset_id: editForm.image_asset_id,
     location_id: locationId ?? (postId ? null : undefined),
-    gallery_media: editForm.gallery_media.map((item, index) => ({
-      media_asset_id: item.media_asset_id,
-      role: 'gallery',
-      sort_order: index,
-      caption: item.caption || null,
-      alt_text: item.alt_text || null,
+    media: editForm.media.map(item => ({
+      asset_id: item.asset_id,
+      slot: item.slot,
     })),
   }
 }
@@ -472,10 +450,10 @@ function hasUnsavedEdits(): boolean {
   if (editForm.slug !== (post.slug ?? '')) return true
   if (editForm.seo_title !== (post.seo_title ?? '')) return true
   if (editForm.seo_description !== (post.seo_description ?? '')) return true
-  if (editForm.image_asset_id !== (post.image_asset_id ?? null)) return true
+  const postMedia = Array.isArray(post.media) ? post.media : []
   if (currentLocationId.value !== (post.location_id ?? null)) return true
-  const currentGallery = normalizeGalleryForForm(post.gallery_media ?? post.gallery ?? [])
-  if (JSON.stringify(editForm.gallery_media) !== JSON.stringify(currentGallery)) return true
+  const currentMedia = normalizeMediaForForm(postMedia)
+  if (JSON.stringify(editForm.media) !== JSON.stringify(currentMedia)) return true
   return false
 }
 

@@ -5,7 +5,7 @@ export function platformBlogRepository(): BlogPostRepository {
     isRecord(value)
     && typeof value.id === 'string'
     && typeof value.title === 'string'
-    && typeof value.body === 'string'
+    && isRecord(value.content_document)
   const isPostResponse = (value: unknown): value is { post: BlogPost } =>
     isRecord(value) && isBlogPost(value.post)
   const isCreatedPostResponse = (value: unknown): value is { id: string; post: BlogPost } =>

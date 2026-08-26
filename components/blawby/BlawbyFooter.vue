@@ -13,6 +13,11 @@
             :content="description"
             class="blawby-footer-copy max-w-xl text-sm leading-6 text-gray-300"
           />
+          <ul v-if="documents.length" class="flex flex-wrap gap-x-4 gap-y-2 text-sm" role="list">
+            <li v-for="document in documents" :key="document.asset_id">
+              <a :href="document.public_url!" class="blawby-footer-link" target="_blank" rel="noopener">{{ document.alt_text || document.file_name || 'Document' }}</a>
+            </li>
+          </ul>
         </div>
 
         <div class="mt-16 grid grid-cols-2 gap-8 md:grid-cols-4 xl:col-span-2 xl:mt-0">
@@ -59,9 +64,10 @@ const props = defineProps<{
 const year = new Date().getFullYear()
 const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || '')
 const description = computed(() => props.compliance?.footer_disclaimer || props.site.brand_description || '')
-const footerLogo = computed(() => typeof props.compliance?.metadata?.logo_dark_url === 'string'
-  ? props.compliance.metadata.logo_dark_url
-  : props.site.logo_url)
+const documents = computed(() => props.compliance?.media.filter(item => item.slot === 'document' && item.public_url) ?? [])
+const footerLogo = computed(() => props.site.media.find(item => item.slot === 'logo_dark')?.public_url
+  || props.site.media.find(item => item.slot === 'logo')?.public_url
+  || null)
 const pageLabels: Record<string, string> = {
   '/schedule': 'Request a Consultation', '/contact': 'Contact', '/pricing': 'Pricing',
   '/about': 'About', '/donate': 'Donate', '/blog': 'Blog',

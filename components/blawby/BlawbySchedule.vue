@@ -41,7 +41,7 @@
       </div>
     </section>
 
-    <BlawbyFaqSection :items="scheduleQa" :decoration-url="assetUrl(qaBlock?.decoration)" />
+    <BlawbyFaqSection :items="scheduleQa" :decoration-url="mediaUrl(qaBlock, 'decoration')" />
     <BlawbyReviewsSection :reviews="routeData.reviews" />
     <BlawbyScheduleRedirect
       v-if="scheduleCta"
@@ -51,7 +51,7 @@
       :notice="optionalString(scheduleCta.notice)"
       :label="String(scheduleCta.buttonText || consultation.cta_label)"
       :destination="scheduleCtaDestination"
-      :background-url="assetUrl(scheduleCta.background)"
+      :background-url="mediaUrl(scheduleCta, 'background')"
       @click="trackConsultation('schedule_cta', scheduleCtaDestination)"
     />
   </div>
@@ -78,8 +78,10 @@ function block(type: string) {
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null
 }
-function assetUrl(value: unknown) {
-  return value && typeof value === 'object' && typeof (value as ApiRecord).url === 'string' ? String((value as ApiRecord).url) : null
+function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
+  const media = Array.isArray(value?.media) ? value.media : []
+  const item = media.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
+  return typeof item?.public_url === 'string' ? item.public_url : null
 }
 
 const scheduleHero = computed(() => block('schedule_hero'))
@@ -99,7 +101,7 @@ const guidanceParagraphs = computed(() => guidanceContent.value
   .split(/\n\n+/)
   .map(paragraph => paragraph.trim())
   .filter(paragraph => paragraph && !paragraph.startsWith('#')))
-const guidanceDecoration = computed(() => assetUrl(guidanceBlock.value?.decoration))
+const guidanceDecoration = computed(() => mediaUrl(guidanceBlock.value, 'decoration'))
 const scheduleCta = computed(() => block('schedule_cta'))
 const scheduleCtaDestination = computed(() => consultation.value.external_url || String(scheduleCta.value?.buttonUrl || consultation.value.schedule_path))
 const qaBlock = computed(() => block('schedule_qa'))
@@ -128,8 +130,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   description: page.value.seo_description || page.value.summary || '',
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.logo_url || null,
-    faviconUrl: identity.value.favicon_url || null,
+    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

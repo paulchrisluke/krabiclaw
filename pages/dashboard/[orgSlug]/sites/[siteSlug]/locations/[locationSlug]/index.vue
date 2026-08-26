@@ -11,7 +11,7 @@
     <template #body>
       <UPage>
         <UPageBody>
-          <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)] pb-(--dashboard-mobile-nav-clearance) md:pb-20">
+          <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)] pb-20">
             <div v-if="loading" class="space-y-5">
               <USkeleton class="aspect-[16/9] w-full rounded-2xl" />
               <USkeleton v-for="index in 3" :key="index" class="h-44 rounded-2xl" />
@@ -118,8 +118,6 @@
           </div>
         </UPageBody>
       </UPage>
-
-      <DashboardViewPublicPill :to="publicLocationUrl" />
     </template>
   </UDashboardPanel>
 </template>
@@ -181,13 +179,11 @@ const tabs = [
 ]
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
-const locationImage = computed(() => dashboardLocationRow.value?.preview_image_url ?? '')
-const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Address not set')
-const publicLocationUrl = computed(() => {
-  const siteUrl = dashboard.site.value?.public_url
-  const slug = dashboardLocationRow.value?.slug
-  return siteUrl && slug ? `${siteUrl}/locations/${slug}` : ''
+const locationImage = computed(() => {
+  const media = dashboardLocationRow.value?.media.find(item => item.slot === 'hero')
+  return media?.thumbnail_url || media?.public_url || ''
 })
+const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Address not set')
 
 const capabilities = computed(() => {
   const vertical = dashboard.site.value?.vertical

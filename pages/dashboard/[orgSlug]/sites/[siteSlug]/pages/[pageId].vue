@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', mobileBottomNav: false })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const pageId = computed(() => String(route.params.pageId || ''))

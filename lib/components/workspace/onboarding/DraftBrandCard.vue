@@ -135,7 +135,6 @@ type DraftUploadedImage = {
   mimeType: string | null
   fileName: string | null
   fileSize: number | null
-  category: 'logo' | 'other'
 }
 
 export type DraftBrandForm = {

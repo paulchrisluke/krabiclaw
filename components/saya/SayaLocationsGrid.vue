@@ -17,26 +17,26 @@
       >
         <div class="aspect-video overflow-hidden bg-muted">
           <!-- Poster image when location media is available. Video swaps in when the card scrolls into view. -->
-          <template v-if="loc.kind === 'video' && loc.public_url && visibleLocCards.has(locIdx)">
+          <template v-if="locationMedia(loc)?.kind === 'video' && locationMedia(loc)?.public_url && visibleLocCards.has(locIdx)">
             <ClientOnly>
               <video
-                :src="loc.public_url"
-                :poster="loc.thumbnail_url || undefined"
+                :src="locationMedia(loc)?.public_url || ''"
+                :poster="locationMedia(loc)?.thumbnail_url || undefined"
                 autoplay muted loop playsinline preload="none"
                 class="aspect-video w-full object-contain"
               />
             </ClientOnly>
           </template>
           <UImage
-            v-else-if="loc.thumbnail_url"
-            :src="loc.thumbnail_url"
+            v-else-if="locationMedia(loc)?.thumbnail_url"
+            :src="locationMedia(loc)?.thumbnail_url || ''"
             :alt="loc.title"
             loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
           <UImage
-            v-else-if="loc.kind !== 'video' && loc.public_url"
-            :src="loc.public_url"
+            v-else-if="locationMedia(loc)?.kind !== 'video' && locationMedia(loc)?.public_url"
+            :src="locationMedia(loc)?.public_url || ''"
             :alt="loc.title"
             loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
@@ -75,9 +75,7 @@ interface Props {
       slug: string
       title: string
       city?: string
-      public_url?: string
-      thumbnail_url?: string
-      kind?: string
+      media?: Array<{ slot: string; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null }>
     }>
     heading?: string
     isAuthenticated?: boolean
@@ -91,7 +89,9 @@ const props = withDefaults(defineProps<Props>(), {
   data: () => ({})
 })
 
+type Location = NonNullable<NonNullable<Props['data']>['locations']>[number]
 const locations = computed(() => props.data?.locations || [])
+const locationMedia = (location: Location) => location.media?.find(item => item.slot === 'hero') ?? null
 const heading = computed(() => props.data?.heading || 'Our Locations')
 
 // Load location card videos via IntersectionObserver when they scroll into

@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', mobileBottomNav: false })
+definePageMeta({ layout: 'dashboard' })
 
 useSeoMeta({ title: 'New Page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

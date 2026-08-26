@@ -99,7 +99,7 @@
                   loading="lazy"
                 />
                 <span class="absolute inset-x-0 bottom-0 bg-black/65 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
-                  {{ asset.location_id ? 'Move here' : 'Attach' }}
+                  Attach
                 </span>
               </button>
             </div>
@@ -123,7 +123,6 @@ interface MediaAsset {
   thumbnail_url: string | null
   alt_text: string | null
   file_name: string | null
-  location_id: string | null
   category: string | null
 }
 
@@ -178,7 +177,7 @@ async function loadPhotos() {
   loading.value = true
   loadError.value = null
   try {
-    const params = new URLSearchParams({ locationId: locationId.value, limit: '100' })
+    const params = new URLSearchParams({ ownerType: 'business_location', ownerId: locationId.value, slot: 'gallery', limit: '100' })
     const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
       validate: isMediaResponse,
     })
@@ -212,10 +211,9 @@ async function retryPendingUpload() {
   await uploadSelectedFile(pendingUpload.file, pendingUpload.options)
 }
 
-async function uploadSelectedFile(file: File, existingOptions?: { category?: string | null, locationId?: string | null }) {
+async function uploadSelectedFile(file: File, existingOptions?: { category?: string | null }) {
   try {
     const options = existingOptions ?? {
-      locationId: locationId.value,
       category: categoryFilter.value === 'all' ? 'other' : categoryFilter.value,
     }
     const result = await upload(file, {
@@ -226,11 +224,7 @@ async function uploadSelectedFile(file: File, existingOptions?: { category?: str
       return
     }
 
-    toast.add({
-      description: result.kind === 'video' ? 'Video uploaded' : 'Photo uploaded',
-      color: 'success'
-    })
-    await loadPhotos()
+    await replaceGallery([...assets.value.map(asset => asset.id), result.asset_id], result.kind === 'video' ? 'Video uploaded and attached' : 'Photo uploaded and attached')
   } catch (error) {
     toast.add({ description: uploadError.value ?? (error instanceof Error ? error.message : 'Failed to upload file'), color: 'error' })
   }
@@ -240,11 +234,11 @@ async function loadAttachableMedia() {
   attachLoading.value = true
   try {
     const params = new URLSearchParams({ limit: '100' })
-    if (locationId.value) params.set('locationId', locationId.value)
     const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
       validate: isMediaResponse,
     })
-    attachableAssets.value = res.media.filter(asset => asset.location_id !== locationId.value)
+    const attachedIds = new Set(assets.value.map(asset => asset.id))
+    attachableAssets.value = res.media.filter(asset => !attachedIds.has(asset.id))
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load media library', color: 'error' })
   } finally {
@@ -274,18 +268,35 @@ async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: st
   }
 }
 
+async function replaceGallery(assetIds: string[], successMessage: string) {
+  if (!locationId.value) return false
+  try {
+    await dashboardApi(`${siteApiBase}/media/placements`, {
+      method: 'PUT',
+      body: {
+        placement: { owner_type: 'business_location', owner_id: locationId.value, slot: 'gallery' },
+        asset_ids: assetIds,
+      },
+      validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
+    })
+    toast.add({ description: successMessage, color: 'success' })
+    await loadPhotos()
+    return true
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to update location media', color: 'error' })
+    return false
+  }
+}
+
 async function attachPhoto(asset: MediaAsset) {
-  const updated = await patchAsset(asset, {
-    location_id: locationId.value,
-    category: categoryFilter.value === 'all' ? (asset.category || 'other') : categoryFilter.value
-  }, 'Photo attached')
+  const updated = await replaceGallery([...assets.value.map(item => item.id), asset.id], 'Media attached')
   if (updated) {
     attachableAssets.value = attachableAssets.value.filter(item => item.id !== asset.id)
   }
 }
 
 async function detachPhoto(asset: MediaAsset) {
-  await patchAsset(asset, { location_id: null }, 'Photo detached from this location')
+  await replaceGallery(assets.value.filter(item => item.id !== asset.id).map(item => item.id), 'Media detached from this location')
 }
 
 function categoryMenu(asset: MediaAsset) {
@@ -306,11 +317,13 @@ const { data: photosResource, pending: photosPending, error: photosError } = awa
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
       return await loadDashboardMedia(requestEvent, siteId, {
-        locationId: locationId.value,
+        ownerType: 'business_location',
+        ownerId: locationId.value,
+        slot: 'gallery',
         limit: 100,
       })
     }
-    const params = new URLSearchParams({ locationId: locationId.value, limit: '100' })
+    const params = new URLSearchParams({ ownerType: 'business_location', ownerId: locationId.value, slot: 'gallery', limit: '100' })
     return await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
       validate: isMediaResponse,
     })

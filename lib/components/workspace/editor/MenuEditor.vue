@@ -229,7 +229,7 @@
             class="grid gap-3 border-b border-default px-4 py-3 last:border-0 hover:bg-elevated sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto_auto] sm:items-center"
           >
             <MediaPicker
-              :model-value="item.media?.[0]?.id ?? null"
+              :model-value="item.media?.[0]?.asset_id ?? null"
               :site-id="props.siteId"
               :location-id="props.locationId"
               accept="any"
@@ -238,13 +238,13 @@
             >
               <div class="group relative size-14 overflow-hidden rounded-md border border-default bg-muted">
                 <img
-                  v-if="item.public_url && item.kind !== 'video'"
-                  :src="item.public_url"
+                  v-if="item.media?.[0]?.public_url && item.media[0].kind !== 'video'"
+                  :src="item.media[0].public_url"
                   :alt="item.name"
                   class="size-full object-cover"
                 />
                 <div v-else class="flex size-full items-center justify-center">
-                  <UIcon :name="item.kind === 'video' ? 'i-lucide-film' : 'i-lucide-image'" class="size-5 text-muted" />
+                  <UIcon :name="item.media?.[0]?.kind === 'video' ? 'i-lucide-film' : 'i-lucide-image'" class="size-5 text-muted" />
                 </div>
                 <div class="absolute inset-0 flex items-center justify-center bg-default/70 opacity-0 transition-opacity group-hover:opacity-100">
                   <UIcon name="i-lucide-image" class="size-4 text-highlighted" />
@@ -432,7 +432,7 @@ const itemEditPath = (item: MenuItem) => ({
 })
 
 const coverMediaUpdate = (item: MenuItem, assetId: string | null): UpdateMenuItemRequest => {
-  const rest = (item.media ?? []).slice(1).map((media) => ({ asset_id: media.id }))
+  const rest = (item.media ?? []).slice(1).map((media) => ({ asset_id: media.asset_id }))
   const next = assetId?.trim()
   return { media: next ? [{ asset_id: next }, ...rest] : rest }
 }

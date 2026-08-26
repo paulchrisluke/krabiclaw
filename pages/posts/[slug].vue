@@ -8,16 +8,15 @@
 definePageMeta({ layout: 'saya' })
 
 interface PublicPostMedia {
-  id?: string
-  mediaAssetId?: string
-  url: string
-  thumbnailUrl?: string | null
+  asset_id: string
+  public_url: string
+  thumbnail_url: string | null
   kind: 'image' | 'video'
-  role?: 'cover' | 'gallery'
-  caption?: string | null
-  alt?: string | null
-  width?: number | null
-  height?: number | null
+  slot: 'cover' | 'gallery'
+  sort_order: number
+  alt_text: string | null
+  width: number | null
+  height: number | null
 }
 
 interface PublicPost {
@@ -26,19 +25,20 @@ interface PublicPost {
   title: string
   body: string
   summary: string
-  createTime: string | null
-  publicPath: string
+  post_type: 'standard' | 'offer' | 'event' | 'update'
+  published_at: string | null
   public_path: string
-  canonicalUrl: string | null
   canonical_url: string | null
   seo_title?: string | null
   seo_description?: string | null
-  cover?: PublicPostMedia | null
   media: PublicPostMedia[]
-  gallery: PublicPostMedia[]
-  callToAction?: { actionType: string | null; url: string } | null
-  event?: { title: string | null; startDate: string | null; endDate: string | null } | null
-  offer?: { title: string | null; couponCode: string | null; terms: string | null } | null
+  cta_type: string | null
+  cta_url: string | null
+  event_title: string | null
+  event_start: string | null
+  event_end: string | null
+  offer_coupon: string | null
+  offer_terms: string | null
   location?: { id: string; title: string | null; slug: string | null } | null
 }
 
@@ -54,12 +54,13 @@ const route = useRoute()
 const requestEvent = useRequestEvent()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
+const { site: publicSite } = useSiteShellState()
 
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
 const postBrand = computed(() => ({
   name: siteName.value,
-  logoUrl: site?.logo_url || null,
+  logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
 }))
 
 const { data, error } = await useAsyncData(
@@ -91,20 +92,20 @@ const { data, error } = await useAsyncData(
 if (error.value) throw error.value
 
 const post = computed(() => data.value?.post ?? null)
-const coverMedia = computed(() => post.value?.cover || post.value?.media?.[0] || null)
-const pagePath = computed(() => post.value?.public_path || post.value?.publicPath || `/posts/${slug.value}`)
+const coverMedia = computed(() => post.value?.media.find(item => item.slot === 'cover') || post.value?.media[0] || null)
+const pagePath = computed(() => post.value?.public_path || `/posts/${slug.value}`)
 const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)
 const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${siteName.value}.`)
 const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
-  path: post.value?.canonical_url || post.value?.canonicalUrl || pagePath.value,
+  path: post.value?.canonical_url || pagePath.value,
   title: seoTitle.value,
   description: seoDescription.value,
   pageType: 'article',
-  brand: { siteName: siteName.value, logoUrl: site?.logo_url || null },
+  brand: { siteName: siteName.value, logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null },
   heroImage: coverMedia.value
-    ? { url: coverMedia.value.url, kind: coverMedia.value.kind, thumbnailUrl: coverMedia.value.thumbnailUrl }
+    ? { url: coverMedia.value.public_url, kind: coverMedia.value.kind, thumbnailUrl: coverMedia.value.thumbnail_url }
     : null,
-  publishedAt: post.value?.createTime || null,
+  publishedAt: post.value?.published_at || null,
 }))
 
 useSchemaOrg([
@@ -112,14 +113,16 @@ useSchemaOrg([
     '@type': 'Article',
     headline: seoTitle.value,
     description: seoDescription.value,
-    datePublished: post.value?.createTime,
+    datePublished: post.value?.published_at,
     image: ogImageUrl.value,
     url: canonicalUrl.value,
     author: { '@type': 'Organization', name: siteName.value },
     publisher: {
       '@type': 'Organization',
       name: siteName.value,
-      logo: site?.logo_url ? { '@type': 'ImageObject', url: site.logo_url } : undefined,
+      logo: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url
+        ? { '@type': 'ImageObject', url: publicSite.value.media.find(item => item.slot === 'logo')!.public_url }
+        : undefined,
     },
   })),
 ])

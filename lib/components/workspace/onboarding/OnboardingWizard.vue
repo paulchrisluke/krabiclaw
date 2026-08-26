@@ -374,12 +374,12 @@ const addLocationEndpoint = '/api/dashboard/locations/add'
 
 const WELCOME_POINTS: [string, string][] = isAddingLocation.value
   ? [
-      ['i-lucide-globe', 'Pulls the address, hours, photos & reviews from Google'],
+      ['i-lucide-globe', 'Pulls the address, hours & reviews from Google'],
       ['i-lucide-sparkles', 'Adds the location to your existing site as you watch'],
       ['i-lucide-map-pin', 'Goes live on your site as soon as you save it'],
     ]
   : [
-      ['i-lucide-globe', 'Pulls your address, hours, photos & reviews from Google'],
+      ['i-lucide-globe', 'Pulls your address, hours & reviews from Google'],
       ['i-lucide-sparkles', 'Builds your homepage and story as you watch'],
       ['i-lucide-rocket', 'Launches on your included site address when you are ready'],
     ]

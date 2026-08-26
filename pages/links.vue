@@ -88,7 +88,7 @@ const linksPage = computed(() => data.value)
 const isBlawby = computed(() => linksPage.value?.site.template === 'blawby')
 const layoutName = computed(() => isBlawby.value ? 'blawby' : 'saya')
 const brandName = computed(() => linksPage.value?.site.brand_name || linksPage.value?.page.title || 'Links')
-const profileImageUrl = computed(() => linksPage.value?.site.logo_url || null)
+const profileImageUrl = computed(() => linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null)
 
 const templateClass = computed(() => isBlawby.value
   ? 'min-h-[calc(100vh-8rem)] bg-[color:var(--blawby-token-bg)] px-4 py-10 sm:px-6 sm:py-14'
@@ -146,7 +146,7 @@ useSocialMetadata(() => ({
   title: linksPage.value?.page.seo_title || `${brandName.value} Links`,
   description: linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || '',
   robots: linksPage.value?.page.robots || 'noindex,follow',
-  brand: { siteName: brandName.value, logoUrl: linksPage.value?.site.logo_url || null },
+  brand: { siteName: brandName.value, logoUrl: linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null },
   heroImage: profileImageUrl.value ? { url: profileImageUrl.value } : null,
 }))
 </script>

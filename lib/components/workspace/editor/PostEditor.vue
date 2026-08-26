@@ -81,7 +81,7 @@
 
         <UFormField v-if="showImage" label="Cover image">
           <MediaPicker
-            v-model="imageAssetId"
+            v-model="coverMediaId"
             :site-id="siteId"
             accept="image"
             title="Select post image"
@@ -102,23 +102,19 @@
           <div v-if="galleryMedia.length > 0" class="space-y-2">
             <div
               v-for="(item, index) in galleryMedia"
-              :key="item.media_asset_id"
+              :key="item.asset_id"
               class="grid gap-2 rounded-md border border-default p-2 sm:grid-cols-[3rem_minmax(0,1fr)_auto]"
             >
               <div class="size-12 overflow-hidden rounded bg-muted">
                 <img
                   v-if="item.public_url && item.kind !== 'video'"
                   :src="item.public_url"
-                  :alt="item.alt_text || item.caption || 'Gallery media'"
+                  :alt="item.alt_text || 'Gallery media'"
                   class="h-full w-full object-cover"
                 />
                 <div v-else class="flex h-full w-full items-center justify-center">
                   <UIcon :name="item.kind === 'video' ? 'i-lucide-film' : 'i-lucide-image'" class="size-4 text-muted" />
                 </div>
-              </div>
-              <div class="grid gap-2 sm:grid-cols-2">
-                <UInput v-model="item.caption" placeholder="Caption" size="sm" />
-                <UInput v-model="item.alt_text" placeholder="Alt text" size="sm" />
               </div>
               <UButton
                 icon="i-lucide-trash-2"
@@ -207,9 +203,9 @@ interface ChannelOption {
   disabled?: boolean
 }
 
-interface PostGalleryItem {
-  media_asset_id: string
-  caption: string
+interface PostMediaItem {
+  asset_id: string
+  slot: 'cover' | 'gallery'
   alt_text: string
   public_url?: string | null
   thumbnail_url?: string | null
@@ -223,13 +219,29 @@ const seoTitle = defineModel<string>('seoTitle', { default: '' })
 const seoDescription = defineModel<string>('seoDescription', { default: '' })
 const excerpt = defineModel<string>('excerpt', { default: '' })
 const category = defineModel<string>('category', { default: '' })
-const imageAssetId = defineModel<string | null>('imageAssetId', { default: null })
-const imagePreviewUrl = defineModel<string | null>('imagePreviewUrl', { default: null })
-const imageKind = defineModel<string | null>('imageKind', { default: 'image' })
-const galleryMedia = defineModel<PostGalleryItem[]>('galleryMedia', { default: () => [] })
+const media = defineModel<PostMediaItem[]>('media', { default: () => [] })
 const selectedChannels = defineModel<string[]>('selectedChannels', { default: () => [] })
 const locationId = defineModel<string>('locationId', { default: '' })
 const galleryPickerAssetId = ref<string | null>(null)
+const coverMedia = computed(() => media.value.find(item => item.slot === 'cover') ?? null)
+const coverMediaId = computed({
+  get: () => coverMedia.value?.asset_id ?? null,
+  set: (assetId: string | null) => {
+    if (assetId) return
+    media.value = media.value.filter(item => item.slot !== 'cover')
+  },
+})
+const imagePreviewUrl = computed(() => coverMedia.value?.thumbnail_url ?? coverMedia.value?.public_url ?? null)
+const imageKind = computed(() => coverMedia.value?.kind ?? 'image')
+const galleryMedia = computed({
+  get: () => media.value.filter(item => item.slot === 'gallery'),
+  set: (items: PostMediaItem[]) => {
+    media.value = [
+      ...media.value.filter(item => item.slot !== 'gallery'),
+      ...items.map(item => ({ ...item, slot: 'gallery' as const })),
+    ]
+  },
+})
 
 interface LocationOption {
   value: string
@@ -297,7 +309,7 @@ const emit = defineEmits<{
   unpublish: []
   delete: []
   close: []
-  imageChange: [asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null]
+  imageChange: [asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null]
 }>()
 
 const { trackEditorSessionStarted } = useAnalytics()
@@ -319,24 +331,35 @@ const formattedPublishedAt = computed(() => {
   return publishedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 })
 
-function handleImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  imagePreviewUrl.value = asset?.thumbnailUrl ?? asset?.publicUrl ?? null
-  imageKind.value = asset?.kind ?? 'image'
+function handleImageChange(asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null) {
+  media.value = [
+    ...(asset
+      ? [{
+          asset_id: asset.asset_id,
+          slot: 'cover' as const,
+          alt_text: '',
+          public_url: asset.public_url,
+          thumbnail_url: asset.thumbnail_url,
+          kind: asset.kind ?? 'image',
+        }]
+      : []),
+    ...media.value.filter(item => item.slot !== 'cover'),
+  ]
   emit('imageChange', asset)
 }
 
-function handleGalleryChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
+function handleGalleryChange(asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null) {
   if (!asset) return
-  const exists = galleryMedia.value.some((item) => item.media_asset_id === asset.id)
+  const exists = galleryMedia.value.some((item) => item.asset_id === asset.asset_id)
   if (!exists) {
     galleryMedia.value = [
       ...galleryMedia.value,
       {
-        media_asset_id: asset.id,
-        caption: '',
+        asset_id: asset.asset_id,
+        slot: 'gallery',
         alt_text: '',
-        public_url: asset.publicUrl,
-        thumbnail_url: asset.thumbnailUrl,
+        public_url: asset.public_url,
+        thumbnail_url: asset.thumbnail_url,
         kind: asset.kind ?? 'image',
       },
     ]

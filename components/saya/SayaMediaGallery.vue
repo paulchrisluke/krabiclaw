@@ -119,7 +119,7 @@
 <script setup lang="ts">
 interface GalleryItem {
   url: string
-  kind?: 'image' | 'video'
+  kind?: 'image' | 'video' | 'file'
   poster?: string
   alt?: string
   description?: string

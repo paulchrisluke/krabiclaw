@@ -44,8 +44,8 @@
               @click="openLightbox(i)"
             >
               <img
-                :src="photo.local_url || photo.google_url || photo.thumbnail_url"
-                :alt="photo.description || ''"
+                :src="photo.public_url"
+                :alt="photo.alt_text || ''"
                 loading="lazy"
                 class="block w-full transition-opacity duration-200 group-hover:opacity-80"
               />
@@ -71,13 +71,12 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { locations, photosList, pending, config } = await usePublicPageData()
-const photos = photosList
+const { locations, media: photos, pending, config, site: publicSite } = await usePublicPageData()
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
 
 const locationsById = computed(() => Object.fromEntries(locations.value.map(l => [l.id, l])))
 function locationTitle(photo) {
-  return locations.value.length > 1 ? locationsById.value[photo.location_id]?.title : null
+  return locations.value.length > 1 ? locationsById.value[photo.owner_id]?.title : null
 }
 
 const cats = [
@@ -108,10 +107,10 @@ function openLightbox(i) {
 
 const lightboxItems = computed(() =>
   sorted.value.map(p => ({
-    url: p.local_url || p.google_url || p.thumbnail_url,
+    url: p.public_url,
     kind: 'image',
-    description: p.description,
-    alt: p.description || p.category || ''
+    description: p.alt_text,
+    alt: p.alt_text || p.category || ''
   }))
 )
 
@@ -122,8 +121,8 @@ useSocialMetadata(() => ({
   label: 'Gallery',
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
 }))

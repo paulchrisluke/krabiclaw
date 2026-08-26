@@ -15,7 +15,7 @@
 
       <UImage
         v-else-if="result"
-        :src="result.publicUrl"
+        :src="result.public_url"
         alt="Generated image"
         class="h-full w-full object-cover"
       />
@@ -93,7 +93,7 @@
         :class="i === activeIdx ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'"
         @click="activeIdx = i; result = item"
       >
-        <UImage :src="item.publicUrl" alt="" class="h-full w-full object-cover" />
+        <UImage :src="item.public_url" alt="" class="h-full w-full object-cover" />
       </button>
     </div>
   </div>
@@ -104,19 +104,19 @@ import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
-  locationId?: string | null
+  resourceLocationId?: string | null
   initialPrompt?: string
   context?: string
 }>()
 
 const emit = defineEmits<{
-  keep: [asset: { id: string; publicUrl: string; thumbnailUrl: string }]
+  keep: [asset: GeneratedAsset]
   back: []
 }>()
 
 const { trackMediaGenerated } = useAnalytics()
 
-type GeneratedAsset = { id: string; publicUrl: string; thumbnailUrl: string }
+type GeneratedAsset = { asset_id: string; public_url: string; thumbnail_url: string }
 type GeneratedHistoryItem = GeneratedAsset & { prompt?: string }
 const MAX_HISTORY = 50
 
@@ -184,13 +184,13 @@ async function generate() {
   try {
     const asset = await dashboardApi<GeneratedAsset>(`/api/ai/${props.siteId}/generate-image`, {
       method: 'POST',
-      body: { prompt: promptText, locationId: props.locationId ?? undefined },
+      body: { prompt: promptText, resource_location_id: props.resourceLocationId ?? undefined },
       signal: controller.signal,
       validate: (value): value is GeneratedAsset =>
         isRecord(value)
-        && typeof value.id === 'string'
-        && typeof value.publicUrl === 'string'
-        && typeof value.thumbnailUrl === 'string',
+        && typeof value.asset_id === 'string'
+        && typeof value.public_url === 'string'
+        && typeof value.thumbnail_url === 'string',
     })
 
     if (controller.signal.aborted) return

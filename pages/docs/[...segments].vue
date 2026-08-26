@@ -34,22 +34,13 @@
           />
         </div>
 
-        <div ref="articleBodyRef" class="space-y-14">
-          <template v-for="(block, blockIndex) in contentBlocks" :key="`block-${blockIndex}`">
-            <!-- eslint-disable vue/no-v-html -->
-            <div
-              v-if="block.kind === 'html'"
-              class="prose prose-lg max-w-none text-default prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base"
-              v-html="block.html"
-            />
-            <!-- eslint-enable vue/no-v-html -->
-
-            <component
-              :is="resolveContentComponent(block.type)"
-              v-else
-              v-bind="block.props"
-            />
-          </template>
+        <div ref="articleBodyRef">
+          <BlogArticleRenderer
+            :title="doc.title"
+            :blocks="doc.content_blocks"
+            :show-title="false"
+            template="platform"
+          />
         </div>
 
         <div v-if="isOverviewDoc && siblingDocs.length" class="mt-14 grid gap-6 sm:grid-cols-2">
@@ -101,11 +92,11 @@
 
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { categoryToSlug, slugToCategory } from '~/utils/docs-categories'
-import { buildContentBlocks, type ContentComponent } from '~/utils/content-blocks'
-import { resolveContentComponent } from '~/utils/content-component-resolver'
+import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 
@@ -118,7 +109,6 @@ interface Doc {
   id: string
   title: string
   slug: string
-  body: string
   excerpt?: string | null
   category?: string | null
   seo_description?: string | null
@@ -126,17 +116,18 @@ interface Doc {
   canonical_url?: string | null
   robots?: string | null
   difficulty_level?: string | null
-  featured_image_asset_id?: string | null
   published_at?: string | null
   updated_at?: string | null
-  featured_image?: {
-    asset_id: string | null
+  author?: { id: string; name: string | null; image: string | null } | null
+  media?: Array<{
+    asset_id: string
+    slot: string
     public_url: string | null
     kind: string | null
     width: number | null
     height: number | null
-  } | null
-  components?: ContentComponent[]
+  }>
+  content_blocks: BlogEditorBlock[]
 }
 
 interface DocListItem {
@@ -155,7 +146,7 @@ const isPublicDocResponse = (value: unknown): value is { doc: Doc } =>
   && typeof value.doc.id === 'string'
   && typeof value.doc.title === 'string'
   && typeof value.doc.slug === 'string'
-  && typeof value.doc.body === 'string'
+  && Array.isArray(value.doc.content_blocks)
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
@@ -258,20 +249,17 @@ function renderMarkdown(markdown: string) {
   return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
 }
 
-const contentBlocks = computed(() =>
-  buildContentBlocks(stripLeadingTitleHeading(doc.value?.body ?? '', doc.value?.title), doc.value?.components ?? [], renderMarkdown),
-)
-const tocHtml = computed(() => contentBlocks.value
-  .filter(block => block.kind === 'html')
-  .map(block => block.html)
+const tocHtml = computed(() => (doc.value?.content_blocks ?? [])
+  .filter(block => block.type === 'heading' || block.type === 'markdown')
+  .map(block => block.type === 'heading'
+    ? `<h${Math.max(2, Math.min(6, block.level || 2))}>${DOMPurify.sanitize(String(block.data.text || ''))}</h${Math.max(2, Math.min(6, block.level || 2))}>`
+    : renderMarkdown(String(block.data.markdown || '')))
   .join('\n'))
 
 const articleBodyRef = shallowRef<Element | null>(null)
-useCopyableCodeBlocks(articleBodyRef, contentBlocks)
+useCopyableCodeBlocks(articleBodyRef, computed(() => doc.value?.content_blocks))
 const renderedComponents = computed(() => {
-  return contentBlocks.value
-    .filter((block): block is Extract<typeof block, { kind: 'component' }> => block.kind === 'component')
-    .map(block => block.component)
+  return structuredComponentsFromBlocks(doc.value?.content_blocks ?? [])
 })
 
 const orderedDocs = computed(() => (docsList.value?.docs ?? [])
@@ -319,10 +307,8 @@ const nextDoc = computed(() =>
     : null,
 )
 
-const docMedia = computed(() => resolveMedia({
-  public_url: doc.value?.featured_image?.public_url,
-  kind: doc.value?.featured_image?.kind,
-}))
+const featuredMedia = computed(() => doc.value?.media?.find(item => item.slot === 'featured') ?? null)
+const docMedia = computed(() => resolveMedia(featuredMedia.value))
 
 const categorySlug = computed(() => categoryToSlug(doc.value?.category) || categoryParam.value)
 const docPath = computed(() => {
@@ -371,11 +357,11 @@ useContentPageSchema(computed(() => {
     title: doc.value.title,
     description: seoDescription.value,
     imageUrl: docMedia.value.url || undefined,
-    imageWidth: doc.value.featured_image?.width ?? undefined,
-    imageHeight: doc.value.featured_image?.height ?? undefined,
+    imageWidth: featuredMedia.value?.width ?? undefined,
+    imageHeight: featuredMedia.value?.height ?? undefined,
     datePublished: doc.value.published_at,
     dateModified: doc.value.updated_at,
-    authorName: 'KrabiClaw',
+    authorName: doc.value.author?.name || undefined,
     articleSection: doc.value.category || undefined,
     keywords: doc.value.seo_keywords || undefined,
     inLanguage: 'en-US',

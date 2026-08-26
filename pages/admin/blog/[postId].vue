@@ -35,7 +35,6 @@ const isPostResponse = (value: unknown): value is { post: BlogPost } =>
   && isRecord(value.post)
   && typeof value.post.id === 'string'
   && typeof value.post.title === 'string'
-  && typeof value.post.body === 'string'
   && isRecord(value.post.content_document)
   && Array.isArray(value.post.content_document.blocks)
 

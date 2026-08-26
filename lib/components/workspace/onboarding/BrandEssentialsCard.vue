@@ -124,6 +124,7 @@ import { useMediaUpload } from '~/composables/useMediaUpload'
 type EditableTenantPageBlock = Record<string, unknown> & {
   type: string
   data: Record<string, unknown>
+  media: Array<{ asset_id: string; slot: string; sort_order: number }>
 }
 
 type EditableTenantPage = {
@@ -177,8 +178,8 @@ async function onLogoSelected(event: Event) {
       URL.revokeObjectURL(logoPreviewUrl.value)
     }
     logoPreviewUrl.value = URL.createObjectURL(file)
-    const result = await uploadLogo(file, { category: 'logo' })
-    if (result) logoAssetId.value = result.id
+    const result = await uploadLogo(file)
+    if (result) logoAssetId.value = result.asset_id
   } catch {
     errorMessage.value = 'Could not upload that logo. Try a different image.'
     if (logoPreviewUrl.value?.startsWith('blob:')) {
@@ -201,7 +202,7 @@ async function onHeroSelected(event: Event) {
     }
     heroPreviewUrl.value = URL.createObjectURL(file)
     const result = await uploadHero(file)
-    if (result) heroAssetId.value = result.id
+    if (result) heroAssetId.value = result.asset_id
   } catch {
     errorMessage.value = 'Could not upload that photo. Try a different image.'
     if (heroPreviewUrl.value?.startsWith('blob:')) {
@@ -235,7 +236,7 @@ async function save() {
     // Run mutations sequentially to handle partial failures
     await applicationFetch<{ success: true }>(`${siteApiBase.value}/settings`, {
       method: 'PATCH',
-      body: { brand_color: brandColor.value, logo_asset_id: logoAssetId.value },
+      body: { brand_color: brandColor.value, media: logoAssetId.value ? [{ asset_id: logoAssetId.value, slot: 'logo' }] : [] },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     
@@ -250,7 +251,13 @@ async function save() {
       })
       const page = detail.page
       const blocks = page.blocks.map(block => block.type === 'hero'
-        ? { ...block, data: { ...block.data, asset_id: heroAssetId.value } }
+        ? {
+            ...block,
+            media: [
+              ...block.media.filter(item => item.slot !== 'media'),
+              { asset_id: heroAssetId.value!, slot: 'media', sort_order: 0 },
+            ],
+          }
         : block)
       await applicationFetch(`${siteApiBase.value}/pages/${home.id}`, {
         method: 'PATCH',

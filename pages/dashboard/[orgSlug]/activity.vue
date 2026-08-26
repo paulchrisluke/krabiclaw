@@ -53,10 +53,9 @@
                 <p class="text-xs font-semibold text-muted uppercase tracking-wide mb-2">{{ group.label }}</p>
                 <ul class="-mx-4">
                   <li v-for="ev in group.events" :key="ev.id" class="flex items-start gap-3 px-4 py-3 border-b border-default last:border-0">
-                    <UAvatar :src="ev.actor_image ?? undefined" :alt="ev.actor_name ?? 'System'" size="2xs" class="mt-0.5 shrink-0" />
                     <div class="min-w-0 flex-1">
                       <p class="text-sm text-highlighted leading-snug">
-                        <span class="font-medium">{{ ev.actor_name ?? 'System' }}</span>
+                        <span class="font-medium">{{ ev.actor_id ? 'Team member' : 'System' }}</span>
                         {{ eventLabel(ev.event_type) }}
                         <span v-if="ev.location_title" class="text-muted"> · {{ ev.location_title }}</span>
                       </p>
@@ -125,9 +124,9 @@ const { data: membersData } = await useAsyncData<{ members: Member[] }>(membersK
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-members'),
     ])
-    const db = cloudflareEnv(requestEvent).DB
-    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-    const result = await getOrganizationMembersData(db, dashboard.organization.value.id)
+    const env = cloudflareEnv(requestEvent)
+    if (!env.DB) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    const result = await getOrganizationMembersData(env, dashboard.organization.value.id)
     return { members: result.members }
   }
   return await dashboardApi<{ members: Member[] }>('/api/dashboard/members', {

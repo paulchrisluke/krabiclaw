@@ -46,12 +46,16 @@
                 class="group relative aspect-[40/21] min-w-0 overflow-hidden rounded-2xl border border-default bg-elevated shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
               >
                 <img
-                  :src="location.preview_image_url"
+                  v-if="locationMediaUrl(location)"
+                  :src="locationMediaUrl(location)!"
                   :alt="`${location.title} preview`"
                   class="size-full object-cover transition duration-300 group-hover:scale-[1.02]"
                   loading="lazy"
                   decoding="async"
                 />
+                <div v-else class="flex size-full items-center justify-center text-muted">
+                  <UIcon name="i-lucide-image-off" class="size-8" />
+                </div>
               </NuxtLink>
             </div>
             <UButton v-else :to="`${locationsPath}/new`" icon="i-lucide-plus" label="Add a location" color="neutral" variant="soft" />
@@ -67,8 +71,8 @@
             </template>
             <NuxtLink :to="`${siteDashboardPath}/settings#brand`" class="block px-5 py-5 hover:bg-elevated">
               <div class="flex items-center gap-4">
-                <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-default bg-default" :style="!settings?.logo_url ? { backgroundColor: settings?.brand_color } : undefined">
-                  <img v-if="settings?.logo_url" :src="settings.logo_url" :alt="`${siteName} logo`" class="size-full object-contain" />
+                <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-default bg-default" :style="!logoUrl ? { backgroundColor: settings?.brand_color } : undefined">
+                  <img v-if="logoUrl" :src="logoUrl" :alt="`${siteName} logo`" class="size-full object-contain" />
                   <span v-else class="text-xl font-semibold text-white">{{ siteName.slice(0, 1) }}</span>
                 </div>
                 <div class="min-w-0 flex-1">
@@ -127,7 +131,9 @@
         </div>
       </div>
 
-      <DashboardViewPublicPill :to="publicSiteUrl" />
+      <div v-if="publicSiteUrl" class="pointer-events-none fixed inset-x-0 bottom-20 z-20 flex justify-center px-4 md:bottom-5">
+        <UButton :to="publicSiteUrl" target="_blank" icon="i-lucide-external-link" label="View site" class="pointer-events-auto rounded-full px-5 shadow-lg" />
+      </div>
     </template>
   </UDashboardPanel>
 </template>
@@ -161,31 +167,35 @@ const vertical = computed(() => {
   return normalizeVertical(raw) as SiteVertical
 })
 const capabilities = computed(() => resolveCmsCapabilities(vertical.value, template.value, { site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides) }))
+const locationMediaUrl = (location: DashboardHomeData['locations'][number]) => {
+  const media = location.media.find(item => item.slot === 'hero')
+  return media?.thumbnail_url || media?.public_url || null
+}
 
 const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
     if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { requiredDashboardPreviewOrigin }] = await Promise.all([
+    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }] = await Promise.all([
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-home'),
       import('~/server/utils/member-access'),
-      import('~/server/utils/dashboard-context'),
     ])
     const environment = cloudflareEnv(requestEvent)
     const db = environment.db
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
     await assertSiteWideAccess(db, {
+      env: environment,
       memberId: organization.memberId,
       role: organization.role,
       organizationId: organization.id,
       siteId,
     })
     return await getDashboardHomeData(db, organization.id, siteId, {
+      env: environment,
       memberId: organization.memberId,
       role: organization.role,
-      ogOrigin: requiredDashboardPreviewOrigin(environment.NUXT_PUBLIC_PLATFORM_DOMAIN),
     })
   }
   return await dashboardApi<DashboardHomeData>('/api/dashboard/home', {
@@ -205,6 +215,7 @@ const overview = computed(() => {
 })
 const locations = computed(() => overview.value.locations)
 const settings = computed(() => overview.value.settings)
+const logoUrl = computed(() => settings.value.media?.find(item => item.slot === 'logo')?.public_url ?? null)
 const pages = computed(() => overview.value.pages)
 const media = computed(() => overview.value.media)
 const activeLinks = computed(() => overview.value.links.filter(item => item.status === 'active'))

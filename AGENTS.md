@@ -64,7 +64,7 @@ ChowBot and dashboard CMS are supported product surfaces. Keep MCP and ChowBot a
 - MCP flow:
   1. Generate natively with `image_generation`
   2. Call `save_generated_image_file({ site_id, attachment_id: <file-reference>, prompt })` — pass the generated image as a file reference (not raw base64)
-  3. Call `show_generated_images` with returned `asset_id` and `public_url`
+  3. Call `show_generated_images` with returned `assetId` and `publicUrl`
 
 Canonical generated-image contracts:
 
@@ -350,12 +350,11 @@ UCard `:ui` prop only accepts:
 
 Use `class` for border, background, rounded, and shadow styling.
 
-### Nuxt UI component internals must be verified, not assumed — props, slots, events, refs, and exposed instance members
+### Nuxt UI props/slots/events must be verified, not assumed
 
-Before using any Nuxt UI component prop, slot, event, template ref, or exposed instance member (`$el`, anything returned by the component's own `expose()`), verify it against the live docs (`ui.nuxt.com/docs/components/<name>`) or the `nuxt-ui` MCP tools. Do not guess based on a similar library, an older Nuxt UI major version, or what "seems like it should exist." Existing usage elsewhere in this codebase is not proof of correctness — copy-pasted mistakes have already propagated across multiple files this way (see the `UModal` `@close` incident below). Verify against the docs directly, every time, regardless of what the codebase already does.
+Before using any Nuxt UI component prop, slot, or event, verify it against the live docs (`ui.nuxt.com/docs/components/<name>`) or the `nuxt-ui` MCP tools. Do not guess based on a similar library, an older Nuxt UI major version, or what "seems like it should exist." Existing usage elsewhere in this codebase is not proof of correctness — copy-pasted mistakes have already propagated across multiple files this way (see the `UModal` `@close` incident below). Verify against the docs directly, every time, regardless of what the codebase already does.
 
 - `UModal` has no plain `close` event. Of its close-related emits, only `close:prevent` (fired when a dismiss attempt is blocked, e.g. `dismissible: false`) and `update:open` (fired on every open/close transition) exist — it also emits `enter`/`after:enter`/`leave`/`after:leave` lifecycle events, which are unrelated to closing. To react to a dismiss from any path (button click, Escape, outside-click), watch the `v-model:open` ref itself; a `@close` handler will silently never fire.
-- A `ref` on a Nuxt UI component does not reliably expose `$el` pointing at its rendered root — `UDashboardSidebar`'s component ref returned `$el` as an internal placeholder text/comment node, silently breaking a `ResizeObserver` attached to it with no error thrown anywhere. The fix was a stable marker class added via the component's own `:ui` prop, queried with `document.querySelector`, not trusting the ref's `$el`. Treat any exposed instance member exactly like a prop/slot/event: verify it renders what you think it does before relying on it, especially for anything that only fails silently (wrong measurement, no-op) rather than throwing.
 - If a fix involves reacting to a component closing/changing/submitting, confirm the actual emitted event name in the docs before wiring a handler to it.
 - If CodeRabbit (or any reviewer) suggests an API that doesn't hold up against the real docs, correct it and move on — do not adopt an unverified suggestion just because it was proposed with confidence.
 
@@ -378,7 +377,6 @@ Use this for every new client:
 ```bash
 yarn client:onboard \
   --slug pottery-house-krabi \
-  --organization-id "<existing-better-auth-organization-id>" \
   --vertical experience \
   --maps-url "https://www.google.com/maps/place/Pottery+House+Krabi/..." \
   --maps-url "https://www.google.com/maps/place/Beachfront+Pottery+Krabi/..." \

@@ -70,8 +70,8 @@
               </div>
             </div>
             <div v-if="activeFeatureItem" :id="`feature-panel-${activeFeature}`" role="tabpanel" class="relative max-w-2xl">
-              <img v-if="activeFeatureItem.image_url" :src="activeFeatureItem.image_url" :alt="activeFeatureItem.title" width="2432" height="1442" loading="lazy" class="w-full rounded-xl">
-              <div v-if="activeFeatureItem.image_url" class="absolute inset-0 flex flex-col items-center justify-end p-8 pb-16">
+              <img v-if="activeFeatureMedia" :src="activeFeatureMedia" :alt="activeFeatureItem.title" width="2432" height="1442" loading="lazy" class="w-full rounded-xl">
+              <div v-if="activeFeatureMedia" class="absolute inset-0 flex flex-col items-center justify-end p-8 pb-16">
                 <BlawbyButton :to="consultation.schedule_path" class="gap-2" @click="trackConsultation(consultation.schedule_path)">
                   <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
                   {{ consultation.cta_label }}
@@ -84,7 +84,7 @@
     </section>
 
     <BlawbyReviewsSection :reviews="routeData.reviews" />
-    <BlawbyFaqSection :items="offeringQa" :heading="`Frequently asked questions about ${offering.name}`" :decoration-url="assetUrl(qaBlock?.decoration)" />
+    <BlawbyFaqSection :items="offeringQa" :heading="`Frequently asked questions about ${offering.name}`" :decoration-url="mediaUrl(qaBlock, 'decoration')" />
 
     <BlawbyServicesSection
       v-if="routeData.offerings.length"
@@ -92,7 +92,7 @@
       :title="String(servicesBlock?.title || '')"
       :accent="String(servicesBlock?.accent || '')"
       :description="optionalString(servicesBlock?.description) || ''"
-      :decoration-url="assetUrl(servicesBlock?.decoration)"
+      :decoration-url="mediaUrl(servicesBlock, 'decoration')"
       parity-section="related-services"
     />
 
@@ -102,8 +102,8 @@
       :description="optionalString(ctaBlock?.description)"
       :label="String(ctaBlock?.label || '')"
       :destination="String(ctaBlock?.url || '')"
-      :background-url="assetUrl(ctaBlock?.background)"
-      :featured-url="assetUrl(ctaBlock?.featured)"
+      :background-url="mediaUrl(ctaBlock, 'background')"
+      :featured-url="mediaUrl(ctaBlock, 'featured')"
       @click="trackConsultation(String(ctaBlock?.url || ''))"
     />
   </article>
@@ -127,12 +127,11 @@ interface FocusableTab {
 
 const tabRefs = ref<Array<FocusableTab | null>>([])
 const gallery = computed(() => {
-  const media = [...offering.value.media]
-  if (!media.length && offering.value.hero_image_url) media.push({ id: 'hero', url: offering.value.hero_image_url, kind: 'image', alt_text: offering.value.name, width: null, height: null })
-  if (!media.length && offering.value.thumbnail_url) media.push({ id: 'thumbnail', url: offering.value.thumbnail_url, kind: 'image', alt_text: offering.value.name, width: null, height: null })
-  return media.filter(item => item.kind === 'image')
+  return offering.value.media.filter(item => ['hero', 'thumbnail', 'gallery'].includes(item.slot) && item.kind === 'image')
 })
 const activeFeatureItem = computed(() => offering.value.features[activeFeature.value] ?? null)
+const activeFeatureMedia = computed(() => offering.value.media.find(item => item.slot === `features.${activeFeature.value}.image`)?.public_url ?? null)
+const heroMedia = computed(() => offering.value.media.find(item => item.slot === 'hero') ?? offering.value.media.find(item => item.slot === 'thumbnail') ?? null)
 function pageBlock(type: string) {
   const page = props.routeData.page
   if (!page) return null
@@ -142,8 +141,10 @@ function pageBlock(type: string) {
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null
 }
-function assetUrl(value: unknown) {
-  return value && typeof value === 'object' && typeof (value as ApiRecord).url === 'string' ? String((value as ApiRecord).url) : null
+function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
+  const media = Array.isArray(value?.media) ? value.media : []
+  const item = media.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
+  return typeof item?.public_url === 'string' ? item.public_url : null
 }
 const servicesBlock = computed(() => pageBlock('services_intro'))
 const ctaBlock = computed(() => pageBlock('consultation_cta'))
@@ -193,12 +194,10 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   label: 'Service',
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.logo_url || null,
-    faviconUrl: identity.value.favicon_url || null,
+    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
-  heroImage: (offering.value.hero_image_url || offering.value.thumbnail_url)
-    ? { url: offering.value.hero_image_url || offering.value.thumbnail_url! }
-    : null,
+  heroImage: heroMedia.value ? { url: heroMedia.value.public_url } : null,
 }))
 
 useProfessionalServiceSchema(() => ({
@@ -207,7 +206,7 @@ useProfessionalServiceSchema(() => ({
   pageUrl: canonicalUrl.value,
   pageTitle: offering.value.name,
   pageDescription: offering.value.seo_description || offering.value.summary || null,
-  imageUrl: offering.value.hero_image_url || offering.value.thumbnail_url || null,
+  imageUrl: heroMedia.value?.public_url || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Services', url: servicesUrl.value },

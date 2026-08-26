@@ -92,7 +92,7 @@
         </UFormField>
 
         <UFormField label="Featured Image">
-          <PlatformMediaPicker v-model="form.featured_image_asset_id" @change="handleImageChange" />
+          <PlatformMediaPicker v-model="featuredAssetId" />
         </UFormField>
 
         <div class="space-y-4 border-t border-default pt-4">
@@ -180,10 +180,6 @@
                     <UTextarea v-model="step.text" :rows="3" placeholder="Describe exactly what the reader should do." />
                   </UFormField>
 
-                  <UFormField label="Step image">
-                    <PlatformMediaPicker v-model="step.image_asset_id" />
-                  </UFormField>
-
                   <div class="flex gap-2">
                     <UButton color="neutral" variant="ghost" size="sm" :disabled="index === 0" @click="moveItem(form.how_to_steps, index, -1)">Up</UButton>
                     <UButton color="neutral" variant="ghost" size="sm" :disabled="index === form.how_to_steps.length - 1" @click="moveItem(form.how_to_steps, index, 1)">Down</UButton>
@@ -214,8 +210,7 @@
 <script setup lang="ts">
 import { categories, difficultyLevels } from '~/config/documentation'
 import { getErrorMessage } from '~/utils/errors'
-import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
-import { useDocForm } from '~/composables/useDocForm'
+import { createEmptyFaqItem, createEmptyHowToStep, docFormContentBlocks, useDocForm } from '~/composables/useDocForm'
 import { PLATFORM_DOC_NAV_SECTION_LABELS } from '~/utils/platform-content-nav'
 import { parseOptionalNumber } from '~/utils/optional-number'
 
@@ -229,7 +224,7 @@ const isCreateDocResponse = (value: unknown): value is CreateDocResponse =>
 
 definePageMeta({ layout: 'dashboard' })
 
-const { form, canPublish, handleImageChange } = useDocForm()
+const { form, canPublish, featuredAssetId } = useDocForm()
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
 const difficultyItems = computed(() => difficultyLevels.map((item) => ({ label: item, value: item })))
 const navSectionItems = computed(() => [
@@ -280,8 +275,10 @@ function moveItem<T>(items: T[], index: number, delta: number) {
 }
 
 function buildPayload() {
+  const { body: _body, faq_items: _faqItems, faq_label: _faqLabel, faq_status: _faqStatus, faq_render_enabled: _faqRender, faq_schema_enabled: _faqSchema, how_to_steps: _howToSteps, how_to_label: _howToLabel, how_to_status: _howToStatus, how_to_render_enabled: _howToRender, how_to_schema_enabled: _howToSchema, ...fields } = form
   return {
-    ...form,
+    ...fields,
+    content_blocks: docFormContentBlocks(form),
     canonical_url: form.canonical_url.trim() || null,
     robots: form.robots.trim() || null,
     nav_section: form.nav_section.trim() || null,
@@ -289,17 +286,6 @@ function buildPayload() {
     nav_order: parseOptionalNumber(form.nav_order),
     nav_section_order: parseOptionalNumber(form.nav_section_order),
     featured_order: parseOptionalNumber(form.featured_order),
-    faq_items: form.faq_items
-      .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
-      .filter(item => item.question && item.answer),
-    how_to_steps: form.how_to_steps
-      .map(step => ({
-        name: step.name.trim(),
-        text: step.text.trim(),
-        image_asset_id: step.image_asset_id.trim() || undefined,
-        url: step.url.trim() || undefined,
-      }))
-      .filter(step => step.name && step.text),
   }
 }
 

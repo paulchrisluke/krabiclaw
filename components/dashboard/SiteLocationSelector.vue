@@ -9,12 +9,16 @@
     >
       <UCard :ui="{ body: 'p-0 sm:p-0' }" class="overflow-hidden bg-transparent shadow-none ring-0">
         <img
+          v-if="item.imageUrl"
           :src="item.imageUrl"
           :alt="`${item.label} preview`"
           class="aspect-[40/21] w-full rounded-2xl border border-default bg-elevated object-cover shadow-sm transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-[1.01] group-hover:shadow-lg"
           loading="lazy"
           decoding="async"
         />
+        <div v-else class="flex aspect-[40/21] items-center justify-center rounded-2xl border border-default bg-elevated text-muted">
+          <UIcon name="i-lucide-image-off" class="size-8" />
+        </div>
       </UCard>
     </NuxtLink>
 
@@ -39,7 +43,7 @@
 export interface SiteLocationSelectorItem {
   id: string
   label: string
-  imageUrl: string
+  imageUrl: string | null
   to: string
 }
 

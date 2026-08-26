@@ -312,26 +312,20 @@ const { data, pending, refresh } = await useAsyncData(
   async () => {
     if (import.meta.server) {
       if (!requestEvent) return null
-      const [{ cloudflareEnv }, { getAuthSession }, { getOrganizationMembersData }, { queryFirst }] = await Promise.all([
+      const [{ cloudflareEnv }, { getAuthSession }, { getOrganizationMembersData }, { resolveUserOrganization }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/auth'),
         import('~/server/utils/dashboard-members'),
-        import('~/server/db'),
+        import('~/server/utils/member-access'),
       ])
       const env = cloudflareEnv(requestEvent)
-      const db = env.db
-      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
       const session = await getAuthSession(requestEvent, env)
       if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
       const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
       if (!orgSlug) throw createError({ statusCode: 400, statusMessage: 'Organization slug is required' })
-      const org = await queryFirst<{ id: string }>(db, `
-        SELECT o.id FROM organization o
-        JOIN member m ON o.id = m.organizationId
-        WHERE m.userId = ? AND o.slug = ? LIMIT 1
-      `, [session.user.id, orgSlug])
+      const org = await resolveUserOrganization(env, { userId: session.user.id, organizationSlug: orgSlug })
       if (!org) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
-      return await getOrganizationMembersData(db, org.id)
+      return await getOrganizationMembersData(env, org.id)
     }
     return await dashboardApi<{ members: MemberRow[]; invitations: InvitationRow[] }>(
       '/api/dashboard/members',

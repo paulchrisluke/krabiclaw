@@ -1,4 +1,4 @@
-import type { BlogLifecycleState, BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput, SiteAuthor } from './types'
+import type { BlogLifecycleState, BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput } from './types'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 
 interface TenantBlogRepositoryOptions {
@@ -13,7 +13,7 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
     isRecord(value)
     && typeof value.id === 'string'
     && typeof value.title === 'string'
-    && typeof value.body === 'string'
+    && isRecord(value.content_document)
   const isPostResponse = (value: unknown): value is { post: BlogPost } =>
     isRecord(value) && isBlogPost(value.post)
   const isCreatedPostResponse = (value: unknown): value is { id: string; post: BlogPost } =>
@@ -30,14 +30,6 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
     && typeof value.content_document_updated_at === 'string'
   const isLifecycleResponse = (value: unknown): value is { success: true; lifecycle: BlogLifecycleState } =>
     isRecord(value) && value.success === true && isLifecycleState(value.lifecycle)
-  const isSiteAuthor = (value: unknown): value is SiteAuthor =>
-    isRecord(value)
-    && typeof value.id === 'string'
-    && typeof value.name === 'string'
-  const isAuthorsResponse = (value: unknown): value is { authors: SiteAuthor[] } =>
-    isRecord(value) && Array.isArray(value.authors) && value.authors.every(isSiteAuthor)
-  const isAuthorResponse = (value: unknown): value is { id: string } =>
-    isRecord(value) && typeof value.id === 'string'
 
   return {
     listUrl: dashboardBaseUrl,
@@ -84,18 +76,5 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
       return response.lifecycle
     },
 
-    async listAuthors(): Promise<SiteAuthor[]> {
-      const res = await dashboardFetch<{ authors: SiteAuthor[] }>(`${baseUrl}/authors`, scope, { validate: isAuthorsResponse })
-      return res.authors
-    },
-
-    async createAuthor(input: { name: string; title?: string | null }): Promise<SiteAuthor> {
-      const res = await dashboardFetch<{ id: string }>(`${baseUrl}/authors`, scope, {
-        method: 'POST',
-        body: input,
-        validate: isAuthorResponse,
-      })
-      return { id: res.id, name: input.name, title: input.title ?? null }
-    },
   }
 }

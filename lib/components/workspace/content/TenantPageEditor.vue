@@ -3,6 +3,19 @@
     <template #header>
       <UDashboardNavbar :title="editorTitle">
         <template #leading><DashboardNavbarLeading :detail-to="pagesPath" detail-label="Pages" /></template>
+        <template #right>
+          <UButton
+            v-if="selected?.id"
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-external-link"
+            label="Preview"
+            :to="navigablePreviewUrl"
+            target="_blank"
+            :disabled="busy !== null || !navigablePreviewUrl"
+          />
+          <UButton icon="i-lucide-check" label="Save" :loading="busy === 'save'" :disabled="busy !== null || !selected" @click="save" />
+        </template>
       </UDashboardNavbar>
     </template>
 
@@ -94,22 +107,6 @@
 
         <UAlert v-else color="error" variant="soft" title="Page unavailable" :description="pageLoadError || 'This page could not be loaded.'" />
       </div>
-    </template>
-
-    <template #footer>
-      <DashboardFooterActionBar>
-        <UButton
-          v-if="selected?.id"
-          color="neutral"
-          variant="outline"
-          icon="i-lucide-external-link"
-          label="Preview"
-          :to="navigablePreviewUrl"
-          target="_blank"
-          :disabled="busy !== null || !navigablePreviewUrl"
-        />
-        <UButton icon="i-lucide-check" label="Save" :loading="busy === 'save'" :disabled="busy !== null || !selected" @click="save" />
-      </DashboardFooterActionBar>
     </template>
   </UDashboardPanel>
 </template>

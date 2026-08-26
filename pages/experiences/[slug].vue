@@ -359,7 +359,7 @@ const siteUrl = config.public.siteUrl
 const { locale, t } = useI18n()
 const experienceCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = await usePublicPageData()
+const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById, site: publicSite } = await usePublicPageData()
 
 const experienceIsOnSale = computed(() => isSaleActive((experience.value as ApiValue) ?? {}))
 const experienceCompareAtPrice = computed(() =>
@@ -614,8 +614,8 @@ const { canonicalUrl } = useSocialMetadata(() => {
     robots: experience.value?.robots || null,
     brand: {
       siteName: siteName.value,
-      logoUrl: siteConfig.value?.logo_url || null,
-      faviconUrl: siteConfig.value?.favicon_url || null,
+      logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+      faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
       primaryColor: siteConfig.value?.brand_color || null,
     },
     heroImage: heroImageUrl ? { url: heroImageUrl } : null,

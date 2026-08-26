@@ -329,13 +329,13 @@ type PropertyValue = {
 
 type LightboxMediaItem = {
   url: string
-  kind: 'image' | 'video'
+  kind: 'image' | 'video' | 'file'
   poster?: string
   alt?: string
   description?: string
 }
 
-const { menu: pageMenu, config: siteConfig, error } = await usePublicPageData({ lazy: false })
+const { menu: pageMenu, config: siteConfig, error, site: publicSite } = await usePublicPageData({ lazy: false })
 if (error.value) {
   throw error.value
 }
@@ -514,8 +514,8 @@ useSocialMetadata(() => {
     robots: item.value?.robots || null,
     brand: {
       siteName: siteName.value,
-      logoUrl: siteConfig.value?.logo_url || null,
-      faviconUrl: siteConfig.value?.favicon_url || null,
+      logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+      faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
       primaryColor: siteConfig.value?.brand_color || null,
     },
     heroImage: heroImageUrl ? { url: heroImageUrl } : null,

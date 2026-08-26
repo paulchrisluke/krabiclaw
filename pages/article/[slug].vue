@@ -37,7 +37,7 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="articleDisplayMedia?.public_url" :media-kind="articleDisplayMedia?.kind || 'image'" :blocks="post.content_blocks" template="blawby" />
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :site-name="identity.brand_name" :media-url="articleDisplayMedia?.public_url" :media-kind="articleDisplayMedia?.kind || 'image'" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -104,8 +104,8 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
 if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
-const articleDisplayMedia = computed(() => post.value.primary_image?.public_url ? post.value.primary_image : post.value.featured_image)
-const articleSocialMedia = computed(() => resolveSocialImageUrl(post.value.primary_image) ? post.value.primary_image : post.value.featured_image)
+const articleDisplayMedia = computed(() => post.value.media.find(item => item.slot === 'featured') ?? null)
+const articleSocialMedia = computed(() => post.value.media.find(item => item.slot === 'featured') ?? null)
 const articleSocialImage = computed(() => resolveSocialImageUrl(articleSocialMedia.value))
 const ctaBlock = computed(() => {
   const page = data.value.page
@@ -143,12 +143,12 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   description: resolvedSeo.value.description,
   pageType: 'article',
   label: 'Article',
-  author: post.value.author_name || null,
+  author: post.value.author?.name || null,
   publishedAt: post.value.published_at || null,
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.logo_url || null,
-    faviconUrl: identity.value.favicon_url || null,
+    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
   heroImage: articleSocialImage.value
     ? {
@@ -181,7 +181,7 @@ useProfessionalServiceSchema(() => ({
     headline: post.value.title,
     datePublished: post.value.published_at || post.value.created_at || null,
     dateModified: post.value.updated_at || post.value.published_at || null,
-    authorName: post.value.author_name || null,
+    authorName: post.value.author?.name || undefined,
   },
 }))
 </script>

@@ -4,7 +4,7 @@
       v-if="featured"
       :class="[
         'grid gap-0 overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md',
-        post.featured_image?.public_url ? 'md:grid-cols-2' : 'md:grid-cols-1',
+        featuredMedia?.public_url ? 'md:grid-cols-2' : 'md:grid-cols-1',
         variant === 'blawby' ? 'border-[var(--blawby-border)] bg-white' : 'border-default bg-elevated',
       ]"
     >
@@ -25,8 +25,18 @@
         <p v-if="post.excerpt" class="mb-6 leading-relaxed" :class="excerptClass">{{ post.excerpt }}</p>
         <span class="text-sm font-semibold" :class="linkClass">Read article →</span>
       </div>
-      <div v-if="post.featured_image?.public_url" class="min-h-64 overflow-hidden">
-        <img :src="post.featured_image.public_url" :alt="post.title" loading="lazy" class="h-full w-full object-cover">
+      <div v-if="featuredMedia?.public_url" class="min-h-64 overflow-hidden">
+        <video
+          v-if="featuredMedia.kind === 'video'"
+          :src="featuredMedia.public_url"
+          :poster="featuredMedia.thumbnail_url || undefined"
+          autoplay
+          muted
+          loop
+          playsinline
+          class="h-full w-full object-cover"
+        />
+        <img v-else :src="featuredMedia.public_url" :alt="post.title" loading="lazy" class="h-full w-full object-cover">
       </div>
     </div>
 
@@ -35,8 +45,18 @@
       class="h-full overflow-hidden rounded-xl border transition-shadow hover:shadow-md"
       :class="variant === 'blawby' ? 'border-[var(--blawby-border)] bg-white' : 'border-default bg-elevated'"
     >
-      <div v-if="post.featured_image?.public_url" class="h-48 overflow-hidden">
-        <img :src="post.featured_image.public_url" :alt="post.title" loading="lazy" class="h-full w-full object-cover">
+      <div v-if="featuredMedia?.public_url" class="h-48 overflow-hidden">
+        <video
+          v-if="featuredMedia.kind === 'video'"
+          :src="featuredMedia.public_url"
+          :poster="featuredMedia.thumbnail_url || undefined"
+          autoplay
+          muted
+          loop
+          playsinline
+          class="h-full w-full object-cover"
+        />
+        <img v-else :src="featuredMedia.public_url" :alt="post.title" loading="lazy" class="h-full w-full object-cover">
       </div>
       <div class="p-6">
         <div class="mb-3 flex flex-wrap items-center gap-3 text-sm" :class="metaTextClass">
@@ -59,7 +79,7 @@ export interface TenantBlogCardPost {
   excerpt?: string | null
   category?: string | null
   published_at?: string | null
-  featured_image?: { public_url: string | null; kind?: string | null; width?: number | null; height?: number | null } | null
+  media?: Array<{ asset_id: string; slot: string; public_url: string | null; kind?: string | null; width?: number | null; height?: number | null }>
 }
 
 const props = withDefaults(defineProps<{
@@ -73,6 +93,7 @@ const props = withDefaults(defineProps<{
 })
 
 const isBlawby = computed(() => props.variant === 'blawby')
+const featuredMedia = computed(() => props.post.media?.find(item => item.slot === 'featured') ?? null)
 const metaTextClass = computed(() => isBlawby.value ? 'text-gray-500' : 'text-dimmed')
 const categoryClass = computed(() => isBlawby.value ? 'bg-[var(--blawby-primary-100)] text-[var(--blawby-primary)]' : 'bg-muted text-muted')
 const titleClass = computed(() => isBlawby.value ? 'blawby-display text-[var(--blawby-primary)]' : 'text-default')
