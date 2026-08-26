@@ -697,6 +697,22 @@ function generateRouteManifest(places) {
 
 // ── D1 row-count query (best-effort, for overwrite visibility) ────────────────
 
+// wrangler's --json output is a single top-level array whose own "results"
+// field is itself an array — a non-greedy [\s\S]*? match stops at the first
+// `]` it finds, which is the inner results array's close, producing truncated,
+// unparseable JSON. Slicing from the first `[` to the *last* `]` in the output
+// captures the whole structure instead.
+function extractD1JsonArray(output) {
+  const start = output.indexOf("[");
+  const end = output.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return null;
+  try {
+    return JSON.parse(output.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
 function queryD1Count(table, siteId, remote) {
   const flag = remote ? "--remote" : "--local";
   try {
@@ -715,12 +731,8 @@ function queryD1Count(table, siteId, remote) {
       { encoding: "utf8", cwd: process.cwd() },
     );
     if (result.status !== 0) return null;
-    const jsonMatch = (result.stdout + (result.stderr ?? "")).match(
-      /\[[\s\S]*?\]/,
-    );
-    if (!jsonMatch) return null;
-    const arr = JSON.parse(jsonMatch[0]);
-    const n = arr[0]?.results?.[0]?.n;
+    const arr = extractD1JsonArray(result.stdout + (result.stderr ?? ""));
+    const n = arr?.[0]?.results?.[0]?.n;
     return typeof n === "number" ? n : null;
   } catch {
     return null;
@@ -738,12 +750,8 @@ function queryD1Row(query, remote) {
       { encoding: "utf8", cwd: process.cwd() },
     );
     if (result.status !== 0) return null;
-    const jsonMatch = (result.stdout + (result.stderr ?? "")).match(
-      /\[[\s\S]*?\]/,
-    );
-    if (!jsonMatch) return null;
-    const arr = JSON.parse(jsonMatch[0]);
-    return arr[0]?.results?.[0] ?? null;
+    const arr = extractD1JsonArray(result.stdout + (result.stderr ?? ""));
+    return arr?.[0]?.results?.[0] ?? null;
   } catch {
     return null;
   }
