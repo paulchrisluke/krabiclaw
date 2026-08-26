@@ -83,9 +83,13 @@ export async function dashboardFetch<T>(
   const headers = buildDashboardRequestHeaders(
     Object.fromEntries(new Headers(options.headers as HeadersInit).entries()),
   )
+  // Route-derived org/site must be authoritative — applied last so a caller-supplied
+  // query can never override which tenant this request is scoped to. A caller can
+  // still narrow further (e.g. activity.vue's site filter) as long as the route
+  // itself doesn't already have that value to assert.
   const scopedOptions: DashboardFetchOptions<T> = {
     ...options,
-    query: { ...buildDashboardRequestQuery(scope), ...(options.query as Record<string, unknown> | undefined) },
+    query: { ...(options.query as Record<string, unknown> | undefined), ...buildDashboardRequestQuery(scope) },
   }
   return await executeApiFetch(request, scopedOptions, headers)
 }
