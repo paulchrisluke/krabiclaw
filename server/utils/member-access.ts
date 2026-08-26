@@ -161,13 +161,13 @@ export async function resolveUserOrganization(
 
 export async function getOrganizationOwnerEmail(env: CloudflareEnv, organizationId: string): Promise<string | null> {
   const adapter = await organizationAdapter(env)
-  const { members } = await adapter.listMembers({
-    organizationId,
-    limit: 100,
-    offset: 0,
-    sortBy: 'createdAt',
-    sortOrder: 'asc',
-  })
+  const pageSize = 100
+  const firstPage = await adapter.listMembers({ organizationId, limit: pageSize, offset: 0, sortBy: 'createdAt', sortOrder: 'asc' })
+  const members = [...firstPage.members]
+  for (let offset = pageSize; offset < firstPage.total; offset += pageSize) {
+    const page = await adapter.listMembers({ organizationId, limit: pageSize, offset, sortBy: 'createdAt', sortOrder: 'asc' })
+    members.push(...page.members)
+  }
   return members
     .filter(member => member.role === 'owner' || member.role === 'admin')
     .sort((left, right) => {

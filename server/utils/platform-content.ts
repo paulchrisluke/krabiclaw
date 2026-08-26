@@ -337,6 +337,11 @@ async function ensureRenderableMediaAssetExists(
 
 async function mediaPlacementScope(db: DbClient, siteId: string | null, organizationId: string | null) {
   if (siteId && organizationId) return { siteId, organizationId }
+  // A siteId without its organizationId is a caller bug (every real tenant caller
+  // resolves both together from the same site row) — it must fail loudly rather
+  // than silently fall through to platform scope, which would misfile tenant media
+  // as platform-owned.
+  if (siteId) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant media placement requires an organization id' })
   const platformSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? LIMIT 1', [PLATFORM_MEDIA_SITE_ID])
   if (!platformSite) throw new HTTPError({ statusCode: 500, statusMessage: 'Platform media site is not configured' })
   return { siteId: PLATFORM_MEDIA_SITE_ID, organizationId: platformSite.organization_id }
@@ -1234,9 +1239,24 @@ export async function updatePlatformBlogPost(
 
 export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: string, siteId: string | null = null) {
   const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
+  const ownerType = blogContentOwnerType(siteId)
   await executeBatch(db, [
     { query: "DELETE FROM media_placements WHERE owner_type = 'blog_post' AND owner_id = ?", params: [postId] },
-    { query: 'DELETE FROM content_documents WHERE owner_type = ? AND owner_id = ?', params: [blogContentOwnerType(siteId), postId] },
+    // The content_documents delete below cascades to content_blocks (FK ON DELETE
+    // CASCADE), but media_placements for those blocks (owner_type = 'content_block')
+    // has no owner FK, so it must be cleared explicitly while the blocks still exist.
+    {
+      query: `
+        DELETE FROM media_placements
+        WHERE owner_type = 'content_block' AND owner_id IN (
+          SELECT id FROM content_blocks WHERE document_id IN (
+            SELECT id FROM content_documents WHERE owner_type = ? AND owner_id = ?
+          )
+        )
+      `,
+      params: [ownerType, postId],
+    },
+    { query: 'DELETE FROM content_documents WHERE owner_type = ? AND owner_id = ?', params: [ownerType, postId] },
     { query: 'DELETE FROM blog_posts WHERE id = ?', params: [postId] },
   ])
   return { success: true }
@@ -1516,6 +1536,20 @@ export async function deletePlatformDoc(db: D1Database, docIdOrSlug: string) {
   const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
   await executeBatch(db, [
     { query: "DELETE FROM media_placements WHERE owner_type = 'platform_doc' AND owner_id = ?", params: [docId] },
+    // The content_documents delete below cascades to content_blocks (FK ON DELETE
+    // CASCADE), but media_placements for those blocks (owner_type = 'content_block')
+    // has no owner FK, so it must be cleared explicitly while the blocks still exist.
+    {
+      query: `
+        DELETE FROM media_placements
+        WHERE owner_type = 'content_block' AND owner_id IN (
+          SELECT id FROM content_blocks WHERE document_id IN (
+            SELECT id FROM content_documents WHERE owner_type = 'platform_doc' AND owner_id = ?
+          )
+        )
+      `,
+      params: [docId],
+    },
     { query: "DELETE FROM content_documents WHERE owner_type = 'platform_doc' AND owner_id = ?", params: [docId] },
     { query: 'DELETE FROM platform_docs WHERE id = ?', params: [docId] },
   ])

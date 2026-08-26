@@ -317,10 +317,10 @@ export async function listMediaAssets(
   params.push(opts.limit ?? 50, opts.offset ?? 0)
   const results = await queryAll<MediaAsset>(
     db,
-    `SELECT id, organization_id, site_id, kind, provider, source,
-            cloudflare_image_id, r2_key,
-            public_url, thumbnail_url, mime_type, file_name, file_size,
-            width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
+    `SELECT ma.id, ma.organization_id, ma.site_id, ma.kind, ma.provider, ma.source,
+            ma.cloudflare_image_id, ma.r2_key,
+            ma.public_url, ma.thumbnail_url, ma.mime_type, ma.file_name, ma.file_size,
+            ma.width, ma.height, ma.duration, ma.alt_text, ma.category, ma.status, ma.created_by_user_id, ma.created_at, ma.updated_at
      FROM media_assets ma
      ${opts.ownerType && opts.ownerId ? 'JOIN media_placements mp ON mp.asset_id = ma.id AND mp.site_id = ma.site_id' : ''}
      WHERE ${conditions.join(' AND ')} ORDER BY ${opts.ownerType && opts.ownerId ? 'mp.sort_order' : 'ma.created_at DESC'} LIMIT ? OFFSET ?`

@@ -32,8 +32,17 @@ export async function getOrganizationMembersData(env: CloudflareEnv, organizatio
   const auth = createAuth(env)
   const authContext = await auth.$context
   const adapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
-  const [{ members: memberRows }, invitationRows] = await Promise.all([
-    adapter.listMembers({ organizationId, limit: 100, offset: 0, sortBy: 'createdAt', sortOrder: 'asc' }),
+  const [memberRows, invitationRows] = await Promise.all([
+    (async () => {
+      const pageSize = 100
+      const firstPage = await adapter.listMembers({ organizationId, limit: pageSize, offset: 0, sortBy: 'createdAt', sortOrder: 'asc' })
+      const rows = [...firstPage.members]
+      for (let offset = pageSize; offset < firstPage.total; offset += pageSize) {
+        const page = await adapter.listMembers({ organizationId, limit: pageSize, offset, sortBy: 'createdAt', sortOrder: 'asc' })
+        rows.push(...page.members)
+      }
+      return rows
+    })(),
     adapter.listInvitations({ organizationId }),
   ])
   const roleOrder = new Map([['owner', 0], ['admin', 1], ['editor', 2]])
@@ -50,7 +59,7 @@ export async function getOrganizationMembersData(env: CloudflareEnv, organizatio
   const invitations = invitationRows.filter(invitation => invitation.status === 'pending').map(invitation => ({
     id: invitation.id,
     email: invitation.email,
-    role: String(invitation.role),
+    role: invitation.role == null ? null : String(invitation.role),
     status: invitation.status,
     inviterName: null,
     expiresAt: betterAuthTimestampToIso(invitation.expiresAt as BetterAuthTimestamp, 'invitation.expiresAt'),

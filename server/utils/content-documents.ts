@@ -482,14 +482,6 @@ export async function createContentDocumentWithBlocks(
   }
 }
 
-export async function deleteContentDocumentForOwner(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
-  await execute(
-    db,
-    'DELETE FROM content_documents WHERE owner_type = ? AND owner_id = ?',
-    [ownerType, ownerId],
-  )
-}
-
 function formatBlockOutline(block: ContentBlockRow) {
   return {
     id: block.id,

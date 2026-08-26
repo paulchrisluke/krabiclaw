@@ -639,12 +639,14 @@ export async function findAuthUsersByIds(env: CloudflareEnv, userIds: Array<stri
       model: string
       where: Array<{ field: string; operator: string; value: string[] }>
       select?: string[]
+      limit?: number
     }): Promise<T[]>
   }
   const rows = await adapter.findMany<AuthUserIdentity>({
     model: 'user',
     where: [{ field: 'id', operator: 'in', value: uniqueIds }],
     select: ['id', 'name', 'image'],
+    limit: uniqueIds.length,
   })
   return new Map(rows.map(row => [row.id, row]))
 }

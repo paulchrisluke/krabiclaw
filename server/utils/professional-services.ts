@@ -104,11 +104,11 @@ function mapOfferingRow(row: OfferingRow, media: ApiRecord[]): PublicOffering {
     cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
     cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
     media: media.filter(asset => typeof asset.public_url === 'string' && asset.public_url).map(asset => ({
-      asset_id: String(asset.id),
+      asset_id: String(asset.asset_id),
       slot: String(asset.slot),
       public_url: String(asset.public_url),
       thumbnail_url: typeof asset.thumbnail_url === 'string' ? asset.thumbnail_url : null,
-      kind: requiredText(asset.kind, `media asset ${asset.id}.kind`),
+      kind: requiredText(asset.kind, `media asset ${asset.asset_id}.kind`),
       alt_text: typeof asset.alt_text === 'string' ? String(asset.alt_text) : null,
       width: Number.isFinite(Number(asset.width)) ? Number(asset.width) : null,
       height: Number.isFinite(Number(asset.height)) ? Number(asset.height) : null,
@@ -190,7 +190,7 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.published_at, p.canonical_url, p.featured_order,
            featured.asset_id AS asset_id, media.public_url, media.thumbnail_url, media.kind, media.width, media.height
       FROM blog_posts p
-      LEFT JOIN media_placements featured ON featured.owner_type = 'blog_post' AND featured.owner_id = p.id AND featured.slot = 'featured' AND featured.status = 'active'
+      LEFT JOIN media_placements featured ON featured.owner_type = 'blog_post' AND featured.owner_id = p.id AND featured.slot = 'featured' AND featured.sort_order = 0 AND featured.status = 'active'
       LEFT JOIN media_assets media ON media.id = featured.asset_id AND media.status = 'active'
      WHERE p.site_id = ? AND p.status = 'published' AND p.visibility = 'public'
      ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
