@@ -5,8 +5,7 @@ export interface SeedTenantPageRow {
   content: string | null
   heroTitle?: string | null
   heroSubtitle?: string | null
-  heroImageAssetId?: string | null
-  heroVideoAssetId?: string | null
+  media: Array<{ asset_id: string; slot: 'media' | 'gallery' }>
 }
 
 export interface SeedTenantPageLocaleField {
@@ -42,7 +41,7 @@ function pageTypeForPage(page: string) {
 }
 
 function blockData(page: string, rows: SeedTenantPageRow[]) {
-  const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = []
+  const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown>; media: Array<{ asset_id: string; slot: string }> }> = []
   const hero = rows.find(row => row.field === 'hero')
   if (hero) {
     blocks.push({
@@ -52,8 +51,8 @@ function blockData(page: string, rows: SeedTenantPageRow[]) {
       data: {
         title: hero.heroTitle ?? hero.content,
         subtitle: hero.heroSubtitle ?? null,
-        asset_id: hero.heroImageAssetId ?? hero.heroVideoAssetId ?? null,
       },
+      media: hero.media,
     })
   }
 
@@ -69,13 +68,14 @@ function blockData(page: string, rows: SeedTenantPageRow[]) {
         label: cta.find(row => row.field === 'cta.label')?.content ?? null,
         url: cta.find(row => row.field === 'cta.url')?.content ?? null,
       },
+      media: [],
     })
   }
 
   for (const row of rows) {
     if (row.field === 'hero' || row.field.startsWith('cta.')) continue
-    if (row.heroImageAssetId || row.heroVideoAssetId) {
-      blocks.push({ id: `${row.id}-block-image`, type: 'image', position: blocks.length, data: { asset_id: row.heroImageAssetId ?? row.heroVideoAssetId, alt: row.field, field: row.field } })
+    if (row.media.length) {
+      blocks.push({ id: `${row.id}-block-image`, type: 'image', position: blocks.length, data: { alt: row.field, field: row.field }, media: row.media })
       continue
     }
     if (!row.content?.trim()) continue
@@ -85,9 +85,10 @@ function blockData(page: string, rows: SeedTenantPageRow[]) {
       type: isHeading ? 'heading' : 'markdown',
       position: blocks.length,
       data: isHeading ? { text: row.content, level: 2, field: row.field } : { markdown: row.content, field: row.field },
+      media: [],
     })
   }
-  if (!blocks.length) blocks.push({ id: `${page}-empty-page-hero`, type: 'hero', position: 0, data: { title: 'Page', subtitle: null } })
+  if (!blocks.length) blocks.push({ id: `${page}-empty-page-hero`, type: 'hero', position: 0, data: { title: 'Page', subtitle: null }, media: [] })
   return blocks
 }
 
@@ -112,6 +113,7 @@ function renderPage(
   const hero = rows.find(row => row.field === 'hero')
   const title = titleOverride ?? hero?.heroTitle ?? hero?.content ?? (page === 'home' ? 'Home' : page[0]!.toUpperCase() + page.slice(1))
   const blockSql = blocks.map(block => `INSERT OR REPLACE INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at) VALUES (${sqlValue(block.id)}, ${sqlValue(documentId)}, NULL, ${sqlValue(block.type)}, ${block.position}, ${block.type === 'heading' ? 2 : 'NULL'}, ${sqlJson(block.data)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`).join('\n')
+  const placementSql = blocks.flatMap(block => block.media.map((media, index) => `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at) VALUES (${sqlValue(`${block.id}-${media.slot}-${index}`)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, 'content_block', ${sqlValue(block.id)}, ${sqlValue(media.slot)}, ${sqlValue(media.asset_id)}, ${index}, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`)).join('\n')
   const pageSql = includePageRecord
     ? `INSERT OR REPLACE INTO tenant_pages (id, organization_id, site_id, title, slug, page_type, recipe, summary, sort_order, source, updated_at)
 VALUES (${sqlValue(pageId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(title)}, ${sqlValue(pageKey)}, ${sqlValue(pageTypeForPage(page))}, ${sqlValue(page)}, NULL, 0, 'fixture', CURRENT_TIMESTAMP);
@@ -119,10 +121,12 @@ VALUES (${sqlValue(pageId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, $
     : ''
   return `${pageSql}INSERT OR REPLACE INTO content_documents (id, owner_type, owner_id, created_at, updated_at)
 VALUES (${sqlValue(documentId)}, 'tenant_page', ${sqlValue(variantId)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (SELECT id FROM content_blocks WHERE document_id = ${sqlValue(documentId)});
 DELETE FROM content_blocks WHERE document_id = ${sqlValue(documentId)};
 INSERT OR REPLACE INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, document_id, path, title, summary, seo_title, seo_description, canonical_url, robots, created_at, updated_at)
 VALUES (${sqlValue(variantId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(pageId)}, ${sqlValue(locale)}, ${sqlValue(documentId)}, ${sqlValue(path)}, ${sqlValue(title)}, NULL, NULL, NULL, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-${blockSql}`
+${blockSql}
+${placementSql}`
 }
 
 export function renderTenantPagesSeedSql(input: {

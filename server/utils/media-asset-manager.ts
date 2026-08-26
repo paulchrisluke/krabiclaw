@@ -139,6 +139,35 @@ export function buildReplaceMediaPlacementQueries(input: {
   ]
 }
 
+// media_placements.owner_id is polymorphic with no owner foreign key, so every
+// path that deletes an owning row (a post, a menu item, a review, ...) must
+// explicitly clear its placements first or they orphan permanently. Route
+// every such deletion through this builder instead of hand-writing the DELETE
+// each time.
+export function buildDeleteOwnerPlacementsQuery(input: {
+  ownerType: string
+  ownerId: string
+  organizationId?: string
+  siteId?: string
+}): BatchQuery {
+  const conditions = ['owner_type = ?']
+  const params: string[] = [input.ownerType]
+  if (input.organizationId) {
+    conditions.push('organization_id = ?')
+    params.push(input.organizationId)
+  }
+  if (input.siteId) {
+    conditions.push('site_id = ?')
+    params.push(input.siteId)
+  }
+  conditions.push('owner_id = ?')
+  params.push(input.ownerId)
+  return {
+    query: `DELETE FROM media_placements WHERE ${conditions.join(' AND ')}`,
+    params,
+  }
+}
+
 export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   if (!row.public_url) {
     throw new HTTPError({ statusCode: 400, statusMessage: `Media asset ${row.id} does not have a public URL` })

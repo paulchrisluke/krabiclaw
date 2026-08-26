@@ -157,7 +157,7 @@ watch(() => filters.siteId, async (siteId) => {
     // Reused for requests that deliberately override the active site while retaining
     // the organization scope resolved from this dashboard route.
     const res = await dashboardApi<{ locations: Location[] }>('/api/dashboard/locations', {
-      headers: { 'x-dashboard-site-slug': site.subdomain },
+      query: { site: site.subdomain },
       validate: (value): value is { locations: Location[] } =>
         isRecord(value)
         && Array.isArray(value.locations)

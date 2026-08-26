@@ -2,7 +2,7 @@ import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/se
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
-import { buildReplaceMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { buildDeleteOwnerPlacementsQuery, buildReplaceMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
 
 export { normalizePostSlug, postPublicPath }
@@ -675,12 +675,14 @@ export async function deletePost(
   siteId: string,
   postId: string,
 ): Promise<boolean> {
-  const result = await execute(
-    db,
-    'DELETE FROM posts WHERE id = ? AND organization_id = ? AND site_id = ?',
-    [postId, organizationId, siteId],
-  )
-  return Number(result.meta.changes ?? 0) > 0
+  const [, deleteResult] = await executeBatch(db, [
+    buildDeleteOwnerPlacementsQuery({ ownerType: 'post', ownerId: postId, organizationId, siteId }),
+    {
+      query: 'DELETE FROM posts WHERE id = ? AND organization_id = ? AND site_id = ?',
+      params: [postId, organizationId, siteId],
+    },
+  ])
+  return Number(deleteResult?.meta.changes ?? 0) > 0
 }
 
 /** Public: published posts for the site, formatted for SayaPosts component. */

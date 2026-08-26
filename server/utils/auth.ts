@@ -618,6 +618,37 @@ export async function findVerifiedAuthUserByPhone(
   })
 }
 
+export interface AuthUserIdentity {
+  id: string
+  name: string | null
+  image: string | null
+}
+
+// Content tables (blog_posts, platform_docs) store author_id as a plain
+// reference — that's fine, it's just a foreign-looking string, not a query.
+// The name/image shown next to an author is Better Auth's data, so it must be
+// read through Better Auth's own adapter (findMany, batched by id) rather than
+// a raw SQL join against the user table.
+export async function findAuthUsersByIds(env: CloudflareEnv, userIds: Array<string | null | undefined>): Promise<Map<string, AuthUserIdentity>> {
+  const uniqueIds = Array.from(new Set(userIds.filter((id): id is string => Boolean(id))))
+  if (uniqueIds.length === 0) return new Map()
+
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    findMany<T>(_input: {
+      model: string
+      where: Array<{ field: string; operator: string; value: string[] }>
+      select?: string[]
+    }): Promise<T[]>
+  }
+  const rows = await adapter.findMany<AuthUserIdentity>({
+    model: 'user',
+    where: [{ field: 'id', operator: 'in', value: uniqueIds }],
+    select: ['id', 'name', 'image'],
+  })
+  return new Map(rows.map(row => [row.id, row]))
+}
+
 export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>> {
   return createAuth(env).api.getSession({
     headers: event.req.headers,

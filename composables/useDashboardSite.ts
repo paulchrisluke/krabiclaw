@@ -1,3 +1,5 @@
+import type { DashboardRequestScope } from '~/composables/dashboardFetch'
+
 interface DashboardOrganization {
   id: string
   name: string
@@ -133,23 +135,28 @@ function getClientDashboardContextReads() {
   return clientDashboardContextReads
 }
 
-// Central legacy dashboard scope adapter. Better Auth migration issue #386 owns
-// removing these route headers; callers must go through dashboardFetch rather
-// than spreading this debt into individual pages or composables.
-// `overrides` lets a caller (e.g. a per-request site-slug filter) set additional
-// headers without losing the org/site ones already on the returned Headers instance
-// (spreading a Headers object with `{ ...headers }` silently drops its entries).
+// The dashboard org/site scope is sent as explicit `org`/`site` query params
+// (see dashboardFetch in composables/dashboardFetch.ts) rather than headers —
+// callers must go through dashboardFetch rather than spreading a bespoke
+// transport into individual pages or composables.
+// `overrides` lets a caller set additional headers (e.g. a cache-control hint)
+// without losing whatever cookie forwarding is already on the returned Headers
+// instance (spreading a Headers object with `{ ...headers }` silently drops
+// its entries).
 export function buildDashboardRequestHeaders(
-  scope: DashboardRequestScope,
   overrides?: Record<string, string>,
 ): Headers {
   const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
-  headers.set('x-dashboard-org-slug', scope.orgSlug)
-  if (scope.siteSlug) headers.set('x-dashboard-site-slug', scope.siteSlug)
   if (overrides) {
     for (const [key, value] of Object.entries(overrides)) headers.set(key, value)
   }
   return headers
+}
+
+export function buildDashboardRequestQuery(scope: DashboardRequestScope): Record<string, string> {
+  const query: Record<string, string> = { org: scope.orgSlug }
+  if (scope.siteSlug) query.site = scope.siteSlug
+  return query
 }
 
 export function useDashboardSite() {

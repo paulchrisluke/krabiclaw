@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm"
 import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, index, check, foreignKey } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
+import { MEDIA_PLACEMENT_OWNER_CHECK_SQL, MEDIA_PLACEMENT_SLOT_CHECK_SQL } from "~/shared/media-placement-contract"
 
 export const account = sqliteTable("account", {
 	id: text().primaryKey(),
@@ -145,8 +146,6 @@ export const business_locations = sqliteTable("business_locations", {
 	foodpanda_url: text(),
 	google_place_id: text(),
 	google_review_url: text(),
-	hero_media_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
-	retired_share_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
@@ -156,6 +155,11 @@ export const business_locations = sqliteTable("business_locations", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
+	// Better Auth Team scoping this location to non-org-wide editors. Site-team membership
+	// (sites.team_id below) implies access to all of that site's locations; this location-team
+	// membership never implies site-wide access. Owners/admins are org-wide and need no team row.
+	// Do not add a parallel membership/scope table — this column plus Better Auth Teams APIs are
+	// the entire mechanism.
 	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts).
 	// NULL means "inherit the parent site's effective feature set" — never the vertical defaults
@@ -182,7 +186,7 @@ export const chowbot_channel_state = sqliteTable("chowbot_channel_state", {
 	channel: text().notNull(),
 	selected_site_id: text().references(() => sites.id, { onDelete: "set null" } ),
 	active_conversation_id: text().references(() => chowbot_conversations.id, { onDelete: "set null" } ),
-	pending_media: text(),
+	pending_message_id: text().references((): AnySQLiteColumn => chowbot_messages.id, { onDelete: "set null" } ),
 	pending_confirmation: text(),
 	last_inbound_id: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -215,7 +219,6 @@ export const chowbot_messages = sqliteTable("chowbot_messages", {
 	role: text().notNull(),
 	channel: text().notNull(),
 	content: text(),
-	media: text(),
 	meta_message_id: text().unique(),
 	tool_calls: text(),
 	status: text().default("sent").notNull(),
@@ -418,7 +421,6 @@ export const notification_events = sqliteTable("notification_events", {
 	scope_type: text().notNull(),
 	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
 	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
 	submission_type: text().notNull(),
 	submission_id: text().notNull(),
 	event_type: text().notNull(),
@@ -598,13 +600,11 @@ export const media_assets = sqliteTable("media_assets", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references((): AnySQLiteColumn => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
-	kind: text().notNull(),
-	provider: text().notNull(),
-	source: text().notNull(),
+	kind: text().$type<'image' | 'video' | 'file'>().notNull(),
+	provider: text().$type<'cloudflare_images' | 'cloudflare_r2'>().notNull(),
+	source: text().$type<'uploaded' | 'generated' | 'external'>().notNull(),
 	cloudflare_image_id: text(),
 	r2_key: text(),
-	google_media_name: text(),
 	public_url: text(),
 	thumbnail_url: text(),
 	mime_type: text(),
@@ -614,20 +614,42 @@ export const media_assets = sqliteTable("media_assets", {
 	height: integer(),
 	duration: integer(),
 	alt_text: text(),
-	category: text().$type<'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog'>(),
-	status: text().default("active").notNull(),
+	category: text().$type<'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other'>(),
+	status: text().$type<'pending' | 'active' | 'deleted' | 'failed'>().default("active").notNull(),
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	// No Drizzle index() here: idx_media_assets_site (site_id, status, created_at DESC) and
-	// idx_media_assets_location (location_id, status, created_at DESC WHERE location_id IS NOT
-	// NULL) already cover this table's real query patterns - they were hand-authored in the
-	// immutable migrations/0001_initial.sql (pre-dates schema.ts as source of truth) and were
-	// never mirrored back here. organization_id adds no separate selectivity once site_id is
-	// fixed (a site belongs to exactly one org), so no additional index is needed.
+	// The historical site/status index covers the media library query path.
 }, (table) => [
-	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog')`),
+	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other')`),
 	uniqueIndex("media_assets_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
+]);
+
+export const media_placements = sqliteTable("media_placements", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references((): AnySQLiteColumn => sites.id, { onDelete: "cascade" }),
+	owner_type: text().notNull(),
+	owner_id: text().notNull(),
+	slot: text().notNull(),
+	asset_id: text().notNull(),
+	sort_order: integer().default(0).notNull(),
+	status: text().default("active").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.asset_id],
+		foreignColumns: [media_assets.organization_id, media_assets.site_id, media_assets.id],
+		name: "media_placements_asset_scope_fk",
+	}).onDelete("cascade"),
+	check("media_placements_owner_type_check", sql.raw(MEDIA_PLACEMENT_OWNER_CHECK_SQL)),
+	check("media_placements_slot_check", sql.raw(MEDIA_PLACEMENT_SLOT_CHECK_SQL)),
+	check("media_placements_status_check", sql`${table.status} IN ('pending', 'active', 'rejected')`),
+	unique("media_placements_owner_slot_asset_unique").on(table.owner_type, table.owner_id, table.slot, table.asset_id),
+	unique("media_placements_owner_slot_order_unique").on(table.owner_type, table.owner_id, table.slot, table.sort_order),
+	index("media_placements_owner_idx").on(table.site_id, table.owner_type, table.owner_id, table.slot, table.sort_order),
+	index("media_placements_asset_idx").on(table.organization_id, table.site_id, table.asset_id),
 ]);
 
 export const member = sqliteTable("member", {
@@ -637,12 +659,7 @@ export const member = sqliteTable("member", {
 	role: text().default("member").notNull(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 }, (table) => [
-	// WHERE m.userId = ? is the primary access-check predicate on nearly every authenticated
-	// dashboard/MCP request (getDashboardContext, listAccessibleSitesForMcp, requireMcpSite).
-	// Without this, D1 full-scans member on every single request - confirmed via wrangler d1
-	// insights as the largest rows-read driver post-cron-fix (66.9M rows / 9,778 executions on
-	// one query alone). organizationId is included second so the same index also serves the
-	// m.organizationId join condition in those same queries.
+	// Better Auth's organization adapter resolves membership by userId and organizationId.
 	index("member_userId_organizationId_idx").on(table.userId, table.organizationId),
 	index("member_organizationId_idx").on(table.organizationId),
 ]);
@@ -680,7 +697,6 @@ export const menu_items = sqliteTable("menu_items", {
 	compare_at_price_amount: numeric(),
 	sale_starts_at: text(),
 	sale_ends_at: text(),
-	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	available: numeric().default(sql`1`).notNull(),
 	featured: numeric().default(sql`false`).notNull(),
 	featured_sort_order: integer().default(0).notNull(),
@@ -699,37 +715,9 @@ export const menu_items = sqliteTable("menu_items", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 }, (table) => [
 	check("menu_items_source_check", sql`source IN ('manual', 'template')`),
 	index("menu_items_menu_id_idx").on(table.menu_id),
-]);
-
-export const menu_item_media = sqliteTable("menu_item_media", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	menu_item_id: text().notNull(),
-	asset_id: text().notNull(),
-	sort_order: integer().notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	foreignKey({
-		columns: [table.menu_item_id],
-		foreignColumns: [menu_items.id],
-		name: "menu_item_media_menu_item_fk",
-	}).onDelete("cascade"),
-	foreignKey({
-		columns: [table.organization_id, table.site_id, table.asset_id],
-		foreignColumns: [media_assets.organization_id, media_assets.site_id, media_assets.id],
-		name: "menu_item_media_asset_scope_fk",
-	}).onDelete("cascade"),
-	unique("menu_item_media_menu_item_asset_unique").on(table.menu_item_id, table.asset_id),
-	unique("menu_item_media_menu_item_sort_unique").on(table.menu_item_id, table.sort_order),
-	index("menu_item_media_menu_item_order_idx").on(table.menu_item_id, table.sort_order),
-	index("menu_item_media_asset_scope_idx").on(table.organization_id, table.site_id, table.asset_id),
-	index("menu_item_media_site_menu_item_idx").on(table.site_id, table.menu_item_id),
 ]);
 
 export const menus = sqliteTable("menus", {
@@ -797,23 +785,6 @@ export const notifications = sqliteTable("notifications", {
 	index("notifications_target_user_created_at_idx").on(table.target_user_id, table.created_at),
 	check("notifications_whatsapp_delivery_status_check", sql`whatsapp_delivery_status IS NULL OR whatsapp_delivery_status IN ('accepted', 'sent', 'delivered', 'read', 'failed')`),
 	check("notifications_related_submission_type_check", sql`related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking', 'invitation')`),
-]);
-
-// App-owned mirror of Better Auth's `user.phoneNumberVerified`, kept as a
-// separate companion table (rather than columns bolted onto Better Auth's
-// `user` table) so app-domain verification state stays independent of a
-// table Better Auth migrates on its own schedule. One row per user.
-export const user_phone_verification = sqliteTable("user_phone_verification", {
-	id: text().primaryKey(),
-	user_id: text().notNull().unique().references(() => user.id, { onDelete: "cascade" } ),
-	format_valid: integer().default(0).notNull(),
-	ownership_verified: integer().default(0).notNull(),
-	whatsapp_observed_at: text(),
-	phone_metadata_version: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	uniqueIndex("user_phone_verification_user_id_unique").on(table.user_id),
 ]);
 
 export const notification_reads = sqliteTable("notification_reads", {
@@ -1069,28 +1040,12 @@ export const platform_analytics = sqliteTable("platform_analytics", {
 	unique("platform_analytics_metric_date_unique").on(table.metric, table.date),
 ]);
 
-export const site_authors = sqliteTable("site_authors", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	name: text().notNull(),
-	title: text(),
-	bio: text(),
-	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	sort_order: integer().default(0).notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("site_authors_site_idx").on(table.site_id),
-]);
-
 export const blog_posts = sqliteTable("blog_posts", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ), // null = platform blog post
 	site_id: text().references(() => sites.id, { onDelete: "cascade" } ), // null = platform blog post
 	title: text().notNull(),
 	slug: text().notNull(),
-	body: text().notNull(),
 	excerpt: text(),
 	category: text(),
 	tags_json: text(),
@@ -1102,10 +1057,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	featured_order: integer(),
 	status: text().default("published").notNull(),
 	visibility: text().default("public").notNull(), // public | unlisted
-	author_id: text().references(() => user.id, { onDelete: "set null" } ), // CMS creator identity (Better Auth user), not the displayed byline
-	site_author_id: text().references(() => site_authors.id, { onDelete: "set null" } ), // displayed byline, tenant-scoped
-	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	published_at: text(),
 	first_published_at: text(),
 	scheduled_for: text(),
@@ -1166,7 +1118,6 @@ export const platform_docs = sqliteTable("platform_docs", {
 	id: text().primaryKey(),
 	title: text().notNull(),
 	slug: text().notNull().unique(),
-	body: text().notNull(),
 	excerpt: text(),
 	category: text(),
 	nav_section: text(),
@@ -1180,7 +1131,6 @@ export const platform_docs = sqliteTable("platform_docs", {
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	seo_description: text(),
 	seo_keywords: text(),
-	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	sort_order: integer().default(0),
 	difficulty_level: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1215,10 +1165,8 @@ export const posts = sqliteTable("posts", {
 	post_type: text().default("standard").notNull(),
 	title: text(),
 	body: text().notNull(),
-	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	seo_title: text(),
 	seo_description: text(),
-	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	cta_type: text(),
 	cta_url: text(),
 	event_title: text(),
@@ -1238,26 +1186,6 @@ export const posts = sqliteTable("posts", {
 	check("posts_status_check", sql`status IN ('published', 'scheduled')`),
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 	index("posts_org_site_idx").on(table.organization_id, table.site_id),
-]);
-
-export const post_media = sqliteTable("post_media", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	post_id: text().notNull().references(() => posts.id, { onDelete: "cascade" } ),
-	media_asset_id: text().notNull().references(() => media_assets.id, { onDelete: "cascade" } ),
-	role: text().default("gallery").notNull(),
-	sort_order: integer().default(0).notNull(),
-	caption: text(),
-	alt_text: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("post_media_post_idx").on(table.post_id, table.sort_order),
-	check("post_media_role_check", sql`role IN ('cover', 'gallery')`),
-	uniqueIndex("post_media_post_asset_unique").on(table.post_id, table.media_asset_id),
-	uniqueIndex("post_media_cover_unique").on(table.post_id).where(sql`role = 'cover'`),
-	index("post_media_org_site_idx").on(table.organization_id, table.site_id),
 ]);
 
 export const rate_limits = sqliteTable("rate_limits", {
@@ -1399,14 +1327,12 @@ export const reviews = sqliteTable("reviews", {
 	user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	menu_item_slug: text(),
 	author_name: text(),
-	reviewer_photo_url: text(),
 	rating: integer().notNull(),
 	title: text(),
 	content: text(),
 	google_review_id: text(),
 	owner_reply: text(),
 	owner_reply_at: text(),
-	photo_urls: text(),
 	helpful_count: integer().default(0),
 	status: text().default("pending"),
 	source: text().default("direct"),
@@ -1430,25 +1356,6 @@ export const reviews = sqliteTable("reviews", {
 	check("reviews_collection_method_check", sql`collection_method IS NULL OR collection_method IN ('in_person', 'email', 'phone', 'migration', 'other')`),
 	check("reviews_owner_entered_provenance_check", sql`source != 'owner_entered' OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NULL AND entered_by_user_id IS NOT NULL AND collection_method IS NOT NULL AND publication_authorized = 1)`),
 	index("reviews_organization_id_idx").on(table.organization_id),
-]);
-
-export const review_media = sqliteTable("review_media", {
-	id: text().primaryKey(),
-	review_id: text().references(() => reviews.id, { onDelete: "cascade" } ),
-	review_request_id: text().notNull().references(() => review_requests.id, { onDelete: "cascade" } ),
-	customer_id: text().notNull().references(() => customers.id, { onDelete: "cascade" } ),
-	media_asset_id: text().notNull().references(() => media_assets.id, { onDelete: "cascade" } ),
-	kind: text().notNull(),
-	sort_order: integer().default(0).notNull(),
-	status: text().default("pending").notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	unique("review_media_media_asset_id_unique").on(table.media_asset_id),
-	index("idx_review_media_review_request_id").on(table.review_request_id),
-	index("idx_review_media_review_id").on(table.review_id),
-	check("review_media_kind_check", sql`kind IN ('image', 'video')`),
-	check("review_media_status_check", sql`status IN ('pending', 'approved', 'rejected', 'deleted')`),
 ]);
 
 export const session = sqliteTable("session", {
@@ -1531,9 +1438,6 @@ export const offerings = sqliteTable("offerings", {
 	faqs: text(),
 	cta_label: text(),
 	cta_url: text(),
-	thumbnail_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	hero_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	media_asset_ids: text(),
 	schema_type: text(),
 	seo_title: text(),
 	seo_description: text(),
@@ -1626,7 +1530,6 @@ export const tenant_compliance = sqliteTable("tenant_compliance", {
 	privacy_page_id: text().references(() => tenant_pages.id, { onDelete: "set null" } ),
 	terms_page_id: text().references(() => tenant_pages.id, { onDelete: "set null" } ),
 	notice_page_id: text().references(() => tenant_pages.id, { onDelete: "set null" } ),
-	document_asset_ids: text(),
 	founder_name: text(),
 	founding_date: text(),
 	same_as: text(),
@@ -1994,9 +1897,6 @@ export const sites = sqliteTable("sites", {
 	public_url: text(),
 	brand_name: text(),
 	brand_description: text(),
-	logo_url: text(),
-	logo_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
-	retired_share_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	contact_email: text(),
 	contact_phone: text(),
 	source_locale: text().default("en").notNull(),
@@ -2006,8 +1906,6 @@ export const sites = sqliteTable("sites", {
 	onboarding_status: text().default("pending"),
 	url_structure: text().default("location_subdirectories").notNull(),
 	vertical: text().default("restaurant").notNull(),
-	content_source: text(),
-	media_source: text(),
 	settings: text(),
 	last_published_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
@@ -2022,6 +1920,9 @@ export const sites = sqliteTable("sites", {
 	social_facebook_url: text(),
 	social_instagram_url: text(),
 	social_tiktok_url: text(),
+	// Better Auth Team scoping this site to non-org-wide editors (see business_locations.team_id
+	// for the per-location equivalent). An editor belonging to this team gets site-wide access
+	// including every location under it.
 	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
 	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
@@ -2035,8 +1936,6 @@ export const sites = sqliteTable("sites", {
 	check("sites_onboarding_status_check", sql`${table.onboarding_status} IN ('pending', 'active', 'failed')`),
 	check("sites_url_structure_check", sql`${table.url_structure} IN ('location_subdirectories', 'brand_pages')`),
 	check("sites_vertical_check", sql`${table.vertical} IN ('restaurant', 'experience', 'retail', 'wellness', 'service')`),
-	check("sites_content_source_check", sql`${table.content_source} IN ('google_maps', 'client_supplied', 'generated')`),
-	check("sites_media_source_check", sql`${table.media_source} IN ('client_photos', 'stock', 'mixed')`),
 	// organization_id is the join/filter column in dozens of call sites across the codebase
 	// (dashboard context resolution, MCP site listing/auth, billing, editor routes). Confirmed
 	// via wrangler d1 insights as driving two of the top four rows-read queries post-cron-fix
@@ -2129,6 +2028,19 @@ export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscript
 	check("stripe_ga4_subscription_intents_timing_check", sql`${table.effective_timing} IN ('immediate', 'period_end')`),
 ]);
 
+// Better Auth's organization subscription is the control-plane billing authority.
+// `ai_credits`/`organization_billing` are derived read projections written from it,
+// never an independent source. usage_events (append-only ledger) and
+// usage_quota_grants (plan/reset/manual grants, also append-only) are the only
+// writers of consumption and allowance history — no one-time credit purchase,
+// service-addon, or auto-top-up writer exists; that product model was removed
+// after a production census found no customer purchase/fulfillment history for it.
+// Starter = 500 shared usage credits/UTC week, Growth = 2,000/UTC week (Monday
+// 00:00:00 UTC boundary); a `plan` grant is the exact base allowance for that week,
+// not additive, and never carries over. `manual` grants are additive within their
+// declared week only; a `reset` grant sets the exact remaining balance for its week
+// without rewriting earlier grants/usage. See server/utils/quota-adjustment.ts for
+// the dry-run/approved-apply operator path (never hand-edit these tables directly).
 export const usage_events = sqliteTable("usage_events", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -2257,7 +2169,6 @@ export const experiences = sqliteTable("experiences", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
-	retired_share_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text(),
@@ -2271,33 +2182,6 @@ export const experiences = sqliteTable("experiences", {
 	check("experiences_source_check", sql`source IN ('manual', 'template')`),
 	index("experiences_org_site_idx").on(table.organization_id, table.site_id),
 	uniqueIndex("experiences_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
-]);
-
-export const experience_media = sqliteTable("experience_media", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	experience_id: text().notNull(),
-	asset_id: text().notNull(),
-	sort_order: integer().notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	foreignKey({
-		columns: [table.organization_id, table.site_id, table.experience_id],
-		foreignColumns: [experiences.organization_id, experiences.site_id, experiences.id],
-		name: "experience_media_experience_scope_fk",
-	}).onDelete("cascade"),
-	foreignKey({
-		columns: [table.organization_id, table.site_id, table.asset_id],
-		foreignColumns: [media_assets.organization_id, media_assets.site_id, media_assets.id],
-		name: "experience_media_asset_scope_fk",
-	}).onDelete("cascade"),
-	unique("experience_media_experience_asset_unique").on(table.experience_id, table.asset_id),
-	unique("experience_media_experience_sort_unique").on(table.experience_id, table.sort_order),
-	index("experience_media_experience_order_idx").on(table.experience_id, table.sort_order),
-	index("experience_media_asset_scope_idx").on(table.organization_id, table.site_id, table.asset_id),
-	index("experience_media_site_experience_idx").on(table.site_id, table.experience_id),
 ]);
 
 export const mcp_workspace_preferences = sqliteTable("mcp_workspace_preferences", {
@@ -2333,21 +2217,6 @@ export const google_analytics_connections = sqliteTable("google_analytics_connec
 export const zaraz_sync_lock = sqliteTable("zaraz_sync_lock", {
 	id: text().primaryKey(),
 	locked_at: text(),
-});
-
-export const platform_content_components = sqliteTable("platform_content_components", {
-	id: text().primaryKey(),
-	content_type: text().notNull(),
-	content_id: text().notNull(),
-	type: text().notNull(),
-	position: integer().default(0).notNull(),
-	data_json: text().notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	label: text(),
-	status: text().default("active").notNull(),
-	render_enabled: integer().default(1).notNull(),
-	schema_enabled: integer().default(1).notNull(),
 });
 
 export const content_documents = sqliteTable("content_documents", {

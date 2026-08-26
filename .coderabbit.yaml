@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_instructions:
+    - path: '**/*'
+      instructions: |
+        Focus only on genuine bugs, security vulnerabilities, and data integrity issues.
+        
+        DO NOT suggest:
+        - Defensive null checks or fallbacks that add redundant safety layers
+        - Restoring previously removed filters or validation that was intentionally deleted
+        - Adding tolerant-parse fallbacks for data validation
+        - Defensive programming patterns that conflict with cleanup goals
+        - "Pre-existing" workarounds or compatibility shims
+        
+        DO suggest:
+        - Missing status filters on media placement joins (mp.status = 'active')
+        - Race conditions in concurrent operations
+        - Cross-site authorization bypasses
+        - Data integrity issues (wrong column selections, broken references)
+        - Type safety issues that cause runtime errors
+        - Security vulnerabilities in public endpoints
+        - Existing defensive patterns like `|| ''`, `|| null`, `?? null` fallbacks that mask API violations
+        - Optional chaining where null shouldn't be possible per API contract
+        - Component-level guards that mask API contract violations
+        - "Guarantee" or "normalize" defensive wrappers
+        
+        This project is actively removing legacy code, fallbacks, and defensive patterns.
+        Assume intentional deletions are cleanup, not regression.

@@ -38,6 +38,7 @@ import { prepareD1SeedFile } from "./utils/d1-seed-file.mjs";
 const { values: rawArgs } = parseArgs({
   options: {
     slug: { type: "string" },
+    "organization-id": { type: "string" },
     vertical: { type: "string", default: "restaurant" },
     "maps-url": { type: "string", multiple: true, default: [] },
     images: { type: "string" },
@@ -51,6 +52,7 @@ const { values: rawArgs } = parseArgs({
 });
 
 const SLUG = rawArgs.slug;
+const ORGANIZATION_ID = rawArgs["organization-id"]?.trim();
 
 // Slug validation: only allow letters, digits, hyphens, underscores
 const SLUG_SAFE_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -92,6 +94,10 @@ if (!SLUG) {
   console.error(
     "Usage: node scripts/client-import.mjs --slug <slug> [--dry-run | --approve | --apply] [--allow-stock] [--remote]",
   );
+  process.exit(1);
+}
+if (!ORGANIZATION_ID || !SLUG_SAFE_PATTERN.test(ORGANIZATION_ID)) {
+  console.error("Error: --organization-id is required and must be the existing Better Auth organization ID.");
   process.exit(1);
 }
 
@@ -519,7 +525,7 @@ function scanForbiddenCopy(sql, vertical) {
 // ── Seed SQL generation ───────────────────────────────────────────────────────
 
 function generateSeedSql(places, mediaManifest) {
-  const orgId = `org-${SLUG}`;
+  const orgId = ORGANIZATION_ID;
   const siteId = `site-${SLUG}`;
   const now = new Date().toISOString();
 
@@ -606,22 +612,17 @@ ON CONFLICT(id) DO UPDATE SET
 -- REVIEW CAREFULLY before applying — DO NOT run without checking
 -- ============================================================
 
--- Organization
-INSERT INTO organization (id, name, slug)
-VALUES ('${orgId}', '${brandName.replace(/'/g, "''")}', '${SLUG}')
-ON CONFLICT(id) DO UPDATE SET name = excluded.name;
-
 -- Site
 INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status,
-  default_currency, vertical, content_source, media_source
+  default_currency, vertical
 ) VALUES (
   '${siteId}', '${orgId}', 'saya-theme-v1', 'saya', '${SLUG}', '${SLUG}',
   '${brandName.replace(/'/g, "''")}', NULL,
   'active', 'free', 'active',
-  'THB', '${VERTICAL}', 'google_maps', 'client_photos'
+  'THB', '${VERTICAL}'
 ) ON CONFLICT(id) DO UPDATE SET
   brand_name = excluded.brand_name,
   vertical = excluded.vertical,
@@ -792,7 +793,7 @@ if (MODE === "approve") {
 
   console.log(`✓ Approval recorded: ${approvedPath}`);
   console.log(`  manifest_hash: ${hash}`);
-  console.log(`\nNext: yarn client:import --slug ${SLUG} --apply`);
+  console.log(`\nNext: yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --apply`);
   process.exit(0);
 }
 
@@ -1257,8 +1258,6 @@ const clientManifest = {
   generated_at: new Date().toISOString(),
   slug: SLUG,
   vertical: VERTICAL,
-  content_source: "google_maps",
-  media_source: "client_photos",
   primary_location: places[0] ?? null,
   secondary_locations: places.slice(1),
   forbidden_copy_domains: FORBIDDEN_BY_VERTICAL[VERTICAL] ?? [],
@@ -1311,13 +1310,13 @@ Next steps:
                client-imports/${SLUG}/generated-copy.json   ← hallucination review surface
                client-imports/${SLUG}/copy-scan.txt
   2. Upload:   images per client-imports/${SLUG}/media-manifest.json
-  3. Approve:  yarn client:import --slug ${SLUG} --approve
-  4. Apply:    yarn client:import --slug ${SLUG} --apply${ALLOW_STOCK ? " --allow-stock" : ""}
+  3. Approve:  yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --approve
+  4. Apply:    yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --apply${ALLOW_STOCK ? " --allow-stock" : ""}
   5. Verify:   yarn client:verify --url http://localhost:3000 --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
   6. Release + verify prod:
                Merge through staging to main; CI deploys and verifies each environment.
                yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
 
   Or use the onboard wrapper (steps 1-5 in one command):
-               yarn client:onboard --slug ${SLUG} --vertical ${VERTICAL}${ALLOW_STOCK ? " --allow-stock" : ""}
+               yarn client:onboard --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --vertical ${VERTICAL}${ALLOW_STOCK ? " --allow-stock" : ""}
 `);

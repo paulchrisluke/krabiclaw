@@ -14,7 +14,7 @@ function sqlValue(value: NclsSeedValue): string {
 }
 
 function table(name: string): NclsSeedTable {
-  const definition = nclsFixture.tables.find(candidate => candidate.table === name)
+  const definition = (nclsFixture.tables as NclsSeedTable[]).find(candidate => candidate.table === name)
   if (!definition) throw new Error(`Missing NCLS fixture table: ${name}`)
   return definition
 }
@@ -32,11 +32,13 @@ function renderRows(definition: NclsSeedTable, transform?: (_row: Record<string,
 export function renderNclsFixtureSql(): string {
   const site = table('sites').rows[0]
   if (!site) throw new Error('NCLS fixture has no site row')
-  const initialSite = (row: Record<string, NclsSeedValue>) => ({
-    ...row,
-    primary_location_id: null,
-    logo_asset_id: null,
-  })
+  const initialSite = (row: Record<string, NclsSeedValue>) => {
+    return { ...row, primary_location_id: null }
+  }
+  const blogPostWithoutBody = (row: Record<string, NclsSeedValue>) => {
+    const { body: _body, ...rest } = row
+    return rest
+  }
 
   const afterCore = [
     'site_locales',
@@ -61,7 +63,7 @@ DELETE FROM content_documents
  WHERE (owner_type = 'tenant_page' AND owner_id IN (SELECT id FROM tenant_page_variants WHERE site_id = ${sqlValue(nclsFixture.siteId)}))
     OR (owner_type = 'tenant_blog' AND owner_id IN (SELECT id FROM blog_posts WHERE site_id = ${sqlValue(nclsFixture.siteId)}));
 UPDATE sites
-   SET primary_location_id = NULL, logo_asset_id = NULL
+   SET primary_location_id = NULL
  WHERE id = ${sqlValue(nclsFixture.siteId)} OR subdomain = 'ncls';
 DELETE FROM sites WHERE id = ${sqlValue(nclsFixture.siteId)} OR subdomain = 'ncls';
 DELETE FROM organization WHERE id = ${sqlValue(nclsFixture.organizationId)} OR slug = 'north-carolina-legal-services';
@@ -88,13 +90,12 @@ ${renderRows(table('business_locations'))}
 ${renderRows(table('media_assets'))}
 
 UPDATE sites
-   SET primary_location_id = ${sqlValue(site.primary_location_id ?? null)},
-       logo_asset_id = ${sqlValue(site.logo_asset_id ?? null)}
+   SET primary_location_id = ${sqlValue(site.primary_location_id ?? null)}
  WHERE id = ${sqlValue(nclsFixture.siteId)};
 
 ${renderRows(table('tenant_pages'))}
 
-${renderRows(table('blog_posts'))}
+${renderRows(table('blog_posts'), blogPostWithoutBody)}
 
 ${renderRows(table('content_documents'))}
 
@@ -105,6 +106,8 @@ ${renderRows(table('tenant_page_variants'))}
 ${renderRows(table('blog_post_redirects'))}
 
 ${afterCore}
+
+${renderRows(table('media_placements'))}
 `
 }
 

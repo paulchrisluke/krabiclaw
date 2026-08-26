@@ -33,17 +33,17 @@ export function hydrateDocFormContent(form: ReturnType<typeof useDocForm>['form'
   form.body = blocks.filter(block => block.type === 'markdown').map(block => String(block.data.markdown || '')).join('\n\n')
   const faq = blocks.find(block => block.type === 'faq')
   form.faq_block_id = faq?.id || ''
-  form.faq_label = typeof faq?.data.label === 'string' ? faq.data.label : ''
-  form.faq_status = faq?.data.status === 'inactive' ? 'inactive' : 'active'
-  form.faq_render_enabled = typeof faq?.data.render_enabled === 'boolean' ? faq.data.render_enabled : true
-  form.faq_schema_enabled = typeof faq?.data.schema_enabled === 'boolean' ? faq.data.schema_enabled : true
+  form.faq_label = faq?.data.label || ''
+  form.faq_status = faq?.data.status || 'active'
+  form.faq_render_enabled = faq?.data.render_enabled ?? true
+  form.faq_schema_enabled = faq?.data.schema_enabled ?? true
   form.faq_items = Array.isArray(faq?.data.items) ? faq.data.items.map(item => ({ question: String(item.question), answer: String(item.answer) })) : []
   const howTo = blocks.find(block => block.type === 'how_to')
   form.how_to_block_id = howTo?.id || ''
-  form.how_to_label = typeof howTo?.data.label === 'string' ? howTo.data.label : ''
-  form.how_to_status = howTo?.data.status === 'inactive' ? 'inactive' : 'active'
-  form.how_to_render_enabled = typeof howTo?.data.render_enabled === 'boolean' ? howTo.data.render_enabled : true
-  form.how_to_schema_enabled = typeof howTo?.data.schema_enabled === 'boolean' ? howTo.data.schema_enabled : true
+  form.how_to_label = howTo?.data.label || ''
+  form.how_to_status = howTo?.data.status || 'active'
+  form.how_to_render_enabled = howTo?.data.render_enabled ?? true
+  form.how_to_schema_enabled = howTo?.data.schema_enabled ?? true
   form.how_to_steps = Array.isArray(howTo?.data.steps) ? howTo.data.steps.map(step => ({ name: String(step.name), text: String(step.text), url: step.url == null ? '' : String(step.url) })) : []
 }
 

@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Documentation data is temporarily unavailable')
 
   try {
-    const doc = await getPublishedPlatformDoc(db, category, slug)
+    const doc = await getPublishedPlatformDoc(db, category, slug, env)
     if (!doc) return apiErrorResponse(event, 404, 'DOC_NOT_FOUND', 'Documentation not found')
 
     return jsonResponse({ doc })

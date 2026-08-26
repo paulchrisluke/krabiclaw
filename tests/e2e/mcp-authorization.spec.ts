@@ -20,7 +20,7 @@ test.describe('stateless MCP server', () => {
     expect(listForSite.status()).toBe(200)
     const toolsBody = await listForSite.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(tool => tool.name)
-    expect(toolNames).toContain('update_page_content')
+    expect(toolNames).toContain('update_tenant_page')
     expect(toolNames).not.toContain('update_notification_settings')
   })
 

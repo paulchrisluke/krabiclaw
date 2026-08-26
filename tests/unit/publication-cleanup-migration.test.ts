@@ -23,12 +23,11 @@ test('0125 deletes every retired publication state and dependent current row', (
   const db = databaseBeforeCleanup()
   db.prepare('INSERT INTO organization (id, name, slug) VALUES (?, ?, ?)').run('org-cleanup', 'Cleanup', 'cleanup')
   db.prepare('INSERT INTO sites (id, organization_id, slug, subdomain) VALUES (?, ?, ?, ?)').run('site-cleanup', 'org-cleanup', 'cleanup', 'cleanup')
-  db.prepare("INSERT INTO media_assets (id, organization_id, site_id, kind, provider, source, status) VALUES (?, ?, ?, 'image', 'external_url', 'external', 'active')").run('asset-cleanup', 'org-cleanup', 'site-cleanup')
+  db.prepare("INSERT INTO media_assets (id, organization_id, site_id, kind, provider, source, status) VALUES (?, ?, ?, 'image', 'cloudflare_r2', 'uploaded', 'active')").run('asset-cleanup', 'org-cleanup', 'site-cleanup')
 
   db.prepare("INSERT INTO posts (id, organization_id, site_id, body, status, created_by) VALUES (?, ?, ?, ?, 'draft', ?)").run('post-hidden', 'org-cleanup', 'site-cleanup', 'Hidden', 'user-cleanup')
   db.prepare("INSERT INTO posts (id, organization_id, site_id, body, status, created_by) VALUES (?, ?, ?, ?, 'published', ?)").run('post-live', 'org-cleanup', 'site-cleanup', 'Live', 'user-cleanup')
   db.prepare("INSERT INTO post_channel_jobs (id, post_id, organization_id, channel) VALUES (?, ?, ?, 'site')").run('job-hidden', 'post-hidden', 'org-cleanup')
-  db.prepare("INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id) VALUES (?, ?, ?, ?, ?)").run('post-media-hidden', 'org-cleanup', 'site-cleanup', 'post-hidden', 'asset-cleanup')
 
   db.prepare("INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'archived')").run('blog-hidden', 'org-cleanup', 'site-cleanup', 'Hidden', 'hidden', 'Hidden', 'News')
   db.prepare("INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, category, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled')").run('blog-scheduled', 'org-cleanup', 'site-cleanup', 'Scheduled', 'scheduled', 'Scheduled', 'News')
@@ -37,7 +36,6 @@ test('0125 deletes every retired publication state and dependent current row', (
 
   db.prepare("INSERT INTO platform_docs (id, title, slug, body, status) VALUES (?, ?, ?, ?, 'draft')").run('doc-hidden', 'Hidden', 'hidden-doc', 'Hidden')
   db.prepare("INSERT INTO platform_docs (id, title, slug, body, status) VALUES (?, ?, ?, ?, 'published')").run('doc-live', 'Live', 'live-doc', 'Live')
-  db.prepare("INSERT INTO platform_content_components (id, content_type, content_id, type, data_json) VALUES (?, 'doc', ?, 'faq', '{}')").run('doc-component-hidden', 'doc-hidden')
   db.prepare("INSERT INTO content_documents (id, owner_type, owner_id) VALUES (?, 'platform_doc', ?)").run('duplicate-doc', 'doc-live')
   db.prepare("INSERT INTO content_blocks (id, document_id, type, data_json) VALUES (?, ?, 'markdown', '{}')").run('duplicate-block', 'duplicate-doc')
 
@@ -52,9 +50,9 @@ test('0125 deletes every retired publication state and dependent current row', (
   applyPublicationMigrations(db)
 
   for (const [table, id] of [
-    ['posts', 'post-hidden'], ['post_channel_jobs', 'job-hidden'], ['post_media', 'post-media-hidden'],
+    ['posts', 'post-hidden'], ['post_channel_jobs', 'job-hidden'],
     ['blog_posts', 'blog-hidden'], ['content_documents', 'blog-doc-hidden'], ['content_blocks', 'blog-block-hidden'],
-    ['platform_docs', 'doc-hidden'], ['platform_content_components', 'doc-component-hidden'],
+    ['platform_docs', 'doc-hidden'],
     ['content_documents', 'duplicate-doc'], ['content_blocks', 'duplicate-block'],
     ['site_locales', 'locale-hidden'], ['tenant_page_variants', 'variant-hidden'],
     ['content_documents', 'locale-doc-hidden'], ['content_blocks', 'locale-block-hidden'], ['tenant_redirects', 'locale-redirect-hidden'],

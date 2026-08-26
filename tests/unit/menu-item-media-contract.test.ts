@@ -29,7 +29,6 @@ const menuRow = {
   id: 'menu-1',
   organization_id: 'org-1',
   site_id: 'site-1',
-  location_id: null,
   name: 'Menu',
   description: null,
   status: 'published',
@@ -51,10 +50,6 @@ const itemRow = {
   compare_at_price_amount: null,
   sale_starts_at: null,
   sale_ends_at: null,
-  image_asset_id: 'legacy-image',
-  public_url: 'https://cdn.example.com/legacy.jpg',
-  thumbnail_url: 'https://cdn.example.com/legacy-thumb.jpg',
-  kind: 'image',
   available: 1,
   featured: 0,
   featured_sort_order: 0,
@@ -74,7 +69,7 @@ const itemRow = {
   updated_by: null,
 }
 
-test('menu item media does not fall back to legacy image_asset_id joins', async () => {
+test('menu item without placements has no media', async () => {
   const menu = await getMenuWithItems(
     fakeDb({ menu: menuRow, items: [itemRow], mediaRows: [] }),
     'org-1',
@@ -82,14 +77,10 @@ test('menu item media does not fall back to legacy image_asset_id joins', async 
     'menu-1',
   )
 
-  assert.equal(menu?.items[0]?.image_asset_id, null)
-  assert.equal(menu?.items[0]?.public_url, null)
-  assert.equal(menu?.items[0]?.thumbnail_url, null)
-  assert.equal(menu?.items[0]?.kind, null)
   assert.deepEqual(menu?.items[0]?.media, [])
 })
 
-test('menu item media is hydrated from ordered menu_item_media rows', async () => {
+test('menu item media is hydrated from ordered placements', async () => {
   const menu = await getMenuWithItems(
     fakeDb({
       menu: menuRow,
@@ -98,16 +89,17 @@ test('menu item media is hydrated from ordered menu_item_media rows', async () =
         {
           ...itemRow,
           id: 'asset-image',
-          menu_item_id: 'item-1',
+          asset_id: 'asset-image',
+          placement_id: 'placement-image',
+          owner_id: 'item-1',
+          slot: 'gallery',
           sort_order: 1,
           organization_id: 'org-1',
           site_id: 'site-1',
-          location_id: null,
           provider: 'cloudflare_r2',
           source: 'uploaded',
           cloudflare_image_id: null,
           r2_key: 'images/asset-image.jpg',
-          google_media_name: null,
           public_url: 'https://cdn.example.com/image.jpg',
           thumbnail_url: 'https://cdn.example.com/image-thumb.jpg',
           mime_type: 'image/jpeg',
@@ -125,16 +117,17 @@ test('menu item media is hydrated from ordered menu_item_media rows', async () =
         {
           ...itemRow,
           id: 'asset-video',
-          menu_item_id: 'item-1',
+          asset_id: 'asset-video',
+          placement_id: 'placement-video',
+          owner_id: 'item-1',
+          slot: 'gallery',
           sort_order: 0,
           organization_id: 'org-1',
           site_id: 'site-1',
-          location_id: null,
           provider: 'cloudflare_r2',
           source: 'uploaded',
           cloudflare_image_id: null,
           r2_key: 'videos/asset-video.mp4',
-          google_media_name: null,
           public_url: 'https://cdn.example.com/video.mp4',
           thumbnail_url: 'https://cdn.example.com/video-poster.jpg',
           mime_type: 'video/mp4',
@@ -156,9 +149,5 @@ test('menu item media is hydrated from ordered menu_item_media rows', async () =
     'menu-1',
   )
 
-  assert.equal(menu?.items[0]?.image_asset_id, 'asset-video')
-  assert.equal(menu?.items[0]?.public_url, 'https://cdn.example.com/video.mp4')
-  assert.equal(menu?.items[0]?.thumbnail_url, 'https://cdn.example.com/video-poster.jpg')
-  assert.equal(menu?.items[0]?.kind, 'video')
-  assert.deepEqual(menu?.items[0]?.media?.map(media => media.id), ['asset-video', 'asset-image'])
+  assert.deepEqual(menu?.items[0]?.media?.map(media => media.asset_id), ['asset-video', 'asset-image'])
 })

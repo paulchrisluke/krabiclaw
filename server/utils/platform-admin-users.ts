@@ -6,7 +6,6 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
 import { hasPlatformAdminPermission, type PlatformAdminPermission } from '~/utils/platform-admin-access'
-import { listUserOrganizations } from '~/server/utils/member-access'
 
 type PlatformUserPermission = NonNullable<PlatformAdminPermission['user']>[number]
 
@@ -216,24 +215,48 @@ export async function countPlatformUsers(authApi: AdminApi, headers: HeadersInit
   return result.total
 }
 
+// An authoritative read of Better Auth's organization table, via its generic
+// adapter (findMany/count on model 'organization') rather than raw SQL or a
+// membership-derived projection — the org plugin itself has no "list all
+// organizations" call (listOrganizations is scoped to one user), so this is
+// the correct sanctioned API for a platform-admin-wide organization listing.
+// A projection built by paginating every user and unioning their memberships
+// would also silently miss any organization unreachable through that page of
+// users (e.g. one whose only member fell outside the enumerated pages).
 export async function listPlatformOrganizations(
-  authApi: AdminApi,
-  headers: HeadersInit,
   env: CloudflareEnv,
+  input: { limit?: number; offset?: number } = {},
 ): Promise<PlatformOrganization[]> {
-  const firstPage = await listPlatformUsers(authApi, headers, { limit: 100, offset: 0 })
-  const users = [...firstPage.users]
-  for (let offset = 100; offset < firstPage.total; offset += 100) {
-    users.push(...(await listPlatformUsers(authApi, headers, { limit: 100, offset })).users)
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    findMany<T>(_input: {
+      model: string
+      limit?: number
+      offset?: number
+      sortBy?: { field: string; direction: 'asc' | 'desc' }
+    }): Promise<T[]>
   }
-  const organizations = (await Promise.all(users.map(user => listUserOrganizations(env, user.id)))).flat()
-  return Array.from(new Map(organizations.map(organization => [organization.id, {
-    id: organization.id,
-    name: organization.name,
-    slug: organization.slug,
-    logo: organization.logo ?? null,
-    createdAt: organization.createdAt,
-  }])).values())
+  const rows = await adapter.findMany<{ id: string; name: string; slug: string; logo: string | null; createdAt: Date }>({
+    model: 'organization',
+    limit: input.limit ?? 50,
+    offset: input.offset ?? 0,
+    sortBy: { field: 'createdAt', direction: 'desc' },
+  })
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    logo: row.logo ?? null,
+    createdAt: row.createdAt,
+  }))
+}
+
+export async function countPlatformOrganizations(env: CloudflareEnv): Promise<number> {
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    count(_input: { model: string }): Promise<number>
+  }
+  return await adapter.count({ model: 'organization' })
 }
 
 export async function listPlatformAdminUsers(authApi: AdminApi, headers: HeadersInit): Promise<PlatformAdminUser[]> {

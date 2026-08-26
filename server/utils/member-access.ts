@@ -100,7 +100,7 @@ export function locationTeamId(locationId: string, generation?: string): string 
 
 type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
 
-async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
+export async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
   const { createAuth } = await import('~/server/utils/auth')
   const auth = createAuth(env)
   const context = await auth.$context

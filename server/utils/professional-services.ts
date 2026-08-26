@@ -1,5 +1,6 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getMediaPlacements } from '~/server/utils/media-placement'
@@ -437,13 +438,14 @@ export async function getPublicBlawbyDocumentData(
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
   options: { slug?: string | null } = {},
+  env: CloudflareEnv,
 ): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
   const site = await getActiveBlawbySite(db, siteId)
   if (!site) return null
 
   const [shell, route] = await Promise.all([
     getPublicBlawbyShellData(db, siteId),
-    getPublicBlawbyRouteData(db, siteId, recipe, options),
+    getPublicBlawbyRouteData(db, siteId, recipe, options, env),
   ])
   return { shell, route }
 }
@@ -453,8 +455,9 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
   options: { slug?: string | null } = {},
+  env: CloudflareEnv,
 ): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
-  const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options)
+  const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options, env)
   if (!document) {
     throw new HTTPError({
       statusCode: 404,
@@ -562,6 +565,7 @@ export async function getPublicBlawbyRouteData(
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
   options: { slug?: string | null } = {},
+  env: CloudflareEnv,
 ): Promise<PublicBlawbyRouteData> {
   const needsOfferings = ['home', 'services', 'offering', 'about', 'pricing'].includes(recipe)
   const needsQa = ['home', 'services', 'about', 'pricing', 'contact', 'schedule', 'blog', 'donate'].includes(recipe)
@@ -590,7 +594,7 @@ export async function getPublicBlawbyRouteData(
     needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, siteId, postLimit) : Promise.resolve([]),
     recipe === 'article' && options.slug
-      ? getPublishedSiteBlogPost(db, siteId, options.slug)
+      ? getPublishedSiteBlogPost(db, siteId, options.slug, env)
       : Promise.resolve(null),
   ])
   const offerings = mapPublicOfferingSummaries(offeringRows)

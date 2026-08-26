@@ -17,7 +17,7 @@ import {
 } from "../utils/tenant-hosts";
 import { verifyScopedPreviewToken } from "../utils/preview-token";
 import { isPlatformPath } from "~/utils/platform-routes";
-import { parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
+import { getDraftMedia, parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
 import { resolvePublicTemplate } from "~/utils/template-registry";
 
 interface TenantSiteRow {
@@ -28,10 +28,27 @@ interface TenantSiteRow {
   onboarding_status: string;
   canonical_domain: string | null;
   brand_name: string | null;
-  logo_url: string | null;
-  logo_mime_type: string | null;
-  favicon_url: string | null;
+  media_json: string;
   vertical: string | null;
+}
+
+interface TenantSiteMedia {
+  asset_id: string
+  slot: string
+  public_url: string | null
+  thumbnail_url: string | null
+  kind: string
+  mime_type: string | null
+}
+
+const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
+  'asset_id', mp.asset_id, 'slot', mp.slot, 'public_url', ma.public_url,
+  'thumbnail_url', ma.thumbnail_url, 'kind', ma.kind, 'mime_type', ma.mime_type
+)), json('[]')) FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+WHERE mp.site_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active')`
+
+function tenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>): TenantSiteMedia[] {
+  return JSON.parse(site.media_json) as TenantSiteMedia[]
 }
 
 export interface SpentSubdomainResolution {
@@ -78,9 +95,7 @@ async function resolveRegisteredSubdomainSite(
     `
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
              canonical.domain AS canonical_domain,
-             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
-             ma.mime_type AS logo_mime_type,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
+             s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
       FROM sites s
       JOIN site_domains requested
         ON requested.site_id = s.id
@@ -90,7 +105,6 @@ async function resolveRegisteredSubdomainSite(
         ON canonical.site_id = s.id
        AND canonical.role = 'canonical'
        AND canonical.status = 'active'
-      LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       WHERE requested.domain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
     `,
@@ -114,9 +128,7 @@ function setResolvedTenantContext(
   event.context.canonicalDomain = canonicalDomain
   event.context.site = {
     brand_name: metadata.brandName,
-    logo_url: site.logo_url || null,
-    logo_mime_type: site.logo_mime_type || null,
-    favicon_url: site.favicon_url || null,
+    media: tenantSiteMedia(site),
     vertical: metadata.vertical,
   }
 }
@@ -188,20 +200,15 @@ export default defineHandler(async (event) => {
           | "theme_id"
           | "onboarding_status"
           | "brand_name"
-          | "logo_url"
-          | "logo_mime_type"
-          | "favicon_url"
+          | "media_json"
           | "vertical"
         >
       >(
         db,
         `
         SELECT s.id, s.organization_id, s.theme_id, s.onboarding_status, s.brand_name,
-               COALESCE(ma.public_url, s.logo_url) AS logo_url,
-               ma.mime_type AS logo_mime_type,
-               json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
+               ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
         FROM sites s
-        LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
         WHERE s.id = ? AND s.status = 'active'
         LIMIT 1
       `,
@@ -216,9 +223,7 @@ export default defineHandler(async (event) => {
         setTenantType(event, TENANT_TYPES.TENANT);
         event.context.site = {
           brand_name: metadata.brandName,
-          logo_url: previewSite.logo_url || null,
-          logo_mime_type: previewSite.logo_mime_type || null,
-          favicon_url: previewSite.favicon_url || null,
+          media: tenantSiteMedia(previewSite),
           vertical: metadata.vertical,
         };
         return;
@@ -272,8 +277,14 @@ export default defineHandler(async (event) => {
           event.context.onboardingStatus = "active";
           event.context.site = {
             brand_name: previewDraft.name || null,
-            logo_url: payload.preview.config.logo_url || null,
-            favicon_url: null,
+            media: getDraftMedia(payload, 'logo') ? [{
+              asset_id: getDraftMedia(payload, 'logo')!.draftAssetId,
+              slot: 'logo',
+              public_url: getDraftMedia(payload, 'logo')!.publicUrl,
+              thumbnail_url: null,
+              kind: 'image',
+              mime_type: null,
+            }] : [],
             vertical: previewDraft.vertical,
           };
           return;
@@ -332,11 +343,8 @@ export async function resolveTenantSite(
       `
       SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
              s.subdomain || '.localhost' AS canonical_domain,
-             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
-             ma.mime_type AS logo_mime_type,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
+             s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
       FROM sites s
-      LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       WHERE s.subdomain = ? AND s.status = 'active'
       LIMIT 1
     `,
@@ -349,14 +357,11 @@ export async function resolveTenantSite(
     `
     SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
            COALESCE(canonical.domain, sd.domain) AS canonical_domain,
-           s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
-           ma.mime_type AS logo_mime_type,
-           json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
+           s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
     FROM sites s
     JOIN site_domains sd ON s.id = sd.site_id
     LEFT JOIN site_domains canonical
       ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
-    LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
     WHERE sd.domain = ? AND sd.type IN ('custom', 'subdomain') AND sd.status = 'active'
       AND s.status = 'active' AND s.onboarding_status = 'active'
     LIMIT 1

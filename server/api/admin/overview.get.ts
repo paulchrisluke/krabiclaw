@@ -1,6 +1,6 @@
 import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { adminHeadersForEvent, authAdminApi, listPlatformOrganizations, platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { listPlatformOrganizations, platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { listOrganizationMembers } from '~/server/utils/member-access'
 
 interface OrganizationRow { id: string; name: string; slug: string | null; impersonation_user_id: string | null }
@@ -15,9 +15,8 @@ export default defineHandler(async (event) => {
   try {
     await requirePlatformEventPermission(event, env, { platform: ['organizations'] })
 
-    const authApi = authAdminApi(env)
     const [organizations, siteRows, locationRows] = await Promise.all([
-      listPlatformOrganizations(authApi, adminHeadersForEvent(event), env), queryAll<SiteRow>(db, `
+      listPlatformOrganizations(env, { limit: 50 }), queryAll<SiteRow>(db, `
         SELECT id, organization_id, slug, brand_name, subdomain, status
         FROM sites
         ORDER BY COALESCE(brand_name, slug) ASC
@@ -27,7 +26,7 @@ export default defineHandler(async (event) => {
         ORDER BY is_primary DESC, title ASC
       `), ])
     const organizationRows: OrganizationRow[] = []
-    for (const organization of organizations.slice(0, 50)) {
+    for (const organization of organizations) {
       const members = await listOrganizationMembers(env, organization.id)
       const impersonationUser = members.find(member => member.role === 'owner')
         ?? members.find(member => member.role === 'admin')

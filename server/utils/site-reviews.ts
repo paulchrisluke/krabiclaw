@@ -1,5 +1,6 @@
-import { execute, queryAll, type DbClient } from '../db/index.ts'
+import { execute, executeBatch, queryAll, type DbClient } from '../db/index.ts'
 import { getMediaPlacements } from './media-placement.ts'
+import { buildDeleteOwnerPlacementsQuery } from './media-asset-manager.ts'
 
 export const OWNER_REVIEW_COLLECTION_METHODS = ['in_person', 'email', 'phone', 'migration', 'other'] as const
 export type OwnerReviewCollectionMethod = typeof OWNER_REVIEW_COLLECTION_METHODS[number]
@@ -157,10 +158,16 @@ export async function deleteOwnerEnteredSiteReview(
   scope: { organizationId: string; siteId: string },
   reviewId: string,
 ) {
-  const result = await execute(db, `
-    DELETE FROM reviews
-    WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
-  `, [reviewId, scope.organizationId, scope.siteId])
-  if (!Number(result.meta.changes ?? 0)) throw new Error('Owner-entered review not found')
+  const [, result] = await executeBatch(db, [
+    buildDeleteOwnerPlacementsQuery({ ownerType: 'review', ownerId: reviewId, organizationId: scope.organizationId, siteId: scope.siteId }),
+    {
+      query: `
+      DELETE FROM reviews
+      WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
+    `,
+      params: [reviewId, scope.organizationId, scope.siteId],
+    },
+  ])
+  if (!Number(result?.meta.changes ?? 0)) throw new Error('Owner-entered review not found')
   return { review_id: reviewId, deleted: true }
 }

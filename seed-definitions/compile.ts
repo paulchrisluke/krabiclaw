@@ -22,6 +22,16 @@ function uniqueStrings(values: string[], label: string) {
   }
 }
 
+function validateMedia<Slot extends string>(media: Array<{ asset_id: string; slot: Slot }>, mediaIds: Set<string>, label: string) {
+  uniqueStrings(media.map(item => `${item.slot}:${item.asset_id}`), `${label} media placement`)
+  for (const item of media) {
+    if (!mediaIds.has(item.asset_id)) {
+      throw new Error(`${label} references unknown media asset "${item.asset_id}"`)
+    }
+  }
+  return media.map(item => ({ ...item }))
+}
+
 export function compileCuratedSiteFixture(
   fixture: CuratedSiteDefinition,
 ): CompiledCuratedSiteBundle {
@@ -52,6 +62,9 @@ export function compileCuratedSiteFixture(
   uniqueStrings((fixture.menuItemTranslations ?? []).map((entry) => entry.id), 'menu item translation id')
   uniqueStrings(fixture.publicRoutes.map((r) => r.path), 'public route path')
 
+  validateMedia(fixture.site.media, mediaIds, 'Site')
+  for (const location of fixture.locations) validateMedia(location.media, mediaIds, `Location "${location.id}"`)
+
   const sourceLocales = fixture.siteLocales.filter((locale) => locale.isSource)
   if (sourceLocales.length !== 1) {
     throw new Error(`Fixture must declare exactly one source locale; found ${sourceLocales.length}`)
@@ -62,9 +75,6 @@ export function compileCuratedSiteFixture(
   }
 
   const mediaAssets: CompiledSeedMediaAsset[] = fixture.mediaAssets.map((asset) => {
-    if (asset.locationId && !locationIds.has(asset.locationId)) {
-      throw new Error(`Media asset "${asset.id}" references unknown location "${asset.locationId}"`)
-    }
     if (asset.kind === 'video' && !asset.thumbnailUrl.trim()) {
       throw new Error(`Video media asset "${asset.id}" requires thumbnailUrl`)
     }
@@ -72,9 +82,8 @@ export function compileCuratedSiteFixture(
       id: asset.id,
       organizationId: fixture.organizationId,
       siteId: fixture.siteId,
-      locationId: asset.locationId,
-      provider: asset.provider ?? 'external_url',
-      source: asset.source ?? 'external',
+      provider: asset.provider ?? 'cloudflare_r2',
+      source: asset.source ?? 'uploaded',
       r2Key: asset.r2Key ?? null,
       cloudflareImageId: asset.cloudflareImageId ?? null,
       publicUrl: asset.publicUrl,
@@ -94,12 +103,7 @@ export function compileCuratedSiteFixture(
     if (entry.locationId && !locationIds.has(entry.locationId)) {
       throw new Error(`Tenant page content "${entry.id}" references unknown location "${entry.locationId}"`)
     }
-    if (entry.heroImageAssetId && !mediaIds.has(entry.heroImageAssetId)) {
-      throw new Error(`Tenant page content "${entry.id}" references unknown hero image asset "${entry.heroImageAssetId}"`)
-    }
-    if (entry.heroVideoAssetId && !mediaIds.has(entry.heroVideoAssetId)) {
-      throw new Error(`Tenant page content "${entry.id}" references unknown hero video asset "${entry.heroVideoAssetId}"`)
-    }
+    const media = validateMedia(entry.media, mediaIds, `Tenant page content "${entry.id}"`)
     return {
       id: entry.id,
       organizationId: fixture.organizationId,
@@ -110,8 +114,7 @@ export function compileCuratedSiteFixture(
       content: entry.content,
       heroTitle: entry.heroTitle ?? null,
       heroSubtitle: entry.heroSubtitle ?? null,
-      heroImageAssetId: entry.heroImageAssetId ?? null,
-      heroVideoAssetId: entry.heroVideoAssetId ?? null,
+      media,
       type: entry.type,
       source: entry.source ?? 'manual',
     }
@@ -123,11 +126,7 @@ export function compileCuratedSiteFixture(
         `Experience "${experience.id}" references unknown location "${experience.locationId}"`,
       )
     }
-    if (!mediaIds.has(experience.imageAssetId)) {
-      throw new Error(
-        `Experience "${experience.id}" references unknown image asset "${experience.imageAssetId}"`,
-      )
-    }
+    const media = validateMedia(experience.media, mediaIds, `Experience "${experience.id}"`)
     return {
       id: experience.id,
       organizationId: fixture.organizationId,
@@ -137,7 +136,7 @@ export function compileCuratedSiteFixture(
       slug: experience.slug,
       tagline: experience.tagline,
       body: experience.body,
-      imageAssetId: experience.imageAssetId,
+      media,
       highlights: experience.highlights ?? null,
       includedItems: experience.includedItems ?? null,
       whatToBring: experience.whatToBring ?? null,
@@ -168,7 +167,6 @@ export function compileCuratedSiteFixture(
       siteId: fixture.siteId,
       locationId: review.locationId,
       authorName: review.authorName,
-      reviewerPhotoUrl: review.reviewerPhotoUrl,
       rating: review.rating,
       content: review.content,
       ownerReply: review.ownerReply,
@@ -183,9 +181,7 @@ export function compileCuratedSiteFixture(
       throw new Error(`Menu "${menu.id}" references unknown location "${menu.locationId}"`)
     }
     const items: CompiledSeedMenuItem[] = menu.items.map((item) => {
-      if (item.imageAssetId && !mediaIds.has(item.imageAssetId)) {
-        throw new Error(`Menu item "${item.id}" references unknown image asset "${item.imageAssetId}"`)
-      }
+      const media = validateMedia(item.media, mediaIds, `Menu item "${item.id}"`)
       return {
         id: item.id,
         menuId: menu.id,
@@ -196,7 +192,7 @@ export function compileCuratedSiteFixture(
         slug: item.slug,
         description: item.description,
         priceAmount: item.priceAmount,
-        imageAssetId: item.imageAssetId,
+        media,
         allergens: item.allergens,
         dietaryNotes: item.dietaryNotes,
         available: item.available,
@@ -244,9 +240,7 @@ export function compileCuratedSiteFixture(
     if (post.locationId && !locationIds.has(post.locationId)) {
       throw new Error(`Post "${post.id}" references unknown location "${post.locationId}"`)
     }
-    if (post.imageAssetId && !mediaIds.has(post.imageAssetId)) {
-      throw new Error(`Post "${post.id}" references unknown image asset "${post.imageAssetId}"`)
-    }
+    const media = validateMedia(post.media, mediaIds, `Post "${post.id}"`)
     const channelJobs: CompiledSeedPostChannelJob[] = post.channelJobs.map((job) => ({
       id: job.id,
       postId: post.id,
@@ -263,7 +257,7 @@ export function compileCuratedSiteFixture(
       postType: post.postType,
       title: post.title,
       body: post.body,
-      imageAssetId: post.imageAssetId,
+      media,
       status: post.status,
       publishedAt: post.publishedAt,
       createdBy: post.createdBy,

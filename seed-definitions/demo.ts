@@ -38,9 +38,7 @@ export const demoFixture: CuratedSiteDefinition = {
     publicUrl: 'https://demo.krabiclaw.com',
     defaultCurrency: 'USD',
     vertical: 'restaurant',
-    contentSource: 'generated',
-    mediaSource: 'stock',
-    logoAssetId: 'media-demo-logo',
+    media: [{ asset_id: 'media-demo-logo', slot: 'logo' }],
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
@@ -119,8 +117,16 @@ export const demoFixture: CuratedSiteDefinition = {
       facebookUrl: 'https://facebook.com/emberandslice',
       isPrimary: true,
       status: 'active',
-      heroImageAssetId: 'media-demo-hero',
-      heroVideoAssetId: 'media-demo-pizza-prep-video',
+      media: [
+        { asset_id: 'media-demo-pizza-prep-video', slot: 'hero' },
+        { asset_id: 'media-demo-hero', slot: 'gallery' },
+        { asset_id: 'media-demo-ext-1', slot: 'gallery' },
+        { asset_id: 'media-demo-ext-2', slot: 'gallery' },
+        { asset_id: 'media-demo-int-1', slot: 'gallery' },
+        { asset_id: 'media-demo-int-2', slot: 'gallery' },
+        { asset_id: 'media-demo-int-3', slot: 'gallery' },
+        { asset_id: 'media-demo-team-1', slot: 'gallery' },
+      ],
     },
     {
       id: 'loc-demo-2',
@@ -160,13 +166,15 @@ export const demoFixture: CuratedSiteDefinition = {
       facebookUrl: 'https://facebook.com/emberandslice',
       isPrimary: false,
       status: 'active',
-      heroImageAssetId: 'media-demo2-hero',
+      media: [
+        { asset_id: 'media-demo2-hero', slot: 'hero' },
+        { asset_id: 'media-demo2-int-1', slot: 'gallery' },
+      ],
     },
   ],
   mediaAssets: [
     {
       id: 'media-demo-logo',
-      locationId: null,
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '970e5c03-f00d-4e30-fa27-0278251cfd00',
@@ -180,7 +188,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Loc-demo: hero + video assets
     {
       id: 'media-demo-hero',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '0762ea49-0bd2-4cc8-1044-d6c9b1f00100',
@@ -192,23 +199,7 @@ export const demoFixture: CuratedSiteDefinition = {
       category: 'food',
     },
     {
-      id: 'media-demo-hero-video',
-      locationId: 'loc-demo',
-      kind: 'video',
-      provider: 'cloudflare_r2',
-      source: 'uploaded',
-      r2Key: 'sites/site-demo/media/media-demo-hero-video.mp4',
-      cloudflareImageId: '1186bd99-f52b-4075-4d02-ca0031c75e00',
-      publicUrl: 'https://media.krabiclaw.com/sites/site-demo/media/media-demo-hero-video.mp4',
-      thumbnailUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1186bd99-f52b-4075-4d02-ca0031c75e00/public',
-      mimeType: 'video/mp4',
-      fileName: 'krabiclaw-demo-hero-video.mp4',
-      altText: 'Hero background video of the restaurant',
-      category: 'interior',
-    },
-    {
       id: 'media-demo-margherita-video',
-      locationId: 'loc-demo',
       kind: 'video',
       provider: 'cloudflare_r2',
       source: 'uploaded',
@@ -223,7 +214,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-pizza-prep-video',
-      locationId: 'loc-demo',
       kind: 'video',
       provider: 'cloudflare_r2',
       source: 'uploaded',
@@ -239,7 +229,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Loc-demo: exterior
     {
       id: 'media-demo-ext-1',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '6ad28d44-8997-46b8-3a06-87833c65c000',
@@ -252,7 +241,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-ext-2',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'e7db135b-cd81-4b15-aa22-a07f24d0b900',
@@ -266,7 +254,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Loc-demo: interior
     {
       id: 'media-demo-int-1',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'fd99958c-6feb-47da-3040-bf5c56705e00',
@@ -279,7 +266,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-int-2',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '03e7f501-7689-4607-3acb-ec6f0d958500',
@@ -292,7 +278,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-int-3',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '01f1ec1c-1440-41d1-5323-1cf279b10600',
@@ -306,7 +291,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Loc-demo: team
     {
       id: 'media-demo-team-1',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'b877d25c-e835-48b8-1faf-00e0c4614000',
@@ -320,7 +304,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Loc-demo: menu food
     {
       id: 'media-demo-margherita',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '59e0fb6a-06dc-400c-9b38-5cd2d957bd00',
@@ -333,7 +316,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-pepperoni',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '0d5c6306-8783-475c-ae49-d40be5783c00',
@@ -346,7 +328,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-funghi',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'a352e160-d8b2-443f-a539-0c585f1fda00',
@@ -359,7 +340,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-burrata',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'cca97463-0109-4ea6-60dd-64001fd87d00',
@@ -372,7 +352,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-knots',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'af94834c-67b7-4dc9-a893-564ffcd2cf00',
@@ -386,7 +365,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Loc-demo: post images
     {
       id: 'media-demo-post1',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '294bda34-8a59-4f17-623b-e2a5feec7c00',
@@ -399,7 +377,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-post2',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '276a3c4d-9bfe-45bd-90e7-85899356f700',
@@ -412,7 +389,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-post3',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '1246e510-65ce-4335-1309-0353b47ae100',
@@ -426,7 +402,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Loc-demo-2: assets
     {
       id: 'media-demo2-hero',
-      locationId: 'loc-demo-2',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'e3ac3094-6e43-4ffe-7659-67365cc21d00',
@@ -439,7 +414,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo2-int-1',
-      locationId: 'loc-demo-2',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'e76fe844-f1e0-4fcd-c1ed-8f9ad2dd6700',
@@ -453,7 +427,6 @@ export const demoFixture: CuratedSiteDefinition = {
     // Experience media
     {
       id: 'media-demo-exp-class',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '245066b6-926f-4dbb-e731-53ebb0e22700',
@@ -466,7 +439,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-exp-wine',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '9b3d4f55-4b43-4a98-40d4-225947dc7300',
@@ -479,7 +451,6 @@ export const demoFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-demo-exp-family',
-      locationId: 'loc-demo',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '0b7af787-3380-4adc-2804-17792dd73300',
@@ -501,8 +472,7 @@ export const demoFixture: CuratedSiteDefinition = {
       content: null,
       heroTitle: 'Wood fire. Brooklyn nights.',
       heroSubtitle: 'Blistered pies & warm neighborhood vibes.',
-      heroImageAssetId: 'media-demo-hero',
-      heroVideoAssetId: 'media-demo-hero-video',
+      media: [{ asset_id: 'media-demo-hero', slot: 'media' }],
       type: 'text',
     },
     {
@@ -511,6 +481,7 @@ export const demoFixture: CuratedSiteDefinition = {
       page: 'home',
       field: 'cta.title',
       content: 'Book a table near the oven.',
+      media: [],
       type: 'text',
     },
     // About page
@@ -520,7 +491,7 @@ export const demoFixture: CuratedSiteDefinition = {
       page: 'about',
       field: 'story.image',
       content: null,
-      heroImageAssetId: 'media-demo-team-1',
+      media: [{ asset_id: 'media-demo-team-1', slot: 'media' }],
       type: 'media',
     },
     {
@@ -529,6 +500,7 @@ export const demoFixture: CuratedSiteDefinition = {
       page: 'about',
       field: 'story.headline',
       content: 'A trattoria shaped by the oven.',
+      media: [],
       type: 'text',
     },
     {
@@ -538,6 +510,7 @@ export const demoFixture: CuratedSiteDefinition = {
       field: 'story.body',
       content:
         'Ember & Slice started with a sourdough starter, a borrowed mixer, and a pop-up oven behind a Brooklyn wine bar. The pies sold out before sunset, then again the next weekend, and then every weekend after that.\n\nToday the room is permanent, but the promise is the same: slow dough, live fire, seasonal produce, and the kind of service that makes a weeknight feel like an occasion.',
+      media: [],
       type: 'richtext',
     },
     {
@@ -545,6 +518,7 @@ export const demoFixture: CuratedSiteDefinition = {
       locationId: null,
       page: 'about',
       field: 'journey.body',
+      media: [],
       content:
         'We cold-ferment our dough, stretch every pie to order, and cook it hot enough for a crisp rim and a tender center. The menu changes around the market, but the Margherita never leaves the board.\n\nThe oven anchors the room. Everything else moves around it.',
       type: 'textarea',
@@ -556,6 +530,7 @@ export const demoFixture: CuratedSiteDefinition = {
       field: 'experience.body',
       content:
         'Come for a quick counter pie, stay for antipasti and another round, or bring a group and let the table fill itself. Ember & Slice is casual by design, but the details matter.\n\nGood tomatoes. Good flour. Good fire. No shortcuts.',
+      media: [],
       type: 'textarea',
     },
     // Experiences page
@@ -565,6 +540,7 @@ export const demoFixture: CuratedSiteDefinition = {
       page: 'experiences',
       field: 'hero.kicker',
       content: 'Experiences',
+      media: [],
       type: 'text',
     },
     {
@@ -573,6 +549,7 @@ export const demoFixture: CuratedSiteDefinition = {
       page: 'experiences',
       field: 'hero.title',
       content: 'Pizza classes, tasting nights, and big-table evenings.',
+      media: [],
       type: 'text',
     },
     {
@@ -581,6 +558,7 @@ export const demoFixture: CuratedSiteDefinition = {
       page: 'experiences',
       field: 'hero.subtitle',
       content: 'Book a hands-on pizza class, a natural wine pairing night, or a family-style evening built around the oven.',
+      media: [],
       type: 'textarea',
     },
   ],
@@ -610,7 +588,7 @@ export const demoFixture: CuratedSiteDefinition = {
       cancellationPolicy: 'Free cancellation up to 24 hours before the class. Cancellations within 24 hours, late arrivals, and no-shows are non-refundable because ingredients and seating are prepared in advance.',
       body:
         'Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.\n\nEach booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.',
-      imageAssetId: 'media-demo-exp-class',
+      media: [{ asset_id: 'media-demo-exp-class', slot: 'gallery' }],
       price: '$95 per guest',
       priceAmount: 95,
       durationMinutes: 120,
@@ -650,7 +628,7 @@ export const demoFixture: CuratedSiteDefinition = {
       cancellationPolicy: 'Free cancellation up to 24 hours before the reservation. Cancellations within 24 hours, late arrivals, and no-shows are non-refundable due to limited shared seating and wine prep.',
       body:
         'This evening is part tasting, part dinner party. We pair a rotating lineup of natural wines with off-menu pies, seasonal antipasti, and a little background on why each pairing works.\n\nBest for date nights, visiting friends, and anyone who wants the room at its loudest and warmest. Seats are shared at the table, and the menu changes with the week.',
-      imageAssetId: 'media-demo-exp-wine',
+      media: [{ asset_id: 'media-demo-exp-wine', slot: 'gallery' }],
       price: '$78 per guest',
       priceAmount: 78,
       durationMinutes: 150,
@@ -690,7 +668,7 @@ export const demoFixture: CuratedSiteDefinition = {
       cancellationPolicy: 'Free cancellation up to 24 hours before the booking. Cancellations within 24 hours, late arrivals, and no-shows are non-refundable because food and table space are reserved specifically for your group.',
       body:
         'Family Pizza Night is our easiest way to turn a Sunday dinner into something a little more memorable. Kids shape mini pies, grown-ups share large-format pizzas and salads, and the kitchen keeps the pacing relaxed.\n\nIdeal for families, birthday dinners, and mixed-age groups who want an experience that feels special without feeling formal.',
-      imageAssetId: 'media-demo-exp-family',
+      media: [{ asset_id: 'media-demo-exp-family', slot: 'gallery' }],
       price: '$140 per table',
       priceAmount: 140,
       durationMinutes: 105,
@@ -711,7 +689,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-1',
       locationId: 'loc-demo',
       authorName: 'Maya R.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public',
       rating: 5,
       content: 'The Margherita had that perfect leopard-spotted crust and the basil hit the table smelling fresh. Exactly what I want from a neighborhood pizza night.',
       ownerReply: null,
@@ -723,7 +700,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-2',
       locationId: 'loc-demo',
       authorName: 'Julian P.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/699707fd-1559-4dc9-b115-3fe4a753aa00/public',
       rating: 5,
       content: 'Sat at the counter and watched the oven all night. Pepperoni Calabrese, burrata, and a spritz made this feel like a tiny vacation.',
       ownerReply: 'Thank you Julian. The counter seats are our favorite too - come back for the Funghi Bianco next time.',
@@ -735,7 +711,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-3',
       locationId: 'loc-demo',
       authorName: 'Priya S.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6e004069-4d01-4709-34bd-d1a0cacc4600/public',
       rating: 4,
       content: 'Great crust, warm service, and the garlic knots vanished before the pizza landed. It gets loud at peak dinner but in a good way.',
       ownerReply: 'Thanks Priya. Dinner definitely has energy, and we are glad the knots did their job.',
@@ -747,7 +722,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-4',
       locationId: 'loc-demo',
       authorName: 'Noah L.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ee18283c-d024-4bf0-15a5-73fc6c321e00/public',
       rating: 5,
       content: 'The hot honey soppressata is ridiculous. Sweet, spicy, smoky, and somehow still balanced. Best pie I have had in Williamsburg this year.',
       ownerReply: null,
@@ -759,7 +733,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-5',
       locationId: 'loc-demo',
       authorName: 'Elena C.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b010933f-cac7-420f-1b4e-130b3b01ca00/public',
       rating: 4,
       content: 'Lovely date-night spot without feeling precious. Caesar was sharp and cold, pizza was blistered, staff knew the menu well.',
       ownerReply: null,
@@ -771,7 +744,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo-6',
       locationId: 'loc-demo',
       authorName: 'Chris B.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6413ee7e-ca8d-4616-00f4-8a4224217a00/public',
       rating: 3,
       content: 'Food was strong but our table was about 15 minutes late on a busy Friday. I would come earlier next time.',
       ownerReply: 'Hi Chris - sorry for the Friday wait. We tightened our turn times and would love to host you again on a smoother night.',
@@ -783,7 +755,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo2-1',
       locationId: 'loc-demo-2',
       authorName: 'Michael T.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ee18283c-d024-4bf0-15a5-73fc6c321e00/public',
       rating: 5,
       content: 'Unbelievable sourdough pizza right in the West Village! The Margherita is simple, fresh, and perfectly charred. Truly a hidden gem.',
       ownerReply: 'Thank you Michael! We are thrilled you enjoyed the neighborhood vibes and our signature crust.',
@@ -795,7 +766,6 @@ export const demoFixture: CuratedSiteDefinition = {
       id: 'rev-demo2-2',
       locationId: 'loc-demo-2',
       authorName: 'Emma W.',
-      reviewerPhotoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public',
       rating: 5,
       content: 'Beautiful space, exceptionally friendly service, and a fantastic corner view. Highly recommend the Burrata and the Hot Honey pie!',
       ownerReply: null,
@@ -820,7 +790,10 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'margherita',
           description: 'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
           priceAmount: 18,
-          imageAssetId: 'media-demo-margherita',
+          media: [
+            { asset_id: 'media-demo-margherita', slot: 'gallery' },
+            { asset_id: 'media-demo-margherita-video', slot: 'gallery' },
+          ],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: '["Vegetarian"]',
           available: true,
@@ -833,7 +806,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'pepperoni-calabrese',
           description: 'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
           priceAmount: 21,
-          imageAssetId: 'media-demo-pepperoni',
+          media: [{ asset_id: 'media-demo-pepperoni', slot: 'gallery' }],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: null,
           available: true,
@@ -846,7 +819,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'funghi-bianco',
           description: 'Roasted mushrooms, ricotta crema, garlic, thyme, mozzarella, pecorino',
           priceAmount: 22,
-          imageAssetId: 'media-demo-funghi',
+          media: [{ asset_id: 'media-demo-funghi', slot: 'gallery' }],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: '["Vegetarian"]',
           available: true,
@@ -859,7 +832,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'soppressata-hot-honey',
           description: 'Spicy soppressata, tomato, mozzarella, pickled Fresno chile, Brooklyn hot honey',
           priceAmount: 23,
-          imageAssetId: null,
+          media: [],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: null,
           available: true,
@@ -872,7 +845,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'burrata',
           description: 'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
           priceAmount: 16,
-          imageAssetId: 'media-demo-burrata',
+          media: [{ asset_id: 'media-demo-burrata', slot: 'gallery' }],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: '["Vegetarian"]',
           available: true,
@@ -885,7 +858,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'garlic-knots',
           description: 'Wood-fired knots, parsley, roasted garlic butter, marinara',
           priceAmount: 9,
-          imageAssetId: 'media-demo-knots',
+          media: [{ asset_id: 'media-demo-knots', slot: 'gallery' }],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: '["Vegetarian"]',
           available: true,
@@ -898,7 +871,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'little-gem-caesar',
           description: 'Little gem lettuce, anchovy dressing, sourdough crumbs, shaved pecorino',
           priceAmount: 14,
-          imageAssetId: null,
+          media: [],
           allergens: '["Gluten", "Dairy", "Fish"]',
           dietaryNotes: null,
           available: true,
@@ -911,7 +884,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'rigatoni-pomodoro',
           description: 'Rigatoni, slow tomato sauce, basil, parmesan',
           priceAmount: 19,
-          imageAssetId: null,
+          media: [],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: '["Vegetarian"]',
           available: true,
@@ -924,7 +897,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'sparkling-lemonade',
           description: 'House lemon cordial, soda, rosemary',
           priceAmount: 6,
-          imageAssetId: null,
+          media: [],
           allergens: null,
           dietaryNotes: '["Vegan", "Gluten-free"]',
           available: true,
@@ -937,7 +910,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'italian-soda',
           description: 'Blood orange, grapefruit, or limonata',
           priceAmount: 5,
-          imageAssetId: null,
+          media: [],
           allergens: null,
           dietaryNotes: '["Vegan", "Gluten-free"]',
           available: true,
@@ -960,7 +933,10 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'margherita',
           description: 'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
           priceAmount: 18,
-          imageAssetId: 'media-demo-margherita',
+          media: [
+            { asset_id: 'media-demo-margherita', slot: 'gallery' },
+            { asset_id: 'media-demo-margherita-video', slot: 'gallery' },
+          ],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: '["Vegetarian"]',
           available: true,
@@ -973,7 +949,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'pepperoni-calabrese',
           description: 'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
           priceAmount: 21,
-          imageAssetId: 'media-demo-pepperoni',
+          media: [{ asset_id: 'media-demo-pepperoni', slot: 'gallery' }],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: null,
           available: true,
@@ -986,7 +962,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'burrata',
           description: 'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
           priceAmount: 16,
-          imageAssetId: 'media-demo-burrata',
+          media: [{ asset_id: 'media-demo-burrata', slot: 'gallery' }],
           allergens: '["Gluten", "Dairy"]',
           dietaryNotes: '["Vegetarian"]',
           available: true,
@@ -999,7 +975,7 @@ export const demoFixture: CuratedSiteDefinition = {
           slug: 'sparkling-lemonade',
           description: 'House lemon cordial, soda, rosemary',
           priceAmount: 6,
-          imageAssetId: null,
+          media: [],
           allergens: null,
           dietaryNotes: '["Vegan", "Gluten-free"]',
           available: true,
@@ -1108,7 +1084,7 @@ export const demoFixture: CuratedSiteDefinition = {
       postType: 'update',
       title: 'Weekend lunch now starts at 11',
       body: 'The oven is lighting up earlier on Saturdays and Sundays. Come by for lunch pies, garlic knots, and spritzes from 11am.',
-      imageAssetId: 'media-demo-post1',
+      media: [{ asset_id: 'media-demo-post1', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-05-01T12:00:00.000Z',
       createdBy: 'user-demo',
@@ -1122,7 +1098,7 @@ export const demoFixture: CuratedSiteDefinition = {
       postType: 'standard',
       title: null,
       body: 'Our Funghi Bianco is back with roasted mushrooms, ricotta crema, thyme, and a little pecorino snow at the pass.',
-      imageAssetId: 'media-demo-post2',
+      media: [{ asset_id: 'media-demo-post2', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-04-18T10:00:00.000Z',
       createdBy: 'user-demo',
@@ -1136,7 +1112,7 @@ export const demoFixture: CuratedSiteDefinition = {
       postType: 'offer',
       title: 'Margherita Monday',
       body: 'Every Monday in May: Margherita pies are $14 from open to close. Dine-in only, one per guest.',
-      imageAssetId: 'media-demo-post3',
+      media: [{ asset_id: 'media-demo-post3', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-04-10T09:00:00.000Z',
       createdBy: 'user-demo',
@@ -1372,7 +1348,7 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   public_url, brand_name, brand_description,
   status, plan, onboarding_status, primary_location_id,
-  contact_email, default_currency, vertical, content_source, media_source
+  contact_email, default_currency, vertical
 ) VALUES (
   ${sqlValue(compiledDemoSeed.identity.siteId)},
   ${sqlValue(compiledDemoSeed.identity.organizationId)},
@@ -1389,9 +1365,7 @@ INSERT OR REPLACE INTO sites (
   NULL,
   ${sqlValue(compiledDemoSeed.site.contactEmail)},
   ${sqlValue(compiledDemoSeed.site.defaultCurrency)},
-  ${sqlValue(compiledDemoSeed.site.vertical)},
-  ${sqlValue(compiledDemoSeed.site.contentSource)},
-  ${sqlValue(compiledDemoSeed.site.mediaSource)}
+  ${sqlValue(compiledDemoSeed.site.vertical)}
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -1415,7 +1389,6 @@ export function renderCompiledDemoMediaBlock(): string {
       sqlValue(media.id),
       sqlValue(media.organizationId),
       sqlValue(media.siteId),
-      sqlValue(media.locationId),
       sqlValue(media.kind),
       sqlValue(media.provider),
       sqlValue(media.source),
@@ -1430,6 +1403,21 @@ export function renderCompiledDemoMediaBlock(): string {
       sqlValue(media.status),
     ].join(', ')})`)
     .join(',\n')
+
+  const mediaPlacementRows = [
+    ...compiledDemoSeed.site.media.map((media, index) => [`placement-site-${compiledDemoSeed.identity.siteId}-${media.slot}-${index}`, 'site', compiledDemoSeed.identity.siteId, media.slot, media.asset_id, index]),
+    ...compiledDemoSeed.locations.flatMap(location => location.media.map((media, index) => [`placement-location-${location.id}-${media.slot}-${index}`, 'business_location', location.id, media.slot, media.asset_id, index])),
+  ].map(([id, ownerType, ownerId, slot, assetId, sortOrder]) => `  (${[
+    sqlValue(String(id)),
+    sqlValue(compiledDemoSeed.identity.organizationId),
+    sqlValue(compiledDemoSeed.identity.siteId),
+    sqlValue(String(ownerType)),
+    sqlValue(String(ownerId)),
+    sqlValue(String(slot)),
+    sqlValue(String(assetId)),
+    sqlValue(Number(sortOrder)),
+    sqlValue('active'),
+  ].join(', ')})`).join(',\n')
 
   const locationRowsNoHero = compiledDemoSeed.locations
     .map((location) => `  (${[
@@ -1456,19 +1444,11 @@ export function renderCompiledDemoMediaBlock(): string {
       sqlValue(location.facebookUrl),
       sqlValue(location.isPrimary),
       sqlValue(location.status),
-      'NULL',
       sqlValue('Asia/Bangkok'),
     ].join(', ')})`)
     .join(',\n')
 
-  const heroUpdates = compiledDemoSeed.locations
-    .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
-    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
-    .join('\n')
-
   return `-- BEGIN GENERATED: demo_media
--- Insert locations first (without hero asset refs) to satisfy media_assets FK,
--- then insert media_assets, then patch hero refs back onto locations.
 INSERT OR REPLACE INTO business_locations (
   id, organization_id, site_id, slug, title, city,
   address, phone, email, maps_url,
@@ -1478,24 +1458,25 @@ INSERT OR REPLACE INTO business_locations (
   rating, review_count,
   price_level, categories,
   instagram_url, facebook_url,
-  is_primary, status,
-  hero_media_asset_id,
-  timezone
+  is_primary, status, timezone
 ) VALUES
 ${locationRowsNoHero};
 
 -- All media assets for the demo tenant.
 INSERT OR REPLACE INTO media_assets
-  (id, organization_id, site_id, location_id,
+  (id, organization_id, site_id,
    kind, provider, source,
    cloudflare_image_id, r2_key, public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
 ${mediaRows};
 
-${heroUpdates}
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES
+${mediaPlacementRows};
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledDemoSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
+UPDATE sites SET primary_location_id = ${sqlValue(compiledDemoSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledDemoSeed.identity.siteId)};
 -- END GENERATED: demo_media`
 }
 
@@ -1507,7 +1488,6 @@ export function renderCompiledDemoReviewsBlock(): string {
       sqlValue(review.siteId),
       sqlValue(review.locationId),
       sqlValue(review.authorName),
-      sqlValue(review.reviewerPhotoUrl),
       sqlValue(review.rating),
       sqlValue(review.content),
       sqlValue(review.ownerReply),
@@ -1521,7 +1501,7 @@ export function renderCompiledDemoReviewsBlock(): string {
 -- Reviews for the demo tenant.
 INSERT OR IGNORE INTO reviews
   (id, organization_id, site_id, location_id,
-   author_name, reviewer_photo_url, rating, content,
+   author_name, rating, content,
    owner_reply, owner_reply_at,
    status, source)
 VALUES
@@ -1553,7 +1533,6 @@ export function renderCompiledDemoMenuBlock(): string {
       sqlValue(item.slug),
       sqlValue(item.description),
       sqlValue(item.priceAmount),
-      sqlValue(item.imageAssetId),
       sqlValue(item.allergens),
       sqlValue(item.dietaryNotes),
       sqlValue(item.available),
@@ -1561,21 +1540,21 @@ export function renderCompiledDemoMenuBlock(): string {
     ].join(', ')})`)
     .join(',\n')
   const menuItemMediaRows = allItems
-    .filter((item) => item.imageAssetId)
-    .map((item) => `  (${[
-      sqlValue(`${item.id}-cover-media`),
-      sqlValue(item.organizationId),
-      sqlValue(item.siteId),
+    .flatMap(item => item.media.map((media, index) => `  (${[
+      sqlValue(`${item.id}-${media.slot}-${index}`),
+      sqlValue(item.organizationId), sqlValue(item.siteId),
+      sqlValue('menu_item'),
       sqlValue(item.id),
-      sqlValue(item.imageAssetId),
-      0,
-    ].join(', ')})`)
+      sqlValue(media.slot),
+      sqlValue(media.asset_id),
+      index, sqlValue('active'),
+    ].join(', ')})`))
     .join(',\n')
   const menuItemMediaSql = menuItemMediaRows
     ? `
 
-INSERT OR REPLACE INTO menu_item_media
-  (id, organization_id, site_id, menu_item_id, asset_id, sort_order)
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
 VALUES
 ${menuItemMediaRows};`
     : ''
@@ -1588,7 +1567,7 @@ ${menuRows};
 
 INSERT OR IGNORE INTO menu_items
   (id, menu_id, section, name, slug, description, price_amount,
-   image_asset_id, allergens, dietary_notes, available, sort_order)
+   allergens, dietary_notes, available, sort_order)
 VALUES
 ${menuItemRows};${menuItemMediaSql}
 -- END GENERATED: demo_menu`
@@ -1634,7 +1613,6 @@ export function renderCompiledDemoPostsBlock(): string {
       sqlValue(post.postType),
       sqlValue(post.title),
       sqlValue(post.body),
-      sqlValue(post.imageAssetId),
       sqlValue(post.status),
       sqlValue(post.publishedAt),
       sqlValue(post.createdBy),
@@ -1642,6 +1620,10 @@ export function renderCompiledDemoPostsBlock(): string {
     .join(',\n')
 
   const allChannelJobs = compiledDemoSeed.posts.flatMap((post) => post.channelJobs)
+  const postMediaRows = compiledDemoSeed.posts.flatMap(post => post.media.map((media, index) => `  (${[
+    sqlValue(`placement-post-${post.id}-${media.slot}-${index}`), sqlValue(post.organizationId), sqlValue(post.siteId),
+    sqlValue('post'), sqlValue(post.id), sqlValue(media.slot), sqlValue(media.asset_id), index, sqlValue('active'),
+  ].join(', ')})`)).join(',\n')
   const channelJobRows = allChannelJobs
     .map((job) => `  (${[
       sqlValue(job.id),
@@ -1657,10 +1639,15 @@ export function renderCompiledDemoPostsBlock(): string {
 -- Posts and channel jobs for the demo tenant.
 INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
-   post_type, title, body, image_asset_id,
+   post_type, title, body,
    status, published_at, created_by)
 VALUES
 ${postRows};
+
+${postMediaRows ? `INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES
+${postMediaRows};` : ''}
 
 INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
 VALUES
@@ -1693,8 +1680,8 @@ We want the room to feel energetic but never rushed, whether you come in for one
   return `-- BEGIN GENERATED: demo_blog
 -- Tenant blog post for local demo verification.
 INSERT OR IGNORE INTO blog_posts
-  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
-   author_id, featured_image_asset_id, published_at, created_at, updated_at,
+  (id, organization_id, site_id, title, slug, excerpt, category, status,
+   author_id, published_at, created_at, updated_at,
    seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
 VALUES (
   ${sqlValue(postId)},
@@ -1702,12 +1689,10 @@ VALUES (
   ${sqlValue('site-demo')},
   ${sqlValue('How We Build a Wood-Fired Pizza Night')},
   ${sqlValue('how-we-build-a-wood-fired-pizza-night')},
-  ${sqlValue(body)},
   ${sqlValue('A quick behind-the-scenes look at how Ember & Slice builds its signature wood-fired dinner service.')},
   ${sqlValue('Behind the scenes')},
   'published',
   ${sqlValue('user-demo')},
-  ${sqlValue('media-demo-hero')},
   ${sqlValue(publishedAt)},
   ${sqlValue(publishedAt)},
   ${sqlValue(publishedAt)},
@@ -1717,6 +1702,10 @@ VALUES (
   ${sqlValue('index,follow')},
   0
 );
+
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES ('placement-blog-demo-wood-fired-guide-featured', 'org-demo', 'site-demo', 'blog_post', ${sqlValue(postId)}, 'featured', 'media-demo-hero', 0, 'active');
 
 INSERT OR REPLACE INTO content_documents
   (id, owner_type, owner_id, created_at, updated_at)
@@ -1729,7 +1718,7 @@ VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL
 }
 
 export function renderCompiledDemoExperienceSeedBlock(): string {
-  const coverExperiences = compiledDemoSeed.experiences.filter(experience => experience.imageAssetId)
+  const experienceMedia = compiledDemoSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
   const experienceRows = compiledDemoSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
@@ -1760,20 +1749,20 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
       sqlValue(experience.seoDescription),
     ].join(', ')})`)
     .join(',\n')
-  const coverBlock = coverExperiences.length
+  const coverBlock = experienceMedia.length
     ? `
 
-INSERT OR REPLACE INTO experience_media
-  (id, organization_id, site_id, experience_id, asset_id, sort_order)
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
 VALUES
-${coverExperiences
-  .map((experience) => `  (${[
-    sqlValue(`em-${experience.id}-cover`),
+${experienceMedia
+  .map(({ experience, media, index }) => `  (${[
+    sqlValue(`em-${experience.id}-${media.slot}-${index}`),
     sqlValue(experience.organizationId),
     sqlValue(experience.siteId),
-    sqlValue(experience.id),
-    sqlValue(experience.imageAssetId),
-    '0',
+    sqlValue('experience'), sqlValue(experience.id), sqlValue(media.slot),
+    sqlValue(media.asset_id),
+    index, sqlValue('active'),
   ].join(', ')})`)
   .join(',\n')};`
     : ''

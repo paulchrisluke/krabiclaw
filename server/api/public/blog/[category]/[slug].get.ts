@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const post = await getPublishedPlatformBlogPost(db, category, slug)
+  const post = await getPublishedPlatformBlogPost(db, category, slug, env)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   return jsonResponse({ post })

@@ -202,6 +202,12 @@ export default defineHandler(async (event) => {
     const now = new Date().toISOString()
     const batchQueries: BatchQuery[] = []
 
+    // media_placements has no owner FK, so its rows for the menu items being
+    // wiped below must be deleted explicitly while those items still exist.
+    batchQueries.push({
+      query: `DELETE FROM media_placements WHERE owner_type = 'menu_item' AND owner_id IN (SELECT id FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE site_id = ?))`,
+      params: [siteId],
+    })
     batchQueries.push({ query: `DELETE FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE site_id = ?)`, params: [siteId] })
     batchQueries.push({ query: `DELETE FROM menus WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
     if (payload.preview.menu) {
@@ -238,6 +244,10 @@ export default defineHandler(async (event) => {
           item.id, organizationId, siteId, locationRow.id, item.question, item.answer, item.answer_author, item.sort_order, now, now, ], })
     }
 
+    batchQueries.push({
+      query: `DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = 'post' AND owner_id IN (SELECT id FROM posts WHERE organization_id = ? AND site_id = ?)`,
+      params: [organizationId, siteId, organizationId, siteId],
+    })
     batchQueries.push({ query: `DELETE FROM posts WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
     for (const post of payload.preview.posts) {
       // Draft "welcome" posts are auto-generated, not owner-authored — mark 'template'.

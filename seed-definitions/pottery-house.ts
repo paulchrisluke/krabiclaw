@@ -26,7 +26,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     slug: 'pottery-house-krabi',
     subdomain: 'pottery-house',
     brandName: 'Pottery House Krabi',
-    logoAssetId: 'media-ph-logo',
+    media: [{ asset_id: 'media-ph-logo', slot: 'logo' }],
     themeId: 'saya-theme-v1',
     theme: 'saya',
     brandDescription:
@@ -40,8 +40,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     publicUrl: 'https://www.potteryhousekrabi.com',
     defaultCurrency: 'THB',
     vertical: 'experience',
-    contentSource: 'google_maps',
-    mediaSource: 'client_photos',
   },
   siteConfig: [
     { key: 'source_locale', value: 'en' },
@@ -131,7 +129,19 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       facebookUrl: '',
       isPrimary: true,
       status: 'active',
-      heroImageAssetId: 'media-ph-homepage-custom',
+      media: [
+        { asset_id: 'media-ph-homepage-custom', slot: 'hero' },
+        { asset_id: 'media-ph-krabi-hero', slot: 'gallery' },
+        { asset_id: 'media-ph-about-custom', slot: 'gallery' },
+        { asset_id: 'media-ph-cocktails', slot: 'gallery' },
+        { asset_id: 'media-ph-membership', slot: 'gallery' },
+        { asset_id: 'media-ph-hero', slot: 'gallery' },
+        { asset_id: 'media-ph-studio', slot: 'gallery' },
+        { asset_id: 'media-ph-team', slot: 'gallery' },
+        { asset_id: 'media-ph-ceramics', slot: 'gallery' },
+        { asset_id: 'media-ph-kiln', slot: 'gallery' },
+        { asset_id: 'media-ph-cocktails-clay', slot: 'gallery' },
+      ],
       notificationPhone: '+66817794877',
     },
     {
@@ -175,7 +185,11 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       facebookUrl: 'ChIJNfYDGwC_UTARU_DUo4sLtK8',
       isPrimary: false,
       status: 'active',
-      heroImageAssetId: 'media-ph-beach-hero',
+      media: [
+        { asset_id: 'media-ph-beach-hero', slot: 'hero' },
+        { asset_id: 'media-ph-beachfront', slot: 'gallery' },
+        { asset_id: 'media-ph-beach', slot: 'gallery' },
+      ],
       notificationPhone: '+66858037108',
     },
   ],
@@ -183,7 +197,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     // Cloudflare-hosted uploads normalized to the production media split (2026-06-11)
     {
       id: 'media-ph-logo',
-      locationId: null,
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '43fb6656-0913-4f3b-be60-b5f180f80400',
@@ -196,7 +209,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-homepage-custom',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '7f1520e7-b6e4-4181-c689-0f1fc6bfaa00',
@@ -209,7 +221,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-beach-hero',
-      locationId: 'loc-pottery-beachfront',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'ed6fbe45-5d08-45b4-0d80-94893e3d1300',
@@ -222,7 +233,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-krabi-hero',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '2af9d7ad-b9a6-4184-8f1b-22300280d200',
@@ -235,7 +245,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-about-custom',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '2273e2ec-f0a6-40fa-9009-9d535a568600',
@@ -248,7 +257,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-beachfront',
-      locationId: 'loc-pottery-beachfront',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'ba40b9b1-7283-4d9d-1e2c-9919bc88fd00',
@@ -261,7 +269,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-cocktails',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '603b05c1-9ef8-492a-315f-3989c8b7c200',
@@ -274,7 +281,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-membership',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'da2a5365-1a9a-468f-f695-d70d7b2e9100',
@@ -288,7 +294,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     // Migrated Cloudflare Images records
     {
       id: 'media-ph-hero',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'd4a4f779-5c53-4833-1e60-f28290afb200',
@@ -301,7 +306,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-studio',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '3a61ea95-852b-47c3-f0c7-2da69e130000',
@@ -314,7 +318,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-team',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '041e17a5-4394-4a85-3933-37ef29809400',
@@ -327,7 +330,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-wheel',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'b1a26753-af38-462e-9835-0acd065eac00',
@@ -340,7 +342,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-ceramics',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'aee28525-66b4-40d5-3424-c936e6e21d00',
@@ -349,11 +350,10 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       mimeType: 'image/jpeg',
       fileName: 'pottery-ceramics-display.jpg',
       altText: 'Display of handmade ceramics, cups, plates and vases at Pottery House Krabi',
-      category: 'food',
+      category: 'other',
     },
     {
       id: 'media-ph-kiln',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'af4c4c0c-691c-4e7a-ce96-78a4c89b5b00',
@@ -366,7 +366,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-cocktails-clay',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'f6c35118-aba6-4cc7-22c5-9f1f3a227a00',
@@ -379,7 +378,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-beach',
-      locationId: 'loc-pottery-beachfront',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'ee0b0d31-c328-43f9-0371-2431da63b100',
@@ -392,7 +390,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-post1',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '6d8865b8-78e1-44a7-9a7f-c850b23e0800',
@@ -405,7 +402,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-post2',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: 'd340b852-67de-44e2-4174-526143f95900',
@@ -418,7 +414,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
     {
       id: 'media-ph-post3',
-      locationId: 'loc-pottery-house',
       provider: 'cloudflare_images',
       source: 'uploaded',
       cloudflareImageId: '4dd42ffb-7912-4595-208e-964eafdbc200',
@@ -439,7 +434,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       content: null,
       heroTitle: 'Clay, calm, and a place to return to.',
       heroSubtitle: 'Pottery classes, wheel throwing & handbuilding in Krabi, Thailand.',
-      heroImageAssetId: 'media-ph-homepage-custom',
+      media: [{ asset_id: 'media-ph-homepage-custom', slot: 'media' }],
       type: 'text',
       source: 'manual',
     },
@@ -449,6 +444,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       page: 'home',
       field: 'cta.title',
       content: 'Book your first class.',
+      media: [],
       type: 'text',
       source: 'manual',
     },
@@ -458,7 +454,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       page: 'about',
       field: 'story.image',
       content: null,
-      heroImageAssetId: 'media-ph-team',
+      media: [{ asset_id: 'media-ph-team', slot: 'media' }],
       type: 'media',
       source: 'manual',
     },
@@ -468,6 +464,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       page: 'about',
       field: 'story.headline',
       content: 'A studio shaped by the joy of making.',
+      media: [],
       type: 'text',
       source: 'manual',
     },
@@ -478,6 +475,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       field: 'story.body',
       content:
         'Pottery House started with two potters, a pair of wheels, and a belief that making something with your hands changes the way you feel about a day.\n\nWe set up in Krabi because it already pulls people in — travellers who slow down, stay longer, and start looking for something to do with their time that is not just a tour. Clay turned out to be exactly that.\n\nToday the studio is a proper home for ceramics: wheels, a kiln, handbuilding tables, studio glazes, and a beachfront pop-up at Klong Muang when the tides are right. But the feeling is the same as day one. We want you to leave with something you made, something you are proud of, and maybe a reason to come back.',
+      media: [],
       type: 'richtext',
       source: 'manual',
     },
@@ -488,6 +486,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       field: 'journey.body',
       content:
         'We teach proper technique, not just guided hand-holding. Centering, opening, pulling — the mechanics matter because they are what let you make something that actually works. Our instructors adapt to where you are, whether that is your first time touching clay or your hundredth.\n\nAll firing happens on site in our Skutt kiln. Bisque and glaze firing are always included.',
+      media: [],
       type: 'textarea',
       source: 'manual',
     },
@@ -498,6 +497,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       field: 'experience.body',
       content:
         'Come for a single class, come back for Cocktails & Clay, or settle in with a monthly membership. Pottery House is as casual or as serious as you want it to be.\n\nNothing makes our team happier than happy students.',
+      media: [],
       type: 'textarea',
       source: 'manual',
     },
@@ -511,7 +511,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       tagline: 'Shape something beautiful. All levels welcome.',
       body:
         'Our signature wheel throwing class is perfect for beginners and returning students alike. You will learn to centre clay, open and pull a cylinder, and shape your piece with guidance from our instructors every step of the way.\n\nAll clay, tools, and firing are included. Your finished pieces are bisque-fired and glaze-fired in our kiln and ready to collect approximately 2–3 weeks after your class.\n\nWhat to expect:\n- 1 hour 30 minutes of hands-on wheel time\n- All materials included (clay, tools, apron)\n- Bisque firing and glaze firing included\n- Studio glazes available to choose from\n- Pieces ready to collect in 2–3 weeks (or shipped home)',
-      imageAssetId: 'media-ph-wheel',
+      media: [{ asset_id: 'media-ph-wheel', slot: 'gallery' }],
       price: '฿1,200',
       priceAmount: 1200,
       durationMinutes: 90,
@@ -534,7 +534,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       tagline: 'Friday nights. Wheels spinning. Drinks flowing.',
       body:
         'Cocktails & Clay is our Friday night social — a relaxed and fun way to try pottery with friends while enjoying a drink or two.\n\nYou get a full wheel throwing session with instructor support, and we take care of the good vibes. Bisque and glaze firing are included, so your creation gets the full kiln treatment just like in any daytime class.\n\nPerfect for couples, groups, date nights, and solo travellers looking for a fun evening out in Krabi.\n\nWhat is included:\n- 3 hours of wheel time and handbuilding\n- Drinks available at the studio\n- All clay, aprons, and tools provided\n- Bisque firing and glaze firing included\n- Pieces ready in 2–3 weeks',
-      imageAssetId: 'media-ph-cocktails',
+      media: [{ asset_id: 'media-ph-cocktails', slot: 'gallery' }],
       price: '฿1,500',
       priceAmount: 1500,
       durationMinutes: 180,
@@ -557,7 +557,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       tagline: 'Throw on the wheel with the sea in front of you.',
       body:
         'Our beachfront pottery popup at Sea View, Klong Muang is one of a kind. We set up the wheels right by the Gulf of Thailand so you can shape clay while watching long-tail boats drift past.\n\nSeats are extremely limited at this location. Each session is an intimate, unhurried experience guided by our instructor.\n\nAll materials and firing included — your piece travels back to the studio kiln and is ready to collect or ship within 2–3 weeks.\n\nGood for:\n- Hotel guests staying in Klong Muang or Tubkaek\n- Couples looking for a unique Krabi experience\n- Anyone who wants to make something by the sea',
-      imageAssetId: 'media-ph-beachfront',
+      media: [{ asset_id: 'media-ph-beachfront', slot: 'gallery' }],
       price: '฿1,800',
       priceAmount: 1800,
       durationMinutes: 120,
@@ -580,7 +580,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       tagline: 'Make Pottery House your creative base while you are in Krabi.',
       body:
         'For people staying in Krabi for a month or more, Pottery House can become more than a class. It can become your creative base — a place to practise, meet people, return to unfinished pieces, and feel part of the studio community.\n\nMembership is designed for long-stay visitors, remote workers, expats, and returning guests who want access to the studio beyond a single tourist class.\n\nWhat membership includes:\n- Studio access during agreed member hours\n- Space for handbuilding, practice, and quiet studio time\n- Access to shared tools, work tables, and clay support from the team\n- Storage for works-in-progress while pieces dry and move through firing\n- Clay included (reasonable monthly allowance)\n- Bisque and glaze firing included\n- Studio glazes available (member palette)\n- A chance to meet other makers and feel part of the Pottery House rhythm\n\nAsk us about current member hours, firing schedule, and monthly pricing.',
-      imageAssetId: 'media-ph-membership',
+      media: [{ asset_id: 'media-ph-membership', slot: 'gallery' }],
       price: 'Ask us',
       priceAmount: null,
       durationMinutes: null,
@@ -600,14 +600,14 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
   // Verified against the live Google Places API 2026-07-06 — do not hand-author
   // review content here. Only ever populate this array from a real Google sync.
   reviews: [
-    { id: 'gplaces-ph-1772088302', locationId: 'loc-pottery-house', authorName: 'Kathy Evans Car', reviewerPhotoUrl: '', rating: 5, content: 'Amazing experience, a great way to spend a few hours. At their beach front area we were given instructions and help from Poe, the genius potter, to make something on the wheels and another day also we hand crafted some pieces.\nAs we were staying in the area for a while we were also lucky enough to be able to return to the studio to  paint and then glaze our items during one of the paint and sip evenings.\n100% recommend, The items they have for sale are inspired , I was able to get some amazing gifts, we did not want to give ours away!\nI went with my 6 year old, she was really into it and it gave us a breather for a few hours.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
-    { id: 'gplaces-ph-1776596323', locationId: 'loc-pottery-house', authorName: 'John Napoli', reviewerPhotoUrl: '', rating: 5, content: 'Unique experience, always wanted to throw something on the wheel. It was a fair price, had personalized service, made some unique souvenirs, had fun!! Highly recommended.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
-    { id: 'gplaces-ph-1778956907', locationId: 'loc-pottery-house', authorName: 'Cari', reviewerPhotoUrl: '', rating: 5, content: "I threw some cups on the pottery wheel, by the beach, during our vacation a few months ago. It was definitely one of the highlights of our trip for me. It had been a while since I threw pottery and I had really wanted to. It's a convenient (and beautiful) location and a reasonable price for the class. Also they were very helpful when I went to paint the cups later, and had them ready on the day I said I would be leaving. My boyfriend is drinking coffee out of the cup I made him every day. Thank you very much.", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
-    { id: 'gplaces-beach-1769434503', locationId: 'loc-pottery-beachfront', authorName: 'Julia', reviewerPhotoUrl: '', rating: 5, content: 'Once in a lifetime experience. The wonderful Po will ensure you have an amazing time. I had the chance to create a unique piece of pottery in-front of such an incredible backdrop. My son (8) loved it even more. If you cannot take your work home (it will take a couple of days to dry and burn) you can have it sent anywhere in Thailand or even home. The three ours of the class flew by in no time and were well worth the price of 1500THB. Can highly recommend!', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
-    { id: 'gplaces-beach-1766915654', locationId: 'loc-pottery-beachfront', authorName: 'Stanley Yeo', reviewerPhotoUrl: '', rating: 5, content: 'I will come here again . This is the first time I done pottery I done a bayan tree aroma buner.  Hope can do more . Time is short . Will have more hours here . Is peaceful and can clam myself . And also slow myself down .', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
-    { id: 'gplaces-beach-1767514091', locationId: 'loc-pottery-beachfront', authorName: 'Eleni Magkli', reviewerPhotoUrl: '', rating: 5, content: 'Fantastic vibes, my kids were able to create whatever they wanted and came back a couple days later to paint them (in the price). Very welcoming, cozy, wonderful people. A fantastic environment to create', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
-    { id: 'gplaces-beach-1767088509', locationId: 'loc-pottery-beachfront', authorName: 'Alexandros Karamitsos', reviewerPhotoUrl: '', rating: 5, content: 'Fantastic experience. We brought our two young daughters 6 and 8 years old for pottery. They were super focused for 2h and enjoyed it very much.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
-    { id: 'gplaces-beach-1763788324', locationId: 'loc-pottery-beachfront', authorName: 'Ory Covo', reviewerPhotoUrl: '', rating: 5, content: "Didn't know really what to except and how will we spend our time , staff where great and time well spent !", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-ph-1772088302', locationId: 'loc-pottery-house', authorName: 'Kathy Evans Car', rating: 5, content: 'Amazing experience, a great way to spend a few hours. At their beach front area we were given instructions and help from Poe, the genius potter, to make something on the wheels and another day also we hand crafted some pieces.\nAs we were staying in the area for a while we were also lucky enough to be able to return to the studio to  paint and then glaze our items during one of the paint and sip evenings.\n100% recommend, The items they have for sale are inspired , I was able to get some amazing gifts, we did not want to give ours away!\nI went with my 6 year old, she was really into it and it gave us a breather for a few hours.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-ph-1776596323', locationId: 'loc-pottery-house', authorName: 'John Napoli', rating: 5, content: 'Unique experience, always wanted to throw something on the wheel. It was a fair price, had personalized service, made some unique souvenirs, had fun!! Highly recommended.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-ph-1778956907', locationId: 'loc-pottery-house', authorName: 'Cari', rating: 5, content: "I threw some cups on the pottery wheel, by the beach, during our vacation a few months ago. It was definitely one of the highlights of our trip for me. It had been a while since I threw pottery and I had really wanted to. It's a convenient (and beautiful) location and a reasonable price for the class. Also they were very helpful when I went to paint the cups later, and had them ready on the day I said I would be leaving. My boyfriend is drinking coffee out of the cup I made him every day. Thank you very much.", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1769434503', locationId: 'loc-pottery-beachfront', authorName: 'Julia', rating: 5, content: 'Once in a lifetime experience. The wonderful Po will ensure you have an amazing time. I had the chance to create a unique piece of pottery in-front of such an incredible backdrop. My son (8) loved it even more. If you cannot take your work home (it will take a couple of days to dry and burn) you can have it sent anywhere in Thailand or even home. The three ours of the class flew by in no time and were well worth the price of 1500THB. Can highly recommend!', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1766915654', locationId: 'loc-pottery-beachfront', authorName: 'Stanley Yeo', rating: 5, content: 'I will come here again . This is the first time I done pottery I done a bayan tree aroma buner.  Hope can do more . Time is short . Will have more hours here . Is peaceful and can clam myself . And also slow myself down .', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1767514091', locationId: 'loc-pottery-beachfront', authorName: 'Eleni Magkli', rating: 5, content: 'Fantastic vibes, my kids were able to create whatever they wanted and came back a couple days later to paint them (in the price). Very welcoming, cozy, wonderful people. A fantastic environment to create', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1767088509', locationId: 'loc-pottery-beachfront', authorName: 'Alexandros Karamitsos', rating: 5, content: 'Fantastic experience. We brought our two young daughters 6 and 8 years old for pottery. They were super focused for 2h and enjoyed it very much.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
+    { id: 'gplaces-beach-1763788324', locationId: 'loc-pottery-beachfront', authorName: 'Ory Covo', rating: 5, content: "Didn't know really what to except and how will we spend our time , staff where great and time well spent !", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
   ],
   menus: [],
   locationQa: [
@@ -703,7 +703,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       postType: 'update',
       title: 'Doors open, wheels spinning.',
       body: 'Welcome to Pottery House. We are open for wheel classes, handbuilding sessions, and Cocktails & Clay every Friday night. Walk-ins welcome when we have space, but booking ahead is always a good idea. Find us on Instagram @potteryclasseskrabi.',
-      imageAssetId: 'media-ph-post1',
+      media: [{ asset_id: 'media-ph-post1', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-05-01T10:00:00.000Z',
       createdBy: 'user-pottery-house',
@@ -717,7 +717,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       postType: 'standard',
       title: null,
       body: 'Nothing makes our team happier than happy students. Turns out clay, coffee, and a few proud smiles are the perfect recipe. Thank you for making the studio so joyful.',
-      imageAssetId: 'media-ph-post2',
+      media: [{ asset_id: 'media-ph-post2', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-05-15T10:00:00.000Z',
       createdBy: 'user-pottery-house',
@@ -731,7 +731,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       postType: 'offer',
       title: 'Cocktails & Clay — Every Friday, 7PM to 10PM',
       body: 'Grab a drink, sit at the wheel, and see what your hands can do. Our Friday night Cocktails & Clay session is social, relaxed, and genuinely fun — whether you are a first-timer or you already know your way around a wheel. ฿1,500 per person. Book via Instagram @potteryclasseskrabi.',
-      imageAssetId: 'media-ph-post3',
+      media: [{ asset_id: 'media-ph-post3', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-05-20T09:00:00.000Z',
       createdBy: 'user-pottery-house',
@@ -917,8 +917,7 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   public_url, brand_name, brand_description,
   status, plan, onboarding_status, primary_location_id,
-  contact_email, contact_phone, default_currency, vertical, content_source, media_source,
-  logo_asset_id
+  contact_email, contact_phone, default_currency, vertical
 ) VALUES (
   ${sqlValue(identity.siteId)},
   ${sqlValue(identity.organizationId)},
@@ -936,10 +935,7 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.contactEmail)},
   ${sqlValue(site.contactPhone ?? null)},
   ${sqlValue(site.defaultCurrency)},
-  ${sqlValue(site.vertical)},
-  ${sqlValue(site.contentSource)},
-  ${sqlValue(site.mediaSource)},
-  NULL
+  ${sqlValue(site.vertical)}
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
@@ -963,7 +959,6 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlValue(media.id),
       sqlValue(media.organizationId),
       sqlValue(media.siteId),
-      sqlValue(media.locationId),
       sqlValue(media.kind),
       sqlValue(media.provider),
       sqlValue(media.source),
@@ -978,6 +973,15 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlValue(media.status),
     ].join(', ')})`)
     .join(',\n')
+
+  const mediaPlacementRows = [
+    ...compiledPotteryHouseSeed.site.media.map((media, index) => [`placement-site-${compiledPotteryHouseSeed.identity.siteId}-${media.slot}-${index}`, 'site', compiledPotteryHouseSeed.identity.siteId, media.slot, media.asset_id, index]),
+    ...compiledPotteryHouseSeed.locations.flatMap(location => location.media.map((media, index) => [`placement-location-${location.id}-${media.slot}-${index}`, 'business_location', location.id, media.slot, media.asset_id, index])),
+  ].map(([id, ownerType, ownerId, slot, assetId, sortOrder]) => `  (${[
+    sqlValue(String(id)), sqlValue(compiledPotteryHouseSeed.identity.organizationId), sqlValue(compiledPotteryHouseSeed.identity.siteId),
+    sqlValue(String(ownerType)), sqlValue(String(ownerId)), sqlValue(String(slot)), sqlValue(String(assetId)),
+    sqlValue(Number(sortOrder)), sqlValue('active'),
+  ].join(', ')})`).join(',\n')
 
   const locationRowsNoHero = compiledPotteryHouseSeed.locations
     .map((location) => `  (${[
@@ -1006,20 +1010,12 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlValue(location.facebookUrl),
       sqlValue(location.isPrimary),
       sqlValue(location.status),
-      'NULL',
       sqlValue(location.notificationPhone ?? null),
       sqlValue('Asia/Bangkok'),
     ].join(', ')})`)
     .join(',\n')
 
-  const heroUpdates = compiledPotteryHouseSeed.locations
-    .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
-    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
-    .join('\n')
-
   return `-- BEGIN GENERATED: pottery_media
--- Insert locations first (without hero asset refs) to satisfy media_assets FK,
--- then insert media_assets, then patch hero refs back onto locations.
 INSERT OR REPLACE INTO business_locations (
   id, organization_id, site_id, slug, title, city,
   address, phone, email, maps_url,
@@ -1029,30 +1025,31 @@ INSERT OR REPLACE INTO business_locations (
   rating, review_count, google_place_id, last_synced_at,
   price_level, categories,
   instagram_url, facebook_url,
-  is_primary, status,
-  hero_media_asset_id,
-  notification_phone,
+  is_primary, status, notification_phone,
   timezone
 ) VALUES
 ${locationRowsNoHero};
 
 -- All media assets for Pottery House Krabi.
 INSERT OR REPLACE INTO media_assets
-  (id, organization_id, site_id, location_id,
+  (id, organization_id, site_id,
    kind, provider, source,
    cloudflare_image_id, r2_key, public_url, thumbnail_url,
    mime_type, file_name, alt_text, category, status)
 VALUES
 ${mediaRows};
 
-${heroUpdates}
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES
+${mediaPlacementRows};
 
-UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAssetId ?? null)}, primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
+UPDATE sites SET primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
 -- END GENERATED: pottery_media`
 }
 
 export function renderCompiledPotteryHouseExperiencesBlock(): string {
-  const coverExperiences = compiledPotteryHouseSeed.experiences.filter(experience => experience.imageAssetId)
+  const experienceMedia = compiledPotteryHouseSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
   const experienceRows = compiledPotteryHouseSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
@@ -1078,20 +1075,20 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.seoDescription),
     ].join(', ')})`)
     .join(',\n')
-  const coverBlock = coverExperiences.length
+  const coverBlock = experienceMedia.length
     ? `
 
-INSERT OR REPLACE INTO experience_media
-  (id, organization_id, site_id, experience_id, asset_id, sort_order)
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
 VALUES
-${coverExperiences
-  .map((experience) => `  (${[
-    sqlValue(`em-${experience.id}-cover`),
+${experienceMedia
+  .map(({ experience, media, index }) => `  (${[
+    sqlValue(`em-${experience.id}-${media.slot}-${index}`),
     sqlValue(experience.organizationId),
     sqlValue(experience.siteId),
-    sqlValue(experience.id),
-    sqlValue(experience.imageAssetId),
-    '0',
+    sqlValue('experience'), sqlValue(experience.id), sqlValue(media.slot),
+    sqlValue(media.asset_id),
+    index, sqlValue('active'),
   ].join(', ')})`)
   .join(',\n')};`
     : ''
@@ -1125,7 +1122,6 @@ export function renderCompiledPotteryHouseReviewsBlock(): string {
       sqlValue(review.siteId),
       sqlValue(review.locationId),
       sqlValue(review.authorName),
-      sqlValue(review.reviewerPhotoUrl),
       sqlValue(review.rating),
       sqlValue(review.content),
       sqlValue(review.ownerReply),
@@ -1139,7 +1135,7 @@ export function renderCompiledPotteryHouseReviewsBlock(): string {
 -- Reviews for Pottery House Krabi.
 INSERT OR IGNORE INTO reviews
   (id, organization_id, site_id, location_id,
-   author_name, reviewer_photo_url, rating, content,
+   author_name, rating, content,
    owner_reply, owner_reply_at,
    status, source)
 VALUES
@@ -1187,7 +1183,6 @@ export function renderCompiledPotteryHousePostsBlock(): string {
       sqlValue(post.postType),
       sqlValue(post.title),
       sqlValue(post.body),
-      sqlValue(post.imageAssetId),
       sqlValue(post.status),
       sqlValue(post.publishedAt),
       sqlValue(post.createdBy),
@@ -1195,6 +1190,10 @@ export function renderCompiledPotteryHousePostsBlock(): string {
     .join(',\n')
 
   const allChannelJobs = compiledPotteryHouseSeed.posts.flatMap((post) => post.channelJobs)
+  const postMediaRows = compiledPotteryHouseSeed.posts.flatMap(post => post.media.map((media, index) => `  (${[
+    sqlValue(`placement-post-${post.id}-${media.slot}-${index}`), sqlValue(post.organizationId), sqlValue(post.siteId),
+    sqlValue('post'), sqlValue(post.id), sqlValue(media.slot), sqlValue(media.asset_id), index, sqlValue('active'),
+  ].join(', ')})`)).join(',\n')
   const channelJobRows = allChannelJobs
     .map((job) => `  (${[
       sqlValue(job.id),
@@ -1210,10 +1209,15 @@ export function renderCompiledPotteryHousePostsBlock(): string {
 -- Posts and channel jobs for Pottery House Krabi.
 INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
-   post_type, title, body, image_asset_id,
+   post_type, title, body,
    status, published_at, created_by)
 VALUES
 ${postRows};
+
+${postMediaRows ? `INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES
+${postMediaRows};` : ''}
 
 INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
 VALUES
@@ -1242,8 +1246,8 @@ Our team can help organise group timing, capacity, and the right workshop format
   return `-- BEGIN GENERATED: pottery_blog
 -- Tenant blog coverage for Pottery House Krabi parity checks.
 INSERT OR IGNORE INTO blog_posts
-  (id, organization_id, site_id, title, slug, body, excerpt, category, status,
-   author_id, featured_image_asset_id, published_at, created_at, updated_at,
+  (id, organization_id, site_id, title, slug, excerpt, category, status,
+   author_id, published_at, created_at, updated_at,
    seo_description, seo_keywords, canonical_url, robots, hide_from_nav)
 VALUES (
   ${sqlValue(postId)},
@@ -1251,12 +1255,10 @@ VALUES (
   ${sqlValue('site-pottery-house')},
   ${sqlValue('Group Bookings Create a Unique Pottery Experience in Krabi')},
   ${sqlValue('group-bookings-create-a-unique-pottery-experience-in-krabi')},
-  ${sqlValue(body)},
   ${sqlValue('A practical guide to private pottery sessions in Krabi for retreats, schools, and team events.')},
   ${sqlValue('Group bookings')},
   'published',
   ${sqlValue('user-pottery-house')},
-  ${sqlValue('media-ph-homepage-custom')},
   ${sqlValue(publishedAt)},
   ${sqlValue(publishedAt)},
   ${sqlValue(publishedAt)},
@@ -1266,6 +1268,10 @@ VALUES (
   ${sqlValue('index,follow')},
   0
 );
+
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES ('placement-blog-pottery-group-bookings-featured', 'org-pottery-house', 'site-pottery-house', 'blog_post', ${sqlValue(postId)}, 'featured', 'media-ph-homepage-custom', 0, 'active');
 
 INSERT OR REPLACE INTO content_documents
   (id, owner_type, owner_id, created_at, updated_at)

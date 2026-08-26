@@ -240,7 +240,7 @@ async function tenantPagePlacementQueries(
   return queries
 }
 
-function preserveOmittedBlockMedia(value: unknown, existingBlocks: TenantPageBlock[]): unknown {
+export function preserveOmittedBlockMedia(value: unknown, existingBlocks: TenantPageBlock[]): unknown {
   if (!Array.isArray(value)) return value
   const existingById = new Map(existingBlocks.map(block => [block.id, block.media]))
   return value.map((rawBlock) => {

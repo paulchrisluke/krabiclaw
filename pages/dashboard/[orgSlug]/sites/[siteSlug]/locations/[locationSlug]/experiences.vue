@@ -589,7 +589,7 @@ function dropGalleryMedia(targetIndex: number) {
   if (item) form.media.splice(targetIndex, 0, item)
 }
 
-function handleGalleryMediaChange(index: number, asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null) {
+function handleGalleryMediaChange(index: number, asset: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind?: string | null } | null) {
   const item = form.media[index]
   if (!item) return
   item.asset_id = asset?.asset_id ?? null

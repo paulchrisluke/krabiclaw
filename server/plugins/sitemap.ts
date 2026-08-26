@@ -138,7 +138,7 @@ export default definePlugin((nitroApp) => {
         queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `
           SELECT slug, canonical_path, updated_at
             FROM offerings
-           WHERE site_id = ? AND (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
+           WHERE site_id = ?
            ORDER BY sort_order ASC, name ASC
         `, [siteId]),
         listPublishedTenantSitemapPages(db, siteId),

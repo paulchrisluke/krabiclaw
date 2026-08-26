@@ -309,7 +309,7 @@ const emit = defineEmits<{
   unpublish: []
   delete: []
   close: []
-  imageChange: [asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null]
+  imageChange: [asset: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind?: string | null } | null]
 }>()
 
 const { trackEditorSessionStarted } = useAnalytics()
@@ -331,7 +331,7 @@ const formattedPublishedAt = computed(() => {
   return publishedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 })
 
-function handleImageChange(asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null) {
+function handleImageChange(asset: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind?: string | null } | null) {
   media.value = [
     ...(asset
       ? [{
@@ -348,7 +348,7 @@ function handleImageChange(asset: { asset_id: string; public_url: string; thumbn
   emit('imageChange', asset)
 }
 
-function handleGalleryChange(asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null) {
+function handleGalleryChange(asset: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind?: string | null } | null) {
   if (!asset) return
   const exists = galleryMedia.value.some((item) => item.asset_id === asset.asset_id)
   if (!exists) {

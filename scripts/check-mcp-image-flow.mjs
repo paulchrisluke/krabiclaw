@@ -143,11 +143,11 @@ async function assertSavedImage(headers, siteId, imageData, label) {
   })
   expectStatus(`${label} save_generated_image succeeds`, response)
   const payload = data(response.body)
-  expectValue(`${label} returns assetId`, Boolean(payload?.assetId), payload)
-  expectValue(`${label} returns publicUrl`, typeof payload?.publicUrl === 'string' && payload.publicUrl.startsWith('https://'), payload)
-  expectValue(`${label} returns thumbnailUrl`, typeof payload?.thumbnailUrl === 'string' && payload.thumbnailUrl.startsWith('https://'), payload)
-  if (payload?.publicUrl) await assertResolvableImage(payload.publicUrl, `${label} publicUrl`)
-  if (payload?.thumbnailUrl) await assertResolvableImage(payload.thumbnailUrl, `${label} thumbnailUrl`)
+  expectValue(`${label} returns asset_id`, Boolean(payload?.asset_id), payload)
+  expectValue(`${label} returns public_url`, typeof payload?.public_url === 'string' && payload.public_url.startsWith('https://'), payload)
+  expectValue(`${label} returns thumbnail_url`, typeof payload?.thumbnail_url === 'string' && payload.thumbnail_url.startsWith('https://'), payload)
+  if (payload?.public_url) await assertResolvableImage(payload.public_url, `${label} public_url`)
+  if (payload?.thumbnail_url) await assertResolvableImage(payload.thumbnail_url, `${label} thumbnail_url`)
   return payload
 }
 
@@ -226,10 +226,10 @@ async function main() {
   const fixture = await buildFixtureImageBase64()
   const rawBase64Image = await assertSavedImage(headers, siteId, fixture.rawBase64, 'raw-base64')
   const dataUrlImage = await assertSavedImage(headers, siteId, fixture.dataUrl, 'data-url')
-  const assetId = rawBase64Image?.assetId
-  const secondAssetId = dataUrlImage?.assetId
-  expectValue('saved image fixture returns reusable assetId', Boolean(assetId), rawBase64Image)
-  expectValue('saved image fixture returns second reusable assetId', Boolean(secondAssetId), dataUrlImage)
+  const assetId = rawBase64Image?.asset_id
+  const secondAssetId = dataUrlImage?.asset_id
+  expectValue('saved image fixture returns reusable asset_id', Boolean(assetId), rawBase64Image)
+  expectValue('saved image fixture returns second reusable asset_id', Boolean(secondAssetId), dataUrlImage)
 
   const locationId = await createLocation(headers, siteId)
   const workspaceSet = await mcp(headers, 'set_workspace_context', {
@@ -245,7 +245,7 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target_type: 'site_logo',
+    placement: { owner_type: 'site', owner_id: siteId, slot: 'logo' },
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media site_logo returns asset id', payload?.asset_ids?.[0] === assetId, payload)
@@ -254,35 +254,7 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target_type: 'home_hero',
-    asset_ids: [assetId],
-  }, (payload) => {
-    expectValue('set_media home_hero updates page content', payload?.entity === 'page_content', payload)
-    expectValue('set_media home_hero returns context', payload?.context?.site_id === siteId, payload)
-  })
-
-  await assertImageAssignmentTool(headers, 'set_media', {
-    site_id: siteId,
-    target_type: 'about_story_image',
-    asset_ids: [dataUrlImage?.assetId],
-  }, (payload) => {
-    expectValue('set_media about_story_image updates page content', payload?.id === 'about', payload)
-    expectValue('set_media about_story_image returns context', payload?.context?.site_id === siteId, payload)
-  })
-
-  await assertImageAssignmentTool(headers, 'set_media', {
-    site_id: siteId,
-    target_type: 'home_story_image',
-    asset_ids: [rawBase64Image?.assetId],
-  }, (payload) => {
-    expectValue('set_media home_story_image updates page content', payload?.id === 'home', payload)
-    expectValue('set_media home_story_image returns context', payload?.context?.site_id === siteId, payload)
-  })
-
-  await assertImageAssignmentTool(headers, 'set_media', {
-    site_id: siteId,
-    target_type: 'location_hero',
-    location_id: locationId,
+    placement: { owner_type: 'business_location', owner_id: locationId, slot: 'hero' },
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media location_hero returns location id', payload?.id === locationId, payload)
@@ -291,18 +263,16 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target_type: 'menu_item_media',
-    menu_item_id: itemId,
+    placement: { owner_type: 'menu_item', owner_id: itemId, slot: 'gallery' },
     asset_ids: [assetId, secondAssetId],
   }, (payload) => {
-    expectValue('set_media menu_item_media returns item id', payload?.id === itemId, payload)
-    expectValue('set_media menu_item_media returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_media menu item gallery returns item id', payload?.id === itemId, payload)
+    expectValue('set_media menu item gallery returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target_type: 'post_image',
-    post_id: postId,
+    placement: { owner_type: 'post', owner_id: postId, slot: 'cover' },
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media post_image returns post id', payload?.id === postId, payload)
@@ -311,12 +281,11 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target_type: 'experience_media',
-    experience_id: experienceId,
+    placement: { owner_type: 'experience', owner_id: experienceId, slot: 'gallery' },
     asset_ids: [assetId],
   }, (payload) => {
-    expectValue('set_media experience_media returns experience id', payload?.id === experienceId, payload)
-    expectValue('set_media experience_media returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_media experience gallery returns experience id', payload?.id === experienceId, payload)
+    expectValue('set_media experience gallery returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   const locationRead = await mcp(headers, 'get_location', {
@@ -324,7 +293,7 @@ async function main() {
     location_id: locationId,
   })
   expectStatus('get_location succeeds', locationRead)
-  expectValue('set_media updates location hero', data(locationRead.body)?.location?.hero_media_asset_id === assetId, data(locationRead.body))
+  expectValue('set_media updates location hero', data(locationRead.body)?.location?.media?.some(media => media.slot === 'hero' && media.asset_id === assetId), data(locationRead.body))
 
   const menuRead = await mcp(headers, 'get_menu', {
     site_id: siteId,
@@ -335,7 +304,7 @@ async function main() {
   expectStatus('get_menu for image verification succeeds', menuRead)
   expectValue(
     'set_media updates ordered menu item media',
-    JSON.stringify(menuItem?.media?.map((media) => media.id)) === JSON.stringify([assetId, secondAssetId]),
+    JSON.stringify(menuItem?.media?.map((media) => media.asset_id)) === JSON.stringify([assetId, secondAssetId]),
     menuItem,
   )
 
@@ -344,14 +313,14 @@ async function main() {
     post_id: postId,
   })
   expectStatus('get_post succeeds', postRead)
-  expectValue('set_media updates post image', data(postRead.body)?.post?.image_asset_id === assetId, data(postRead.body))
+  expectValue('set_media updates post cover', data(postRead.body)?.post?.media?.some(media => media.slot === 'cover' && media.asset_id === assetId), data(postRead.body))
 
   const experienceRead = await mcp(headers, 'get_experience', {
     site_id: siteId,
     experience_id: experienceId,
   })
   expectStatus('get_experience succeeds', experienceRead)
-  expectValue('set_media updates experience media', data(experienceRead.body)?.experience?.media?.[0]?.id === assetId, data(experienceRead.body))
+  expectValue('set_media updates experience media', data(experienceRead.body)?.experience?.media?.[0]?.asset_id === assetId, data(experienceRead.body))
 
   process.exit(failed ? 1 : 0)
 }

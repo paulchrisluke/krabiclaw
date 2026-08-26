@@ -21,7 +21,7 @@ import { normalizeBlogSlug, parseScheduledFor, resolveBlogPublicPath, resolveSlu
 import { createBlogRedirect } from '~/server/utils/blog-publishing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { buildReplaceMediaPlacementQueries } from '~/server/utils/media-asset-manager'
-import type { CloudflareEnv } from '~/server/utils/auth'
+import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
 
 const BLOG_TITLE_MAX = 200
@@ -543,7 +543,7 @@ async function resolveTenantContext(db: DbClient, siteId: string | null, env?: C
  * request, which was causing the page to 404 on posts the API itself
  * served fine.
  */
-export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string) {
+export async function getPublishedPlatformBlogPost(db: DbClient, category: string, slug: string, env: CloudflareEnv) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
@@ -551,8 +551,6 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
-      u.name AS author_name,
-      u.image AS author_image,
       mp.asset_id AS asset_id,
       ma.public_url,
       ma.thumbnail_url,
@@ -560,7 +558,6 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
       ma.width,
       ma.height
     FROM blog_posts p
-    LEFT JOIN "user" u ON u.id = p.author_id
     LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
     WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id IS NULL
@@ -570,10 +567,12 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_blog', String(post.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-  const { author_id: authorId, author_name: authorName, author_image: authorImage, ...postRecord } = post
+  const { author_id: authorId, ...postRecord } = post
+  const authors = await findAuthUsersByIds(env, [authorId as string | null])
+  const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks }),
-    author: authorId ? { id: authorId, name: authorName, image: authorImage } : null,
+    author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
 
@@ -582,7 +581,7 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
  * See getPublishedPlatformBlogPost above for why the page must call this
  * directly rather than doing a nested self-fetch back to the API route.
  */
-export async function getPublishedPlatformDoc(db: DbClient, category: string, slug: string) {
+export async function getPublishedPlatformDoc(db: DbClient, category: string, slug: string, env: CloudflareEnv) {
   const doc = await queryFirst<ApiRecord>(
     db,
     `SELECT
@@ -590,12 +589,9 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
        p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.nav_group, p.nav_group_order, p.hide_from_nav, p.featured_order,
        p.author_id,
-       u.name AS author_name,
-       u.image AS author_image,
        mp.asset_id AS asset_id, p.updated_at,
        ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
      FROM platform_docs p
-     LEFT JOIN "user" u ON u.id = p.author_id
      LEFT JOIN media_placements mp ON mp.owner_type = 'platform_doc' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0
      LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
      WHERE p.slug = ? AND p.category = ?`,
@@ -606,10 +602,12 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_doc', String(doc.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Documentation content document is missing' })
-  const { author_id: authorId, author_name: authorName, author_image: authorImage, ...docRecord } = doc
+  const { author_id: authorId, ...docRecord } = doc
+  const authors = await findAuthUsersByIds(env, [authorId as string | null])
+  const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...docRecord, content_blocks: contentBlocks }),
-    author: authorId ? { id: authorId, name: authorName, image: authorImage } : null,
+    author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
 
@@ -785,15 +783,13 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   }
 }
 
-export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string) {
+export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots, p.featured_order, p.visibility,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
-      u.name AS author_name,
-      u.image AS author_image,
       mp.asset_id AS asset_id,
       ma.public_url,
       ma.thumbnail_url,
@@ -801,7 +797,6 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
       ma.width,
       ma.height
     FROM blog_posts p
-    LEFT JOIN "user" u ON u.id = p.author_id
     LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
     WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
@@ -817,10 +812,12 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
     getContentBlocksForOwner(db, 'tenant_blog', String(post.id)),
     listBlocksForDocument(db, contentDocument.id),
   ])
-  const { author_id: authorId, author_name: authorName, author_image: authorImage, ...postRecord } = post
+  const { author_id: authorId, ...postRecord } = post
+  const authors = await findAuthUsersByIds(env, [authorId as string | null])
+  const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks ?? [], body: renderContentBlocksToMarkdown(rawBlocks) }),
-    author: authorId ? { id: authorId, name: authorName, image: authorImage } : null,
+    author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
 

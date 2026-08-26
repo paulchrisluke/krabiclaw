@@ -80,10 +80,14 @@ export async function dashboardFetch<T>(
   if (!scope.orgSlug) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
   }
-  const headers = buildDashboardRequestHeaders(scope,
+  const headers = buildDashboardRequestHeaders(
     Object.fromEntries(new Headers(options.headers as HeadersInit).entries()),
   )
-  return await executeApiFetch(request, options, headers)
+  const scopedOptions: DashboardFetchOptions<T> = {
+    ...options,
+    query: { ...buildDashboardRequestQuery(scope), ...(options.query as Record<string, unknown> | undefined) },
+  }
+  return await executeApiFetch(request, scopedOptions, headers)
 }
 
 export function useDashboardRouteScope() {

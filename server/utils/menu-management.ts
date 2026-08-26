@@ -12,6 +12,7 @@ import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 import {
+  buildDeleteOwnerPlacementsQuery,
   buildReplaceMediaPlacementQueries,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
@@ -703,16 +704,27 @@ export async function deleteMenu(
   siteId: string,
   menuId: string,
 ): Promise<void> {
-  const result = await execute(
-    db,
-    `
-    DELETE FROM menus
-    WHERE id = ? AND organization_id = ? AND site_id = ?
-  `,
-    [menuId, organizationId, siteId],
-  );
+  // menu_items cascades away with the menu (FK ON DELETE CASCADE), but
+  // media_placements has no owner FK, so each item's placements must be
+  // deleted explicitly while the items they're keyed by still exist.
+  const [, result] = await executeBatch(db, [
+    {
+      query: `
+      DELETE FROM media_placements
+      WHERE owner_type = 'menu_item' AND owner_id IN (SELECT id FROM menu_items WHERE menu_id = ?)
+    `,
+      params: [menuId],
+    },
+    {
+      query: `
+      DELETE FROM menus
+      WHERE id = ? AND organization_id = ? AND site_id = ?
+    `,
+      params: [menuId, organizationId, siteId],
+    },
+  ]);
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to delete menu");
   }
 }
@@ -1100,9 +1112,12 @@ export async function deleteMenuItem(
 
   if (!existing) return false;
 
-  const result = await execute(db, `DELETE FROM menu_items WHERE id = ?`, [menuItemId]);
+  const [, result] = await executeBatch(db, [
+    buildDeleteOwnerPlacementsQuery({ ownerType: 'menu_item', ownerId: menuItemId }),
+    { query: `DELETE FROM menu_items WHERE id = ?`, params: [menuItemId] },
+  ]);
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to delete menu item");
   }
 
@@ -1228,16 +1243,24 @@ export async function deleteMenuSection(
 ): Promise<number> {
   await assertMenuOwnership(db, menuId, organizationId, siteId);
   const sectionOrder = await getMenuSectionOrder(db, menuId);
-  const result = await execute(
-    db,
-    `
-    DELETE FROM menu_items
-    WHERE menu_id = ? AND section = ?
-  `,
-    [menuId, section],
-  );
+  const [, result] = await executeBatch(db, [
+    {
+      query: `
+      DELETE FROM media_placements
+      WHERE owner_type = 'menu_item' AND owner_id IN (SELECT id FROM menu_items WHERE menu_id = ? AND section = ?)
+    `,
+      params: [menuId, section],
+    },
+    {
+      query: `
+      DELETE FROM menu_items
+      WHERE menu_id = ? AND section = ?
+    `,
+      params: [menuId, section],
+    },
+  ]);
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to delete menu section");
   }
 

@@ -19,9 +19,12 @@
     "publicUrl": "https://demo.krabiclaw.com",
     "defaultCurrency": "USD",
     "vertical": "restaurant",
-    "contentSource": "generated",
-    "mediaSource": "stock",
-    "logoAssetId": "media-demo-logo"
+    "media": [
+      {
+        "asset_id": "media-demo-logo",
+        "slot": "logo"
+      }
+    ]
   },
   "siteConfig": [
     {
@@ -138,8 +141,40 @@
       "facebookUrl": "https://facebook.com/emberandslice",
       "isPrimary": true,
       "status": "active",
-      "heroImageAssetId": "media-demo-hero",
-      "heroVideoAssetId": "media-demo-pizza-prep-video"
+      "media": [
+        {
+          "asset_id": "media-demo-pizza-prep-video",
+          "slot": "hero"
+        },
+        {
+          "asset_id": "media-demo-hero",
+          "slot": "gallery"
+        },
+        {
+          "asset_id": "media-demo-ext-1",
+          "slot": "gallery"
+        },
+        {
+          "asset_id": "media-demo-ext-2",
+          "slot": "gallery"
+        },
+        {
+          "asset_id": "media-demo-int-1",
+          "slot": "gallery"
+        },
+        {
+          "asset_id": "media-demo-int-2",
+          "slot": "gallery"
+        },
+        {
+          "asset_id": "media-demo-int-3",
+          "slot": "gallery"
+        },
+        {
+          "asset_id": "media-demo-team-1",
+          "slot": "gallery"
+        }
+      ]
     },
     {
       "id": "loc-demo-2",
@@ -211,7 +246,16 @@
       "facebookUrl": "https://facebook.com/emberandslice",
       "isPrimary": false,
       "status": "active",
-      "heroImageAssetId": "media-demo2-hero"
+      "media": [
+        {
+          "asset_id": "media-demo2-hero",
+          "slot": "hero"
+        },
+        {
+          "asset_id": "media-demo2-int-1",
+          "slot": "gallery"
+        }
+      ]
     }
   ],
   "mediaAssets": [
@@ -219,7 +263,6 @@
       "id": "media-demo-logo",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": null,
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -237,7 +280,6 @@
       "id": "media-demo-hero",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -252,28 +294,9 @@
       "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/thumbnail"
     },
     {
-      "id": "media-demo-hero-video",
-      "organizationId": "org-demo",
-      "siteId": "site-demo",
-      "locationId": "loc-demo",
-      "provider": "cloudflare_r2",
-      "source": "uploaded",
-      "r2Key": "sites/site-demo/media/media-demo-hero-video.mp4",
-      "cloudflareImageId": "1186bd99-f52b-4075-4d02-ca0031c75e00",
-      "publicUrl": "https://media.krabiclaw.com/sites/site-demo/media/media-demo-hero-video.mp4",
-      "mimeType": "video/mp4",
-      "fileName": "krabiclaw-demo-hero-video.mp4",
-      "altText": "Hero background video of the restaurant",
-      "category": "interior",
-      "status": "active",
-      "kind": "video",
-      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1186bd99-f52b-4075-4d02-ca0031c75e00/public"
-    },
-    {
       "id": "media-demo-margherita-video",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_r2",
       "source": "uploaded",
       "r2Key": "sites/site-demo/media/media-demo-margherita-video.mp4",
@@ -291,7 +314,6 @@
       "id": "media-demo-pizza-prep-video",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_r2",
       "source": "uploaded",
       "r2Key": "sites/site-demo/media/media-demo-pizza-prep-video.mp4",
@@ -309,7 +331,6 @@
       "id": "media-demo-ext-1",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -327,7 +348,6 @@
       "id": "media-demo-ext-2",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -345,7 +365,6 @@
       "id": "media-demo-int-1",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -363,7 +382,6 @@
       "id": "media-demo-int-2",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -381,7 +399,6 @@
       "id": "media-demo-int-3",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -399,7 +416,6 @@
       "id": "media-demo-team-1",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -417,7 +433,6 @@
       "id": "media-demo-margherita",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -435,7 +450,6 @@
       "id": "media-demo-pepperoni",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -453,7 +467,6 @@
       "id": "media-demo-funghi",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -471,7 +484,6 @@
       "id": "media-demo-burrata",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -489,7 +501,6 @@
       "id": "media-demo-knots",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -507,7 +518,6 @@
       "id": "media-demo-post1",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -525,7 +535,6 @@
       "id": "media-demo-post2",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -543,7 +552,6 @@
       "id": "media-demo-post3",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -561,7 +569,6 @@
       "id": "media-demo2-hero",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo-2",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -579,7 +586,6 @@
       "id": "media-demo2-int-1",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo-2",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -597,7 +603,6 @@
       "id": "media-demo-exp-class",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -615,7 +620,6 @@
       "id": "media-demo-exp-wine",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -633,7 +637,6 @@
       "id": "media-demo-exp-family",
       "organizationId": "org-demo",
       "siteId": "site-demo",
-      "locationId": "loc-demo",
       "provider": "cloudflare_images",
       "source": "uploaded",
       "r2Key": null,
@@ -659,8 +662,12 @@
       "content": null,
       "heroTitle": "Wood fire. Brooklyn nights.",
       "heroSubtitle": "Blistered pies & warm neighborhood vibes.",
-      "heroImageAssetId": "media-demo-hero",
-      "heroVideoAssetId": "media-demo-hero-video",
+      "media": [
+        {
+          "asset_id": "media-demo-hero",
+          "slot": "media"
+        }
+      ],
       "type": "text",
       "source": "manual"
     },
@@ -674,8 +681,7 @@
       "content": "Book a table near the oven.",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "text",
       "source": "manual"
     },
@@ -689,8 +695,12 @@
       "content": null,
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": "media-demo-team-1",
-      "heroVideoAssetId": null,
+      "media": [
+        {
+          "asset_id": "media-demo-team-1",
+          "slot": "media"
+        }
+      ],
       "type": "media",
       "source": "manual"
     },
@@ -704,8 +714,7 @@
       "content": "A trattoria shaped by the oven.",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "text",
       "source": "manual"
     },
@@ -719,8 +728,7 @@
       "content": "Ember & Slice started with a sourdough starter, a borrowed mixer, and a pop-up oven behind a Brooklyn wine bar. The pies sold out before sunset, then again the next weekend, and then every weekend after that.\n\nToday the room is permanent, but the promise is the same: slow dough, live fire, seasonal produce, and the kind of service that makes a weeknight feel like an occasion.",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "richtext",
       "source": "manual"
     },
@@ -734,8 +742,7 @@
       "content": "We cold-ferment our dough, stretch every pie to order, and cook it hot enough for a crisp rim and a tender center. The menu changes around the market, but the Margherita never leaves the board.\n\nThe oven anchors the room. Everything else moves around it.",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "textarea",
       "source": "manual"
     },
@@ -749,8 +756,7 @@
       "content": "Come for a quick counter pie, stay for antipasti and another round, or bring a group and let the table fill itself. Ember & Slice is casual by design, but the details matter.\n\nGood tomatoes. Good flour. Good fire. No shortcuts.",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "textarea",
       "source": "manual"
     },
@@ -764,8 +770,7 @@
       "content": "Experiences",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "text",
       "source": "manual"
     },
@@ -779,8 +784,7 @@
       "content": "Pizza classes, tasting nights, and big-table evenings.",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "text",
       "source": "manual"
     },
@@ -794,8 +798,7 @@
       "content": "Book a hands-on pizza class, a natural wine pairing night, or a family-style evening built around the oven.",
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
-      "heroVideoAssetId": null,
+      "media": [],
       "type": "textarea",
       "source": "manual"
     }
@@ -810,7 +813,12 @@
       "slug": "pizza-making-class",
       "tagline": "Stretch dough, top your pie, and fire it yourself.",
       "body": "Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.\n\nEach booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.",
-      "imageAssetId": "media-demo-exp-class",
+      "media": [
+        {
+          "asset_id": "media-demo-exp-class",
+          "slot": "gallery"
+        }
+      ],
       "highlights": [
         "Hands-on dough stretching and shaping with a live instructor",
         "Personal pizza fired in a wood oven and served fresh from the peel",
@@ -853,7 +861,12 @@
       "slug": "natural-wine-and-pizza-night",
       "tagline": "Small pours, hot pies, and long-table energy.",
       "body": "This evening is part tasting, part dinner party. We pair a rotating lineup of natural wines with off-menu pies, seasonal antipasti, and a little background on why each pairing works.\n\nBest for date nights, visiting friends, and anyone who wants the room at its loudest and warmest. Seats are shared at the table, and the menu changes with the week.",
-      "imageAssetId": "media-demo-exp-wine",
+      "media": [
+        {
+          "asset_id": "media-demo-exp-wine",
+          "slot": "gallery"
+        }
+      ],
       "highlights": [
         "Curated natural wine pours paired with off-menu pizza and seasonal plates",
         "Shared long-table seating that encourages conversation and a lively room",
@@ -895,7 +908,12 @@
       "slug": "family-pizza-night",
       "tagline": "Big-table dinner, easy pacing, and pizza for all ages.",
       "body": "Family Pizza Night is our easiest way to turn a Sunday dinner into something a little more memorable. Kids shape mini pies, grown-ups share large-format pizzas and salads, and the kitchen keeps the pacing relaxed.\n\nIdeal for families, birthday dinners, and mixed-age groups who want an experience that feels special without feeling formal.",
-      "imageAssetId": "media-demo-exp-family",
+      "media": [
+        {
+          "asset_id": "media-demo-exp-family",
+          "slot": "gallery"
+        }
+      ],
       "highlights": [
         "Family-friendly pacing with kids welcome to join the pizza action",
         "Large-format pizzas and salads shared at the table",
@@ -937,7 +955,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo",
       "authorName": "Maya R.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public",
       "rating": 5,
       "content": "The Margherita had that perfect leopard-spotted crust and the basil hit the table smelling fresh. Exactly what I want from a neighborhood pizza night.",
       "ownerReply": null,
@@ -951,7 +968,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo",
       "authorName": "Julian P.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/699707fd-1559-4dc9-b115-3fe4a753aa00/public",
       "rating": 5,
       "content": "Sat at the counter and watched the oven all night. Pepperoni Calabrese, burrata, and a spritz made this feel like a tiny vacation.",
       "ownerReply": "Thank you Julian. The counter seats are our favorite too - come back for the Funghi Bianco next time.",
@@ -965,7 +981,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo",
       "authorName": "Priya S.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6e004069-4d01-4709-34bd-d1a0cacc4600/public",
       "rating": 4,
       "content": "Great crust, warm service, and the garlic knots vanished before the pizza landed. It gets loud at peak dinner but in a good way.",
       "ownerReply": "Thanks Priya. Dinner definitely has energy, and we are glad the knots did their job.",
@@ -979,7 +994,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo",
       "authorName": "Noah L.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ee18283c-d024-4bf0-15a5-73fc6c321e00/public",
       "rating": 5,
       "content": "The hot honey soppressata is ridiculous. Sweet, spicy, smoky, and somehow still balanced. Best pie I have had in Williamsburg this year.",
       "ownerReply": null,
@@ -993,7 +1007,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo",
       "authorName": "Elena C.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b010933f-cac7-420f-1b4e-130b3b01ca00/public",
       "rating": 4,
       "content": "Lovely date-night spot without feeling precious. Caesar was sharp and cold, pizza was blistered, staff knew the menu well.",
       "ownerReply": null,
@@ -1007,7 +1020,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo",
       "authorName": "Chris B.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/6413ee7e-ca8d-4616-00f4-8a4224217a00/public",
       "rating": 3,
       "content": "Food was strong but our table was about 15 minutes late on a busy Friday. I would come earlier next time.",
       "ownerReply": "Hi Chris - sorry for the Friday wait. We tightened our turn times and would love to host you again on a smoother night.",
@@ -1021,7 +1033,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo-2",
       "authorName": "Michael T.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/ee18283c-d024-4bf0-15a5-73fc6c321e00/public",
       "rating": 5,
       "content": "Unbelievable sourdough pizza right in the West Village! The Margherita is simple, fresh, and perfectly charred. Truly a hidden gem.",
       "ownerReply": "Thank you Michael! We are thrilled you enjoyed the neighborhood vibes and our signature crust.",
@@ -1035,7 +1046,6 @@
       "siteId": "site-demo",
       "locationId": "loc-demo-2",
       "authorName": "Emma W.",
-      "reviewerPhotoUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/45239b3d-625e-49da-e751-a5ff8cc7e700/public",
       "rating": 5,
       "content": "Beautiful space, exceptionally friendly service, and a fantastic corner view. Highly recommend the Burrata and the Hot Honey pie!",
       "ownerReply": null,
@@ -1070,7 +1080,16 @@
           "slug": "margherita",
           "description": "San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt",
           "priceAmount": 18,
-          "imageAssetId": "media-demo-margherita",
+          "media": [
+            {
+              "asset_id": "media-demo-margherita",
+              "slot": "gallery"
+            },
+            {
+              "asset_id": "media-demo-margherita-video",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": "[\"Vegetarian\"]",
           "available": true,
@@ -1086,7 +1105,12 @@
           "slug": "pepperoni-calabrese",
           "description": "Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano",
           "priceAmount": 21,
-          "imageAssetId": "media-demo-pepperoni",
+          "media": [
+            {
+              "asset_id": "media-demo-pepperoni",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": null,
           "available": true,
@@ -1102,7 +1126,12 @@
           "slug": "funghi-bianco",
           "description": "Roasted mushrooms, ricotta crema, garlic, thyme, mozzarella, pecorino",
           "priceAmount": 22,
-          "imageAssetId": "media-demo-funghi",
+          "media": [
+            {
+              "asset_id": "media-demo-funghi",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": "[\"Vegetarian\"]",
           "available": true,
@@ -1118,7 +1147,7 @@
           "slug": "soppressata-hot-honey",
           "description": "Spicy soppressata, tomato, mozzarella, pickled Fresno chile, Brooklyn hot honey",
           "priceAmount": 23,
-          "imageAssetId": null,
+          "media": [],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": null,
           "available": true,
@@ -1134,7 +1163,12 @@
           "slug": "burrata",
           "description": "Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough",
           "priceAmount": 16,
-          "imageAssetId": "media-demo-burrata",
+          "media": [
+            {
+              "asset_id": "media-demo-burrata",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": "[\"Vegetarian\"]",
           "available": true,
@@ -1150,7 +1184,12 @@
           "slug": "garlic-knots",
           "description": "Wood-fired knots, parsley, roasted garlic butter, marinara",
           "priceAmount": 9,
-          "imageAssetId": "media-demo-knots",
+          "media": [
+            {
+              "asset_id": "media-demo-knots",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": "[\"Vegetarian\"]",
           "available": true,
@@ -1166,7 +1205,7 @@
           "slug": "little-gem-caesar",
           "description": "Little gem lettuce, anchovy dressing, sourdough crumbs, shaved pecorino",
           "priceAmount": 14,
-          "imageAssetId": null,
+          "media": [],
           "allergens": "[\"Gluten\", \"Dairy\", \"Fish\"]",
           "dietaryNotes": null,
           "available": true,
@@ -1182,7 +1221,7 @@
           "slug": "rigatoni-pomodoro",
           "description": "Rigatoni, slow tomato sauce, basil, parmesan",
           "priceAmount": 19,
-          "imageAssetId": null,
+          "media": [],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": "[\"Vegetarian\"]",
           "available": true,
@@ -1198,7 +1237,7 @@
           "slug": "sparkling-lemonade",
           "description": "House lemon cordial, soda, rosemary",
           "priceAmount": 6,
-          "imageAssetId": null,
+          "media": [],
           "allergens": null,
           "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
           "available": true,
@@ -1214,7 +1253,7 @@
           "slug": "italian-soda",
           "description": "Blood orange, grapefruit, or limonata",
           "priceAmount": 5,
-          "imageAssetId": null,
+          "media": [],
           "allergens": null,
           "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
           "available": true,
@@ -1246,7 +1285,16 @@
           "slug": "margherita",
           "description": "San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt",
           "priceAmount": 18,
-          "imageAssetId": "media-demo-margherita",
+          "media": [
+            {
+              "asset_id": "media-demo-margherita",
+              "slot": "gallery"
+            },
+            {
+              "asset_id": "media-demo-margherita-video",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": "[\"Vegetarian\"]",
           "available": true,
@@ -1262,7 +1310,12 @@
           "slug": "pepperoni-calabrese",
           "description": "Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano",
           "priceAmount": 21,
-          "imageAssetId": "media-demo-pepperoni",
+          "media": [
+            {
+              "asset_id": "media-demo-pepperoni",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": null,
           "available": true,
@@ -1278,7 +1331,12 @@
           "slug": "burrata",
           "description": "Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough",
           "priceAmount": 16,
-          "imageAssetId": "media-demo-burrata",
+          "media": [
+            {
+              "asset_id": "media-demo-burrata",
+              "slot": "gallery"
+            }
+          ],
           "allergens": "[\"Gluten\", \"Dairy\"]",
           "dietaryNotes": "[\"Vegetarian\"]",
           "available": true,
@@ -1294,7 +1352,7 @@
           "slug": "sparkling-lemonade",
           "description": "House lemon cordial, soda, rosemary",
           "priceAmount": 6,
-          "imageAssetId": null,
+          "media": [],
           "allergens": null,
           "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
           "available": true,
@@ -1419,7 +1477,12 @@
       "postType": "update",
       "title": "Weekend lunch now starts at 11",
       "body": "The oven is lighting up earlier on Saturdays and Sundays. Come by for lunch pies, garlic knots, and spritzes from 11am.",
-      "imageAssetId": "media-demo-post1",
+      "media": [
+        {
+          "asset_id": "media-demo-post1",
+          "slot": "cover"
+        }
+      ],
       "status": "published",
       "publishedAt": "2026-05-01T12:00:00.000Z",
       "createdBy": "user-demo",
@@ -1442,7 +1505,12 @@
       "postType": "standard",
       "title": null,
       "body": "Our Funghi Bianco is back with roasted mushrooms, ricotta crema, thyme, and a little pecorino snow at the pass.",
-      "imageAssetId": "media-demo-post2",
+      "media": [
+        {
+          "asset_id": "media-demo-post2",
+          "slot": "cover"
+        }
+      ],
       "status": "published",
       "publishedAt": "2026-04-18T10:00:00.000Z",
       "createdBy": "user-demo",
@@ -1465,7 +1533,12 @@
       "postType": "offer",
       "title": "Margherita Monday",
       "body": "Every Monday in May: Margherita pies are $14 from open to close. Dine-in only, one per guest.",
-      "imageAssetId": "media-demo-post3",
+      "media": [
+        {
+          "asset_id": "media-demo-post3",
+          "slot": "cover"
+        }
+      ],
       "status": "published",
       "publishedAt": "2026-04-10T09:00:00.000Z",
       "createdBy": "user-demo",

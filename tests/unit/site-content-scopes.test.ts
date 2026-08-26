@@ -26,6 +26,7 @@ async function executeBatch(_db: unknown, queries: Array<{ query: string; params
 
 async function queryAll<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T[]> {
   calls.execute.push({ query, params })
+  if (query.includes('FROM media_placements')) return []
   return calls.rows as T[]
 }
 
@@ -146,7 +147,8 @@ test('only directly collected review-request feedback is marked verified', async
     { id: 'google', source: 'google', review_request_id: null, publication_authorized: 0 },
   ]
   const reviews = await listSiteReviews(db, 'site-1')
-  assert.match(calls.execute.at(-1)?.query ?? '', /SELECT[\s\S]*location_id[\s\S]*FROM reviews/)
+  const reviewQuery = calls.execute.find(call => /FROM reviews/.test(call.query))
+  assert.match(reviewQuery?.query ?? '', /SELECT[\s\S]*location_id[\s\S]*FROM reviews/)
   assert.equal(reviews[0]?.verified, true)
   assert.equal(reviews[1]?.verified, false)
   assert.equal(reviews[2]?.verified, false)

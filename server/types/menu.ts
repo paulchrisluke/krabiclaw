@@ -1,4 +1,5 @@
 // Menu management types
+import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 
 export interface Menu {
   id: string
@@ -26,23 +27,7 @@ export interface MenuItem {
   compare_at_price_amount: string | number | null
   sale_starts_at: string | null
   sale_ends_at: string | null
-  image_asset_id: string | null
-  public_url?: string | null  // from media_assets join
-  thumbnail_url?: string | null
-  kind?: string | null
-  media?: Array<{
-    id: string
-    kind: 'image' | 'video'
-    public_url: string
-    thumbnail_url: string | null
-    mime_type: string | null
-    width: number | null
-    height: number | null
-    duration: number | null
-    alt_text: string | null
-    provider: string
-    status: 'active'
-  }>
+  media?: ResolvedMediaAsset[]
   available: boolean
   featured: boolean
   featured_sort_order: number

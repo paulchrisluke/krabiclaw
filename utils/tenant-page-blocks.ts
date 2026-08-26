@@ -236,6 +236,13 @@ export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
     if (canonicalSlot && normalizedMedia.some(item => item.slot !== canonicalSlot)) {
       throw new Error(`blocks[${index}].media must use the ${canonicalSlot} slot for ${type} blocks.`)
     }
+    if (canonicalSlot) {
+      // Pre-migration image/gallery blocks stored the asset directly on `data`.
+      // Surface that as a specific, actionable error instead of the generic
+      // "requires at least one asset" message, which doesn't say why one is missing.
+      if (data.url !== undefined) throw new Error(`${type}.url must use the block media array.`)
+      if (data.asset_id !== undefined) throw new Error(`${type}.asset_id must use the block media array.`)
+    }
     if ((type === 'image' || type === 'gallery') && normalizedMedia.length === 0) {
       throw new Error(`blocks[${index}].media requires at least one asset for ${type} blocks.`)
     }

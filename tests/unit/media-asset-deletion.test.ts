@@ -80,7 +80,16 @@ mock.module('../../server/db/index.ts', {
 
       return { meta: { changes: state.executeChanges } }
     },
-    executeBatch: async () => [],
+    executeBatch: async (_db: unknown, statements: Array<{ query: string; params: unknown[] }>) => statements.map(({ query, params }) => {
+      if (/UPDATE media_assets SET status = 'deleted'/.test(query)) {
+        state.updates.push(query)
+        if (state.executeChanges === 1 && state.asset) state.asset.status = 'deleted'
+        return { meta: { changes: state.executeChanges } }
+      }
+      assert.match(query, /DELETE FROM media_placements/)
+      assert.deepEqual(params, ['site-1', state.asset?.id ?? 'asset-video'])
+      return { meta: { changes: 0 } }
+    }),
     queryAll: async () => [],
     queryFirst: async (_db: unknown, query: string, params: unknown[]) => {
       if (/AS r2_referenced_elsewhere/.test(query)) {

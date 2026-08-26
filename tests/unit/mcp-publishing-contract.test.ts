@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { MCP_PUBLIC_TOOLS } from '../../server/utils/mcp-tools/index.ts'
+import { EDITABLE_MEDIA_PLACEMENT_OWNERS } from '../../shared/media-placement-contract.ts'
 import { renderMcpPrompt } from '../../server/utils/mcp-prompts.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
@@ -38,8 +39,7 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
 
   for (const name of ['create_post', 'update_post']) {
     const post = tool(POSTS_TOOLS, name)
-    assert.equal(post.inputSchema.properties?.image_asset_id, undefined)
-    assert.equal(post.inputSchema.properties?.gallery_media, undefined)
+    assert.equal(post.inputSchema.additionalProperties, false)
   }
 
   const publishPost = tool(POSTS_TOOLS, 'publish_post')
@@ -76,6 +76,15 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   for (const property of ['assetId', 'publicUrl', 'thumbnailUrl']) {
     assert.equal(upload.outputSchema?.properties?.[property], undefined, `upload output must not expose ${property}`)
   }
+  for (const name of ['save_generated_image', 'save_generated_image_file']) {
+    const saveGenerated = tool(ONBOARDING_TOOLS, name)
+    for (const property of ['asset_id', 'public_url', 'thumbnail_url']) {
+      assert.ok(saveGenerated.outputSchema?.properties?.[property], `missing ${name} output ${property}`)
+    }
+    for (const property of ['assetId', 'publicUrl', 'thumbnailUrl']) {
+      assert.equal(saveGenerated.outputSchema?.properties?.[property], undefined, `${name} must not expose ${property}`)
+    }
+  }
 
   const listMedia = tool(MEDIA_TOOLS, 'get_site_media_assets')
   assert.deepEqual(
@@ -94,19 +103,17 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.deepEqual(updateMedia.outputSchema?.properties?.updated, { type: 'boolean' })
   assert.deepEqual((updateMedia.inputSchema as { anyOf?: unknown[] }).anyOf, [
     { required: ['alt_text'] },
-    { required: ['location_id'] },
     { required: ['category'] },
   ])
   const chowbotUpdateMedia = MEDIA_CHOWBOT_TOOLS.find(candidate => candidate.name === 'update_media_asset')
   assert.ok(chowbotUpdateMedia)
   assert.deepEqual((chowbotUpdateMedia.input_schema as { anyOf?: unknown[] }).anyOf, [
     { required: ['alt_text'] },
-    { required: ['location_id'] },
     { required: ['category'] },
   ])
   assert.deepEqual(
     (updateMedia.inputSchema.properties?.category as { enum?: string[] }).enum,
-    ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'],
+    ['exterior', 'interior', 'food', 'menu', 'team', 'other'],
   )
 
   const importMenu = tool(MEDIA_TOOLS, 'import_menu_from_media')
@@ -133,35 +140,22 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.equal(MCP_PUBLIC_TOOLS.some(candidate => candidate.name === 'upload_user_photo'), false)
 
   const setMedia = tool(MEDIA_TOOLS, 'set_media')
-  assert.deepEqual(setMedia.inputSchema.required, ['target_type', 'asset_ids'])
+  assert.deepEqual(setMedia.inputSchema.required, ['placement', 'asset_ids'])
   assert.equal(setMedia.inputSchema.additionalProperties, false)
-  assert.equal(setMedia.inputSchema.properties?.target, undefined)
-  assert.ok(setMedia.inputSchema.properties?.target_type)
-  assert.equal(setMedia.inputSchema.oneOf?.length, 5)
-  const mediaBranches = setMedia.inputSchema.oneOf as Array<{
-    properties: { target_type: { const?: string, enum?: string[] } }
-    required?: string[]
-    not: { anyOf: Array<{ required: string[] }> }
-  }>
-  const siteBranch = mediaBranches.find(candidate => candidate.properties.target_type.enum?.includes('site_logo'))
-  assert.ok(siteBranch)
-  assert.equal(siteBranch.required, undefined)
-  assert.equal(siteBranch.not.anyOf.length, 4)
-  for (const [targetType, entityId] of [
-    ['location_hero', 'location_id'],
-    ['menu_item_media', 'menu_item_id'],
-    ['post_image', 'post_id'],
-    ['experience_media', 'experience_id'],
-  ] as const) {
-    const branch = mediaBranches.find(candidate =>
-      candidate.properties.target_type.const === targetType
-      || candidate.properties.target_type.enum?.includes(targetType),
-    )
-    assert.ok(branch, `missing schema branch for ${targetType}`)
-    assert.deepEqual(branch.required, [entityId])
-    assert.equal(branch.not.anyOf.some(candidate => candidate.required.includes(entityId)), false)
-    assert.equal(branch.not.anyOf.length, 3)
-  }
+  assert.deepEqual(setMedia.inputSchema.properties?.placement, {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      owner_type: {
+        type: 'string',
+        enum: [...EDITABLE_MEDIA_PLACEMENT_OWNERS],
+      },
+      owner_id: { type: 'string' },
+      slot: { type: 'string' },
+    },
+    required: ['owner_type', 'owner_id', 'slot'],
+  })
+  assert.deepEqual(setMedia.outputSchema?.properties?.placement, setMedia.inputSchema.properties?.placement)
 
   assert.match(upload.description, /only upload path/i)
   assert.match(upload.description, /native ChatGPT file argument/i)
@@ -224,47 +218,25 @@ test('Facebook publication is immediate and has no persisted-draft argument', as
   })
 })
 
-test('media placement contract does not reintroduce entity-specific assignment tools', () => {
-  const removedToolNames = [
-    'set_experience_media',
-    'set_experience_image',
-    'set_experience_video',
-    'reorder_experience_gallery',
-    'set_home_hero_image',
-    'set_home_hero_video',
-    'set_location_hero_image',
-    'set_location_hero_video',
-    'set_menu_item_media',
-    'set_post_image',
-    'set_blog_post_image',
-    'set_logo',
-    'clear_home_hero_image',
-    'clear_home_hero_video',
-    'clear_location_hero_image',
-    'clear_location_hero_video',
-  ]
-  const mcpNames = new Set(MCP_PUBLIC_TOOLS.map(tool => tool.name))
-  const chowbotNames = new Set(CHOWBOT_TOOLS.map(tool => tool.name))
-  assert.equal(mcpNames.has('set_media'), true, 'set_media must be exposed by MCP')
-  assert.equal(chowbotNames.has('set_media'), true, 'set_media must be exposed by ChowBot')
-  for (const name of removedToolNames) {
-    assert.equal(mcpNames.has(name), false, `${name} must not be exposed by MCP`)
-    assert.equal(chowbotNames.has(name), false, `${name} must not be exposed by ChowBot`)
-  }
+test('media assignment has one canonical entrypoint on both agent surfaces', () => {
+  assert.deepEqual(MCP_PUBLIC_TOOLS.filter(candidate => candidate.name === 'set_media').map(candidate => candidate.name), ['set_media'])
+  assert.deepEqual(CHOWBOT_TOOLS.filter(candidate => candidate.name === 'set_media').map(candidate => candidate.name), ['set_media'])
+  assert.deepEqual(MEDIA_TOOLS.filter(candidate => candidate.name.startsWith('set_')).map(candidate => candidate.name), ['set_media'])
 })
 
-test('generated menu image picker requires an exact menu item target', () => {
+test('generated image picker accepts only canonical assets and an optional placement', () => {
   const picker = tool(ONBOARDING_TOOLS, 'show_generated_images')
-  assert.match(String((picker as unknown as { description: string }).description), /one standalone food photo per item/i)
-  const branches = picker.inputSchema.oneOf as Array<{
-    properties?: { target?: { const?: string, enum?: string[] } }
+  const properties = picker.inputSchema.properties as Record<string, {
+    items?: { properties?: Record<string, unknown>, required?: string[], additionalProperties?: boolean }
+    properties?: Record<string, unknown>
     required?: string[]
-    not?: { anyOf?: Array<{ required: string[] }> }
+    additionalProperties?: boolean
   }>
-  const menuItemBranch = branches.find(branch => branch.properties?.target?.const === 'menu_item_media')
-  assert.ok(menuItemBranch)
-  assert.deepEqual(menuItemBranch.required, ['target', 'site_id', 'menu_item_id'])
-  assert.equal(menuItemBranch.not?.anyOf?.some(candidate => candidate.required.includes('menu_item_id')), false)
+  assert.deepEqual(properties.images.items?.required, ['asset_id', 'public_url'])
+  assert.deepEqual(Object.keys(properties.images.items?.properties ?? {}), ['asset_id', 'public_url'])
+  assert.equal(properties.images.items?.additionalProperties, false)
+  assert.deepEqual(properties.placement.required, ['owner_type', 'owner_id', 'slot'])
+  assert.equal(properties.placement.additionalProperties, false)
 })
 
 test('photo prompt uploads each confirmed attachment once before reporting placement', () => {

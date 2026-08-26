@@ -222,10 +222,11 @@ const { data: doc, pending: loading, error } = await useAsyncData(
         import('~/server/utils/api-response'),
         import('~/server/utils/platform-content'),
       ])
-      const db = cloudflareEnv(requestEvent).db
+      const env = cloudflareEnv(requestEvent)
+      const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      doc = await getPublishedPlatformDoc(db, category, effectiveSlug.value) as Doc | null
+      doc = await getPublishedPlatformDoc(db, category, effectiveSlug.value, env) as Doc | null
     } else {
       const endpoint = `/api/public/docs/${categoryParam.value}/${effectiveSlug.value}`
       const response = await publicApiRequest<{ doc: Doc }>(endpoint, {

@@ -3,6 +3,7 @@ import type { H3Event } from 'nitro';
 import {  getRequestHost } from 'nitro/h3';
 import { queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import { getContentBlocksForOwner } from './content-documents.ts'
+import { findAuthUsersByIds, type CloudflareEnv } from './auth.ts'
 import { blogCategoryToSlug, slugToBlogCategory } from '../../utils/blog-categories.ts'
 import { categoryToSlug, slugToCategory } from '../../utils/docs-categories.ts'
 
@@ -270,29 +271,37 @@ export async function listPublishedPlatformDocsForLlm(db: DbClient) {
   )
 }
 
-export async function listPublishedPlatformBlogPostsForLlm(db: DbClient) {
-  return await queryAll<PlatformLlmBlogSummary>(
+export async function listPublishedPlatformBlogPostsForLlm(db: DbClient, env: CloudflareEnv) {
+  const posts = await queryAll<PlatformLlmBlogSummary & { author_id: string | null }>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, u.name AS author_name
+      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, p.author_id
      FROM blog_posts p
-     LEFT JOIN "user" u ON u.id = p.author_id
      WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'
      ORDER BY p.category, p.published_at DESC`,
   )
+  const authors = await findAuthUsersByIds(env, posts.map(post => post.author_id))
+  return posts.map(({ author_id: authorId, ...post }) => ({
+    ...post,
+    author_name: (authorId ? authors.get(authorId)?.name : null) ?? null,
+  }))
 }
 
-export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: string) {
-  return await queryAll<TenantLlmBlogSummary>(
+export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: string, env: CloudflareEnv) {
+  const posts = await queryAll<TenantLlmBlogSummary & { author_id: string | null }>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, u.name AS author_name
+      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, p.author_id
      FROM blog_posts p
-     LEFT JOIN "user" u ON u.id = p.author_id
      WHERE p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
      ORDER BY p.published_at DESC, p.updated_at DESC`,
     [siteId],
   )
+  const authors = await findAuthUsersByIds(env, posts.map(post => post.author_id))
+  return posts.map(({ author_id: authorId, ...post }) => ({
+    ...post,
+    author_name: (authorId ? authors.get(authorId)?.name : null) ?? null,
+  }))
 }
 
 export async function getPublishedPlatformDocBySlug(db: DbClient, categorySlug: string, slug: string) {

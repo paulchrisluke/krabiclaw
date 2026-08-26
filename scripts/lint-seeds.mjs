@@ -27,7 +27,7 @@ const { values: args } = parseArgs({
 })
 
 const ROOT = process.cwd()
-const REQUIRED_FIELDS = ['vertical', 'content_source', 'media_source']
+const REQUIRED_FIELDS = ['vertical']
 const ALLOWED_GENERATED_SEED_SQL = new Set([])
 const CURATED_FIXTURE_FILES = [
   'seed-definitions/demo.ts',
@@ -124,11 +124,11 @@ function lintCuratedFixtureSource(source, filePath) {
       message: 'Curated fixtures may not use external_url media providers.',
     },
     {
-      regex: /(?:thumbnailUrl|reviewerPhotoUrl|content|logoUrl):\s*['"]\/(?:public|images|videos)\//g,
+      regex: /(?:thumbnailUrl|content|logoUrl):\s*['"]\/(?:public|images|videos)\//g,
       message: 'Curated fixtures may not point tenant media at repo-local /public, /images, or /videos paths.',
     },
     {
-      regex: /(?:thumbnailUrl|reviewerPhotoUrl|content|logoUrl):\s*['"]https?:\/\/(?!imagedelivery\.net\/|media\.krabiclaw\.com\/)/g,
+      regex: /(?:thumbnailUrl|content|logoUrl):\s*['"]https?:\/\/(?!imagedelivery\.net\/|media\.krabiclaw\.com\/)/g,
       message: 'Curated fixtures may not point tenant media at third-party hosted URLs.',
     },
   ]

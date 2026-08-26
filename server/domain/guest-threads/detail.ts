@@ -1,4 +1,4 @@
-import { queryAll, type DbClient } from '~/server/db'
+import type { DbClient } from '~/server/db'
 import { getAdapter } from './adapters/registry'
 import { listThreadEntries, parseEntryPayload } from './entries'
 import { listDeliveryFailures } from './deliveries'
@@ -6,15 +6,6 @@ import { getGuestThreadById } from './repository'
 import { getMemberCursor } from './read-state'
 import { CONVERSATION_STATE_LABELS } from './types'
 import type { GuestThreadDetailViewModel, GuestThreadEntryViewModel } from './types'
-
-async function buildActorLabels(db: DbClient, userIds: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(userIds)]
-  if (unique.length === 0) return new Map()
-  const rows = await queryAll<{ id: string; name: string }>(db, `
-    SELECT id, name FROM user WHERE id IN (${unique.map(() => '?').join(', ')})
-  `, unique)
-  return new Map((rows ?? []).map(row => [row.id, row.name]))
-}
 
 /** Builds the full canonical thread detail view model — the sole source for the detail API. */
 export async function getGuestThreadDetail(
@@ -36,14 +27,12 @@ export async function getGuestThreadDetail(
     getMemberCursor(db, threadId, memberId),
   ])
 
-  const actorLabels = await buildActorLabels(db, entryRows.map(e => e.actor_user_id).filter((v): v is string => Boolean(v)))
-
   const entries: GuestThreadEntryViewModel[] = entryRows.map(entry => ({
     id: entry.id,
     kind: entry.kind,
     actorKind: entry.actor_kind,
     actorUserId: entry.actor_user_id,
-    actorLabel: entry.actor_user_id ? (actorLabels.get(entry.actor_user_id) ?? null) : null,
+    actorLabel: null,
     channel: entry.channel,
     body: entry.body,
     eventName: entry.event_name,

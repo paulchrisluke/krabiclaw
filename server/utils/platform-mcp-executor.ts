@@ -799,7 +799,7 @@ export async function executePlatformMcpToolCall(
         upload.contentType,
       )
 
-      await ensurePlatformMediaScope(user.db)
+      await ensurePlatformMediaScope(user.env, user.db)
       const assetId = crypto.randomUUID()
       await createMediaAsset(user.db, {
         id: assetId,

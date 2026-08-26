@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro';
+import { getQuery } from 'nitro/h3';
 
 import type { H3Event } from 'nitro'
 
@@ -144,14 +145,28 @@ export interface ResolveOrganizationOptions {
   explicitOrganizationId?: string | null
   // The Better Auth session's session.activeOrganizationId, if the caller wants it
   // considered at all. Pass null/undefined to make this resolution strictly
-  // header/explicit-param-only (the required behavior for billing and any other
+  // query-param/explicit-param-only (the required behavior for billing and any other
   // URL-scoped route — a stale session-wide active org must never silently stand
   // in for the org actually named in the request).
   activeOrganizationId?: string | null
 }
 
+// The dashboard SPA's route (/dashboard/{orgSlug}/...) is the only source of
+// truth for which org/site a request is for. dashboardFetch (composables/dashboardFetch.ts)
+// sends that route context on every /api/dashboard/* request as explicit,
+// visible `org`/`site` query params rather than a bespoke request header.
+function dashboardOrgQueryParam(event: H3Event): string | null {
+  const value = getQuery(event).org
+  return typeof value === 'string' && value ? value : null
+}
+
+function dashboardSiteQueryParam(event: H3Event): string | null {
+  const value = getQuery(event).site
+  return typeof value === 'string' && value ? value : null
+}
+
 // The one place "which org is this request for" gets decided. Both explicit params
-// and the x-dashboard-org-slug header are membership-checked before being trusted;
+// and the `org` query param are membership-checked before being trusted;
 // if both are present and disagree, that's a client bug (stale cached org id vs.
 // current URL) and must fail loudly rather than silently pick one. activeOrganizationId
 // is the last resort and only consulted when the caller explicitly passes it in —
@@ -163,7 +178,7 @@ export async function resolveRequestedOrganization(
   userId: string,
   options: ResolveOrganizationOptions = {}
 ): Promise<DashboardOrganizationRow | null> {
-  const organizationSlug = options.organizationSlug ?? (event.req.headers.get('x-dashboard-org-slug'))
+  const organizationSlug = options.organizationSlug ?? dashboardOrgQueryParam(event)
   const explicitOrganizationId = options.explicitOrganizationId ?? null
   const env = cloudflareEnv(event)
 
@@ -255,7 +270,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // caller has declared it has no URL-scoped org context (requireOrganization: false —
   // the dashboard boot-discovery endpoint and the notifications badge, both of which
   // run outside any /dashboard/{orgSlug}/... route). Every other caller must resolve
-  // strictly from x-dashboard-org-slug; a missing header there is a real error, not
+  // strictly from the `org` query param; a missing one there is a real error, not
   // a cue to guess from a session field that can be stale relative to the URL.
   const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string | null }
   const activeOrganizationId = options.requireOrganization === false && typeof sessionRecord.activeOrganizationId === 'string'
@@ -278,10 +293,10 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         site: null,
       }
     }
-    const hasHeader = Boolean(options.organizationSlug ?? (event.req.headers.get('x-dashboard-org-slug')))
+    const hasQueryParam = Boolean(options.organizationSlug ?? dashboardOrgQueryParam(event))
     throw new HTTPError({
-      statusCode: hasHeader ? 404 : 400,
-      message: hasHeader
+      statusCode: hasQueryParam ? 404 : 400,
+      message: hasQueryParam
         ? 'Organization not found'
         : 'Organization context is required. Use /dashboard/{orgSlug} routes.',
     })
@@ -289,16 +304,16 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   assertDashboardPathPermission(organization.role, options.pathname ?? event.path)
 
   // The organization and active site are resolved explicitly from the route segments,
-  // sent on every /api/dashboard/* request via dashboard headers (see
-  // plugins/dashboard-site-header.client.ts). All dashboard routes must include the site
+  // sent on every /api/dashboard/* request as `org`/`site` query params (see
+  // composables/dashboardFetch.ts). All dashboard routes must include the site
   // explicitly in the URL path for multi-site support. Callers that pass
   // `requireSite: false` (onboarding, org-level routes, and this function's own
   // discovery endpoint /api/dashboard/context) are explicitly designed to work
-  // before a site is known/selected, so a missing header there means "no site
+  // before a site is known/selected, so a missing query param there means "no site
   // selected yet" rather than a client error — only callers that need a site
   // get the hard 400.
   const siteId = options.siteId ?? null
-  const siteSlug = options.siteSlug ?? (event.req.headers.get('x-dashboard-site-slug'))
+  const siteSlug = options.siteSlug ?? dashboardSiteQueryParam(event)
 
   if (!siteId && !siteSlug && options.requireSite !== false) {
     throw new HTTPError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })

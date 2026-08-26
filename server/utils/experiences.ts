@@ -7,6 +7,7 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import {
+  buildDeleteOwnerPlacementsQuery,
   buildReplaceMediaPlacementQueries,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
@@ -624,8 +625,11 @@ export async function deleteExperience(
     where += ` AND location_id = ?`
     params.push(opts.locationId)
   }
-  const result = await execute(db, `DELETE FROM experiences WHERE ${where}`, params)
-  return Boolean(result.meta.changes)
+  const [, deleteResult] = await executeBatch(db, [
+    buildDeleteOwnerPlacementsQuery({ ownerType: 'experience', ownerId: id }),
+    { query: `DELETE FROM experiences WHERE ${where}`, params },
+  ])
+  return Boolean(deleteResult?.meta.changes)
 }
 
 // ── Bookings ─────────────────────────────────────────────────────────────────
