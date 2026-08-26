@@ -12,12 +12,11 @@ import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 import {
-  buildReplaceMenuItemMediaQueries,
-  hydrateMediaAssetsForMenuItems,
+  buildReplaceMediaPlacementQueries,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
-  type ResolvedMediaAsset,
 } from "~/server/utils/media-asset-manager";
+import { getMediaPlacements } from '~/server/utils/media-placement'
 
 const MAX_SUFFIX_ATTEMPTS = 50;
 
@@ -115,12 +114,27 @@ export function parseStringArray(value: unknown): string[] {
     });
   if (value == null || value === '') return []
   if (typeof value !== "string") throw new Error('Expected a JSON string array')
-  const parsed = JSON.parse(value)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new Error('Expected a JSON string array')
+  }
   if (!Array.isArray(parsed)) throw new Error('Expected a JSON string array')
   return parsed.map((item, index) => {
     if (typeof item !== "string") throw new Error(`String array item ${index} is invalid`)
     return item
   })
+}
+
+function assertMenuItemStringArrays(input: Record<string, unknown>): void {
+  for (const field of ['allergens', 'ingredients', 'dietary_notes'] as const) {
+    const value = input[field]
+    if (value === undefined || value === null) continue
+    if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+      throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an array of strings` })
+    }
+  }
 }
 
 export function normalizeSectionOrder(sections: unknown): string[] {
@@ -167,16 +181,17 @@ async function attachMenuItemMedia<T extends MenuItem>(
   siteId: string,
   items: T[],
 ): Promise<T[]> {
-  const mediaByItem = await hydrateMediaAssetsForMenuItems(db, siteId, items.map((item) => item.id));
+  const mediaByItem = await getMediaPlacements(db, {
+    siteId,
+    ownerType: 'menu_item',
+    ownerIds: items.map(item => item.id),
+    slot: 'gallery',
+  });
   return items.map((item) => {
     const media = mediaByItem.get(item.id) ?? [];
     return {
       ...item,
       media,
-      image_asset_id: media[0]?.id ?? null,
-      public_url: media[0]?.public_url ?? null,
-      thumbnail_url: media[0]?.thumbnail_url ?? null,
-      kind: media[0]?.kind ?? null,
     };
   });
 }
@@ -196,40 +211,6 @@ async function validateMenuItemMediaRefs(
     allowedKinds: ['image', 'video'],
     fieldName: 'media',
   });
-}
-
-async function replaceMenuItemMedia(
-  db: DbClient,
-  input: {
-    organizationId: string
-    siteId: string
-    menuItemId: string
-    media: ResolvedMediaAsset[]
-    now?: string
-  },
-) {
-  await executeBatch(db, buildReplaceMenuItemMediaQueries({
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-    menuItemId: input.menuItemId,
-    media: input.media,
-    now: input.now,
-  }));
-}
-
-async function replaceMenuItemMediaFromRefs(
-  db: DbClient,
-  input: {
-    organizationId: string
-    siteId: string
-    menuItemId: string
-    refs: MediaAssetRefInput[]
-    now?: string
-  },
-) {
-  const media = await validateMenuItemMediaRefs(db, input);
-  await replaceMenuItemMedia(db, { ...input, media });
-  return media;
 }
 
 function menuItemMediaRefsFromInput(input: { media?: MediaAssetRefInput[] | null }) {
@@ -442,7 +423,7 @@ export async function getMenuWithItems(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -480,7 +461,7 @@ async function loadPublishedMenuById(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -562,7 +543,7 @@ export async function getPublicMenuItem(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -612,7 +593,7 @@ export async function createMenu(
     ],
   );
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to create menu");
   }
 
@@ -692,7 +673,7 @@ export async function updateMenu(
     params,
   );
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to update menu");
   }
 
@@ -752,6 +733,7 @@ export async function createMenuItem(
   );
   if (!menuOwner) throw new HTTPError({ statusCode: 404, statusMessage: "Menu not found" });
   assertValidSaleWindow(item.sale_starts_at, item.sale_ends_at);
+  assertMenuItemStringArrays(item as unknown as Record<string, unknown>);
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -765,14 +747,11 @@ export async function createMenuItem(
       })
     : null;
 
-  const result = await execute(
-    db,
-    `
-    INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, image_asset_id, available, featured, featured_sort_order, sort_order,
+  const insertQuery = {
+    query: `INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, available, featured, featured_sort_order, sort_order,
       allergens, ingredients, dietary_notes, preparation, serving_note, seo_title, seo_description, canonical_url, robots, created_at, updated_at, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-    [
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
       id,
       menuId,
       item.section,
@@ -783,7 +762,6 @@ export async function createMenuItem(
       normalizePriceAmount(item.compare_at_price_amount),
       item.sale_starts_at || null,
       item.sale_ends_at || null,
-      null,
       item.available !== undefined ? item.available : true,
       item.featured !== undefined ? item.featured : false,
       item.featured_sort_order || 0,
@@ -800,24 +778,24 @@ export async function createMenuItem(
       now,
       now,
       createdBy,
-    ],
-  );
+    ] as SqlBindValue[],
+  };
+  const [result] = await executeBatch(db, [
+    insertQuery,
+    ...(media ? buildReplaceMediaPlacementQueries({
+      organizationId,
+      siteId,
+      placement: { owner_type: 'menu_item', owner_id: id, slot: 'gallery' },
+      media,
+      now,
+    }) : []),
+  ]);
 
   // Rely on DB unique index (menu_id, slug) for concurrent writes.
   // Callers can safely retry create on unique-constraint failures with backoff.
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to create menu item");
-  }
-
-  if (media) {
-    await replaceMenuItemMedia(db, {
-      organizationId,
-      siteId,
-      menuItemId: id,
-      media,
-      now,
-    });
   }
 
   const createdItem = await queryFirst<Record<string, unknown>>(
@@ -825,7 +803,7 @@ export async function createMenuItem(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
@@ -875,6 +853,7 @@ export async function updateMenuItem(
 ): Promise<MenuItem> {
   const now = new Date().toISOString();
   assertValidSaleWindow(updates.sale_starts_at, updates.sale_ends_at);
+  assertMenuItemStringArrays(updates as unknown as Record<string, unknown>);
 
   const existing = await queryFirst<{ menu_id: string; section: string | null }>(
     db,
@@ -893,6 +872,9 @@ export async function updateMenuItem(
   }
 
   const mediaRefs = menuItemMediaRefsFromInput(updates);
+  const media = mediaRefs
+    ? await validateMenuItemMediaRefs(db, { organizationId, siteId, refs: mediaRefs })
+    : null;
 
   // Build dynamic update query
   const setParts: string[] = [];
@@ -1007,31 +989,28 @@ export async function updateMenuItem(
 
   params.push(menuItemId);
 
-  const result = await execute(
-    db,
-    `
-    UPDATE menu_items
-    SET ${setParts.join(", ")}
-    WHERE id = ?
-  `,
+  const updateQuery = {
+    query: `UPDATE menu_items SET ${setParts.join(", ")} WHERE id = ?`,
     params,
-  );
+  };
+  const [result] = media
+    ? await executeBatch(db, [
+        updateQuery,
+        ...buildReplaceMediaPlacementQueries({
+          organizationId,
+          siteId,
+          placement: { owner_type: 'menu_item', owner_id: menuItemId, slot: 'gallery' },
+          media,
+          now,
+        }),
+      ])
+    : [await execute(db, updateQuery.query, updateQuery.params)];
 
   // Rely on DB unique index (menu_id, slug) for concurrent writes.
   // Callers can safely retry updates on unique-constraint failures with backoff.
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to update menu item");
-  }
-
-  if (mediaRefs) {
-    await replaceMenuItemMediaFromRefs(db, {
-      organizationId,
-      siteId,
-      menuItemId,
-      refs: mediaRefs,
-      now,
-    });
   }
 
   const updatedItem = await queryFirst<Record<string, unknown>>(
@@ -1039,7 +1018,7 @@ export async function updateMenuItem(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by

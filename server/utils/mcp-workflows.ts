@@ -1,7 +1,5 @@
 import { HTTPError } from 'nitro';
 
-import { contentRegistry } from "~/config/content-registry";
-import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import {
   getOrgWhatsAppPhone,
   setOrgWhatsAppPhone,
@@ -10,21 +8,15 @@ import type { CloudflareEnv } from "~/server/utils/auth";
 import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
-import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { reorderQa, updateQa } from "~/server/utils/location-qa";
+import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 
 export async function listSitesForUser(
   db: D1Database,
+  env: CloudflareEnv,
   userId: string,
 ) {
-  const orgRows = await queryAll<{ id: string }>(db, `
-    SELECT o.id
-    FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    WHERE m.userId = ?
-  `, [userId]);
-
-  const orgIds = orgRows.map((row) => row.id).filter(Boolean);
+  const orgIds = (await listUserOrganizations(env, userId)).map(organization => organization.id)
   if (!orgIds.length) return [];
 
   const placeholders = orgIds.map(() => "?").join(", ");
@@ -39,6 +31,7 @@ export async function listSitesForUser(
 
 export async function getSiteForMcp(
   db: D1Database,
+  env: CloudflareEnv,
   siteId: string,
   userId: string,
 ) {
@@ -46,38 +39,16 @@ export async function getSiteForMcp(
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
              s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
-      JOIN member m ON s.organization_id = m.organizationId
-      WHERE s.id = ? AND m.userId = ?
+      WHERE s.id = ?
       LIMIT 1
-    `, [siteId, userId]);
+    `, [siteId]);
 
-  if (!site) throw new Error("Site not found or access denied");
+  const organizationId = typeof site?.organization_id === 'string' ? site.organization_id : ''
+  const membership = organizationId
+    ? await resolveOrganizationMembership(env, { organizationId, userId })
+    : null
+  if (!site || !membership) throw new Error("Site not found or access denied");
   return site;
-}
-
-async function assertSiteContentPage(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  page: string,
-) {
-  const site = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
-    SELECT vertical, theme_id, feature_overrides FROM sites
-    WHERE id = ? AND organization_id = ?
-    LIMIT 1
-  `, [siteId, organizationId]);
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: `Site "${siteId}" was not found.` });
-  const { vertical, template, capabilities: capability } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-    siteEnabledFeatures: site.feature_overrides,
-  });
-  const pageCapability = capability.pages.find(candidate => candidate.id === page);
-  if (!pageCapability) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });
-  }
-  if (pageCapability.editor !== "tenant_pages") {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is owned by the ${pageCapability.editor} editor.` });
-  }
-  return pageCapability;
 }
 
 export async function getLocationForMcp(
@@ -87,29 +58,28 @@ export async function getLocationForMcp(
   locationIdOrSlug: string,
 ) {
   const byId = await queryFirst<Record<string, unknown>>(db, `
-    SELECT bl.*, img.public_url AS hero_public_url, img.thumbnail_url AS hero_thumbnail_url, img.kind AS hero_kind
+    SELECT bl.*
     FROM business_locations bl
-    LEFT JOIN media_assets img ON bl.hero_media_asset_id = img.id AND img.status = 'active'
-      AND img.organization_id = bl.organization_id AND img.site_id = bl.site_id
     WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
     LIMIT 1
   `, [locationIdOrSlug, organizationId, siteId]);
   const row = byId ?? await queryFirst<Record<string, unknown>>(db, `
-    SELECT bl.*, img.public_url AS hero_public_url, img.thumbnail_url AS hero_thumbnail_url, img.kind AS hero_kind
+    SELECT bl.*
     FROM business_locations bl
-    LEFT JOIN media_assets img ON bl.hero_media_asset_id = img.id AND img.status = 'active'
-      AND img.organization_id = bl.organization_id AND img.site_id = bl.site_id
     WHERE bl.slug = ? AND bl.organization_id = ? AND bl.site_id = ?
     LIMIT 1
   `, [locationIdOrSlug, organizationId, siteId]);
 
   if (!row) throw new Error("Location not found");
+  const { getMediaPlacements } = await import('~/server/utils/media-placement')
+  const placements = await getMediaPlacements(db, { siteId, ownerType: 'business_location', ownerIds: [String(row.id)] })
   return {
     ...row,
     address: safeJson(row.address),
     opening_hours: safeJson(row.opening_hours),
     categories: safeJson(row.categories),
     is_primary: Boolean(row.is_primary),
+    media: (placements.get(String(row.id)) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
   };
 }
 
@@ -367,17 +337,15 @@ export async function listLocationReviews(
   locationId: string,
 ) {
   const rows = await queryAll<Record<string, unknown>>(db, `
-    SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply,
-           owner_reply_at, photo_urls, source, status, created_at, updated_at
-    FROM reviews
-    WHERE site_id = ? AND location_id = ?
-    ORDER BY created_at DESC
+    SELECT r.id, r.author_name, r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at,
+           r.source, r.status, r.created_at, r.updated_at
+    FROM reviews r
+    WHERE r.site_id = ? AND r.location_id = ?
+    ORDER BY r.created_at DESC
   `, [siteId, locationId]);
 
-  return rows.map((review) => ({
-    ...review,
-    photo_urls: safeJsonArray(review.photo_urls),
-  }));
+  const { attachReviewMedia } = await import('~/server/utils/site-reviews')
+  return await attachReviewMedia(db, siteId, rows)
 }
 
 export async function listWorkRequestsForOrganization(
@@ -396,214 +364,8 @@ export async function listWorkRequestsForOrganization(
   `, [organizationId]);
 }
 
-async function resolveTenantPagePath(db: DbClient, siteId: string, page: string, locationId?: string) {
-  if (page === 'location') {
-    if (!locationId) throw new HTTPError({ statusCode: 400, statusMessage: 'Location pages require an explicit location_id.' })
-    const location = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [locationId, siteId])
-    if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found.' })
-    return `/locations/${location.slug}`
-  }
-  const path = contentRegistry[page]?.path
-  if (!path) throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is not registered as a tenant page.` })
-  return path
-}
-
 export function buildTenantPageReplacementConfirmationToken(expectedDocumentUpdatedAt: string, removedBlockIds: readonly string[]) {
   return `tenant-page-replacement:${expectedDocumentUpdatedAt}:${[...removedBlockIds].sort().join(',')}`
-}
-
-export async function updatePageContent(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  input: {
-    page: string;
-    changes: Record<string, unknown>;
-    location_id?: string | null;
-  },
-  actorId?: string | null,
-) {
-  const locationId = input.location_id;
-  const pageDefinition = await assertSiteContentPage(db, organizationId, siteId, input.page);
-  if (pageDefinition.scope === "location" && !locationId) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${input.page}" requires an explicit location_id.` });
-  }
-  if (pageDefinition.scope === "site" && locationId) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${input.page}" is site-scoped and does not accept location_id.` });
-  }
-  if (locationId) {
-    const location = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
-      LIMIT 1
-    `, [locationId, organizationId, siteId]);
-    if (!location) throw new HTTPError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
-  }
-
-  if (pageDefinition.editor !== "tenant_pages") throw new HTTPError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager and complete block snapshots.' });
-  if (!Array.isArray(input.changes.blocks)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Tenant page updates must provide the canonical blocks array.' });
-  }
-  const { getTenantPageForEditorByPath, updateTenantPage } = await import('~/server/utils/tenant-pages');
-  const canonicalPath = await resolveTenantPagePath(db, siteId, input.page, locationId ?? undefined);
-  const page = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
-  const incomingBlockIds = new Set(
-    (input.changes.blocks as unknown[])
-      .map(block => block && typeof block === 'object' && 'id' in block && typeof (block as { id?: unknown }).id === 'string'
-        ? (block as { id: string }).id
-        : null)
-      .filter((id): id is string => Boolean(id)),
-  )
-  const removedBlockIds = page.blocks
-    .map(block => block.id)
-    .filter(blockId => !incomingBlockIds.has(blockId))
-  if (removedBlockIds.length) {
-    const expectedDocumentUpdatedAt = typeof input.changes.expected_document_updated_at === 'string'
-      ? input.changes.expected_document_updated_at
-      : typeof input.changes.expectedDocumentUpdatedAt === 'string'
-        ? input.changes.expectedDocumentUpdatedAt
-        : ''
-    const requestedRemovedIds = Array.isArray(input.changes.removed_block_ids)
-      ? input.changes.removed_block_ids.filter((id): id is string => typeof id === 'string').sort()
-      : []
-    const confirmationToken = typeof input.changes.confirmation_token === 'string'
-      ? input.changes.confirmation_token
-      : ''
-    const expectedToken = buildTenantPageReplacementConfirmationToken(page.document.updated_at, removedBlockIds)
-    if (expectedDocumentUpdatedAt !== page.document.updated_at || requestedRemovedIds.join(',') !== [...removedBlockIds].sort().join(',') || confirmationToken !== expectedToken) {
-      throw new HTTPError({
-        statusCode: 409,
-        statusMessage: `Complete block replacement would remove ${removedBlockIds.length} existing block(s). Confirm with expected_document_updated_at="${page.document.updated_at}", removed_block_ids=${JSON.stringify([...removedBlockIds].sort())}, confirmation_token="${expectedToken}".`,
-      })
-    }
-  }
-  const expectedDocumentUpdatedAt = typeof input.changes.expected_document_updated_at === 'string'
-    ? input.changes.expected_document_updated_at
-    : typeof input.changes.expectedDocumentUpdatedAt === 'string'
-      ? input.changes.expectedDocumentUpdatedAt
-      : page.document.updated_at
-  const result = await updateTenantPage(db, page.id, {
-    userId: actorId ?? null,
-    scope: { siteId, organizationId },
-    data: {
-      path: typeof input.changes.path === 'string' ? input.changes.path : page.path,
-      title: typeof input.changes.title === 'string' ? input.changes.title : page.title,
-      summary: typeof input.changes.summary === 'string' ? input.changes.summary : page.summary,
-      seoTitle: typeof input.changes.seoTitle === 'string' ? input.changes.seoTitle : page.seo_title,
-      seoDescription: typeof input.changes.seoDescription === 'string' ? input.changes.seoDescription : page.seo_description,
-      canonicalUrl: typeof input.changes.canonicalUrl === 'string' ? input.changes.canonicalUrl : page.canonical_url,
-      robots: typeof input.changes.robots === 'string' ? input.changes.robots : page.robots,
-      pageType: page.page_type,
-      recipe: page.recipe,
-      sortOrder: page.sort_order,
-      blocks: input.changes.blocks,
-      expectedDocumentUpdatedAt,
-    },
-  });
-  await fireSiteEventSafe({
-    db,
-    organizationId,
-    siteId,
-    locationId: locationId ?? null,
-    actorId,
-    eventType: 'content.updated',
-    entityType: 'tenant_page',
-    entityId: page.id,
-    metadata: { page: input.page, editor: 'tenant_pages', block_count: result.page.blocks.length },
-  });
-  return {
-    success: true,
-    page: input.page,
-    location_id: locationId ?? null,
-    changes_count: input.changes.blocks.length,
-    public_path: result.page.path,
-  };
-}
-
-export async function getEditorContent(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  page: string,
-  locationId?: string,
-) {
-  const pageDefinition = await assertSiteContentPage(db, organizationId, siteId, page);
-  if (pageDefinition.scope === "location" && !locationId) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" requires an explicit location_id.` });
-  }
-  if (pageDefinition.scope === "site" && locationId) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is site-scoped and does not accept location_id.` });
-  }
-  if (locationId) {
-    const location = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
-      LIMIT 1
-    `, [locationId, organizationId, siteId]);
-    if (!location) throw new HTTPError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
-  }
-
-  if (pageDefinition.editor !== "tenant_pages") throw new HTTPError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager.' });
-  const { getTenantPageForEditorByPath } = await import('~/server/utils/tenant-pages');
-  const canonicalPath = await resolveTenantPagePath(db, siteId, page, locationId);
-  const canonicalPage = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
-  return {
-    success: true,
-    page: canonicalPage,
-    blocks: canonicalPage.blocks,
-    siteId,
-    locationId: locationId ?? null,
-    public_path: canonicalPage.path,
-    schema: { page, fields: ['blocks'], structured: ['blocks'] },
-    replacement_confirmation: {
-      expected_document_updated_at: canonicalPage.document.updated_at,
-      current_block_ids: canonicalPage.blocks.map(block => block.id),
-      confirmation_format: 'tenant-page-replacement:<expected_document_updated_at>:<sorted_removed_block_ids_comma_separated>',
-    },
-  };
-}
-
-export async function updateHomeHero(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  input: {
-    title?: string | null;
-    subtitle?: string | null;
-    location_id?: string | null;
-  },
-) {
-  if (input.location_id) throw new HTTPError({ statusCode: 400, statusMessage: 'The canonical home page is site-scoped; update a location page for location-specific content.' })
-  const { getTenantPageForEditorByPath, updateTenantPage } = await import('~/server/utils/tenant-pages')
-  const page = await getTenantPageForEditorByPath(db, siteId, '/')
-  const blocks = page.blocks.map(block => block.type === 'hero'
-    ? { ...block, data: { ...block.data, ...(input.title !== undefined ? { title: input.title } : {}), ...(input.subtitle !== undefined ? { subtitle: input.subtitle } : {}) } }
-    : block)
-  const result = await updateTenantPage(db, page.id, {
-    userId: null,
-    scope: { siteId, organizationId },
-    data: {
-      path: page.path,
-      title: page.title,
-      summary: page.summary,
-      seoTitle: page.seo_title,
-      seoDescription: page.seo_description,
-      canonicalUrl: page.canonical_url,
-      robots: page.robots,
-      pageType: page.page_type,
-      recipe: page.recipe,
-      sortOrder: page.sort_order,
-      blocks,
-      expectedDocumentUpdatedAt: page.document.updated_at,
-    },
-  })
-
-  return {
-    success: true,
-    page: "home",
-    changes_count: 1,
-    public_path: result.page.path,
-  };
 }
 
 export async function hydrateSeededLocationForOnboarding(
@@ -662,11 +424,4 @@ export async function deleteContentField(
 function safeJson(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
   return JSON.parse(value)
-}
-
-function safeJsonArray(value: unknown) {
-  const parsed = safeJson(value);
-  if (parsed == null) return []
-  if (!Array.isArray(parsed)) throw new Error('Stored JSON array is invalid')
-  return parsed
 }

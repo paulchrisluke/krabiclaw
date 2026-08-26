@@ -2,6 +2,7 @@ import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
+import { getMediaPlacements } from '~/server/utils/media-placement'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
@@ -50,9 +51,6 @@ export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown):
 type OfferingRow = ApiRecord & {
   features: string | null
   faqs: string | null
-  media_asset_ids: string | null
-  thumbnail_url: string | null
-  hero_image_url: string | null
   location_address: string | null
   location_city: string | null
 }
@@ -70,20 +68,15 @@ export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise
     : null
 }
 
-async function loadMediaById(db: DbClient, siteId: string, mediaIds: string[]) {
-  const uniqueIds = Array.from(new Set(mediaIds)).filter(Boolean)
-  const mediaRows = uniqueIds.length
-    ? await queryAll<ApiRecord>(db, `
-        SELECT id, public_url, kind, alt_text, width, height
-          FROM media_assets
-         WHERE site_id = ? AND id IN (${uniqueIds.map(() => '?').join(',')}) AND status = 'active'
-      `, [siteId, ...uniqueIds])
-    : []
-  return new Map(mediaRows.map(row => [String(row.id), row]))
+async function getOfferingMedia(db: DbClient, siteId: string, offeringIds: string[]) {
+  return await getMediaPlacements(db, {
+    siteId,
+    ownerType: 'offering',
+    ownerIds: offeringIds,
+  })
 }
 
-function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): PublicOffering {
-  const ids = row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : []
+function mapOfferingRow(row: OfferingRow, media: ApiRecord[]): PublicOffering {
   const rawFeatures = row.features ? JSON.parse(row.features) as ApiRecord[] : []
   const features: PublicOfferingFeature[] = rawFeatures.map((feature, index) => {
     if (!feature || typeof feature !== 'object' || Array.isArray(feature)) {
@@ -93,9 +86,7 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     return {
       title: requiredText(record.title ?? record.name, `offering ${row.id}.features[${index}].title`),
       description: requiredText(record.description ?? record.desc, `offering ${row.id}.features[${index}].description`),
-      image_url: typeof record.image_url === 'string' ? record.image_url : null,
       icon: typeof record.icon === 'string' ? record.icon : null,
-      icon_url: typeof record.icon_url === 'string' ? record.icon_url : null,
       sort_order: Number(record.sort_order ?? index),
     }
   }).sort((left, right) => left.sort_order - right.sort_order)
@@ -111,15 +102,15 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     faqs: row.faqs ? JSON.parse(row.faqs) as { question: string; answer: string }[] : [],
     cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
     cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
-    thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
-    hero_image_url: typeof row.hero_image_url === 'string' ? row.hero_image_url : null,
-    media: ids.map(id => mediaById.get(id)).filter(Boolean).map(asset => ({
-      id: String(asset!.id),
-      url: String(asset!.public_url),
-      kind: requiredText(asset!.kind, `media asset ${asset!.id}.kind`),
-      alt_text: typeof asset!.alt_text === 'string' ? String(asset!.alt_text) : null,
-      width: Number.isFinite(Number(asset!.width)) ? Number(asset!.width) : null,
-      height: Number.isFinite(Number(asset!.height)) ? Number(asset!.height) : null,
+    media: media.filter(asset => typeof asset.public_url === 'string' && asset.public_url).map(asset => ({
+      asset_id: String(asset.id),
+      slot: String(asset.slot),
+      public_url: String(asset.public_url),
+      thumbnail_url: typeof asset.thumbnail_url === 'string' ? asset.thumbnail_url : null,
+      kind: requiredText(asset.kind, `media asset ${asset.id}.kind`),
+      alt_text: typeof asset.alt_text === 'string' ? String(asset.alt_text) : null,
+      width: Number.isFinite(Number(asset.width)) ? Number(asset.width) : null,
+      height: Number.isFinite(Number(asset.height)) ? Number(asset.height) : null,
     })),
     schema_type: typeof row.schema_type === 'string' ? row.schema_type : null,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
@@ -139,22 +130,16 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
 
 export async function listPublicOfferings(db: DbClient, siteId: string): Promise<PublicOffering[]> {
   const rows = await queryAll<OfferingRow>(db, `
-    SELECT o.*,
-           thumb.public_url AS thumbnail_url,
-           hero.public_url AS hero_image_url,
-           loc.address AS location_address,
+    SELECT o.*, loc.address AS location_address,
            loc.city AS location_city
       FROM offerings o
-      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
-      LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
      WHERE o.site_id = ?
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
 
-  const mediaIds = rows.flatMap(row => row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : [])
-  const mediaById = await loadMediaById(db, siteId, mediaIds)
-  return rows.map(row => mapOfferingRow(row, mediaById))
+  const media = await getOfferingMedia(db, siteId, rows.map(row => String(row.id)))
+  return rows.map(row => mapOfferingRow(row, media.get(String(row.id)) ?? []))
 }
 
 export async function listPublicOfferingLinks(db: DbClient, siteId: string): Promise<PublicOfferingLink[]> {
@@ -185,7 +170,14 @@ function mapPublicOfferingSummaries(rows: PublicTenantPageOfferingRow[]): Public
     label: typeof row.label === 'string' ? row.label : null,
     summary: typeof row.summary === 'string' ? row.summary : null,
     short_description: typeof row.short_description === 'string' ? row.short_description : null,
-    thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
+    media: row.media.map(item => ({
+      asset_id: item.asset_id,
+      slot: item.slot,
+      public_url: item.public_url,
+      thumbnail_url: item.thumbnail_url,
+      kind: item.kind,
+      alt_text: item.alt_text,
+    })),
     canonical_path: requiredText(row.canonical_path, `offering ${row.id}.canonical_path`),
     sort_order: Number(row.sort_order ?? 0),
     featured: asBoolean(row.featured),
@@ -195,11 +187,10 @@ function mapPublicOfferingSummaries(rows: PublicTenantPageOfferingRow[]): Public
 export async function listPublicBlogSummaries(db: DbClient, siteId: string, limit = 50): Promise<PublicBlogSummary[]> {
   const rows = await queryAll<ApiRecord>(db, `
     SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.published_at, p.canonical_url, p.featured_order,
-           u.name AS author_name, u.image AS author_image,
-           media.public_url, media.thumbnail_url, media.kind, media.width, media.height
+           featured.asset_id AS asset_id, media.public_url, media.thumbnail_url, media.kind, media.width, media.height
       FROM blog_posts p
-      LEFT JOIN user u ON u.id = p.author_id
-      LEFT JOIN media_assets media ON media.id = p.featured_image_asset_id AND media.status = 'active'
+      LEFT JOIN media_placements featured ON featured.owner_type = 'blog_post' AND featured.owner_id = p.id AND featured.slot = 'featured' AND featured.status = 'active'
+      LEFT JOIN media_assets media ON media.id = featured.asset_id AND media.status = 'active'
      WHERE p.site_id = ? AND p.status = 'published' AND p.visibility = 'public'
      ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
      LIMIT ?
@@ -212,39 +203,34 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     category: typeof row.category === 'string' ? row.category : null,
     tags: row.tags_json ? JSON.parse(row.tags_json) as string[] : [],
     featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
-    author_name: typeof row.author_name === 'string' ? row.author_name : null,
-    author_image: typeof row.author_image === 'string' ? row.author_image : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
     canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
-    featured_image: typeof row.public_url === 'string' && row.public_url
-      ? {
+    media: typeof row.public_url === 'string' && row.public_url
+      ? [{
+          asset_id: String(row.asset_id),
+          slot: 'featured',
           public_url: row.public_url,
           thumbnail_url: typeof row.thumbnail_url === 'string' ? row.thumbnail_url : null,
           kind: typeof row.kind === 'string' ? row.kind : null,
           width: Number.isFinite(Number(row.width)) ? Number(row.width) : null,
           height: Number.isFinite(Number(row.height)) ? Number(row.height) : null,
-        }
-      : null,
+        }]
+      : [],
   }))
 }
 
 export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug: string): Promise<PublicOffering | null> {
   const row = await queryFirst<OfferingRow>(db, `
-    SELECT o.*,
-           thumb.public_url AS thumbnail_url,
-           hero.public_url AS hero_image_url,
-           loc.address AS location_address,
+    SELECT o.*, loc.address AS location_address,
            loc.city AS location_city
       FROM offerings o
-      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
-      LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
      WHERE o.site_id = ? AND o.slug = ?
      LIMIT 1
   `, [siteId, slug])
   if (!row) return null
-  const mediaById = await loadMediaById(db, siteId, row.media_asset_ids ? JSON.parse(row.media_asset_ids) as string[] : [])
-  return mapOfferingRow(row, mediaById)
+  const media = await getOfferingMedia(db, siteId, [String(row.id)])
+  return mapOfferingRow(row, media.get(String(row.id)) ?? [])
 }
 
 export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
@@ -338,15 +324,15 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
          LIMIT 1
       `, [siteId])
     : null
-  const documentAssetIds = row.document_asset_ids ? JSON.parse(row.document_asset_ids) as string[] : []
-  const documentRows = documentAssetIds.length
-    ? await queryAll<ApiRecord>(db, `
-        SELECT id, public_url, alt_text, file_name
-          FROM media_assets
-         WHERE site_id = ? AND id IN (${documentAssetIds.map(() => '?').join(',')}) AND status = 'active'
-         ORDER BY file_name ASC, id ASC
-      `, [siteId, ...documentAssetIds])
-    : []
+  const mediaRows = await queryAll<ApiRecord>(db, `
+    SELECT ma.id, ma.public_url, ma.kind, ma.alt_text, ma.file_name,
+           mp.slot
+      FROM media_placements mp
+      JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+     WHERE mp.site_id = ? AND mp.owner_type = 'tenant_compliance' AND mp.owner_id = ?
+       AND mp.slot = 'document' AND mp.status = 'active'
+     ORDER BY mp.sort_order
+  `, [siteId, String(row.id)])
   return {
     entity_name: typeof row.entity_name === 'string' ? row.entity_name : null,
     dba_name: typeof row.dba_name === 'string' ? row.dba_name : null,
@@ -357,12 +343,13 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
     service_area_type: typeof row.service_area_type === 'string' ? row.service_area_type : null,
     disclaimer: typeof row.disclaimer === 'string' ? row.disclaimer : null,
     footer_disclaimer: typeof row.footer_disclaimer === 'string' ? row.footer_disclaimer : null,
-    document_asset_ids: documentAssetIds,
-    documents: documentRows.map(document => ({
-      id: String(document.id),
-      url: typeof document.public_url === 'string' && document.public_url ? document.public_url : null,
-      label: typeof document.alt_text === 'string' ? document.alt_text : null,
-      file_name: typeof document.file_name === 'string' ? document.file_name : null,
+    media: mediaRows.map(item => ({
+      asset_id: String(item.id),
+      slot: String(item.slot),
+      public_url: typeof item.public_url === 'string' && item.public_url ? item.public_url : null,
+      kind: typeof item.kind === 'string' ? item.kind : null,
+      alt_text: typeof item.alt_text === 'string' ? item.alt_text : null,
+      file_name: typeof item.file_name === 'string' ? item.file_name : null,
     })),
     founder_name: typeof row.founder_name === 'string' ? row.founder_name : null,
     founding_date: typeof row.founding_date === 'string' ? row.founding_date : null,
@@ -396,22 +383,20 @@ export async function getPublicThemeTokens(db: DbClient, siteId: string, templat
 
 export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Promise<PublicBlawbyIdentity> {
   const row = await queryFirst<ApiRecord>(db, `
-    SELECT s.brand_name, s.brand_description, s.contact_phone, COALESCE(logo.public_url, s.logo_url) AS logo_url,
-           json_extract(s.settings, '$.favicon_url') AS favicon_url,
+    SELECT s.brand_name, s.brand_description, s.contact_phone,
            primary_loc.address AS primary_location_address,
            primary_loc.city AS primary_location_city
       FROM sites s
-      LEFT JOIN media_assets logo ON s.logo_asset_id = logo.id AND logo.status = 'active'
       LEFT JOIN business_locations primary_loc ON s.primary_location_id = primary_loc.id AND primary_loc.status = 'active'
      WHERE s.id = ?
      LIMIT 1
   `, [siteId])
+  const media = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
 
   return {
     brand_name: requiredText(row?.brand_name, `site ${siteId}.brand_name`),
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
-    logo_url: typeof row?.logo_url === 'string' ? row.logo_url : null,
-    favicon_url: typeof row?.favicon_url === 'string' ? row.favicon_url : null,
+    media: (media.get(siteId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
     phone: typeof row?.contact_phone === 'string' ? row.contact_phone : null,
     banner_content: null,
     banner_dismissible: false,
@@ -523,7 +508,7 @@ function mapPublicReviews(rows: Array<Record<string, unknown>>): PublicSiteRevie
   return rows.map(row => ({
     id: String(row.id),
     author_name: requiredText(row.author_name, `review ${row.id}.author_name`),
-    reviewer_photo_url: typeof row.reviewer_photo_url === 'string' ? row.reviewer_photo_url : null,
+    media: Array.isArray(row.media) ? row.media as PublicSiteReview['media'] : [],
     rating: Number(row.rating),
     title: typeof row.title === 'string' ? row.title : null,
     content: requiredText(row.content, `review ${row.id}.content`),
@@ -534,17 +519,23 @@ function mapPublicReviews(rows: Array<Record<string, unknown>>): PublicSiteRevie
 
 function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
   if (!row) return null
-  const featured = row.featured_image && typeof row.featured_image === 'object' ? row.featured_image as ApiRecord : null
+  const media = Array.isArray(row.media) ? row.media as ApiRecord[] : []
   return {
     id: String(row.id),
     title: String(row.title),
     slug: String(row.slug),
     body: requiredText(row.body, `article ${row.id}.body`),
+    author: row.author && typeof row.author === 'object' && !Array.isArray(row.author)
+      ? {
+          id: String((row.author as ApiRecord).id),
+          name: typeof (row.author as ApiRecord).name === 'string' ? String((row.author as ApiRecord).name) : null,
+          image: typeof (row.author as ApiRecord).image === 'string' ? String((row.author as ApiRecord).image) : null,
+        }
+      : null,
     excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
     category: typeof row.category === 'string' ? row.category : null,
     tags: Array.isArray(row.tags) ? row.tags.map(String) : (row.tags_json ? JSON.parse(row.tags_json) as string[] : []),
     featured_order: Number.isFinite(Number(row.featured_order)) ? Number(row.featured_order) : null,
-    author_name: typeof row.author_name === 'string' ? row.author_name : null,
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
     canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
@@ -553,21 +544,16 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     visibility: row.visibility === 'unlisted' ? 'unlisted' : 'public',
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
-    components: Array.isArray(row.components) ? row.components as ApiRecord[] : [],
     content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/lib/components/workspace/blog/types').BlogEditorBlock[] : [],
-    primary_image: row.primary_image && typeof row.primary_image === 'object'
-      ? row.primary_image as PublicBlogPost['primary_image']
-      : null,
-    author_image: typeof row.author_image === 'string' ? row.author_image : null,
-    featured_image: featured && typeof featured.public_url === 'string'
-      ? {
-          public_url: featured.public_url,
-          thumbnail_url: typeof featured.thumbnail_url === 'string' ? featured.thumbnail_url : null,
-          kind: typeof featured.kind === 'string' ? featured.kind : null,
-          width: Number.isFinite(Number(featured.width)) ? Number(featured.width) : null,
-          height: Number.isFinite(Number(featured.height)) ? Number(featured.height) : null,
-        }
-      : null,
+    media: media.map(item => ({
+      asset_id: String(item.asset_id),
+      slot: String(item.slot),
+      public_url: requiredText(item.public_url, `article ${row.id}.media.public_url`),
+      thumbnail_url: typeof item.thumbnail_url === 'string' ? item.thumbnail_url : null,
+      kind: typeof item.kind === 'string' ? item.kind : null,
+      width: Number.isFinite(Number(item.width)) ? Number(item.width) : null,
+      height: Number.isFinite(Number(item.height)) ? Number(item.height) : null,
+    })),
   }
 }
 

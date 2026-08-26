@@ -2,6 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { execute, executeBatch, queryFirst } from '~/server/db'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
 import { uploadToR2, buildR2Key } from './cloudflare-r2'
+import { buildMediaAssetInsertQuery, buildMediaPlacementInsertQuery } from './media-asset-manager'
 
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
@@ -471,38 +472,27 @@ export const syncInstagramPosts = async (
 
       // Use D1 batch to make asset creation and post insert atomic
       await executeBatch(env.DB, [
-        {
-          query: `
-          INSERT INTO media_assets (
-            id, organization_id, site_id, location_id, kind, provider, source,
-            r2_key, public_url, mime_type, file_name, file_size, status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-          params: [
-            assetId,
-            organizationId,
-            siteId,
-            null,
-            'image',
-            'cloudflare_r2',
-            'external',
-            r2Key,
-            publicUrl,
-            'image/jpeg',
-            `instagram-${item.id}.jpg`,
-            imageBuffer.byteLength,
-            'active',
-            now,
-            now
-          ]
-        },
+        buildMediaAssetInsertQuery({
+          id: assetId,
+          organization_id: organizationId,
+          site_id: siteId,
+          kind: 'image',
+          provider: 'cloudflare_r2',
+          source: 'external',
+          r2_key: r2Key,
+          public_url: publicUrl,
+          mime_type: 'image/jpeg',
+          file_name: `instagram-${item.id}.jpg`,
+          file_size: imageBuffer.byteLength,
+          status: 'active',
+        }, now),
         {
           query: `
           INSERT INTO posts (
             id, organization_id, site_id, location_id, google_post_id, post_type,
-            title, body, image_asset_id, cta_url, status, published_at,
+            title, body, cta_url, status, published_at,
             created_by, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
           params: [
             postId,
@@ -513,7 +503,6 @@ export const syncInstagramPosts = async (
             'standard',
             title,
             body,
-            assetId,
             item.permalink,
             'published',
             item.timestamp,
@@ -521,7 +510,8 @@ export const syncInstagramPosts = async (
             now,
             now
           ]
-        }
+        },
+        buildMediaPlacementInsertQuery({ organizationId, siteId, ownerType: 'post', ownerId: postId, slot: 'cover', assetId, sortOrder: 0, createdAt: now, updatedAt: now }),
       ])
 
       success++
@@ -593,38 +583,27 @@ export const syncFacebookPosts = async (
 
       // Use D1 batch to make asset creation and post insert atomic
       await executeBatch(env.DB, [
-        {
-          query: `
-          INSERT INTO media_assets (
-            id, organization_id, site_id, location_id, kind, provider, source,
-            r2_key, public_url, mime_type, file_name, file_size, status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-          params: [
-            assetId,
-            organizationId,
-            siteId,
-            null,
-            'image',
-            'cloudflare_r2',
-            'external',
-            r2Key,
-            publicUrl,
-            'image/jpeg',
-            `facebook-${item.id}.jpg`,
-            imageBuffer.byteLength,
-            'active',
-            now,
-            now
-          ]
-        },
+        buildMediaAssetInsertQuery({
+          id: assetId,
+          organization_id: organizationId,
+          site_id: siteId,
+          kind: 'image',
+          provider: 'cloudflare_r2',
+          source: 'external',
+          r2_key: r2Key,
+          public_url: publicUrl,
+          mime_type: 'image/jpeg',
+          file_name: `facebook-${item.id}.jpg`,
+          file_size: imageBuffer.byteLength,
+          status: 'active',
+        }, now),
         {
           query: `
           INSERT INTO posts (
             id, organization_id, site_id, location_id, google_post_id, post_type,
-            title, body, image_asset_id, cta_url, status, published_at,
+            title, body, cta_url, status, published_at,
             created_by, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
           params: [
             postId,
@@ -635,7 +614,6 @@ export const syncFacebookPosts = async (
             'standard',
             title,
             body,
-            assetId,
             item.permalink_url,
             'published',
             item.created_time,
@@ -643,7 +621,8 @@ export const syncFacebookPosts = async (
             now,
             now
           ]
-        }
+        },
+        buildMediaPlacementInsertQuery({ organizationId, siteId, ownerType: 'post', ownerId: postId, slot: 'cover', assetId, sortOrder: 0, createdAt: now, updatedAt: now }),
       ])
 
       success++

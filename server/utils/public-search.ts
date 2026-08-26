@@ -16,6 +16,7 @@ import {
   type PlatformKnowledgeSurface,
 } from '~/config/platform-knowledge'
 import type { PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
+import { renderContentBlocksForLlm } from '~/server/utils/platform-llm'
 
 const AI_SEARCH_CUSTOM_METADATA: AiSearchConfig['custom_metadata'] = [
   { field_name: 'record_id', data_type: 'text' },
@@ -52,7 +53,6 @@ interface PlatformDocSearchRow {
   id: string
   title: string
   slug: string
-  body: string
   excerpt: string | null
   category: string | null
   seo_description: string | null
@@ -63,7 +63,6 @@ interface PlatformBlogSearchRow {
   id: string
   title: string
   slug: string
-  body: string
   excerpt: string | null
   category: string | null
   seo_description: string | null
@@ -92,12 +91,30 @@ interface TenantBlogDocRow {
   site_id: string
   title: string
   slug: string
-  body: string
   excerpt: string | null
   category: string | null
   tags_json: string | null
   seo_description: string | null
   seo_keywords: string | null
+}
+
+async function loadContentBodies(db: DbClient, ownerTypes: Array<'platform_doc' | 'platform_blog' | 'tenant_blog'>) {
+  const placeholders = ownerTypes.map(() => '?').join(', ')
+  const rows = await queryAll<{ owner_type: string; owner_id: string; type: string; position: number; level: number | null; data_json: string }>(db, `
+    SELECT cd.owner_type, cd.owner_id, cb.type, cb.position, cb.level, cb.data_json
+    FROM content_documents cd
+    JOIN content_blocks cb ON cb.document_id = cd.id
+    WHERE cd.owner_type IN (${placeholders})
+    ORDER BY cd.owner_type, cd.owner_id, cb.position
+  `, ownerTypes)
+  const blocks = new Map<string, Array<{ type: string; position: number; level: number | null; data: Record<string, unknown>; media: [] }>>()
+  for (const row of rows ?? []) {
+    const key = `${row.owner_type}:${row.owner_id}`
+    const items = blocks.get(key) ?? []
+    items.push({ type: row.type, position: row.position, level: row.level, data: JSON.parse(row.data_json) as Record<string, unknown>, media: [] })
+    blocks.set(key, items)
+  }
+  return new Map([...blocks].map(([key, items]) => [key, renderContentBlocksForLlm(items)]))
 }
 
 function platformKnowledgeInstanceId(env: CloudflareEnv) {
@@ -281,7 +298,7 @@ function normalizeTenantBlogSearchResults(
       type: 'blog' as const,
       title: post.title,
       path: `/blog/${post.slug}`,
-      snippet: truncateSnippet(post.excerpt || post.seo_description || post.body || post.title),
+      snippet: truncateSnippet(post.excerpt || post.seo_description || post.title),
       surface: options.surface,
       section: post.category || 'Blog',
       icon: 'newspaper',
@@ -404,23 +421,24 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
 }
 
 export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
-  const posts = await queryAll<TenantBlogDocRow>(db, `
-    SELECT id, site_id, title, slug, body, excerpt, category, tags_json, seo_description, seo_keywords
+  const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
+    SELECT id, site_id, title, slug, excerpt, category, tags_json, seo_description, seo_keywords
     FROM blog_posts
     WHERE status = 'published' AND site_id IS NOT NULL AND visibility = 'public'
     ORDER BY site_id, published_at DESC, updated_at DESC
-  `)
+  `), loadContentBodies(db, ['tenant_blog'])])
 
   return (posts ?? []).map((post) => {
     const tags = post.tags_json ? JSON.parse(post.tags_json) as string[] : []
-    const snippet = truncateSnippet(post.excerpt || post.seo_description || post.body || post.title)
+    const canonicalBody = contentBodies.get(`tenant_blog:${post.id}`) ?? ''
+    const snippet = truncateSnippet(post.excerpt || post.seo_description || canonicalBody || post.title)
     const body = [
       post.title,
       post.category ?? '',
       tags.join(' '),
       post.seo_keywords ?? '',
       post.excerpt ?? '',
-      stripMarkdown(post.body),
+      stripMarkdown(canonicalBody),
     ].join('\n\n')
     return {
       id: `tenant-blog:${post.id}`,
@@ -442,31 +460,33 @@ export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKn
 }
 
 export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
-  const [docs, posts, tenantBlogRecords] = await Promise.all([
+  const [docs, posts, tenantBlogRecords, contentBodies] = await Promise.all([
     queryAll<PlatformDocSearchRow>(db, `
-      SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
+      SELECT id, title, slug, excerpt, category, seo_description, seo_keywords
       FROM platform_docs
       ORDER BY category, sort_order, updated_at DESC
     `),
     queryAll<PlatformBlogSearchRow>(db, `
-      SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
+      SELECT id, title, slug, excerpt, category, seo_description, seo_keywords
       FROM blog_posts
       WHERE status = 'published' AND site_id IS NULL AND visibility = 'public'
       ORDER BY category, published_at DESC, updated_at DESC
     `),
     buildTenantBlogDocuments(db),
+    loadContentBodies(db, ['platform_doc', 'platform_blog']),
   ])
 
   const docRecords: PlatformKnowledgeDocument[] = (docs ?? []).flatMap((doc) => {
     const path = getDocPath(doc.category, doc.slug)
     if (!path) return []
-    const snippet = truncateSnippet(doc.excerpt || doc.seo_description || doc.body || doc.title)
+    const canonicalBody = contentBodies.get(`platform_doc:${doc.id}`) ?? ''
+    const snippet = truncateSnippet(doc.excerpt || doc.seo_description || canonicalBody || doc.title)
     const body = [
       doc.title,
       doc.category ?? '',
       doc.seo_keywords ?? '',
       doc.excerpt ?? '',
-      stripMarkdown(doc.body),
+      stripMarkdown(canonicalBody),
     ].join('\n\n')
     return [{
       id: `doc:${doc.id}`,
@@ -487,13 +507,14 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
   const blogRecords: PlatformKnowledgeDocument[] = (posts ?? []).flatMap((post) => {
     const path = getPlatformBlogPath(post.category, post.slug)
     if (!path) return []
-    const snippet = truncateSnippet(post.excerpt || post.seo_description || post.body || post.title)
+    const canonicalBody = contentBodies.get(`platform_blog:${post.id}`) ?? ''
+    const snippet = truncateSnippet(post.excerpt || post.seo_description || canonicalBody || post.title)
     const body = [
       post.title,
       post.category ?? '',
       post.seo_keywords ?? '',
       post.excerpt ?? '',
-      stripMarkdown(post.body),
+      stripMarkdown(canonicalBody),
     ].join('\n\n')
     return [{
       id: `blog:${post.id}`,
@@ -843,20 +864,22 @@ export async function searchPublicResources(
       const likePattern = `%${escapeLikePattern(normalized)}%`
       return await queryAll<TenantBlogSearchRow>(
           env.db,
-          `SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
-           FROM blog_posts
-           WHERE status = 'published'
-             AND site_id = ?
-             AND visibility = 'public'
+          `SELECT DISTINCT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords
+           FROM blog_posts p
+           LEFT JOIN content_documents cd ON cd.owner_type = 'tenant_blog' AND cd.owner_id = p.id
+           LEFT JOIN content_blocks cb ON cb.document_id = cd.id
+           WHERE p.status = 'published'
+             AND p.site_id = ?
+             AND p.visibility = 'public'
              AND (
-               lower(title) LIKE lower(?) ESCAPE '\\'
-               OR lower(body) LIKE lower(?) ESCAPE '\\'
-               OR lower(COALESCE(excerpt, '')) LIKE lower(?) ESCAPE '\\'
-               OR lower(COALESCE(category, '')) LIKE lower(?) ESCAPE '\\'
-               OR lower(COALESCE(seo_description, '')) LIKE lower(?) ESCAPE '\\'
-               OR lower(COALESCE(seo_keywords, '')) LIKE lower(?) ESCAPE '\\'
+               lower(p.title) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(cb.data_json, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(p.excerpt, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(p.category, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(p.seo_description, '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(p.seo_keywords, '')) LIKE lower(?) ESCAPE '\\'
              )
-           ORDER BY published_at DESC, updated_at DESC
+           ORDER BY p.published_at DESC, p.updated_at DESC
            LIMIT ?`,
           [
             options.siteId,

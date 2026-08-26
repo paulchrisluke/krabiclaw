@@ -4,7 +4,6 @@ import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   getDashboardContext,
-  requiredDashboardPreviewOrigin,
   listOrganizationSites,
   listDashboardLocations,
 } from '~/server/utils/dashboard-context'
@@ -17,7 +16,8 @@ export async function loadDashboardContext(
   scope?: { orgSlug?: string | null; siteId?: string | null; siteSlug?: string | null; afterTransfer?: boolean },
 ) {
   const contextStartedAt = performance.now()
-  const managedServiceEnabled = isManagedServiceEnabled(cloudflareEnv(event))
+  const env = cloudflareEnv(event)
+  const managedServiceEnabled = isManagedServiceEnabled(env)
   const { db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: false,
     requireOrganization: scope?.orgSlug ? true : false,
@@ -55,9 +55,8 @@ export async function loadDashboardContext(
   const teamIds = isOrganizationWideRole(organization.role)
     ? null
     : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
-  const principal = { memberId: organization.memberId, role: organization.role, teamIds }
-  const ogOrigin = requiredDashboardPreviewOrigin(cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN)
-  const sites = await listOrganizationSites(db, organization.id, ogOrigin, principal)
+  const principal = { env, memberId: organization.memberId, role: organization.role, teamIds }
+  const sites = await listOrganizationSites(db, organization.id, principal)
   if (!site) {
     return {
       success: true as const,
@@ -72,7 +71,7 @@ export async function loadDashboardContext(
 
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
-    listDashboardLocations(db, organization.id, site.id, ogOrigin, principal),
+    listDashboardLocations(db, organization.id, site.id, principal),
     resolveDashboardSiteAccess(db, {
       ...principal,
       organizationId: organization.id,

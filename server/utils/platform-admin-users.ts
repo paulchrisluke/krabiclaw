@@ -6,6 +6,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { betterAuthTimestampToIso, type BetterAuthTimestamp } from '~/server/utils/better-auth-timestamps'
 import { hasPlatformAdminPermission, type PlatformAdminPermission } from '~/utils/platform-admin-access'
+import { listUserOrganizations } from '~/server/utils/member-access'
 
 type PlatformUserPermission = NonNullable<PlatformAdminPermission['user']>[number]
 
@@ -46,6 +47,14 @@ export interface PlatformAdminUser {
 export interface PlatformAdminUserList {
   users: PlatformAdminUser[]
   total: number
+}
+
+export interface PlatformOrganization {
+  id: string
+  name: string
+  slug: string
+  logo: string | null
+  createdAt: Date
 }
 
 export function adminHeadersForEvent(event: H3Event): HeadersInit {
@@ -205,6 +214,26 @@ export async function listPlatformUsers(
 export async function countPlatformUsers(authApi: AdminApi, headers: HeadersInit): Promise<number> {
   const result = await listPlatformUsers(authApi, headers, { limit: 1, offset: 0 })
   return result.total
+}
+
+export async function listPlatformOrganizations(
+  authApi: AdminApi,
+  headers: HeadersInit,
+  env: CloudflareEnv,
+): Promise<PlatformOrganization[]> {
+  const firstPage = await listPlatformUsers(authApi, headers, { limit: 100, offset: 0 })
+  const users = [...firstPage.users]
+  for (let offset = 100; offset < firstPage.total; offset += 100) {
+    users.push(...(await listPlatformUsers(authApi, headers, { limit: 100, offset })).users)
+  }
+  const organizations = (await Promise.all(users.map(user => listUserOrganizations(env, user.id)))).flat()
+  return Array.from(new Map(organizations.map(organization => [organization.id, {
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    logo: organization.logo ?? null,
+    createdAt: organization.createdAt,
+  }])).values())
 }
 
 export async function listPlatformAdminUsers(authApi: AdminApi, headers: HeadersInit): Promise<PlatformAdminUser[]> {

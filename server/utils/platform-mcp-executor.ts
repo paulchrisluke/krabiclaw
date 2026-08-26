@@ -101,7 +101,19 @@ function optionalArray(args: Record<string, unknown>, key: string) {
   return Array.isArray(value) ? value : undefined
 }
 
-const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'tenant_blog']
+function platformMediaInput(args: Record<string, unknown>) {
+  if (args.media === undefined) return undefined
+  const media = optionalArray(args, 'media')
+  if (!media) throw mcpProtocolError(MCP_ERROR.invalidParams, 'media must be an array.')
+  return media.map((value, index) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw mcpProtocolError(MCP_ERROR.invalidParams, `media[${index}] must be an object.`)
+    const item = value as Record<string, unknown>
+    if (typeof item.asset_id !== 'string' || item.slot !== 'featured') throw mcpProtocolError(MCP_ERROR.invalidParams, `media[${index}] requires asset_id and slot featured.`)
+    return { asset_id: item.asset_id, slot: 'featured' as const }
+  })
+}
+
+const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'tenant_blog', 'platform_doc']
 const CONTENT_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
 const PLATFORM_BLOG_POST_STATUSES = new Set(['published', 'scheduled'])
 const PLATFORM_BLOG_VISIBILITIES = new Set(['public', 'unlisted'])
@@ -121,12 +133,19 @@ function contentBlocks(args: Record<string, unknown>): ContentBlockInput[] {
   return value.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw mcpProtocolError(MCP_ERROR.invalidParams, `content_blocks[${index}] must be an object.`)
     const block = item as Record<string, unknown>
+    const media = block.media === undefined ? [] : optionalArray(block, 'media')
+    if (!media) throw mcpProtocolError(MCP_ERROR.invalidParams, `content_blocks[${index}].media must be an array.`)
     return {
       id: typeof block.id === 'string' ? block.id : undefined,
       type: optionalContentBlockType(block, 'type'),
       data: requiredObject(block, 'data'),
       parent_block_id: optionalNullableString(block, 'parent_block_id'),
       level: optionalNullableNumber(block, 'level'),
+      media: media.map((value, mediaIndex) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw mcpProtocolError(MCP_ERROR.invalidParams, `content_blocks[${index}].media[${mediaIndex}] must be an object.`)
+        const item = value as Record<string, unknown>
+        return { asset_id: requiredString(item, 'asset_id'), slot: requiredString(item, 'slot') }
+      }),
     }
   })
 }
@@ -187,15 +206,20 @@ function platformBlogResponseNullableBoolean(value: unknown, path: string) {
   return value
 }
 
-function projectPlatformFeaturedImage(value: unknown) {
-  const image = platformBlogResponseRecord(value, 'post.featured_image')
-  return {
-    asset_id: platformBlogResponseNullableString(image.asset_id, 'post.featured_image.asset_id'),
-    public_url: platformBlogResponseNullableString(image.public_url, 'post.featured_image.public_url'),
-    kind: platformBlogResponseNullableString(image.kind, 'post.featured_image.kind'),
-    width: platformBlogResponseNullableNumber(image.width, 'post.featured_image.width'),
-    height: platformBlogResponseNullableNumber(image.height, 'post.featured_image.height'),
-  }
+function projectPlatformMedia(value: unknown) {
+  if (!Array.isArray(value)) invalidPlatformBlogResponse('post.media', 'an array')
+  return value.map((item, index) => {
+    const path = `post.media[${index}]`
+    const media = platformBlogResponseRecord(item, path)
+    return {
+      asset_id: platformBlogResponseString(media.asset_id, `${path}.asset_id`),
+      slot: platformBlogResponseString(media.slot, `${path}.slot`),
+      public_url: platformBlogResponseNullableString(media.public_url, `${path}.public_url`),
+      kind: platformBlogResponseNullableString(media.kind, `${path}.kind`),
+      width: platformBlogResponseNullableNumber(media.width, `${path}.width`),
+      height: platformBlogResponseNullableNumber(media.height, `${path}.height`),
+    }
+  })
 }
 
 function projectPlatformContentBlock(value: unknown, index: number) {
@@ -243,7 +267,7 @@ export function projectPlatformBlogPostForMcp(post: Record<string, unknown>) {
     seo_keywords: platformBlogResponseNullableString(post.seo_keywords, 'post.seo_keywords'),
     canonical_url: platformBlogResponseNullableString(post.canonical_url, 'post.canonical_url'),
     robots: platformBlogResponseNullableEnum(post.robots, 'post.robots', PLATFORM_BLOG_ROBOTS),
-    featured_image: projectPlatformFeaturedImage(post.featured_image),
+    media: projectPlatformMedia(post.media),
     admin_edit_url: platformBlogResponseString(post.admin_edit_url, 'post.admin_edit_url'),
     public_path: platformBlogResponseNullableString(post.public_path, 'post.public_path'),
     public_url: platformBlogResponseNullableString(post.public_url, 'post.public_url'),
@@ -346,6 +370,7 @@ async function getFormattedContentBlock(db: D1Database, blockId: string) {
     level: block.level,
     updated_at: block.updated_at,
     data: block.data,
+    media: block.media,
   }
 }
 
@@ -361,20 +386,6 @@ function optionalDateParam(args: Record<string, unknown>, key: string): string |
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${key} must be a valid date in YYYY-MM-DD format.`)
   }
   return value
-}
-
-function structuredContentInput(args: Record<string, unknown>) {
-  return {
-    components: optionalArray(args, 'components') as Array<{
-      type: 'faq' | 'how_to' | 'ai_assistance'
-      position?: number
-      label?: string
-      status?: 'active' | 'inactive'
-      render_enabled?: boolean
-      schema_enabled?: boolean
-      data: unknown
-    }> | undefined,
-  }
 }
 
 function navMetadataInput(args: Record<string, unknown>) {
@@ -673,15 +684,8 @@ export async function executePlatformMcpToolCall(
 
   switch (toolName) {
     case 'get_platform_context': {
-      const currentUser = await queryFirst<{ role: string | null }>(
-        user.db,
-        'SELECT role FROM user WHERE id = ? LIMIT 1',
-        [user.userId],
-      )
-      if (!currentUser) throw mcpProtocolError(MCP_ERROR.internal, 'Current user not found.')
       return {
         currentUser: {
-          role: currentUser.role ?? null,
           isPlatformAdmin: user.isPlatformAdmin,
         },
       }
@@ -750,6 +754,7 @@ export async function executePlatformMcpToolCall(
         unique_sessions: summary.uniqueSessions,
         unique_visitors: summary.uniqueVisitors,
         new_signups: summary.newSignups,
+        new_signups_ledger_start_date: summary.newSignupsLedgerStartDate,
         top_pages: summary.topPages.map((page) => ({
           path: page.path,
           views: page.views,
@@ -874,9 +879,9 @@ export async function executePlatformMcpToolCall(
       return await renderContentPreview(user.db, document.id)
     }
     case 'list_platform_blog_posts':
-      return { posts: await listPlatformBlogPosts(user.db, optionalString(rawArguments, 'status'), optionalString(rawArguments, 'site_id')) }
+      return { posts: await listPlatformBlogPosts(user.db, optionalString(rawArguments, 'status'), optionalString(rawArguments, 'site_id'), user.env) }
     case 'get_platform_blog_post':
-      return { post: projectPlatformBlogPostForMcp(await getPlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'))) }
+      return { post: projectPlatformBlogPostForMcp(await getPlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'), user.env)) }
     case 'create_platform_blog_post': {
       const siteId = optionalString(rawArguments, 'site_id')
       let blogScope = undefined
@@ -900,14 +905,14 @@ export async function executePlatformMcpToolCall(
         seo_keywords: optionalString(rawArguments, 'seo_keywords') ?? null,
         canonical_url: optionalString(rawArguments, 'canonical_url') ?? null,
         robots: optionalString(rawArguments, 'robots') ?? null,
-        featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
+        media: platformMediaInput(rawArguments) ?? [],
         scheduled_for: optionalNullableString(rawArguments, 'scheduled_for') ?? null,
-      }, blogScope)
+      }, blogScope, user.env)
       return { post: projectPlatformBlogPostForMcp(result.post) }
     }
     case 'update_platform_blog_metadata': {
       const siteId = optionalString(rawArguments, 'site_id')
-      const metadataFields = ['title', 'excerpt', 'category', 'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order', 'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'featured_image_asset_id', 'visibility', 'slug', 'redirect_old_slug', 'reset_slug_override']
+      const metadataFields = ['title', 'excerpt', 'category', 'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order', 'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'media', 'visibility', 'slug', 'redirect_old_slug', 'reset_slug_override']
       if (!metadataFields.some(field => rawArguments[field] !== undefined)) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'At least one metadata field is required.')
       }
@@ -922,12 +927,12 @@ export async function executePlatformMcpToolCall(
         seo_keywords: optionalNullableString(rawArguments, 'seo_keywords'),
         canonical_url: optionalNullableString(rawArguments, 'canonical_url'),
         robots: optionalNullableString(rawArguments, 'robots'),
-        featured_image_asset_id: optionalNullableString(rawArguments, 'featured_image_asset_id'),
+        media: platformMediaInput(rawArguments),
         visibility: optionalString(rawArguments, 'visibility') as 'public' | 'unlisted' | undefined,
         slug: optionalNullableString(rawArguments, 'slug'),
         redirect_old_slug: optionalBoolean(rawArguments, 'redirect_old_slug'),
         reset_slug_override: optionalBoolean(rawArguments, 'reset_slug_override'),
-      }, siteId)
+      }, siteId, user.env)
       return { post: projectPlatformBlogPostForMcp(result.post) }
     }
     case 'replace_platform_blog_content': {
@@ -935,16 +940,16 @@ export async function executePlatformMcpToolCall(
       const result = await updatePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), {
         content_blocks: contentBlocks(rawArguments),
         expected_document_updated_at: requiredString(rawArguments, 'expected_document_updated_at'),
-      }, siteId)
+      }, siteId, user.env)
       return { post: projectPlatformBlogPostForMcp(result.post) }
     }
     case 'publish_platform_blog_post': {
       const call = platformBlogLifecycleCall(rawArguments, 'publish')
       await updatePlatformBlogLifecycle(user.db, call.postId, call.input, call.siteId)
-      return { post: projectPlatformBlogPostForMcp(await getPlatformBlogPost(user.db, call.postId, call.siteId)) }
+      return { post: projectPlatformBlogPostForMcp(await getPlatformBlogPost(user.db, call.postId, call.siteId, user.env)) }
     }
     case 'reorder_platform_blog_posts':
-      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>, optionalString(rawArguments, 'site_id'))
+      return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>, optionalString(rawArguments, 'site_id'), user.env)
     case 'delete_platform_blog_post':
       return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'))
     case 'list_platform_docs':
@@ -954,7 +959,7 @@ export async function executePlatformMcpToolCall(
     case 'create_platform_doc':
       return await createPlatformDoc(user.db, user.userId, {
         title: requiredString(rawArguments, 'title'),
-        body: requiredString(rawArguments, 'body'),
+        content_blocks: contentBlocks(rawArguments),
         excerpt: optionalString(rawArguments, 'excerpt') ?? null,
         category: optionalString(rawArguments, 'category') ?? null,
         ...navMetadataInput(rawArguments),
@@ -966,13 +971,13 @@ export async function executePlatformMcpToolCall(
         robots: optionalString(rawArguments, 'robots') ?? null,
         difficulty_level: optionalString(rawArguments, 'difficulty_level') ?? null,
         sort_order: optionalNumber(rawArguments, 'sort_order') ?? 0,
-        featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id') ?? null,
-        ...structuredContentInput(rawArguments),
+        media: platformMediaInput(rawArguments) ?? [],
       })
     case 'update_platform_doc':
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), {
         title: optionalString(rawArguments, 'title'),
-        body: optionalString(rawArguments, 'body'),
+        content_blocks: rawArguments.content_blocks === undefined ? undefined : contentBlocks(rawArguments),
+        expected_document_updated_at: optionalString(rawArguments, 'expected_document_updated_at'),
         excerpt: optionalString(rawArguments, 'excerpt'),
         category: optionalString(rawArguments, 'category'),
         ...navMetadataInput(rawArguments),
@@ -984,8 +989,7 @@ export async function executePlatformMcpToolCall(
         robots: optionalString(rawArguments, 'robots'),
         difficulty_level: optionalString(rawArguments, 'difficulty_level'),
         sort_order: optionalNumber(rawArguments, 'sort_order'),
-        featured_image_asset_id: optionalString(rawArguments, 'featured_image_asset_id'),
-        ...structuredContentInput(rawArguments),
+        media: platformMediaInput(rawArguments),
       })
     case 'reorder_platform_docs':
       return await reorderPlatformDocs(user.db, reorderItems(rawArguments, 'doc_id', { navGroup: true }) as Array<{ doc_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; nav_group?: string | null; nav_group_order?: number | null; hide_from_nav?: boolean | null }>)

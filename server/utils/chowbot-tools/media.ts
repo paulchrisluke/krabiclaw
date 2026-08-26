@@ -71,11 +71,6 @@ export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
             description:
               "Describe the image. Include food type, style, plating, lighting. Be specific.",
           },
-          location_id: {
-            type: "string",
-            description:
-              "Optional: attach the generated image to a specific location.",
-          },
         },
         required: ["prompt"],
       },

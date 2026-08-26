@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
-import { parseOnboardingDraftPayload, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, parseOnboardingDraftPayload, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { verifyScopedPreviewToken } from '~/server/utils/preview-token'
 import type { BlawbyRouteRecipe, PublicBlawbyRouteData, PublicBlawbyShellData } from '~/types/blawby'
 
@@ -43,11 +43,10 @@ async function loadDraftPreviewSource(
 }
 
 export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDraftPreviewSource>>) {
+  const logo = getDraftMedia(payload, 'logo')
   const rawConfig = {
     ...payload.preview.config,
     brand_name: payload.preview.brandName,
-    logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
-    hero_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
   }
   const config = Object.fromEntries(
     Object.entries(rawConfig).map(([key, value]) => [key, value ?? '']),
@@ -60,13 +59,11 @@ export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDr
     site: {
       brand_name: payload.preview.brandName,
       brand_description: null,
-      logo_url: rawConfig.logo_url,
-      logo_mime_type: null,
-      favicon_url: null,
+      media: logo ? [{ asset_id: logo.draftAssetId, slot: 'logo', public_url: logo.publicUrl, thumbnail_url: logo.thumbnailUrl, kind: 'image' }] : [],
       vertical: payload.preview.vertical,
       config: { phone: draftPhone },
     },
-    locations: payload.preview.locations,
+    locations: payload.preview.locations.map(location => ({ ...location, media: [] })),
     config,
     googleBusiness: {
       business: null,
@@ -93,11 +90,10 @@ export function buildPublicDraftBlawbyDocument(
   const heroContent = payload.preview.content.find(item => item.page === 'home' && item.field === 'hero') ?? null
   const heroTitle = heroContent?.hero_title?.trim() || payload.preview.brandName
   const heroDescription = heroContent?.hero_subtitle?.trim() || null
-  const heroUrl = heroContent?.hero_public_url
-    || payload.preview.config.hero_image_url
-    || payload.preview.draftMedia.hero?.publicUrl
-    || null
-  const logoUrl = payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null
+  const heroMedia = getDraftMedia(payload, 'hero')
+  const logoMedia = getDraftMedia(payload, 'logo')
+  const heroUrl = heroMedia?.publicUrl ?? null
+  const logoUrl = logoMedia?.publicUrl ?? null
   const brandColor = payload.preview.config.brand_color?.trim() || null
 
   return {
@@ -106,8 +102,7 @@ export function buildPublicDraftBlawbyDocument(
       identity: {
         brand_name: payload.preview.brandName,
         brand_description: heroDescription,
-        logo_url: logoUrl,
-        favicon_url: null,
+        media: logoUrl ? [{ asset_id: logoMedia!.draftAssetId, slot: 'logo', public_url: logoUrl, thumbnail_url: logoMedia!.thumbnailUrl, kind: 'image' }] : [],
         phone: payload.source.details.phone ?? primaryLocation?.phone ?? null,
         banner_content: null,
         banner_dismissible: false,
@@ -155,8 +150,16 @@ export function buildPublicDraftBlawbyDocument(
             description: heroDescription,
             cta_label: '',
             cta_url: '',
-            background: heroUrl ? { url: heroUrl } : null,
           },
+          media: heroUrl
+            ? [{
+                asset_id: heroMedia!.draftAssetId,
+                slot: 'media',
+                public_url: heroUrl,
+                thumbnail_url: heroMedia?.thumbnailUrl ?? null,
+                kind: 'image',
+              }]
+            : [],
         }],
         updated_at: heroContent?.updated_at || '',
       },
@@ -231,11 +234,9 @@ export async function loadPublicDraftPage(
 
   const content = payload.preview.content.filter((item) => item.page === page)
   const reviewsList = requestedDatasets.has('reviews') ? payload.preview.reviews : []
-  const photosList = requestedDatasets.has('photos')
-    ? payload.preview.locations
-        .flatMap(location => [location.hero_url, location.thumbnail_url])
-        .filter((url): url is string => Boolean(url))
-        .map((url, index) => ({ id: `draft-photo-${index + 1}`, url, category: 'OTHER' }))
+  const heroMedia = getDraftMedia(payload, 'hero')
+  const media = requestedDatasets.has('photos') && heroMedia
+    ? [{ asset_id: heroMedia.draftAssetId, public_url: heroMedia.publicUrl, thumbnail_url: heroMedia.thumbnailUrl, kind: 'image', alt_text: null, category: 'OTHER', sort_order: 0 }]
     : []
   const qaList = requestedDatasets.has('qa') ? payload.preview.qa : []
   const postsList = requestedDatasets.has('posts') ? payload.preview.posts : []
@@ -248,19 +249,12 @@ export async function loadPublicDraftPage(
       }
     : null
 
-  const config = {
-    ...payload.preview.config,
-    brand_name: payload.preview.brandName,
-    logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
-    hero_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
-  }
   return {
     kind: page,
     shell,
     site: {
       brand_name: payload.preview.brandName,
-      logo_url: config.logo_url,
-      favicon_url: null,
+      media: shell.site.media,
       vertical: payload.preview.vertical,
     },
     locations: payload.preview.locations,
@@ -270,7 +264,7 @@ export async function loadPublicDraftPage(
     globalReviews: page === 'home' || page === 'reviews' ? payload.preview.reviews : [],
     reviewsAggregate,
     reviewsList,
-    photosList,
+    media,
     qaList,
     postsList,
     globalPosts: page === 'home' || page === 'posts' ? payload.preview.posts : [],

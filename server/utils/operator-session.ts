@@ -1,3 +1,10 @@
+// Better Auth impersonation is the only cross-user client-workspace access mechanism for
+// platform support. A global platform admin may touch tenant dashboard/MCP data only when
+// either (a) they are an actual member of the target org with sufficient org/team permissions,
+// or (b) they are in a Better Auth impersonation session for a user who has that access.
+// Platform admin status alone is never tenant owner access — do not add a support-mode cookie,
+// acting-as principal, or owner-equivalent bypass; use authClient.admin.impersonateUser() /
+// stopImpersonating() and keep the impersonation banner visible until it succeeds.
 export type OperatorSessionErrorCode = 'authentication_required' | 'impersonation_forbidden'
 
 export class OperatorSessionError extends Error {

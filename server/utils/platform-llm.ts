@@ -2,18 +2,9 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';
 import {  getRequestHost } from 'nitro/h3';
 import { queryAll, queryFirst, type DbClient } from '../db/index.ts'
-import {
-  listContentComponents,
-  resolveContentComponentsMedia,
-  type PlatformFaqComponentData,
-  type PlatformHowToComponentData,
-  type PlatformAiAssistanceComponentData,
-  type PlatformContentComponent,
-} from './platform-content.ts'
+import { getContentBlocksForOwner } from './content-documents.ts'
 import { blogCategoryToSlug, slugToBlogCategory } from '../../utils/blog-categories.ts'
 import { categoryToSlug, slugToCategory } from '../../utils/docs-categories.ts'
-
-const COMPONENT_EMBED_REGEX = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
 
 interface PlatformLlmDocSummary {
   id: string
@@ -28,8 +19,7 @@ interface PlatformLlmDocSummary {
 }
 
 interface PlatformLlmDocDetail extends PlatformLlmDocSummary {
-  body: string
-  components: PlatformContentComponent[]
+  content_blocks: LlmContentBlock[]
 }
 
 interface PlatformLlmBlogSummary {
@@ -46,8 +36,15 @@ interface PlatformLlmBlogSummary {
 }
 
 interface PlatformLlmBlogDetail extends PlatformLlmBlogSummary {
-  body: string
-  components: PlatformContentComponent[]
+  content_blocks: LlmContentBlock[]
+}
+
+interface LlmContentBlock {
+  type: string
+  position: number
+  level: number | null
+  data: Record<string, unknown>
+  media: Array<{ public_url?: string | null; alt_text?: string | null; caption?: string | null }>
 }
 
 type TenantLlmBlogSummary = PlatformLlmBlogSummary
@@ -63,8 +60,8 @@ export interface PlatformLlmLinkEntry {
   category?: string | null
   publishedAt?: string | null
   updatedAt?: string | null
-  difficultyLevel?: string | null
   authorName?: string | null
+  difficultyLevel?: string | null
 }
 
 function normalizeWhitespace(value: string | null | undefined) {
@@ -97,39 +94,33 @@ function optionalFrontMatterLine(key: string, value: string | null | undefined) 
   return normalized ? `${key}: ${escapeYamlString(normalized)}` : null
 }
 
-function serializeFaqMarkdown(component: PlatformContentComponent) {
-  if (component.type !== 'faq') return ''
-  const data = component.data as PlatformFaqComponentData
-  const validItems = (data.items ?? [])
-    .filter(item => item.question?.trim() && item.answer?.trim())
-    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+function serializeFaqMarkdown(block: LlmContentBlock) {
+  const items = Array.isArray(block.data.items) ? block.data.items as Array<Record<string, unknown>> : []
+  const validItems = items.filter(item => String(item.question || '').trim() && String(item.answer || '').trim())
 
   if (!validItems.length) return ''
 
   return [
-    `## ${normalizeWhitespace(component.label) || 'FAQ'}`,
+    `## ${normalizeWhitespace(String(block.data.label || '')) || 'FAQ'}`,
     ...validItems.flatMap(item => [
       '',
-      `### ${item.question!.trim()}`,
+      `### ${String(item.question).trim()}`,
       '',
-      item.answer!.trim(),
+      String(item.answer).trim(),
     ]),
   ].join('\n')
 }
 
-function serializeHowToMarkdown(component: PlatformContentComponent) {
-  if (component.type !== 'how_to') return ''
-  const data = component.data as PlatformHowToComponentData
-  const validSteps = (data.steps ?? [])
-    .filter(step => step.name?.trim() && step.text?.trim())
-    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+function serializeHowToMarkdown(block: LlmContentBlock) {
+  const steps = Array.isArray(block.data.steps) ? block.data.steps as Array<Record<string, unknown>> : []
+  const validSteps = steps.filter(step => String(step.name || '').trim() && String(step.text || '').trim())
 
   if (!validSteps.length) return ''
 
-  const lines: string[] = [`## ${normalizeWhitespace(component.label) || 'How To'}`]
-  const estimatedTime = normalizeWhitespace(data.estimated_time)
-  const toolItems = (data.tool_items ?? []).map(item => normalizeWhitespace(item)).filter(Boolean)
-  const supplyItems = (data.supply_items ?? []).map(item => normalizeWhitespace(item)).filter(Boolean)
+  const lines: string[] = [`## ${normalizeWhitespace(String(block.data.label || '')) || 'How To'}`]
+  const estimatedTime = normalizeWhitespace(String(block.data.estimated_time || ''))
+  const toolItems = (Array.isArray(block.data.tool_items) ? block.data.tool_items : []).map(item => normalizeWhitespace(String(item))).filter(Boolean)
+  const supplyItems = (Array.isArray(block.data.supply_items) ? block.data.supply_items : []).map(item => normalizeWhitespace(String(item))).filter(Boolean)
 
   if (estimatedTime) {
     lines.push('', `Estimated time: ${estimatedTime}`)
@@ -143,79 +134,50 @@ function serializeHowToMarkdown(component: PlatformContentComponent) {
 
   lines.push('')
   for (const [index, step] of validSteps.entries()) {
-    lines.push(`${index + 1}. **${step.name!.trim()}**`)
+    lines.push(`${index + 1}. **${String(step.name).trim()}**`)
     lines.push('')
-    lines.push(`   ${step.text!.trim().replace(/\n/g, '\n   ')}`)
-    if (step.url?.trim()) lines.push(`   Link: ${step.url.trim()}`)
-    if (step.image_public_url?.trim()) lines.push(`   Image: ${step.image_public_url.trim()}`)
+    lines.push(`   ${String(step.text).trim().replace(/\n/g, '\n   ')}`)
+    if (String(step.url || '').trim()) lines.push(`   Link: ${String(step.url).trim()}`)
     lines.push('')
   }
 
   return normalizeWhitespace(lines.join('\n'))
 }
 
-function serializeAiAssistanceMarkdown(component: PlatformContentComponent) {
-  if (component.type !== 'ai_assistance') return ''
-  const data = component.data as PlatformAiAssistanceComponentData
-  const validPrompts = (data.prompts ?? [])
-    .filter(item => item.prompt?.trim())
-    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+function serializeAiAssistanceMarkdown(block: LlmContentBlock) {
+  const prompts = Array.isArray(block.data.prompts) ? block.data.prompts as Array<Record<string, unknown>> : []
+  const validPrompts = prompts.filter(item => String(item.prompt || '').trim())
 
   if (!validPrompts.length) return ''
 
-  const lines: string[] = [`## ${normalizeWhitespace(component.label) || 'AI Assistance'}`]
-  const intro = normalizeWhitespace(data.intro)
+  const lines: string[] = [`## ${normalizeWhitespace(String(block.data.label || '')) || 'AI Assistance'}`]
+  const intro = normalizeWhitespace(String(block.data.intro || ''))
   if (intro) lines.push('', intro)
 
   for (const prompt of validPrompts) {
-    const title = normalizeWhitespace(prompt.title)
-    const description = normalizeWhitespace(prompt.description)
+    const title = normalizeWhitespace(String(prompt.title || ''))
+    const description = normalizeWhitespace(String(prompt.description || ''))
     if (title) lines.push('', `### ${title}`)
     if (description) lines.push('', description)
-    lines.push('', '```text', prompt.prompt.trim(), '```')
+    lines.push('', '```text', String(prompt.prompt).trim(), '```')
   }
 
   return normalizeWhitespace(lines.join('\n'))
 }
 
-function serializeComponentMarkdown(component: PlatformContentComponent) {
-  if (component.render_enabled === false) return ''
-  if (component.status !== 'active') return ''
-  if (component.type === 'faq') return serializeFaqMarkdown(component)
-  if (component.type === 'how_to') return serializeHowToMarkdown(component)
-  return serializeAiAssistanceMarkdown(component)
-}
-
-export function renderContentMarkdownWithComponents(body: string, components: PlatformContentComponent[]) {
-  const normalizedComponents = [...components].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-  // Filter out inactive or disabled components before serialization
-  const activeComponents = normalizedComponents.filter(
-    component => component.status === 'active' && component.render_enabled !== false
-  )
-  const queues = {
-    faq: activeComponents.filter(component => component.type === 'faq'),
-    how_to: activeComponents.filter(component => component.type === 'how_to'),
-    ai_assistance: activeComponents.filter(component => component.type === 'ai_assistance'),
-  }
-  const usedComponentIds = new Set<string>()
-  const replacedBody = body.replace(COMPONENT_EMBED_REGEX, (_match, quoted, singleQuoted, bare) => {
-    const type = String(quoted ?? singleQuoted ?? bare ?? '').trim()
-    if (type !== 'faq' && type !== 'how_to' && type !== 'ai_assistance') return ''
-    const component = queues[type].shift()
-    if (!component) return ''
-    usedComponentIds.add(component.id)
-    return `\n\n${serializeComponentMarkdown(component)}\n\n`
-  })
-
-  const trailingSections = activeComponents
-    .filter(component => !usedComponentIds.has(component.id))
-    .map(component => serializeComponentMarkdown(component))
-    .filter(Boolean)
-
-  return normalizeWhitespace([
-    replacedBody,
-    ...trailingSections,
-  ].filter(Boolean).join('\n\n'))
+export function renderContentBlocksForLlm(blocks: LlmContentBlock[]) {
+  return normalizeWhitespace([...blocks].sort((a, b) => a.position - b.position).map((block) => {
+    if (block.data.status === 'inactive' || block.data.render_enabled === false) return ''
+    if (block.type === 'heading') return `${'#'.repeat(Math.max(1, Math.min(6, block.level || 2)))} ${String(block.data.text || '').trim()}`
+    if (block.type === 'markdown') return String(block.data.markdown || '').trim()
+    if (block.type === 'divider') return '---'
+    if (block.type === 'faq') return serializeFaqMarkdown(block)
+    if (block.type === 'how_to') return serializeHowToMarkdown(block)
+    if (block.type === 'ai_assistance') return serializeAiAssistanceMarkdown(block)
+    if (block.type === 'image' || block.type === 'gallery') return block.media.map(item => item.public_url ? `![${item.alt_text || ''}](${item.public_url})${item.caption ? `\n\n${item.caption}` : ''}` : '').filter(Boolean).join('\n\n')
+    if (block.type === 'cta') return block.data.url ? `[${String(block.data.label || block.data.title || 'Learn more')}](${String(block.data.url)})` : ''
+    return String(block.data.markdown || block.data.text || '')
+  }).filter(Boolean).join('\n\n'))
 }
 
 function formatDateOnly(value: string | null | undefined) {
@@ -235,7 +197,7 @@ export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: str
   const path = `/docs/${categorySlug}/${doc.slug}`
   const markdownPath = `/docs-md/${categorySlug}/${doc.slug}.md`
   const canonicalUrl = doc.canonical_url?.trim() || absoluteUrl(origin, path)
-  const body = renderContentMarkdownWithComponents(doc.body, doc.components)
+  const body = renderContentBlocksForLlm(doc.content_blocks)
 
   return [
     buildFrontMatter([
@@ -263,13 +225,12 @@ function renderBlogMarkdown(
 ) {
   const { path, markdownPath } = paths
   const canonicalUrl = post.canonical_url?.trim() || absoluteUrl(origin, path)
-  const body = renderContentMarkdownWithComponents(post.body, post.components)
+  const body = renderContentBlocksForLlm(post.content_blocks)
 
   return [
     buildFrontMatter([
       optionalFrontMatterLine('title', post.title),
       optionalFrontMatterLine('category', post.category),
-      optionalFrontMatterLine('author', post.author_name),
       optionalFrontMatterLine('url', path),
       optionalFrontMatterLine('markdown_url', markdownPath),
       optionalFrontMatterLine('canonical_url', canonicalUrl),
@@ -313,10 +274,9 @@ export async function listPublishedPlatformBlogPostsForLlm(db: DbClient) {
   return await queryAll<PlatformLlmBlogSummary>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at,
-      u.name AS author_name
+      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, u.name AS author_name
      FROM blog_posts p
-     LEFT JOIN user u ON u.id = p.author_id
+     LEFT JOIN "user" u ON u.id = p.author_id
      WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'
      ORDER BY p.category, p.published_at DESC`,
   )
@@ -326,10 +286,9 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: s
   return await queryAll<TenantLlmBlogSummary>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at,
-      u.name AS author_name
+      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, u.name AS author_name
      FROM blog_posts p
-     LEFT JOIN user u ON u.id = p.author_id
+     LEFT JOIN "user" u ON u.id = p.author_id
      WHERE p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
      ORDER BY p.published_at DESC, p.updated_at DESC`,
     [siteId],
@@ -339,51 +298,50 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: s
 export async function getPublishedPlatformDocBySlug(db: DbClient, categorySlug: string, slug: string) {
   const category = slugToCategory(categorySlug)
   if (!category) return null
-  const detail = await queryFirst<PlatformLlmDocDetail>(
+  const detail = await queryFirst<Omit<PlatformLlmDocDetail, 'content_blocks'>>(
     db,
     `SELECT
-      id, title, slug, body, excerpt, category, difficulty_level, canonical_url, seo_description, updated_at
+      id, title, slug, excerpt, category, difficulty_level, canonical_url, seo_description, updated_at
      FROM platform_docs
      WHERE slug = ? AND category = ?`,
     [slug, category],
   )
   if (!detail) return null
-  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'doc', detail.id, { activeOnly: true }))
-  return { ...detail, components }
+  const contentBlocks = await getContentBlocksForOwner(db, 'platform_doc', detail.id)
+  if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Documentation content document is missing' })
+  return { ...detail, content_blocks: contentBlocks }
 }
 
 export async function getPublishedPlatformBlogPostBySlug(db: DbClient, categorySlug: string, slug: string) {
   const category = slugToBlogCategory(categorySlug)
   if (!category) return null
-  const detail = await queryFirst<PlatformLlmBlogDetail>(
+  const detail = await queryFirst<Omit<PlatformLlmBlogDetail, 'content_blocks'>>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at,
-      u.name AS author_name
+      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at
      FROM blog_posts p
-     LEFT JOIN user u ON u.id = p.author_id
      WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id IS NULL`,
     [slug, category],
   )
   if (!detail) return null
-  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', detail.id, { activeOnly: true }))
-  return { ...detail, components }
+  const contentBlocks = await getContentBlocksForOwner(db, 'platform_blog', detail.id)
+  if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+  return { ...detail, content_blocks: contentBlocks }
 }
 
 export async function getPublishedTenantBlogPostBySlug(db: DbClient, siteId: string, slug: string) {
-  const detail = await queryFirst<TenantLlmBlogDetail>(
+  const detail = await queryFirst<Omit<TenantLlmBlogDetail, 'content_blocks'>>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at,
-      u.name AS author_name
+      p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at
      FROM blog_posts p
-     LEFT JOIN user u ON u.id = p.author_id
      WHERE p.slug = ? AND p.status = 'published' AND p.site_id = ?`,
     [slug, siteId],
   )
   if (!detail) return null
-  const components = await resolveContentComponentsMedia(db, await listContentComponents(db, 'blog_post', detail.id, { activeOnly: true }))
-  return { ...detail, components }
+  const contentBlocks = await getContentBlocksForOwner(db, 'tenant_blog', detail.id)
+  if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+  return { ...detail, content_blocks: contentBlocks }
 }
 
 export function buildPlatformDocLinkEntries(docs: PlatformLlmDocSummary[], origin: string): PlatformLlmLinkEntry[] {
@@ -559,7 +517,6 @@ export function buildBlogIndexJson(posts: PlatformLlmLinkEntry[]) {
     posts: posts.map(post => ({
       title: post.title,
       category: post.category ?? null,
-      author_name: post.authorName ?? null,
       url: post.path,
       markdown_url: post.markdownPath,
       canonical_url: post.canonicalUrl,
@@ -588,7 +545,6 @@ export function buildBlogRss(origin: string, posts: PlatformLlmLinkEntry[]) {
 interface BlogFeedOptions {
   title?: string
   description?: string
-  authorName?: string
 }
 
 export function buildNamedBlogRss(origin: string, posts: PlatformLlmLinkEntry[], options: BlogFeedOptions = {}) {
@@ -643,7 +599,7 @@ export function buildNamedBlogJsonFeed(origin: string, posts: PlatformLlmLinkEnt
       summary: post.summary,
       date_published: post.publishedAt ?? null,
       date_modified: post.updatedAt ?? post.publishedAt ?? null,
-      authors: post.authorName ? [{ name: post.authorName }] : [{ name: options.authorName || 'KrabiClaw' }],
+      ...(post.authorName ? { authors: [{ name: post.authorName }] } : {}),
       tags: post.category ? [post.category] : [],
     })),
   }

@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { isOrganizationWideRole } from '~/server/utils/member-access'
+import { listAccessibleLocationIds } from '~/server/utils/member-access'
 
 export interface DashboardLocationResource {
   id: string
@@ -25,30 +25,31 @@ export async function listDashboardLocationsResource(
   event: H3Event,
   scope: { organizationSlug?: string; siteSlug?: string } = {},
 ) {
-  const { db, organization, site } = await getDashboardContext(event, {
+  const { env, db, organization, site } = await getDashboardContext(event, {
     requireSite: true,
     organizationSlug: scope.organizationSlug,
     siteSlug: scope.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  const scoped = !isOrganizationWideRole(organization.role)
+  const accessibleLocationIds = await listAccessibleLocationIds(db, {
+    env,
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId: organization.id,
+    siteId: site.id,
+  })
+  if (accessibleLocationIds?.length === 0) return { success: true as const, locations: [] }
+  const locationFilter = accessibleLocationIds
+    ? `AND id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+    : ''
   const locations = await queryAll<DashboardLocationResource>(db, `
     SELECT id, slug, title, city, is_primary, status, address, phone, email,
            notification_phone, grab_url, uber_eats_url, foodpanda_url
       FROM business_locations
      WHERE organization_id = ? AND site_id = ?
-       ${scoped ? `AND EXISTS (
-         SELECT 1
-           FROM member m
-           JOIN sites s ON s.id = business_locations.site_id
-           JOIN teamMember tm ON tm.userId = m.userId
-            AND tm.teamId IN (s.team_id, business_locations.team_id)
-          WHERE m.id = ? AND m.organizationId = business_locations.organization_id
-       )` : ''}
+       ${locationFilter}
      ORDER BY is_primary DESC, title ASC
-  `, scoped
-    ? [organization.id, site.id, organization.memberId]
-    : [organization.id, site.id])
+  `, [organization.id, site.id, ...(accessibleLocationIds ?? [])])
   return {
     success: true as const,
     locations: locations.map(location => ({

@@ -3,6 +3,12 @@ import { deleteImage } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
+import {
+  isSupportedMediaPlacement,
+  MAX_ORDERED_MEDIA_ASSETS,
+} from '~/shared/media-placement-contract'
+
+export { isSingleMediaPlacement, isSupportedMediaPlacement, MAX_ORDERED_MEDIA_ASSETS } from '~/shared/media-placement-contract'
 
 type SqlBindValue = string | number | boolean | null
 type MediaProviderEnv = Parameters<typeof deleteImage>[0]
@@ -16,13 +22,11 @@ export interface MediaAsset {
   id: string
   organization_id: string
   site_id: string
-  location_id: string | null
   kind: 'image' | 'video' | 'file'
-  provider: 'cloudflare_images' | 'cloudflare_r2' | 'external_url' | 'chowbot'
-  source: 'uploaded' | 'google_sync' | 'generated' | 'external' | 'template_stock'
+  provider: 'cloudflare_images' | 'cloudflare_r2'
+  source: 'uploaded' | 'generated' | 'external'
   cloudflare_image_id: string | null
   r2_key: string | null
-  google_media_name: string | null
   public_url: string | null
   thumbnail_url: string | null
   mime_type: string | null
@@ -32,7 +36,7 @@ export interface MediaAsset {
   height: number | null
   duration: number | null
   alt_text: string | null
-  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog' | null
+  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | null
   status: 'pending' | 'active' | 'deleted' | 'failed'
   created_by_user_id: string | null
   created_at: string
@@ -40,7 +44,7 @@ export interface MediaAsset {
 }
 
 interface ResolvedMediaAssetBase {
-  id: string
+  asset_id: string
   public_url: string
   mime_type: string | null
   width: number | null
@@ -54,21 +58,88 @@ interface ResolvedMediaAssetBase {
 export type ResolvedMediaAsset = ResolvedMediaAssetBase & (
   | { kind: 'image'; thumbnail_url: string | null }
   | { kind: 'video'; thumbnail_url: string }
+  | { kind: 'file'; thumbnail_url: null }
 )
 
 export interface MediaAssetRefInput {
   asset_id: string
 }
 
+export function parseMediaAssetRefs(value: unknown): MediaAssetRefInput[] {
+  if (!Array.isArray(value)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'media must be an array of { asset_id } items' })
+  }
+  return value.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'media must be an array of { asset_id } items' })
+    }
+    const assetId = (item as Record<string, unknown>).asset_id
+    if (typeof assetId !== 'string' || !assetId.trim()) {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'media must be an array of { asset_id } items' })
+    }
+    return { asset_id: assetId.trim() }
+  })
+}
+
 export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
   Partial<Omit<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source' | 'created_at' | 'updated_at'>>
 
-export const MAX_ORDERED_MEDIA_ASSETS = 50
+export interface MediaPlacementInsertInput {
+  id?: string
+  organizationId: string
+  siteId: string
+  ownerType: string
+  ownerId: string
+  slot: string
+  assetId: string
+  sortOrder: number
+  status?: 'pending' | 'active' | 'rejected'
+  createdAt?: string
+  updatedAt?: string
+}
+
+export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput): BatchQuery {
+  if (!isSupportedMediaPlacement({ owner_type: input.ownerType, slot: input.slot })) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Media placement owner and slot are not supported' })
+  }
+  const createdAt = input.createdAt ?? new Date().toISOString()
+  return {
+    query: 'INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    params: [input.id ?? crypto.randomUUID(), input.organizationId, input.siteId, input.ownerType, input.ownerId, input.slot, input.assetId, input.sortOrder, input.status ?? 'active', createdAt, input.updatedAt ?? createdAt],
+  }
+}
+
+export function buildReplaceMediaPlacementQueries(input: {
+  organizationId: string
+  siteId: string
+  placement: { owner_type: string; owner_id: string; slot: string }
+  media: Array<{ asset_id: string }>
+  now?: string
+}): BatchQuery[] {
+  if (!isSupportedMediaPlacement(input.placement)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Media placement owner and slot are not supported' })
+  }
+  const now = input.now ?? new Date().toISOString()
+  return [
+    {
+      query: 'DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?',
+      params: [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot],
+    },
+    ...input.media.map((asset, sortOrder) => buildMediaPlacementInsertQuery({
+      organizationId: input.organizationId,
+      siteId: input.siteId,
+      ownerType: input.placement.owner_type,
+      ownerId: input.placement.owner_id,
+      slot: input.placement.slot,
+      assetId: asset.asset_id,
+      sortOrder,
+      createdAt: now,
+      updatedAt: now,
+    })),
+  ]
+}
 
 export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
-  if (row.kind !== 'image' && row.kind !== 'video') {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not assignable image/video media` })
-  }
   if (!row.public_url) {
     throw new HTTPError({ statusCode: 400, statusMessage: `Media asset ${row.id} does not have a public URL` })
   }
@@ -80,7 +151,7 @@ export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   }
 
   const base = {
-    id: row.id,
+    asset_id: row.id,
     public_url: row.public_url,
     mime_type: row.mime_type,
     width: row.width,
@@ -93,7 +164,8 @@ export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   if (row.kind === 'video') {
     return { ...base, kind: 'video', thumbnail_url: row.thumbnail_url! }
   }
-  return { ...base, kind: 'image', thumbnail_url: row.thumbnail_url }
+  if (row.kind === 'image') return { ...base, kind: 'image', thumbnail_url: row.thumbnail_url }
+  return { ...base, kind: 'file', thumbnail_url: null }
 }
 
 export async function hydrateMediaAssetRefs(
@@ -146,167 +218,38 @@ export async function hydrateMediaAssetRefs(
   return resolved
 }
 
-export async function hydrateMediaAssetsForExperiences(
-  db: DbClient,
-  siteId: string,
-  experienceIds: string[],
-): Promise<Map<string, ResolvedMediaAsset[]>> {
-  const uniqueExperienceIds = Array.from(new Set(experienceIds)).filter(Boolean)
-  const result = new Map<string, ResolvedMediaAsset[]>()
-  for (const id of uniqueExperienceIds) result.set(id, [])
-  if (uniqueExperienceIds.length === 0) return result
-
-  const rows = await queryAll<MediaAsset & { experience_id: string; sort_order: number }>(
-    db,
-    `SELECT ma.*, em.experience_id, em.sort_order
-       FROM experience_media em
-       JOIN media_assets ma ON ma.id = em.asset_id
-      WHERE em.site_id = ? AND em.experience_id IN (${uniqueExperienceIds.map(() => '?').join(',')})
-        AND ma.site_id = em.site_id AND ma.status = 'active'
-      ORDER BY em.experience_id ASC, em.sort_order ASC`,
-    [siteId, ...uniqueExperienceIds],
-  )
-  for (const row of rows ?? []) {
-    const list = result.get(row.experience_id)
-    if (!list || !row.public_url || (row.kind !== 'image' && row.kind !== 'video')) continue
-    try {
-      list.push(toResolvedMediaAsset(row))
-    } catch {
-      continue
-    }
-  }
-  return result
-}
-
-export async function hydrateMediaAssetsForMenuItems(
-  db: DbClient,
-  siteId: string,
-  menuItemIds: string[],
-): Promise<Map<string, ResolvedMediaAsset[]>> {
-  const uniqueMenuItemIds = Array.from(new Set(menuItemIds)).filter(Boolean)
-  const result = new Map<string, ResolvedMediaAsset[]>()
-  for (const id of uniqueMenuItemIds) result.set(id, [])
-  if (uniqueMenuItemIds.length === 0) return result
-
-  const rows = await queryAll<MediaAsset & { menu_item_id: string; sort_order: number }>(
-    db,
-    `SELECT ma.*, mim.menu_item_id, mim.sort_order
-       FROM menu_item_media mim
-       JOIN media_assets ma ON ma.id = mim.asset_id
-      WHERE mim.site_id = ? AND mim.menu_item_id IN (${uniqueMenuItemIds.map(() => '?').join(',')})
-        AND ma.site_id = mim.site_id AND ma.status = 'active'
-      ORDER BY mim.menu_item_id ASC, mim.sort_order ASC`,
-    [siteId, ...uniqueMenuItemIds],
-  )
-  for (const row of rows ?? []) {
-    const list = result.get(row.menu_item_id)
-    if (!list) continue
-    list.push(toResolvedMediaAsset(row))
-  }
-  return result
-}
-
-export async function replaceExperienceMedia(
-  db: DbClient,
-  input: {
-    organizationId: string
-    siteId: string
-    experienceId: string
-    refs: MediaAssetRefInput[]
-  },
-): Promise<ResolvedMediaAsset[]> {
-  const media = await hydrateMediaAssetRefs(db, {
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-    refs: input.refs,
-    allowedKinds: ['image', 'video'],
-    fieldName: 'media',
-  })
-  await executeBatch(db, buildReplaceExperienceMediaQueries({
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-    experienceId: input.experienceId,
-    media,
-  }))
-  return media
-}
-
-export function buildReplaceExperienceMediaQueries(input: {
-  organizationId: string
-  siteId: string
-  experienceId: string
-  media: ResolvedMediaAsset[]
-  now?: string
-}): BatchQuery[] {
-  const now = input.now ?? new Date().toISOString()
-  return [
-    {
-      query: `DELETE FROM experience_media WHERE site_id = ? AND experience_id = ?`,
-      params: [input.siteId, input.experienceId],
-    },
-    ...input.media.map((asset, index) => ({
-      query: `INSERT INTO experience_media
-         (id, organization_id, site_id, experience_id, asset_id, sort_order, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [crypto.randomUUID(), input.organizationId, input.siteId, input.experienceId, asset.id, index, now, now],
-    })),
-  ]
-}
-
-export function buildReplaceMenuItemMediaQueries(input: {
-  organizationId: string
-  siteId: string
-  menuItemId: string
-  media: ResolvedMediaAsset[]
-  now?: string
-}): BatchQuery[] {
-  const now = input.now ?? new Date().toISOString()
-  return [
-    {
-      query: `DELETE FROM menu_item_media WHERE site_id = ? AND menu_item_id = ?`,
-      params: [input.siteId, input.menuItemId],
-    },
-    ...input.media.map((asset, index) => ({
-      query: `INSERT INTO menu_item_media
-         (id, organization_id, site_id, menu_item_id, asset_id, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [crypto.randomUUID(), input.organizationId, input.siteId, input.menuItemId, asset.id, index, now, now],
-    })),
-    {
-      query: `UPDATE menu_items SET updated_at = ? WHERE id = ?`,
-      params: [now, input.menuItemId],
-    },
-  ]
-}
-
-export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
+export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().toISOString()): BatchQuery {
   if (data.kind === 'video' && !data.thumbnail_url?.trim()) {
     throw new Error(`Video asset ${data.id} requires a thumbnail URL`)
   }
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO media_assets (
-      id, organization_id, site_id, location_id, kind, provider, source,
-      cloudflare_image_id, r2_key, google_media_name,
+  return {
+    query: `INSERT INTO media_assets (
+      id, organization_id, site_id, kind, provider, source,
+      cloudflare_image_id, r2_key,
       public_url, thumbnail_url, mime_type, file_name, file_size,
       width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    data.id, data.organization_id, data.site_id, data.location_id ?? null,
-    data.kind, data.provider, data.source,
-    data.cloudflare_image_id ?? null, data.r2_key ?? null, data.google_media_name ?? null,
-    data.public_url ?? null, data.thumbnail_url ?? null,
-    data.mime_type ?? null, data.file_name ?? null, data.file_size ?? null,
-    data.width ?? null, data.height ?? null, data.duration ?? null,
-    data.alt_text ?? null, data.category ?? null, data.status ?? 'active',
-    data.created_by_user_id ?? null, now, now,
-  ])
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      data.id, data.organization_id, data.site_id, data.kind, data.provider, data.source,
+      data.cloudflare_image_id ?? null, data.r2_key ?? null,
+      data.public_url ?? null, data.thumbnail_url ?? null,
+      data.mime_type ?? null, data.file_name ?? null, data.file_size ?? null,
+      data.width ?? null, data.height ?? null, data.duration ?? null,
+      data.alt_text ?? null, data.category ?? null, data.status ?? 'active',
+      data.created_by_user_id ?? null, now, now,
+    ],
+  }
+}
+
+export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
+  const query = buildMediaAssetInsertQuery(data)
+  await execute(db, query.query, query.params)
 
   await fireSiteEventSafe({
     db,
     organizationId: data.organization_id,
     siteId: data.site_id,
-    locationId: data.location_id ?? null,
+    locationId: null,
     actorId: data.created_by_user_id ?? null,
     eventType: 'media.uploaded',
     entityType: 'media_asset',
@@ -331,21 +274,27 @@ export async function getMediaAsset(db: DbClient, id: string, siteId: string): P
 export async function listMediaAssets(
   db: DbClient,
   siteId: string,
-  opts: { kind?: string; locationId?: string; search?: string; limit?: number; offset?: number } = {}
+  opts: { kind?: string; search?: string; ownerType?: string; ownerId?: string; slot?: string; limit?: number; offset?: number } = {}
 ): Promise<MediaAsset[]> {
-  const conditions = [`site_id = ?`, `status = 'active'`]
+  const conditions = [`ma.site_id = ?`, `ma.status = 'active'`]
   const params: SqlBindValue[] = [siteId]
-  if (opts.kind) { conditions.push(`kind = ?`); params.push(opts.kind) }
-  if (opts.locationId) { conditions.push(`location_id = ?`); params.push(opts.locationId) }
-  if (opts.search) { conditions.push(`file_name LIKE ? ESCAPE '\\'`); params.push(`%${opts.search.replace(/[\\%_]/g, '\\$&')}%`) }
+  if (opts.kind) { conditions.push(`ma.kind = ?`); params.push(opts.kind) }
+  if (opts.search) { conditions.push(`ma.file_name LIKE ? ESCAPE '\\'`); params.push(`%${opts.search.replace(/[\\%_]/g, '\\$&')}%`) }
+  if (opts.ownerType && opts.ownerId) {
+    conditions.push('mp.owner_type = ?', 'mp.owner_id = ?', `mp.status = 'active'`)
+    params.push(opts.ownerType, opts.ownerId)
+    if (opts.slot) { conditions.push('mp.slot = ?'); params.push(opts.slot) }
+  }
   params.push(opts.limit ?? 50, opts.offset ?? 0)
   const results = await queryAll<MediaAsset>(
     db,
-    `SELECT id, organization_id, site_id, location_id, kind, provider, source,
-            cloudflare_image_id, r2_key, google_media_name,
+    `SELECT id, organization_id, site_id, kind, provider, source,
+            cloudflare_image_id, r2_key,
             public_url, thumbnail_url, mime_type, file_name, file_size,
             width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-     FROM media_assets WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+     FROM media_assets ma
+     ${opts.ownerType && opts.ownerId ? 'JOIN media_placements mp ON mp.asset_id = ma.id AND mp.site_id = ma.site_id' : ''}
+     WHERE ${conditions.join(' AND ')} ORDER BY ${opts.ownerType && opts.ownerId ? 'mp.sort_order' : 'ma.created_at DESC'} LIMIT ? OFFSET ?`
     , params,
   )
   return results
@@ -381,17 +330,13 @@ export async function updateMediaAssetMetadata(
   db: DbClient,
   id: string,
   siteId: string,
-  updates: { alt_text?: string | null; location_id?: string | null; category?: MediaAsset['category'] }
+  updates: { alt_text?: string | null; category?: MediaAsset['category'] }
 ): Promise<boolean> {
   const sets: string[] = ['updated_at = ?']
   const params: SqlBindValue[] = [new Date().toISOString()]
   if (updates.alt_text !== undefined) {
     sets.push('alt_text = ?')
     params.push(updates.alt_text)
-  }
-  if (updates.location_id !== undefined) {
-    sets.push('location_id = ?')
-    params.push(updates.location_id)
   }
   if (updates.category !== undefined) {
     sets.push('category = ?')
@@ -462,10 +407,9 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     cloudflare_image_id: string | null
     r2_key: string | null
     organization_id: string
-    location_id: string | null
     created_by_user_id: string | null
   }>(db, `
-    SELECT id, provider, cloudflare_image_id, r2_key, organization_id, location_id, created_by_user_id
+    SELECT id, provider, cloudflare_image_id, r2_key, organization_id, created_by_user_id
     FROM media_assets
     WHERE id = ? AND site_id = ? AND status != 'deleted'
   `, [id, siteId]) ?? null
@@ -497,11 +441,13 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     throw new Error(`Media deletion failed: ${failures.join('; ')}`)
   }
 
-  const result = await execute(db, `
-    UPDATE media_assets
-    SET status = 'deleted', updated_at = ?
-    WHERE id = ? AND site_id = ? AND status != 'deleted'
-  `, [new Date().toISOString(), pendingAsset.id, siteId])
+  const [result] = await executeBatch(db, [{
+    query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND site_id = ? AND status != 'deleted'`,
+    params: [new Date().toISOString(), pendingAsset.id, siteId],
+  }, {
+    query: 'DELETE FROM media_placements WHERE site_id = ? AND asset_id = ?',
+    params: [siteId, pendingAsset.id],
+  }])
   if (Number(result?.meta?.changes ?? 0) !== 1) {
     throw new Error(`Media asset ${pendingAsset.id} changed during deletion`)
   }
@@ -510,7 +456,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     db,
     organizationId: pendingAsset.organization_id,
     siteId,
-    locationId: pendingAsset.location_id,
+    locationId: null,
     actorId: deletedByUserId,
     eventType: 'media.deleted',
     entityType: 'media_asset',

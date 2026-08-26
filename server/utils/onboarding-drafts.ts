@@ -25,7 +25,6 @@ export interface DraftUploadedImage {
   mimeType: string | null
   fileName: string | null
   fileSize: number | null
-  category: 'logo' | 'other'
 }
 
 export interface DraftLocationRecord {
@@ -42,8 +41,6 @@ export interface DraftLocationRecord {
   review_count: number | null
   is_primary: boolean
   status: 'active'
-  hero_url: string | null
-  thumbnail_url: string | null
 }
 
 export interface DraftMenuItemRecord {
@@ -67,13 +64,11 @@ export interface DraftMenuRecord {
 export interface DraftReviewRecord {
   id: string
   author_name: string | null
-  reviewer_photo_url: string | null
   rating: number
   title: string | null
   content: string | null
   owner_reply: string | null
   owner_reply_at: string | null
-  photo_urls: string | null
   source: string | null
   created_at: string | null
 }
@@ -102,9 +97,6 @@ export interface DraftContentRecord {
   type: string
   hero_title: string | null
   hero_subtitle: string | null
-  hero_public_url: string | null
-  hero_kind: string | null
-  thumbnail_url: string | null
   component: string | null
   updated_at: string
 }
@@ -121,10 +113,7 @@ export interface OnboardingDraftPayload {
     vertical: SiteVertical
     subdomainCandidate: string
     config: Record<string, string | null>
-    draftMedia: {
-      logo: DraftUploadedImage | null
-      hero: DraftUploadedImage | null
-    }
+    media: Array<{ slot: 'logo' | 'hero'; asset: DraftUploadedImage }>
     locations: DraftLocationRecord[]
     menu: DraftMenuRecord | null
     reviews: DraftReviewRecord[]
@@ -134,6 +123,10 @@ export interface OnboardingDraftPayload {
     locales: Array<{ code: string; label: string; is_source: boolean }>
     hasExperiences: boolean
   }
+}
+
+export function getDraftMedia(payload: OnboardingDraftPayload, slot: 'logo' | 'hero') {
+  return payload.preview.media.find(item => item.slot === slot)?.asset ?? null
 }
 
 export interface OnboardingDraftUpsertResult {
@@ -166,11 +159,9 @@ export interface PlaceDetailsSnapshot {
   rating: number | null
   ratingCount: number | null
   openingHours: string[] | null
-  photos: Array<{ photoUri: string }>
   reviews: Array<{
     reviewId: string | null
     authorName: string | null
-    authorPhotoUrl: string | null
     rating: number | null
     text: string | null
     publishedAt: string | null
@@ -199,11 +190,9 @@ function asPlaceSnapshot(place: DraftPlaceSource): PlaceDetailsSnapshot {
     rating: place.rating ?? null,
     ratingCount: place.ratingCount ?? null,
     openingHours: place.openingHours ?? null,
-    photos: place.photos.map(photo => ({ photoUri: photo.photoUri })),
     reviews: place.reviews.map(review => ({
       reviewId: review.reviewId ?? null,
       authorName: review.authorName ?? null,
-      authorPhotoUrl: review.authorPhotoUrl ?? null,
       rating: review.rating ?? null,
       text: review.text ?? null,
       publishedAt: review.publishedAt ?? null,
@@ -214,12 +203,10 @@ function asPlaceSnapshot(place: DraftPlaceSource): PlaceDetailsSnapshot {
 function buildDraftContent(
   _brandName: string,
   _vertical: SiteVertical,
-  heroImageUrl: string | null,
-  heroThumbnailUrl: string | null,
   heroHeadline: string | null,
   heroDescription: string | null,
 ): DraftContentRecord[] {
-  if (!heroHeadline && !heroDescription && !heroImageUrl) return []
+  if (!heroHeadline && !heroDescription) return []
   return [{
     page: 'home',
     field: 'hero',
@@ -228,9 +215,6 @@ function buildDraftContent(
     type: 'text',
     hero_title: heroHeadline,
     hero_subtitle: heroDescription,
-    hero_public_url: heroImageUrl,
-    hero_kind: heroImageUrl ? 'image' : null,
-    thumbnail_url: heroThumbnailUrl,
     component: null,
     updated_at: nowIso(),
   }]
@@ -250,9 +234,6 @@ export function buildOnboardingDraftPayload(input: {
   // Saya hero renders a brand-color + icon treatment when no real photo is available yet.
   const uploadedHero = input.brandDraft?.heroImage ?? null
   const uploadedLogo = input.brandDraft?.logoImage ?? null
-  const heroImageUrl = uploadedHero?.publicUrl ?? placeSnapshot?.photos[0]?.photoUri ?? null
-  const locationHeroImageUrl = uploadedHero?.publicUrl ?? placeSnapshot?.photos[1]?.photoUri ?? null
-  const heroThumbnailUrl = uploadedHero?.thumbnailUrl ?? heroImageUrl
   const locationSlug = slugify(brandName) || 'main'
   const locationId = 'draft-location-main'
 
@@ -264,13 +245,11 @@ export function buildOnboardingDraftPayload(input: {
     .map((review, index) => ({
       id: review.reviewId ? `draft-review-${review.reviewId.replace(/\//g, '-')}` : `draft-review-${index + 1}`,
       author_name: review.authorName,
-      reviewer_photo_url: review.authorPhotoUrl,
       rating: review.rating ?? 0,
       title: null,
       content: review.text,
       owner_reply: null,
       owner_reply_at: null,
-      photo_urls: null,
       source: 'google_places',
       created_at: review.publishedAt,
     }))
@@ -281,7 +260,7 @@ export function buildOnboardingDraftPayload(input: {
   const brandColor = input.brandDraft?.brandColor?.trim() || null
   const heroHeadline = input.brandDraft?.heroHeadline?.trim() || null
   const heroDescription = input.brandDraft?.heroDescription?.trim() || null
-  const content = buildDraftContent(brandName, input.vertical, heroImageUrl, heroThumbnailUrl, heroHeadline, heroDescription)
+  const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroDescription)
 
   return {
     version: 1,
@@ -296,21 +275,16 @@ export function buildOnboardingDraftPayload(input: {
       subdomainCandidate,
       config: {
         source_locale: 'en',
-        hero_image_url: heroImageUrl,
-        location_hero_image_url: locationHeroImageUrl,
-        logo_url: uploadedLogo?.publicUrl ?? null,
         brand_color: brandColor,
         draft_logo_note: input.brandDraft?.logoNote?.trim() || null,
         draft_hero_photo_note: input.brandDraft?.heroPhotoNote?.trim() || null,
         draft_hero_headline: heroHeadline,
         draft_hero_description: heroDescription,
-        draft_logo_asset_id: uploadedLogo?.draftAssetId ?? null,
-        draft_hero_asset_id: uploadedHero?.draftAssetId ?? null,
       },
-      draftMedia: {
-        logo: uploadedLogo,
-        hero: uploadedHero,
-      },
+      media: [
+        ...(uploadedLogo ? [{ slot: 'logo' as const, asset: uploadedLogo }] : []),
+        ...(uploadedHero ? [{ slot: 'hero' as const, asset: uploadedHero }] : []),
+      ],
       locations: [{
         id: locationId,
         slug: locationSlug,
@@ -325,8 +299,6 @@ export function buildOnboardingDraftPayload(input: {
         review_count: placeSnapshot?.ratingCount ?? null,
         is_primary: true,
         status: 'active',
-        hero_url: locationHeroImageUrl,
-        thumbnail_url: locationHeroImageUrl,
       }],
       menu,
       reviews,
@@ -341,7 +313,7 @@ export function buildOnboardingDraftPayload(input: {
 
 export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload {
   const parsed = JSON.parse(raw) as OnboardingDraftPayload
-  if (!parsed || parsed.version !== 1 || !parsed.preview || !parsed.preview.draftMedia) {
+  if (!parsed || parsed.version !== 1 || !parsed.preview || !Array.isArray(parsed.preview.media)) {
     throw new Error('Unsupported onboarding draft payload')
   }
   return parsed

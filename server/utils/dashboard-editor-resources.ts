@@ -1,9 +1,7 @@
 import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
-import { queryAll, queryFirst } from '~/server/db'
-import { cloudflareEnv } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { queryAll } from '~/server/db'
 import { listLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
 import { listExperiences } from '~/server/utils/experiences'
@@ -32,21 +30,6 @@ import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
 
-interface EditorSiteRow {
-  id: string
-  brand_name: string
-  subdomain: string
-  organization_id: string
-  status: string
-  onboarding_status: string
-  organization_name: string
-  vertical: string
-  theme_id: string
-  feature_overrides: string | null
-  member_id: string
-  member_role: string
-}
-
 interface EditorLocationRow {
   id: string
   slug: string
@@ -57,24 +40,11 @@ interface EditorLocationRow {
 }
 
 export async function loadDashboardEditorContext(event: H3Event, siteId: string) {
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
-  const site = await queryFirst<EditorSiteRow>(db, `
-    SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
-           s.vertical, s.theme_id, s.feature_overrides, o.name AS organization_name,
-           om.id AS member_id, om.role AS member_role
-      FROM sites s
-      JOIN organization o ON s.organization_id = o.id
-      JOIN member om ON o.id = om.organizationId
-     WHERE s.id = ? AND om.userId = ?
-     LIMIT 1
-  `, [siteId, session.user.id])
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
+  if (!site.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 
   const principal = {
+    env,
     memberId: site.member_id,
     role: site.member_role,
     organizationId: site.organization_id,
@@ -134,30 +104,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
 }
 
 export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
-  const site = await queryFirst<{
-    id: string
-    organization_id: string
-    member_id: string
-    member_role: string
-  }>(db, `
-    SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
-      FROM sites s
-      JOIN member om ON s.organization_id = om.organizationId
-     WHERE s.id = ? AND om.userId = ?
-     LIMIT 1
-  `, [siteId, session.user.id])
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
-  await assertSiteWideAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  })
+  const { db, site } = await requireSiteAccess(event, siteId)
   return { success: true as const, ...await listSiteLocales(db, site.organization_id, siteId) }
 }
 
@@ -182,7 +129,9 @@ export async function loadDashboardLocationExperiences(
 export interface DashboardMediaFilters {
   id?: string
   kind?: string
-  locationId?: string
+  ownerType?: string
+  ownerId?: string
+  slot?: string
   search?: string
   limit?: number
   offset?: number
@@ -193,8 +142,9 @@ export async function loadDashboardMedia(
   siteId: string,
   filters: DashboardMediaFilters = {},
 ) {
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   const principal = {
+    env,
     memberId: site.member_id,
     role: site.member_role,
     organizationId: site.organization_id,
@@ -205,7 +155,7 @@ export async function loadDashboardMedia(
     if (asset) {
       await assertResourceAccess(db, {
         ...principal,
-        resourceLocationId: asset.location_id ?? null,
+        resourceLocationId: null,
       })
     }
     return { media: asset ? [asset] : [] }
@@ -213,14 +163,16 @@ export async function loadDashboardMedia(
 
   await assertResourceAccess(db, {
     ...principal,
-    resourceLocationId: filters.locationId ?? null,
+    resourceLocationId: null,
   })
   const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100)
   const offset = Math.max(filters.offset ?? 0, 0)
   return {
     media: await listMediaAssets(db, siteId, {
       kind: filters.kind,
-      locationId: filters.locationId,
+      ownerType: filters.ownerType,
+      ownerId: filters.ownerId,
+      slot: filters.slot,
       search: filters.search,
       limit,
       offset,
@@ -239,6 +191,7 @@ export async function loadDashboardSettingsResource(
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   await assertSiteWideAccess(db, {
+    env,
     memberId: organization.memberId,
     role: organization.role,
     organizationId: organization.id,
@@ -269,11 +222,12 @@ export async function loadDashboardLocationOverview(
   locationId: string,
   options: { includeMenus: boolean },
 ) {
-  const { db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
   await assertLocationAccess(db, {
+    env,
     memberId: organization.memberId,
     role: organization.role,
     organizationId: organization.id,
@@ -308,11 +262,12 @@ export async function loadDashboardLocationSettings(
   siteId: string,
   locationId: string,
 ) {
-  const { db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
   await assertLocationAccess(db, {
+    env,
     memberId: organization.memberId,
     role: organization.role,
     organizationId: organization.id,
@@ -339,8 +294,8 @@ export async function loadDashboardBlogPosts(
   siteId: string,
   status?: string,
 ) {
-  const { db } = await requireBlogAccess(event, siteId)
-  return { posts: await listPlatformBlogPosts(db, status, siteId) }
+  const { env, db } = await requireBlogAccess(event, siteId)
+  return { posts: await listPlatformBlogPosts(db, status, siteId, env) }
 }
 
 export async function loadDashboardBlogPost(
@@ -348,8 +303,8 @@ export async function loadDashboardBlogPost(
   siteId: string,
   postId: string,
 ) {
-  const { db } = await requireBlogAccess(event, siteId)
-  const post = await getPlatformBlogPost(db, postId, siteId)
+  const { env, db } = await requireBlogAccess(event, siteId)
+  const post = await getPlatformBlogPost(db, postId, siteId, env)
   if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
   return { post }
 }
@@ -359,10 +314,11 @@ export async function loadDashboardMenu(
   siteId: string,
   menuId: string,
 ) {
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   const menu = await getMenuWithItems(db, site.organization_id, siteId, menuId)
   if (!menu) throw new HTTPError({ statusCode: 404, statusMessage: 'Menu not found' })
   await assertResourceAccess(db, {
+    env,
     memberId: site.member_id,
     role: site.member_role,
     organizationId: site.organization_id,

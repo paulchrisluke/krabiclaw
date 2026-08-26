@@ -1,69 +1,49 @@
 import type { McpToolDefinition } from './shared'
 import { chatgptFileInput, mediaAssetObject, resolvedMediaAssetObject, siteTool } from './shared'
+import { EDITABLE_MEDIA_PLACEMENT_OWNERS } from '~/server/utils/media-placement'
 
-const mediaEntityIdFields = ['location_id', 'menu_item_id', 'post_id', 'experience_id'] as const
-
-function mediaTargetBranch(targetTypes: string[], requiredEntityId?: typeof mediaEntityIdFields[number]) {
-  const forbiddenEntityIds = mediaEntityIdFields.filter(field => field !== requiredEntityId)
-  return {
-    properties: {
-      target_type: targetTypes.length === 1
-        ? { const: targetTypes[0] }
-        : { enum: targetTypes },
-    },
-    ...(requiredEntityId ? { required: [requiredEntityId] } : {}),
-    not: { anyOf: forbiddenEntityIds.map(field => ({ required: [field] })) },
-  }
+const mediaPlacementObject = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    owner_type: { type: 'string', enum: [...EDITABLE_MEDIA_PLACEMENT_OWNERS] },
+    owner_id: { type: 'string' },
+    slot: { type: 'string' },
+  },
+  required: ['owner_type', 'owner_id', 'slot'],
 }
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'set_media',
-      description: 'Assign existing media assets to exactly one CMS placement. Pass target_type as a top-level enum and use only the matching entity-id field returned by a read tool. asset_ids is the complete desired state; an empty array clears it. Position 0 is the cover for ordered mixed-media placements. Video cover/hero assets must already have thumbnail_url/poster metadata.',
+      description: 'Assign existing media assets to one canonical CMS placement. Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:"post", owner_id:<post.id>, slot:"cover"}; for a location hero use {owner_type:"business_location", owner_id:<location.id>, slot:"hero"}. asset_ids is the complete desired state; an empty array clears it. Array order is display order. Video cover/hero assets must already have thumbnail_url/poster metadata.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
       strict: true,
       inputSchema: {
-        target_type: {
-          type: 'string',
-          enum: ['site_logo', 'home_hero', 'home_story_image', 'about_story_image', 'location_hero', 'menu_item_media', 'post_image', 'blog_post_image', 'experience_media'],
-          description: 'The placement to replace. This is a required top-level field.',
-        },
-        location_id: { type: 'string', description: 'Required only for location_hero. Use the exact id returned by get_location or list_locations; never pass a slug, name, URL, or site_id.' },
-        menu_item_id: { type: 'string', description: 'Required only for menu_item_media. Use the exact id returned by a menu read tool.' },
-        post_id: { type: 'string', description: 'Required only for post_image or blog_post_image. Use the exact id returned by the matching post read tool.' },
-        experience_id: { type: 'string', description: 'Required only for experience_media. Use the exact id returned by get_experience or list_experiences.' },
+        placement: mediaPlacementObject,
         asset_ids: {
           type: 'array',
           items: { type: 'string' },
           uniqueItems: true,
           description: 'Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.',
         },
-        oneOf: [
-          mediaTargetBranch(['site_logo', 'home_hero', 'home_story_image', 'about_story_image']),
-          mediaTargetBranch(['location_hero'], 'location_id'),
-          mediaTargetBranch(['menu_item_media'], 'menu_item_id'),
-          mediaTargetBranch(['post_image', 'blog_post_image'], 'post_id'),
-          mediaTargetBranch(['experience_media'], 'experience_id'),
-        ],
       },
-      required: ['target_type', 'asset_ids'],
+      required: ['placement', 'asset_ids'],
       outputSchema: {
         type: 'object',
         properties: {
           ok: { type: 'boolean' },
           entity: { type: 'string' },
           id: { type: 'string' },
-          target: { type: 'object' },
+          placement: mediaPlacementObject,
           asset_ids: { type: 'array', items: { type: 'string' } },
           media: { type: 'array', items: resolvedMediaAssetObject },
           cleared: { type: 'boolean' },
-          updated_at: { type: ['string', 'null'] },
-          location_id: { type: ['string', 'null'] },
           context: { type: 'object' },
         },
-        required: ['ok', 'entity', 'id', 'target', 'asset_ids', 'media', 'cleared'],
+        required: ['ok', 'entity', 'id', 'placement', 'asset_ids', 'media', 'cleared'],
       },
     }),
   siteTool({
@@ -72,7 +52,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { kind: { type: 'string', enum: ['image', 'video', 'file'], description: 'Filter by asset type.' }, location_id: { type: 'string' } },
+      inputSchema: { kind: { type: 'string', enum: ['image', 'video', 'file'], description: 'Filter by asset type.' } },
       outputSchema: {
         type: 'object',
         properties: { assets: { type: 'array', items: mediaAssetObject } },
@@ -89,7 +69,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         file: chatgptFileInput,
         poster_file: { ...chatgptFileInput, description: 'Required poster/thumbnail image for video uploads. Invalid for non-video uploads.' },
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'other'], description: 'Optional visual subject used to organize the media library. It never assigns the asset to content.' },
         description: { type: 'string', description: 'Description of the media (stored as alt text).' },
       },
       required: ['file'],
@@ -117,9 +97,8 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         asset_id: { type: 'string' },
         alt_text: { type: 'string' },
-        location_id: { type: 'string' },
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'] },
-        anyOf: [{ required: ['alt_text'] }, { required: ['location_id'] }, { required: ['category'] }],
+        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'other'] },
+        anyOf: [{ required: ['alt_text'] }, { required: ['category'] }],
       },
       required: ['asset_id'],
       outputSchema: {

@@ -132,13 +132,11 @@ export async function handleFaviconRequest(event: H3Event, options: FaviconOptio
 
   const site = event.context.site as {
     brand_name?: string | null
-    logo_url?: string | null
-    logo_mime_type?: string | null
-    favicon_url?: string | null
+    media?: Array<{ slot: string; public_url: string | null }>
   } | undefined
 
-  const faviconUrl = sanitizeUrl(site?.favicon_url)
-  const logoUrl = sanitizeUrl(site?.logo_url)
+  const faviconUrl = sanitizeUrl(site?.media?.find(item => item.slot === 'favicon')?.public_url)
+  const logoUrl = sanitizeUrl(site?.media?.find(item => item.slot === 'logo')?.public_url)
   const sourceUrl = faviconUrl && !isPlatformAssetUrl(faviconUrl, env)
     ? faviconUrl
     : logoUrl && !isPlatformAssetUrl(logoUrl, env)

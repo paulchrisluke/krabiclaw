@@ -12,6 +12,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
     case "list_locations": {
       const workspace = await resolveMcpWorkspace(
         site.db,
+        site.env,
         site.userId,
         { siteId: site.siteId },
       );

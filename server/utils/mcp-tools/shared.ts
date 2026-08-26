@@ -98,7 +98,6 @@ export const locationObject = {
     short_description: { type: ['string', 'null'] },
     status: { type: 'string' },
     is_primary: { type: 'number' },
-    hero_media_asset_id: { type: ['string', 'null'] },
     notification_phone: { type: ['string', 'null'], description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null.' },
     timezone: { type: ['string', 'null'], description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
     max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).' },
@@ -153,10 +152,6 @@ export const menuItemObject = {
     compare_at_price_amount: { type: ['string', 'number', 'null'] },
     sale_starts_at: { type: ['string', 'null'] },
     sale_ends_at: { type: ['string', 'null'] },
-    image_asset_id: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
-    thumbnail_url: { type: ['string', 'null'] },
-    kind: { type: ['string', 'null'] },
     available: { type: 'boolean' },
     featured: { type: 'boolean' },
     featured_sort_order: { type: 'number' },
@@ -242,7 +237,6 @@ const howToStepSchema = {
   properties: {
     name: { type: 'string' },
     text: { type: 'string' },
-    image_asset_id: { type: ['string', 'null'] },
     url: { type: ['string', 'null'] },
     position: { type: 'number' },
   },
@@ -299,6 +293,19 @@ export const blogComponentInputSchema = {
   ],
 }
 
+const mediaPlacementObject = {
+  type: 'object',
+  properties: {
+    asset_id: { type: 'string' },
+    slot: { type: 'string' },
+    public_url: { type: ['string', 'null'] },
+    kind: { type: ['string', 'null'] },
+    width: { type: ['number', 'null'] },
+    height: { type: ['number', 'null'] },
+  },
+  additionalProperties: false,
+}
+
 const blogContentBlockObject = {
   type: 'object',
   properties: {
@@ -308,20 +315,9 @@ const blogContentBlockObject = {
     position: { type: 'number' },
     level: { type: ['number', 'null'] },
     data: { type: 'object' },
+    media: { type: 'array', items: mediaPlacementObject },
   },
-  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'data'],
-  additionalProperties: false,
-}
-
-const featuredImageObject = {
-  type: ['object', 'null'],
-  properties: {
-    asset_id: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
-    kind: { type: ['string', 'null'] },
-    width: { type: ['number', 'null'] },
-    height: { type: ['number', 'null'] },
-  },
+  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'data', 'media'],
   additionalProperties: false,
 }
 
@@ -340,8 +336,6 @@ export const blogPostObject = {
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
-    author_name: { type: ['string', 'null'] },
-    site_author_id: { type: ['string', 'null'], description: 'Selected tenant author id, if any. Null means the byline falls back to the site name.' },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['published', 'scheduled'] },
@@ -349,7 +343,7 @@ export const blogPostObject = {
     scheduled_for: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
-    featured_image: featuredImageObject,
+    media: { type: 'array', items: mediaPlacementObject },
     admin_edit_url: { type: ['string', 'null'] },
     edit_url: { type: ['string', 'null'] },
     public_path: { type: ['string', 'null'] },
@@ -363,24 +357,11 @@ export const blogPostObject = {
     'id', 'title', 'slug', 'excerpt', 'category', 'tags',
     'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
     'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
-    'author_name', 'site_author_id', 'published', 'published_at', 'status', 'visibility', 'scheduled_for',
-    'created_at', 'updated_at', 'featured_image', 'admin_edit_url', 'edit_url',
+    'published', 'published_at', 'status', 'visibility', 'scheduled_for',
+    'created_at', 'updated_at', 'media', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
     'content_blocks', 'document_updated_at',
   ],
-  additionalProperties: false,
-}
-
-export const siteAuthorObject = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
-    title: { type: ['string', 'null'] },
-    bio: { type: ['string', 'null'] },
-    image_public_url: { type: ['string', 'null'] },
-  },
-  required: ['id', 'name', 'title', 'bio', 'image_public_url'],
   additionalProperties: false,
 }
 
@@ -406,7 +387,7 @@ export const blogPostSummaryObject = {
     scheduled_for: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
-    featured_image: featuredImageObject,
+    media: { type: 'array', items: mediaPlacementObject },
     admin_edit_url: { type: ['string', 'null'] },
     edit_url: { type: ['string', 'null'] },
     public_path: { type: ['string', 'null'] },
@@ -419,7 +400,7 @@ export const blogPostSummaryObject = {
     'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
     'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
     'published', 'published_at', 'status', 'visibility', 'scheduled_for',
-    'created_at', 'updated_at', 'featured_image', 'admin_edit_url', 'edit_url',
+    'created_at', 'updated_at', 'media', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
   ],
   additionalProperties: false,
@@ -504,27 +485,18 @@ export const postObject = {
       items: {
         type: 'object',
         properties: {
-          mediaAssetId: { type: ['string', 'null'] },
-          url: { type: 'string' },
+          asset_id: { type: 'string' },
+          public_url: { type: 'string' },
+          thumbnail_url: { type: ['string', 'null'] },
           kind: { type: 'string', enum: ['image', 'video'] },
-          role: { type: ['string', 'null'], enum: ['cover', 'gallery', null] },
-          caption: { type: ['string', 'null'] },
-          alt: { type: ['string', 'null'] },
+          slot: { type: 'string', enum: ['cover', 'gallery'] },
+          sort_order: { type: 'number' },
+          alt_text: { type: ['string', 'null'] },
+          width: { type: ['number', 'null'] },
+          height: { type: ['number', 'null'] },
         },
-      },
-    },
-    gallery_media: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          mediaAssetId: { type: ['string', 'null'] },
-          url: { type: 'string' },
-          kind: { type: 'string', enum: ['image', 'video'] },
-          role: { type: ['string', 'null'], enum: ['cover', 'gallery', null] },
-          caption: { type: ['string', 'null'] },
-          alt: { type: ['string', 'null'] },
-        },
+        required: ['asset_id', 'public_url', 'kind', 'slot', 'sort_order'],
+        additionalProperties: false,
       },
     },
     channels: {
@@ -541,7 +513,6 @@ export const postObject = {
         required: ['channel', 'status'],
       },
     },
-    thumbnail_asset_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
@@ -550,7 +521,7 @@ export const postObject = {
 export const mediaAssetObject = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    asset_id: { type: 'string' },
     kind: { type: 'string', enum: ['image', 'video', 'file'] },
     provider: { type: 'string' },
     source: { type: 'string' },
@@ -560,18 +531,15 @@ export const mediaAssetObject = {
     category: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['pending', 'active', 'deleted', 'failed'] },
     file_name: { type: ['string', 'null'] },
-    location_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
   },
+  required: ['asset_id', 'kind', 'provider', 'source', 'status'],
 }
 
 export const currentUserObject = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    email: { type: ['string', 'null'] },
-    name: { type: ['string', 'null'] },
-    role: { type: ['string', 'null'] },
     isPlatformAdmin: { type: 'boolean' },
   },
   required: ['id', 'isPlatformAdmin'],
@@ -596,8 +564,8 @@ export const chatgptFileInput = {
 export const resolvedMediaAssetObject = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
-    kind: { type: 'string', enum: ['image', 'video'] },
+    asset_id: { type: 'string' },
+    kind: { type: 'string', enum: ['image', 'video', 'file'] },
     public_url: { type: 'string' },
     thumbnail_url: { type: ['string', 'null'] },
     mime_type: { type: ['string', 'null'] },
@@ -608,7 +576,7 @@ export const resolvedMediaAssetObject = {
     provider: { type: 'string' },
     status: { type: 'string', enum: ['active'] },
   },
-  required: ['id', 'kind', 'public_url', 'status'],
+  required: ['asset_id', 'kind', 'public_url', 'status'],
 }
 
 export const experienceObject = {
@@ -991,10 +959,10 @@ export const generatedImagePickerOutputSchema = {
       items: {
         type: 'object',
         properties: {
-          assetId: { type: 'string' },
-          publicUrl: { type: 'string' },
+          asset_id: { type: 'string' },
+          public_url: { type: 'string' },
         },
-        required: ['assetId', 'publicUrl'],
+        required: ['asset_id', 'public_url'],
       },
     },
     useLabel: { type: ['string', 'null'] },
@@ -1099,11 +1067,9 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_post',
   'list_blog_posts',
   'get_blog_post',
-  'list_blog_authors',
   'get_site_media_assets',
   'get_facebook_connection',
   'get_dashboard_link',
-  'get_page_fields',
   'list_tenant_pages',
   'get_tenant_page',
   'get_professional_service_content',
@@ -1131,7 +1097,6 @@ export const READ_ONLY_TOOL_NAMES = [
 export const BOUNDED_WRITE_TOOL_NAMES = [
   'set_workspace_context',
   'analyze_document',
-  'create_blog_author',
   'update_media_asset',
   'update_experience_booking',
   'update_notification_settings',
@@ -1168,13 +1133,11 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'publish_post',
   'publish_to_facebook',
   'sync_facebook_page',
-  'update_page_content',
   'create_tenant_page',
   'update_tenant_page',
   'change_tenant_page_path',
   'update_professional_service_content',
   'update_booking_policy',
-  'update_home_hero',
   'create_location_qa',
   'update_location_qa',
   'reorder_location_qa',

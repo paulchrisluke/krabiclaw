@@ -431,13 +431,11 @@ const MEDIA_ASSET_COLUMNS = [
   'id',
   'organization_id',
   'site_id',
-  'location_id',
   'kind',
   'provider',
   'source',
   'cloudflare_image_id',
   'r2_key',
-  'google_media_name',
   'public_url',
   'thumbnail_url',
   'mime_type',
@@ -486,38 +484,11 @@ function buildMediaClusterQueries(
       `,
       params: [transferPrefix, toOrgId, siteId, fromOrgId],
     },
-    // Move the site and location media references to the recipient-scoped
-    // temporary rows before the guarded media scope update below.
+    // Move every media usage to recipient-scoped temporary assets before the
+    // guarded asset scope update.
     {
       query: `
-        UPDATE business_locations
-           SET organization_id = ?,
-               hero_media_asset_id = ? || hero_media_asset_id,
-               notification_phone = NULL,
-               team_id = NULL
-         WHERE site_id = ? AND organization_id = ?
-      `,
-      params: [toOrgId, transferPrefix, siteId, fromOrgId],
-    },
-    {
-      query: `
-        UPDATE experiences
-           SET organization_id = ?
-         WHERE site_id = ? AND organization_id = ?
-      `,
-      params: [toOrgId, siteId, fromOrgId],
-    },
-    {
-      query: `
-        UPDATE experience_media
-           SET organization_id = ?, asset_id = ? || asset_id
-         WHERE site_id = ? AND organization_id = ?
-      `,
-      params: [toOrgId, transferPrefix, siteId, fromOrgId],
-    },
-    {
-      query: `
-        UPDATE menu_item_media
+        UPDATE media_placements
            SET organization_id = ?, asset_id = ? || asset_id
          WHERE site_id = ? AND organization_id = ?
       `,
@@ -531,33 +502,10 @@ function buildMediaClusterQueries(
       `,
       params: [toOrgId, siteId, fromOrgId],
     },
-    // Restore the original IDs after the guarded parent scope update.  The
-    // temporary rows keep every composite media FK valid during the rewrite.
+    // Restore the original IDs after the guarded parent scope update.
     {
       query: `
-        UPDATE business_locations
-           SET hero_media_asset_id = CASE
-                 WHEN substr(hero_media_asset_id, 1, length(?)) = ? THEN substr(hero_media_asset_id, length(?) + 1)
-                 ELSE hero_media_asset_id
-               END
-         WHERE site_id = ? AND organization_id = ?
-      `,
-      params: [transferPrefix, transferPrefix, transferPrefix, siteId, toOrgId],
-    },
-    {
-      query: `
-        UPDATE experience_media
-           SET asset_id = CASE
-                 WHEN substr(asset_id, 1, length(?)) = ? THEN substr(asset_id, length(?) + 1)
-                 ELSE asset_id
-               END
-         WHERE site_id = ? AND organization_id = ?
-      `,
-      params: [transferPrefix, transferPrefix, transferPrefix, siteId, toOrgId],
-    },
-    {
-      query: `
-        UPDATE menu_item_media
+        UPDATE media_placements
            SET asset_id = CASE
                  WHEN substr(asset_id, 1, length(?)) = ? THEN substr(asset_id, length(?) + 1)
                  ELSE asset_id
@@ -678,7 +626,7 @@ export function buildSiteTransferMutationBatch(input: {
     transfer_id: transferId,
     generation: String(input.teamGeneration ?? now),
   })
-  const mediaTables = new Set(['media_assets', 'business_locations', 'experiences', 'experience_media', 'menu_item_media'])
+  const mediaTables = new Set(['media_assets', 'media_placements'])
   const batch: BatchQuery[] = [{ query: 'PRAGMA defer_foreign_keys = ON' }]
 
   // The site scope is the root invariant for every transfer mutation. Check
@@ -794,7 +742,7 @@ export function buildSiteTransferMutationBatch(input: {
     {
       query: `UPDATE chowbot_channel_state
                  SET selected_site_id = NULL, active_conversation_id = NULL,
-                     pending_media = NULL, pending_confirmation = NULL
+                     pending_message_id = NULL, pending_confirmation = NULL
                WHERE selected_site_id = ?
                   OR active_conversation_id IN (
                     SELECT id FROM chowbot_conversations WHERE site_id = ?
@@ -810,6 +758,11 @@ export function buildSiteTransferMutationBatch(input: {
   )
 
   batch.push(...buildMediaClusterQueries(input.siteId, input.fromOrgId, input.toOrgId, transferPrefix))
+
+  batch.push({
+    query: `UPDATE business_locations SET notification_phone = NULL, team_id = NULL WHERE site_id = ? AND organization_id = ?`,
+    params: [input.siteId, input.fromOrgId],
+  })
 
   // Parent rows and all ordinary business/content rows use deferred composite
   // FKs. The media cluster above is kept separate because its scope triggers

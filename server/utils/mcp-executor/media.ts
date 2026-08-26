@@ -3,7 +3,7 @@ import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/s
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
-import { setMediaPlacement, type MediaPlacementTarget } from '~/server/utils/media-placement'
+import { parseMediaPlacementKey, setMediaPlacement } from '~/server/utils/media-placement'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import {
@@ -20,37 +20,37 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "set_media": {
-      const target = mediaPlacementTarget(args);
+      const placement = parseMediaPlacementKey(args.placement);
       const assetIdsRaw = args.asset_ids;
       if (!Array.isArray(assetIdsRaw) || !assetIdsRaw.every((item): item is string => typeof item === "string")) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "asset_ids must be an array of strings.");
       }
       const result = await setMediaPlacement(site.db, {
+        env: site.env,
         organizationId: site.organizationId,
         siteId: site.siteId,
         memberId: site.memberId,
         role: site.role,
-        userId: site.userId,
-        env: site.env,
-        target,
+        placement,
         assetIds: assetIdsRaw,
       });
       return renderStructuredResponse(
         {
           ok: true,
           ...result,
-          context: await mutationContextPayload(site, { locationId: result.location_id }),
+          context: await mutationContextPayload(site),
         },
         result.cleared ? "Cleared media placement." : "Updated media placement.",
       );
     }
-    case "get_site_media_assets":
-      return {
-        assets: await listMediaAssets(site.db, site.siteId, {
+    case "get_site_media_assets": {
+      const assets = await listMediaAssets(site.db, site.siteId, {
           kind: optionalString(args, "kind") ?? undefined,
-          locationId: optionalString(args, "location_id") ?? undefined,
-        }),
+        });
+      return {
+        assets: assets.map(({ id, ...asset }) => ({ asset_id: id, ...asset })),
       };
+    }
     case "upload_user_media": {
       const description = optionalString(args, "description") ?? null;
       const category = optionalString(args, "category") ?? null;
@@ -145,7 +145,6 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         site.siteId,
         {
           alt_text: optionalString(args, "alt_text"),
-          location_id: optionalString(args, "location_id"),
           category: (optionalString(args, "category") as never),
         },
       );
@@ -154,9 +153,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       }
       return {
         updated,
-        context: await mutationContextPayload(site, {
-          locationId: optionalString(args, "location_id"),
-        }),
+        context: await mutationContextPayload(site),
       };
     }
     case "delete_media_asset": {
@@ -199,33 +196,4 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
     default:
       return NOT_HANDLED
   }
-}
-
-function mediaPlacementTarget(raw: Record<string, unknown>): MediaPlacementTarget {
-  const type = requiredString(raw, "target_type") as MediaPlacementTarget["type"];
-  const entityIdKeys = ["location_id", "menu_item_id", "post_id", "experience_id"] as const;
-  const allowedEntityId = type === "location_hero"
-    ? "location_id"
-    : type === "menu_item_media"
-      ? "menu_item_id"
-      : type === "post_image" || type === "blog_post_image"
-        ? "post_id"
-        : type === "experience_media"
-          ? "experience_id"
-          : undefined;
-  const unexpectedEntityIds = entityIdKeys.filter(key => key !== allowedEntityId && raw[key] !== undefined);
-  if (unexpectedEntityIds.length > 0) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `${unexpectedEntityIds.join(", ")} cannot be used with target_type ${type}.`,
-    );
-  }
-
-  if (type === "site_logo" || type === "home_story_image" || type === "about_story_image" || type === "home_hero") return { type };
-  if (type === "location_hero") return { type, location_id: requiredString(raw, "location_id") };
-  if (type === "menu_item_media") return { type, menu_item_id: requiredString(raw, "menu_item_id") };
-  if (type === "post_image") return { type, post_id: requiredString(raw, "post_id") };
-  if (type === "blog_post_image") return { type, post_id: requiredString(raw, "post_id") };
-  if (type === "experience_media") return { type, experience_id: requiredString(raw, "experience_id") };
-  throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported media placement target: ${type}`);
 }

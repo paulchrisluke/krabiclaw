@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { HTTPError } from 'nitro';
 import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
@@ -53,7 +53,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.db,
           site.organizationId,
           site.siteId,
-          omit(args, ["image_asset_id", "gallery_media"]) as never,
+          args as never,
           site.userId,
           site.env,
         ));
@@ -82,7 +82,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
-          omit(args, ["post_id", "image_asset_id", "gallery_media"]) as never,
+          omit(args, ["post_id"]) as never,
           site.userId,
           site.env,
         ));
@@ -162,14 +162,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const pageId = facebookConnection!.facebook_page_id!;
 
         let imageUrl: string | null = null;
-        if (post.image_asset_id) {
-          const asset = await queryFirst<{ public_url: string | null }>(
-            site.db,
-            `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`,
-            [post.image_asset_id],
-          );
-          imageUrl = asset?.public_url ?? null;
-        }
+        imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url ?? null;
 
         if (wantsFacebook) {
           try {

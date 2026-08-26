@@ -7,12 +7,12 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import {
-  buildReplaceExperienceMediaQueries,
-  hydrateMediaAssetsForExperiences,
+  buildReplaceMediaPlacementQueries,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
+import { getMediaPlacements } from '~/server/utils/media-placement'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -131,7 +131,12 @@ function parseRow(row: ExperienceRow): Experience {
 }
 
 async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
-  const mediaByExperience = await hydrateMediaAssetsForExperiences(db, siteId, experiences.map(experience => experience.id))
+  const mediaByExperience = await getMediaPlacements(db, {
+    siteId,
+    ownerType: 'experience',
+    ownerIds: experiences.map(experience => experience.id),
+    slot: 'gallery',
+  })
   return experiences.map(experience => ({
     ...experience,
     media: mediaByExperience.get(experience.id) ?? [],
@@ -441,7 +446,13 @@ export async function createExperience(
     },
   ]
   if (media) {
-    queries.push(...buildReplaceExperienceMediaQueries({ organizationId, siteId, experienceId: id, media, now }))
+    queries.push(...buildReplaceMediaPlacementQueries({
+      organizationId,
+      siteId,
+      placement: { owner_type: 'experience', owner_id: id, slot: 'gallery' },
+      media,
+      now,
+    }))
   }
 
   const [result] = await executeBatch(db, queries)
@@ -558,10 +569,10 @@ export async function updateExperience(
           query: `UPDATE experiences SET updated_at = ? WHERE organization_id = ? AND site_id = ? AND id = ?`,
           params: [now, owner.organization_id, siteId, id],
         },
-        ...buildReplaceExperienceMediaQueries({
+        ...buildReplaceMediaPlacementQueries({
           organizationId: owner.organization_id,
           siteId,
-          experienceId: id,
+          placement: { owner_type: 'experience', owner_id: id, slot: 'gallery' },
           media,
           now,
         }),
@@ -583,10 +594,10 @@ export async function updateExperience(
   if (media) {
     const [result] = await executeBatch(db, [
       updateQuery,
-      ...buildReplaceExperienceMediaQueries({
+      ...buildReplaceMediaPlacementQueries({
         organizationId: owner.organization_id,
         siteId,
-        experienceId: id,
+        placement: { owner_type: 'experience', owner_id: id, slot: 'gallery' },
         media,
         now,
       }),

@@ -1,8 +1,11 @@
-import { executeBatch, queryAll, type BatchQuery, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { cleanString } from '~/server/utils/api-response'
 import { getPublicBlawbyData } from '~/server/utils/professional-services'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
+import { buildReplaceMediaPlacementQueries } from '~/server/utils/media-asset-manager'
+import { getMediaPlacements } from '~/server/utils/media-placement'
+import { assertNoEmbeddedMediaFields } from '~/utils/tenant-page-blocks'
 
 export class ProfessionalServiceValidationError extends Error {
   constructor(message: string) {
@@ -61,40 +64,60 @@ function strictJsonRecord(value: unknown, field: string): ApiRecord {
   return value as ApiRecord
 }
 
-function strictStringArray(value: unknown, field: string): string[] {
-  const items = strictJsonArray(value, field)
-  return items.map((item, index) => requiredText(item, `${field}[${index}]`, 500))
+function strictMediaRefs(value: unknown, field: string, allowedSlots: readonly string[]) {
+  return recordArray(value, field).map((item, index) => {
+    const assetId = requiredText(item.asset_id, `${field}[${index}].asset_id`, 120)
+    const slot = requiredText(item.slot, `${field}[${index}].slot`, 40)
+    if (!allowedSlots.includes(slot)) validationError(`${field}[${index}].slot is not supported.`)
+    return { asset_id: assetId, slot }
+  })
+}
+
+function assertNoStoredMedia(value: unknown, field: string) {
+  try {
+    assertNoEmbeddedMediaFields(value, field)
+  } catch (error) {
+    validationError(error instanceof Error ? error.message : `${field} contains embedded media`)
+  }
+}
+
+function strictMediaFreeRecord(value: unknown, field: string) {
+  const record = strictJsonRecord(value, field)
+  assertNoStoredMedia(record, field)
+  return record
 }
 
 function validateOfferingContent(item: ApiRecord, slug: string) {
   const features = strictJsonArray(item.features, `offerings.${slug}.features`)
+  assertNoStoredMedia(features, `offerings.${slug}.features`)
   features.forEach((feature, index) => {
     if (!feature || typeof feature !== 'object' || Array.isArray(feature)) {
       validationError(`offerings.${slug}.features[${index}] must be an object.`)
     }
   })
   const faqs = strictJsonArray(item.faqs, `offerings.${slug}.faqs`)
+  assertNoStoredMedia(faqs, `offerings.${slug}.faqs`)
   faqs.forEach((faq, index) => {
     if (!faq || typeof faq !== 'object' || Array.isArray(faq)) {
       validationError(`offerings.${slug}.faqs[${index}] must be an object.`)
     }
   })
-  strictStringArray(item.media_asset_ids, `offerings.${slug}.media_asset_ids`)
+  strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
 }
 
 async function listEditableOfferings(db: DbClient, siteId: string) {
   const rows = await queryAll<ApiRecord>(db, `
-    SELECT *
-      FROM offerings
+    SELECT o.* FROM offerings o
      WHERE site_id = ?
      ORDER BY sort_order ASC, name ASC
   `, [siteId])
 
+  const placements = await getMediaPlacements(db, { siteId, ownerType: 'offering', ownerIds: rows.map(row => String(row.id)) })
   return rows.map(row => ({
     ...row,
     features: row.features ? JSON.parse(row.features) : [],
     faqs: row.faqs ? JSON.parse(row.faqs) : [],
-    media_asset_ids: row.media_asset_ids ? JSON.parse(row.media_asset_ids) : [],
+    media: placements.get(String(row.id)) ?? [],
     featured: row.featured === true || row.featured === 1,
   }))
 }
@@ -219,6 +242,8 @@ export async function upsertProfessionalServiceContent(
   const { organizationId, siteId, data, updatedBy = null } = input
   const written: Record<string, number> = {}
   const statements: BatchQuery[] = []
+  const existingOfferings = await queryAll<{ id: string; slug: string }>(db, 'SELECT id, slug FROM offerings WHERE site_id = ?', [siteId])
+  const offeringIdBySlug = new Map(existingOfferings.map(offering => [offering.slug, offering.id]))
   for (const field of ['compliance', 'consultation', 'themeTokens'] as const) {
     if (Object.hasOwn(data, field) && (data[field] == null || typeof data[field] !== 'object' || Array.isArray(data[field]))) {
       validationError(`${field} must be an object.`)
@@ -227,25 +252,24 @@ export async function upsertProfessionalServiceContent(
 
 
   for (const item of recordArray(data.offerings, 'offerings')) {
-    const id = cleanString(item.id, 80) || idWith('offering')
     const name = cleanString(item.name, 200)
     const slug = cleanString(item.slug, 180)
     if (!name || !slug) validationError('Each offering needs name and slug.')
+    const id = offeringIdBySlug.get(slug) ?? cleanString(item.id, 80) ?? idWith('offering')
     validateOfferingContent(item, slug)
+    const offeringMedia = strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
     statements.push({
       query: `
       INSERT INTO offerings
         (id, organization_id, site_id, location_id, name, slug, label, summary, short_description, body,
-         features, faqs, cta_label, cta_url, thumbnail_asset_id, hero_image_asset_id,
-         media_asset_ids, schema_type, seo_title, seo_description, canonical_path,
+         features, faqs, cta_label, cta_url, schema_type, seo_title, seo_description, canonical_path,
          sort_order, featured, source, source_ref, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON CONFLICT(organization_id, site_id, slug) DO UPDATE SET
         location_id = excluded.location_id, name = excluded.name, label = excluded.label,
         summary = excluded.summary, short_description = excluded.short_description, body = excluded.body,
         features = excluded.features, faqs = excluded.faqs, cta_label = excluded.cta_label,
-        cta_url = excluded.cta_url, thumbnail_asset_id = excluded.thumbnail_asset_id,
-        hero_image_asset_id = excluded.hero_image_asset_id, media_asset_ids = excluded.media_asset_ids,
+        cta_url = excluded.cta_url,
         schema_type = excluded.schema_type, seo_title = excluded.seo_title,
         seo_description = excluded.seo_description, canonical_path = excluded.canonical_path,
         sort_order = excluded.sort_order, featured = excluded.featured,
@@ -267,9 +291,6 @@ export async function upsertProfessionalServiceContent(
         json(strictJsonArray(item.faqs, `offerings.${slug}.faqs`)),
         cleanString(item.cta_label, 120) || null,
         safeStoredUrl(item.cta_url, 500),
-        cleanString(item.thumbnail_asset_id, 120) || null,
-        cleanString(item.hero_image_asset_id, 120) || null,
-        json(strictJsonArray(item.media_asset_ids, `offerings.${slug}.media_asset_ids`)),
         requiredText(item.schema_type, `offerings.${slug}.schema_type`, 120),
         cleanString(item.seo_title, 200) || null,
         cleanString(item.seo_description, 500) || null,
@@ -281,11 +302,32 @@ export async function upsertProfessionalServiceContent(
         updatedBy,
       ],
     })
+    statements.push(
+      ...buildReplaceMediaPlacementQueries({
+        organizationId,
+        siteId,
+        placement: { owner_type: 'offering', owner_id: id, slot: 'thumbnail' },
+        media: offeringMedia.filter(item => item.slot === 'thumbnail').map(item => ({ asset_id: item.asset_id })),
+      }),
+      ...buildReplaceMediaPlacementQueries({
+        organizationId,
+        siteId,
+        placement: { owner_type: 'offering', owner_id: id, slot: 'hero' },
+        media: offeringMedia.filter(item => item.slot === 'hero').map(item => ({ asset_id: item.asset_id })),
+      }),
+      ...buildReplaceMediaPlacementQueries({
+        organizationId,
+        siteId,
+        placement: { owner_type: 'offering', owner_id: id, slot: 'gallery' },
+        media: offeringMedia.filter(item => item.slot === 'gallery').map(item => ({ asset_id: item.asset_id })),
+      }),
+    )
     written.offerings = (written.offerings ?? 0) + 1
   }
 
   if (typeof data.compliance === 'object' && data.compliance) {
     const item = data.compliance as ApiRecord
+    const complianceMedia = strictMediaRefs(item.media, 'compliance.media', ['document'])
     // Canonical contract: nonprofit_status must be a recognized schema.org
     // nonprofit enumeration value (e.g. https://schema.org/Nonprofit501c3),
     // not free text like "501(c)(3)". Reject rather than silently store an
@@ -312,26 +354,30 @@ export async function upsertProfessionalServiceContent(
       validationError('compliance.address_visibility must be visible or hidden.')
     }
     const addressVisibility = item.address_visibility === 'visible' ? 'visible' : 'hidden'
+
+    const existingCompliance = await queryFirst<{ id: string }>(db, 'SELECT id FROM tenant_compliance WHERE site_id = ? LIMIT 1', [siteId])
+    const complianceId = existingCompliance?.id || cleanString(item.id, 80) || `compliance_${siteId}`
+
     statements.push({
       query: `
       INSERT INTO tenant_compliance
         (id, organization_id, site_id, entity_name, dba_name, entity_type, nonprofit_status,
-         registration_number, service_area, service_area_type, disclaimer, footer_disclaimer, document_asset_ids,
+         registration_number, service_area, service_area_type, disclaimer, footer_disclaimer,
          founder_name, founding_date, same_as, contact_points, address_visibility,
          metadata_json, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON CONFLICT(site_id) DO UPDATE SET
         entity_name = excluded.entity_name, dba_name = excluded.dba_name, entity_type = excluded.entity_type,
         nonprofit_status = excluded.nonprofit_status, registration_number = excluded.registration_number,
         service_area = excluded.service_area, service_area_type = excluded.service_area_type,
         disclaimer = excluded.disclaimer, footer_disclaimer = excluded.footer_disclaimer,
-        document_asset_ids = excluded.document_asset_ids, founder_name = excluded.founder_name,
+        founder_name = excluded.founder_name,
         founding_date = excluded.founding_date, same_as = excluded.same_as,
         contact_points = excluded.contact_points, address_visibility = excluded.address_visibility,
         metadata_json = excluded.metadata_json, updated_at = CURRENT_TIMESTAMP, updated_by = excluded.updated_by
     `,
       params: [
-        cleanString(item.id, 80) || `compliance_${siteId}`,
+        complianceId,
         organizationId,
         siteId,
         cleanString(item.entity_name, 200) || null,
@@ -343,16 +389,21 @@ export async function upsertProfessionalServiceContent(
         serviceAreaType || null,
         typeof item.disclaimer === 'string' ? item.disclaimer : null,
         typeof item.footer_disclaimer === 'string' ? item.footer_disclaimer : null,
-        json(strictJsonArray(item.document_asset_ids, 'compliance.document_asset_ids')),
         cleanString(item.founder_name, 200) || null,
         foundingDate || null,
         json(sanitizedUrlArray(item.same_as, 500)),
         json(sanitizedContactPoints(item.contact_points)),
         addressVisibility,
-        json(strictJsonRecord(item.metadata, 'compliance.metadata')),
+        json(strictMediaFreeRecord(item.metadata, 'compliance.metadata')),
         updatedBy,
       ],
     })
+    statements.push(...buildReplaceMediaPlacementQueries({
+      organizationId,
+      siteId,
+      placement: { owner_type: 'tenant_compliance', owner_id: complianceId, slot: 'document' },
+      media: complianceMedia.map(item => ({ asset_id: item.asset_id })),
+    }))
     written.compliance = 1
   }
 
@@ -385,7 +436,7 @@ export async function upsertProfessionalServiceContent(
         requiredStoredPath(item.schedule_path, 'consultation.schedule_path', 300),
         requiredStoredPath(item.confirmation_path, 'consultation.confirmation_path', 300),
         item.tracking_enabled === false ? 0 : 1,
-        json(strictJsonRecord(item.metadata, 'consultation.metadata')),
+        json(strictMediaFreeRecord(item.metadata, 'consultation.metadata')),
         updatedBy,
       ],
     })

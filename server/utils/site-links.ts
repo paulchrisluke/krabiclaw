@@ -1,6 +1,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { cleanString } from '~/server/utils/api-response'
 import { resolvePublicTemplate, type PublicTemplateSlug } from '~/utils/template-registry'
+import { getMediaPlacements } from '~/server/utils/media-placement'
 
 const ROBOTS_DIRECTIVES = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] as const
 const LINK_ITEM_STATUSES = ['active', 'hidden'] as const
@@ -42,7 +43,7 @@ export interface PublicSiteLinksPayload {
     organization_id: string
     brand_name: string | null
     brand_description: string | null
-    logo_url: string | null
+    media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
     brand_color: string | null
     theme_id: string | null
     vertical: string | null
@@ -216,16 +217,15 @@ export async function getLinksPage(db: DbClient, siteId: string): Promise<{ page
 export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<PublicSiteLinksPayload | null> {
   const site = await queryFirst<ApiRecord>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
-           COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
            s.theme_id, s.vertical,
            cfg.value AS brand_color
       FROM sites s
-      LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
       LEFT JOIN site_config cfg ON cfg.site_id = s.id AND cfg.key = 'brand_color'
      WHERE s.id = ? AND s.status = 'active' AND s.onboarding_status = 'active'
      LIMIT 1
   `, [siteId])
   if (!site) return null
+  const media = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
 
   const { page, items } = await getLinksPage(db, siteId)
   const publicItems = items.filter(item => item.status === 'active')
@@ -242,7 +242,7 @@ export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<
       organization_id: String(site.organization_id),
       brand_name: typeof site.brand_name === 'string' ? site.brand_name : null,
       brand_description: typeof site.brand_description === 'string' ? site.brand_description : null,
-      logo_url: typeof site.logo_url === 'string' ? site.logo_url : null,
+      media: (media.get(siteId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
       brand_color: typeof site.brand_color === 'string' ? site.brand_color : null,
       theme_id: typeof site.theme_id === 'string' ? site.theme_id : null,
       vertical: typeof site.vertical === 'string' ? site.vertical : null,

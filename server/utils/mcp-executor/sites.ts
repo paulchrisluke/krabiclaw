@@ -13,11 +13,13 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       {
         const siteRecord = await getSiteForMcp(
           site.db,
+          site.env,
           site.siteId,
           site.userId,
         );
         const workspace = await resolveMcpWorkspace(
           site.db,
+          site.env,
           site.userId,
           { siteId: site.siteId },
         );
@@ -39,7 +41,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         string,
         unknown
       >;
-      delete updates.logo_asset_id;
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,

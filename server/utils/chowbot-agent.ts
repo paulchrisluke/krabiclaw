@@ -14,8 +14,6 @@ import {
   getExperienceById,
   WEEKDAY_NAMES,
 } from "~/server/utils/experiences";
-import { contentRegistry } from "~/config/content-registry";
-import { cmsCapabilityRegistry } from "~/config/cms-registry";
 import {
   CHOWBOT_TOOLS,
   CHOWBOT_CONFIRM_REQUIRED,
@@ -29,6 +27,7 @@ import {
 import { queryAll, queryFirst } from "~/server/db";
 import { searchPublicResources } from "~/server/utils/public-search";
 import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
+import { findOrganizationById } from '~/server/utils/member-access'
 
 const MAX_ITERATIONS = 10;
 export type JsonSerializable =
@@ -102,20 +101,6 @@ function toSqlText(value: ApiValue): string | null | undefined {
   return null;
 }
 
-function getToolString(
-  record: Record<string, unknown>,
-  key: string,
-  maxLength: number,
-): string | undefined {
-  const value = record[key];
-  return typeof value === "string" ? value.slice(0, maxLength) : undefined;
-}
-
-function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
-  return Object.prototype.hasOwnProperty.call(contentRegistry, page)
-    || cmsCapabilityRegistry.some((capability) => capability.pages.some((candidate) => candidate.id === page));
-}
-
 function isAllowedGoogleMapsHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   return (
@@ -171,14 +156,16 @@ async function executeTool(
   if (!normalizedRole) {
     return { error: "Could not verify your permissions for this site." };
   }
-  const dashboardRouteContext = name === "get_dashboard_link"
-    ? await queryFirst<{ organizationSlug: string; siteSlug: string | null }>(db, `
-        SELECT o.slug AS organizationSlug, s.subdomain AS siteSlug
-        FROM organization o
-        JOIN sites s ON s.organization_id = o.id
-        WHERE o.id = ? AND s.id = ?
-        LIMIT 1
-      `, [orgId, siteId])
+  const dashboardRouteContext = name === 'get_dashboard_link'
+    ? await Promise.all([
+        findOrganizationById(env as CloudflareEnv, orgId),
+        queryFirst<{ siteSlug: string | null }>(db, `
+          SELECT subdomain AS siteSlug FROM sites
+          WHERE organization_id = ? AND id = ? LIMIT 1
+        `, [orgId, siteId]),
+      ]).then(([organization, site]) => organization && site
+        ? { organizationSlug: organization.slug, siteSlug: site.siteSlug }
+        : null)
     : null;
   const executorSite = {
     db,
@@ -347,7 +334,7 @@ async function executeTool(
 
       if (placeId) {
         try {
-          const details = await getPlaceDetails(apiKey, placeId, false);
+          const details = await getPlaceDetails(apiKey, placeId);
           return {
             found: true,
             name: details.name,
@@ -438,7 +425,7 @@ async function executeTool(
           userId,
           channel: "whatsapp",
           selectedSiteId: siteId,
-          pendingMedia: null,
+          pendingMessageId: null,
           pendingConfirmation: null,
         });
       }
@@ -484,7 +471,7 @@ async function executeTool(
           userId,
           channel: "whatsapp",
           selectedSiteId: siteId,
-          pendingMedia: null,
+          pendingMessageId: null,
           pendingConfirmation: null,
         });
       }
@@ -513,7 +500,6 @@ async function executeTool(
         id: assetId,
         organization_id: orgId,
         site_id: siteId,
-        location_id: input.location_id ?? null,
         kind: "image",
         provider: "cloudflare_images",
         source: "generated",
@@ -533,7 +519,7 @@ async function executeTool(
         outputTokens: generated.outputTokens,
         cfGatewayLogId: generated.cfLogId,
       });
-      return { asset_id: assetId, publicUrl, thumbnailUrl };
+      return { asset_id: assetId, public_url: publicUrl, thumbnail_url: thumbnailUrl };
     }
 
     case "list_location_qa":
@@ -573,37 +559,6 @@ async function executeTool(
     case "update_tenant_page":
     case "change_tenant_page_path":
       return runMcpExecutorToolForChowbot(executorSite, name, input);
-
-    case "get_page_fields": {
-      const page = getToolString(input, "page", 40);
-      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-      const targetLocationId =
-        typeof input.location_id === "string" && input.location_id.trim()
-          ? input.location_id.trim()
-          : (ctx.locationId);
-      return runMcpExecutorToolForChowbot(executorSite, "get_page_fields", {
-        page,
-        location_id: targetLocationId,
-      });
-    }
-
-    case "update_page_content": {
-      const page = getToolString(input, "page", 40);
-      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-      const changes = input.changes;
-      if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
-        return { error: "Changes are required." };
-      }
-      const targetLocationId =
-        typeof input.location_id === "string" && input.location_id.trim()
-          ? input.location_id.trim()
-          : (ctx.locationId);
-      return runMcpExecutorToolForChowbot(executorSite, "update_page_content", {
-        page,
-        changes,
-        location_id: targetLocationId,
-      });
-    }
 
     case "get_site_stats": {
       const [postStats, menuCount, itemCount, locationCount, reviewCount] =
@@ -938,15 +893,10 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    // Regression fix: this previously accepted title/caption fields that
-    // updateMediaAssetMetadata's signature never supported (only alt_text,
-    // location_id, category exist) — those were silently dropped, so
-    // "update the caption" always claimed success while doing nothing.
     case "update_media_asset": {
       return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
     }
 
-    case "update_home_hero":
     case "set_media": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
@@ -1070,7 +1020,7 @@ ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. To place it on an existing site surface, call set_media with the appropriate target_type, the exact entity id returned by a read tool when required, and complete asset_ids state for ordered placements. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. To place it on an existing site surface, call set_media with placement {owner_type, owner_id, slot} built from the target entity's type and id and the complete asset_ids state for that placement. For a post cover use {owner_type:"post", owner_id:<post.id>, slot:"cover"}. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped
@@ -1098,7 +1048,7 @@ Guidelines:
 - When creating menus, omit location_id — the server links it to the current location automatically
 - Reservation rules, hold times, cancellation windows, deposits, and experience cancellation terms are structured booking policy fields specifically — not editable through any tool available here. Tell the user to edit those specific fields in the dashboard instead of attempting it. The reservations page's own copy (title, intro text, images) is regular page content and stays editable like any other page — see the next line
 - Use search_public_resources for docs/help/product questions, support routing, and when the user asks where something lives in public docs or on the platform site
-- Use get_page_fields to inspect page content, then update_page_content with the complete canonical blocks array for tenant pages such as home, about, contact, services, pricing, donate, and schedule. Use field changes only for registered scoped domain content such as location notes.
+- Use list_tenant_pages to resolve a page variant, get_tenant_page to inspect its complete canonical block state, and update_tenant_page with that complete block array.
 - Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, or delete_location_qa — confirm first
 - Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
 - Keep responses short — this is a chat panel`;

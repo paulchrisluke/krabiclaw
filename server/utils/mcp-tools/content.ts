@@ -16,8 +16,27 @@ const TENANT_PAGE_METADATA_SCHEMA = {
 
 const TENANT_PAGE_BLOCKS_SCHEMA = {
   type: 'array',
-  items: { type: 'object' },
-  description: 'Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Image blocks store asset_id only; never write a delivery URL. Use set_media for media placement.',
+  items: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      type: { type: 'string' },
+      position: { type: 'number' },
+      data: { type: 'object' },
+      media: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { asset_id: { type: 'string' }, slot: { type: 'string' } },
+          required: ['asset_id', 'slot'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['type', 'data'],
+    additionalProperties: false,
+  },
+  description: 'Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block\'s current placements; provide media explicitly to replace them, or call set_media with owner_type "content_block", the block id, and the intended slot.',
 }
 
 const TENANT_PAGE_LIFECYCLE_OUTPUT = {
@@ -26,69 +45,6 @@ const TENANT_PAGE_LIFECYCLE_OUTPUT = {
 }
 
 export const CONTENT_TOOLS: McpToolDefinition[] = [
-  siteTool({
-      name: 'get_page_fields',
-      description: 'Get the current tenant page metadata and typed blocks. Call this before update_page_content to inspect the canonical page shape.',
-      domain: 'content',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: { page: { type: 'string' }, location_id: { type: 'string' } },
-      required: ['page'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          page: { type: 'string' },
-          siteId: { type: 'string' },
-          locationId: { type: ['string', 'null'] },
-          public_path: { type: 'string' },
-          view_url: { type: ['string', 'null'] },
-          fields: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                field: { type: 'string' },
-                value: { type: ['string', 'null'] },
-                render_status: { type: 'string', enum: ['rendered', 'orphan'] },
-                editable_keys: { type: 'array', items: { type: 'string' } },
-              },
-            },
-          },
-          schema: {
-            type: 'object',
-            properties: {
-              page: { type: 'string' },
-              fields: { type: 'array', items: { type: 'string' } },
-              structured: { type: 'array', items: { type: 'string' } },
-            },
-          },
-          page_data: { type: 'object' },
-          blocks: { type: 'array', items: { type: 'object' } },
-        },
-        required: ['page', 'siteId'],
-      },
-    }),
-  siteTool({
-      name: 'update_page_content',
-      description: 'Replace canonical tenant-page content through the editor. changes must include the complete typed blocks array plus any changed page metadata. Omitting existing block ids is destructive: include expected_document_updated_at, the exact removed_block_ids, and the confirmation_token returned by the canonical page read. Structured business data is edited through its own domain tool.',
-      domain: 'content',
-      minimumRole: 'editor',
-      confirmRequired: true,
-      inputSchema: { page: { type: 'string' }, changes: { type: 'object' }, location_id: { type: 'string' } },
-      required: ['page', 'changes'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean' },
-          page: { type: 'string' },
-          location_id: { type: ['string', 'null'] },
-          changes_count: { type: 'number' },
-          public_path: { type: 'string' },
-          view_url: { type: ['string', 'null'] },
-        },
-        required: ['success', 'page', 'changes_count'],
-      },
-    }),
   siteTool({
       name: 'list_tenant_pages',
       description: 'List canonical tenant-page variants for one manually managed locale. Automated translation is not used; create or update each locale explicitly.',
@@ -208,7 +164,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
             address_visibility: { type: 'string', enum: ['visible', 'hidden'] },
             disclaimer: { type: ['string', 'null'] },
             footer_disclaimer: { type: ['string', 'null'] },
-            document_asset_ids: { type: 'array', items: { type: 'string' } },
+            media: { type: 'array', items: { type: 'object', properties: { asset_id: { type: 'string' }, slot: { type: 'string', const: 'document' } }, required: ['asset_id', 'slot'] } },
             metadata: { type: 'object' },
           },
         },
@@ -287,29 +243,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
           summary: renderedBookingPolicySummaryObject,
         },
         required: ['ok', 'entity', 'id'],
-      },
-    }),
-  siteTool({
-      name: 'update_home_hero',
-      description: 'Update the homepage hero text — this affects the homepage, never a location\'s own separate page. If the user is talking about one particular location\'s own page (e.g. a closure or an announcement image for one location), use update_location instead. To place media, call set_media with target_type home_hero. Only provided fields are changed.',
-      domain: 'content',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        title: { type: 'string' },
-        subtitle: { type: 'string' },
-        location_id: { type: 'string', description: 'Not supported for the site-scoped homepage.' },
-      },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean' },
-          page: { type: 'string' },
-          changes_count: { type: 'number' },
-          public_path: { type: 'string' },
-          view_url: { type: ['string', 'null'] },
-        },
-        required: ['success', 'page', 'changes_count'],
       },
     }),
 ]

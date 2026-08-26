@@ -1,11 +1,13 @@
 import { useRender } from 'vue-email'
-import { execute, queryFirst } from '~/server/db'
+import { execute } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { getOrganizationOwnerEmail } from '~/server/utils/member-access'
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import DomainUpdate from '~/server/emails/templates/DomainUpdate'
 import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
 
-interface DomainNotificationEnv {
+interface DomainNotificationEnv extends CloudflareEnv {
   PLATFORM_OWNER_EMAILS?: string
   RESEND_API_KEY?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
@@ -26,17 +28,6 @@ interface DomainNotificationInput {
   title: string
   message: string
   dashboardUrl: string
-}
-
-function ownerEmailQuery() {
-  return `
-    SELECT u.email
-    FROM user u
-    JOIN member m ON u.id = m.userId
-    WHERE m.organizationId = ? AND m.role IN ('owner', 'admin')
-    ORDER BY m.role = 'owner' DESC, u.email LIKE '%@example.test' ASC, m.createdAt DESC
-    LIMIT 1
-  `
 }
 
 function supportEmails(env: DomainNotificationEnv): string[] {
@@ -191,8 +182,8 @@ export async function notifyDomainLifecycle(
   })
 
   if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
-    const owner = await queryFirst<{ email?: string }>(db, ownerEmailQuery(), [opts.organizationId])
-    if (owner?.email) await sendEmail(env, db, { ...opts, to: owner.email, audience: 'owner' })
+    const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
+    if (ownerEmail) await sendEmail(env, db, { ...opts, to: ownerEmail, audience: 'owner' })
     const supportSendPromises = supportEmails(env).map((email) => sendEmail(env, db, { ...opts, to: email, audience: 'support' }))
     await Promise.all(supportSendPromises)
   }

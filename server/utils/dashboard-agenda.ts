@@ -1,6 +1,7 @@
 import { queryAll, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
+import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 export const AGENDA_KINDS = ['reservation', 'experience_booking', 'post', 'thread'] as const
 export type AgendaKind = typeof AGENDA_KINDS[number]
@@ -23,6 +24,7 @@ export interface AgendaItem {
 }
 
 export interface AgendaPrincipal {
+  env: CloudflareEnv
   memberId: string
   role: string
 }
@@ -146,23 +148,10 @@ function addDays(dateKey: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
-function accessClause(principal: AgendaPrincipal | undefined, rowAlias: string): string {
-  if (!principal || isOrganizationWideRole(principal.role)) return ''
-  return `AND EXISTS (
-    SELECT 1 FROM member m
-    JOIN sites access_site ON access_site.id = ${rowAlias}.site_id
-    LEFT JOIN business_locations access_location
-      ON access_location.id = ${rowAlias}.location_id AND access_location.site_id = ${rowAlias}.site_id
-    WHERE m.id = ? AND m.organizationId = ${rowAlias}.organization_id
-      AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 'access_site.team_id', locationTeamExpr: 'access_location.team_id' })}
-  )`
-}
-
-function scopeParams(organizationId: string, query: AgendaQuery, principalUsesScope: boolean): unknown[] {
+function scopeParams(organizationId: string, query: AgendaQuery): unknown[] {
   const params: unknown[] = [organizationId]
   if (query.siteId) params.push(query.siteId)
   if (query.locationId) params.push(query.locationId)
-  if (principalUsesScope) params.push(query.principal!.memberId)
   return params
 }
 
@@ -170,7 +159,6 @@ function scopeConditions(query: AgendaQuery, alias: string): string {
   return [
     query.siteId ? `AND ${alias}.site_id = ?` : '',
     query.locationId ? `AND ${alias}.location_id = ?` : '',
-    accessClause(query.principal, alias),
   ].filter(Boolean).join('\n')
 }
 
@@ -184,21 +172,26 @@ export async function listAgenda(
   if (query.from > query.to) throw new Error('from must not be after to')
 
   const scoped = Boolean(query.principal && !isOrganizationWideRole(query.principal.role))
-  const siteConditions = [
-    scoped ? `AND EXISTS (
-      SELECT 1 FROM member m
-      LEFT JOIN business_locations access_location ON access_location.site_id = s.id
-      WHERE m.id = ? AND m.organizationId = s.organization_id
-        AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'access_location.team_id' })}
-    )` : '',
-  ].filter(Boolean).join('\n')
-  const siteParams: unknown[] = [organizationId, ...(scoped ? [query.principal!.memberId] : [])]
-  const capabilitySites = await queryAll<CapabilitySiteRow>(db, `
+  const allCapabilitySites = await queryAll<CapabilitySiteRow>(db, `
     SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
     FROM sites s
-    WHERE s.organization_id = ? ${siteConditions}
+    WHERE s.organization_id = ?
     ORDER BY s.created_at, s.id
-  `, siteParams)
+  `, [organizationId])
+  const accessibleLocationsBySite = new Map<string, string[] | null>()
+  if (scoped && query.principal) {
+    await Promise.all(allCapabilitySites.map(async (site) => {
+      accessibleLocationsBySite.set(site.id, await listAccessibleLocationIds(db, {
+        env: query.principal!.env,
+        memberId: query.principal!.memberId,
+        role: query.principal!.role,
+        organizationId,
+        siteId: site.id,
+      }))
+    }))
+  }
+  const capabilitySites = allCapabilitySites.filter(site =>
+    !scoped || (accessibleLocationsBySite.get(site.id)?.length ?? 1) > 0)
 
   const available = new Set<AgendaKind>(['post', 'thread'])
   for (const site of capabilitySites) {
@@ -235,7 +228,7 @@ export async function listAgenda(
     ${kind === 'thread' ? 'LEFT JOIN guest_threads gt ON gt.id = ' + alias + '.id' : ''}
     WHERE ${alias}.organization_id = ? ${scopeConditions(query, alias)}
   `
-  const params = () => scopeParams(organizationId, query, scoped)
+  const params = () => scopeParams(organizationId, query)
 
   if (requestedKinds.has('reservation')) sourceQueries.push(queryAll(db, `${commonSelect('r', 'reservation', `r.date AS local_date, r.time AS local_time, NULL AS starts_at, NULL AS ends_at,
     r.name AS title, printf('%s guests', r.guests) AS subtitle, r.status`)} AND r.date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
@@ -255,7 +248,11 @@ export async function listAgenda(
       ...(query.limit ? [Math.max(1, Math.min(query.limit, 100))] : []),
     ]))
 
-  const rows = (await Promise.all(sourceQueries)).flat()
+  const rows = (await Promise.all(sourceQueries)).flat().filter((row) => {
+    if (!scoped) return true
+    const locationIds = accessibleLocationsBySite.get(row.site_id)
+    return locationIds === null || Boolean(row.location_id && locationIds?.includes(row.location_id))
+  })
   const organizationSlug = query.organizationSlug ?? organizationId
   const items = rows.flatMap<AgendaItem>((row) => {
     const timeZone = validTimeZone(row.timezone) ?? 'UTC'
@@ -281,18 +278,16 @@ export async function listAgenda(
     }]
   }).sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.id.localeCompare(right.id))
 
-  const locationParams: unknown[] = [organizationId, ...capabilitySites.map(site => site.id), ...(scoped ? [query.principal!.memberId] : [])]
+  const locationParams: unknown[] = [organizationId, ...capabilitySites.map(site => site.id)]
   const locations = capabilitySites.length === 0 ? [] : await queryAll<LocationRow>(db, `
     SELECT l.id, l.site_id, l.title FROM business_locations l
     WHERE l.organization_id = ? AND l.site_id IN (${capabilitySites.map(() => '?').join(', ')})
-    ${scoped ? `AND EXISTS (
-      SELECT 1 FROM member m
-      JOIN sites access_site ON access_site.id = l.site_id
-      WHERE m.id = ? AND m.organizationId = l.organization_id
-        AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 'access_site.team_id', locationTeamExpr: 'l.team_id' })}
-    )` : ''}
     ORDER BY l.title, l.id
-  `, locationParams)
+  `, locationParams).then(rows => rows.filter((location) => {
+    if (!scoped) return true
+    const locationIds = accessibleLocationsBySite.get(location.site_id)
+    return locationIds === null || Boolean(locationIds?.includes(location.id))
+  }))
   return {
     items, availableKinds,
     sites: capabilitySites.map(site => ({ id: site.id, label: site.brand_name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id })),

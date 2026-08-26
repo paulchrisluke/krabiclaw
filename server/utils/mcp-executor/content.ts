@@ -2,7 +2,7 @@ import { HTTPError } from 'nitro';
 
 import type { McpExecutorContext } from './shared'
 import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
-import { buildTenantPageReplacementConfirmationToken, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
+import { buildTenantPageReplacementConfirmationToken } from '~/server/utils/mcp-workflows'
 import {
   createTenantPage,
   getTenantPageById,
@@ -11,7 +11,7 @@ import {
 } from '~/server/utils/tenant-pages'
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, objectRecord, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
+import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
 
 function nullableStringArg(args: Record<string, unknown>, key: string, fallback: string | null): string | null {
   if (!Object.prototype.hasOwnProperty.call(args, key)) return fallback
@@ -92,52 +92,6 @@ function assertTenantPageReplacementConfirmed(
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
-    case "get_page_fields":
-      console.info(
-        "[MCP] get_page_fields invoked page=%s site=%s",
-        args.page,
-        site.siteId,
-      );
-      return attachViewUrlToRecord(await getEditorContent(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        requiredString(args, "page"),
-        optionalString(args, "location_id") ?? undefined,
-      ), site, {}, site.env);
-    case "update_page_content":
-      try {
-        const locationId = optionalString(args, "location_id");
-        const page = requiredString(args, "page");
-        const changes = objectRecord(args.changes, "changes");
-        const updated = await updatePageContent(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          {
-            page,
-            changes,
-            location_id: locationId,
-          },
-        );
-        const hydratedPageContent = attachViewUrlToRecord(updated, site, {}, site.env);
-        const pageContentContext = await mutationContextPayload(site, { locationId });
-        return renderStructuredResponse(
-          {
-            success: true,
-            page,
-            location_id: locationId ?? null,
-            changes_count: Object.keys(changes).length,
-            public_path: updated.public_path,
-            view_url: hydratedPageContent.view_url,
-            context: pageContentContext,
-          },
-          `Updated ${page} page content.`,
-          { page_content: hydratedPageContent },
-        );
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
     case "list_tenant_pages":
       try {
         return { pages: await listTenantPages(site.db, site.siteId, { locale: optionalString(args, "locale") }) };
@@ -228,7 +182,12 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         const updated = await upsertProfessionalServiceContent(site.db, {
           organizationId: site.organizationId,
           siteId: site.siteId,
-          data: objectRecord(args, "content"),
+          data: {
+            ...(Object.hasOwn(args, 'offerings') ? { offerings: args.offerings } : {}),
+            ...(Object.hasOwn(args, 'compliance') ? { compliance: args.compliance } : {}),
+            ...(Object.hasOwn(args, 'consultation') ? { consultation: args.consultation } : {}),
+            ...(Object.hasOwn(args, 'themeTokens') ? { themeTokens: args.themeTokens } : {}),
+          },
           updatedBy: site.userId,
         });
         const context = await mutationContextPayload(site);
@@ -322,21 +281,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         { policy, resolved_policy: resolvedPolicy },
       );
     }
-    case "update_home_hero":
-      try {
-        const locationId = optionalString(args, "location_id");
-        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
-          title: optionalString(args, "title"),
-          subtitle: optionalString(args, "subtitle"),
-          location_id: locationId,
-        });
-        return {
-          ...attachViewUrlToRecord(updated, site, {}, site.env),
-          context: await mutationContextPayload(site, { locationId }),
-        };
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
     default:
       return NOT_HANDLED
   }

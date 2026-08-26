@@ -1,4 +1,6 @@
 import { execute, queryAll, queryFirst } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 
 export interface McpWorkspacePreferenceRow {
   user_id: string
@@ -76,18 +78,32 @@ export async function getMcpWorkspacePreference(
 
 export async function listAccessibleSitesForMcp(
   db: D1Database,
+  env: CloudflareEnv,
   userId: string,
 ) {
-  return await queryAll<McpSiteSummary>(db, `
-    SELECT s.id, s.organization_id, o.name AS organization_name, o.slug AS organization_slug,
-           s.brand_name, s.subdomain, s.custom_domain, s.public_url, s.status, s.onboarding_status,
-           s.primary_location_id, m.role
-    FROM sites s
-    JOIN organization o ON o.id = s.organization_id
-    JOIN member m ON m.organizationId = s.organization_id
-    WHERE m.userId = ?
-    ORDER BY s.updated_at DESC, s.created_at DESC
-  `, [userId])
+  const organizations = await listUserOrganizations(env, userId)
+  if (!organizations.length) return []
+  const memberships = await Promise.all(organizations.map(organization =>
+    resolveOrganizationMembership(env, { organizationId: organization.id, userId }),
+  ))
+  const organizationById = new Map(organizations.map(organization => [organization.id, organization]))
+  const roleByOrganizationId = new Map(memberships.flatMap((membership, index) => membership
+    ? [[organizations[index]!.id, membership.role] as const]
+    : []))
+  const rows = await queryAll<Omit<McpSiteSummary, 'organization_name' | 'organization_slug' | 'role'>>(db, `
+    SELECT id, organization_id, brand_name, subdomain, custom_domain, public_url, status,
+           onboarding_status, primary_location_id
+    FROM sites
+    WHERE organization_id IN (${organizations.map(() => '?').join(', ')})
+    ORDER BY updated_at DESC, created_at DESC
+  `, organizations.map(organization => organization.id))
+  return rows.flatMap((site) => {
+    const organization = organizationById.get(site.organization_id)
+    const role = roleByOrganizationId.get(site.organization_id)
+    return organization && role
+      ? [{ ...site, organization_name: organization.name, organization_slug: organization.slug, role }]
+      : []
+  })
 }
 
 export async function listLocationsForMcp(
@@ -117,11 +133,12 @@ export async function listLocationsForMcp(
 
 export async function resolveMcpWorkspace(
   db: D1Database,
+  env: CloudflareEnv,
   userId: string,
   options: ResolveWorkspaceOptions = {},
 ): Promise<ResolvedMcpWorkspace> {
   const preference = await getMcpWorkspacePreference(db, userId)
-  const sites = await listAccessibleSitesForMcp(db, userId)
+  const sites = await listAccessibleSitesForMcp(db, env, userId)
   const organizations = Array.from(
     new Map(
       sites.map((site) => [

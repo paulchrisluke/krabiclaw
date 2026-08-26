@@ -2,6 +2,18 @@ import type { McpToolDefinition } from './shared'
 import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
 import { ALL_VERTICALS } from '~/utils/vertical-copy'
 
+const SITE_MEDIA_ITEM_SCHEMA = {
+  type: 'object',
+  properties: {
+    asset_id: { type: 'string' },
+    slot: { type: 'string' },
+    public_url: { type: ['string', 'null'] },
+    thumbnail_url: { type: ['string', 'null'] },
+    kind: { type: 'string' },
+  },
+  required: ['asset_id', 'slot', 'public_url', 'thumbnail_url', 'kind'],
+} as const
+
 export const SITES_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'list_sites',
@@ -68,7 +80,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               status: { type: 'string' },
               brand_name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
-              logo_url: { type: ['string', 'null'] },
+              media: { type: 'array', items: SITE_MEDIA_ITEM_SCHEMA },
               public_url: { type: ['string', 'null'] },
               last_published_at: { type: ['string', 'null'] },
               created_at: { type: 'string' },
@@ -102,8 +114,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               custom_domain_status: { type: ['string', 'null'] },
               brand_name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
-              logo_url: { type: ['string', 'null'] },
-              logo_asset_id: { type: ['string', 'null'] },
+              media: { type: 'array', items: SITE_MEDIA_ITEM_SCHEMA },
               contact_email: { type: ['string', 'null'] },
               default_currency: { type: ['string', 'null'] },
               press_email: { type: ['string', 'null'] },
@@ -135,7 +146,14 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         brand_name: { type: 'string' },
         brand_description: { type: 'string' },
-        logo_url: { type: 'string' },
+        media: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { asset_id: { type: 'string' }, slot: { type: 'string', enum: ['logo', 'favicon'] } },
+            required: ['asset_id', 'slot'],
+          },
+        },
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
         press_email: { type: 'string' },

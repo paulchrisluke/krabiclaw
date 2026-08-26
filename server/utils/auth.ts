@@ -11,7 +11,7 @@ import { HTTPError, type H3Event } from 'nitro';
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
-import { parsePhoneOrThrow, PHONE_METADATA_VERSION } from '~/utils/phone'
+import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
@@ -264,6 +264,9 @@ export function createAuth(env: CloudflareEnv) {
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
+    user: {
+      deleteUser: { enabled: true },
+    },
     rateLimit: {
       customRules: {
         '/sign-in/*': (request, currentRule) => shouldBypassE2eAuthRateLimit(env, request)
@@ -287,6 +290,12 @@ export function createAuth(env: CloudflareEnv) {
             // personal org here would just be an orphaned, siteless duplicate.
             // Persist the canonical event before the auth hook completes. Delivery failures
             // are recorded by the dispatcher and must never fail account creation.
+            //
+            // This is also the sole source for the platform `new_signups` analytics metric
+            // (server/utils/analytics.ts). The catch here is intentional and must stay this
+            // way: a signup can never be allowed to fail because this write failed. That
+            // means the metric is a best-effort lower bound, not an exact count — see
+            // PLATFORM_SIGNUP_LEDGER_START_DATE for the known-gap cutover this implies.
             await notifyNewUserSignup(db, env, {
               id: user.id,
               email: user.email,
@@ -548,23 +557,6 @@ export function createAuth(env: CloudflareEnv) {
             return false
           }
         },
-        // Stamp the app-owned user_phone_verification companion table
-        // (issue #293 Section D/I) on every successful OTP verification —
-        // this table exists specifically to track ownership_verified/
-        // format_valid/phone_metadata_version separately from Better Auth's
-        // own phoneNumberVerified column, but nothing wrote to it until now.
-        callbackOnVerification: async ({ user }) => {
-          try {
-            const now = new Date().toISOString()
-            await execute(d1, `
-              INSERT INTO user_phone_verification (id, user_id, format_valid, ownership_verified, phone_metadata_version, created_at, updated_at)
-              VALUES (?, ?, 1, 1, ?, ?, ?)
-              ON CONFLICT(user_id) DO UPDATE SET format_valid = 1, ownership_verified = 1, phone_metadata_version = excluded.phone_metadata_version, updated_at = excluded.updated_at
-            `, [crypto.randomUUID(), user.id, PHONE_METADATA_VERSION, now, now])
-          } catch (error) {
-            console.warn('user_phone_verification_stamp_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) })
-          }
-        },
         signUpOnVerification: {
           getTempEmail: (phone) => {
             try {
@@ -604,6 +596,26 @@ export function createAuth(env: CloudflareEnv) {
 
   authCache.set(d1, instance)
   return instance
+}
+
+export async function findVerifiedAuthUserByPhone(
+  env: CloudflareEnv,
+  phoneNumber: string,
+): Promise<{ id: string; phoneNumber: string; phoneNumberVerified: boolean } | null> {
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    findOne<T>(_input: {
+      model: string
+      where: Array<{ field: string; value: string | boolean }>
+    }): Promise<T | null>
+  }
+  return await adapter.findOne({
+    model: 'user',
+    where: [
+      { field: 'phoneNumber', value: phoneNumber },
+      { field: 'phoneNumberVerified', value: true },
+    ],
+  })
 }
 
 export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>> {
