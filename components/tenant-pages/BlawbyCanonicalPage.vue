@@ -120,7 +120,7 @@ const offerings = computed<PublicOfferingSummary[]>(() => arrayRecords(servicesB
     thumbnail_url: stringValue(media.thumbnail_url) || null,
     kind: stringValue(media.kind),
     alt_text: stringValue(media.alt_text) || null,
-  })).filter(media => media.asset_id && media.slot && media.public_url && media.kind),
+  })).filter(media => media.asset_id && media.slot && media.public_url && media.kind) ?? [],
   canonical_path: stringValue(item.url),
   sort_order: 0,
   featured: false,
