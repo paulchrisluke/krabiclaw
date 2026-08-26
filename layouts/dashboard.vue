@@ -1,6 +1,10 @@
 <template>
   <UApp>
-    <div class="platform-theme" :class="{ 'has-mobile-bottom-nav': showMobileBottomNav }">
+    <div
+      class="platform-theme"
+      :class="{ 'has-mobile-bottom-nav': showMobileBottomNav }"
+      :style="{ '--dashboard-sidebar-width': `${sidebarWidthPx}px` }"
+    >
     <div v-if="impersonatedBy" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 sm:left-1/2 sm:right-auto sm:w-1/3 sm:-translate-x-1/2 sm:px-0">
       <div class="pointer-events-auto flex w-full max-w-full flex-wrap items-center justify-center gap-3 rounded-t-2xl border border-warning/40 border-b-0 bg-default px-6 py-4 shadow-[0_-4px_24px_rgba(0,0,0,0.15)]">
         <span class="relative flex size-2 shrink-0">
@@ -50,7 +54,7 @@
         collapsible
         class="hidden lg:flex"
         :menu="{ close: false }"
-        :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
+        :ui="{ root: 'dashboard-sidebar-root h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
       >
         <template #header="{ collapsed }">
           <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
@@ -162,6 +166,7 @@ interface AuthOrganization {
 
 const route = useRoute()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
+const sidebarWidthPx = ref(0)
 const { data: sessionData, refreshSession } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
@@ -197,6 +202,44 @@ const dashboardContextError = computed(() =>
     ? dashboardContextErrors.value[dashboard.contextKey.value] ?? null
     : null,
 )
+
+// Measured (not assumed) so it tracks the sidebar's actual rendered width —
+// including user drag-resizing and the collapsed rail state — rather than
+// hardcoding its default size. Exposed as --dashboard-sidebar-width so a
+// `fixed` element elsewhere (e.g. a floating "View" pill) can offset itself
+// clear of the sidebar at lg and above instead of centering against the
+// full viewport width, which is wrong the moment the sidebar is visible.
+if (import.meta.client) {
+  let sidebarResizeObserver: ResizeObserver | null = null
+  let observedSidebarEl: Element | null = null
+  // watchEffect (not onMounted) because the sidebar sits behind the
+  // dashboard.pending/dashboardContextError v-if chain above and may not
+  // exist in the DOM yet on first mount — this re-queries after every
+  // post-render where either of those flips, picking the sidebar up
+  // whenever it actually appears (or disappears, e.g. the error state).
+  watchEffect(() => {
+    void dashboard.pending.value
+    void dashboardContextError.value
+    // UDashboardSidebar's component ref exposes `$el` pointing at an internal
+    // placeholder text/comment node, not its rendered root — so this queries
+    // the stable marker class added to :ui.root above instead.
+    const el = document.querySelector('.dashboard-sidebar-root')
+    if (el === observedSidebarEl) return
+    sidebarResizeObserver?.disconnect()
+    observedSidebarEl = el
+    if (!(el instanceof HTMLElement)) {
+      sidebarWidthPx.value = 0
+      return
+    }
+    sidebarWidthPx.value = Math.round(el.getBoundingClientRect().width)
+    sidebarResizeObserver = new ResizeObserver(([entry]) => {
+      sidebarWidthPx.value = entry ? Math.round(entry.contentRect.width) : 0
+    })
+    sidebarResizeObserver.observe(el)
+  }, { flush: 'post' })
+  onBeforeUnmount(() => sidebarResizeObserver?.disconnect())
+}
+
 let dashboardContextController: AbortController | null = null
 
 function setDashboardContextError(scopeKey: string, error: unknown) {
