@@ -7,8 +7,6 @@
       </p>
       <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" :disabled="!interactive || !post" @click="share"><span class="hidden sm:inline">Share</span></UButton>
       <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" :disabled="!interactive" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
-      <UButton v-if="post?.status === 'published'" size="sm" :loading="savingExplicitly" :disabled="!interactive || savingExplicitly || loadPending || saveState === 'conflict' || !dirtyState" @click="saveLiveChanges">Save live changes</UButton>
-      <UButton v-else size="sm" :loading="publishing" :disabled="!interactive || publishing || loadPending || saveState === 'conflict'" @click="publish">{{ publishTiming === 'Scheduled' ? (post ? 'Reschedule' : 'Schedule') : 'Publish now' }}</UButton>
     </header>
     <p v-if="actionError" role="alert" class="shrink-0 border-b border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
@@ -55,6 +53,14 @@
         </BlogArticleView>
       </div>
     </main>
+
+    <!-- Mirrors the Airbnb host app: the header carries only back/title/utility
+         icons, never the primary commit action — Publish/Save live changes
+         always lives in a bottom bar. -->
+    <footer class="flex shrink-0 justify-end border-t border-default bg-elevated p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4">
+      <UButton v-if="post?.status === 'published'" :loading="savingExplicitly" :disabled="!interactive || savingExplicitly || loadPending || saveState === 'conflict' || !dirtyState" @click="saveLiveChanges">Save live changes</UButton>
+      <UButton v-else :loading="publishing" :disabled="!interactive || publishing || loadPending || saveState === 'conflict'" @click="publish">{{ publishTiming === 'Scheduled' ? (post ? 'Reschedule' : 'Schedule') : 'Publish now' }}</UButton>
+    </footer>
 
     <USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal :content="{ onOpenAutoFocus: focusCategory }" @after:leave="restoreSettingsFocus">
       <template #body>

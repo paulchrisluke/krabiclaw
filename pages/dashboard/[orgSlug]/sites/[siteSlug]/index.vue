@@ -127,7 +127,7 @@
         </div>
       </div>
 
-      <div v-if="publicSiteUrl" class="pointer-events-none fixed inset-x-0 bottom-20 z-20 flex justify-center px-4 md:bottom-5">
+      <div v-if="publicSiteUrl" class="pointer-events-none fixed inset-x-0 bottom-(--dashboard-mobile-nav-clearance) z-20 flex justify-center px-4 md:bottom-5">
         <UButton :to="publicSiteUrl" target="_blank" icon="i-lucide-external-link" label="View site" class="pointer-events-auto rounded-full px-5 shadow-lg" />
       </div>
     </template>

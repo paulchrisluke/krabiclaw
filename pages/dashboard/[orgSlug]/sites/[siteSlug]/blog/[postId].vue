@@ -27,7 +27,7 @@ import BlogPostEditor from '~/lib/components/workspace/blog/BlogPostEditor.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { BlogPost } from '~/lib/components/workspace/blog/types'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog', mobileBottomNav: false })
 
 const route = useRoute()
 const orgSlug = route.params.orgSlug as string

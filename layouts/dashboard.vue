@@ -1,6 +1,6 @@
 <template>
   <UApp>
-    <div class="platform-theme">
+    <div class="platform-theme" :class="{ 'has-mobile-bottom-nav': showMobileBottomNav }">
     <div v-if="impersonatedBy" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 sm:left-1/2 sm:right-auto sm:w-1/3 sm:-translate-x-1/2 sm:px-0">
       <div class="pointer-events-auto flex w-full max-w-full flex-wrap items-center justify-center gap-3 rounded-t-2xl border border-warning/40 border-b-0 bg-default px-6 py-4 shadow-[0_-4px_24px_rgba(0,0,0,0.15)]">
         <span class="relative flex size-2 shrink-0">
@@ -88,7 +88,7 @@
     </UDashboardGroup>
 
     <div
-      v-if="mobileNavItems.length && !isAccountRoute"
+      v-if="showMobileBottomNav"
       class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden"
       data-testid="dashboard-mobile-nav"
     >
@@ -306,6 +306,11 @@ const locationBase = computed(() => locationsBase.value && currentLocationSlug.v
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
+// Detail/edit pages (single-record forms) opt out via definePageMeta({ mobileBottomNav: false })
+// and render their own contextual save bar instead — mirrors the Airbnb host app pattern where
+// the shared tab bar shows on list/overview screens but hides on a field's edit sheet.
+const hidesMobileBottomNav = computed(() => route.meta.mobileBottomNav === false)
+const showMobileBottomNav = computed(() => mobileNavItems.value.length > 0 && !isAccountRoute.value && !hidesMobileBottomNav.value)
 const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
 const showChowBot = computed(() => !isConversationsRoute.value
   && (dashboard.siteAccess.value !== 'location' || scope.value === 'location'))

@@ -122,26 +122,6 @@
         </div>
       </div>
 
-      <!-- Action bar -->
-      <div class="mt-6 flex flex-col-reverse gap-2 border-t border-default pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <UButton
-          v-if="itemId"
-          color="error"
-          variant="ghost"
-          icon="i-lucide-trash-2"
-          :loading="deleting"
-          @click="handleDelete"
-        >
-          Delete item
-        </UButton>
-        <div v-else />
-        <div class="flex justify-end gap-2">
-          <UButton color="neutral" variant="ghost" :to="backPath">Cancel</UButton>
-          <UButton :loading="saving" :disabled="!canSave" @click="handleSave">
-            {{ itemId ? 'Save item' : 'Create item' }}
-          </UButton>
-        </div>
-      </div>
     </template>
   </div>
 </template>
@@ -162,6 +142,23 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:item-name': [name: string]
 }>()
+
+// Exposed so the owning page can render the Save/Cancel/Delete bar in
+// UDashboardPanel's own #footer slot instead of duplicating this state —
+// this component is nested inside the panel's #body slot and has no direct
+// access to a sibling #footer template. Declared here, ahead of this script's
+// top-level `await useAsyncData(...)` below, because defineExpose must run
+// before any suspension point; getters defer evaluation of the referenced
+// consts (declared further down) until the parent actually reads them, well
+// after setup has finished, so no temporal-dead-zone issue at runtime.
+defineExpose({
+  get itemId() { return itemId },
+  get saving() { return saving },
+  get deleting() { return deleting },
+  get canSave() { return canSave },
+  get handleSave() { return handleSave },
+  get handleDelete() { return handleDelete },
+})
 
 const router = useRouter()
 const toast = useToast()
@@ -408,5 +405,4 @@ const handleDelete = async () => {
     deleting.value = false
   }
 }
-
 </script>

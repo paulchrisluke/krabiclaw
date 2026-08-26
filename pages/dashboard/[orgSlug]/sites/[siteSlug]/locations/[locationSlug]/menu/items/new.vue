@@ -18,6 +18,7 @@
       />
       <MenuItemDetailEditor
         v-else-if="menuId"
+        ref="editorRef"
         :site-id="siteId"
         :menu-id="menuId"
         :location-id="locationId"
@@ -25,13 +26,21 @@
         :default-currency="defaultCurrency"
       />
     </template>
+
+    <template v-if="editorRef" #footer>
+      <DashboardFooterActionBar>
+        <UButton color="neutral" variant="ghost" :to="backPath">Cancel</UButton>
+        <UButton :loading="editorRef.saving" :disabled="!editorRef.canSave" @click="editorRef.handleSave">Create item</UButton>
+      </DashboardFooterActionBar>
+    </template>
   </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.menu' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.menu', mobileBottomNav: false })
 
 const route = useRoute()
+const editorRef = useTemplateRef('editorRef')
 
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
@@ -49,7 +58,7 @@ if (!siteId) {
 }
 
 const { menuPath } = useDashboardSiteLinks(siteId)
-const backPath = computed(() => menuPath())
+const backPath = computed(() => menuPath(locationId.value))
 
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to create an item')
 
