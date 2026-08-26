@@ -1,6 +1,5 @@
 import { execute, executeBatch, queryAll, type DbClient } from '../db/index.ts'
 import { getMediaPlacements } from './media-placement.ts'
-import { buildDeleteOwnerPlacementsQuery } from './media-asset-manager.ts'
 
 export const OWNER_REVIEW_COLLECTION_METHODS = ['in_person', 'email', 'phone', 'migration', 'other'] as const
 export type OwnerReviewCollectionMethod = typeof OWNER_REVIEW_COLLECTION_METHODS[number]
@@ -159,7 +158,19 @@ export async function deleteOwnerEnteredSiteReview(
   reviewId: string,
 ) {
   const [, result] = await executeBatch(db, [
-    buildDeleteOwnerPlacementsQuery({ ownerType: 'review', ownerId: reviewId, organizationId: scope.organizationId, siteId: scope.siteId }),
+    {
+      // Scoped by the exact same owner-entered predicate as the reviews DELETE below,
+      // so a reviewId that exists but isn't owner-entered (or belongs to another
+      // org/site) never has its placements cleared while the review itself survives.
+      query: `
+      DELETE FROM media_placements
+      WHERE owner_type = 'review' AND owner_id IN (
+        SELECT id FROM reviews
+        WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
+      )
+    `,
+      params: [reviewId, scope.organizationId, scope.siteId],
+    },
     {
       query: `
       DELETE FROM reviews

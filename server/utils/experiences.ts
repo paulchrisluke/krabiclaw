@@ -7,7 +7,6 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import {
-  buildDeleteOwnerPlacementsQuery,
   buildReplaceMediaPlacementQueries,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
@@ -626,7 +625,13 @@ export async function deleteExperience(
     params.push(opts.locationId)
   }
   const [, deleteResult] = await executeBatch(db, [
-    buildDeleteOwnerPlacementsQuery({ ownerType: 'experience', ownerId: id }),
+    {
+      // Scoped by the same where clause as the experiences DELETE below, so an
+      // idOrSlug that resolves to an out-of-scope experience id (wrong site/location)
+      // never has its placements cleared while the experience itself survives.
+      query: `DELETE FROM media_placements WHERE owner_type = 'experience' AND owner_id IN (SELECT id FROM experiences WHERE ${where})`,
+      params,
+    },
     { query: `DELETE FROM experiences WHERE ${where}`, params },
   ])
   return Boolean(deleteResult?.meta.changes)

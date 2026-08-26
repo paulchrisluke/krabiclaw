@@ -42,10 +42,14 @@ interface TenantSiteMedia {
 }
 
 const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
-  'asset_id', mp.asset_id, 'slot', mp.slot, 'public_url', ma.public_url,
-  'thumbnail_url', ma.thumbnail_url, 'kind', ma.kind, 'mime_type', ma.mime_type
-)), json('[]')) FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-WHERE mp.site_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active')`
+  'asset_id', ordered.asset_id, 'slot', ordered.slot, 'public_url', ordered.public_url,
+  'thumbnail_url', ordered.thumbnail_url, 'kind', ordered.kind, 'mime_type', ordered.mime_type
+)), json('[]')) FROM (
+  SELECT mp.asset_id, mp.slot, ma.public_url, ma.thumbnail_url, ma.kind, ma.mime_type, mp.id
+  FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+  WHERE mp.site_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active'
+  ORDER BY mp.slot, mp.sort_order, mp.id
+) ordered)`
 
 function tenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>): TenantSiteMedia[] {
   return JSON.parse(site.media_json) as TenantSiteMedia[]

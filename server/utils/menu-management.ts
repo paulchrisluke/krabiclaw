@@ -709,11 +709,18 @@ export async function deleteMenu(
   // deleted explicitly while the items they're keyed by still exist.
   const [, result] = await executeBatch(db, [
     {
+      // Scoped by the same organization/site as the menus DELETE below, so a
+      // menuId belonging to another org/site never has its items' placements
+      // cleared while the menu itself survives (the DELETE below affects 0 rows).
       query: `
       DELETE FROM media_placements
-      WHERE owner_type = 'menu_item' AND owner_id IN (SELECT id FROM menu_items WHERE menu_id = ?)
+      WHERE owner_type = 'menu_item' AND owner_id IN (
+        SELECT mi.id FROM menu_items mi
+        JOIN menus m ON m.id = mi.menu_id
+        WHERE mi.menu_id = ? AND m.organization_id = ? AND m.site_id = ?
+      )
     `,
-      params: [menuId],
+      params: [menuId, organizationId, siteId],
     },
     {
       query: `
