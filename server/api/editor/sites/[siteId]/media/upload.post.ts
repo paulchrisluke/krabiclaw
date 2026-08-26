@@ -1,15 +1,13 @@
 import { defineHandler } from 'nitro';
 import { getQuery, getRouterParam } from 'nitro/h3';
-import { queryFirst } from '~/server/db'
-import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { requireSiteAccess } from '~/server/utils/location-access'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 
-const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'])
+const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024
-type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo'
+type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other'
 
 function sanitizeFilename(raw: string | undefined): string {
   const sanitized = (raw ?? '')
@@ -32,41 +30,9 @@ export default defineHandler(async (event) => {
     const siteId = getRouterParam(event, 'siteId')
     if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
-    const env = cloudflareEnv(event)
-    const db = env.DB
-    if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-    const session = await getAuthSession(event, env)
-    if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-    const site = await queryFirst<{ organization_id: string }>(
-      db, `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`, [siteId], )
-    if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-
-    const membership = await queryFirst<{ userId: string; member_id: string; member_role: string }>(db, `
-      SELECT m.userId, m.id AS member_id, m.role AS member_role
-      FROM member m
-      WHERE m.organizationId = ?
-        AND m.userId = ?
-      LIMIT 1
-    `, [site.organization_id, session.user.id])
-    if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+    const { env, db, session, site } = await requireSiteAccess(event, siteId)
 
     const query = getQuery(event)
-    const locationId = queryValue(query.locationId)
-    if (locationId) {
-      const location = await queryFirst(db, `
-        SELECT id
-        FROM business_locations
-        WHERE id = ? AND site_id = ? AND organization_id = ?
-        LIMIT 1
-      `, [locationId, siteId, site.organization_id])
-      if (!location) return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
-    }
-
-    await assertResourceAccess(db, {
-      memberId: membership.member_id, role: membership.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId, })
-
     const rawCategory = queryValue(query.category)
     let category: MediaCategory | null = null
     if (rawCategory) {
@@ -117,7 +83,6 @@ export default defineHandler(async (event) => {
       kind: 'video',
       source: 'uploaded',
       category,
-      locationId,
       fileSize: videoData.byteLength,
       poster: {
         buffer: thumbnailData,
@@ -127,9 +92,9 @@ export default defineHandler(async (event) => {
     })
 
     return jsonResponse({
-      id: uploaded.assetId,
-      publicUrl: uploaded.publicUrl,
-      thumbnailUrl: uploaded.thumbnailUrl,
+      asset_id: uploaded.assetId,
+      public_url: uploaded.publicUrl,
+      thumbnail_url: uploaded.thumbnailUrl,
       kind: 'video',
       status: 'active',
     })

@@ -19,10 +19,10 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { db, session, site } = await requireBlogAccess(event, siteId);
+    const { env, db, session, site } = await requireBlogAccess(event, siteId);
 
     const result = await createPlatformBlogPost(db, session.user.id, body as PlatformBlogCreateInput, {
-      site_id: siteId, organization_id: site.organization_id, });
+      site_id: siteId, organization_id: site.organization_id, }, env);
 
     return jsonResponse(finalizeRequestMetrics(event, 'editor-blog-post-create', result));
   } catch (error) {

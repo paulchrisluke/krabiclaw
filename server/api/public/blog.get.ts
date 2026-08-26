@@ -1,7 +1,7 @@
 // GET /api/public/blog - List published platform blog posts
 import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { attachFeaturedImageFromBareJoin } from '~/server/utils/platform-content'
+import { attachFeaturedMediaFromBareJoin } from '~/server/utils/platform-content'
 import { blogCategoryToSlug } from '~/utils/blog-categories'
 
 export default defineHandler(async (event) => {
@@ -11,9 +11,10 @@ export default defineHandler(async (event) => {
 
   const sql = `
     SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order, p.featured_image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
+      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order, mp.asset_id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
     FROM blog_posts p
-    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+    LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0
+    LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
     WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'
     ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.published_at DESC
     LIMIT 100
@@ -23,7 +24,7 @@ export default defineHandler(async (event) => {
     const results = await queryAll<ApiRecord>(db, sql)
     const posts = (results ?? [])
       .filter(post => blogCategoryToSlug(post.category))
-      .map(attachFeaturedImageFromBareJoin)
+      .map(attachFeaturedMediaFromBareJoin)
     return jsonResponse({ posts })
   } catch (err) {
     console.error('Failed to fetch public blog posts:', err)

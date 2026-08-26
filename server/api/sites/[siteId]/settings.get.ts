@@ -5,6 +5,7 @@ import { getConfig } from '~/server/utils/site-config'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
+import { getMediaPlacements } from '~/server/utils/media-placement'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -34,16 +35,18 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberSiteRow(db, siteId, session.user.id)
+    const siteAccess = await loadMemberSiteRow(db, env, siteId, session.user.id)
     if (!siteAccess) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
     await assertSiteWideAccess(db, {
+      env,
       memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
 
     const site = await queryFirst<ApiRecord>(db, `
-      SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status, s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency, s.brand_name, s.brand_description, s.logo_url, s.logo_asset_id, s.contact_email, s.settings, s.last_published_at, s.created_at, s.updated_at
+      SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status, s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency, s.brand_name, s.brand_description,
+             s.contact_email, s.settings, s.last_published_at, s.created_at, s.updated_at
       FROM sites s
       WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1
@@ -56,9 +59,10 @@ export default defineHandler(async (event) => {
     }
 
     const siteConfig = await getConfig(db, site.organization_id as string, site.id as string)
+    const placements = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
 
     const settings = {
-      id: site.id, organization_id: site.organization_id, site_id: site.id, subdomain: site.subdomain, theme: site.theme || 'saya', status: site.status, primary_location_id: site.primary_location_id, public_url: site.public_url, custom_domain_status: site.custom_domain_status || 'none', brand_name: site.brand_name, brand_description: site.brand_description, logo_url: site.logo_url, logo_asset_id: site.logo_asset_id, contact_email: site.contact_email, brand_color: siteConfig.brand_color || '', default_currency: site.default_currency || 'THB', press_email: siteConfig.press_email || '', partnerships_email: siteConfig.partnerships_email || '', catering_email: siteConfig.catering_email || '', careers_email: siteConfig.careers_email || '', google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '', google_site_verification: siteConfig.google_site_verification || '', last_published_at: site.last_published_at, created_at: site.created_at, updated_at: site.updated_at
+      id: site.id, organization_id: site.organization_id, site_id: site.id, subdomain: site.subdomain, theme: site.theme || 'saya', status: site.status, primary_location_id: site.primary_location_id, public_url: site.public_url, custom_domain_status: site.custom_domain_status || 'none', brand_name: site.brand_name, brand_description: site.brand_description, media: (placements.get(siteId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })), contact_email: site.contact_email, brand_color: siteConfig.brand_color || '', default_currency: site.default_currency || 'THB', press_email: siteConfig.press_email || '', partnerships_email: siteConfig.partnerships_email || '', catering_email: siteConfig.catering_email || '', careers_email: siteConfig.careers_email || '', google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '', google_site_verification: siteConfig.google_site_verification || '', last_published_at: site.last_published_at, created_at: site.created_at, updated_at: site.updated_at
     }
     
     return jsonResponse({

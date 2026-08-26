@@ -22,7 +22,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const destination = await resolvePostLoginDestination(db, session.user)
+    const destination = await resolvePostLoginDestination(env, session.user)
     return redirect(destination, 302)
   } catch (error) {
     console.error('Failed to resolve organization slug in post-login:', error)

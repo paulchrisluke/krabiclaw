@@ -28,13 +28,14 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const booking = await queryFirst<{ location_id: string; status: string; updated_at: string }>(db, `SELECT location_id, status, updated_at FROM experience_bookings WHERE id = ? AND site_id = ? LIMIT 1`, [bookingId, siteId])
   if (!booking) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
 
   await assertResourceAccess(db, {
+    env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: booking.location_id, })
 
   const body = await readBody(event) as { status?: unknown }

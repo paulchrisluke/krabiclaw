@@ -15,10 +15,10 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
+  await assertSiteWideAccess(db, { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
   return jsonResponse({ success: true, ...(await getProfessionalServiceContent(db, siteId)) })
 })

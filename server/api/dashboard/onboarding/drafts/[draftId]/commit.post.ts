@@ -4,11 +4,12 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, executeBatch, queryFirst, type BatchQuery } from '~/server/db'
 import { updateLocation } from '~/server/utils/location-management'
-import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
-import { setConfig } from '~/server/utils/site-config'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
+import { setMediaPlacement } from '~/server/utils/media-placement'
+import { resolveUserOrganization } from '~/server/utils/member-access'
 import { applyOnboardingTenantPages } from '~/server/utils/tenant-pages'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -30,15 +31,13 @@ function onboardingPagePath(page: string): string {
   return `/${page}`
 }
 
-function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content: string | null; hero_title: string | null; hero_subtitle: string | null; hero_media_asset_id?: string | null; type: string }>, heroAssetId: string | null) {
+function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content: string | null; hero_title: string | null; hero_subtitle: string | null; type: string }>) {
   const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = []
   for (const row of rows) {
     if (row.field === 'hero') {
-      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title ?? row.content, subtitle: row.hero_subtitle, asset_id: heroAssetId ?? row.hero_media_asset_id ?? null } })
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title ?? row.content, subtitle: row.hero_subtitle } })
     } else if (row.type === 'media' || row.field.endsWith('.image')) {
-      if (row.hero_media_asset_id) {
-        blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'image', position: blocks.length, data: { field: row.field, asset_id: row.hero_media_asset_id, alt: row.field } })
-      }
+      continue
     } else if (row.content?.trim()) {
       const type = row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
       blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content } })
@@ -130,19 +129,20 @@ export default defineHandler(async (event) => {
       throw new Error('No active location found for this site. Site creation may have failed.')
     }
 
-    const logoDraftImage = payload.preview.draftMedia?.logo ?? null
-    const heroDraftImage = payload.preview.draftMedia?.hero ?? null
-    const logoAssetId = logoDraftImage?.draftAssetId ?? null
+    const logoDraftImage = getDraftMedia(payload, 'logo')
+    const heroDraftImage = getDraftMedia(payload, 'hero')
     const heroAssetId = heroDraftImage?.draftAssetId ?? null
 
     if (logoDraftImage) {
       await createMediaAsset(db, {
-        id: logoDraftImage.draftAssetId, organization_id: organizationId, site_id: siteId, location_id: null, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: logoDraftImage.cloudflareImageId, public_url: logoDraftImage.publicUrl, thumbnail_url: logoDraftImage.thumbnailUrl, mime_type: logoDraftImage.mimeType, file_name: logoDraftImage.fileName, file_size: logoDraftImage.fileSize, category: 'logo', status: 'active', created_by_user_id: session.user.id, })
+        id: logoDraftImage.draftAssetId, organization_id: organizationId, site_id: siteId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: logoDraftImage.cloudflareImageId, public_url: logoDraftImage.publicUrl, thumbnail_url: logoDraftImage.thumbnailUrl, mime_type: logoDraftImage.mimeType, file_name: logoDraftImage.fileName, file_size: logoDraftImage.fileSize, status: 'active', created_by_user_id: session.user.id, })
+      await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'site', owner_id: siteId, slot: 'logo' }, assetIds: [logoDraftImage.draftAssetId] })
     }
 
     if (heroDraftImage) {
       await createMediaAsset(db, {
-        id: heroDraftImage.draftAssetId, organization_id: organizationId, site_id: siteId, location_id: locationRow.id, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: heroDraftImage.cloudflareImageId, public_url: heroDraftImage.publicUrl, thumbnail_url: heroDraftImage.thumbnailUrl, mime_type: heroDraftImage.mimeType, file_name: heroDraftImage.fileName, file_size: heroDraftImage.fileSize, category: 'other', status: 'active', created_by_user_id: session.user.id, })
+        id: heroDraftImage.draftAssetId, organization_id: organizationId, site_id: siteId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: heroDraftImage.cloudflareImageId, public_url: heroDraftImage.publicUrl, thumbnail_url: heroDraftImage.thumbnailUrl, mime_type: heroDraftImage.mimeType, file_name: heroDraftImage.fileName, file_size: heroDraftImage.fileSize, category: 'other', status: 'active', created_by_user_id: session.user.id, })
+      await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'business_location', owner_id: locationRow.id, slot: 'hero' }, assetIds: [heroDraftImage.draftAssetId] })
     }
 
     const primaryLocation = payload.preview.locations[0]
@@ -150,7 +150,7 @@ export default defineHandler(async (event) => {
     if (primaryLocation) {
       updatedSlug = primaryLocation.slug || locationRow.slug || slugify(primaryLocation.title)
       const updateResult = await updateLocation(db, organizationId, siteId, locationRow.id, {
-        title: primaryLocation.title, slug: updatedSlug, city: primaryLocation.city, address: primaryLocation.address, description: primaryLocation.description, phone: primaryLocation.phone, website_url: primaryLocation.website_url, opening_hours: primaryLocation.opening_hours, rating: primaryLocation.rating, review_count: primaryLocation.review_count, notification_phone: payload.source.details.notificationPhone, timezone: payload.source.details.timezone, hero_media_asset_id: heroAssetId, is_primary: true, status: 'active', maps_url: payload.source.place?.mapsUrl, google_place_id: payload.source.place?.placeId, }, session.user.id)
+        title: primaryLocation.title, slug: updatedSlug, city: primaryLocation.city, address: primaryLocation.address, description: primaryLocation.description, phone: primaryLocation.phone, website_url: primaryLocation.website_url, opening_hours: primaryLocation.opening_hours, rating: primaryLocation.rating, review_count: primaryLocation.review_count, notification_phone: payload.source.details.notificationPhone, timezone: payload.source.details.timezone, is_primary: true, status: 'active', maps_url: payload.source.place?.mapsUrl, google_place_id: payload.source.place?.placeId, }, session.user.id)
 
       if (updateResult.status !== 200) {
         throw new Error(
@@ -159,11 +159,6 @@ export default defineHandler(async (event) => {
             : 'Primary location update failed.', )
       }
     }
-
-    // No real Maps photo was available, so the hero remains the non-photo Saya treatment.
-    // Record this so the onboarding checklist can distinguish it from owner-provided media.
-    const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri
-    await setConfig(db, organizationId, siteId, 'hero_image_is_placeholder', heroIsPlaceholder ? 'true' : 'false')
 
     const contentByPage = new Map<string, typeof payload.preview.content>()
     for (const row of payload.preview.content) {
@@ -175,8 +170,24 @@ export default defineHandler(async (event) => {
       organizationId, siteId, userId: session.user.id, pages: [...contentByPage].map(([pageName, rows]) => {
         const pageType = pageName === 'privacy' || pageName === 'terms' ? 'legal' : pageName === 'home' || pageName === 'about' || pageName === 'contact' ? 'system' : 'recipe'
         return {
-          path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows, pageName === 'home' ? heroAssetId : null), trustedSystemPage: pageType === 'system', }
+          path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows), trustedSystemPage: pageType === 'system', }
       }), })
+
+    for (const [pageName, rows] of contentByPage) {
+      for (const row of rows) {
+        const assetId = pageName === 'home' && row.field === 'hero' ? heroAssetId : null
+        if (!assetId) continue
+        const block = await queryFirst<{ id: string }>(db, `
+          SELECT cb.id FROM content_blocks cb
+          JOIN content_documents d ON d.id = cb.document_id AND d.owner_type = 'tenant_page'
+          JOIN tenant_page_variants v ON v.id = d.owner_id
+          WHERE v.site_id = ? AND v.path = ?
+            AND (cb.type = 'hero' AND ? = 'hero' OR json_extract(cb.data, '$.field') = ?)
+          ORDER BY cb.position LIMIT 1
+        `, [siteId, onboardingPagePath(pageName), row.field, row.field])
+        if (block) await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'content_block', owner_id: block.id, slot: 'media' }, assetIds: [assetId] })
+      }
+    }
 
     // The full rebuild (menu/qa/posts/reviews delete+insert) plus the final
     // draft status flip runs as a single atomic D1 batch, so a failure partway through
@@ -184,11 +195,6 @@ export default defineHandler(async (event) => {
     // sequential execute() calls here are unsafe.
     const now = new Date().toISOString()
     const batchQueries: BatchQuery[] = []
-
-    if (logoAssetId) {
-      batchQueries.push({
-        query: `UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`, params: [logoAssetId, now, siteId, organizationId], })
-    }
 
     batchQueries.push({ query: `DELETE FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE site_id = ?)`, params: [siteId] })
     batchQueries.push({ query: `DELETE FROM menus WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
@@ -243,10 +249,10 @@ export default defineHandler(async (event) => {
       batchQueries.push({
         query: `
           INSERT OR IGNORE INTO reviews
-            (id, organization_id, site_id, location_id, google_review_id, author_name, reviewer_photo_url, rating, title, content, owner_reply, owner_reply_at, photo_urls, status, source, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
+            (id, organization_id, site_id, location_id, google_review_id, author_name, rating, title, content, owner_reply, owner_reply_at, status, source, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
         `, params: [
-          review.id, organizationId, siteId, locationRow.id, null, review.author_name, review.reviewer_photo_url, review.rating, review.title, review.content, review.owner_reply, review.owner_reply_at, review.photo_urls, review.source ?? 'direct', review.created_at ?? now, now, ], })
+          review.id, organizationId, siteId, locationRow.id, null, review.author_name, review.rating, review.title, review.content, review.owner_reply, review.owner_reply_at, review.source ?? 'direct', review.created_at ?? now, now, ], })
     }
 
     // Finalize draft status to committed in the same batch as the rebuild
@@ -278,9 +284,10 @@ export default defineHandler(async (event) => {
     // If anything fails after this point, the draft is already committed - we don't reset it
     // since the site was successfully created. The user can continue from the dashboard.
 
-    const orgRow = await queryFirst<{ slug: string }>(db, `
-      SELECT slug FROM organization WHERE id = ? LIMIT 1
-    `, [organizationId])
+    const orgRow = await resolveUserOrganization(env, {
+      userId: session.user.id,
+      organizationId,
+    })
     if (!orgRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Committed organization not found' })
 
     return jsonResponse({

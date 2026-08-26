@@ -29,10 +29,10 @@ export default defineHandler(async (event) => {
 
   const link = await queryFirst<{ id: string }>(db, `
     SELECT id
-    FROM review_media
-    WHERE review_request_id = ? AND media_asset_id = ? AND customer_id = ? AND status = 'pending'
+    FROM media_placements
+    WHERE owner_type = 'review_request' AND owner_id = ? AND asset_id = ? AND status = 'pending'
     LIMIT 1
-  `, [requestId, assetId, result.request.customer_id])
+  `, [requestId, assetId])
   if (!link) return jsonResponse({ error: 'Review media not found' }, { status: 404 })
 
   const asset = await getMediaAsset(db, assetId, result.context.site_id)
@@ -63,7 +63,7 @@ export default defineHandler(async (event) => {
       `, params: [publicUrl, thumbnailUrl, now, assetId, result.context.site_id], }, ])
   if (Number(activation?.meta?.changes ?? 0) !== 1) return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
 
-  return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'pending' })
+  return jsonResponse({ asset_id: assetId, public_url: publicUrl, thumbnail_url: thumbnailUrl, status: 'pending' })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

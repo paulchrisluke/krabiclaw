@@ -5,7 +5,7 @@ import { getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { queryFirst } from '~/server/db'
 import {
-  buildOnboardingDraftPayload, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
+  buildOnboardingDraftPayload, getDraftMedia, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
 import { createScopedPreviewToken } from '~/server/utils/preview-token'
 import { VALID_VERTICALS } from '~/server/utils/site-creation'
 import { DEFAULT_CURRENCY, isCurrencyCode } from '~/shared/currencies'
@@ -37,18 +37,20 @@ function imageFromBody(raw: unknown, existing: DraftUploadedImage | null): Draft
   const publicUrl = stringOrNull(record.publicUrl)
   if (!draftAssetId || !cloudflareImageId || !publicUrl) return existing
   return {
-    draftAssetId, cloudflareImageId, publicUrl, thumbnailUrl: stringOrNull(record.thumbnailUrl), mimeType: stringOrNull(record.mimeType), fileName: stringOrNull(record.fileName), fileSize: typeof record.fileSize === 'number' && Number.isFinite(record.fileSize) ? record.fileSize : null, category: record.category === 'logo' ? 'logo' : 'other', }
+    draftAssetId, cloudflareImageId, publicUrl, thumbnailUrl: stringOrNull(record.thumbnailUrl), mimeType: stringOrNull(record.mimeType), fileName: stringOrNull(record.fileName), fileSize: typeof record.fileSize === 'number' && Number.isFinite(record.fileSize) ? record.fileSize : null, }
 }
 
 function brandFromBody(raw: Record<string, unknown> | null, existing: OnboardingDraftPayload | null): DraftBrandInput {
   const existingConfig = existing?.preview.config ?? {}
   const existingHomeHero = existing?.preview.content.find(item => item.page === 'home' && item.field === 'hero') ?? null
+  const existingLogo = existing ? getDraftMedia(existing, 'logo') : null
+  const existingHero = existing ? getDraftMedia(existing, 'hero') : null
   const existingHeroHeadline = existingHomeHero?.hero_title && existing && existingHeroHeadlineIsCustom(existingHomeHero.hero_title, existing.preview.brandName)
     ? existingHomeHero.hero_title
     : null
 
   return {
-    brandColor: stringOrNull(raw?.brandColor) ?? stringOrNull(existingConfig.brand_color) ?? null, logoNote: stringOrNull(raw?.logoNote) ?? stringOrNull(existingConfig.draft_logo_note) ?? null, logoPreviewUrl: stringOrNull(raw?.logoPreviewUrl) ?? existing?.preview.draftMedia?.logo?.publicUrl ?? null, heroPhotoNote: stringOrNull(raw?.heroPhotoNote) ?? stringOrNull(existingConfig.draft_hero_photo_note) ?? null, heroPreviewUrl: stringOrNull(raw?.heroPreviewUrl) ?? existing?.preview.draftMedia?.hero?.publicUrl ?? null, heroHeadline: stringOrNull(raw?.heroHeadline) ?? stringOrNull(existingConfig.draft_hero_headline) ?? existingHeroHeadline, heroDescription: stringOrNull(raw?.heroDescription) ?? stringOrNull(existingConfig.draft_hero_description) ?? null, logoImage: imageFromBody(raw?.logoImage, existing?.preview.draftMedia?.logo ?? null), heroImage: imageFromBody(raw?.heroImage, existing?.preview.draftMedia?.hero ?? null), }
+    brandColor: stringOrNull(raw?.brandColor) ?? stringOrNull(existingConfig.brand_color) ?? null, logoNote: stringOrNull(raw?.logoNote) ?? stringOrNull(existingConfig.draft_logo_note) ?? null, logoPreviewUrl: stringOrNull(raw?.logoPreviewUrl) ?? existingLogo?.publicUrl ?? null, heroPhotoNote: stringOrNull(raw?.heroPhotoNote) ?? stringOrNull(existingConfig.draft_hero_photo_note) ?? null, heroPreviewUrl: stringOrNull(raw?.heroPreviewUrl) ?? existingHero?.publicUrl ?? null, heroHeadline: stringOrNull(raw?.heroHeadline) ?? stringOrNull(existingConfig.draft_hero_headline) ?? existingHeroHeadline, heroDescription: stringOrNull(raw?.heroDescription) ?? stringOrNull(existingConfig.draft_hero_description) ?? null, logoImage: imageFromBody(raw?.logoImage, existingLogo), heroImage: imageFromBody(raw?.heroImage, existingHero), }
 }
 
 function existingHeroHeadlineIsCustom(headline: string, brandName: string) {

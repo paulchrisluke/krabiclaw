@@ -1,6 +1,7 @@
 import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { adminHeadersForEvent, authAdminApi, listPlatformOrganizations, platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { listOrganizationMembers } from '~/server/utils/member-access'
 
 interface OrganizationRow { id: string; name: string; slug: string | null; impersonation_user_id: string | null }
 interface SiteRow { id: string; organization_id: string; slug: string; brand_name: string | null; subdomain: string | null; status: string | null }
@@ -14,18 +15,9 @@ export default defineHandler(async (event) => {
   try {
     await requirePlatformEventPermission(event, env, { platform: ['organizations'] })
 
-    const [organizationRows, siteRows, locationRows] = await Promise.all([
-      queryAll<OrganizationRow>(db, `
-        WITH workspace_member AS (
-          SELECT organizationId, userId, ROW_NUMBER() OVER (PARTITION BY organizationId ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, createdAt ASC) AS rn
-          FROM member
-          WHERE role IN ('owner', 'admin')
-        )
-        SELECT o.id, o.name, o.slug, wm.userId AS impersonation_user_id
-        FROM organization o
-        LEFT JOIN workspace_member wm ON wm.organizationId = o.id AND wm.rn = 1
-        ORDER BY o.name ASC
-      `), queryAll<SiteRow>(db, `
+    const authApi = authAdminApi(env)
+    const [organizations, siteRows, locationRows] = await Promise.all([
+      listPlatformOrganizations(authApi, adminHeadersForEvent(event), env), queryAll<SiteRow>(db, `
         SELECT id, organization_id, slug, brand_name, subdomain, status
         FROM sites
         ORDER BY COALESCE(brand_name, slug) ASC
@@ -34,6 +26,18 @@ export default defineHandler(async (event) => {
         FROM business_locations
         ORDER BY is_primary DESC, title ASC
       `), ])
+    const organizationRows: OrganizationRow[] = await Promise.all(organizations.map(async (organization) => {
+      const members = await listOrganizationMembers(env, organization.id)
+      const impersonationUser = members.find(member => member.role === 'owner')
+        ?? members.find(member => member.role === 'admin')
+      return {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        impersonation_user_id: impersonationUser?.userId ?? null,
+      }
+    }))
+    organizationRows.sort((left, right) => left.name.localeCompare(right.name))
 
     const locationsBySite = new Map<string, LocationRow[]>()
     for (const location of locationRows) locationsBySite.set(location.site_id, [...(locationsBySite.get(location.site_id) || []), location])

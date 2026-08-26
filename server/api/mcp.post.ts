@@ -129,8 +129,8 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 2. Prepare the exact image brief and call review_agent_guidance_candidate({ site_id, task: "image.generate", candidate_type: "image_brief", candidate: <brief> }). Revise the brief when the review recommends it.
 3. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the reviewed prompt tailored to the business.
 4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
-5. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
-6. After the user approves, assign with set_media using the appropriate top-level target_type (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, or experience_media) and the exact entity id returned by a read tool when that placement requires one.
+5. Call show_generated_images with the asset_id and public_url returned by save_generated_image_file.
+6. After the user approves, assign with set_media using placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
 7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
 For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For menu items, each show_generated_images and set_media call must include that item's exact menu_item_id; finish every requested item before reporting completion.
@@ -144,7 +144,7 @@ This entire flow runs within the current conversation — do not tell the user t
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
 5. After confirmation, call upload_user_media({ site_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
 6. The file argument is the only contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not pass a bare file_id, fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader. If attachment delivery fails, stop and ask the user to attach it again; do not try a second transport.
-7. After upload_user_media returns asset_id/public_url, call set_media with target_type, the exact required entity id from a read tool, and complete asset_ids state. For ordered placements such as experience_media, first call the matching read tool, append or reorder the asset IDs, and pass the complete ordered list.
+7. After upload_user_media returns asset_id/public_url, call set_media with placement { owner_type, owner_id, slot } and complete asset_ids state. For ordered placements, first call the matching read tool, append or reorder the asset IDs, and pass the complete ordered list.
 8. Reply with the exact site, placement, asset_id, and public_url that were updated.
 
 **Videos:**
@@ -152,7 +152,7 @@ This entire flow runs within the current conversation — do not tell the user t
 - Every video requires a poster image. Ask the user to attach one before uploading the video.
 - Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) for every video upload.
 - Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
-- After upload_user_media returns asset_id/public_url, call set_media with the matching target_type and the exact required entity id from a read tool. For ordered placements, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
+- After upload_user_media returns asset_id/public_url, call set_media with the matching placement object and the exact owner id from a read tool. For ordered placements, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:

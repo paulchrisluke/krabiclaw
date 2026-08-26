@@ -30,6 +30,7 @@ export default defineHandler(async (event) => {
 
   try {
     await assertSiteWideAccess(db, {
+      env,
       memberId, role: 'owner', organizationId: site.organization_id, siteId, })
   } catch {
     return jsonResponse({ error: 'Site access denied' }, { status: 403 })

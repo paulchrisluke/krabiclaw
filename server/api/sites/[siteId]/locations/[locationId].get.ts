@@ -1,15 +1,8 @@
 // Get a business location for a site
-import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { assertLocationAccess } from '~/server/utils/member-access'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
-
-interface SiteRow {
-  id: string
-  organization_id: string
-  member_id: string
-  member_role: string
-}
+import { requireLocationAccess } from '~/server/utils/location-access'
+import { getMediaPlacements } from '~/server/utils/media-placement'
 
 interface LocationRow {
   id: string
@@ -18,10 +11,6 @@ interface LocationRow {
   address: string | null
   city: string | null
   phone: string | null
-  hero_media_asset_id: string | null
-  public_url: string | null  // from media_assets join
-  thumbnail_url: string | null
-  kind: string | null
   website_url: string | null
   maps_url: string | null
   latitude: number | null
@@ -53,37 +42,12 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) {
-    return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  }
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) {
-    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  }
-
   try {
-    const site = await queryFirst<SiteRow>(db, `
-      SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
-      FROM sites s
-      JOIN member om ON s.organization_id = om.organizationId
-      WHERE s.id = ? AND om.userId = ?
-      LIMIT 1
-    `, [siteId, session.user.id])
-
-    if (!site) {
-      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-    }
-
-    await assertLocationAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
+    const { db, site } = await requireLocationAccess(event, siteId, locationId)
 
     const location = await queryFirst<LocationRow>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.hero_media_asset_id, bl.created_at, bl.updated_at, ma.public_url, ma.thumbnail_url, ma.kind
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.created_at, bl.updated_at
       FROM business_locations bl
-      LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
-        AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
       WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
       LIMIT 1
     `, [locationId, site.organization_id, siteId])
@@ -92,9 +56,10 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })
     }
 
+    const placements = await getMediaPlacements(db, { siteId, ownerType: 'business_location', ownerIds: [location.id] })
     return jsonResponse({
       success: true, location: {
-        ...location, address: location.address ? JSON.parse(location.address) : null, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, categories: location.categories ? JSON.parse(location.categories) : null, is_primary: Boolean(location.is_primary)
+        ...location, address: location.address ? JSON.parse(location.address) : null, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, categories: location.categories ? JSON.parse(location.categories) : null, is_primary: Boolean(location.is_primary), media: placements.get(location.id) ?? []
       }
     })
   } catch (error) {

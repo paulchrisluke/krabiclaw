@@ -33,7 +33,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await loadMemberSiteRow(db, siteId, session.user.id)
+    const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({
@@ -41,22 +41,29 @@ export default defineHandler(async (event) => {
       }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
+    await assertSiteWideAccess(db, { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
     // Get business locations
     const locations = await queryAll<ApiValue>(db, `
-      SELECT bl.id, bl.team_id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.hero_media_asset_id, ma.public_url, ma.thumbnail_url, ma.kind
+      SELECT bl.id, bl.team_id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, ma.id AS asset_id, ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind
       FROM business_locations bl
-      LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
+      LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+      LEFT JOIN media_assets ma ON mp.asset_id = ma.id AND ma.status = 'active'
         AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
       ORDER BY bl.is_primary DESC, bl.title ASC
     `, [site.organization_id, siteId])
 
     // Parse JSON fields
-    const parsedLocations = (locations || []).map((location: ApiValue) => ({
-      ...location, address: location.address ? JSON.parse(location.address) : null, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null
-    }))
+    const parsedLocations = (locations || []).map((location: ApiValue) => {
+      const { asset_id, media_public_url, media_thumbnail_url, media_kind, ...fields } = location
+      return {
+        ...fields,
+        address: location.address ? JSON.parse(location.address) : null,
+        opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
+        media: asset_id ? [{ asset_id, slot: 'hero', public_url: media_public_url, thumbnail_url: media_thumbnail_url, kind: media_kind }] : [],
+      }
+    })
     
     return jsonResponse({
       success: true, locations: parsedLocations, count: parsedLocations.length

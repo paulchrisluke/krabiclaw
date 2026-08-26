@@ -61,14 +61,18 @@ export default defineHandler(async (event) => {
   if (sets.length === 1) return jsonResponse({ updated: true })
   params.push(reviewId, siteId)
 
-  await execute(db, `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
+  const reviewUpdate = await execute(db, `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
+  if (Number(reviewUpdate?.meta?.changes ?? 0) === 0) {
+    return jsonResponse({ error: 'Review not found' }, { status: 404 })
+  }
   if (body.status === 'approved' || body.status === 'rejected') {
     await execute(db, `
-      UPDATE review_media
+      UPDATE media_placements
       SET status = ?, updated_at = ?
-      WHERE review_id = ?
-        AND status != 'deleted'
-    `, [body.status === 'approved' ? 'approved' : 'rejected', new Date().toISOString(), reviewId])
+      WHERE owner_type = 'review' AND owner_id = ?
+        AND site_id = ?
+        AND status != 'rejected'
+    `, [body.status === 'approved' ? 'active' : 'rejected', new Date().toISOString(), reviewId, siteId])
   }
 
   return jsonResponse({ updated: true })

@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { platformPermissionJsonResponse } from "~/server/utils/platform-admin-users";
+import { findOrganizationById } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event);
@@ -16,11 +17,10 @@ export default defineHandler(async (event) => {
   const statusFilter = query.status ? String(query.status) : null;
   const showDone = query.done === "1";
 
-  const rows = await queryAll(db, `
+  const rows = await queryAll<ApiRecord>(db, `
     SELECT
-      wr.id, wr.type, wr.title, wr.description, wr.status, wr.priority, wr.source, wr.notes, wr.assigned_to, wr.created_at, wr.updated_at, wr.completed_at, o.name AS org_name, o.slug AS org_slug, s.brand_name
+      wr.id, wr.type, wr.title, wr.description, wr.status, wr.priority, wr.source, wr.notes, wr.assigned_to, wr.created_at, wr.updated_at, wr.completed_at, wr.organization_id, s.brand_name
     FROM work_requests wr
-    JOIN organization o ON o.id = wr.organization_id
     LEFT JOIN sites s ON s.id = wr.site_id
     WHERE (? IS NULL OR wr.status = ?)
     AND (? = 1 OR wr.status != 'done')
@@ -29,7 +29,16 @@ export default defineHandler(async (event) => {
     LIMIT 200
   `, [statusFilter, statusFilter, showDone ? 1 : 0]);
 
-  return jsonResponse({ requests: rows ?? [] });
+  const organizations = new Map<string, Awaited<ReturnType<typeof findOrganizationById>>>()
+  await Promise.all((rows ?? []).map(async (row) => {
+    const organizationId = String(row.organization_id)
+    if (!organizations.has(organizationId)) organizations.set(organizationId, await findOrganizationById(env, organizationId))
+  }))
+  return jsonResponse({ requests: (rows ?? []).map((row) => {
+    const organization = organizations.get(String(row.organization_id))
+    const { organization_id: _organizationId, ...request } = row
+    return { ...request, org_name: organization?.name ?? null, org_slug: organization?.slug ?? null }
+  }) });
 });
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';

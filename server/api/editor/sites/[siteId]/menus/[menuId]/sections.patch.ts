@@ -42,7 +42,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'New section must be different' }, { status: 400 })
     }
 
-    const site = await loadMemberSiteRow(db, siteId, session.user.id)
+    const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -59,6 +59,7 @@ export default defineHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
+      env,
       memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: menu.location_id, })
 
     const updated = await renameMenuSection(db, site.organization_id, siteId, menuId, oldSection, newSection, session.user.id)

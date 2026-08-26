@@ -5,6 +5,7 @@ import { DEMO_ORG_ID } from '../utils/demo'
 import { defineHandler } from 'nitro';
 import { queryAll } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { listUserOrganizations } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -29,11 +30,7 @@ export default defineHandler(async (event) => {
 
   try {
     // Get user's organization
-    const organization = await queryAll(db, `
-      SELECT o.id FROM organization o
-      JOIN member m ON o.id = m.organizationId
-      WHERE m.userId = ?
-    `, [userId])
+    const organization = await listUserOrganizations(env, userId)
 
     if (!organization || organization.length === 0) {
       return jsonResponse({

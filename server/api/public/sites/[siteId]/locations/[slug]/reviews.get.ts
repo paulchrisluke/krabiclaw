@@ -3,6 +3,7 @@ import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
   buildPublicReviewAggregate, normalizePublicReviewAggregateRows, } from '~/server/utils/public-review-aggregate'
+import { attachReviewMedia } from '~/server/utils/site-reviews'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -18,18 +19,18 @@ export default defineHandler(async (event) => {
      WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [siteId, slug], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
   const results = await queryAll<ApiValue>(
-    db, `SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply, owner_reply_at, photo_urls, source, helpful_count, created_at
-     FROM reviews
-     WHERE location_id = ? AND status = 'approved'
-     ORDER BY created_at DESC
+    db, `SELECT r.id, r.author_name, r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at,
+       r.source, r.helpful_count, r.created_at
+     FROM reviews r
+     WHERE r.location_id = ? AND r.status = 'approved'
+     ORDER BY r.created_at DESC
      LIMIT 50`, [location.id], )
   const aggregateResults = await queryAll<{ rating: number | string | null }>(
     db, `SELECT rating
      FROM reviews
      WHERE location_id = ? AND status = 'approved'`, [location.id], )
 
-  const reviews = (results ?? []).map((r: ApiValue) => ({
-    ...r, photo_urls: r.photo_urls ? JSON.parse(r.photo_urls) : [], }))
+  const reviews = await attachReviewMedia(db, siteId, (results ?? []) as Array<Record<string, unknown>>)
 
   return jsonResponse({
     aggregate: buildPublicReviewAggregate(normalizePublicReviewAggregateRows(aggregateResults), location), reviews, })

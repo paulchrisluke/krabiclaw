@@ -1,5 +1,6 @@
 import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { createExperience } from '~/server/utils/experiences'
+import { parseMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 import { queryFirst } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
@@ -11,24 +12,11 @@ const optionalInteger = (value: unknown) => {
   return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null
 }
 
-class InvalidMediaError extends Error {}
-
-function normalizeExperienceMedia(value: unknown): Array<{ asset_id: string }> | undefined {
-  if (value === null || value === undefined) return undefined
-  if (!Array.isArray(value)) throw new InvalidMediaError()
-  return value.map((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item) || typeof (item as Record<string, unknown>).asset_id !== 'string') {
-      throw new InvalidMediaError()
-    }
-    return { asset_id: String((item as Record<string, unknown>).asset_id).trim() }
-  })
-}
-
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
-  const { db, session, site } = await requireSiteAccess(event, siteId, 'context')
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
   const siteRecord = await queryFirst<{ primary_location_id: string | null }>(
     db, 'SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1', [siteId, site.organization_id], )
   if (!siteRecord) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -48,6 +36,7 @@ export default defineHandler(async (event) => {
   const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   await assertResourceAccess(db, {
+    env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId, })
 
   // Validate featured and featured_sort_order when explicitly provided
@@ -67,9 +56,8 @@ export default defineHandler(async (event) => {
     highlights = stringArrayOrNull(body.highlights)
     includedItems = stringArrayOrNull(body.included_items)
     whatToBring = stringArrayOrNull(body.what_to_bring)
-    media = normalizeExperienceMedia(body.media)
+    media = body.media === null || body.media === undefined ? undefined : parseMediaAssetRefs(body.media)
   } catch (err) {
-    if (err instanceof InvalidMediaError) return jsonResponse({ error: 'media must be an array of { asset_id } items' }, { status: 400 })
     if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
     throw err
   }

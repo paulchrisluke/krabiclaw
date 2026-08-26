@@ -1,14 +1,15 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getDashboardContext, requiredDashboardPreviewOrigin } from '~/server/utils/dashboard-context'
+import { jsonResponse } from '~/server/utils/api-response'
+import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getDashboardHomeData } from '~/server/utils/dashboard-home'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { defineHandler } from 'nitro'
 
 export default defineHandler(async (event) => {
-  const { db, organization, site } = await getDashboardContext(event, { requireSite: true })
+  const { env, db, organization, site } = await getDashboardContext(event, { requireSite: true })
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 
   await assertSiteWideAccess(db, {
+    env,
     memberId: organization.memberId,
     role: organization.role,
     organizationId: organization.id,
@@ -16,8 +17,8 @@ export default defineHandler(async (event) => {
   })
 
   return jsonResponse(await getDashboardHomeData(db, organization.id, site.id, {
+    env,
     memberId: organization.memberId,
     role: organization.role,
-    ogOrigin: requiredDashboardPreviewOrigin(cloudflareEnv(event).NUXT_PUBLIC_PLATFORM_DOMAIN),
   }))
 })
