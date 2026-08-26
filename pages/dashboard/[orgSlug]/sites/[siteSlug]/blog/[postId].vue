@@ -12,7 +12,6 @@
     :initial-post="postResource?.post ?? null"
     defer-load
     :site-id="siteId"
-    title="Edit Post"
     :back-url="baseUrl"
     back-label="Blog"
     :is-edit="true"

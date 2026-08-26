@@ -2,7 +2,6 @@
   <BlogPostEditor
     :repository="repository"
     :site-id="siteId"
-    title="New Blog Post"
     :back-url="baseUrl"
     back-label="Blog"
     :is-edit="false"
