@@ -159,8 +159,8 @@ interface PickerMediaAsset {
 
 interface SelectedMediaAsset {
   asset_id: string
-  public_url: string
-  thumbnail_url: string
+  public_url: string | null
+  thumbnail_url: string | null
   kind: string
   alt_text: string
 }
@@ -254,8 +254,8 @@ function open() {
 function onSelect(asset: PickerMediaAsset) {
   pendingAsset.value = {
     asset_id: asset.id,
-    public_url: asset.public_url ?? '',
-    thumbnail_url: asset.thumbnail_url ?? '',
+    public_url: asset.public_url ?? null,
+    thumbnail_url: asset.thumbnail_url ?? null,
     kind: asset.kind ?? 'image',
     alt_text: assetAlt(asset),
   }
@@ -267,8 +267,8 @@ function onUploaded(asset: PickerMediaAsset) {
   const size = asset.size ?? 0
   pendingAsset.value = {
     asset_id: asset.id,
-    public_url: url,
-    thumbnail_url: asset.thumbnail_url ?? '',
+    public_url: asset.public_url ?? null,
+    thumbnail_url: asset.thumbnail_url ?? null,
     kind,
     alt_text: assetAlt(asset),
   }

@@ -106,14 +106,14 @@ const impactProps = computed(() => ({
 }))
 
 const servicesBlock = computed(() => block('offering_grid', data => data.section === 'services'))
-const offerings = computed<PublicOfferingSummary[]>(() => arrayRecords(servicesBlock.value?.data.items).map(item => ({
+const offerings = computed<PublicOfferingSummary[]>(() => arrayRecords(servicesBlock.value?.data.items).map((item, index) => ({
   id: stringValue(item.id),
   name: stringValue(item.title),
   slug: stringValue(item.url).replace(/^\/services\//, ''),
   label: stringValue(item.label) || null,
   summary: stringValue(item.description) || null,
   short_description: stringValue(item.description) || null,
-  media: arrayRecords(item.media).map(media => ({
+  media: servicesBlock.value?.media.filter(asset => asset.slot === `items.${index}.image`).map(media => ({
     asset_id: stringValue(media.asset_id),
     slot: stringValue(media.slot),
     public_url: stringValue(media.public_url),

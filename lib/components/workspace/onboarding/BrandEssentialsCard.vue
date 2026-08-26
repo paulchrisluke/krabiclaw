@@ -234,9 +234,13 @@ async function save() {
     }
     
     // Run mutations sequentially to handle partial failures
+    const body: Record<string, unknown> = { brand_color: brandColor.value }
+    if (logoAssetId.value) {
+      body.media = [{ asset_id: logoAssetId.value, slot: 'logo' }]
+    }
     await applicationFetch<{ success: true }>(`${siteApiBase.value}/settings`, {
       method: 'PATCH',
-      body: { brand_color: brandColor.value, media: logoAssetId.value ? [{ asset_id: logoAssetId.value, slot: 'logo' }] : [] },
+      body,
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     

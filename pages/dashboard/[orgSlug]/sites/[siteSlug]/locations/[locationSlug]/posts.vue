@@ -408,6 +408,7 @@ function buildPostPayload(locationId: string, postId?: string) {
     media: editForm.media.map(item => ({
       asset_id: item.asset_id,
       slot: item.slot,
+      alt_text: item.alt_text,
     })),
   }
 }

@@ -7,8 +7,8 @@
         </template>
         <template #trailing>
           <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />
-          <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!locationId" @click="openUploadPicker">Upload</UButton>
-          <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!locationId" @click="openAttachModal">Attach existing</UButton>
+          <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!locationId || galleryMutating" @click="openUploadPicker">Upload</UButton>
+          <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!locationId || galleryMutating" @click="openAttachModal">Attach existing</UButton>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
           <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
         </template>
@@ -65,7 +65,7 @@
             <UDropdownMenu :items="categoryMenu(asset)" :content="{ align: 'end' }">
               <UButton size="xs" color="neutral" variant="solid" icon="i-lucide-tag" />
             </UDropdownMenu>
-            <UButton size="xs" color="error" variant="solid" icon="i-lucide-x" @click="detachPhoto(asset)" />
+            <UButton size="xs" color="error" variant="solid" icon="i-lucide-x" :disabled="galleryMutating" @click="detachPhoto(asset)" />
           </div>
         </div>
       </div>
@@ -89,6 +89,7 @@
                 :key="asset.id"
                 type="button"
                 class="group relative aspect-square overflow-hidden rounded-lg border border-default bg-elevated text-left"
+                :disabled="galleryMutating"
                 @click="attachPhoto(asset)"
               >
                 <img
@@ -139,6 +140,7 @@ const attachOpen = ref(false)
 const attachLoading = ref(false)
 const categoryFilter = ref('all')
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
+const galleryMutating = ref(false)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
@@ -270,6 +272,7 @@ async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: st
 
 async function replaceGallery(assetIds: string[], successMessage: string) {
   if (!locationId.value) return false
+  galleryMutating.value = true
   try {
     await dashboardApi(`${siteApiBase}/media/placements`, {
       method: 'PUT',
@@ -285,6 +288,8 @@ async function replaceGallery(assetIds: string[], successMessage: string) {
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update location media', color: 'error' })
     return false
+  } finally {
+    galleryMutating.value = false
   }
 }
 

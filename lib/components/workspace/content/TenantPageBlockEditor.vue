@@ -219,13 +219,13 @@ function mediaAt(slot: string, index: number) {
 
 function setMediaAt(slot: string, index: number, assetId: string | null | undefined) {
   const slotMedia = mediaForSlot(slot)
-  if (assetId !== null && assetId !== undefined) slotMedia[index] = { asset_id: assetId, slot, sort_order: index }
+  if (assetId) slotMedia[index] = { asset_id: assetId, slot, sort_order: index }
   else slotMedia.splice(index, 1)
   emitBlock({ ...props.block, media: [...props.block.media.filter(item => item.slot !== slot), ...slotMedia.map((item, sort_order) => ({ ...item, sort_order }))] })
 }
 
 function addMedia(slot: string) {
-  setMediaAt(slot, mediaForSlot(slot).length, '')
+  setMediaAt(slot, mediaForSlot(slot).length, null)
 }
 
 function removeMediaAt(slot: string, index: number) {
