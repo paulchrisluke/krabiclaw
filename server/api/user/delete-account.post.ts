@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
-import { execute, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst } from '~/server/db'
 import { deleteOrganization, listOrganizationMembers, listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 
 const ACTIVE_STATUSES = ['active', 'trialing', 'past_due']
@@ -83,11 +83,14 @@ export default defineHandler(async (event) => {
   })
   if (!response.ok) {
     const message = await response.text().catch(() => '')
-    await execute(db, `
-      UPDATE organization_billing
-      SET ga_client_id = ?, ga_user_id = ?, updated_at = ?
-      WHERE id = ?
-    `, [billingAttribution[0]?.ga_client_id, billingAttribution[0]?.ga_user_id, new Date().toISOString(), billingAttribution[0]?.id])
+    const restoredAt = new Date().toISOString()
+    for (const attribution of billingAttribution) {
+      await execute(db, `
+        UPDATE organization_billing
+        SET ga_client_id = ?, ga_user_id = ?, updated_at = ?
+        WHERE id = ?
+      `, [attribution.ga_client_id, attribution.ga_user_id, restoredAt, attribution.id])
+    }
     return jsonResponse({ error: 'account_deletion_failed', message: message || 'Failed to delete account.' }, { status: response.status })
   }
 

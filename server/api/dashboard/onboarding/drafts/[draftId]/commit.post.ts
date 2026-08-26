@@ -31,7 +31,7 @@ function onboardingPagePath(page: string): string {
   return `/${page}`
 }
 
-function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content: string | null; hero_title: string | null; hero_subtitle: string | null; type: string }>) {
+function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content: string | null; hero_title: string | null; hero_subtitle: string | null; type: string; asset_id?: string | null }>) {
   const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = []
   for (const row of rows) {
     if (row.field === 'hero') {

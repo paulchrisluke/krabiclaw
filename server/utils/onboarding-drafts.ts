@@ -99,6 +99,12 @@ export interface DraftContentRecord {
   hero_subtitle: string | null
   component: string | null
   updated_at: string
+  // Not populated by this module's own parser today (no draft content record
+  // carries a resolved media asset yet) — declared so commit.post.ts's
+  // per-field image-block attachment logic, which already treats it as
+  // possibly absent, type-checks against the real shape it reads.
+  id?: string
+  asset_id?: string | null
 }
 
 export interface OnboardingDraftPayload {

@@ -593,7 +593,7 @@ async function handleManagerChowBotMessage(
       await upsertChannelState(db, {
         userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: mediaMessage.id, pendingConfirmation: { intent: 'pending_media' }, lastInboundId: message.id, })
 
-      await runChowbotAndReply(db, env, {
+      await runChowBotAndReply(db, env, {
         toPhone, conversation, organizationId: site.organization_id, siteId: site.id, userId: user.id, memberId: site.member_id, userRole: site.role, siteName, pendingMedia: { assetId: asset.id, siteId: site.id }, })
 
       await upsertChannelState(db, {
