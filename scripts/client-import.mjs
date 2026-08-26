@@ -727,6 +727,28 @@ function queryD1Count(table, siteId, remote) {
   }
 }
 
+// ── D1 single-row lookup (best-effort, for pre-apply ownership checks) ────────
+
+function queryD1Row(query, remote) {
+  const flag = remote ? "--remote" : "--local";
+  try {
+    const result = spawnSync(
+      "yarn",
+      ["wrangler", "d1", "execute", "DB", flag, "--command", query, "--json"],
+      { encoding: "utf8", cwd: process.cwd() },
+    );
+    if (result.status !== 0) return null;
+    const jsonMatch = (result.stdout + (result.stderr ?? "")).match(
+      /\[[\s\S]*?\]/,
+    );
+    if (!jsonMatch) return null;
+    const arr = JSON.parse(jsonMatch[0]);
+    return arr[0]?.results?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 console.log(
@@ -922,6 +944,36 @@ if (MODE === "apply") {
       console.log(
         "⚠ Proceeding with no client images (--allow-stock set). Update media before launch.",
       );
+    }
+  }
+
+  // Gate 8: organization exists, and any existing site-${SLUG} already belongs
+  // to it — a typo'd --organization-id must never silently re-home an existing
+  // client's site or seed a new one under the wrong tenant.
+  {
+    const siteId = `site-${SLUG}`;
+    const org = queryD1Row(
+      `SELECT id FROM organization WHERE id = '${ORGANIZATION_ID}'`,
+      REMOTE,
+    );
+    if (!org) {
+      console.error(
+        `Error: organization '${ORGANIZATION_ID}' was not found. Check --organization-id.`,
+      );
+      process.exit(1);
+    }
+    const existingSite = queryD1Row(
+      `SELECT organization_id FROM sites WHERE id = '${siteId}'`,
+      REMOTE,
+    );
+    if (existingSite && existingSite.organization_id !== ORGANIZATION_ID) {
+      console.error(
+        `Error: site '${siteId}' already exists under organization '${existingSite.organization_id}', not '${ORGANIZATION_ID}'.`,
+      );
+      console.error(
+        "  Re-check --slug and --organization-id — this import would otherwise cross tenant boundaries.",
+      );
+      process.exit(1);
     }
   }
 
