@@ -2116,7 +2116,7 @@ INSERT INTO `__new_platform_docs` (`id`, `title`, `slug`, `excerpt`, `category`,
 DROP TABLE `platform_docs`;--> statement-breakpoint
 ALTER TABLE `__new_platform_docs` RENAME TO `platform_docs`;--> statement-breakpoint
 CREATE UNIQUE INDEX `platform_docs_slug_unique` ON `platform_docs` (`slug`);--> statement-breakpoint
-PRAGMA foreign_keys=OFF;
+PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_chowbot_messages` (
 	id TEXT PRIMARY KEY,
 	conversation_id TEXT NOT NULL,
@@ -2136,14 +2136,14 @@ CREATE TABLE `__new_chowbot_messages` (
 	FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE CASCADE,
 	FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
 	FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE SET NULL
-);
-INSERT INTO `__new_chowbot_messages` (`id`, `conversation_id`, `organization_id`, `site_id`, `user_id`, `role`, `channel`, `content`, `meta_message_id`, `tool_calls`, `status`, `error`, `created_at`) SELECT `id`, `conversation_id`, `organization_id`, `site_id`, `user_id`, `role`, `channel`, `content`, `meta_message_id`, `tool_calls`, `status`, `error`, `created_at` FROM `chowbot_messages`;
-DROP TABLE `chowbot_messages`;
-ALTER TABLE `__new_chowbot_messages` RENAME TO `chowbot_messages`;
-PRAGMA foreign_keys=ON;
-CREATE INDEX idx_chowbot_messages_conversation ON chowbot_messages(conversation_id, created_at ASC);
-CREATE INDEX `chowbot_messages_conversation_id_idx` ON `chowbot_messages` (`conversation_id`);
-CREATE INDEX `chowbot_messages_org_site_idx` ON `chowbot_messages` (`organization_id`,`site_id`);
+);--> statement-breakpoint
+INSERT INTO `__new_chowbot_messages` (`id`, `conversation_id`, `organization_id`, `site_id`, `user_id`, `role`, `channel`, `content`, `meta_message_id`, `tool_calls`, `status`, `error`, `created_at`) SELECT `id`, `conversation_id`, `organization_id`, `site_id`, `user_id`, `role`, `channel`, `content`, `meta_message_id`, `tool_calls`, `status`, `error`, `created_at` FROM `chowbot_messages`;--> statement-breakpoint
+DROP TABLE `chowbot_messages`;--> statement-breakpoint
+ALTER TABLE `__new_chowbot_messages` RENAME TO `chowbot_messages`;--> statement-breakpoint
+PRAGMA foreign_keys=ON;--> statement-breakpoint
+CREATE INDEX idx_chowbot_messages_conversation ON chowbot_messages(conversation_id, created_at ASC);--> statement-breakpoint
+CREATE INDEX `chowbot_messages_conversation_id_idx` ON `chowbot_messages` (`conversation_id`);--> statement-breakpoint
+CREATE INDEX `chowbot_messages_org_site_idx` ON `chowbot_messages` (`organization_id`,`site_id`);--> statement-breakpoint
 CREATE TRIGGER trg_chowbot_messages_consistency_insert
 BEFORE INSERT ON chowbot_messages
 FOR EACH ROW
@@ -2154,7 +2154,7 @@ WHEN EXISTS (
 )
 BEGIN
   SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
-END;
+END;--> statement-breakpoint
 CREATE TRIGGER trg_chowbot_messages_consistency_update
 BEFORE UPDATE ON chowbot_messages
 FOR EACH ROW
@@ -2165,8 +2165,7 @@ WHEN EXISTS (
 )
 BEGIN
   SELECT RAISE(ABORT, 'chowbot_messages conversation organization/site mismatch');
-END;
---> statement-breakpoint
+END;--> statement-breakpoint
 
 ALTER TABLE `chowbot_channel_state` ADD `pending_message_id` text REFERENCES chowbot_messages(id);--> statement-breakpoint
 ALTER TABLE `chowbot_channel_state` DROP COLUMN `pending_media`;--> statement-breakpoint
