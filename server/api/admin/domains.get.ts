@@ -37,9 +37,10 @@ export default defineHandler(async (event) => {
   `, params)
 
   const eventRows = await queryAll<ApiRecord>(db, `
-    SELECT e.id, e.event_type, e.message, e.created_at, sd.domain, sd.organization_id
+    SELECT e.id, e.event_type, e.message, e.created_at, e.organization_id, sd.domain, s.brand_name AS site_name
     FROM site_domain_events e
     LEFT JOIN site_domains sd ON sd.id = e.domain_id
+    JOIN sites s ON s.id = e.site_id
     ORDER BY e.created_at DESC
     ${search ? '' : 'LIMIT 100'}
   `, [])

@@ -29,11 +29,12 @@ export default defineHandler(async (event) => {
     LIMIT 200
   `, [statusFilter, statusFilter, showDone ? 1 : 0]);
 
-  const organizations = new Map<string, Awaited<ReturnType<typeof findOrganizationById>>>()
-  await Promise.all((rows ?? []).map(async (row) => {
-    const organizationId = String(row.organization_id)
-    if (!organizations.has(organizationId)) organizations.set(organizationId, await findOrganizationById(env, organizationId))
-  }))
+  const organizationIds = [...new Set((rows ?? []).map(row => String(row.organization_id)))]
+  const organizations = new Map<string, Awaited<ReturnType<typeof findOrganizationById>>>(
+    await Promise.all(organizationIds.map(async organizationId =>
+      [organizationId, await findOrganizationById(env, organizationId)] as const,
+    )),
+  )
   return jsonResponse({ requests: (rows ?? []).map((row) => {
     const organization = organizations.get(String(row.organization_id))
     const { organization_id: _organizationId, ...request } = row
