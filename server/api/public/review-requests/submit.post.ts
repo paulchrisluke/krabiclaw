@@ -118,8 +118,8 @@ export default defineHandler(async (event) => {
       `(
         SELECT COUNT(*) = ?
           AND SUM(CASE WHEN ma.status = 'active' THEN 1 ELSE 0 END) = ?
-          AND SUM(CASE WHEN kind = 'image' THEN 1 ELSE 0 END) <= 5
-          AND SUM(CASE WHEN kind = 'video' THEN 1 ELSE 0 END) <= 2
+          AND SUM(CASE WHEN ma.kind = 'image' THEN 1 ELSE 0 END) <= 5
+          AND SUM(CASE WHEN ma.kind = 'video' THEN 1 ELSE 0 END) <= 2
         FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id
         WHERE mp.owner_type = 'review_request' AND mp.owner_id = ?
           AND mp.status = 'pending'

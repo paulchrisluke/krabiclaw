@@ -64,6 +64,9 @@ export default defineHandler(async (event) => {
   // the organization billing projection. Erase both fields for organizations
   // the user leaves; the FK only protects ga_user_id and would otherwise leave
   // the client identifier behind on co-owned organizations.
+  const billingAttribution = await queryAll<{ id: string; ga_client_id: string | null; ga_user_id: string | null }>(db, `
+    SELECT id, ga_client_id, ga_user_id FROM organization_billing WHERE ga_user_id = ?
+  `, [userId])
   await execute(db, `
     UPDATE organization_billing
     SET ga_client_id = NULL, ga_user_id = NULL, updated_at = ?
@@ -80,6 +83,11 @@ export default defineHandler(async (event) => {
   })
   if (!response.ok) {
     const message = await response.text().catch(() => '')
+    await execute(db, `
+      UPDATE organization_billing
+      SET ga_client_id = ?, ga_user_id = ?, updated_at = ?
+      WHERE id = ?
+    `, [billingAttribution[0]?.ga_client_id, billingAttribution[0]?.ga_user_id, new Date().toISOString(), billingAttribution[0]?.id])
     return jsonResponse({ error: 'account_deletion_failed', message: message || 'Failed to delete account.' }, { status: response.status })
   }
 

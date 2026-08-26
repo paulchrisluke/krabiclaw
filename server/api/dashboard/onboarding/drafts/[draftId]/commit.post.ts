@@ -37,7 +37,10 @@ function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content:
     if (row.field === 'hero') {
       blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title ?? row.content, subtitle: row.hero_subtitle } })
     } else if (row.type === 'media' || row.field.endsWith('.image')) {
-      continue
+      if (row.asset_id) {
+        const type = row.field.endsWith('.image') ? 'image' : 'gallery'
+        blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: { field: row.field } })
+      }
     } else if (row.content?.trim()) {
       const type = row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
       blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content } })
@@ -175,7 +178,7 @@ export default defineHandler(async (event) => {
 
     for (const [pageName, rows] of contentByPage) {
       for (const row of rows) {
-        const assetId = pageName === 'home' && row.field === 'hero' ? heroAssetId : null
+        const assetId = pageName === 'home' && row.field === 'hero' ? heroAssetId : row.asset_id
         if (!assetId) continue
         const block = await queryFirst<{ id: string }>(db, `
           SELECT cb.id FROM content_blocks cb
@@ -185,7 +188,10 @@ export default defineHandler(async (event) => {
             AND (cb.type = 'hero' AND ? = 'hero' OR json_extract(cb.data, '$.field') = ?)
           ORDER BY cb.position LIMIT 1
         `, [siteId, onboardingPagePath(pageName), row.field, row.field])
-        if (block) await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'content_block', owner_id: block.id, slot: 'media' }, assetIds: [assetId] })
+        if (block) {
+          const slot = row.field === 'hero' ? 'media' : row.field.endsWith('.image') ? row.field : 'gallery'
+          await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'content_block', owner_id: block.id, slot }, assetIds: [assetId] })
+        }
       }
     }
 

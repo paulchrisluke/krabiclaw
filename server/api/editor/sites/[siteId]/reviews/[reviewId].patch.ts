@@ -71,7 +71,6 @@ export default defineHandler(async (event) => {
       SET status = ?, updated_at = ?
       WHERE owner_type = 'review' AND owner_id = ?
         AND site_id = ?
-        AND status != 'rejected'
     `, [body.status === 'approved' ? 'active' : 'rejected', new Date().toISOString(), reviewId, siteId])
   }
 

@@ -61,11 +61,9 @@ export default defineHandler(async (event) => {
     `, [since, ...siteParam]), ]);
 
   const organizationNames = new Map<string, string | null>()
-  await Promise.all((bySite ?? []).map(async (row) => {
-    const organizationId = typeof row.organization_id === 'string' ? row.organization_id : ''
-    if (organizationId && !organizationNames.has(organizationId)) {
-      organizationNames.set(organizationId, (await findOrganizationById(env, organizationId))?.name ?? null)
-    }
+  const uniqueOrganizationIds = new Set((bySite ?? []).map(row => typeof row.organization_id === 'string' ? row.organization_id : '').filter(Boolean))
+  await Promise.all(Array.from(uniqueOrganizationIds).map(async (organizationId) => {
+    organizationNames.set(organizationId, (await findOrganizationById(env, organizationId))?.name ?? null)
   }))
   return jsonResponse({
     range_days: days, site_id: siteId, top_tools: topTools ?? [], failures_by_tool: failuresByTool ?? [], blocked_or_auth_required: blockedTools ?? [], by_site: (bySite ?? []).map((row) => {

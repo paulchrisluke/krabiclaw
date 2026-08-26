@@ -35,10 +35,11 @@ export default defineHandler(async (event) => {
 
   const existingMedia = await queryFirst<{ count: number; next_sort_order: number }>(db, `
     SELECT
-      COUNT(CASE WHEN status != 'rejected' THEN 1 END) AS count,
-      COALESCE(MAX(sort_order) + 1, 0) AS next_sort_order
-    FROM media_placements
-    WHERE owner_type = 'review_request' AND owner_id = ? AND slot = 'gallery'
+      COUNT(CASE WHEN ma.kind = 'image' AND mp.status != 'rejected' THEN 1 END) AS count,
+      COALESCE(MAX(mp.sort_order) + 1, 0) AS next_sort_order
+    FROM media_placements mp
+    JOIN media_assets ma ON ma.id = mp.asset_id
+    WHERE mp.owner_type = 'review_request' AND mp.owner_id = ? AND mp.slot = 'gallery'
   `, [requestId])
   if (Number(existingMedia?.count ?? 0) >= 5) return jsonResponse({ error: 'You can upload up to 5 photos.' }, { status: 400 })
   if (!hasCloudflareImagesConfig(env)) return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })

@@ -28,18 +28,10 @@ export default defineHandler(async (event) => {
     JOIN sites s ON s.id = sd.site_id
     WHERE ${where.join(' AND ')}
     ORDER BY sd.status = 'active' ASC, sd.updated_at DESC
+    LIMIT 100
   `, params)
 
-  const eventRows = await queryAll<ApiRecord>(db, `
-    SELECT e.*, sd.domain, sd.organization_id, s.brand_name AS site_name
-    FROM site_domain_events e
-    JOIN site_domains sd ON sd.id = e.domain_id
-    JOIN sites s ON s.id = sd.site_id
-    WHERE ${where.join(' AND ')}
-    ORDER BY e.created_at DESC
-  `, params)
-
-  const organizationIds = new Set([...domainRows, ...eventRows].map(row => String(row.organization_id)))
+  const organizationIds = new Set(domainRows.map(row => String(row.organization_id)))
   const organizations = new Map(await Promise.all([...organizationIds].map(async id => [id, await findOrganizationById(env, id)] as const)))
   const matchesSearch = (row: ApiRecord) => {
     if (!search) return true
@@ -51,7 +43,7 @@ export default defineHandler(async (event) => {
     ...row,
     organization_name: organizations.get(String(row.organization_id))?.name ?? null,
   })
-  const domains = domainRows.filter(matchesSearch).slice(0, 100).map(enrich)
+  const domains = domainRows.filter(matchesSearch).map(enrich)
   const events = eventRows.filter(matchesSearch).slice(0, 100).map(enrich)
 
   return jsonResponse({ success: true, domains: domains || [], events: events || [] })
