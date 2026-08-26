@@ -11,9 +11,6 @@ export interface ContentHowToStep {
   name?: string | null
   text?: string | null
   url?: string | null
-  image_public_url?: string | null
-  image_width?: number | null
-  image_height?: number | null
   position?: number | null
 }
 
@@ -79,9 +76,6 @@ export interface ContentHowToSectionProps {
   steps: Array<{
     name: string
     url: string | null
-    image_public_url: string | null
-    image_width?: number | null
-    image_height?: number | null
     textHtml: string
   }>
 }
@@ -173,9 +167,6 @@ export function normalizeContentComponent(
     .map(step => ({
       name: step.name!.trim(),
       url: sanitizeUrl(step.url),
-      image_public_url: sanitizeUrl(step.image_public_url),
-      image_width: step.image_width ?? null,
-      image_height: step.image_height ?? null,
       textHtml: renderMarkdown(step.text!.trim()),
     }))
 

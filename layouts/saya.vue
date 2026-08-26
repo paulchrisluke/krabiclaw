@@ -179,8 +179,8 @@ useSocialMetadata(() => ({
   description: config.value?.seo_description || config.value?.brand_description || '',
   brand: {
     siteName: config.value?.brand_name || resolvedSite.value?.brand_name || '',
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: shellSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: shellSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
   robots: siteRobots.value,

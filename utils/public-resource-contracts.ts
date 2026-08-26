@@ -4,9 +4,7 @@ import type { Experience } from '~/server/utils/experiences'
 export interface PublicShellSite {
   brand_name: string | null
   brand_description: string | null
-  logo_url: string | null
-  logo_mime_type: string | null
-  favicon_url: string | null
+  media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   vertical: string | null
   config: { phone: string | null } | null
 }
@@ -28,9 +26,9 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
   if (!isRecord(value) || !isRecord(value.site)) return false
   if (!nullableString(value.site.brand_name)) return false
   if (!nullableString(value.site.brand_description)) return false
-  if (!nullableString(value.site.logo_url)) return false
-  if (!nullableString(value.site.logo_mime_type)) return false
-  if (!nullableString(value.site.favicon_url)) return false
+  if (!Array.isArray(value.site.media) || !value.site.media.every(item => isRecord(item)
+    && typeof item.asset_id === 'string' && typeof item.slot === 'string'
+    && nullableString(item.public_url) && nullableString(item.thumbnail_url) && nullableString(item.kind))) return false
   if (!nullableString(value.site.vertical)) return false
   if (value.site.config !== null && !isRecord(value.site.config)) return false
   if (isRecord(value.site.config) && !nullableString(value.site.config.phone)) return false
@@ -64,7 +62,7 @@ export interface PublicPagePayload {
   globalReviews: ApiRecord[]
   reviewsAggregate: ApiRecord | null
   reviewsList: ApiRecord[]
-  photosList: ApiRecord[]
+  media: ApiRecord[]
   qaList: ApiRecord[]
   postsList: ApiRecord[]
   globalPosts: ApiRecord[]
@@ -93,7 +91,7 @@ export const isPublicPagePayload = (
   && value.globalReviews.every(item => isRecord(item) && typeof item.rating === 'number')
   && (value.reviewsAggregate === null || isRecord(value.reviewsAggregate))
   && Array.isArray(value.reviewsList)
-  && Array.isArray(value.photosList)
+  && Array.isArray(value.media)
   && Array.isArray(value.qaList)
   && Array.isArray(value.postsList)
   && Array.isArray(value.globalPosts)

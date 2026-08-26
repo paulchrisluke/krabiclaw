@@ -1,9 +1,7 @@
 export interface PublicOfferingFeature {
   title: string
   description: string
-  image_url: string | null
   icon: string | null
-  icon_url: string | null
   sort_order: number
 }
 
@@ -19,9 +17,7 @@ export interface PublicOffering {
   faqs: Array<{ question: string; answer: string }>
   cta_label: string | null
   cta_url: string | null
-  thumbnail_url: string | null
-  hero_image_url: string | null
-  media: Array<{ id: string; url: string; kind: string; alt_text: string | null; width: number | null; height: number | null }>
+  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string; alt_text: string | null; width: number | null; height: number | null }>
   schema_type: string | null
   seo_title: string | null
   seo_description: string | null
@@ -55,7 +51,7 @@ export interface PublicOfferingSummary {
   label: string | null
   summary: string | null
   short_description: string | null
-  thumbnail_url: string | null
+  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string; alt_text: string | null }>
   canonical_path: string
   sort_order: number
   featured: boolean
@@ -71,7 +67,7 @@ export interface PublicSiteQa {
 export interface PublicSiteReview {
   id: string
   author_name: string
-  reviewer_photo_url: string | null
+  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string; alt_text: string | null }>
   rating: number
   title: string | null
   content: string
@@ -87,21 +83,22 @@ export interface PublicBlogSummary {
   category: string | null
   tags: string[]
   featured_order: number | null
-  author_name: string | null
-  author_image: string | null
   published_at: string | null
   canonical_url: string
-  featured_image: {
+  media: Array<{
+    asset_id: string
+    slot: string
     public_url: string
     thumbnail_url: string | null
     kind: string | null
     width: number | null
     height: number | null
-  } | null
+  }>
 }
 
 export interface PublicBlogPost extends PublicBlogSummary {
   body: string
+  author: { id: string; name: string | null; image: string | null } | null
   seo_title: string | null
   seo_description: string | null
   canonical_url: string
@@ -109,9 +106,7 @@ export interface PublicBlogPost extends PublicBlogSummary {
   visibility: 'public' | 'unlisted'
   created_at: string | null
   updated_at: string | null
-  components: ApiRecord[]
   content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
-  primary_image: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
 }
 
 export const BLAWBY_ROUTE_RECIPES = [
@@ -201,8 +196,14 @@ export interface PublicCompliance {
   service_area_type: string | null
   disclaimer: string | null
   footer_disclaimer: string | null
-  document_asset_ids: string[]
-  documents: Array<{ id: string; url: string | null; label: string | null; file_name: string | null }>
+  media: Array<{
+    asset_id: string
+    slot: string
+    public_url: string | null
+    kind: string | null
+    alt_text: string | null
+    file_name: string | null
+  }>
   founder_name: string | null
   founding_date: string | null
   same_as: string[]
@@ -221,8 +222,7 @@ export interface PublicCompliance {
 export interface PublicBlawbyIdentity {
   brand_name: string
   brand_description: string | null
-  logo_url: string | null
-  favicon_url: string | null
+  media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   phone: string | null
   banner_content: string | null
   banner_dismissible: boolean

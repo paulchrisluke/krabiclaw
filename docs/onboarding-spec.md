@@ -30,7 +30,7 @@ Global first, local second, persistent after that.
 
 **Resolved** — kept as dated history, not current findings:
 
-- ~~The checklist's `hero_image` check can never pass because it queries the wrong column.~~ Fixed prior to #277 — `checklist.get.ts` now checks `site_config.hero_image_is_placeholder` and `business_locations.hero_media_asset_id` → `media_assets.source`, matching what both creation paths actually write.
+- ~~The checklist's `hero_image` check can never pass because it queries the wrong source.~~ Fixed prior to #277; the checklist now resolves the location `hero` media placement and its canonical asset source.
 - ~~No dedicated brand step exists anywhere in the wizard.~~ Fixed prior to #277 and revised in #459 — `OnboardingWizard.vue` now prompts before commit with separate skippable `Brand` and `Homepage hero` draft steps, instead of combining brand color, logo, hero photo, and homepage copy in one dense card.
 - ~~Restaurant-flavored placeholder copy bleeds into non-restaurant verticals.~~ Resolved — onboarding and site creation persist only owner/imported content; professional-service sites use the Blawby renderer and never receive generated menu, Q&A, story, or CTA copy.
 

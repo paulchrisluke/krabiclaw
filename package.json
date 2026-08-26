@@ -53,7 +53,6 @@
     "seed:pottery-local": "node --experimental-strip-types scripts/generate-pottery-house-seed.ts",
     "seed:kikuzuki": "node --experimental-strip-types scripts/generate-kikuzuki-seed.ts",
     "seed:kikuzuki:preview": "node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview",
-    "platform-admin:break-glass-promote": "node scripts/break-glass-promote-platform-admin.mjs",
     "client:replay": "node scripts/client-replay.mjs",
     "client:import": "node scripts/client-import.mjs",
     "client:onboard": "node scripts/client-onboard.mjs",

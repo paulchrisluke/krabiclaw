@@ -19,12 +19,10 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'experience_slot_overrides',
   'location_qa',
   'media_assets',
-  'menu_item_media',
+  'media_placements',
   'menus',
-  'site_authors',
   'blog_posts',
   'posts',
-  'post_media',
   'reservation_slot_overrides',
   'reservation_submissions',
   'booking_policies',
@@ -46,7 +44,6 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'site_locales',
   'work_requests',
   'experiences',
-  'experience_media',
   'tenant_page_variants',
 ] as const
 

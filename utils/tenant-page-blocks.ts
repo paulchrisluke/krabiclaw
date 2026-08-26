@@ -26,6 +26,17 @@ export interface TenantPageBlock {
   type: TenantPageBlockType
   position: number
   data: Record<string, unknown>
+  media: TenantPageMedia[]
+}
+
+export interface TenantPageMedia {
+  asset_id: string
+  slot: string
+  sort_order?: number
+  public_url?: string | null
+  thumbnail_url?: string | null
+  kind?: string | null
+  alt_text?: string | null
 }
 
 export interface TenantPageSnapshotMetadata {
@@ -73,13 +84,13 @@ export const TENANT_PAGE_TYPES: readonly TenantPageType[] = ['custom', 'recipe',
 export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageBlockDefinition> = {
   heading: blockDefinitionWithMetadata('heading', 'Heading', 'A semantic heading.', ALL_RECIPES, ['text', 'level'], { accessibility: 'required', seo: 'structured' }),
   markdown: blockDefinitionWithMetadata('markdown', 'Rich text', 'Markdown-safe prose.', ALL_RECIPES, ['markdown'], { accessibility: 'required', seo: 'inherited' }),
-  image: blockDefinitionWithMetadata('image', 'Image', 'A tenant media asset.', ALL_RECIPES, ['asset_id', 'alt', 'caption']),
-  gallery: blockDefinitionWithMetadata('gallery', 'Gallery', 'An ordered media gallery.', ALL_RECIPES, ['asset_ids', 'caption']),
+  image: blockDefinitionWithMetadata('image', 'Image', 'A tenant media placement.', ALL_RECIPES, ['alt', 'caption']),
+  gallery: blockDefinitionWithMetadata('gallery', 'Gallery', 'An ordered media placement.', ALL_RECIPES, ['caption']),
   faq: blockDefinitionWithMetadata('faq', 'FAQ', 'Structured frequently asked questions.', ALL_RECIPES, ['items'], { accessibility: 'required', seo: 'structured' }),
   divider: blockDefinitionWithMetadata('divider', 'Divider', 'A visual section divider.', ALL_RECIPES, [], { accessibility: 'inherited', seo: 'none' }),
   cta: blockDefinitionWithMetadata('cta', 'Call to action', 'A typed call-to-action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   callout: blockDefinitionWithMetadata('callout', 'Callout', 'A highlighted message.', ALL_RECIPES, ['title', 'body', 'tone']),
-  hero: blockDefinitionWithMetadata('hero', 'Hero', 'A page hero section.', ALL_RECIPES, ['eyebrow', 'title', 'subtitle', 'asset_id', 'cta_label', 'cta_url'], { accessibility: 'required', seo: 'structured' }),
+  hero: blockDefinitionWithMetadata('hero', 'Hero', 'A page hero section.', ALL_RECIPES, ['eyebrow', 'title', 'subtitle', 'cta_label', 'cta_url'], { accessibility: 'required', seo: 'structured' }),
   button_group: blockDefinitionWithMetadata('button_group', 'Button group', 'A group of typed links.', ALL_RECIPES, ['buttons']),
   feature_grid: blockDefinitionWithMetadata('feature_grid', 'Feature grid', 'A grid of structured features or a configured source.', ALL_RECIPES, ['title', 'items', 'source', 'calculator']),
   testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'items']),
@@ -91,6 +102,19 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
 }
 
 const BLOCK_TYPES = new Set(Object.keys(TENANT_PAGE_BLOCK_REGISTRY))
+const EMBEDDED_MEDIA_FIELDS = new Set(['asset_id', 'asset_ids', 'image_url', 'public_url', 'thumbnail_url', 'media'])
+
+export function assertNoEmbeddedMediaFields(value: unknown, path = 'data'): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoEmbeddedMediaFields(item, `${path}[${index}]`))
+    return
+  }
+  if (!value || typeof value !== 'object') return
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (EMBEDDED_MEDIA_FIELDS.has(key)) throw new Error(`${path}.${key} must use the block media array.`)
+    assertNoEmbeddedMediaFields(item, `${path}.${key}`)
+  }
+}
 
 export function isTenantPageBlockAllowed(
   definitionOrType: TenantPageBlockDefinition | TenantPageBlockType,
@@ -149,12 +173,14 @@ function blockDefinitionWithMetadata(
 
 const STRING_FIELDS = new Set([
   'eyebrow', 'title', 'subtitle', 'text', 'markdown', 'alt', 'caption', 'description',
-  'label', 'url', 'body', 'tone', 'asset_id', 'cta_label', 'cta_url', 'source',
+  'label', 'url', 'body', 'tone', 'cta_label', 'cta_url', 'source',
   'source_url', 'effective_date', 'field', 'section', 'destination', 'legacy_type',
 ])
-const ARRAY_FIELDS = new Set(['asset_ids', 'offering_ids', 'location_ids'])
+const ARRAY_FIELDS = new Set(['offering_ids', 'location_ids'])
 
 function validateBlockData(type: TenantPageBlockType, data: Record<string, unknown>): Record<string, unknown> {
+  assertNoEmbeddedMediaFields(data, type)
+  if (type === 'image' && 'url' in data) throw new Error('image.url must use the block media array.')
   for (const key of STRING_FIELDS) {
     if (data[key] !== undefined && data[key] !== null && typeof data[key] !== 'string') {
       throw new Error(`${type}.${key} must be a string.`)
@@ -181,17 +207,12 @@ function validateBlockData(type: TenantPageBlockType, data: Record<string, unkno
       if (record.answer !== undefined && typeof record.answer !== 'string') throw new Error(`${type}.items[${index}].answer must be a string.`)
     }
   }
-  if (type === 'image') {
-    if ('url' in data) throw new Error('image.url is not canonical; use image.asset_id.')
-    if (typeof data.asset_id !== 'string' || !data.asset_id.trim()) throw new Error('image.asset_id is required.')
-    data = { ...data, asset_id: data.asset_id.trim() }
-  }
   return { ...data }
 }
 
 export function createTenantPageBlock(type: TenantPageBlockType, data: Record<string, unknown> = {}, position = 0): TenantPageBlock {
   if (!BLOCK_TYPES.has(type)) throw new Error('Unsupported tenant page block type: ' + type)
-  return { id: crypto.randomUUID(), type, position, data: { ...data } }
+  return { id: crypto.randomUUID(), type, position, data: { ...data }, media: [] }
 }
 
 export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
@@ -203,9 +224,21 @@ export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
     if (!BLOCK_TYPES.has(type)) throw new Error('blocks[' + index + '].type "' + type + '" is not registered.')
     const id = asString(block.id, 'blocks[' + index + '].id') || crypto.randomUUID()
     const data = asRecord(block.data ?? {}, 'blocks[' + index + '].data')
+    const media = block.media === undefined ? [] : block.media
+    if (!Array.isArray(media)) throw new Error('blocks[' + index + '].media must be an array.')
+    const normalizedMedia = media.map((rawMedia, mediaIndex) => {
+      const item = asRecord(rawMedia, `blocks[${index}].media[${mediaIndex}]`)
+      const assetId = asString(item.asset_id, `blocks[${index}].media[${mediaIndex}].asset_id`, true)!
+      const slot = asString(item.slot, `blocks[${index}].media[${mediaIndex}].slot`, true)!
+      return { asset_id: assetId, slot, sort_order: mediaIndex }
+    })
+    const canonicalSlot = type === 'gallery' ? 'gallery' : type === 'hero' || type === 'image' ? 'media' : null
+    if (canonicalSlot && normalizedMedia.some(item => item.slot !== canonicalSlot)) {
+      throw new Error(`blocks[${index}].media must use the ${canonicalSlot} slot for ${type} blocks.`)
+    }
     if (byteLength(data) > 32 * 1024) throw new Error('blocks[' + index + '] exceeds the 32KB payload limit.')
     const normalized = validateBlockData(type, data)
-    return { id, type, position: index, data: normalized }
+    return { id, type, position: index, data: normalized, media: normalizedMedia }
   })
 }
 
@@ -256,5 +289,5 @@ export function findTenantPageBlock(
     candidate.data.legacy_type === legacyType
     || (canonicalType ? candidate.type === canonicalType : false),
   )
-  return block?.data ?? null
+  return block ? { ...block.data, media: block.media } : null
 }

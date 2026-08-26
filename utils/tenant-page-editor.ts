@@ -14,9 +14,9 @@ export function createTenantPageEditorData(type: TenantPageBlockType): EditorDat
     case 'markdown':
       return { markdown: '', editor_mode: 'rich' }
     case 'image':
-      return { asset_id: '', alt: '', caption: '' }
+      return { alt: '', caption: '' }
     case 'gallery':
-      return { asset_ids: [] }
+      return {}
     case 'faq':
       return { title: '', items: [{ title: '', description: '' }] }
     case 'divider':
@@ -28,7 +28,7 @@ export function createTenantPageEditorData(type: TenantPageBlockType): EditorDat
     case 'callout':
       return { title: '', body: '', tone: 'neutral', buttons: [] }
     case 'hero':
-      return { eyebrow: '', title: '', subtitle: '', asset_id: '', alt: '', cta_label: '', cta_url: '' }
+      return { eyebrow: '', title: '', subtitle: '', alt: '', cta_label: '', cta_url: '' }
     case 'button_group':
       return { buttons: [{ label: '', url: '' }] }
     case 'feature_grid':
@@ -107,10 +107,10 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       if (!text(data.markdown)) addError(errors, 'Rich text is empty.')
       break
     case 'image':
-      if (!text(data.asset_id) && !text(data.url)) addError(errors, 'Select a media asset.')
+      if (!block.media.some(item => item.slot === 'media')) addError(errors, 'Select a media asset.')
       break
     case 'gallery':
-      if (!stringArray(data, 'asset_ids').length) addError(errors, 'Add at least one gallery image.')
+      if (!block.media.some(item => item.slot === 'gallery')) addError(errors, 'Add at least one gallery image.')
       break
     case 'faq':
       if (text(data.source) === 'page_qa') break

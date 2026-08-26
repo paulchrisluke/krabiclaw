@@ -1,4 +1,43 @@
-import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
+import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
+
+export interface BlogFaqItemForm {
+  question: string
+  answer: string
+}
+
+export interface BlogHowToStepForm {
+  name: string
+  text: string
+  url: string
+}
+
+export function createEmptyFaqItem(): BlogFaqItemForm {
+  return { question: '', answer: '' }
+}
+
+export function createEmptyHowToStep(): BlogHowToStepForm {
+  return { name: '', text: '', url: '' }
+}
+
+export function docFormContentBlocks(form: ReturnType<typeof useDocForm>['form']): BlogEditorBlock[] {
+  const blocks: BlogEditorBlock[] = [{ id: form.markdown_block_id || crypto.randomUUID(), type: 'markdown', position: 0, parent_block_id: null, level: null, data: { markdown: form.body, editor_mode: 'source' }, media: [] }]
+  const faqItems = form.faq_items.map(item => ({ question: item.question.trim(), answer: item.answer.trim() })).filter(item => item.question && item.answer)
+  if (faqItems.length) blocks.push({ id: form.faq_block_id || crypto.randomUUID(), type: 'faq', position: blocks.length, parent_block_id: null, level: null, data: { items: faqItems, label: form.faq_label, status: form.faq_status, render_enabled: form.faq_render_enabled, schema_enabled: form.faq_schema_enabled }, media: [] })
+  const steps = form.how_to_steps.map(step => ({ name: step.name.trim(), text: step.text.trim(), url: step.url.trim() || null })).filter(step => step.name && step.text)
+  if (steps.length) blocks.push({ id: form.how_to_block_id || crypto.randomUUID(), type: 'how_to', position: blocks.length, parent_block_id: null, level: null, data: { steps, label: form.how_to_label, status: form.how_to_status, render_enabled: form.how_to_render_enabled, schema_enabled: form.how_to_schema_enabled }, media: [] })
+  return blocks
+}
+
+export function hydrateDocFormContent(form: ReturnType<typeof useDocForm>['form'], blocks: BlogEditorBlock[]) {
+  form.markdown_block_id = blocks.find(block => block.type === 'markdown')?.id || ''
+  form.body = blocks.filter(block => block.type === 'markdown').map(block => String(block.data.markdown || '')).join('\n\n')
+  const faq = blocks.find(block => block.type === 'faq')
+  form.faq_block_id = faq?.id || ''
+  form.faq_items = Array.isArray(faq?.data.items) ? faq.data.items.map(item => ({ question: String(item.question), answer: String(item.answer) })) : []
+  const howTo = blocks.find(block => block.type === 'how_to')
+  form.how_to_block_id = howTo?.id || ''
+  form.how_to_steps = Array.isArray(howTo?.data.steps) ? howTo.data.steps.map(step => ({ name: String(step.name), text: String(step.text), url: String(step.url) })) : []
+}
 
 export function useDocForm() {
   const form = reactive({
@@ -17,7 +56,10 @@ export function useDocForm() {
     canonical_url: '',
     robots: '',
     body: '',
-    featured_image_asset_id: '',
+    markdown_block_id: '',
+    faq_block_id: '',
+    how_to_block_id: '',
+    media: [] as Array<{ asset_id: string; slot: string }>,
     faq_items: [createEmptyFaqItem()],
     faq_label: '',
     faq_status: 'active' as 'active' | 'inactive',
@@ -32,15 +74,20 @@ export function useDocForm() {
 
   const canSave = computed(() => Boolean(form.title.trim() || form.body.trim()))
   const canPublish = computed(() => Boolean(form.title.trim() && form.body.trim()))
-
-  function handleImageChange(_asset: { id: string; publicUrl: string; thumbnailUrl: string } | null) {
-    // Image change is handled by v-model, this is for any additional logic if needed
-  }
+  const featuredAssetId = computed({
+    get: () => form.media.find(item => item.slot === 'featured')?.asset_id ?? '',
+    set: (assetId: string | null) => {
+      form.media = [
+        ...(assetId ? [{ asset_id: assetId, slot: 'featured' }] : []),
+        ...form.media.filter(item => item.slot !== 'featured'),
+      ]
+    },
+  })
 
   return {
     form,
     canSave,
     canPublish,
-    handleImageChange
+    featuredAssetId,
   }
 }

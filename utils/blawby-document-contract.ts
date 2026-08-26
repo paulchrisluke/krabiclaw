@@ -20,8 +20,11 @@ function hasValidIdentity(value: unknown) {
   return isRecord(value)
     && typeof value.brand_name === 'string'
     && isNullableString(value.brand_description)
-    && isNullableString(value.logo_url)
-    && isNullableString(value.favicon_url)
+    && Array.isArray(value.media)
+    && value.media.every(item => isRecord(item)
+      && typeof item.asset_id === 'string'
+      && typeof item.slot === 'string'
+      && isNullableString(item.public_url))
     && isNullableString(value.phone)
     && isNullableString(value.banner_content)
     && typeof value.banner_dismissible === 'boolean'

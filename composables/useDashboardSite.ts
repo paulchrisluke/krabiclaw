@@ -21,7 +21,6 @@ interface DashboardSite {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
-  logo_url: string | null
   feature_overrides: string | null
 }
 
@@ -34,8 +33,7 @@ interface DashboardSiteSummary {
   status: string | null
   onboarding_status: string | null
   plan: string | null
-  logo_url: string | null
-  preview_image_url: string
+  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
 interface DashboardLocation {
@@ -46,7 +44,7 @@ interface DashboardLocation {
   status: string
   city: string | null
   address: { addressLines?: string[] } | null
-  preview_image_url: string
+  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
   feature_overrides: string | null
 }
 
@@ -76,7 +74,6 @@ const isDashboardSite = (value: unknown): value is DashboardSite =>
   && (value.brand_name === null || typeof value.brand_name === 'string')
   && (value.subdomain === null || typeof value.subdomain === 'string')
   && (value.public_url === null || typeof value.public_url === 'string')
-  && (value.logo_url === null || typeof value.logo_url === 'string')
   && typeof value.status === 'string'
   && typeof value.onboarding_status === 'string'
 
@@ -87,7 +84,7 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   && typeof value.title === 'string'
   && typeof value.is_primary === 'boolean'
   && typeof value.status === 'string'
-  && typeof value.preview_image_url === 'string'
+  && Array.isArray(value.media)
 
 const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
   isRecord(value)
@@ -101,8 +98,7 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     && (site.team_id === null || typeof site.team_id === 'string')
     && (site.brand_name === null || typeof site.brand_name === 'string')
     && (site.subdomain === null || typeof site.subdomain === 'string')
-    && (site.logo_url === null || typeof site.logo_url === 'string')
-    && typeof site.preview_image_url === 'string')
+    && Array.isArray(site.media))
   && Array.isArray(value.locations)
   && value.locations.every(isDashboardLocation)
   && typeof value.managedServiceEnabled === 'boolean'

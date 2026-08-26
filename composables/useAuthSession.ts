@@ -8,7 +8,7 @@ export async function useAuthSession() {
     sessionData,
     user,
     isAuthenticated: computed(() => Boolean(user.value)),
-    sessionLoading: computed(() => Boolean(result.isPending.value)),
+    sessionLoading: computed(() => Boolean(result.isPending)),
     sessionError: computed(() => result.error.value ?? null),
   }
 }
