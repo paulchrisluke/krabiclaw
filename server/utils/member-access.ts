@@ -159,8 +159,11 @@ export async function resolveUserOrganization(
   }
 }
 
-export async function getOrganizationOwnerEmail(env: CloudflareEnv, organizationId: string): Promise<string | null> {
-  const adapter = await organizationAdapter(env)
+// adapter.listMembers pages at 100 by default — every caller that needs the
+// complete membership (not just a bounded page for display) must walk every
+// page via its own total, or a large organization silently loses members
+// past the first 100.
+async function listAllOrganizationMembers(adapter: OrganizationAdapter, organizationId: string) {
   const pageSize = 100
   const firstPage = await adapter.listMembers({ organizationId, limit: pageSize, offset: 0, sortBy: 'createdAt', sortOrder: 'asc' })
   const members = [...firstPage.members]
@@ -169,7 +172,13 @@ export async function getOrganizationOwnerEmail(env: CloudflareEnv, organization
     members.push(...page.members)
   }
   return members
-    .filter(member => member.role === 'owner' || member.role === 'admin')
+}
+
+export async function getOrganizationOwnerEmail(env: CloudflareEnv, organizationId: string): Promise<string | null> {
+  const adapter = await organizationAdapter(env)
+  const members = await listAllOrganizationMembers(adapter, organizationId)
+  return members
+    .filter(member => member.user && (member.role === 'owner' || member.role === 'admin'))
     .sort((left, right) => {
       const roleOrder = Number(right.role === 'owner') - Number(left.role === 'owner')
       if (roleOrder) return roleOrder
@@ -213,14 +222,7 @@ export async function findOrganizationById(env: CloudflareEnv, organizationId: s
 
 export async function listOrganizationMembers(env: CloudflareEnv, organizationId: string) {
   const adapter = await organizationAdapter(env)
-  const { members } = await adapter.listMembers({
-    organizationId,
-    limit: 100,
-    offset: 0,
-    sortBy: 'createdAt',
-    sortOrder: 'asc',
-  })
-  return members
+  return await listAllOrganizationMembers(adapter, organizationId)
 }
 
 export async function deleteOrganization(env: CloudflareEnv, organizationId: string): Promise<void> {
