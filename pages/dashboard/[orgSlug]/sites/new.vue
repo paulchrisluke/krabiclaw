@@ -35,7 +35,7 @@
 const dashboardApi = useDashboardApi()
 import type { SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', mobileBottomNav: false })
 
 // Options list, not a bare ALL_VERTICALS import — the picker needs
 // human-readable labels, but the *values* are still driven by the single

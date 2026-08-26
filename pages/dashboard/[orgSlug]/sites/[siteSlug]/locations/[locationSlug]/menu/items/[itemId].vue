@@ -18,6 +18,7 @@
       />
       <MenuItemDetailEditor
         v-else-if="menuId"
+        ref="editorRef"
         :site-id="siteId"
         :menu-id="menuId"
         :item-id="itemId"
@@ -26,13 +27,34 @@
         @update:item-name="itemName = $event"
       />
     </template>
+
+    <template v-if="editorRef" #footer>
+      <DashboardFooterActionBar>
+        <template v-if="editorRef.itemId" #leading>
+          <UButton
+            color="error"
+            variant="ghost"
+            icon="i-lucide-trash-2"
+            square
+            aria-label="Delete item"
+            :loading="editorRef.deleting"
+            @click="editorRef.handleDelete"
+          />
+        </template>
+        <UButton color="neutral" variant="ghost" :to="backPath">Cancel</UButton>
+        <UButton :loading="editorRef.saving" :disabled="!editorRef.canSave" @click="editorRef.handleSave">
+          {{ editorRef.itemId ? 'Save item' : 'Create item' }}
+        </UButton>
+      </DashboardFooterActionBar>
+    </template>
   </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.menu' })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.menu', mobileBottomNav: false })
 
 const route = useRoute()
+const editorRef = useTemplateRef('editorRef')
 
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
@@ -48,7 +70,7 @@ if (!siteId || !itemId) {
 }
 
 const { menuPath } = useDashboardSiteLinks(siteId)
-const backPath = computed(() => menuPath())
+const backPath = computed(() => menuPath(locationId.value))
 
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to edit an item')
 
