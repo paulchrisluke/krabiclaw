@@ -236,6 +236,9 @@ export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
     if (canonicalSlot && normalizedMedia.some(item => item.slot !== canonicalSlot)) {
       throw new Error(`blocks[${index}].media must use the ${canonicalSlot} slot for ${type} blocks.`)
     }
+    if ((type === 'image' || type === 'gallery') && normalizedMedia.length === 0) {
+      throw new Error(`blocks[${index}].media requires at least one asset for ${type} blocks.`)
+    }
     if (byteLength(data) > 32 * 1024) throw new Error('blocks[' + index + '] exceeds the 32KB payload limit.')
     const normalized = validateBlockData(type, data)
     return { id, type, position: index, data: normalized, media: normalizedMedia }

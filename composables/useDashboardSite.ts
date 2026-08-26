@@ -85,6 +85,14 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   && typeof value.is_primary === 'boolean'
   && typeof value.status === 'string'
   && Array.isArray(value.media)
+  && value.media.every(item =>
+    isRecord(item)
+    && typeof item.asset_id === 'string'
+    && typeof item.slot === 'string'
+    && (item.public_url === null || typeof item.public_url === 'string')
+    && (item.thumbnail_url === null || typeof item.thumbnail_url === 'string')
+    && (item.kind === null || typeof item.kind === 'string')
+  )
 
 const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
   isRecord(value)
@@ -98,7 +106,15 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     && (site.team_id === null || typeof site.team_id === 'string')
     && (site.brand_name === null || typeof site.brand_name === 'string')
     && (site.subdomain === null || typeof site.subdomain === 'string')
-    && Array.isArray(site.media))
+    && Array.isArray(site.media)
+    && site.media.every(item =>
+      isRecord(item)
+      && typeof item.asset_id === 'string'
+      && typeof item.slot === 'string'
+      && (item.public_url === null || typeof item.public_url === 'string')
+      && (item.thumbnail_url === null || typeof item.thumbnail_url === 'string')
+      && (item.kind === null || typeof item.kind === 'string')
+    ))
   && Array.isArray(value.locations)
   && value.locations.every(isDashboardLocation)
   && typeof value.managedServiceEnabled === 'boolean'
