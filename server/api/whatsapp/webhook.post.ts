@@ -15,7 +15,8 @@ import { nextConversationState } from '~/server/domain/guest-threads/state-machi
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient, resolveMemberId, teamAccessPredicate } from '~/server/utils/member-access'
+import { isAuthorizedWhatsAppRecipient, listAccessibleLocationIds, resolveMemberId, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { findVerifiedAuthUserByPhone } from '~/server/utils/auth'
 import {
   ASK_CHOWBOT_OR_QUOTE_MESSAGE, REPLY_SENT_CONFIRMATION, buildCollectReplyPrompt, buildConfirmSendPrompt, buildDisambiguationPrompt, buildReplyFailedMessage, decideWhatsAppReplyRouting, isChowBotDirective, maskEmailForDisplay, stripChowBotPrefix, type DisambiguationCandidate, type PendingWhatsAppReplyState, } from '~/server/utils/whatsapp-reply-routing'
 
@@ -64,7 +65,7 @@ interface WhatsAppPayload {
 interface UserRow {
   id: string
   phoneNumber: string
-  phoneNumberVerified: number
+  phoneNumberVerified: boolean
 }
 
 function platformLoginUrl(env: ApiRecord): string {
@@ -141,27 +142,9 @@ async function reply(
   }
 }
 
-async function resolveUser(db: D1Database, from: string): Promise<UserRow | null> {
+async function resolveUser(env: ApiRecord, from: string): Promise<UserRow | null> {
   const normalized = parseMetaMsisdn(from)
-  return await queryFirst<UserRow>(db, `
-    SELECT id, phoneNumber, phoneNumberVerified
-    FROM user
-    WHERE phoneNumber = ? AND phoneNumberVerified = 1
-    LIMIT 1
-  `, [normalized])
-}
-
-function parsePendingMedia(raw: string | null | undefined): { assetId: string; siteId: string } | null {
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as { assetId?: unknown; siteId?: unknown }
-    if (typeof parsed.assetId !== 'string' || typeof parsed.siteId !== 'string') {
-      return null
-    }
-    return { assetId: parsed.assetId, siteId: parsed.siteId }
-  } catch {
-    return null
-  }
+  return await findVerifiedAuthUserByPhone(env as CloudflareEnv, normalized)
 }
 
 async function runChowBotAndReply(
@@ -225,7 +208,7 @@ interface QuotedNotificationMatch {
 // Returns null (never throws) for "no match yet" so the caller can treat it as
 // unmatched and fall through to the remaining routing tiers rather than erroring.
 async function resolveQuotedNotification(
-  db: D1Database, providerMessageId: string, phone: string, ): Promise<QuotedNotificationMatch | null> {
+  db: D1Database, env: ApiRecord, providerMessageId: string, phone: string, ): Promise<QuotedNotificationMatch | null> {
   const notification = await queryFirst<{
     organization_id: string
     site_id: string | null
@@ -243,6 +226,7 @@ async function resolveQuotedNotification(
   if (notification.related_submission_type === 'invitation') return null
 
   const authorized = await isAuthorizedWhatsAppRecipient(db, {
+    env: env as CloudflareEnv,
     phone, organizationId: notification.organization_id, siteId: notification.site_id, locationId: notification.location_id, requireSiteWide: false, })
   if (!authorized) return null
 
@@ -257,7 +241,7 @@ async function resolveQuotedNotification(
 // org; editor always needs matching resource team membership). Grouped by
 // guest thread so a guest with multiple notification events in the window (e.g. created
 // + a reply) only appears once, most recent first.
-async function listRecentGuestNotificationCandidates(db: D1Database, userId: string): Promise<DisambiguationCandidate[]> {
+async function listRecentGuestNotificationCandidates(db: D1Database, env: ApiRecord, userId: string): Promise<DisambiguationCandidate[]> {
   const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const rows = await queryAll<{
     threadId: string
@@ -269,20 +253,31 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
   }>(db, `
     SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId, gt.location_id AS locationId, gt.guest_name AS guestName, gt.submission_type AS submissionType, MAX(n.created_at) AS createdAt
     FROM notifications n
-    JOIN member m ON m.organizationId = n.organization_id AND m.userId = ?
     JOIN guest_threads gt ON gt.submission_type = n.related_submission_type AND gt.submission_id = n.related_submission_id
-    LEFT JOIN sites s ON s.id = n.site_id AND s.organization_id = n.organization_id
-    LEFT JOIN business_locations bl ON bl.id = n.location_id AND bl.site_id = n.site_id AND bl.organization_id = n.organization_id
     WHERE n.channel = 'whatsapp'
       AND n.related_submission_type IS NOT NULL AND n.related_submission_id IS NOT NULL
       AND n.created_at > ?
-      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}))
     GROUP BY gt.id
     ORDER BY createdAt DESC
-    LIMIT 5
-  `, [userId, sinceIso])
+    LIMIT 25
+  `, [sinceIso])
 
-  return (rows ?? []).map((r) => ({
+  const authorizedRows = (await Promise.all((rows ?? []).map(async (row) => {
+    const membership = await resolveOrganizationMembership(env as CloudflareEnv, {
+      organizationId: row.organizationId,
+      userId,
+    })
+    if (!membership) return null
+    const locationIds = await listAccessibleLocationIds(db, {
+      env: env as CloudflareEnv,
+      memberId: membership.memberId,
+      role: membership.role,
+      organizationId: row.organizationId,
+      siteId: row.siteId,
+    })
+    return locationIds === null || Boolean(row.locationId && locationIds.includes(row.locationId)) ? row : null
+  }))).filter((row): row is NonNullable<typeof row> => Boolean(row)).slice(0, 5)
+  return authorizedRows.map((r) => ({
     threadId: r.threadId, siteId: r.siteId, organizationId: r.organizationId, locationId: r.locationId, label: `${submissionTypeLabel(r.submissionType)} from ${r.guestName}`, }))
 }
 
@@ -325,7 +320,7 @@ async function routeManagerWhatsAppMessage(
     let quotedResolved: QuotedNotificationMatch | null = null
     let quotedMatch: 'authorized_thread_found' | 'unmatched' | null = null
     if (hasQuotedContext) {
-      quotedResolved = await resolveQuotedNotification(db, contextId!, opts.toPhone)
+      quotedResolved = await resolveQuotedNotification(db, env, contextId!, opts.toPhone)
       quotedMatch = quotedResolved ? 'authorized_thread_found' : 'unmatched'
     }
 
@@ -339,7 +334,7 @@ async function routeManagerWhatsAppMessage(
 
     let recentCandidates: DisambiguationCandidate[] = []
     if (!quotedResolved && !isChowBotDirected) {
-      recentCandidates = await listRecentGuestNotificationCandidates(db, opts.userId)
+      recentCandidates = await listRecentGuestNotificationCandidates(db, env, opts.userId)
     }
 
     return {
@@ -407,6 +402,7 @@ async function routeManagerWhatsAppMessage(
     if (decision.action === 'confirm_send_execute') {
       // Reauthorize before executing the reply to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
+        env: env as CloudflareEnv,
         phone: opts.toPhone, organizationId: pendingState.organizationId, siteId: pendingState.siteId, locationId: pendingState.locationId, })
       if (!authorized) {
         await clearPending()
@@ -438,6 +434,7 @@ async function routeManagerWhatsAppMessage(
 
       // Reauthorize before disambiguation transition to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
+        env: env as CloudflareEnv,
         phone: opts.toPhone, organizationId: chosen.organizationId, siteId: chosen.siteId, locationId: chosen.locationId, })
       if (!authorized) {
         await clearPending()
@@ -523,14 +520,16 @@ async function handleManagerChowBotMessage(
   const text = opts.text
   let selectedSiteFromList = false
 
-  const pendingMedia = parsePendingMedia(existingState?.pending_media)
+  const pendingMedia = existingState?.pending_asset_id && existingState.pending_asset_site_id
+    ? { assetId: existingState.pending_asset_id, siteId: existingState.pending_asset_site_id }
+    : null
 
   if (!selectedSiteId && sites.length > 1) {
     const selectedIndex = /^\d+$/.test(text) ? Number(text) - 1 : -1
     const selected = sites[selectedIndex]
     if (!selected) {
       await upsertChannelState(db, {
-        userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMedia: null, pendingConfirmation: null, lastInboundId: message.id, })
+        userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
       await reply(null, env, toPhone, siteListReply(sites))
       return
     }
@@ -546,10 +545,10 @@ async function handleManagerChowBotMessage(
     return
   }
 
-  const site = await getSiteForMember(db, selectedSiteId, user.id)
+  const site = await getSiteForMember(db, env, selectedSiteId, user.id)
   if (!site) {
     await upsertChannelState(db, {
-      userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMedia: null, pendingConfirmation: null, lastInboundId: message.id, })
+      userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
     await reply(null, env, toPhone, 'That site is no longer available. Reply again to choose a site.')
     return
   }
@@ -561,7 +560,7 @@ async function handleManagerChowBotMessage(
 
   if (selectedSiteFromList && message.type === 'text' && /^\d+$/.test(text)) {
     await upsertChannelState(db, {
-      userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId: null, pendingMedia: null, pendingConfirmation: null, lastInboundId: message.id, })
+      userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId: null, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
     await reply(null, env, toPhone, `ChowBot is now connected to ${siteName}. What should we work on?`)
     return
   }
@@ -588,16 +587,21 @@ async function handleManagerChowBotMessage(
       const asset = await saveInboundMediaAsset(db, env, {
         organizationId: site.organization_id, siteId: site.id, userId: user.id, bytes: media.bytes, mimeType: media.mimeType, fileSize: media.fileSize, filename: message.type === 'document' ? message.document?.filename : undefined, })
 
-      await createMessage(db, {
-        conversationId: conversation.id, organizationId: site.organization_id, siteId: site.id, userId: user.id, role: 'user', channel: 'whatsapp', content: text || `Uploaded ${message.type}`, media: { asset_id: asset.id, mime_type: asset.mime_type }, metaMessageId: message.id, }, user.id)
+      const mediaMessage = await createMessage(db, {
+        conversationId: conversation.id, organizationId: site.organization_id, siteId: site.id, userId: user.id, role: 'user', channel: 'whatsapp', content: text || `Uploaded ${message.type}`, mediaAssetId: asset.id, metaMessageId: message.id, }, user.id)
 
       await upsertChannelState(db, {
-        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMedia: { assetId: asset.id, siteId: site.id }, pendingConfirmation: { intent: 'pending_media' }, lastInboundId: message.id, })
+        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: mediaMessage.id, pendingConfirmation: { intent: 'pending_media' }, lastInboundId: message.id, })
 
       await runChowBotAndReply(db, env, {
         toPhone, conversation, organizationId: site.organization_id, siteId: site.id, userId: user.id, memberId: site.member_id, userRole: site.role, siteName, pendingMedia: { assetId: asset.id, siteId: site.id }, })
+
+      await upsertChannelState(db, {
+        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
       return
     } catch (err) {
+      await upsertChannelState(db, {
+        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
       await reply(db, env, toPhone, 'Failed to process the media file. Please try again.', { conversation, userId: user.id, status: 'failed', error: String(err) })
       return
     }
@@ -609,6 +613,9 @@ async function handleManagerChowBotMessage(
 
     await runChowBotAndReply(db, env, {
       toPhone, conversation, userId: user.id, memberId: site.member_id, organizationId: site.organization_id, siteId: site.id, userRole: site.role, siteName, pendingMedia, })
+
+    await upsertChannelState(db, {
+      userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
   } catch (err) {
     await reply(db, env, toPhone, 'Sorry, something went wrong. Please try again.', {
       conversation, userId: user.id, status: 'failed', error: String(err), })
@@ -619,20 +626,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
   if (await metaMessageExists(db, message.id)) return
 
   const toPhone = parseMetaMsisdn(message.from)
-  const user = await resolveUser(db, message.from)
-  if (user) {
-    // A signed inbound message is exactly what user_phone_verification's
-    // whatsapp_observed_at is for (issue #293 Section D) — best-effort, never
-    // blocks message handling.
-    const observedAt = new Date().toISOString()
-    await execute(db, `
-      INSERT INTO user_phone_verification (id, user_id, format_valid, ownership_verified, whatsapp_observed_at, created_at, updated_at)
-      VALUES (?, ?, 1, 1, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET whatsapp_observed_at = excluded.whatsapp_observed_at, updated_at = excluded.updated_at
-    `, [crypto.randomUUID(), user.id, observedAt, observedAt, observedAt]).catch((error) => {
-      console.warn('user_phone_verification_observed_stamp_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) })
-    })
-  }
+  const user = await resolveUser(env, message.from)
   if (!user) {
     // Not a verified owner/staff account — check whether this is a customer replying to an
     // open reservation/experience-booking thread rather than trying to talk to ChowBot.
@@ -677,7 +671,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
     return
   }
 
-  const sites = await listSitesForMember(db, user.id)
+  const sites = await listSitesForMember(db, env, user.id)
 
   // Issue #293 Section C: quoted-notification replies, ChowBot directives, and
   // guest-notification disambiguation take priority over the default "always ChowBot"

@@ -3,11 +3,12 @@ import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/do
 import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
 import type { SiteVertical } from '~/utils/vertical-copy'
+import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -38,8 +39,14 @@ interface FullSiteRow extends SiteSettingsRow {
   custom_domain_status: string | null
   default_currency: string | null
   brand_description: string | null
-  logo_url: string | null
-  logo_asset_id: string | null
+  logo_media_id: string | null
+  logo_public_url: string | null
+  logo_thumbnail_url: string | null
+  logo_kind: 'image' | 'video' | null
+  favicon_media_id: string | null
+  favicon_public_url: string | null
+  favicon_thumbnail_url: string | null
+  favicon_kind: 'image' | 'video' | null
   contact_email: string | null
   last_published_at: string | null
   seo_title: string | null
@@ -74,25 +81,26 @@ export async function loadSettingsPayload(
   siteId: string
 ) {
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
-    SELECT id, organization_id, subdomain, theme, status,
-           primary_location_id, public_url, custom_domain_status, default_currency,
+    SELECT sites.id, sites.organization_id, subdomain, theme, sites.status,
+           primary_location_id, sites.public_url, custom_domain_status, default_currency,
            brand_name, brand_description,
-           COALESCE(
-             (SELECT public_url FROM media_assets
-              WHERE id = sites.logo_asset_id
-                AND organization_id = sites.organization_id
-                AND site_id = sites.id
-                AND status = 'active'
-              LIMIT 1),
-             logo_url
-           ) AS logo_url,
-           logo_asset_id, contact_email,
+           mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
+           ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
+           fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
+           fma.thumbnail_url AS favicon_thumbnail_url, fma.kind AS favicon_kind,
+           contact_email,
            seo_title, seo_description, canonical_url, robots,
            social_facebook_url, social_instagram_url, social_tiktok_url,
-           feature_overrides, settings, last_published_at, created_at, updated_at,
+           feature_overrides, settings, last_published_at, sites.created_at, sites.updated_at,
            vertical, theme_id
     FROM sites
-    WHERE id = ? AND organization_id = ?
+    LEFT JOIN media_placements mp ON mp.site_id = sites.id AND mp.owner_type = 'site'
+      AND mp.owner_id = sites.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
+    LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+    LEFT JOIN media_placements fmp ON fmp.site_id = sites.id AND fmp.owner_type = 'site'
+      AND fmp.owner_id = sites.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
+    LEFT JOIN media_assets fma ON fma.id = fmp.asset_id AND fma.status = 'active'
+    WHERE sites.id = ? AND sites.organization_id = ?
     LIMIT 1
   `, [siteId, organizationId])
 
@@ -129,8 +137,22 @@ export async function loadSettingsPayload(
     custom_domain_status: updatedSite.custom_domain_status || 'none',
     brand_name: updatedSite.brand_name,
     brand_description: updatedSite.brand_description,
-    logo_url: updatedSite.logo_url,
-    logo_asset_id: updatedSite.logo_asset_id,
+    media: [
+      ...(updatedSite.logo_media_id ? [{
+        asset_id: updatedSite.logo_media_id,
+        slot: 'logo',
+        public_url: updatedSite.logo_public_url,
+        thumbnail_url: updatedSite.logo_thumbnail_url,
+        kind: updatedSite.logo_kind,
+      }] : []),
+      ...(updatedSite.favicon_media_id ? [{
+        asset_id: updatedSite.favicon_media_id,
+        slot: 'favicon',
+        public_url: updatedSite.favicon_public_url,
+        thumbnail_url: updatedSite.favicon_thumbnail_url,
+        kind: updatedSite.favicon_kind,
+      }] : []),
+    ],
     contact_email: updatedSite.contact_email,
     seo_title: updatedSite.seo_title,
     seo_description: updatedSite.seo_description,
@@ -231,6 +253,7 @@ async function attemptSiteUpdate(
 ): Promise<SiteSettingsUpdateResult> {
   const setParts: string[] = []
   const params: Array<string | null> = []
+  const siteMedia = updates.media
 
   if (updates.brand_name !== undefined) {
     setParts.push('brand_name = ?', 'subdomain = ?')
@@ -239,29 +262,6 @@ async function attemptSiteUpdate(
   if (updates.brand_description !== undefined) {
     setParts.push('brand_description = ?')
     params.push(updates.brand_description ?? null)
-  }
-  if (updates.logo_asset_id !== undefined) {
-    if (updates.logo_asset_id !== null && updates.logo_asset_id !== '') {
-      const asset = await queryFirst(db, `
-        SELECT id
-        FROM media_assets
-        WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = 'image'
-        LIMIT 1
-      `, [updates.logo_asset_id, organizationId, siteId])
-
-      if (!asset) {
-        return {
-          status: 400,
-          data: { error: 'Logo asset not found, unauthorized, or not an image' },
-        }
-      }
-    }
-    setParts.push('logo_asset_id = ?')
-    params.push(updates.logo_asset_id || null)
-  }
-  if (updates.logo_url !== undefined) {
-    setParts.push('logo_url = ?')
-    params.push(updates.logo_url ?? null)
   }
   if (updates.contact_email !== undefined) {
     if (updates.contact_email !== null && updates.contact_email !== '') {
@@ -408,7 +408,8 @@ async function attemptSiteUpdate(
     setParts.push('feature_overrides = ?')
     params.push(newDelta ? JSON.stringify(newDelta) : null)
   }
-  if (setParts.length === 0) {
+
+  if (setParts.length === 0 && siteMedia === undefined) {
     const settings = await loadSettingsPayload(db, organizationId, siteId)
     return {
       status: 200,
@@ -421,8 +422,10 @@ async function attemptSiteUpdate(
   }
 
   const now = new Date().toISOString()
-  setParts.push('updated_at = ?', 'updated_by = ?')
-  params.push(now, userId)
+  if (setParts.length > 0) {
+    setParts.push('updated_at = ?', 'updated_by = ?')
+    params.push(now, userId)
+  }
 
   const siteUpdate = {
     sql: `
@@ -434,13 +437,24 @@ async function attemptSiteUpdate(
   }
 
   const isRename = updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain
-  if (isRename) {
+  if (isRename && setParts.length > 0) {
     await createSystemSubdomain(env, db, siteId, organizationId, subdomain, { siteUpdate })
-  } else {
+  } else if (setParts.length > 0) {
     const result = await execute(db, siteUpdate.sql, siteUpdate.values)
     if (!result.success) {
       throw new Error('Failed to update site settings')
     }
+  }
+
+  if (siteMedia !== undefined) {
+    const queries = (['logo', 'favicon'] as const).flatMap(slot => buildSingleMediaPlacementQueries({
+      organizationId,
+      siteId,
+      placement: { owner_type: 'site', owner_id: siteId, slot },
+      media: siteMedia.filter(item => item.slot === slot).map(item => ({ asset_id: item.asset_id })),
+      now,
+    }))
+    await executeBatch(db, queries)
   }
 
   const settings = await loadSettingsPayload(db, organizationId, siteId)
@@ -480,6 +494,23 @@ export async function updateSiteSettingsFields(
     return {
       status: 404,
       data: { error: 'Site not found or access denied' },
+    }
+  }
+
+  const siteMedia = updates.media
+  if (siteMedia !== undefined) {
+    if (!Array.isArray(siteMedia) || siteMedia.some(item => !item || !['logo', 'favicon'].includes(item.slot) || typeof item.asset_id !== 'string')) {
+      return { status: 400, data: { error: 'media must contain asset_id and a logo or favicon slot' } }
+    }
+    try {
+      await hydrateMediaAssetRefs(db, {
+        organizationId,
+        siteId,
+        refs: siteMedia.map(item => ({ asset_id: item.asset_id })),
+        allowedKinds: ['image'],
+      })
+    } catch {
+      return { status: 400, data: { error: 'Invalid media references' } }
     }
   }
 

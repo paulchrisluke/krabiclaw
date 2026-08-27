@@ -22,7 +22,6 @@ const ALWAYS_ALLOWED_PREFIXES = [
 ]
 
 const ALWAYS_ALLOWED_FILES = new Set([
-  'docs/adr/0021-better-auth-authorization-target.md',
   'scripts/check-better-auth-boundaries.mjs',
   'server/db/schema.ts',
 ])
@@ -30,25 +29,6 @@ const ALWAYS_ALLOWED_FILES = new Set([
 const EXISTING_DEBT_ALLOWLIST = {
   admin_impersonation_proxy: new Set([
     'tests/unit/dashboard-ia.test.ts',
-  ]),
-
-  direct_platform_role_sql: new Set([
-    'scripts/break-glass-promote-platform-admin.mjs',
-  ]),
-
-  dashboard_context_headers: new Set([
-    'PRODUCT.md',
-    'composables/useDashboardSite.ts',
-    'pages/dashboard/[orgSlug]/activity.vue',
-    'pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue',
-    'plugins/dashboard-site-header.client.ts',
-    'server/utils/dashboard-context.ts',
-    'tests/e2e/dashboard.spec.ts',
-    'tests/e2e/helpers/ensure-site.ts',
-    'tests/e2e/local-access.spec.ts',
-    'tests/e2e/onboarding-wizard.spec.ts',
-    'tests/e2e/test-env.ts',
-    'tests/unit/dashboard-org-resolution.test.ts',
   ]),
 }
 

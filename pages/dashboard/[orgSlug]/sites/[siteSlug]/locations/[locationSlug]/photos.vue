@@ -7,8 +7,8 @@
         </template>
         <template #trailing>
           <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />
-          <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!locationId" @click="openUploadPicker">Upload</UButton>
-          <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!locationId" @click="openAttachModal">Attach existing</UButton>
+          <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!locationId || galleryMutating" @click="openUploadPicker">Upload</UButton>
+          <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!locationId || galleryMutating" @click="openAttachModal">Attach existing</UButton>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
           <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
         </template>
@@ -65,7 +65,7 @@
             <UDropdownMenu :items="categoryMenu(asset)" :content="{ align: 'end' }">
               <UButton size="xs" color="neutral" variant="solid" icon="i-lucide-tag" />
             </UDropdownMenu>
-            <UButton size="xs" color="error" variant="solid" icon="i-lucide-x" @click="detachPhoto(asset)" />
+            <UButton size="xs" color="error" variant="solid" icon="i-lucide-x" :disabled="galleryMutating" @click="detachPhoto(asset)" />
           </div>
         </div>
       </div>
@@ -89,6 +89,7 @@
                 :key="asset.id"
                 type="button"
                 class="group relative aspect-square overflow-hidden rounded-lg border border-default bg-elevated text-left"
+                :disabled="galleryMutating"
                 @click="attachPhoto(asset)"
               >
                 <img
@@ -124,6 +125,7 @@ interface MediaAsset {
   alt_text: string | null
   file_name: string | null
   category: string | null
+  placement_updated_at?: string | null
 }
 
 const dashboardLocation = useDashboardLocation()
@@ -139,6 +141,7 @@ const attachOpen = ref(false)
 const attachLoading = ref(false)
 const categoryFilter = ref('all')
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
+const galleryMutating = ref(false)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
@@ -224,7 +227,7 @@ async function uploadSelectedFile(file: File, existingOptions?: { category?: str
       return
     }
 
-    await replaceGallery([...assets.value.map(asset => asset.id), result.asset_id], result.kind === 'video' ? 'Video uploaded and attached' : 'Photo uploaded and attached')
+    await attachPhotoById(result.asset_id, result.kind === 'video' ? 'Video uploaded and attached' : 'Photo uploaded and attached')
   } catch (error) {
     toast.add({ description: uploadError.value ?? (error instanceof Error ? error.message : 'Failed to upload file'), color: 'error' })
   }
@@ -268,35 +271,56 @@ async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: st
   }
 }
 
-async function replaceGallery(assetIds: string[], successMessage: string) {
+const GALLERY_PLACEMENT = () => ({ owner_type: 'business_location' as const, owner_id: locationId.value as string, slot: 'gallery' })
+
+async function attachPhotoById(assetId: string, successMessage: string): Promise<boolean> {
   if (!locationId.value) return false
+  galleryMutating.value = true
   try {
-    await dashboardApi(`${siteApiBase}/media/placements`, {
-      method: 'PUT',
-      body: {
-        placement: { owner_type: 'business_location', owner_id: locationId.value, slot: 'gallery' },
-        asset_ids: assetIds,
-      },
+    await dashboardApi(`${siteApiBase}/media/placements/attach`, {
+      method: 'POST',
+      body: { placement: GALLERY_PLACEMENT(), asset_id: assetId },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
     })
     toast.add({ description: successMessage, color: 'success' })
     await loadPhotos()
     return true
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update location media', color: 'error' })
+    if (error instanceof ApiClientError && error.statusCode === 409) {
+      toast.add({ description: 'This photo is already attached.', color: 'warning' })
+      await loadPhotos()
+      return false
+    }
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to attach media', color: 'error' })
     return false
+  } finally {
+    galleryMutating.value = false
   }
 }
 
 async function attachPhoto(asset: MediaAsset) {
-  const updated = await replaceGallery([...assets.value.map(item => item.id), asset.id], 'Media attached')
+  const updated = await attachPhotoById(asset.id, 'Media attached')
   if (updated) {
     attachableAssets.value = attachableAssets.value.filter(item => item.id !== asset.id)
   }
 }
 
 async function detachPhoto(asset: MediaAsset) {
-  await replaceGallery(assets.value.filter(item => item.id !== asset.id).map(item => item.id), 'Media detached from this location')
+  if (!locationId.value) return
+  galleryMutating.value = true
+  try {
+    await dashboardApi(`${siteApiBase}/media/placements/remove`, {
+      method: 'POST',
+      body: { placement: GALLERY_PLACEMENT(), asset_id: asset.id },
+      validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
+    })
+    toast.add({ description: 'Media detached from this location', color: 'success' })
+    await loadPhotos()
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove media', color: 'error' })
+  } finally {
+    galleryMutating.value = false
+  }
 }
 
 function categoryMenu(asset: MediaAsset) {

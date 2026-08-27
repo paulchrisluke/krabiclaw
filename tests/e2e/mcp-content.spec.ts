@@ -51,10 +51,10 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'get_site_media_assets', args: { site_id: siteId, kind: 'image' },
       })
       expect(mediaResponse.status()).toBe(200)
-      const mediaAssets = mcpData<{ assets: Array<{ id: string, status: string }> }>(await mediaResponse.json()).assets
+      const mediaAssets = mcpData<{ assets: Array<{ asset_id: string, status: string }> }>(await mediaResponse.json()).assets
       const imageAsset = mediaAssets.find(asset => asset.status === 'active')
       expect(imageAsset).toBeTruthy()
-      const imageAssetId = imageAsset!.id
+      const imageAssetId = imageAsset!.asset_id
       expect(imageAssetId).toEqual(expect.any(String))
 
       const now = Date.now()
@@ -74,7 +74,7 @@ test.describe('stateless MCP server', () => {
       const placement = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'set_media',
-        args: { site_id: siteId, target_type: 'post_image', post_id: created.id, asset_ids: [imageAssetId] },
+        args: { site_id: siteId, placement: { owner_type: 'post', owner_id: created.id, slot: 'cover' }, asset_id: imageAssetId },
       })
       if (placement.status() !== 200) console.error(await placement.text())
       expect(placement.status()).toBe(200)
@@ -86,18 +86,16 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },
       })
       expect(read.status()).toBe(200)
-      const firstPost = mcpData<{ post: { status: string, slug: string, published_at: string, image_asset_id: string, media: Array<{ mediaAssetId?: string }> } }>(await read.json()).post
+      const firstPost = mcpData<{ post: { status: string, slug: string, published_at: string, media: Array<{ asset_id: string, slot: string }> } }>(await read.json()).post
       expect(firstPost.status).toBe('published')
       expect(firstPost.published_at).toEqual(expect.any(String))
-      expect(firstPost.image_asset_id).toBe(imageAssetId)
-      expect(firstPost.media.some(item => item.mediaAssetId === imageAssetId)).toBe(true)
+      expect(firstPost.media).toContainEqual(expect.objectContaining({ asset_id: imageAssetId, slot: 'cover' }))
 
       const publicRead = await request.get(`${baseURL}/api/public/sites/${siteId}/posts/${encodeURIComponent(firstPost.slug)}`)
       expect(publicRead.status()).toBe(200)
-      const publicPost = (await publicRead.json() as { post: { id: string, image_asset_id: string, media: Array<{ mediaAssetId?: string }> } }).post
+      const publicPost = (await publicRead.json() as { post: { id: string, media: Array<{ asset_id: string, slot: string }> } }).post
       expect(publicPost.id).toBe(created.id)
-      expect(publicPost.image_asset_id).toBe(imageAssetId)
-      expect(publicPost.media.some(item => item.mediaAssetId === imageAssetId)).toBe(true)
+      expect(publicPost.media).toContainEqual(expect.objectContaining({ asset_id: imageAssetId, slot: 'cover' }))
 
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_post',
@@ -316,7 +314,7 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites', 'create_site',
       'get_site', 'list_locations', 'list_menus', 'list_posts', 'get_site_media_assets',
-      'get_page_fields', 'list_experiences', 'get_contact_inquiries',
+      'list_tenant_pages', 'list_experiences', 'get_contact_inquiries',
     ]))
     expect(allToolNames).not.toEqual(expect.arrayContaining([
       'get_translation_inventory', 'start_translation_job', 'list_translation_jobs',

@@ -9,9 +9,10 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
   if (!locationId) return jsonResponse({ error: 'Location ID required' }, { status: 400 })
 
-  const { db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   const organizationId = organization.id
   await assertLocationAccess(db, {
+    env,
     memberId: organization.memberId, role: organization.role, organizationId, siteId: location.site_id, locationId, })
 
   const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.site_id, location.feature_overrides as string | null ?? null)

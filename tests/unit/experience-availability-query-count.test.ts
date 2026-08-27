@@ -7,9 +7,8 @@ import type { Experience } from '../../server/utils/experiences.ts'
 // (server/utils/experiences.ts) previously ran a location lookup plus timezone,
 // booking, and override query per experience, serially — query count grew
 // linearly with experience count. It now bulk-loads bookings/overrides in a
-// single chunked query per 97 experiences (D1's ~100 param limit), so the
-// query count must stay flat across 1, 8, and 25 experiences, which all fit
-// in one chunk.
+// single query with one JSON-array bind, so query count remains flat without
+// consuming one D1 bind parameter per experience.
 
 let queryAllCallCount = 0
 
@@ -121,9 +120,9 @@ test('attachAvailabilitySummaries issues zero queries for an empty list', async 
   assert.equal(queryAllCallCount, 0)
 })
 
-test('attachAvailabilitySummaries chunks past the ~97-item D1 parameter limit', async () => {
+test('attachAvailabilitySummaries uses one JSON-array bind beyond the former parameter limit', async () => {
   queryAllCallCount = 0
   const list = Array.from({ length: 150 }, (_, index) => fakeExperience(index))
   await attachAvailabilitySummaries({} as never, 'org-1', 'site-1', list, context)
-  assert.equal(queryAllCallCount, 2, 'expected 150 experiences to split into 2 chunks of <=97')
+  assert.equal(queryAllCallCount, 1, 'expected one bulk query for 150 experiences')
 })

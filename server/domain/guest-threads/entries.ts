@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { GuestThreadActorKind, GuestThreadChannel, GuestThreadEntryKind, GuestThreadEntryRow } from './types'
 
 export interface AppendEntryInput {
@@ -129,13 +130,12 @@ export async function getLatestEntryByKind(
   threadId: string,
   kinds: GuestThreadEntryKind[],
 ): Promise<GuestThreadEntryRow | null> {
-  const placeholders = kinds.map(() => '?').join(', ')
   return await queryFirst<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
-    WHERE thread_id = ? AND kind IN (${placeholders})
+    WHERE thread_id = ? AND kind IN (SELECT value FROM json_each(?))
     ORDER BY sequence DESC, occurred_at DESC, id DESC
     LIMIT 1
-  `, [threadId, ...kinds])
+  `, [threadId, d1JsonStringSet(kinds)])
 }
 
 export function parseEntryPayload(entry: GuestThreadEntryRow): Record<string, unknown> | null {

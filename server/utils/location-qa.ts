@@ -1,4 +1,5 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
+import { d1JsonStringSet } from '../db/d1-limits.ts'
 
 export interface QaScope {
   organizationId: string
@@ -227,12 +228,11 @@ export async function reorderQa(
   }
 
   const scoped = scopeSql(scope.locationId, scope.pagePath)
-  const placeholders = updates.map(() => '?').join(', ')
   const validation = await queryFirst<{ valid_count: number }>(db, `
     SELECT COUNT(*) AS valid_count
     FROM location_qa
-    WHERE id IN (${placeholders}) AND organization_id = ? AND site_id = ? AND ${scoped.clause}
-  `, [...updates.map(update => update.id), scope.organizationId, scope.siteId, ...scoped.params])
+    WHERE id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND site_id = ? AND ${scoped.clause}
+  `, [d1JsonStringSet(updates.map(update => update.id)), scope.organizationId, scope.siteId, ...scoped.params])
   if (Number(validation?.valid_count ?? 0) !== updates.length) {
     throw new Error('Q&A reorder contains records outside the requested scope')
   }

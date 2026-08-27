@@ -21,17 +21,14 @@ import {
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
 import {
-  hydrateMediaAssetsForExperiences,
   toResolvedMediaAsset,
   type MediaAsset,
   type ResolvedMediaAsset,
 } from "~/server/utils/media-asset-manager";
+import { getMediaPlacements } from '~/server/utils/media-placement'
 import type { MenuWithItems } from "~/server/types/menu";
-import {
-  attachFeaturedImageFromBareJoin,
-  listContentComponents,
-  resolveContentComponentsMedia,
-} from "~/server/utils/platform-content";
+import { attachFeaturedMediaFromBareJoin } from "~/server/utils/platform-content";
+import { getContentBlocksForOwner } from '~/server/utils/content-documents'
 import {
   buildPublicResourceCacheKey,
   getPublicResourceCache,
@@ -62,10 +59,7 @@ interface SiteContent {
   content?: string
   hero_title?: string | null
   hero_subtitle?: string | null
-  hero_media_asset_id?: string | null
-  hero_public_url?: string | null
-  hero_kind?: string | null
-  thumbnail_url?: string | null
+  media?: Array<{ asset_id: string; slot: string; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null }>
   component?: string | null
   updated_at: string
 }
@@ -99,13 +93,11 @@ const PUBLIC_PHOTO_CATEGORY: Record<string, string> = {
 interface ReviewRow {
   id: string;
   author_name: string | null;
-  reviewer_photo_url: string | null;
   rating: number;
   title: string | null;
   content: string | null;
   owner_reply: string | null;
   owner_reply_at: string | null;
-  photo_urls: string | null;
   source: string | null;
   created_at: string | null;
 }
@@ -151,6 +143,7 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
       source: 'tenant-pages',
       updated_at: page.updated_at,
       component: null,
+      media: block.media,
     } satisfies SiteContent
     if (block.type === 'hero') {
       rows.push({
@@ -159,10 +152,6 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
         content: typeof data.eyebrow === 'string' ? data.eyebrow : undefined,
         hero_title: typeof data.title === 'string' ? data.title : null,
         hero_subtitle: typeof data.subtitle === 'string' ? data.subtitle : null,
-        hero_media_asset_id: typeof data.asset_id === 'string' ? data.asset_id : null,
-        hero_public_url: typeof data.url === 'string' ? data.url : null,
-        hero_kind: typeof data.kind === 'string' ? data.kind : null,
-        thumbnail_url: typeof data.thumbnail_url === 'string' ? data.thumbnail_url : null,
       })
       if (typeof data.eyebrow === 'string' && data.eyebrow.trim()) rows.push({ ...base, field: 'hero.kicker', content: data.eyebrow })
       continue
@@ -434,7 +423,7 @@ async function loadPublicPageSource(
     idxMenuItems = push(
       `SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
               mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-              NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured,
+              mi.available, mi.featured,
               mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
               mi.preparation, mi.serving_note,
               mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
@@ -447,16 +436,17 @@ async function loadPublicPageSource(
     );
 
     idxMenuItemMedia = push(
-      `SELECT ma.*, mim.menu_item_id, mim.sort_order
-       FROM menu_item_media mim
-       JOIN menu_items mi ON mi.id = mim.menu_item_id
+      `SELECT ma.*, mp.owner_id AS menu_item_id, mp.sort_order
+       FROM media_placements mp
+       JOIN menu_items mi ON mi.id = mp.owner_id
        JOIN menus m ON m.id = mi.menu_id
-       JOIN media_assets ma ON ma.id = mim.asset_id
-         AND ma.organization_id = mim.organization_id
-         AND ma.site_id = mim.site_id
+       JOIN media_assets ma ON ma.id = mp.asset_id
+         AND ma.organization_id = mp.organization_id
+         AND ma.site_id = mp.site_id
          AND ma.status = 'active'
        WHERE m.organization_id = ? AND m.site_id = ? AND m.is_visible = 1
-       ORDER BY mim.menu_item_id ASC, mim.sort_order ASC`,
+         AND mp.owner_type = 'menu_item' AND mp.slot = 'gallery' AND mp.status = 'active'
+       ORDER BY mp.owner_id ASC, mp.sort_order ASC`,
       [orgId, siteId],
     );
 
@@ -518,17 +508,17 @@ async function loadPublicPageSource(
 
   if (locationId && requestedDatasets.has("reviews"))
     idxLocReviews = push(
-      `SELECT id, author_name, rating, content, created_at
-       FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
+      `SELECT r.id, r.author_name, r.rating, r.content, r.created_at
+       FROM reviews r WHERE r.location_id = ? AND r.site_id = ? AND r.status = 'approved'
        ORDER BY created_at DESC LIMIT 3`,
       [locationId, siteId],
     );
 
   if (locationId && requestedDatasets.has("reviews"))
     idxFullReviews = push(
-      `SELECT id, author_name, reviewer_photo_url, rating, title, content,
-              owner_reply, owner_reply_at, photo_urls, source, created_at
-       FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
+      `SELECT r.id, r.author_name, r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at,
+              r.source, r.created_at
+       FROM reviews r WHERE r.location_id = ? AND r.site_id = ? AND r.status = 'approved'
        ORDER BY created_at DESC LIMIT 50`,
       [locationId, siteId],
     );
@@ -543,30 +533,32 @@ async function loadPublicPageSource(
   if (requestedDatasets.has("photos"))
     idxPhotos = push(
       locationId
-        ? `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
-           FROM media_assets
-           WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
-           ORDER BY created_at DESC LIMIT 100`
-        : `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
-           FROM media_assets
-           WHERE site_id = ? AND kind = 'image' AND status = 'active'
-           ORDER BY created_at DESC LIMIT 100`,
+        ? `SELECT mp.id AS placement_id, mp.owner_type, mp.owner_id, mp.slot, mp.sort_order, ma.id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text, ma.category, ma.created_at
+           FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id
+           WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ? AND mp.slot = 'gallery' AND mp.status = 'active' AND ma.kind = 'image' AND ma.status = 'active'
+           ORDER BY mp.sort_order LIMIT 100`
+        : `SELECT mp.id AS placement_id, mp.owner_type, mp.owner_id, mp.slot, mp.sort_order, ma.id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text, ma.category, ma.created_at
+           FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id
+           WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.slot = 'gallery' AND mp.status = 'active' AND ma.kind = 'image' AND ma.status = 'active'
+           ORDER BY mp.owner_id, mp.sort_order LIMIT 100`,
       locationId ? [siteId, locationId] : [siteId],
     );
 
   if (requestedDatasets.has("blog"))
     idxBlogList = push(
-      // read_time_minutes approximates words as body length / 5 chars at 200wpm —
-      // avoids shipping the full post body to list views just to estimate read time.
       `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.updated_at, p.featured_order,
-              COALESCE(sa.name, u.name) AS author_name, p.featured_image_asset_id,
+              mp.asset_id AS asset_id,
               ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height,
-              CAST(MAX(1, ROUND((LENGTH(COALESCE(p.body, '')) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
+              CAST(MAX(1, ROUND((COALESCE((
+                SELECT SUM(LENGTH(COALESCE(json_extract(cb.data_json, '$.markdown'), json_extract(cb.data_json, '$.text'), '')))
+                FROM content_documents cd
+                JOIN content_blocks cb ON cb.document_id = cd.id
+                WHERE cd.owner_type = 'tenant_blog' AND cd.owner_id = p.id
+              ), 0) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
        FROM blog_posts p
-       LEFT JOIN user u ON u.id = p.author_id
-       LEFT JOIN site_authors sa ON sa.id = p.site_author_id
-       LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+       LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0 AND mp.status = 'active'
+       LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
        WHERE (p.scheduled_for IS NULL OR p.scheduled_for <= datetime('now')) AND p.site_id = ? AND p.visibility = 'public'
        ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
        LIMIT ?`,
@@ -575,17 +567,13 @@ async function loadPublicPageSource(
 
   if (requestedDatasets.has("blogPost") && blogSlug)
     idxBlogPost = push(
-      `SELECT p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.created_at, p.updated_at,
-              p.featured_image_asset_id,
-              COALESCE(sa.name, u.name) AS author_name, COALESCE(sma.public_url, u.image) AS author_image,
-              sa.title AS author_title, sa.bio AS author_bio,
+              mp.asset_id AS asset_id,
               ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
        FROM blog_posts p
-       LEFT JOIN user u ON u.id = p.author_id
-       LEFT JOIN site_authors sa ON sa.id = p.site_author_id
-       LEFT JOIN media_assets sma ON sma.id = sa.image_asset_id AND sma.status = 'active'
-       LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+       LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0 AND mp.status = 'active'
+       LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
        WHERE p.slug = ? AND p.site_id = ? AND (p.scheduled_for IS NULL OR p.scheduled_for <= datetime('now'))
        LIMIT 1`,
       [blogSlug, siteId],
@@ -699,10 +687,6 @@ async function loadPublicPageSource(
             const item = {
               ...mapped,
               media,
-              image_asset_id: media[0]?.id ?? null,
-              public_url: media[0]?.public_url ?? null,
-              thumbnail_url: media[0]?.thumbnail_url ?? null,
-              kind: media[0]?.kind ?? null,
             };
             return item;
           }),
@@ -725,17 +709,18 @@ async function loadPublicPageSource(
         ).map(parseExperienceRow)
       : [];
   options.signal?.throwIfAborted();
-  const mediaByExperience = await hydrateMediaAssetsForExperiences(
-    db,
+  const mediaByExperience = await getMediaPlacements(db, {
     siteId,
-    [
+    ownerType: 'experience',
+    ownerIds: [
       ...experiencesListRaw.map(experience => experience.id),
       ...(idxExperienceDetail >= 0
         ? ((batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results ?? [])
             .map(row => String(row.id ?? ""))
         : []),
     ],
-  );
+    slot: 'gallery',
+  });
   const attachExperienceMedia = <T extends Experience>(experience: T): T => ({
     ...experience,
     media: mediaByExperience.get(experience.id) ?? [],
@@ -788,9 +773,7 @@ async function loadPublicPageSource(
 
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {
-    const publicUrl = loc.hero_public_url as string | null;
-    const thumbnailUrl = loc.hero_thumbnail_url as string | null;
-    const heroKind = loc.hero_kind as string | null;
+    const publicUrl = loc.media_public_url as string | null;
 
     const address = loc.address as string | null
     const openingHours = loc.opening_hours as string | null
@@ -821,10 +804,13 @@ async function loadPublicPageSource(
       review_count: loc.review_count,
       is_primary: Boolean(loc.is_primary),
       status: loc.status,
-      public_url: publicUrl,
-      kind: publicUrl ? heroKind : null,
-      hero_public_url: publicUrl,
-      thumbnail_url: thumbnailUrl,
+      media: publicUrl ? [{
+        asset_id: loc.asset_id,
+        slot: 'hero',
+        public_url: publicUrl,
+        thumbnail_url: loc.media_thumbnail_url,
+        kind: loc.media_kind,
+      }] : [],
       city: loc.city,
       neighborhood: loc.neighborhood || null,
       short_description: loc.short_description || null,
@@ -895,10 +881,9 @@ async function loadPublicPageSource(
   const locationForAggregate = locationId
     ? ((locRows.results ?? []).find((l) => l.id === locationId) ?? null)
     : null;
-  const fullReviews = (fullReviewRows?.results ?? []).map((r) => ({
-    ...r,
-    photo_urls: r.photo_urls ? JSON.parse(r.photo_urls as string) : [],
-  }));
+  const fullReviewList = fullReviewRows?.results ?? []
+  const reviewMedia = await getMediaPlacements(db, { siteId, ownerType: 'review', ownerIds: fullReviewList.map(review => String(review.id)) })
+  const fullReviews = fullReviewList.map(r => ({ ...r, media: reviewMedia.get(String(r.id)) ?? [] }));
   const aggregateLocation = locationForAggregate ? {
     rating: typeof locationForAggregate.rating === 'number' ? locationForAggregate.rating : null,
     review_count: typeof locationForAggregate.review_count === 'number' ? locationForAggregate.review_count : null,
@@ -914,16 +899,19 @@ async function loadPublicPageSource(
   );
 
   // Shape photos (type E)
-  const photos = (photoRows?.results ?? []).map((asset, index) => ({
-    id: asset.id,
+  const media = (photoRows?.results ?? []).map(asset => ({
+    placement_id: asset.placement_id,
+    owner_type: asset.owner_type,
+    owner_id: asset.owner_id,
+    slot: asset.slot,
+    asset_id: asset.id,
+    public_url: asset.public_url,
     thumbnail_url: asset.thumbnail_url,
-    local_url: asset.public_url,
-    google_url: asset.public_url,
-    description: asset.alt_text,
+    kind: asset.kind,
+    alt_text: asset.alt_text,
     category:
       PUBLIC_PHOTO_CATEGORY[String(asset.category || "other")] ?? "OTHER",
-    sort_order: index,
-    location_id: asset.location_id ?? null,
+    sort_order: asset.sort_order,
   }));
 
   // Shape blog list
@@ -931,24 +919,18 @@ async function loadPublicPageSource(
     idxBlogList >= 0
       ? (
           (batchResults[idxBlogList] as { results: ApiRecord[] })?.results ?? []
-        ).map(attachFeaturedImageFromBareJoin)
+        ).map(attachFeaturedMediaFromBareJoin)
       : [];
 
-  // Shape blog post detail — content components require the post's id, so this
-  // is one more D1 round trip server-side, but still a single client request.
   let blogPost: ApiRecord | null = null;
   if (idxBlogPost >= 0) {
     const postRow = (batchResults[idxBlogPost] as { results: ApiRecord[] })
       ?.results?.[0];
     if (postRow) {
       options.signal?.throwIfAborted();
-      const components = await resolveContentComponentsMedia(
-        db,
-        await listContentComponents(db, "blog_post", String(postRow.id), {
-          activeOnly: true,
-        }),
-      );
-      blogPost = attachFeaturedImageFromBareJoin({ ...postRow, components });
+      const contentBlocks = await getContentBlocksForOwner(db, 'tenant_blog', String(postRow.id));
+      if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+      blogPost = attachFeaturedMediaFromBareJoin({ ...postRow, content_blocks: contentBlocks });
     }
   }
 
@@ -964,7 +946,7 @@ async function loadPublicPageSource(
     globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
     reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
     reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
-    photosList: requestedDatasets.has("photos") ? photos : [],
+    media: requestedDatasets.has("photos") ? media : [],
     qaList: requestedDatasets.has("qa") ? qaRows?.results ?? [] : [],
     blogList: requestedDatasets.has("blog") ? blogList : [],
     blogPost: requestedDatasets.has("blogPost") ? blogPost : null,

@@ -83,7 +83,7 @@ export default defineHandler(async (event) => {
     const filename = sanitizeFilename(filePart.filename)
     const uploaded = await uploadImageBuffer(env, toArrayBuffer(filePart.data), filename, contentType)
     const image: DraftUploadedImage = {
-      draftAssetId: crypto.randomUUID(), cloudflareImageId: uploaded.imageId, publicUrl: uploaded.publicUrl, thumbnailUrl: uploaded.thumbnailUrl, mimeType: contentType, fileName: filename, fileSize, category: target === 'logo' ? 'logo' : 'other', }
+      draftAssetId: crypto.randomUUID(), cloudflareImageId: uploaded.imageId, publicUrl: uploaded.publicUrl, thumbnailUrl: uploaded.thumbnailUrl, mimeType: contentType, fileName: filename, fileSize, }
 
     let currentUpdatedAt = draft.updated_at
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -98,29 +98,12 @@ export default defineHandler(async (event) => {
       if (!currentDraft) return jsonResponse({ error: 'Draft not found' }, { status: 404 })
       currentUpdatedAt = currentDraft.updated_at
       const payload = parseOnboardingDraftPayload(currentDraft.payload_json)
-      payload.preview.draftMedia ??= { logo: null, hero: null }
+      payload.preview.media = payload.preview.media.filter(item => item.slot !== target)
+      payload.preview.media.push({ slot: target, asset: image })
       if (target === 'logo') {
-        payload.preview.draftMedia.logo = image
-        payload.preview.config.logo_url = image.publicUrl
-        payload.preview.config.draft_logo_asset_id = image.draftAssetId
         payload.preview.config.draft_logo_note = filename
       } else {
-        payload.preview.draftMedia.hero = image
-        payload.preview.config.hero_image_url = image.publicUrl
-        payload.preview.config.location_hero_image_url = image.publicUrl
-        payload.preview.config.draft_hero_asset_id = image.draftAssetId
         payload.preview.config.draft_hero_photo_note = filename
-        for (const row of payload.preview.content) {
-          if (row.page === 'home' && row.field === 'hero') {
-            row.hero_public_url = image.publicUrl
-            row.hero_kind = 'image'
-            row.thumbnail_url = image.thumbnailUrl
-          }
-        }
-        for (const location of payload.preview.locations) {
-          location.hero_url = image.publicUrl
-          location.thumbnail_url = image.thumbnailUrl ?? image.publicUrl
-        }
       }
 
       const updatedAt = new Date().toISOString()

@@ -254,7 +254,7 @@ ${e2eFixtureSiteRetainedDeletes}
 UPDATE chowbot_channel_state
 SET selected_site_id = NULL,
     active_conversation_id = NULL,
-    pending_media = NULL,
+    pending_message_id = NULL,
     pending_confirmation = NULL
 WHERE selected_site_id IN (${eligibleE2eFixtureSiteIds});
 

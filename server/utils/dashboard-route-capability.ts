@@ -1,5 +1,7 @@
 import { queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { resolveUserOrganization } from '~/server/utils/member-access'
 
 export interface RouteCapabilityParams {
   organizationSlug: string
@@ -25,17 +27,21 @@ interface RouteCapabilitySiteRow {
  *  correct for a route guard even though it isn't a real authorization decision. */
 export async function isDashboardRouteCapabilityAllowed(
   db: DbClient,
+  env: CloudflareEnv,
   userId: string,
   params: RouteCapabilityParams,
 ): Promise<boolean> {
+  const organization = await resolveUserOrganization(env, {
+    userId,
+    organizationSlug: params.organizationSlug,
+  })
+  if (!organization) return false
   const site = await queryFirst<RouteCapabilitySiteRow>(db, `
     SELECT s.id, s.vertical, s.theme_id, s.feature_overrides
     FROM sites s
-    JOIN organization o ON o.id = s.organization_id
-    JOIN member m ON m.organizationId = o.id
-    WHERE o.slug = ? AND s.subdomain = ? AND m.userId = ?
+    WHERE s.organization_id = ? AND s.subdomain = ?
     LIMIT 1
-  `, [params.organizationSlug, params.siteSlug, userId])
+  `, [organization.id, params.siteSlug])
   if (!site) return false
 
   let locationFeatureOverrides: string | null = null

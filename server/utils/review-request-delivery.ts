@@ -1,4 +1,5 @@
 import type { DbClient } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { notifyReviewRequest } from '~/server/utils/notifications'
 import {
   createOrRotateReviewRequest,
@@ -9,12 +10,7 @@ import {
   type ReviewBookingType,
 } from '~/server/utils/review-requests'
 
-interface ReviewRequestDeliveryEnv {
-  NUXT_PUBLIC_PLATFORM_DOMAIN?: string
-  RESEND_API_KEY?: string
-  EMAIL_FROM?: string
-  EMAIL_DELIVERY_MODE?: string
-}
+type ReviewRequestDeliveryEnv = CloudflareEnv
 
 function platformDomain(env: ReviewRequestDeliveryEnv): string {
   const configured = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()

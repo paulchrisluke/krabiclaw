@@ -1,7 +1,9 @@
 import type { H3Event } from 'nitro'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { isOrganizationWideRole } from '~/server/utils/member-access'
+import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { queryAll } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 
 export interface NotificationVisibilityPrincipal {
   userId: string
@@ -11,6 +13,8 @@ export interface NotificationVisibilityPrincipal {
     role: string
     memberId: string
   } | null
+  siteWideSiteIds?: string[]
+  locationIds?: string[]
 }
 
 export function buildNotificationVisibilityFilter(principal: NotificationVisibilityPrincipal) {
@@ -30,20 +34,21 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
       visibilityClauses.push(`(n.scope IN ('organization', 'site') AND n.organization_id = ?)`)
       params.push(principal.organization.id)
     } else {
-      visibilityClauses.push(`(n.scope = 'site' AND n.organization_id = ? AND EXISTS (
-        SELECT 1
-        FROM member m
-        JOIN sites s ON s.organization_id = m.organizationId AND s.id = n.site_id
-        LEFT JOIN business_locations bl ON bl.organization_id = m.organizationId AND bl.site_id = s.id AND bl.id = n.location_id
-        JOIN teamMember tm
-          ON tm.userId = m.userId
-          AND (
-            (n.location_id IS NULL AND tm.teamId = s.team_id)
-            OR (n.location_id IS NOT NULL AND tm.teamId IN (s.team_id, bl.team_id))
-          )
-        WHERE m.id = ? AND m.organizationId = n.organization_id
-      ))`)
-      params.push(principal.organization.id, principal.organization.memberId)
+      const accessClauses: string[] = []
+      if (principal.siteWideSiteIds?.length) {
+        accessClauses.push(`n.site_id IN (SELECT value FROM json_each(?))`)
+      }
+      if (principal.locationIds?.length) {
+        accessClauses.push(`n.location_id IN (SELECT value FROM json_each(?))`)
+      }
+      if (accessClauses.length) {
+        visibilityClauses.push(`(n.scope = 'site' AND n.organization_id = ? AND (${accessClauses.join(' OR ')}))`)
+        params.push(
+          principal.organization.id,
+          ...(principal.siteWideSiteIds?.length ? [d1JsonStringSet(principal.siteWideSiteIds)] : []),
+          ...(principal.locationIds?.length ? [d1JsonStringSet(principal.locationIds)] : []),
+        )
+      }
     }
   }
 
@@ -58,10 +63,30 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
 export async function getNotificationAccess(event: H3Event) {
   const context = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
   const platformAdmin = await hasPlatformEventPermission(event, context.env, { platform: ['access'] })
+  const siteWideSiteIds: string[] = []
+  const locationIds: string[] = []
+  if (context.organization && !isOrganizationWideRole(context.organization.role)) {
+    const sites = await queryAll<{ id: string }>(context.db, `
+      SELECT id FROM sites WHERE organization_id = ?
+    `, [context.organization.id])
+    await Promise.all(sites.map(async (site) => {
+      const accessibleLocationIds = await listAccessibleLocationIds(context.db, {
+        env: context.env,
+        memberId: context.organization!.memberId,
+        role: context.organization!.role,
+        organizationId: context.organization!.id,
+        siteId: site.id,
+      })
+      if (accessibleLocationIds === null) siteWideSiteIds.push(site.id)
+      else locationIds.push(...accessibleLocationIds)
+    }))
+  }
   const filter = buildNotificationVisibilityFilter({
     userId: context.userId,
     platformAdmin,
     organization: context.organization,
+    siteWideSiteIds,
+    locationIds,
   })
 
   return {

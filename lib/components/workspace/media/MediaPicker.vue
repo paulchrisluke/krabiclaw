@@ -4,9 +4,11 @@
     @click="open"
     @keydown.enter.prevent="open"
     @keydown.space.prevent="open"
-    class="w-full text-left cursor-pointer"
+    class="w-full text-left"
+    :class="disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
     role="button"
-    tabindex="0"
+    :aria-disabled="disabled"
+    :tabindex="disabled ? -1 : 0"
   >
     <slot>
       <div
@@ -136,6 +138,7 @@ const props = defineProps<{
   title?: string
   initialPrompt?: string
   context?: string
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -159,8 +162,8 @@ interface PickerMediaAsset {
 
 interface SelectedMediaAsset {
   asset_id: string
-  public_url: string
-  thumbnail_url: string
+  public_url: string | null
+  thumbnail_url: string | null
   kind: string
   alt_text: string
 }
@@ -245,6 +248,7 @@ onUnmounted(() => {
 })
 
 function open() {
+  if (props.disabled) return
   pendingAsset.value = null
   panel.value = 'library'
   isOpen.value = true
@@ -254,8 +258,8 @@ function open() {
 function onSelect(asset: PickerMediaAsset) {
   pendingAsset.value = {
     asset_id: asset.id,
-    public_url: asset.public_url ?? '',
-    thumbnail_url: asset.thumbnail_url ?? '',
+    public_url: asset.public_url ?? null,
+    thumbnail_url: asset.thumbnail_url ?? null,
     kind: asset.kind ?? 'image',
     alt_text: assetAlt(asset),
   }
@@ -267,8 +271,8 @@ function onUploaded(asset: PickerMediaAsset) {
   const size = asset.size ?? 0
   pendingAsset.value = {
     asset_id: asset.id,
-    public_url: url,
-    thumbnail_url: asset.thumbnail_url ?? '',
+    public_url: asset.public_url ?? null,
+    thumbnail_url: asset.thumbnail_url ?? null,
     kind,
     alt_text: assetAlt(asset),
   }

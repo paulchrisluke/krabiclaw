@@ -2,6 +2,9 @@ import { sql } from 'drizzle-orm'
 import type { SQL, SQLChunk } from 'drizzle-orm'
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1'
 import * as schema from './schema'
+import { MAX_D1_BATCH_STATEMENTS } from './d1-limits'
+
+export * from './d1-limits'
 
 export type AppSchema = typeof schema
 export type AppDb = DrizzleD1Database<AppSchema> & { $client: D1Database }
@@ -117,7 +120,16 @@ export type BatchQuery = { query: string; params?: unknown[] }
  * Runs multiple writes as a single atomic D1 batch (all-or-nothing), unlike
  * batchStatements/sequential execute() calls which have no transactional guarantee.
  */
-export async function executeBatch(db: DbClient, queries: BatchQuery[]) {
+export async function executeBatch(
+  db: DbClient,
+  queries: BatchQuery[],
+  opts: { operation?: string } = {},
+) {
+  if (queries.length > MAX_D1_BATCH_STATEMENTS) {
+    throw new RangeError(
+      `${opts.operation ?? 'D1 batch'} contains ${queries.length} statements; maximum is ${MAX_D1_BATCH_STATEMENTS}`,
+    )
+  }
   const client = rawClient(db)
   const statements = queries.map(({ query, params = [] }) => client.prepare(query).bind(...params))
   return await client.batch(statements)

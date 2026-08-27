@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
   const channels: Array<'site' | 'instagram' | 'facebook'> =
     body?.channels ?? ['site']
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const postScope = await queryFirst<{ location_id: string | null }>(db, `
@@ -33,6 +33,7 @@ export default defineHandler(async (event) => {
   `, [postId, site.organization_id, siteId])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, {
+    env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: postScope.location_id, })
 
   const post = await publishPost(db, site.organization_id, siteId, postId, channels, env)
@@ -76,12 +77,7 @@ export default defineHandler(async (event) => {
         const pageId = connection.facebook_page_id
 
       // Resolve image URL for Instagram (needs a public HTTPS URL)
-      let imageUrl: string | null = null
-      if (post.image_asset_id) {
-        const asset = await queryFirst<{ public_url: string | null }>(
-          db, `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`, [post.image_asset_id], )
-        imageUrl = asset?.public_url ?? null
-      }
+      const imageUrl = post.media?.find(item => item.slot === 'cover')?.public_url ?? null
 
       // Facebook publish
       if (wantsFacebook) {

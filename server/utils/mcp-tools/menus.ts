@@ -1,5 +1,6 @@
 import type { McpToolDefinition } from './shared'
-import { menuItemMutationResultObject, menuMutationResultObject, menuObject, seoOverrideFieldsSchema, siteTool } from './shared'
+import { menuItemMutationResultObject, menuMutationResultObject, menuObject, pageInfoObject, paginationInputSchema, seoOverrideFieldsSchema, siteTool } from './shared'
+import { MAX_MENU_BATCH_ITEMS, MAX_MENU_ITEM_MEDIA } from '~/server/utils/menu-batch-limits'
 
 export const MENUS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -8,6 +9,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
       domain: 'menus',
       minimumRole: 'editor',
       confirmRequired: false,
+      inputSchema: { ...paginationInputSchema },
       outputSchema: {
         type: 'object',
         properties: {
@@ -20,27 +22,30 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
                 name: { type: 'string' },
                 description: { type: ['string', 'null'] },
                 location_id: { type: ['string', 'null'] },
-                sort_order: { type: 'number' },
+                is_visible: { type: 'boolean' },
+                section_order: { type: ['array', 'null'], items: { type: 'string' } },
+                updated_at: { type: 'string' },
               },
-              required: ['id', 'name'],
+              required: ['id', 'name', 'is_visible', 'updated_at'],
             },
           },
+          page_info: pageInfoObject,
         },
-        required: ['menus'],
+        required: ['menus', 'page_info'],
       },
     }),
   siteTool({
       name: 'get_menu',
-      description: 'Get a menu with items.',
+      description: 'Get one page of a menu\'s items. When item_page_info.has_more is true, call get_menu again with item_page_info.next_cursor and repeat until has_more is false before treating the menu as complete.',
       domain: 'menus',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { menu_id: { type: 'string' } },
+      inputSchema: { menu_id: { type: 'string' }, ...paginationInputSchema },
       required: ['menu_id'],
       outputSchema: {
         type: 'object',
-        properties: { menu: menuObject },
-        required: ['menu'],
+        properties: { menu: menuObject, item_page_info: pageInfoObject },
+        required: ['menu', 'item_page_info'],
       },
     }),
   siteTool({
@@ -111,12 +116,15 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         media: {
           type: 'array',
           description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
+          maxItems: MAX_MENU_ITEM_MEDIA,
+          uniqueItems: true,
           items: {
             type: 'object',
             properties: {
               asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
             },
             required: ['asset_id'],
+            additionalProperties: false,
           },
         },
         ...seoOverrideFieldsSchema(),
@@ -126,7 +134,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'add_menu_items_batch',
-      description: 'Add multiple brand-new menu items in one call. Use this when the user is adding new items, not revising existing ones.',
+      description: `Atomically add up to ${MAX_MENU_BATCH_ITEMS} brand-new menu items in one call. Use this when the user is adding new items, not revising existing ones. The complete request either commits or rolls back together.`,
       domain: 'menus',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -135,7 +143,9 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         menu_id: { type: 'string' },
         items: {
           type: 'array',
-          description: 'Up to 100 new menu items to add.',
+          description: `The complete set of new items to add atomically. Up to ${MAX_MENU_BATCH_ITEMS}.`,
+          minItems: 1,
+          maxItems: MAX_MENU_BATCH_ITEMS,
           items: {
             type: 'object',
             properties: {
@@ -158,6 +168,8 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
               media: {
                 type: 'array',
                 description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
+                maxItems: MAX_MENU_ITEM_MEDIA,
+                uniqueItems: true,
                 items: {
                   type: 'object',
                   properties: {
@@ -210,7 +222,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'sync_menu_items',
-      description: 'Reconcile a menu item list with an existing menu — use for updates, replacements, revised prices/descriptions, renamed items, or mixed create/update work. Items match by item_id first, then by normalized name/slug.',
+      description: `Atomically reconcile up to ${MAX_MENU_BATCH_ITEMS} menu items with an existing menu — use for updates, complete replacements, revised prices/descriptions, renamed items, or mixed create/update work. Items match by item_id first, then by normalized name/slug. Read every get_menu page first, then send the complete intended mutation in one call. The complete request either commits or rolls back together.`,
       domain: 'menus',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -219,7 +231,9 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         menu_id: { type: 'string' },
         items: {
           type: 'array',
-          description: 'Items to reconcile. Up to 100.',
+          description: `The complete item set to reconcile atomically. Up to ${MAX_MENU_BATCH_ITEMS}.`,
+          minItems: 1,
+          maxItems: MAX_MENU_BATCH_ITEMS,
           items: {
             type: 'object',
             properties: {
@@ -237,25 +251,13 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
               dietary_notes: { type: 'array', items: { type: 'string' } },
               preparation: { type: ['string', 'null'] },
               serving_note: { type: ['string', 'null'] },
-              media: {
-                type: 'array',
-                description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
-                items: {
-                  type: 'object',
-                  properties: {
-                    asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
-                  },
-                  required: ['asset_id'],
-                  additionalProperties: false,
-                },
-              },
             },
             additionalProperties: false,
           },
         },
         set_missing_unavailable: {
           type: 'boolean',
-          description: 'Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable.',
+          description: `Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable and this call contains the complete intended menu (up to ${MAX_MENU_BATCH_ITEMS} items).`,
         },
       },
       required: ['menu_id', 'items'],
@@ -341,7 +343,7 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_menu_item',
-      description: 'Update a menu item.',
+      description: 'Update a menu item. To change its gallery photos, use attach_media/remove_media/reorder_media with {owner_type:"menu_item", owner_id:<menu_item_id>, slot:"gallery"} — this tool does not accept media.',
       domain: 'menus',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -364,17 +366,6 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         dietary_notes: { type: 'array', items: { type: 'string' } },
         preparation: { type: ['string', 'null'] },
         serving_note: { type: ['string', 'null'] },
-        media: {
-          type: 'array',
-          description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
-          items: {
-            type: 'object',
-            properties: {
-              asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
-            },
-            required: ['asset_id'],
-          },
-        },
         ...seoOverrideFieldsSchema(),
       },
       required: ['menu_item_id'],

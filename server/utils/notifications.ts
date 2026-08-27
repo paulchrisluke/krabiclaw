@@ -3,7 +3,8 @@ import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
+import { isAuthorizedWhatsAppRecipient, getOrganizationOwnerEmail  } from '~/server/utils/member-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { getPlatformSupportEmails } from '~/server/utils/platform-support'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
 import ReservationOwnerCancelled from '~/server/emails/templates/ReservationOwnerCancelled'
@@ -32,7 +33,7 @@ const SUBJECT_LABELS: Record<string, string> = {
 
 type NotificationChannel = 'email' | 'whatsapp'
 
-interface NotificationEnv {
+interface NotificationEnv extends CloudflareEnv {
   RESEND_API_KEY?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_ACCESS_TOKEN?: string
@@ -94,7 +95,6 @@ interface NotificationEventInput {
   scopeType: 'platform' | 'site'
   organizationId?: string | null
   siteId?: string | null
-  locationId?: string | null
   submissionType: 'platform_contact' | 'contact' | 'reservation' | 'experience_booking'
   submissionId: string
   eventType: string
@@ -269,29 +269,13 @@ async function buildOwnerReviewsUrl(
   db: DbClient,
   opts: { organizationId: string; siteId: string; locationId?: string | null; reviewId?: string | null }
 ): Promise<string | null> {
-  const slugs = await resolveSiteLocationSlugs(db, opts)
+  const slugs = await resolveSiteLocationSlugs(env, db, opts)
   if (!slugs) return null
 
   const platformDomain = getPlatformDomain(env)
   const base = `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/reviews`
   if (!opts.reviewId) return base
   return `${base}?${new URLSearchParams({ reply: opts.reviewId }).toString()}`
-}
-
-function ownerEmailQuery() {
-  return `
-    SELECT u.email
-    FROM user u
-    JOIN member m ON u.id = m.userId
-    WHERE m.organizationId = ? AND m.role IN ('owner', 'admin')
-    ORDER BY m.role = 'owner' DESC, u.email LIKE '%@example.test' ASC, m.createdAt DESC
-    LIMIT 1
-  `
-}
-
-export async function getOwnerEmail(db: DbClient, organizationId: string): Promise<string | null> {
-  const row = await queryFirst<{ email?: string }>(db, ownerEmailQuery(), [organizationId])
-  return row?.email ?? null
 }
 
 async function getOwnerNotificationChannels(
@@ -505,7 +489,7 @@ async function notifyOwner(
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
-  const ownerEmail = await getOwnerEmail(db, opts.organizationId)
+  const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
 
   const configuredTargets = [
     locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
@@ -533,6 +517,7 @@ async function notifyOwner(
   if (channels.includes('whatsapp') && opts.whatsapp && phones.length > 0) {
     await Promise.allSettled(phoneTargets.map(async target => {
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
+        env,
         phone: target.phone,
         organizationId: opts.organizationId,
         siteId: opts.siteId,
@@ -704,14 +689,13 @@ async function logNotificationEvent(
   const redactedPayload = redactAuditPayload(opts.payload)
   await execute(db, `
     INSERT INTO notification_events
-    (id, scope_type, organization_id, site_id, location_id, submission_type, submission_id, event_type, channels, recipients, payload, status, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, scope_type, organization_id, site_id, submission_type, submission_id, event_type, channels, recipients, payload, status, error, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     crypto.randomUUID(),
     opts.scopeType,
     opts.organizationId ?? null,
     opts.siteId ?? null,
-    opts.locationId ?? null,
     opts.submissionType,
     opts.submissionId,
     opts.eventType,
@@ -988,7 +972,6 @@ export async function notifyContactSubmitted(
       scopeType: 'site',
       organizationId: opts.organizationId,
       siteId: opts.siteId,
-      locationId: opts.locationId ?? null,
       submissionType: 'contact',
       submissionId: opts.contactId,
       eventType: 'contact_submitted',
@@ -1440,7 +1423,7 @@ async function notifyGuestThreadReplyInner(
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
-  const ownerEmail = await getOwnerEmail(db, opts.organizationId)
+  const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
   const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]
   const emails = [...new Set([ownerEmail].filter(Boolean))] as string[]
   const channels = await getOwnerNotificationChannels(db, {
@@ -1502,7 +1485,6 @@ async function notifyGuestThreadReplyInner(
       scopeType: 'site',
       organizationId: opts.organizationId,
       siteId: opts.siteId,
-      locationId: opts.locationId ?? null,
       submissionType: opts.submissionType,
       submissionId: opts.submissionId,
       eventType: 'guest_thread_reply',

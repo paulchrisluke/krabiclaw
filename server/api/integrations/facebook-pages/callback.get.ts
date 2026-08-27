@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
     try {
       const db = env.DB
       if (!db) return `/dashboard?fb=${status}`
-      const context = await getDashboardSiteRouteContext(db, organizationId, siteId)
+      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId, siteId)
       return context
         ? `/dashboard/${encodeURIComponent(context.organizationSlug)}/sites/${encodeURIComponent(context.siteSlug)}/settings?fb=${status}`
         : `/dashboard?fb=${status}`
@@ -61,9 +61,10 @@ export default defineHandler(async (event) => {
   try {
     const db = env.DB
     if (!db) throw new Error('Database not available')
-    const siteAccess = await loadMemberSiteRow(db, siteId, userId)
+    const siteAccess = await loadMemberSiteRow(db, env, siteId, userId)
     if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
     await assertSiteWideAccess(db, {
+      env,
       memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId, siteId, })
 
     // System-user access tokens from FLB never expire — no long-lived exchange needed

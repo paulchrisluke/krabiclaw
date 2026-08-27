@@ -169,7 +169,8 @@ const vertical = computed(() => {
 const capabilities = computed(() => resolveCmsCapabilities(vertical.value, template.value, { site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides) }))
 const locationMediaUrl = (location: DashboardHomeData['locations'][number]) => {
   const media = location.media.find(item => item.slot === 'hero')
-  return media?.thumbnail_url || media?.public_url || null
+  if (media?.kind === 'video') return media?.thumbnail_url || null
+  return media?.public_url || null
 }
 
 const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {

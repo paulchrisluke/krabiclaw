@@ -48,12 +48,14 @@ const isNotFound = computed(() => errorStatusCode.value === 404)
 // favicon.ico via the browser's implicit lookup.
 const { isPlatform, site } = useTenantSite()
 const route = useRoute()
+const tenantLogoUrl = computed(() => site?.media?.find(item => item.slot === 'logo')?.public_url ?? null)
+const tenantFaviconUrl = computed(() => site?.media?.find(item => item.slot === 'favicon')?.public_url ?? null)
 
 useHead(() => ({
   link: buildTenantHeadLinks({
     isPlatform,
-    tenantLogoUrl: site?.logo_url || null,
-    tenantFaviconUrl: site?.favicon_url || null,
+    tenantLogoUrl: tenantLogoUrl.value,
+    tenantFaviconUrl: tenantFaviconUrl.value,
     tenantBrandName: site?.brand_name || '',
     isDraftPreview: route.path.startsWith('/preview/draft/'),
     isSitePreview: route.path.startsWith('/preview/site/'),

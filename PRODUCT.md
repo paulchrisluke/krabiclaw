@@ -224,6 +224,6 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
   - `/dashboard/{orgSlug}/settings/billing` — the organization's subscription, shared quota, invoices, and plan management
   - `/dashboard/account/settings` — personal account settings
-- App-facing dashboard APIs use `/api/dashboard/*`; the active site is resolved server-side from the `x-dashboard-site-slug` header (auto-attached by `plugins/dashboard-site-header.ts` based on the route's `siteSlug`), not by guessing the org's oldest site.
+- App-facing dashboard APIs use `/api/dashboard/*`; the active org/site are resolved server-side from explicit `org`/`site` query params (attached by `dashboardFetch` in `composables/dashboardFetch.ts` based on the route's `orgSlug`/`siteSlug`), not by guessing the org's oldest site.
 - **Site transfers move only the site and its tenant data.** Neither organization's subscription, quota ledger, grants, nor billing customer moves. After acceptance, the recipient organization's effective plan governs the transferred site and any site-scoped compatibility projections are reconciled from that organization authority.
 - Dashboard is home for: billing, org settings, unified inbox (contact inquiries, reservations, bookings, reviews), analytics.

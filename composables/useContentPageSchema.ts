@@ -19,9 +19,6 @@ interface ContentHowToStep {
   name?: string | null
   text?: string | null
   url?: string | null
-  image_public_url?: string | null
-  image_width?: number | null
-  image_height?: number | null
 }
 
 interface ContentAiAssistancePrompt {
@@ -245,9 +242,6 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
             name: step.name!.trim(),
             text: markdownToPlainText(step.text!),
             url: step.url ? normalizeAbsoluteUrl(step.url, origin) : undefined,
-            image: step.image_public_url
-              ? buildImageValue(normalizeAbsoluteUrl(step.image_public_url, origin), step.image_width, step.image_height)
-              : undefined,
           })),
           totalTime: howTo.data.estimated_time || undefined,
           tool: (howTo.data.tool_items?.filter(Boolean) ?? []).map(name => ({ '@type': 'HowToTool', name })),

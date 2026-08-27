@@ -93,7 +93,7 @@
                 </div>
                 <div v-if="selectedBlockIndex === index" class="mt-4 border-t border-default pt-4" @click.stop>
                   <fieldset :disabled="busy !== null" class="contents">
-                    <TenantPageBlockEditor :block="block" :site-id="resolvedSiteId" :page-recipe="selected.recipe" :page-type="selected.page_type" @update:block="updateBlock(index, $event)" />
+                    <TenantPageBlockEditor :block="block" :site-id="resolvedSiteId" :is-persisted="savedBlockIds.has(block.id)" :page-recipe="selected.recipe" :page-type="selected.page_type" @update:block="updateBlock(index, $event)" />
                   </fieldset>
                 </div>
               </div>
@@ -152,6 +152,11 @@ const localeRevertGuard = createTenantPageLocaleRevertGuard()
 const selectedBlockIndex = ref(0)
 const draggedBlockIndex = ref<number | null>(null)
 const newBlockType = ref<TenantPageBlockType>('markdown')
+// A block only exists as a content_blocks row once this page has been saved
+// with it present — before that, its gallery (if any) has nothing to attach
+// to and TenantPageBlockEditor edits it locally instead of calling the
+// generic media routes. Refreshed after every successful load/save.
+const savedBlockIds = ref<Set<string>>(new Set())
 
 const editorTitle = computed(() => isNew.value ? 'New page' : selected.value?.title || 'Page')
 const localeOptions = computed(() => locales.value.map(value => ({ label: value, value })))
@@ -220,8 +225,10 @@ async function loadEditor() {
     if (pageResponse) {
       selected.value = toEditorPage(pageResponse.page)
       locale.value = pageResponse.page.locale
+      savedBlockIds.value = new Set(pageResponse.page.blocks.map(block => block.id))
     } else {
       locale.value = localeResponse.source_locale
+      savedBlockIds.value = new Set()
       selected.value = {
         id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '', title: '', page_type: 'custom', recipe: '', sort_order: pagesResponse?.pages.length ?? 0, updated_at: '',
         summary: '', seo_title: '', seo_description: '', canonical_url: '', robots: '', blocks: [], document: { updated_at: '' },
@@ -328,7 +335,7 @@ async function save() {
     }
     selected.value.blocks.forEach((block, index) => { block.position = index })
     const path = selected.value.id ? selected.value.path : `/${slugifyTitle(title)}`
-    if (path === '/') throw new Error('Choose a more specific page title.')
+    if (!selected.value.id && path === '/') throw new Error('Choose a more specific page title.')
     const body = {
       id: selected.value.id || undefined,
       pageId: selected.value.page_id || undefined,
@@ -351,6 +358,7 @@ async function save() {
       : await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: validatePage })
     hydrating.value = true
     selected.value = toEditorPage(response.page)
+    savedBlockIds.value = new Set(response.page.blocks.map(block => block.id))
     dirty.value = false
     hydrating.value = false
     toast.add({ title: 'Saved', description: 'Page saved.', color: 'success' })

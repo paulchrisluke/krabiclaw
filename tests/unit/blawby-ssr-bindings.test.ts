@@ -8,8 +8,7 @@ const payload = {
     identity: {
       brand_name: 'North Carolina Legal Services',
       brand_description: null,
-      logo_url: null,
-      favicon_url: null,
+      media: [],
       phone: null,
       banner_content: null,
       banner_dismissible: false,

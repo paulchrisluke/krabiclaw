@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { siteTool } from './shared'
+import { pageInfoObject, paginationInputSchema, siteTool } from './shared'
 
 export const LOCALES_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -8,6 +8,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       domain: 'locales',
       minimumRole: 'editor',
       confirmRequired: false,
+      inputSchema: { ...paginationInputSchema },
       outputSchema: {
         type: 'object',
         properties: {
@@ -23,8 +24,9 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
               required: ['locale'],
             },
           },
+          page_info: pageInfoObject,
         },
-        required: ['locales'],
+        required: ['locales', 'page_info'],
       },
     }),
   siteTool({

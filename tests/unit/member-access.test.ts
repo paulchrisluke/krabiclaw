@@ -13,9 +13,12 @@ const locationTeams = new Map([
   ['loc-2', { siteId: 'site-1', teamId: 'location:loc-2' }],
 ])
 const members = new Map([
-  ['member-loc', { userId: 'user-loc', organizationId: 'org-1' }],
-  ['member-site', { userId: 'user-site', organizationId: 'org-1' }],
-  ['member-multi', { userId: 'user-multi', organizationId: 'org-1' }],
+  ['member-owner', { userId: 'user-owner', organizationId: 'org-1', role: 'owner' }],
+  ['member-admin', { userId: 'user-admin', organizationId: 'org-1', role: 'admin' }],
+  ['member-other', { userId: 'user-other', organizationId: 'org-1', role: 'member' }],
+  ['member-loc', { userId: 'user-loc', organizationId: 'org-1', role: 'editor' }],
+  ['member-site', { userId: 'user-site', organizationId: 'org-1', role: 'editor' }],
+  ['member-multi', { userId: 'user-multi', organizationId: 'org-1', role: 'editor' }],
 ])
 const userTeams = new Map([
   ['user-loc', new Set(['location:loc-1'])],
@@ -30,6 +33,10 @@ const provisionedTeams = new Map<string, { id: string; organizationId: string; n
 const provisionedMemberships = new Map<string, { id: string; teamId: string; userId: string }>()
 const teamAdapterCalls: string[] = []
 const teamAdapter = {
+  findMemberById: async (memberId: string) => {
+    const member = members.get(memberId)
+    return member ? { id: memberId, ...member, createdAt: new Date() } : null
+  },
   findTeamById: async (input: { teamId: string; organizationId?: string }) => {
     teamAdapterCalls.push(`find:${input.teamId}:${input.organizationId || ''}`)
     const team = provisionedTeams.get(input.teamId)
@@ -60,11 +67,18 @@ const teamAdapter = {
   },
   listTeamsByUser: async (input: { userId: string }) => {
     teamAdapterCalls.push(`listTeams:${input.userId}`)
-    return [...provisionedMemberships.values()]
+    const staticTeams = [...(userTeams.get(input.userId) ?? [])].map(id => ({
+      id,
+      organizationId: 'org-1',
+      name: id,
+      createdAt: new Date(),
+    }))
+    const provisioned = [...provisionedMemberships.values()]
       .filter(member => member.userId === input.userId)
       .map(member => provisionedTeams.get(member.teamId))
       .filter((team): team is { id: string; organizationId: string; name: string } => Boolean(team))
       .map(team => ({ ...team, createdAt: new Date() }))
+    return [...staticTeams, ...provisioned]
   },
 }
 
@@ -98,9 +112,17 @@ async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []
   }
   if (query.includes('SELECT team_id') && query.includes('FROM sites')) {
     const [siteId, organizationId] = params
-    return (persistedSiteTeams.has(`${organizationId}:${siteId}`)
-      ? { team_id: persistedSiteTeams.get(`${organizationId}:${siteId}`) ?? null }
-      : undefined) as T | undefined
+    const persisted = persistedSiteTeams.get(`${organizationId}:${siteId}`)
+    const teamId = persistedSiteTeams.has(`${organizationId}:${siteId}`) ? persisted : siteTeams.get(String(siteId))
+    return (teamId ? { team_id: teamId } : undefined) as T | undefined
+  }
+  if (query.includes('site_team_id') && query.includes('location_team_id')) {
+    const [locationId, siteId] = params
+    const location = locationTeams.get(String(locationId))
+    return ({
+      site_team_id: siteTeams.get(String(siteId)) ?? null,
+      location_team_id: location?.siteId === siteId ? location.teamId : null,
+    }) as T
   }
   if (query.includes('JOIN sites s') && query.includes('tm.teamId = s.team_id')) {
     const [siteId, memberId] = params
@@ -124,6 +146,19 @@ async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []
 }
 
 async function queryAll<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T[]> {
+  if (query.includes('SELECT team_id FROM sites') && query.includes('UNION ALL')) {
+    const [siteId] = params
+    return [
+      { team_id: siteTeams.get(String(siteId)) ?? null },
+      ...[...locationTeams.values()].filter(location => location.siteId === siteId).map(location => ({ team_id: location.teamId })),
+    ] as T[]
+  }
+  if (query.includes('SELECT id AS location_id, team_id FROM business_locations')) {
+    const [siteId] = params
+    return [...locationTeams.entries()]
+      .filter(([, location]) => location.siteId === siteId)
+      .map(([locationId, location]) => ({ location_id: locationId, team_id: location.teamId })) as T[]
+  }
   if (query.includes('SELECT bl.id AS location_id')) {
     const [siteId, memberId] = params
     const member = members.get(String(memberId))
@@ -169,7 +204,6 @@ const {
   listAccessibleLocationIds,
   resolveDashboardSiteAccess,
   canScopedRoleUseDashboardPath,
-  teamAccessPredicate,
   ensureSiteTeam,
   ensureLocationTeam,
   addUserToResourceTeam,
@@ -178,57 +212,62 @@ const {
   removeAllMemberResourceAccess,
 } = await import('../../server/utils/member-access.ts')
 
+const authEnv = {} as never
+
 test('owner and admin bypass every team check', async () => {
   assert.equal(isOrganizationWideRole('owner'), true)
   assert.equal(isOrganizationWideRole('admin'), true)
-  await assert.doesNotReject(() => assertSiteWideAccess({} as never, { memberId: 'x', role: 'owner', organizationId: 'org-1', siteId: 'site-1' }))
-  await assert.doesNotReject(() => assertLocationAccess({} as never, { memberId: 'x', role: 'admin', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-9' }))
-  assert.equal(await listAccessibleLocationIds({} as never, { memberId: 'x', role: 'owner', organizationId: 'org-1', siteId: 'site-1' }), null)
+  await assert.doesNotReject(() => assertSiteWideAccess({} as never, { env: authEnv, memberId: 'member-owner', role: 'owner', organizationId: 'org-1', siteId: 'site-1' }))
+  await assert.doesNotReject(() => assertLocationAccess({} as never, { env: authEnv, memberId: 'member-admin', role: 'admin', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-9' }))
+  assert.equal(await listAccessibleLocationIds({} as never, { env: authEnv, memberId: 'member-owner', role: 'owner', organizationId: 'org-1', siteId: 'site-1' }), null)
 })
 
 test('a site-team editor passes site-wide and any location, but a location-only editor does not', async () => {
-  await assert.doesNotReject(() => assertSiteWideAccess({} as never, { memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2' }))
-  await assert.doesNotReject(() => assertLocationAccess({} as never, { memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2', locationId: 'loc-anything' }))
+  await assert.doesNotReject(() => assertSiteWideAccess({} as never, { env: authEnv, memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2' }))
+  await assert.doesNotReject(() => assertLocationAccess({} as never, { env: authEnv, memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2', locationId: 'loc-anything' }))
 
-  await assert.rejects(() => assertSiteWideAccess({} as never, { memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1' }))
-  await assert.doesNotReject(() => assertLocationAccess({} as never, { memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' }))
-  await assert.rejects(() => assertLocationAccess({} as never, { memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-2' }))
+  await assert.rejects(() => assertSiteWideAccess({} as never, { env: authEnv, memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1' }))
+  await assert.doesNotReject(() => assertLocationAccess({} as never, { env: authEnv, memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' }))
+  await assert.rejects(() => assertLocationAccess({} as never, { env: authEnv, memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-2' }))
 })
 
 test('assertResourceAccess dispatches by the resource location', async () => {
-  await assert.rejects(() => assertResourceAccess({} as never, { memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', resourceLocationId: null }))
-  await assert.doesNotReject(() => assertResourceAccess({} as never, { memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', resourceLocationId: 'loc-1' }))
+  await assert.rejects(() => assertResourceAccess({} as never, { env: authEnv, memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', resourceLocationId: null }))
+  await assert.doesNotReject(() => assertResourceAccess({} as never, { env: authEnv, memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1', resourceLocationId: 'loc-1' }))
 })
 
 test('assertSiteContextAccess allows any team membership for the site', async () => {
-  await assert.doesNotReject(() => assertSiteContextAccess({} as never, { memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1' }))
-  await assert.rejects(() => assertSiteContextAccess({} as never, { memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-2' }))
+  await assert.doesNotReject(() => assertSiteContextAccess({} as never, { env: authEnv, memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1' }))
+  await assert.rejects(() => assertSiteContextAccess({} as never, { env: authEnv, memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-2' }))
 })
 
 test('an unrelated non-scoped role never passes any check', async () => {
   assert.equal(isScopedRole('member'), false)
   assert.equal(isOperationalRole('member'), false)
-  await assert.rejects(() => assertSiteWideAccess({} as never, { memberId: 'x', role: 'member', organizationId: 'org-1', siteId: 'site-1' }))
-  await assert.rejects(() => listAccessibleLocationIds({} as never, { memberId: 'x', role: 'member', organizationId: 'org-1', siteId: 'site-1' }))
+  await assert.rejects(() => assertSiteWideAccess({} as never, { env: authEnv, memberId: 'member-other', role: 'member', organizationId: 'org-1', siteId: 'site-1' }))
+  await assert.rejects(() => listAccessibleLocationIds({} as never, { env: authEnv, memberId: 'member-other', role: 'member', organizationId: 'org-1', siteId: 'site-1' }))
   assert.throws(() => assertOrganizationAccess('member'))
 })
 
 test('listAccessibleLocationIds returns null for site team, and ids for location teams', async () => {
-  assert.equal(await listAccessibleLocationIds({} as never, { memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2' }), null)
+  assert.equal(await listAccessibleLocationIds({} as never, { env: authEnv, memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2' }), null)
   assert.deepEqual(
-    (await listAccessibleLocationIds({} as never, { memberId: 'member-multi', role: 'editor', organizationId: 'org-1', siteId: 'site-1' }))?.sort(),
+    (await listAccessibleLocationIds({} as never, { env: authEnv, memberId: 'member-multi', role: 'editor', organizationId: 'org-1', siteId: 'site-1' }))?.sort(),
     ['loc-1', 'loc-2'],
   )
 })
 
 test('dashboard site access distinguishes organization, site-team, and location-only principals', async () => {
   assert.equal(await resolveDashboardSiteAccess({} as never, {
-    memberId: 'owner', role: 'owner', organizationId: 'org-1', siteId: 'site-1',
+    env: authEnv,
+    memberId: 'member-owner', role: 'owner', organizationId: 'org-1', siteId: 'site-1',
   }), 'organization')
   assert.equal(await resolveDashboardSiteAccess({} as never, {
+    env: authEnv,
     memberId: 'member-site', role: 'editor', organizationId: 'org-1', siteId: 'site-2',
   }), 'site')
   assert.equal(await resolveDashboardSiteAccess({} as never, {
+    env: authEnv,
     memberId: 'member-loc', role: 'editor', organizationId: 'org-1', siteId: 'site-1',
   }), 'location')
 })
@@ -241,31 +280,6 @@ test('the audited /api/dashboard/** boundary is deny-by-default for scoped roles
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/sites/site-1/guest-threads/thread-1/reply'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/onboarding/checklist?siteId=site-1'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/members'), false)
-})
-
-// #406: teamAccessPredicate is the shared EXISTS-clause builder extracted out
-// of dashboard-home.ts, chowbot-conversations.ts, and whatsapp/webhook.post.ts,
-// which each independently wrote this same team-membership check for their
-// own bulk row-filtering queries before this consolidation.
-test('teamAccessPredicate builds a site-only EXISTS clause when no location expression is given', () => {
-  assert.equal(
-    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' }),
-    'EXISTS (SELECT 1 FROM teamMember tm WHERE tm.userId = m.userId AND tm.teamId = s.team_id)',
-  )
-})
-
-test('teamAccessPredicate builds a site-or-location EXISTS clause when a location expression is given', () => {
-  assert.equal(
-    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' }),
-    'EXISTS (SELECT 1 FROM teamMember tm WHERE tm.userId = m.userId AND tm.teamId IN (s.team_id, bl.team_id))',
-  )
-})
-
-test('teamAccessPredicate treats an explicit null locationTeamExpr the same as omitting it', () => {
-  assert.equal(
-    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: null }),
-    teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' }),
-  )
 })
 
 test('resource team provisioning uses Better Auth Teams with deterministic scoped ids and idempotency', async () => {
@@ -387,6 +401,7 @@ test('transferred resources use a generation namespace and old source membership
   assert.equal(provisionedTeams.get('site:site-transfer:generation:7')?.organizationId, 'org-recipient')
   assert.equal(provisionedTeams.get('location:location-transfer:generation:7')?.organizationId, 'org-recipient')
   await assert.rejects(() => assertSiteWideAccess({} as never, {
+    env: authEnv,
     memberId: 'member-transfer',
     role: 'editor',
     organizationId: 'org-recipient',

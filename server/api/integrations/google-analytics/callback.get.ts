@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
     if (!db) return `/dashboard?ga=${status}`
 
     try {
-      const context = await getDashboardSiteRouteContext(db, organizationId, siteId)
+      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId, siteId)
       if (!context) return `/dashboard?ga=${status}`
       const encodedOrgSlug = encodeURIComponent(context.organizationSlug)
       const params = new URLSearchParams({ ga: status, site: context.siteSlug })

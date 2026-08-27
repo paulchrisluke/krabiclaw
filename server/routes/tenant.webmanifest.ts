@@ -6,9 +6,7 @@ import { isNonIndexableHost } from '~/server/utils/seo-policy'
 export default defineHandler((event) => {
   const site = event.context.site as {
     brand_name?: string | null
-    logo_url?: string | null
-    logo_mime_type?: string | null
-    favicon_url?: string | null
+    media?: Array<{ slot: string; public_url: string | null }>
   } | undefined
 
   const brandName = site?.brand_name?.trim() || ''
@@ -21,7 +19,9 @@ export default defineHandler((event) => {
     ? 'private, no-store, max-age=0'
     : 'public, max-age=3600, stale-while-revalidate=86400')
 
-  const versionSource = site?.favicon_url || site?.logo_url || brandName
+  const versionSource = site?.media?.find(item => item.slot === 'favicon')?.public_url
+    || site?.media?.find(item => item.slot === 'logo')?.public_url
+    || brandName
   let hash = 0
   for (let i = 0; i < versionSource.length; i++) {
     hash = (hash << 5) - hash + versionSource.charCodeAt(i)

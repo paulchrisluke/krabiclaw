@@ -143,7 +143,7 @@
               >
                 <img
                   v-if="!failedPhotoIndices[`${review.id}-${i}`]"
-                  :src="asset.public_url"
+                  :src="asset.kind === 'video' ? asset.thumbnail_url : asset.public_url"
                   alt=""
                   class="h-full w-full object-cover"
                   @error="handleReviewImageError(review.id, i)"

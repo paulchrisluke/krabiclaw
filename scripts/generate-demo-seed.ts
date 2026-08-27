@@ -57,18 +57,21 @@ function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: 
         content: name,
         heroTitle: name,
         heroSubtitle: 'A seeded MCP fixture page.',
+        media: [],
       },
       {
         id: `${siteId}-about-body`,
         page: 'about',
         field: 'body',
         content: `${name} about page.`,
+        media: [],
       },
       {
         id: `${siteId}-contact-body`,
         page: 'contact',
         field: 'body',
         content: `${name} contact page.`,
+        media: [],
       },
     ],
     sqlValue,
@@ -114,15 +117,20 @@ VALUES (${sqlValue(locationId)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, 'main'
 UPDATE sites SET primary_location_id = ${sqlValue(locationId)} WHERE id = ${sqlValue(siteId)};
 
 INSERT OR REPLACE INTO media_assets
-  (id, organization_id, site_id, location_id, kind, provider, source,
+  (id, organization_id, site_id, kind, provider, source,
    cloudflare_image_id, public_url, thumbnail_url, mime_type, file_name,
    alt_text, category, status, created_at, updated_at)
 VALUES
-  (${sqlValue(`media-${siteId}-fixture-image`)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, ${sqlValue(locationId)},
-   'image', 'cloudflare_images', 'uploaded', ${sqlValue(`fixture-${siteId}`)},
+  (${sqlValue(`media-${siteId}-fixture-image`)}, ${sqlValue(orgId)}, ${sqlValue(siteId)},
+   'image', 'cloudflare_images', 'uploaded', ${sqlValue('0762ea49-0bd2-4cc8-1044-d6c9b1f00100')},
    'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
    'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
    'image/jpeg', ${sqlValue(`${siteId}-fixture.jpg`)}, 'Seeded MCP image fixture', 'other', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT OR REPLACE INTO media_placements
+  (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES
+  (${sqlValue(`placement-${siteId}-fixture-gallery`)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, 'business_location', ${sqlValue(locationId)}, 'gallery', ${sqlValue(`media-${siteId}-fixture-image`)}, 0, 'active');
 
 ${renderCanonicalBillingSql(siteId, orgId, { status, plan }, sqlValue, aiCredits)}
 
@@ -130,6 +138,16 @@ ${tenantPages}
 ${selectionSite}`
 }
 
+// INCIDENT: Anthropic's Claude (an AI coding assistant) ran this script with
+// --preview believing it was a harmless dry run. It is not. --preview
+// executes these queries for real against the remote preview D1 database via
+// `wrangler d1 execute DB --env preview --remote`. Claude did not check what
+// the flag actually did before running it and fired a live remote write
+// without asking the user first. That was Claude's mistake, not a tooling
+// ambiguity — the behavior is spelled out a few lines below. If you are
+// Claude (or any other AI assistant) reading this: check what a flag on a
+// database-touching script actually does before you run it. Use --stdout to
+// see the generated SQL without applying it anywhere.
 const isStdout = process.argv.includes('--stdout')
 const isPreview = process.argv.includes('--preview')
 

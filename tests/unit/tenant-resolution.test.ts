@@ -10,9 +10,7 @@ type SiteRow = {
   onboarding_status: string
   canonical_domain: string | null
   brand_name: string | null
-  logo_url: string | null
-  logo_mime_type: string | null
-  favicon_url: string | null
+  media_json: string
   vertical: string | null
 }
 
@@ -24,9 +22,7 @@ const site: SiteRow = {
   onboarding_status: 'active',
   canonical_domain: 'www.potteryhousekrabi.com',
   brand_name: 'Pottery House Krabi',
-  logo_url: null,
-  logo_mime_type: null,
-  favicon_url: null,
+  media_json: '[]',
   vertical: 'experience',
 }
 

@@ -335,6 +335,10 @@ const capabilities = computed(() => {
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
 
 const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
+const siteAvatar = (candidate: (typeof sites.value)[number] | undefined) => {
+  const media = candidate?.media.find(item => item.slot === 'media')
+  return media?.thumbnail_url || media?.public_url || undefined
+}
 // Progressive drill-in: exactly one scope is active per route, and the sidebar's
 // single ContextSwitcher (this dropdown) and NavigationGroups both key off it —
 // there is no separate sidebar shell per scope, only scope-driven content inside
@@ -350,20 +354,22 @@ const scope = computed<'organization' | 'site' | 'location'>(() => {
 // parent, but scope navigation never infers a parent from browser history.
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   if (scope.value === 'site' || scope.value === 'location') {
+    const currentSite = sites.value.find(candidate => candidate.id === site.value?.id)
+    const currentSiteAvatar = siteAvatar(currentSite)
     return {
       scope: 'site',
       current: {
         label: siteLabel.value,
-        avatar: site.value?.logo_url ?? undefined,
-        icon: site.value?.logo_url ? undefined : 'i-lucide-globe'
+        avatar: currentSiteAvatar,
+        icon: currentSiteAvatar ? undefined : 'i-lucide-globe'
       },
       parent: scope.value === 'location' && siteBase.value
         ? { label: siteLabel.value, to: siteBase.value }
         : orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
       peers: sites.value.map((s) => ({
         label: s.brand_name ?? s.subdomain ?? s.id,
-        avatar: s.logo_url ?? undefined,
-        icon: s.logo_url ? undefined : 'i-lucide-globe',
+        avatar: siteAvatar(s),
+        icon: siteAvatar(s) ? undefined : 'i-lucide-globe',
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
       })),

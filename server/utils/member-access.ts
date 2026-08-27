@@ -13,39 +13,6 @@ import {
 // Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
 // by membership in a site's team and/or one or more location teams.
 
-/**
- * Composes the team-membership EXISTS predicate shared by every bulk query
- * that filters a set of rows (locations, events, notifications, member-owned
- * sites) down to what a scoped editor's Teams membership actually covers —
- * dashboard-home.ts, chowbot-conversations.ts, and whatsapp/webhook.post.ts
- * each independently wrote this same `EXISTS (SELECT 1 FROM teamMember tm
- * WHERE tm.userId = ... AND tm.teamId ...)` shape before this was extracted.
- *
- * A pure string builder rather than a per-row async function: every caller
- * here filters many rows in one query for performance (avoiding an N+1
- * `hasTeamAccess()` call per row), so the predicate has to compose into the
- * caller's own SQL, not replace it. Point-lookup checks (assertSiteWideAccess,
- * assertLocationAccess, etc. below) stay as their own queries — they're
- * already correct, already tested, and a single-row lookup gets no benefit
- * from string-templating its own predicate.
- *
- * `userIdExpr` is the caller's already-joined `member.userId` column
- * reference (e.g. `m.userId`). `siteTeamExpr`/`locationTeamExpr` are the
- * caller's `sites.team_id`/`business_locations.team_id` column references —
- * pass `locationTeamExpr` only when the row being filtered can itself be
- * location-scoped; omitting it produces a site-wide-only check.
- */
-export function teamAccessPredicate(opts: {
-  userIdExpr: string
-  siteTeamExpr: string
-  locationTeamExpr?: string | null
-}): string {
-  const teamIdMatch = opts.locationTeamExpr
-    ? `tm.teamId IN (${opts.siteTeamExpr}, ${opts.locationTeamExpr})`
-    : `tm.teamId = ${opts.siteTeamExpr}`
-  return `EXISTS (SELECT 1 FROM teamMember tm WHERE tm.userId = ${opts.userIdExpr} AND ${teamIdMatch})`
-}
-
 export interface ResourceTeamAccess {
   organizationId: string
   siteId: string
@@ -59,6 +26,7 @@ export interface ResourceScope {
 }
 
 export interface MemberAccessPrincipal {
+  env: CloudflareEnv
   memberId: string
   role: string
   organizationId: string
@@ -132,11 +100,90 @@ export function locationTeamId(locationId: string, generation?: string): string 
 
 type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
 
-async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
+export async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
   const { createAuth } = await import('~/server/utils/auth')
   const auth = createAuth(env)
   const context = await auth.$context
   return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
+}
+
+export async function resolveOrganizationMembership(
+  env: CloudflareEnv,
+  input: { organizationId: string; userId: string },
+): Promise<{ memberId: string; role: string; organizationSlug: string; organizationName: string; organizationLogo: string | null } | null> {
+  const adapter = await organizationAdapter(env)
+  const [member, organization] = await Promise.all([
+    adapter.findMemberByOrgId(input),
+    adapter.findOrganizationById(input.organizationId),
+  ])
+  if (!member || !organization) return null
+  return {
+    memberId: member.id,
+    role: String(member.role),
+    organizationSlug: organization.slug,
+    organizationName: organization.name,
+    organizationLogo: organization.logo ?? null,
+  }
+}
+
+export async function resolveUserOrganization(
+  env: CloudflareEnv,
+  input: { userId: string; organizationId?: string | null; organizationSlug?: string | null },
+): Promise<{
+  id: string
+  name: string
+  slug: string
+  logo: string | null
+  role: string
+  memberId: string
+} | null> {
+  const adapter = await organizationAdapter(env)
+  const organization = input.organizationId
+    ? await adapter.findOrganizationById(input.organizationId)
+    : input.organizationSlug
+      ? await adapter.findOrganizationBySlug(input.organizationSlug)
+      : null
+  if (!organization) return null
+  const member = await adapter.findMemberByOrgId({
+    userId: input.userId,
+    organizationId: organization.id,
+  })
+  if (!member) return null
+  return {
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    logo: organization.logo ?? null,
+    role: String(member.role),
+    memberId: member.id,
+  }
+}
+
+// adapter.listMembers pages at 100 by default — every caller that needs the
+// complete membership (not just a bounded page for display) must walk every
+// page via its own total, or a large organization silently loses members
+// past the first 100.
+async function listAllOrganizationMembers(adapter: OrganizationAdapter, organizationId: string) {
+  const pageSize = 100
+  const firstPage = await adapter.listMembers({ organizationId, limit: pageSize, offset: 0, sortBy: 'createdAt', sortOrder: 'asc' })
+  const members = [...firstPage.members]
+  for (let offset = pageSize; offset < firstPage.total; offset += pageSize) {
+    const page = await adapter.listMembers({ organizationId, limit: pageSize, offset, sortBy: 'createdAt', sortOrder: 'asc' })
+    members.push(...page.members)
+  }
+  return members
+}
+
+export async function getOrganizationOwnerEmail(env: CloudflareEnv, organizationId: string): Promise<string | null> {
+  const adapter = await organizationAdapter(env)
+  const members = await listAllOrganizationMembers(adapter, organizationId)
+  return members
+    .filter(member => member.user && (member.role === 'owner' || member.role === 'admin'))
+    .sort((left, right) => {
+      const roleOrder = Number(right.role === 'owner') - Number(left.role === 'owner')
+      if (roleOrder) return roleOrder
+      return Number(left.user.email.endsWith('@example.test')) - Number(right.user.email.endsWith('@example.test'))
+    })[0]?.user.email ?? null
 }
 
 export async function listUserOrganizationTeamIds(input: {
@@ -147,6 +194,39 @@ export async function listUserOrganizationTeamIds(input: {
   const adapter = await organizationAdapter(input.env)
   const teams = await adapter.listTeamsByUser({ userId: input.userId })
   return teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)
+}
+
+export async function listUserOrganizations(env: CloudflareEnv, userId: string) {
+  const adapter = await organizationAdapter(env)
+  return await adapter.listOrganizations(userId)
+}
+
+export async function findOrganizationMemberById(
+  env: CloudflareEnv,
+  memberId: string,
+): Promise<{ id: string; userId: string; organizationId: string; role: string } | null> {
+  const adapter = await organizationAdapter(env)
+  const member = await adapter.findMemberById(memberId)
+  if (!member) return null
+  return {
+    id: member.id,
+    userId: member.userId,
+    organizationId: member.organizationId,
+    role: String(member.role),
+  }
+}
+
+export async function findOrganizationById(env: CloudflareEnv, organizationId: string) {
+  return await organizationAdapter(env).then(adapter => adapter.findOrganizationById(organizationId))
+}
+
+export async function listOrganizationMembers(env: CloudflareEnv, organizationId: string) {
+  const adapter = await organizationAdapter(env)
+  return await listAllOrganizationMembers(adapter, organizationId)
+}
+
+export async function deleteOrganization(env: CloudflareEnv, organizationId: string): Promise<void> {
+  await organizationAdapter(env).then(adapter => adapter.deleteOrganization(organizationId))
 }
 
 async function ensureTeam(
@@ -356,14 +436,10 @@ export async function removeAllMemberResourceAccess(
   }
 }
 
-export async function memberHasTeamAccess(db: DbClient, input: { userId: string; teamId: string | null }): Promise<boolean> {
+export async function memberHasTeamAccess(_db: DbClient, input: { env: CloudflareEnv; userId: string; teamId: string | null }): Promise<boolean> {
   if (!input.teamId) return false
-  const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM teamMember
-    WHERE userId = ? AND teamId = ?
-    LIMIT 1
-  `, [input.userId, input.teamId])
-  return Boolean(row)
+  const adapter = await organizationAdapter(input.env)
+  return Boolean(await adapter.findTeamMember({ userId: input.userId, teamId: input.teamId }))
 }
 
 // Deny-by-default boundary for dashboard handlers that resolve through
@@ -396,70 +472,94 @@ export function assertDashboardPathPermission(role: string, pathname: string): v
   }
 }
 
-export async function listResourceTeamAccess(db: DbClient, memberId: string): Promise<ResourceTeamAccess[]> {
-  return await queryAll<ResourceTeamAccess>(db, `
-    SELECT s.organization_id AS organizationId, s.id AS siteId, NULL AS locationId
-    FROM member m
-    JOIN sites s ON s.organization_id = m.organizationId
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id
-    WHERE m.id = ?
-    UNION
-    SELECT bl.organization_id AS organizationId, bl.site_id AS siteId, bl.id AS locationId
-    FROM member m
-    JOIN business_locations bl ON bl.organization_id = m.organizationId
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = bl.team_id
-    WHERE m.id = ?
-  `, [memberId, memberId])
+async function canonicalMemberAccess(input: MemberAccessPrincipal): Promise<{
+  role: string
+  userId: string
+  teamIds: Set<string>
+}> {
+  const adapter = await organizationAdapter(input.env)
+  const member = await adapter.findMemberById(input.memberId)
+  if (!member || member.organizationId !== input.organizationId) {
+    throw new HTTPError({ statusCode: 403, message: 'Access denied' })
+  }
+  const role = String(member.role)
+  const teams = isScopedRole(role)
+    ? await adapter.listTeamsByUser({ userId: member.userId })
+    : []
+  return {
+    role,
+    userId: member.userId,
+    teamIds: new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)),
+  }
+}
+
+export async function listResourceTeamAccess(
+  db: DbClient,
+  input: { env: CloudflareEnv; memberId: string },
+): Promise<ResourceTeamAccess[]> {
+  const adapter = await organizationAdapter(input.env)
+  const member = await adapter.findMemberById(input.memberId)
+  if (!member) return []
+  const teams = await adapter.listTeamsByUser({ userId: member.userId })
+  const teamIds = new Set(teams.filter(team => team.organizationId === member.organizationId).map(team => team.id))
+  if (teamIds.size === 0) return []
+  const [sites, locations] = await Promise.all([
+    queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
+      SELECT organization_id AS organizationId, id AS siteId, NULL AS locationId, team_id
+      FROM sites WHERE organization_id = ?
+    `, [member.organizationId]),
+    queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
+      SELECT organization_id AS organizationId, site_id AS siteId, id AS locationId, team_id
+      FROM business_locations WHERE organization_id = ?
+    `, [member.organizationId]),
+  ])
+  return [...sites, ...locations]
+    .filter(row => row.team_id && teamIds.has(row.team_id))
+    .map(({ organizationId, siteId, locationId }) => ({ organizationId, siteId, locationId }))
 }
 
 export async function resolveDashboardSiteAccess(db: DbClient, input: MemberAccessPrincipal): Promise<DashboardSiteAccess> {
-  if (isOrganizationWideRole(input.role)) return 'organization'
-  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const siteAccess = await queryFirst<{ id: string }>(db, `
-    SELECT tm.id
-    FROM member m
-    JOIN sites s ON s.organization_id = m.organizationId AND s.id = ?
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id
-    WHERE m.id = ? AND m.organizationId = ?
-    LIMIT 1
-  `, [input.siteId, input.memberId, input.organizationId])
-  return siteAccess ? 'site' : 'location'
+  const access = await canonicalMemberAccess(input)
+  if (isOrganizationWideRole(access.role)) return 'organization'
+  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
+  const site = await queryFirst<{ team_id: string | null }>(db, `
+    SELECT team_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [input.siteId, input.organizationId])
+  return site?.team_id && access.teamIds.has(site.team_id) ? 'site' : 'location'
 }
 
-/** Site-wide management access: site settings, blog, localized content, professional-services, analytics, domains, contact-submissions inbox, and any menu/media/review/QA row whose own location_id is null. */
+/** Site-wide management access: site settings, blog, localized content, professional-services, analytics, domains, contact-submissions inbox, and any menu/review/QA row whose own location_id is null. */
 export async function assertSiteWideAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
-  if (isOrganizationWideRole(input.role)) return
-  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-
-  const scope = await queryFirst<{ id: string }>(db, `
-    SELECT tm.id
-    FROM member m
-    JOIN sites s ON s.organization_id = m.organizationId AND s.id = ?
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id
-    WHERE m.id = ? AND m.organizationId = ?
-    LIMIT 1
-  `, [input.siteId, input.memberId, input.organizationId])
-  if (!scope) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
+  const access = await canonicalMemberAccess(input)
+  if (isOrganizationWideRole(access.role)) return
+  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
+  const site = await queryFirst<{ team_id: string | null }>(db, `
+    SELECT team_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [input.siteId, input.organizationId])
+  if (!site?.team_id || !access.teamIds.has(site.team_id)) {
+    throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
+  }
 }
 
 /** Location management access: org-wide roles, a site-wide-scoped editor, or an editor scoped to this exact location. */
 export async function assertLocationAccess(db: DbClient, input: MemberAccessPrincipal & { locationId: string }): Promise<void> {
-  if (isOrganizationWideRole(input.role)) return
-  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-
-  const scope = await queryFirst<{ id: string }>(db, `
-    SELECT tm.id
-    FROM member m
-    JOIN sites s ON s.organization_id = m.organizationId AND s.id = ?
-    LEFT JOIN business_locations bl ON bl.organization_id = m.organizationId AND bl.site_id = s.id AND bl.id = ?
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, bl.team_id)
-    WHERE m.id = ? AND m.organizationId = ?
+  const access = await canonicalMemberAccess(input)
+  if (isOrganizationWideRole(access.role)) return
+  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
+  const scope = await queryFirst<{ site_team_id: string | null; location_team_id: string | null }>(db, `
+    SELECT s.team_id AS site_team_id, bl.team_id AS location_team_id
+    FROM sites s
+    LEFT JOIN business_locations bl
+      ON bl.organization_id = s.organization_id AND bl.site_id = s.id AND bl.id = ?
+    WHERE s.id = ? AND s.organization_id = ?
     LIMIT 1
-  `, [input.siteId, input.locationId, input.memberId, input.organizationId])
-  if (!scope) throw new HTTPError({ statusCode: 404, message: 'Resource not found' })
+  `, [input.locationId, input.siteId, input.organizationId])
+  if (!scope || ![scope.site_team_id, scope.location_team_id].some(teamId => teamId && access.teamIds.has(teamId))) {
+    throw new HTTPError({ statusCode: 404, message: 'Resource not found' })
+  }
 }
 
-/** A resource that may or may not belong to one location (e.g. a menu/media/review row) — dispatches to assertSiteWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the TARGET ROW's location_id, never a caller-supplied param, since the row itself is the source of truth for its own scope. */
+/** A resource that may or may not belong to one location (e.g. a menu or review row) — dispatches to assertSiteWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the target row's location_id, never a caller-supplied param. Media authorization uses its placement owner instead. */
 export async function assertResourceAccess(db: DbClient, input: MemberAccessPrincipal & { resourceLocationId: string | null }): Promise<void> {
   if (input.resourceLocationId === null) {
     return assertSiteWideAccess(db, input)
@@ -469,47 +569,36 @@ export async function assertResourceAccess(db: DbClient, input: MemberAccessPrin
 
 /** Minimal site-context/discovery access: org-wide roles, or ANY scope row at all for this site — enough to resolve site metadata and navigate to the caller's own location(s). Never grants access to full site settings or other locations' data; callers must still trim their response to what the caller's own scope allows. */
 export async function assertSiteContextAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
-  if (isOrganizationWideRole(input.role)) return
-  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-
-  const scope = await queryFirst<{ id: string }>(db, `
-    SELECT tm.id
-    FROM member m
-    JOIN sites s ON s.organization_id = m.organizationId AND s.id = ?
-    LEFT JOIN business_locations bl ON bl.organization_id = m.organizationId AND bl.site_id = s.id
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, bl.team_id)
-    WHERE m.id = ? AND m.organizationId = ?
-    LIMIT 1
-  `, [input.siteId, input.memberId, input.organizationId])
-  if (!scope) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
+  const access = await canonicalMemberAccess(input)
+  if (isOrganizationWideRole(access.role)) return
+  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
+  const rows = await queryAll<{ team_id: string | null }>(db, `
+    SELECT team_id FROM sites WHERE id = ? AND organization_id = ?
+    UNION ALL
+    SELECT team_id FROM business_locations WHERE site_id = ? AND organization_id = ?
+  `, [input.siteId, input.organizationId, input.siteId, input.organizationId])
+  if (!rows.some(row => row.team_id && access.teamIds.has(row.team_id))) {
+    throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
+  }
 }
 
 /** Returns null for org-wide roles or site-team editors (unrestricted at this site), or the list of location ids a location-team editor may reach. */
 export async function listAccessibleLocationIds(db: DbClient, input: MemberAccessPrincipal): Promise<string[] | null> {
-  if (isOrganizationWideRole(input.role)) return null
-  if (!isScopedRole(input.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-
-  const siteAccess = await queryFirst<{ id: string }>(db, `
-    SELECT tm.id
-    FROM member m
-    JOIN sites s ON s.organization_id = m.organizationId AND s.id = ?
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id
-    WHERE m.id = ?
-    LIMIT 1
-  `, [input.siteId, input.memberId])
-  if (siteAccess) return null
-
-  const rows = await queryAll<{ location_id: string }>(db, `
-    SELECT bl.id AS location_id
-    FROM member m
-    JOIN business_locations bl ON bl.organization_id = m.organizationId AND bl.site_id = ?
-    JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = bl.team_id
-    WHERE m.id = ?
-  `, [input.siteId, input.memberId])
-  return rows.map(row => row.location_id)
+  const access = await canonicalMemberAccess(input)
+  if (isOrganizationWideRole(access.role)) return null
+  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
+  const site = await queryFirst<{ team_id: string | null }>(db, `
+    SELECT team_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [input.siteId, input.organizationId])
+  if (site?.team_id && access.teamIds.has(site.team_id)) return null
+  const rows = await queryAll<{ location_id: string; team_id: string | null }>(db, `
+    SELECT id AS location_id, team_id FROM business_locations
+    WHERE site_id = ? AND organization_id = ?
+  `, [input.siteId, input.organizationId])
+  return rows.filter(row => row.team_id && access.teamIds.has(row.team_id)).map(row => row.location_id)
 }
 
-export async function assertMemberScope(db: DbClient, input: ResourceScope & { memberId: string; role: string }): Promise<void> {
+export async function assertMemberScope(db: DbClient, input: MemberAccessPrincipal & { locationId?: string | null }): Promise<void> {
   if (input.locationId) {
     await assertLocationAccess(db, { ...input, locationId: input.locationId })
     return
@@ -517,23 +606,33 @@ export async function assertMemberScope(db: DbClient, input: ResourceScope & { m
   await assertSiteWideAccess(db, input)
 }
 
-export async function assertMemberSiteAccess(db: DbClient, input: Omit<ResourceScope, 'locationId'> & { memberId: string; role: string }): Promise<void> {
+export async function assertMemberSiteAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   await assertSiteContextAccess(db, input)
 }
 
-export async function isAuthorizedWhatsAppRecipient(db: DbClient, input: ResourceScope & { phone: string; requireSiteWide?: boolean }): Promise<boolean> {
-  const phone = parsePhoneOrThrow(input.phone, { defaultCountry: 'TH' })
-  const row = await queryFirst<{ role: string; scopeId: string | null }>(db, `
-    SELECT m.role, tm.id AS scopeId
-    FROM user u
-    JOIN member m ON m.userId = u.id AND m.organizationId = ?
-    LEFT JOIN sites s ON s.organization_id = m.organizationId AND s.id = ?
-    LEFT JOIN business_locations bl ON bl.organization_id = m.organizationId AND bl.site_id = s.id AND bl.id = ?
-    LEFT JOIN teamMember tm
-      ON tm.userId = u.id
-      AND tm.teamId = ${input.requireSiteWide ? 's.team_id' : 'COALESCE(bl.team_id, s.team_id)'}
-    WHERE u.phoneNumber = ? AND u.phoneNumberVerified = 1
-    LIMIT 1
-  `, input.requireSiteWide ? [input.organizationId, input.siteId, null, phone] : [input.organizationId, input.siteId, input.locationId ?? null, phone])
-  return Boolean(row && (isOrganizationWideRole(row.role) || (isOperationalRole(row.role) && row.scopeId)))
+export async function isAuthorizedWhatsAppRecipient(
+  db: DbClient,
+  input: ResourceScope & { env: CloudflareEnv; phone: string; requireSiteWide?: boolean },
+): Promise<boolean> {
+  const { findVerifiedAuthUserByPhone } = await import('~/server/utils/auth')
+  const user = await findVerifiedAuthUserByPhone(
+    input.env,
+    parsePhoneOrThrow(input.phone, { defaultCountry: 'TH' }),
+  )
+  if (!user) return false
+  const membership = await resolveOrganizationMembership(input.env, {
+    organizationId: input.organizationId,
+    userId: user.id,
+  })
+  if (!membership || !isOperationalRole(membership.role)) return false
+  if (isOrganizationWideRole(membership.role)) return true
+  const locationIds = await listAccessibleLocationIds(db, {
+    env: input.env,
+    memberId: membership.memberId,
+    role: membership.role,
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+  })
+  if (input.requireSiteWide || !input.locationId) return locationIds === null
+  return locationIds === null || locationIds.includes(input.locationId)
 }

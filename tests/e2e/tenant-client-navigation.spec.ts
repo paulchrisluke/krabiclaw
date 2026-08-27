@@ -18,6 +18,7 @@ async function clientJourney(page: Page, options: {
   const errors = collectPageErrors(page, { failOnAllWarnings: true })
   await page.goto(`${options.baseURL}/`, { waitUntil: 'load' })
   await expect(page.locator('body')).toContainText(options.identity)
+  await expect(page.locator('[data-hydrated]')).toHaveAttribute('data-hydrated', 'true')
   await page.locator(`a[href="${options.listPath}"]`).first().click()
   await expect(page).toHaveURL(new RegExp(`${options.listPath}/?$`))
   await expect(page.locator('body')).toContainText(options.identity)

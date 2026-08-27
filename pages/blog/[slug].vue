@@ -116,10 +116,11 @@ const { data, pending, error } = await useAsyncData(
         import('~/server/utils/api-response'),
         import('~/server/utils/platform-content'),
       ])
-      const db = cloudflareEnv(requestEvent).db
+      const env = cloudflareEnv(requestEvent)
+      const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedSiteBlogPost(db, siteId, String(route.params.slug)) as TenantBlogPost | null
+      post = await getPublishedSiteBlogPost(db, siteId, String(route.params.slug), env) as TenantBlogPost | null
     } else {
       let payload: PublicBlogResponse
       try {

@@ -1,4 +1,4 @@
-// GET /api/editor/sites/[siteId]/media?kind=image&locationId=xxx&limit=50&offset=0
+// GET /api/editor/sites/[siteId]/media?kind=image&limit=50&offset=0
 import { jsonResponse } from '~/server/utils/api-response'
 import { loadDashboardMedia } from '~/server/utils/dashboard-editor-resources'
 
@@ -9,7 +9,9 @@ export default defineHandler(async (event) => {
   const query = getQuery(event)
   const id = typeof query.id === 'string' ? query.id : undefined
   const kind = typeof query.kind === 'string' ? query.kind : undefined
-  const locationId = typeof query.locationId === 'string' ? query.locationId : undefined
+  const ownerType = typeof query.ownerType === 'string' ? query.ownerType : undefined
+  const ownerId = typeof query.ownerId === 'string' ? query.ownerId : undefined
+  const slot = typeof query.slot === 'string' ? query.slot : undefined
   const search = typeof query.search === 'string' ? query.search : undefined
   const parsedLimit = typeof query.limit === 'string' ? Number.parseInt(query.limit, 10) : Number.NaN
   const parsedOffset = typeof query.offset === 'string' ? Number.parseInt(query.offset, 10) : Number.NaN
@@ -17,7 +19,7 @@ export default defineHandler(async (event) => {
   const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0
 
   return jsonResponse(await loadDashboardMedia(event, siteId, {
-    id, kind, locationId, search, limit, offset, }))
+    id, kind, ownerType, ownerId, slot, search, limit, offset, }))
 })
 import { defineHandler } from 'nitro';
 import { getQuery, getRouterParam  } from 'nitro/h3';

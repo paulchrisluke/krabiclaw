@@ -142,8 +142,8 @@ function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null
 }
 function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
-  const media = Array.isArray(value?.media) ? value.media : []
-  const item = media.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
+  const media = value?.media
+  const item = media?.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
   return typeof item?.public_url === 'string' ? item.public_url : null
 }
 const servicesBlock = computed(() => pageBlock('services_intro'))

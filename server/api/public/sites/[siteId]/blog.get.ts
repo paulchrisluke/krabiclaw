@@ -1,7 +1,7 @@
 // GET /api/public/sites/[siteId]/blog - List a tenant site's published blog posts
 import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { attachFeaturedImageFromBareJoin } from '~/server/utils/platform-content'
+import { attachFeaturedMediaFromBareJoin } from '~/server/utils/platform-content'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -13,10 +13,10 @@ export default defineHandler(async (event) => {
 
   const sql = `
     SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.updated_at, u.name AS author_name, p.featured_image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
+      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.updated_at, mp.asset_id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
     FROM blog_posts p
-    LEFT JOIN user u ON u.id = p.author_id
-    LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
+    LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0 AND mp.status = 'active'
+    LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
     WHERE p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
     ORDER BY p.published_at IS NULL, p.published_at DESC, p.id DESC
     LIMIT 50
@@ -24,7 +24,7 @@ export default defineHandler(async (event) => {
 
   try {
     const results = await queryAll<ApiRecord>(db, sql, [siteId])
-    return jsonResponse({ posts: (results ?? []).map(attachFeaturedImageFromBareJoin) })
+    return jsonResponse({ posts: (results ?? []).map(attachFeaturedMediaFromBareJoin) })
   } catch (err) {
     console.error('Failed to fetch public site blog posts:', err)
     return jsonResponse({ error: 'Failed to fetch posts' }, { status: 500 })

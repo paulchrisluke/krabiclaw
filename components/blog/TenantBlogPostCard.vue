@@ -79,7 +79,7 @@ export interface TenantBlogCardPost {
   excerpt?: string | null
   category?: string | null
   published_at?: string | null
-  media?: Array<{ asset_id: string; slot: string; public_url: string | null; kind?: string | null; width?: number | null; height?: number | null }>
+  media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url?: string | null; kind?: string | null; width?: number | null; height?: number | null }>
 }
 
 const props = withDefaults(defineProps<{

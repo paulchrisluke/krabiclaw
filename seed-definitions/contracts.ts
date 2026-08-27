@@ -10,12 +10,17 @@ export interface CuratedSiteIdentity {
   siteId: string
 }
 
+export interface CuratedMediaPlacement<Slot extends string = string> {
+  asset_id: string
+  slot: Slot
+}
+
 export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   site: {
     slug: string
     subdomain: string
     brandName: string
-    logoAssetId?: string | null
+    media: CuratedMediaPlacement<'logo' | 'logo_dark' | 'favicon'>[]
     themeId: string
     theme: string
     brandDescription: string
@@ -28,8 +33,6 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     publicUrl: string
     defaultCurrency: string
     vertical: 'restaurant' | 'experience' | 'service' | 'professional_service'
-    contentSource: 'generated' | 'imported' | 'manual' | 'google_maps'
-    mediaSource: 'stock' | 'client' | 'mixed' | 'client_photos'
   }
   siteConfig: CuratedSiteConfigEntry[]
   siteLocales: CuratedSiteLocaleDefinition[]
@@ -117,16 +120,14 @@ export interface CuratedLocationDefinition {
   facebookUrl: string
   isPrimary: boolean
   status: 'active' | 'inactive' | 'sync_error'
-  heroImageAssetId?: string | null
-  heroVideoAssetId?: string | null
+  media: CuratedMediaPlacement<'hero' | 'gallery'>[]
   notificationPhone?: string | null
 }
 
 interface CuratedMediaAssetDefinitionBase {
   id: string
-  locationId: string | null
-  provider?: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
-  source?: 'external' | 'uploaded'
+  provider?: 'cloudflare_r2' | 'cloudflare_images'
+  source?: 'uploaded'
   r2Key?: string | null
   cloudflareImageId?: string | null
   publicUrl: string
@@ -151,8 +152,7 @@ export interface CuratedTenantPageContentDefinition {
   source?: 'manual' | 'generated'
   heroTitle?: string | null
   heroSubtitle?: string | null
-  heroImageAssetId?: string | null
-  heroVideoAssetId?: string | null
+  media: CuratedMediaPlacement<'media' | 'gallery'>[]
 }
 
 export interface CuratedExperienceDefinition {
@@ -162,7 +162,7 @@ export interface CuratedExperienceDefinition {
   slug: string
   tagline: string
   body: string
-  imageAssetId: string
+  media: CuratedMediaPlacement<'gallery'>[]
   highlights?: string[] | null
   includedItems?: string[] | null
   whatToBring?: string[] | null
@@ -186,7 +186,6 @@ export interface CuratedReviewDefinition {
   id: string
   locationId: string
   authorName: string
-  reviewerPhotoUrl: string
   rating: number
   content: string
   ownerReply: string | null
@@ -202,7 +201,7 @@ export interface CuratedMenuItemDefinition {
   slug: string
   description: string
   priceAmount: number
-  imageAssetId: string | null
+  media: CuratedMediaPlacement<'gallery'>[]
   allergens: string | null
   dietaryNotes: string | null
   available: boolean
@@ -246,7 +245,7 @@ export interface CuratedPostDefinition {
   postType: 'update' | 'standard' | 'offer'
   title: string | null
   body: string
-  imageAssetId: string | null
+  media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: 'published' | 'scheduled'
   publishedAt: string
   createdBy: string
@@ -319,9 +318,8 @@ interface CompiledSeedMediaAssetBase {
   id: string
   organizationId: string
   siteId: string
-  locationId: string | null
-  provider: 'external_url' | 'cloudflare_r2' | 'cloudflare_images'
-  source: 'external' | 'uploaded'
+  provider: 'cloudflare_r2' | 'cloudflare_images'
+  source: 'uploaded'
   r2Key: string | null
   cloudflareImageId: string | null
   publicUrl: string
@@ -347,8 +345,7 @@ export interface CompiledSeedTenantPageContent {
   content: string | null
   heroTitle: string | null
   heroSubtitle: string | null
-  heroImageAssetId: string | null
-  heroVideoAssetId: string | null
+  media: CuratedMediaPlacement<'media' | 'gallery'>[]
   type: CuratedTenantPageContentDefinition['type']
   source: 'manual' | 'generated'
 }
@@ -362,7 +359,7 @@ export interface CompiledSeedExperience {
   slug: string
   tagline: string
   body: string
-  imageAssetId: string
+  media: CuratedMediaPlacement<'gallery'>[]
   highlights: string[] | null
   includedItems: string[] | null
   whatToBring: string[] | null
@@ -388,7 +385,6 @@ export interface CompiledSeedReview {
   siteId: string
   locationId: string
   authorName: string
-  reviewerPhotoUrl: string
   rating: number
   content: string
   ownerReply: string | null
@@ -407,7 +403,7 @@ export interface CompiledSeedMenuItem {
   slug: string
   description: string
   priceAmount: number
-  imageAssetId: string | null
+  media: CuratedMediaPlacement<'gallery'>[]
   allergens: string | null
   dietaryNotes: string | null
   available: boolean
@@ -459,7 +455,7 @@ export interface CompiledSeedPost {
   postType: CuratedPostDefinition['postType']
   title: string | null
   body: string
-  imageAssetId: string | null
+  media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: CuratedPostDefinition['status']
   publishedAt: string
   createdBy: string

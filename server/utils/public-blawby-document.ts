@@ -96,7 +96,7 @@ export async function loadPublicBlawbyDocument(
   }
 
   const loadStartedAt = performance.now()
-  const payload = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug })
+  const payload = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug }, env)
   recordRequestPhase(event, 'document', loadStartedAt)
   options.signal?.throwIfAborted()
 

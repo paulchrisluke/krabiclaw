@@ -4,6 +4,7 @@ import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createLocation, deleteLocation, updateLocation, type LocationRecord } from '~/server/utils/location-management'
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requiredString, requiredStringArray, workspaceLocationsPayload } from './shared'
 
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -12,12 +13,15 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
     case "list_locations": {
       const workspace = await resolveMcpWorkspace(
         site.db,
+        site.env,
         site.userId,
         { siteId: site.siteId },
       );
+      const page = paginateMcpCollection(workspaceLocationsPayload(workspace), args, { resource: `locations:${site.siteId}` });
       return {
         context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location, site.env),
-        locations: workspaceLocationsPayload(workspace),
+        locations: page.items,
+        page_info: page.page_info,
       };
     }
     case "get_location":

@@ -53,7 +53,6 @@ export const CHOWBOT_CONFIRM_REQUIRED = new Set([
   "delete_locale",
   "delete_experience",
   "create_work_request",
-  "update_page_content",
   "create_tenant_page",
   "update_tenant_page",
   "change_tenant_page_path",

@@ -2,7 +2,7 @@ import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-l
 import { cleanString, cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { executeBatch, queryFirst } from '~/server/db'
 import { getAuthSession } from '~/server/utils/auth'
-import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
+import { buildMediaPlacementInsertQuery, deleteMediaAsset } from '~/server/utils/media-asset-manager'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
@@ -42,12 +42,15 @@ export default defineHandler(async (event) => {
     if (result.request.user_id && result.request.user_id !== sessionUser.id) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
     if (result.request.anonymous_user_id && result.request.anonymous_user_id !== sessionUser.id) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const existingVideos = await queryFirst<{ count: number }>(db, `
-      SELECT COUNT(*) AS count
-      FROM review_media
-      WHERE review_request_id = ? AND kind = 'video' AND status != 'deleted'
+    const existingMedia = await queryFirst<{ count: number; next_sort_order: number }>(db, `
+      SELECT
+        COUNT(CASE WHEN ma.kind = 'video' AND mp.status != 'rejected' THEN 1 END) AS count,
+        COALESCE(MAX(mp.sort_order) + 1, 0) AS next_sort_order
+      FROM media_placements mp
+      JOIN media_assets ma ON ma.id = mp.asset_id
+      WHERE mp.owner_type = 'review_request' AND mp.owner_id = ?
     `, [requestId])
-    if (Number(existingVideos?.count ?? 0) >= 2) return jsonResponse({ error: 'You can upload up to 2 videos.' }, { status: 400 })
+    if (Number(existingMedia?.count ?? 0) >= 2) return jsonResponse({ error: 'You can upload up to 2 videos.' }, { status: 400 })
 
     const contentLengthHeader = event.req.headers.get('content-length')
     const contentLength = contentLengthHeader && /^\d+$/.test(contentLengthHeader)
@@ -94,7 +97,6 @@ export default defineHandler(async (event) => {
       kind: 'video',
       source: 'uploaded',
       category: 'other',
-      locationId: result.context.location_id,
       fileSize: videoData.byteLength,
       poster: {
         buffer: thumbnailData,
@@ -105,13 +107,19 @@ export default defineHandler(async (event) => {
     try {
       const now = new Date().toISOString()
       await executeBatch(db, [
-        {
-          query: `
-            INSERT INTO review_media (
-              id, review_request_id, customer_id, media_asset_id, kind, sort_order, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'video', ?, 'pending', ?, ?)
-          `, params: [
-            mediaLinkId, requestId, result.request.customer_id, uploaded.assetId, Number(existingVideos?.count ?? 0), now, now, ], }, {
+        buildMediaPlacementInsertQuery({
+          id: mediaLinkId,
+          organizationId: result.context.organization_id,
+          siteId: result.context.site_id,
+          ownerType: 'review_request',
+          ownerId: requestId,
+          slot: 'gallery',
+          assetId: uploaded.assetId,
+          sortOrder: Number(existingMedia?.next_sort_order ?? 0),
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+        }), {
           query: `
             UPDATE review_requests
             SET user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
@@ -128,10 +136,9 @@ export default defineHandler(async (event) => {
     }
 
     return jsonResponse({
-      assetId: uploaded.assetId,
-      mediaId: mediaLinkId,
-      publicUrl: uploaded.publicUrl,
-      thumbnailUrl: uploaded.thumbnailUrl,
+      asset_id: uploaded.assetId,
+      public_url: uploaded.publicUrl,
+      thumbnail_url: uploaded.thumbnailUrl,
       kind: 'video',
       status: 'active',
     }, { status: 201 })

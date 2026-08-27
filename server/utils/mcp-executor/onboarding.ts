@@ -6,7 +6,7 @@ import { getSiteForMcp } from '~/server/utils/mcp-workflows'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { queryAll } from '~/server/db'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveImageUploadProvider, toolFileReference } from './shared'
+import { NOT_HANDLED, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveImageUploadProvider, toolFileReference } from './shared'
 
 export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -14,6 +14,7 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
     case "show_site_preview": {
       const siteRow = await getSiteForMcp(
         site.db,
+        site.env,
         site.siteId,
         site.userId,
       );
@@ -94,14 +95,9 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       });
 
       return {
-        uploaded: true,
-        assigned: false,
-        assetId: uploaded.assetId,
-        publicUrl: uploaded.publicUrl,
-        thumbnailUrl: uploaded.thumbnailUrl,
-        nextStep:
-          "Upload complete. This image is in the media library but not assigned yet. Call set_media with the desired target next.",
-        context: await mutationContextPayload(site),
+        asset_id: uploaded.assetId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
       };
     }
     case "save_generated_image_file": {
@@ -125,10 +121,9 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       });
 
       return {
-        assetId: uploaded.assetId,
-        publicUrl: uploaded.publicUrl,
-        thumbnailUrl: uploaded.thumbnailUrl,
-        context: await mutationContextPayload(site),
+        asset_id: uploaded.assetId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
       };
     }
     default:

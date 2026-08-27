@@ -32,7 +32,7 @@ export function useBlawbyOrgIdentity(
     return {
       name: id?.brand_name || comp?.entity_name || null,
       description: id?.brand_description || null,
-      logoUrl: id?.logo_url || null,
+      logoUrl: id?.media.find(item => item.slot === 'logo')?.public_url || null,
       entityType: comp?.entity_type || null,
       nonprofitStatus: comp?.nonprofit_status || null,
       serviceArea: comp?.service_area || null,

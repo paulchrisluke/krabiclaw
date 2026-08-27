@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await getSiteForMember(db, siteId, session.user.id)
+  const site = await getSiteForMember(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const conversations = await listConversations(db, siteId, session.user.id)

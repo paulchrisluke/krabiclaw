@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { reviewObject, siteTool } from './shared'
+import { pageInfoObject, paginationInputSchema, reviewObject, siteTool } from './shared'
 
 export const REVIEWS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -8,7 +8,8 @@ export const REVIEWS_TOOLS: McpToolDefinition[] = [
     domain: 'reviews',
     minimumRole: 'editor',
     confirmRequired: false,
-    outputSchema: { type: 'object', properties: { reviews: { type: 'array', items: reviewObject } }, required: ['reviews'] },
+    inputSchema: { ...paginationInputSchema },
+    outputSchema: { type: 'object', properties: { reviews: { type: 'array', items: reviewObject }, page_info: pageInfoObject }, required: ['reviews', 'page_info'] },
   }),
   siteTool({
     name: 'create_owner_entered_site_review',
@@ -56,12 +57,12 @@ export const REVIEWS_TOOLS: McpToolDefinition[] = [
       domain: 'reviews',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { location_id: { type: 'string' } },
+      inputSchema: { location_id: { type: 'string' }, ...paginationInputSchema },
       required: ['location_id'],
       outputSchema: {
         type: 'object',
-        properties: { reviews: { type: 'array', items: reviewObject } },
-        required: ['reviews'],
+        properties: { reviews: { type: 'array', items: reviewObject }, page_info: pageInfoObject },
+        required: ['reviews', 'page_info'],
       },
     }),
   siteTool({

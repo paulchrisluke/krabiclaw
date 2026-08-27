@@ -109,10 +109,11 @@ const { data, pending, error } = await useAsyncData(
         import('~/server/utils/api-response'),
         import('~/server/utils/platform-content'),
       ])
-      const db = cloudflareEnv(requestEvent).db
+      const env = cloudflareEnv(requestEvent)
+      const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedPlatformBlogPost(db, category, String(route.params.slug)) as BlogPost | null
+      post = await getPublishedPlatformBlogPost(db, category, String(route.params.slug), env) as BlogPost | null
     } else {
       let payload: { post?: BlogPost }
       try {

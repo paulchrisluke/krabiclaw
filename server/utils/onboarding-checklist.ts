@@ -40,7 +40,6 @@ interface ChecklistRow {
   brand_name: string | null
   city: string | null
   business_info: number
-  hero_placeholder: string | null
   hero_source: string | null
   menu_items: number
   experiences: number
@@ -87,13 +86,10 @@ export async function loadOnboardingChecklist(
         )
       ) AS business_info,
       (
-        SELECT value FROM site_config
-        WHERE site_id = s.id AND key = 'hero_image_is_placeholder' LIMIT 1
-      ) AS hero_placeholder,
-      (
         SELECT ma.source
         FROM business_locations bl
-        JOIN media_assets ma ON ma.id = bl.hero_media_asset_id
+        JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.status = 'active'
+        JOIN media_assets ma ON ma.id = mp.asset_id
         WHERE bl.site_id = s.id AND bl.status = 'active' AND ma.status = 'active'
         ORDER BY bl.is_primary DESC, bl.created_at ASC LIMIT 1
       ) AS hero_source,
@@ -119,9 +115,7 @@ export async function loadOnboardingChecklist(
 
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const vertical = normalizeVertical(row.vertical)
-  const heroIsReal = row.hero_placeholder !== null
-    ? row.hero_placeholder === 'false'
-    : row.hero_source !== null && row.hero_source !== 'template_stock'
+  const heroIsReal = row.hero_source !== null
 
   return {
     success: true,

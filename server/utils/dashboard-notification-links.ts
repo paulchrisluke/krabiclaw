@@ -1,4 +1,6 @@
 import { queryFirst, type DbClient } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { findOrganizationById } from '~/server/utils/member-access'
 
 export interface DashboardNotificationLinkEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
@@ -19,17 +21,20 @@ export interface SiteLocationSlugs {
 // Thread deep links are scope-sensitive: site-wide records go to the site inbox,
 // while location-assigned records go to that location's inbox.
 export async function resolveSiteLocationSlugs(
+  env: CloudflareEnv,
   db: DbClient,
   opts: { organizationId: string; siteId: string; locationId?: string | null },
 ): Promise<SiteLocationSlugs | null> {
-  const site = await queryFirst<{ org_slug: string; site_slug: string | null }>(db, `
-      SELECT o.slug AS org_slug, s.subdomain AS site_slug
-      FROM organization o
-      JOIN sites s ON s.organization_id = o.id
-      WHERE o.id = ? AND s.id = ?
+  const [organization, site] = await Promise.all([
+    findOrganizationById(env, opts.organizationId),
+    queryFirst<{ site_slug: string | null }>(db, `
+      SELECT subdomain AS site_slug
+      FROM sites
+      WHERE organization_id = ? AND id = ?
       LIMIT 1
-    `, [opts.organizationId, opts.siteId])
-  if (!site?.site_slug) return null
+    `, [opts.organizationId, opts.siteId]),
+  ])
+  if (!organization || !site?.site_slug) return null
 
   let locationSlug: string | null = null
   if (opts.locationId) {
@@ -40,7 +45,7 @@ export async function resolveSiteLocationSlugs(
     if (!locationSlug) return null
   }
 
-  return { orgSlug: site.org_slug, siteSlug: site.site_slug, locationSlug }
+  return { orgSlug: organization.slug, siteSlug: site.site_slug, locationSlug }
 }
 
 export function composeOwnerThreadInboxUrl(
@@ -54,10 +59,10 @@ export function composeOwnerThreadInboxUrl(
 }
 
 export async function buildOwnerThreadInboxUrl(
-  env: DashboardNotificationLinkEnv,
+  env: DashboardNotificationLinkEnv & CloudflareEnv,
   db: DbClient,
   opts: { organizationId: string; siteId: string; locationId?: string | null; threadId: string },
 ): Promise<string | null> {
-  const slugs = await resolveSiteLocationSlugs(db, opts)
+  const slugs = await resolveSiteLocationSlugs(env, db, opts)
   return slugs ? composeOwnerThreadInboxUrl(env, slugs, opts.threadId) : null
 }

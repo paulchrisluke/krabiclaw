@@ -6,9 +6,9 @@ import { getOrganizationBillingStatus, setSiteEntitlementsFromPlan, type Billing
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { ensureSiteTeam } from '~/server/utils/member-access'
+import { ensureSiteTeam, organizationAdapter } from '~/server/utils/member-access'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { getOrgAdapter } from 'better-auth/plugins'
+import type { getOrgAdapter } from 'better-auth/plugins'
 
 type SetupEnv = CloudflareEnv
 
@@ -31,12 +31,6 @@ interface CreateOrganizationApi {
       metadata: Record<string, string>
     }
   }): Promise<{ id: string }>
-}
-
-async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
-  const auth = createAuth(env)
-  const context = await auth.$context
-  return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
 }
 
 // Re-exported for existing callers (endpoint validation, tests) — the

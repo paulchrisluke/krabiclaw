@@ -2,6 +2,7 @@
   <div
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
+    :data-hydrated="hydrated ? 'true' : 'false'"
     :data-public-critical-shell="isHome ? 'true' : undefined"
   >
     <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
@@ -48,6 +49,8 @@ import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 
 const route = useRoute()
+const hydrated = ref(false)
+onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
 const isHome = computed(() => route.path === '/' || getPreviewSubpath(route.path) === '/')
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
@@ -179,8 +182,8 @@ useSocialMetadata(() => ({
   description: config.value?.seo_description || config.value?.brand_description || '',
   brand: {
     siteName: config.value?.brand_name || resolvedSite.value?.brand_name || '',
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: resolvedSite.value?.media?.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: resolvedSite.value?.media?.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
   robots: siteRobots.value,

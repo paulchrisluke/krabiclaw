@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { qaItemObject, siteTool } from './shared'
+import { pageInfoObject, paginationInputSchema, qaItemObject, siteTool } from './shared'
 
 export const QA_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -8,11 +8,11 @@ export const QA_TOOLS: McpToolDefinition[] = [
     domain: 'qa',
     minimumRole: 'editor',
     confirmRequired: false,
-    inputSchema: { page_path: { type: ['string', 'null'], description: 'Public route path such as /about, /pricing, or /blog. Omit for general site Q&A.' } },
+    inputSchema: { page_path: { type: ['string', 'null'], description: 'Public route path such as /about, /pricing, or /blog. Omit for general site Q&A.' }, ...paginationInputSchema },
     outputSchema: {
       type: 'object',
-      properties: { items: { type: 'array', items: qaItemObject } },
-      required: ['items'],
+      properties: { items: { type: 'array', items: qaItemObject }, page_info: pageInfoObject },
+      required: ['items', 'page_info'],
     },
   }),
   siteTool({
@@ -61,12 +61,12 @@ export const QA_TOOLS: McpToolDefinition[] = [
       domain: 'qa',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { location_id: { type: 'string' } },
+      inputSchema: { location_id: { type: 'string' }, ...paginationInputSchema },
       required: ['location_id'],
       outputSchema: {
         type: 'object',
-        properties: { items: { type: 'array', items: qaItemObject } },
-        required: ['items'],
+        properties: { items: { type: 'array', items: qaItemObject }, page_info: pageInfoObject },
+        required: ['items', 'page_info'],
       },
     }),
   siteTool({

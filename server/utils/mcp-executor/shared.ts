@@ -16,6 +16,9 @@ import { chargeFlatCredits, type FlatCreditAction } from "~/server/utils/ai-cred
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TYPES } from "~/server/utils/media-mime";
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
 import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
+import { parseMediaPlacementKey } from '~/server/utils/media-placement'
+import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
+import { findOrganizationById, listUserOrganizations } from '~/server/utils/member-access'
 
 /**
  * Resolves the upload provider for an image based on content type and Cloudflare Images config.
@@ -39,19 +42,20 @@ export async function chargeFlatCreditsForUser(
   user: McpUserContext,
   action: FlatCreditAction,
 ): Promise<void> {
-  const activeOrgId = user.activeOrganizationId ?? "";
-  const orgRow = await queryFirst<{ organizationId: string }>(user.db, `
-    SELECT o.id AS organizationId FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    WHERE m.userId = ?
-    ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
-  `, [user.userId, activeOrgId]);
-  if (!orgRow) return;
+  const activeOrgId = user.activeOrganizationId ?? ''
+  const organizations = (await listUserOrganizations(user.env, user.userId))
+    .slice()
+    .sort((left, right) => {
+      const activeOrder = Number(right.id === activeOrgId) - Number(left.id === activeOrgId)
+      return activeOrder || left.createdAt.getTime() - right.createdAt.getTime()
+    })
+  const organization = organizations[0]
+  if (!organization) return;
 
-  const result = await chargeFlatCredits(user.db, orgRow.organizationId, { action });
+  const result = await chargeFlatCredits(user.db, organization.id, { action });
   if (!result.charged) {
     console.error(`chargeFlatCredits did not charge for ${action}`, {
-      organizationId: orgRow.organizationId,
+      organizationId: organization.id,
       newBalance: result.newBalance,
     });
   }
@@ -211,16 +215,6 @@ export function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<s
   return { ...restWithoutRecurringSlots, time_slots: generated };
 }
 
-export type GeneratedImageTarget =
-  | "logo"
-  | "home_hero"
-  | "about_story_image"
-  | "home_story_image"
-  | "location_hero"
-  | "post_image"
-  | "menu_item_media"
-  | "experience_image";
-
 export interface GeneratedImagePickerConfig {
   title: string;
   subtitle: string | null;
@@ -233,104 +227,6 @@ export interface GeneratedImagePickerConfig {
   successMessage: string | null;
 }
 
-export function assignmentForGeneratedTarget(
-  target: GeneratedImageTarget,
-  args: Record<string, unknown>,
-  siteName?: string | null,
-): {
-  assignTool: string;
-  assignArgs: Record<string, unknown>;
-  title: string;
-  subtitle: string | null;
-  useLabel: string;
-  successMessage: string;
-} {
-  const siteId = requiredString(args, "site_id");
-  const forSite = siteName ? ` for ${siteName}` : "";
-  switch (target) {
-    case "logo":
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "site_logo", asset_ids: [] },
-        title: "Logo Concepts",
-        subtitle: "Choose the mark that feels most like the brand.",
-        useLabel: `Use as logo${forSite}`,
-        successMessage: `Logo updated${forSite}.`,
-      };
-    case "home_hero":
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "home_hero", asset_ids: [] },
-        title: "Homepage Hero Images",
-        subtitle: "Choose the image that best sets the tone for the homepage.",
-        useLabel: `Use as homepage hero${forSite}`,
-        successMessage: `Homepage hero image updated${forSite}.`,
-      };
-    case "about_story_image":
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "about_story_image", asset_ids: [] },
-        title: "Story Images",
-        subtitle: "Choose the image that best tells the brand story on the About page.",
-        useLabel: `Use as About story image${forSite}`,
-        successMessage: `About page story image updated${forSite}.`,
-      };
-    case "home_story_image":
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "home_story_image", asset_ids: [] },
-        title: "Story Images",
-        subtitle: "Choose the image that best tells the brand story on the homepage.",
-        useLabel: `Use as homepage story image${forSite}`,
-        successMessage: `Homepage story image updated${forSite}.`,
-      };
-    case "location_hero": {
-      const locationId = requiredString(args, "location_id");
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "location_hero", location_id: locationId, asset_ids: [] },
-        title: "Location Hero Images",
-        subtitle: "Choose the image that best represents this location.",
-        useLabel: `Use as location hero${forSite}`,
-        successMessage: `Location hero image updated${forSite}.`,
-      };
-    }
-    case "post_image": {
-      const postId = requiredString(args, "post_id");
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "post_image", post_id: postId, asset_ids: [] },
-        title: "Post Images",
-        subtitle: "Choose the image that best fits this post.",
-        useLabel: `Use for this post${forSite}`,
-        successMessage: `Post image updated${forSite}.`,
-      };
-    }
-    case "menu_item_media": {
-      const menuItemId = requiredString(args, "menu_item_id");
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "menu_item_media", menu_item_id: menuItemId, asset_ids: [] },
-        title: "Menu Item Media",
-        subtitle: "Choose the media that best sells this item.",
-        useLabel: `Use for this menu item${forSite}`,
-        successMessage: `Menu item media updated${forSite}.`,
-      };
-    }
-    case "experience_image": {
-      const experienceId = requiredString(args, "experience_id");
-      return {
-        assignTool: "set_media",
-        assignArgs: { site_id: siteId, target_type: "experience_media", experience_id: experienceId, asset_ids: [] },
-        title: "Experience Media",
-        subtitle: "Choose the media that best captures the experience.",
-        useLabel: `Use for this experience${forSite}`,
-        successMessage: `Experience media updated${forSite}.`,
-      };
-    }
-  }
-}
-
 export function pickerConfigFromShowGeneratedImages(
   rawArguments: Record<string, unknown>,
   siteName?: string | null,
@@ -340,17 +236,7 @@ export function pickerConfigFromShowGeneratedImages(
   const useLabel = optionalString(rawArguments, "use_label");
   const regenerateLabel = optionalString(rawArguments, "regenerate_label");
   const successMessage = optionalString(rawArguments, "success_message");
-  const VALID_TARGETS = new Set<string>([
-    "logo", "home_hero", "about_story_image", "home_story_image", "location_hero",
-    "post_image", "menu_item_media", "experience_image",
-  ]);
-  const rawTargetStr = optionalString(rawArguments, "target");
-  if (rawTargetStr !== null && !VALID_TARGETS.has(rawTargetStr)) {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid target: ${rawTargetStr}`);
-  }
-  const rawTarget = rawTargetStr as GeneratedImageTarget | null;
-
-  if (!rawTarget) {
+  if (!rawArguments.placement) {
     return {
       title: title ?? "Generated Images",
       subtitle,
@@ -364,17 +250,22 @@ export function pickerConfigFromShowGeneratedImages(
     };
   }
 
-  const assignment = assignmentForGeneratedTarget(rawTarget, rawArguments, siteName);
+  const placement = parseMediaPlacementKey(rawArguments.placement)
+  const siteId = requiredString(rawArguments, 'site_id')
+  const forSite = siteName ? ` for ${siteName}` : ''
+  const single = isSingleMediaPlacement(placement)
   return {
-    title: title ?? assignment.title,
-    subtitle: subtitle ?? assignment.subtitle,
-    useLabel: useLabel ?? assignment.useLabel,
+    title: title ?? 'Generated Images',
+    subtitle,
+    useLabel: useLabel ?? `Use this image${forSite}`,
     regenerateLabel,
-    assignTool: assignment.assignTool,
-    assignArgs: assignment.assignArgs,
+    assignTool: single ? 'set_media' : 'attach_media',
+    assignArgs: single
+      ? { site_id: siteId, placement, asset_id: null }
+      : { site_id: siteId, placement, asset_id: '' },
     regenerateTool: null,
     regenerateArgs: null,
-    successMessage: successMessage ?? assignment.successMessage,
+    successMessage: successMessage ?? `Media updated${forSite}.`,
   };
 }
 
@@ -1040,8 +931,6 @@ export async function mutationContextPayload(
 ) {
   const context = await queryFirst<{
     organization_id: string;
-    organization_name: string | null;
-    organization_slug: string | null;
     site_id: string;
     brand_name: string | null;
     subdomain: string | null;
@@ -1051,9 +940,7 @@ export async function mutationContextPayload(
     location_slug: string | null;
     location_title: string | null;
   }>(site.db, `
-    SELECT o.id AS organization_id,
-           o.name AS organization_name,
-           o.slug AS organization_slug,
+    SELECT s.organization_id,
            s.id AS site_id,
            s.brand_name,
            s.subdomain,
@@ -1063,7 +950,6 @@ export async function mutationContextPayload(
            location.slug AS location_slug,
            location.title AS location_title
     FROM sites s
-    JOIN organization o ON o.id = s.organization_id
     LEFT JOIN mcp_workspace_preferences preference
       ON preference.user_id = ? AND preference.site_id = s.id
     LEFT JOIN business_locations location
@@ -1080,10 +966,12 @@ export async function mutationContextPayload(
     options.organizationId ?? site.organizationId,
   ]);
   if (!context) throw new Error('MCP site context is unavailable.');
+  const organization = await findOrganizationById(site.env, context.organization_id)
+  if (!organization) throw new Error('MCP organization context is unavailable.')
   return {
     organization_id: context.organization_id,
-    organization_name: context.organization_name,
-    organization_slug: context.organization_slug,
+    organization_name: organization.name,
+    organization_slug: organization.slug,
     site_id: context.site_id,
     site_name: context.brand_name ?? context.subdomain,
     site_subdomain: context.subdomain,
@@ -1163,6 +1051,7 @@ export async function normalizeWorkspaceArguments(
   try {
     workspace = await resolveMcpWorkspace(
       user.db,
+      user.env,
       user.userId,
       {
         siteId: hasSite ? String(args.site_id) : null,
@@ -1187,22 +1076,6 @@ export async function normalizeWorkspaceArguments(
 
 
 
-
-export async function getCurrentHomeHeroState(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  locationId?: string | null,
-) {
-  void organizationId;
-  void locationId;
-  const { getTenantPageForEditorByPath } = await import('~/server/utils/tenant-pages');
-  const page = await getTenantPageForEditorByPath(db, siteId, '/');
-  const hero = page.blocks.find(entry => entry.type === 'hero');
-  return {
-    hero_media_asset_id: typeof hero?.data.asset_id === 'string' ? hero.data.asset_id : null,
-  };
-}
 
 export function humanizeEntitlement(entitlement: string) {
   return entitlement
@@ -1304,7 +1177,6 @@ export function rethrowAsInvalidParams(error: unknown): never {
   if (
     message.startsWith('Field "') ||
     message.includes("must be a string") ||
-    message.includes("must be an object with hero_title/hero_subtitle") ||
     message.includes("calculator rules") ||
     message.includes("calculator configuration") ||
     message.includes("pricing_calculator") ||

@@ -360,6 +360,17 @@ export async function aggregatePlatformAnalyticsForDate(
   }
 }
 
+// notifyNewUserSignup (server/utils/notification-center.ts), fired from Better
+// Auth's own `databaseHooks.user.create.after` hook, is the only sanctioned
+// signal for this metric — direct queries against Better Auth's own tables are
+// out of bounds, and there is no backfill for accounts created before this
+// hook existed. The write is intentionally best-effort (it must never block
+// account creation), so it can also silently miss a signup after this date.
+// `newSignups` is therefore a lower bound on real signups, not an exact count,
+// and is meaningless before this date. Surface PLATFORM_SIGNUP_LEDGER_START_DATE
+// alongside it rather than presenting the number as an authoritative total.
+export const PLATFORM_SIGNUP_LEDGER_START_DATE = '2026-07-26'
+
 /**
  * Get platform analytics summary (top pages + daily trend) across a date
  * range, for the platform admin dashboard/MCP tool to use in content planning.
@@ -373,14 +384,11 @@ export async function getPlatformAnalyticsSummary(
   uniqueSessions: number
   uniqueVisitors: number
   newSignups: number
+  newSignupsLedgerStartDate: string
   topPages: Array<{ path: string; views: number; percentOfTotal: number }>
   dailyData: Array<{ date: string; pageViews: number; sessions: number; newSignups: number }>
 }> {
   const { start, end } = dateRangeBounds(startDate, endDate)
-  // user.createdAt is stored as epoch seconds (Better Auth column), unlike the
-  // ISO-text created_at on platform_pageview_events, so it needs its own bounds.
-  const startEpochSeconds = Math.floor(new Date(start).getTime() / 1000)
-  const endEpochSeconds = Math.floor(new Date(end).getTime() / 1000)
 
   // Derived from the same raw-event range as pageViews/uniqueSessions/topPages below,
   // rather than the platform_analytics_daily rollup table — that table is only
@@ -398,14 +406,13 @@ export async function getPlatformAnalyticsSummary(
       ORDER BY date ASC
     `, [start, end]),
     queryAll<{ date: string; count: number }>(db, `
-      SELECT
-        strftime('%Y-%m-%d', createdAt, 'unixepoch') as date,
-        COUNT(*) as count
-      FROM user
-      WHERE createdAt >= ? AND createdAt < ?
+      SELECT substr(created_at, 1, 10) as date, COUNT(*) as count
+      FROM notifications
+      WHERE scope = 'platform' AND event_type = 'platform.user_signup'
+        AND created_at >= ? AND created_at < ?
       GROUP BY date
       ORDER BY date ASC
-    `, [startEpochSeconds, endEpochSeconds]),
+    `, [start, end]),
   ])
 
   const [pageViewsResult, uniqueSessionsResult, visitorStats, newSignupsResult] = await Promise.all([
@@ -426,9 +433,10 @@ export async function getPlatformAnalyticsSummary(
     `, [start, end]),
     queryFirst<{ count: number }>(db, `
       SELECT COUNT(*) as count
-      FROM user
-      WHERE createdAt >= ? AND createdAt < ?
-    `, [startEpochSeconds, endEpochSeconds]),
+      FROM notifications
+      WHERE scope = 'platform' AND event_type = 'platform.user_signup'
+        AND created_at >= ? AND created_at < ?
+    `, [start, end]),
   ])
 
   const pageViews = toNumber(pageViewsResult?.count)
@@ -481,13 +489,8 @@ export async function getPlatformAnalyticsSummary(
     }
   })
 
-  // Include signup-only days that had zero platform pageviews (e.g. a direct
-  // signup with no tracked page visit in this window) so newSignups totals
-  // reconcile with the daily breakdown.
   for (const [date, count] of signupsByDate) {
-    if (!dailyData.some(d => d.date === date)) {
-      dailyData.push({ date, pageViews: 0, sessions: 0, newSignups: count })
-    }
+    if (!dailyData.some(d => d.date === date)) dailyData.push({ date, pageViews: 0, sessions: 0, newSignups: count })
   }
   dailyData.sort((a, b) => a.date.localeCompare(b.date))
 
@@ -496,6 +499,7 @@ export async function getPlatformAnalyticsSummary(
     uniqueSessions,
     uniqueVisitors: toNumber(visitorStats?.count),
     newSignups: toNumber(newSignupsResult?.count),
+    newSignupsLedgerStartDate: PLATFORM_SIGNUP_LEDGER_START_DATE,
     topPages,
     dailyData
   }

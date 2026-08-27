@@ -1,9 +1,11 @@
 import { HTTPError } from 'nitro';
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { listPageQa, type LocationQaRow } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
 
 export interface PublicTenantPage {
   id: string
@@ -31,10 +33,7 @@ export interface PublicTenantPageOfferingRow {
   body: string | null
   slug: string
   canonical_path: string | null
-  thumbnail_asset_id: string | null
-  hero_image_asset_id: string | null
-  media_asset_ids: string | null
-  thumbnail_url: string | null
+  media: MediaPlacementItem[]
   sort_order: number
   featured: number
 }
@@ -50,17 +49,16 @@ export async function listPublicTenantPageOfferingRows(
   offeringIds?: readonly string[],
 ): Promise<PublicTenantPageOfferingRow[]> {
   if (offeringIds?.length === 0) return []
-  return await queryAll<PublicTenantPageOfferingRow>(db, `
+  const rows = await queryAll<Omit<PublicTenantPageOfferingRow, 'media'>>(db, `
     SELECT o.id, o.name, o.label, o.summary, o.short_description, o.body, o.slug,
-           o.canonical_path, o.thumbnail_asset_id, o.hero_image_asset_id,
-           o.media_asset_ids, thumb.public_url AS thumbnail_url,
-           o.sort_order, o.featured
+           o.canonical_path, o.sort_order, o.featured
       FROM offerings o
-      LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
      WHERE o.site_id = ?
-       ${offeringIds ? `AND o.id IN (${offeringIds.map(() => '?').join(',')})` : ''}
+       ${offeringIds ? `AND o.id IN (SELECT value FROM json_each(?))` : ''}
      ORDER BY o.sort_order ASC, o.name ASC
-  `, [siteId, ...(offeringIds ?? [])])
+  `, [siteId, ...(offeringIds ? [d1JsonStringSet(offeringIds)] : [])])
+  const placements = await getMediaPlacements(db, { siteId, ownerType: 'offering', ownerIds: rows.map(row => row.id) })
+  return rows.map(row => ({ ...row, media: placements.get(row.id) ?? [] }))
 }
 
 export function selectPublicTenantPageBlocks(blocks: TenantPageBlock[]): TenantPageBlock[] {
@@ -75,7 +73,6 @@ async function hydrateBlocks(
   resources: PublicTenantPageHydrationResources = {},
 ): Promise<TenantPageBlock[]> {
   const publicBlocks = selectPublicTenantPageBlocks(blocks)
-  const assetIds = new Set<string>()
   const offeringIds = new Set<string>()
   const locationIds = new Set<string>()
   const hasOfferingSource = publicBlocks.some(block => block.type === 'offering_grid' && block.data.source === 'site_offerings')
@@ -83,14 +80,6 @@ async function hydrateBlocks(
   const hasReviewSource = publicBlocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
   const hasPostSource = publicBlocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
   for (const block of publicBlocks) {
-    const assetId = block.data.asset_id
-    if (typeof assetId === 'string' && assetId.trim()) assetIds.add(assetId)
-    const assetIdsValue = block.data.asset_ids
-    if (Array.isArray(assetIdsValue)) {
-      for (const value of assetIdsValue) {
-        if (typeof value === 'string' && value.trim()) assetIds.add(value)
-      }
-    }
     if (block.type === 'offering_grid' && Array.isArray(block.data.offering_ids)) {
       for (const value of block.data.offering_ids) if (typeof value === 'string' && value.trim()) offeringIds.add(value)
     }
@@ -104,46 +93,28 @@ async function hydrateBlocks(
       : await listPublicTenantPageOfferingRows(db, siteId, hasOfferingSource ? undefined : [...offeringIds])
     : []
   const locations = locationIds.size
-    ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; hero_media_asset_id: string | null }>(db, `
-        SELECT id, title, slug, description, short_description, hero_media_asset_id
-          FROM business_locations
-         WHERE site_id = ? AND status = 'active' AND id IN (${Array.from(locationIds).map(() => '?').join(',')})
-      `, [siteId, ...locationIds])
+    ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null }>(db, `
+        SELECT bl.id, bl.title, bl.slug, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind
+          FROM business_locations bl
+          LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+          LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+         WHERE bl.site_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
+      `, [siteId, d1JsonStringSet([...locationIds])])
     : []
-  if (locations.length !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
+  const distinctLocationIds = new Set(locations.map(l => l.id))
+  if (distinctLocationIds.size !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
   const [qaRows, reviewRows, postRows] = await Promise.all([
     hasQaSource ? (resources.qaRows ?? listPageQa(db, siteId, pagePath, true)) : Promise.resolve([]),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
-    hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; featured_image_asset_id: string | null }>(db, `
-      SELECT id, title, slug, excerpt, canonical_url, featured_image_asset_id
-        FROM blog_posts
-       WHERE site_id = ? AND status = 'published' AND visibility = 'public'
-       ORDER BY COALESCE(featured_order, 999999), published_at IS NULL, published_at DESC, id DESC
+    hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null }>(db, `
+      SELECT p.id, p.title, p.slug, p.excerpt, p.canonical_url, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind
+        FROM blog_posts p
+        LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0 AND mp.status = 'active'
+        LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+       WHERE p.site_id = ? AND p.status = 'published' AND p.visibility = 'public'
+       ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
     `, [siteId]) : Promise.resolve([]),
   ])
-  for (const offering of offerings) {
-    if (offering.thumbnail_asset_id) assetIds.add(offering.thumbnail_asset_id)
-    if (offering.hero_image_asset_id) assetIds.add(offering.hero_image_asset_id)
-    if (offering.media_asset_ids) {
-      try {
-        const ids = JSON.parse(offering.media_asset_ids) as unknown
-        if (Array.isArray(ids)) for (const id of ids) if (typeof id === 'string' && id.trim()) assetIds.add(id)
-      } catch { throw new HTTPError({ statusCode: 500, statusMessage: `Offering ${offering.id} has malformed media references` }) }
-    }
-  }
-  for (const location of locations) if (location.hero_media_asset_id) assetIds.add(location.hero_media_asset_id)
-  for (const post of postRows) if (post.featured_image_asset_id) assetIds.add(post.featured_image_asset_id)
-  const rows = assetIds.size ? await queryAll<{ id: string; kind: string | null; public_url: string | null; thumbnail_url: string | null; alt_text: string | null }>(db, `
-    SELECT id, kind, public_url, thumbnail_url, alt_text
-      FROM media_assets
-     WHERE site_id = ? AND status = 'active' AND id IN (${Array.from(assetIds).map(() => '?').join(',')})
-  `, [siteId, ...assetIds])
-    : []
-  const media = new Map(rows.map(row => [row.id, row]))
-  for (const id of assetIds) {
-    const asset = media.get(id)
-    if (!asset?.public_url) throw new HTTPError({ statusCode: 500, statusMessage: `Tenant page media asset ${id} is unavailable` })
-  }
   const offeringById = new Map(offerings.map(item => [item.id, item]))
   const selectedOfferings = new Map(Array.from(offeringIds).map(id => [id, offeringById.get(id)] as const))
   if ([...selectedOfferings.values()].some(offering => !offering)) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
@@ -161,37 +132,21 @@ async function hydrateBlocks(
     description: post.excerpt || undefined,
     url: post.canonical_url || `/article/${post.slug}`,
     label: 'Read more',
-    image_url: post.featured_image_asset_id ? (media.get(post.featured_image_asset_id)?.public_url) : undefined,
+    media: post.asset_id ? [{ asset_id: post.asset_id, slot: 'featured', public_url: post.public_url, thumbnail_url: post.thumbnail_url, kind: post.kind }] : [],
   }))
   return publicBlocks.map(block => {
     const data = { ...block.data }
-    const assetId = typeof data.asset_id === 'string' ? data.asset_id : null
-    if (assetId) {
-      const asset = media.get(assetId)
-      data.url = asset?.public_url ?? null
-      data.thumbnail_url = asset?.thumbnail_url ?? null
-      data.kind = asset?.kind ?? null
-      data.asset_alt = asset?.alt_text ?? null
-    }
-    if (Array.isArray(data.asset_ids)) {
-      data.images = data.asset_ids.map(value => {
-        const asset = typeof value === 'string' ? media.get(value) : null
-        if (!asset?.public_url) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page gallery media is unavailable' })
-        return { id: value, url: asset.public_url, thumbnail_url: asset.thumbnail_url, kind: asset.kind, alt: asset.alt_text }
-      })
-    }
     if (block.type === 'offering_grid' && Array.isArray(data.offering_ids)) {
       data.items = data.offering_ids.map(id => {
         const offering = typeof id === 'string' ? selectedOfferings.get(id) : undefined
         if (!offering) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
-        const imageId = offering.thumbnail_asset_id ?? offering.hero_image_asset_id
         return {
           id: offering.id,
           title: offering.label || offering.name,
           description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
           label: offering.label ? 'Learn more' : undefined,
-          image_url: imageId ? (media.get(imageId)?.public_url) : undefined,
+          media: offering.media,
         }
       })
     }
@@ -205,20 +160,19 @@ async function hydrateBlocks(
           description: location.short_description || location.description || undefined,
           url: `/locations/${location.slug}`,
           label: 'View location',
-          image_url: location.hero_media_asset_id ? (media.get(location.hero_media_asset_id)?.public_url) : undefined,
+          media: location.asset_id ? [{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind }] : [],
         }
       })
     }
     if (block.type === 'offering_grid' && data.source === 'site_offerings') {
       data.items = offerings.map(offering => {
-        const imageId = offering.thumbnail_asset_id ?? offering.hero_image_asset_id
         return {
           id: offering.id,
           title: offering.label || offering.name,
           description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
           label: 'Learn more',
-          image_url: imageId ? (media.get(imageId)?.public_url) : undefined,
+          media: offering.media,
         }
       })
     }

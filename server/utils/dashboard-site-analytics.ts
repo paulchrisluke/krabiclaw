@@ -166,13 +166,13 @@ export async function loadDashboardSiteAnalytics(
   }
 
   try {
-    const site = await loadMemberSiteRow(db, siteId, session.user.id)
+    const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
 
     if (!site) {
       throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
     }
 
-    await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
+    await assertSiteWideAccess(db, { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
 
     const rawStartDate = query.startDate || getDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
     const rawEndDate = query.endDate || getDateString(new Date())

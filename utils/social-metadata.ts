@@ -31,9 +31,7 @@ export interface SocialImageSource {
 
 export interface SocialMediaSource {
   kind?: string | null
-  url?: string | null
   public_url?: string | null
-  thumbnailUrl?: string | null
   thumbnail_url?: string | null
 }
 
@@ -47,12 +45,12 @@ function firstNonBlank(...values: Array<string | null | undefined>): string | nu
 
 export function resolveSocialImageUrl(source: SocialMediaSource | null | undefined): string | null {
   if (source?.kind === 'video') {
-    const thumbnailUrl = firstNonBlank(source.thumbnailUrl, source.thumbnail_url)
+    const thumbnailUrl = firstNonBlank(source.thumbnail_url)
     if (!thumbnailUrl) throw new Error('Video media requires a thumbnail URL')
     return thumbnailUrl
   }
   return source?.kind === 'image' || !source?.kind
-    ? firstNonBlank(source?.url, source?.public_url)
+    ? firstNonBlank(source?.public_url)
     : null
 }
 
@@ -246,7 +244,9 @@ export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: str
     location: input.location,
     logoUrl: input.brand.logoUrl,
     faviconUrl: input.brand.faviconUrl,
-    backgroundImageUrl: resolveSocialImageUrl(input.heroImage),
+    backgroundImageUrl: input.heroImage?.kind === 'video'
+      ? firstNonBlank(input.heroImage.thumbnailUrl)
+      : firstNonBlank(input.heroImage?.url),
     primaryColor: input.brand.primaryColor,
     secondaryColor: input.brand.secondaryColor,
   }

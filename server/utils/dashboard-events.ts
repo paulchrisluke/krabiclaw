@@ -10,8 +10,6 @@ export interface DashboardEvent {
   metadata: Record<string, unknown> | null
   created_at: string
   actor_id: string | null
-  actor_name: string | null
-  actor_image: string | null
   location_title: string | null
 }
 
@@ -51,10 +49,9 @@ export async function listDashboardEvents(
 
   const rows = await queryAll<DashboardEvent & { metadata: string | null }>(db, `
     SELECT e.id, e.event_type, e.site_id, e.location_id, e.entity_type, e.entity_id, e.metadata, e.created_at,
-           e.actor_id, u.name AS actor_name, u.image AS actor_image,
+           e.actor_id,
            l.title AS location_title
     FROM site_events e
-    LEFT JOIN user u ON u.id = e.actor_id
     LEFT JOIN business_locations l ON l.id = e.location_id
     WHERE ${conditions.join(' AND ')}
     ORDER BY e.created_at DESC, e.id DESC

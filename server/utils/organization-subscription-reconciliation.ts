@@ -1,6 +1,17 @@
+// The pinned @better-auth/stripe build mutates subscription state inside its
+// webhook handlers before invoking the application callback and can create a
+// second checkout for a past_due subscription, which breaks event-ID
+// deduplication. patches/@better-auth+stripe+1.7.0-beta.10.patch (applied via
+// postinstall's patch-package --error-on-fail) delegates lifecycle events to
+// this reconciler instead. This module owns current-state repair, monotonic
+// event protection, and retry processing; the hourly sweep task is a recovery
+// path for missed dispatches, not the normal fulfillment flow. Remove the
+// patch only once an upstream release provides the same guarantees, then
+// rerun the billing + signed-webhook regression suite.
 import type Stripe from 'stripe'
 import type { StripePlan } from '@better-auth/stripe'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
   invoiceSubscriptionId as resolveInvoiceSubscriptionId,
   resolveCanonicalSubscriptionPlan,
@@ -790,8 +801,6 @@ const MAX_PROVIDER_CURRENT_INVOICE_READS = 10
 const MAX_PROVIDER_INVOICE_LINES = 100
 const MAX_LOCAL_EVIDENCE_ROWS = 1_000
 const MAX_LOCAL_INVOICE_ROWS = 100
-const MAX_D1_BOUND_PARAMETERS = 100
-const MAX_IDS_PER_D1_QUERY = MAX_D1_BOUND_PARAMETERS - 1
 
 class ReconciliationProviderReadBoundError extends Error {
   readonly code:
@@ -951,14 +960,6 @@ function emptyLocalEvidence(): OrganizationReconciliationLocalEvidence {
   }
 }
 
-function chunksOf<T>(values: T[], size: number): T[][] {
-  const chunks: T[][] = []
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size))
-  }
-  return chunks
-}
-
 function statusFromDrifts(drifts: OrganizationReconciliationDrift[]): 'match' | 'drift' | 'blocked' {
   if (drifts.some(drift => drift.severity === 'blocked')) return 'blocked'
   return drifts.length > 0 ? 'drift' : 'match'
@@ -1038,55 +1039,37 @@ async function readLocalEvidence(db: DbClient, organizationId: string, subscript
   if (invoices.length > MAX_LOCAL_INVOICE_ROWS) {
     throw new ReconciliationLocalEvidenceBoundError('stripe_invoice_payments', MAX_LOCAL_INVOICE_ROWS)
   }
-  const versions: Array<{
+  const versions = subscriptionIds.length ? await queryAll<{
     stripe_subscription_id: string
     last_event_created: number | null
     last_event_id: string | null
-  }> = []
-  for (const subscriptionIdChunk of chunksOf(subscriptionIds, MAX_IDS_PER_D1_QUERY)) {
-    const rows = await queryAll<{
-      stripe_subscription_id: string
-      last_event_created: number | null
-      last_event_id: string | null
-    }>(db, `
+  }>(db, `
         SELECT stripe_subscription_id, last_event_created, last_event_id
          FROM stripe_subscription_versions
-         WHERE stripe_subscription_id IN (${subscriptionIdChunk.map(() => '?').join(', ')})
+         WHERE stripe_subscription_id IN (SELECT value FROM json_each(?))
          ORDER BY stripe_subscription_id LIMIT ?
-    `, [...subscriptionIdChunk, MAX_LOCAL_EVIDENCE_ROWS + 1])
-    versions.push(...rows)
-    if (versions.length > MAX_LOCAL_EVIDENCE_ROWS) {
-      throw new ReconciliationLocalEvidenceBoundError('stripe_subscription_versions', MAX_LOCAL_EVIDENCE_ROWS)
-    }
+    `, [d1JsonStringSet(subscriptionIds), MAX_LOCAL_EVIDENCE_ROWS + 1]) : []
+  if (versions.length > MAX_LOCAL_EVIDENCE_ROWS) {
+    throw new ReconciliationLocalEvidenceBoundError('stripe_subscription_versions', MAX_LOCAL_EVIDENCE_ROWS)
   }
   const eventIds = [...new Set([
     ...invoices.map(invoice => invoice.last_event_id).filter((value): value is string => Boolean(value)),
     ...versions.map(version => version.last_event_id).filter((value): value is string => Boolean(value)),
   ])].sort()
-  const webhooks: Array<{
+  const webhooks = eventIds.length ? await queryAll<{
     stripe_event_id: string
     event_type: string | null
     status: string | null
     attempt_count: number | null
     dead_lettered_at: string | null
-  }> = []
-  for (const eventIdChunk of chunksOf(eventIds, MAX_IDS_PER_D1_QUERY)) {
-    const rows = await queryAll<{
-      stripe_event_id: string
-      event_type: string | null
-      status: string | null
-      attempt_count: number | null
-      dead_lettered_at: string | null
-    }>(db, `
+  }>(db, `
         SELECT stripe_event_id, event_type, status, attempt_count, dead_lettered_at
           FROM stripe_webhook_events
-         WHERE stripe_event_id IN (${eventIdChunk.map(() => '?').join(', ')})
+         WHERE stripe_event_id IN (SELECT value FROM json_each(?))
          ORDER BY stripe_event_id LIMIT ?
-    `, [...eventIdChunk, MAX_LOCAL_EVIDENCE_ROWS + 1])
-    webhooks.push(...rows)
-    if (webhooks.length > MAX_LOCAL_EVIDENCE_ROWS) {
-      throw new ReconciliationLocalEvidenceBoundError('stripe_webhook_events', MAX_LOCAL_EVIDENCE_ROWS)
-    }
+    `, [d1JsonStringSet(eventIds), MAX_LOCAL_EVIDENCE_ROWS + 1]) : []
+  if (webhooks.length > MAX_LOCAL_EVIDENCE_ROWS) {
+    throw new ReconciliationLocalEvidenceBoundError('stripe_webhook_events', MAX_LOCAL_EVIDENCE_ROWS)
   }
   const sites = await queryAll<{ id: string; plan: string | null; status: string | null }>(db, `
     SELECT id, plan, status FROM sites WHERE organization_id = ? ORDER BY id LIMIT ?

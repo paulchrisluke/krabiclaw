@@ -1,7 +1,7 @@
 // Google Places API (New, v1) — server-side only. Key stored as GOOGLE_PLACES_API_KEY CF secret.
 // Never import this in client-side code.
 import type { D1Database } from '@cloudflare/workers-types'
-import { execute } from '~/server/db'
+import { execute, executeBatch } from '~/server/db'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
@@ -57,8 +57,6 @@ export class PlaceDetailsError extends Error {
 // Basic: id, displayName, formattedAddress, location, googleMapsUri
 // Contact (+$0.003/1k): nationalPhoneNumber, internationalPhoneNumber, websiteUri
 // Atmosphere (+$0.005/1k): rating, userRatingCount, regularOpeningHours, reviews
-// Photos: photos metadata is free in the detail response; fetching the actual image
-//   via /v1/{name}/media is billed at $0.007/photo (first 5,000/month free)
 const SEARCH_FIELD_MASK = [
   'places.id',
   'places.displayName',
@@ -85,7 +83,6 @@ const DETAIL_FIELD_MASK = [
   'userRatingCount',
   'regularOpeningHours',
   'reviews',
-  'photos',
 ].join(',')
 
 export interface PlaceSearchResult {
@@ -103,17 +100,9 @@ export interface PlaceSearchResult {
 export interface PlaceReview {
   reviewId: string
   authorName: string
-  authorPhotoUrl: string | null
   rating: number
   text: string | null
   publishedAt: string | null
-}
-
-export interface PlacePhoto {
-  name: string          // e.g. "places/ChIJ.../photos/AUc7tXq..."
-  widthPx: number
-  heightPx: number
-  photoUri: string      // resolved CDN URL (fetched via /media?skipHttpRedirect=true)
 }
 
 export interface PlaceDetails {
@@ -130,21 +119,14 @@ export interface PlaceDetails {
   ratingCount: number | null
   openingHours: string[] | null
   reviews: PlaceReview[]
-  photos: PlacePhoto[]
 }
 
 interface RawReview {
   name?: string
   rating?: number
   text?: { text?: string }
-  authorAttribution?: { displayName?: string; photoUri?: string }
+  authorAttribution?: { displayName?: string }
   publishTime?: string
-}
-
-interface RawPhoto {
-  name?: string
-  widthPx?: number
-  heightPx?: number
 }
 
 interface RawPlace {
@@ -161,7 +143,6 @@ interface RawPlace {
   regularOpeningHours?: { weekdayDescriptions?: string[] }
   addressComponents?: Array<{ longText?: string; types?: string[]; languageCode?: string }>
   reviews?: RawReview[]
-  photos?: RawPhoto[]
 }
 
 // business_locations is source-locale (English) only — no locale column exists on it,
@@ -205,7 +186,7 @@ function normalizeSearchResult(place: RawPlace): PlaceSearchResult {
   }
 }
 
-function normalizeDetail(place: RawPlace): Omit<PlaceDetails, 'photos'> & { rawPhotos: RawPhoto[] } {
+function normalizeDetail(place: RawPlace): PlaceDetails {
   return {
     placeId: place.id ?? '',
     name: place.displayName?.text ?? '',
@@ -222,57 +203,11 @@ function normalizeDetail(place: RawPlace): Omit<PlaceDetails, 'photos'> & { rawP
     reviews: (place.reviews ?? []).map(r => ({
       reviewId: r.name ?? '',
       authorName: r.authorAttribution?.displayName ?? '',
-      authorPhotoUrl: r.authorAttribution?.photoUri ?? null,
       rating: Math.round(r.rating ?? 0),
       text: r.text?.text ?? null,
       publishedAt: r.publishTime ?? null,
     })),
-    rawPhotos: place.photos ?? [],
   }
-}
-
-// Resolves up to `limit` photo CDN URLs from photo name references.
-// Uses skipHttpRedirect=true so we get the URI directly without following a redirect.
-// Billed at $0.007/photo after the free tier (5,000/month).
-export async function fetchPlacePhotoUrls(
-  apiKey: string,
-  rawPhotos: RawPhoto[],
-  limit = 5,
-): Promise<PlacePhoto[]> {
-  const fetch1Photo = async (raw: RawPhoto): Promise<PlacePhoto | null> => {
-    if (!raw.name) return null
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8_000)
-    try {
-      const url = `https://places.googleapis.com/v1/${raw.name}/media?key=${apiKey}&maxHeightPx=1600&maxWidthPx=1600&skipHttpRedirect=true`
-      const res = await fetch(url, { signal: controller.signal })
-      if (!res.ok) return null
-      const data = await res.json() as { photoUri?: string }
-      if (!data.photoUri) return null
-      return { name: raw.name, widthPx: raw.widthPx ?? 0, heightPx: raw.heightPx ?? 0, photoUri: data.photoUri }
-    } catch {
-      return null
-    } finally {
-      clearTimeout(timer)
-    }
-  }
-
-  const attempted = rawPhotos.slice(0, limit)
-  const settled = await Promise.allSettled(attempted.map(fetch1Photo))
-  const photos = settled
-    .filter((r): r is PromiseFulfilledResult<PlacePhoto> => r.status === 'fulfilled' && r.value !== null)
-    .map(r => r.value)
-
-  // Google told us this place has photos (rawPhotos came from its own response),
-  // so every one of them failing is a systemic problem — a bad/rate-limited API
-  // key, or the photo-media endpoint being down — not "this business has no
-  // photos" (that case never reaches here: rawPhotos would already be empty).
-  // Surfacing this loudly is what lets a real integration failure get fixed
-  // instead of silently masquerading as an empty photo gallery.
-  if (attempted.length > 0 && photos.length === 0) {
-    throw new Error(`fetchPlacePhotoUrls() failed to resolve all ${attempted.length} photo(s) Google reported for this place.`)
-  }
-  return photos
 }
 
 export async function syncPlaceToLocation(
@@ -321,26 +256,12 @@ export async function syncPlaceToLocation(
   let reviewsUpserted = 0
   for (const review of place.reviews) {
     if (!review.reviewId || !review.rating) continue
-    const result = await execute(db, `
-      INSERT OR IGNORE INTO reviews
-        (id, organization_id, site_id, location_id, google_review_id,
-         author_name, reviewer_photo_url, rating, content,
-         status, source, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'google_places', ?, ?)
-    `, [
-      `gplaces-${review.reviewId.replace(/\//g, '-')}`,
-      organizationId,
-      siteId,
-      locationId,
-      review.reviewId,
-      review.authorName,
-      review.authorPhotoUrl,
-      review.rating,
-      review.text,
-      review.publishedAt ?? now,
-      now
-    ])
-    if (result.meta.changes > 0) reviewsUpserted++
+    const reviewId = `gplaces-${review.reviewId.replace(/\//g, '-')}`
+    const [result] = await executeBatch(db, [{
+      query: `INSERT OR IGNORE INTO reviews (id, organization_id, site_id, location_id, google_review_id, author_name, rating, content, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'google_places', ?, ?)`,
+      params: [reviewId, organizationId, siteId, locationId, review.reviewId, review.authorName, review.rating, review.text, review.publishedAt ?? now, now],
+    }])
+    if (Number(result?.meta?.changes ?? 0) > 0) reviewsUpserted++
   }
 
   return { place, reviewsUpserted }
@@ -419,13 +340,11 @@ async function resolveShortUrl(url: string): Promise<string> {
 export async function getPlaceDetailsByUrl(
   apiKey: string,
   mapsUrl: string,
-  fetchPhotos = true,
-  photoLimit = 5,
 ): Promise<PlaceDetails> {
   const resolved = await resolveShortUrl(mapsUrl)
   const placeId = extractPlaceIdFromUrl(resolved)
   if (placeId) {
-    return getPlaceDetails(apiKey, placeId, fetchPhotos, photoLimit)
+    return getPlaceDetails(apiKey, placeId)
   }
 
   // URL uses hex-format or feature ID — extract name + coords and search instead
@@ -441,14 +360,12 @@ export async function getPlaceDetailsByUrl(
   if (!top?.placeId) {
     throw new PlaceDetailsError(`Could not find "${name}" on Google. Try pasting the link from a desktop browser, or use the Facebook or manual option.`, 422)
   }
-  return getPlaceDetails(apiKey, top.placeId, fetchPhotos, photoLimit)
+  return getPlaceDetails(apiKey, top.placeId)
 }
 
 export async function getPlaceDetails(
   apiKey: string,
   placeId: string,
-  fetchPhotos = true,
-  photoLimit = 5,
 ): Promise<PlaceDetails> {
   const response = await fetch(`${PLACES_BASE}/${encodeURIComponent(placeId)}?languageCode=en`, {
     headers: {
@@ -462,8 +379,5 @@ export async function getPlaceDetails(
     throw new Error(`Places detail failed: ${response.status} ${text.slice(0, 200)}`)
   }
 
-  const data = await response.json() as RawPlace
-  const { rawPhotos, ...detail } = normalizeDetail(data)
-  const photos = fetchPhotos ? await fetchPlacePhotoUrls(apiKey, rawPhotos, photoLimit) : []
-  return { ...detail, photos }
+  return normalizeDetail(await response.json() as RawPlace)
 }

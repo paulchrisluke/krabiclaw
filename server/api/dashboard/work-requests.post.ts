@@ -1,12 +1,11 @@
 // POST /api/dashboard/work-requests — Growth client submits a priority-support request
-import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
+import { jsonResponse } from "~/server/utils/api-response";
 import { getDashboardContext } from "~/server/utils/dashboard-context";
 import { createWorkRequest } from "~/server/utils/work-request-management";
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from "~/server/utils/site-events";
 
 export default defineHandler(async (event) => {
-  const env = cloudflareEnv(event);
-  const { db, organization, site, userId } = await getDashboardContext(event, {
+  const { env, db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: false, });
 
   const body = (await readBody(event).catch(() => ({}))) as {

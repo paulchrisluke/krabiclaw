@@ -15,11 +15,11 @@ export default defineHandler(async (event) => {
   const siteName = (event.context.site as { brand_name?: string | null } | undefined)?.brand_name?.trim() || ''
   if (isTenant && siteId && !siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
   const posts = isTenant && siteId
-    ? await listPublishedTenantBlogPostsForLlm(db, siteId)
-    : await listPublishedPlatformBlogPostsForLlm(db)
+    ? await listPublishedTenantBlogPostsForLlm(db, siteId, env)
+    : await listPublishedPlatformBlogPostsForLlm(db, env)
   const entries = isTenant && siteId
     ? buildTenantBlogLinkEntries(posts ?? [], origin)
     : buildPlatformBlogLinkEntries(posts ?? [], origin)
   return jsonResponse(buildNamedBlogJsonFeed(origin, entries, isTenant ? {
-    title: `${siteName} Blog`, description: `Published blog feed for ${siteName}.`, authorName: siteName, } : {}))
+    title: `${siteName} Blog`, description: `Published blog feed for ${siteName}.`, } : {}))
 })

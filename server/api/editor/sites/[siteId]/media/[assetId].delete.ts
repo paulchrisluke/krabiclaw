@@ -12,7 +12,6 @@ interface MediaAssetSiteRow {
   id: string
   site_id: string
   organization_id: string
-  location_id: string | null
 }
 
 export default defineHandler(async (event) => {
@@ -27,17 +26,18 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, site_id, organization_id, location_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]
+  const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]
   )
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
   if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   try {
     await assertResourceAccess(db, {
-      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: asset.location_id, })
+      env,
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: null, })
 
     await deleteMediaAsset(db, env, assetId, siteId, session.user.id)
     return jsonResponse({ deleted: true })

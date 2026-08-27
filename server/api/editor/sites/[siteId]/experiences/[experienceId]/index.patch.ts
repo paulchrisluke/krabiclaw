@@ -16,46 +16,27 @@ const optionalInteger = (value: unknown) => {
   return parsed !== null && Number.isInteger(parsed) ? parsed : null
 }
 
-class InvalidMediaError extends Error {}
-
-function normalizeExperienceMedia(value: unknown): Array<{ asset_id: string }> | null {
-  if (value === null || value === undefined) return null
-  if (!Array.isArray(value)) throw new InvalidMediaError()
-  return value.map((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item) || typeof (item as Record<string, unknown>).asset_id !== 'string') {
-      throw new InvalidMediaError()
-    }
-    return { asset_id: String((item as Record<string, unknown>).asset_id).trim() }
-  })
-}
-
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
   if (!siteId || !experienceId) return jsonResponse({ error: 'siteId and experienceId required' }, { status: 400 })
 
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   const existing = await queryFirst<{ location_id: string }>(db, 'SELECT location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1', [experienceId, siteId])
   if (!existing) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   const principal = {
+    env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, }
   await assertResourceAccess(db, { ...principal, resourceLocationId: existing.location_id })
 
   let body: Record<string, ApiValue>
   try { body = await readRequiredBody<Record<string, ApiValue>>(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
+  if ('media' in body) return jsonResponse({ error: 'Experience gallery changes must use media placement attach/remove/reorder operations' }, { status: 400 })
 
   const updates: Record<string, ApiValue> = {}
   if ('title' in body) updates.title = String(body.title).trim()
   if ('tagline' in body) updates.tagline = body.tagline ? String(body.tagline).trim() : null
   if ('body' in body) updates.body = body.body ? String(body.body).trim() : null
-  if ('media' in body) {
-    try {
-      updates.media = normalizeExperienceMedia(body.media)
-    } catch (err) {
-      if (err instanceof InvalidMediaError) return jsonResponse({ error: 'media must be an array of { asset_id } items' }, { status: 400 })
-      throw err
-    }
-  }
   try {
     if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
     if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)

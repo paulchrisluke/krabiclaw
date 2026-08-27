@@ -1,7 +1,6 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
-import type { ContentBlockSnapshot } from '~/server/utils/content-documents'
 
 export async function publishDueBlogPosts(db: D1Database, now = new Date()) {
   const contentIssues = await queryAll<{ id: string }>(db, `
@@ -111,21 +110,4 @@ export async function createBlogRedirect(db: D1Database, postId: string, siteId:
   if (Number(result.meta.changes ?? 0) === 0) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
   }
-}
-
-export async function resolveBlogPrimaryImage(db: DbClient, input: {
-  featuredAssetId?: string | null
-  blocks?: ContentBlockSnapshot[] | null
-}) {
-  const firstImage = input.blocks?.find(block => block.type === 'image' && block.data.status !== 'inactive')
-  const firstImageId = typeof firstImage?.data.asset_id === 'string' ? firstImage.data.asset_id : null
-  const resolveAsset = async (assetId: string) => await queryFirst<{ asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null>(db, `
-    SELECT id AS asset_id, public_url, thumbnail_url, kind, width, height
-      FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1
-  `, [assetId])
-  if (input.featuredAssetId) {
-    const featured = await resolveAsset(input.featuredAssetId)
-    if (featured) return featured
-  }
-  return firstImageId ? await resolveAsset(firstImageId) : null
 }

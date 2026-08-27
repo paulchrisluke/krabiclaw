@@ -223,10 +223,10 @@ The current platform blog system supports:
 
 - Public paths shaped as `/blog/<category>/<slug>`.
 - Fixed platform categories from `utils/blog-categories.ts`: Marketing, Technology, Design, Business, SEO, Social Media.
-- SEO fields: `seo_description`, `seo_keywords`, `canonical_url`, `robots`, and `featured_image_asset_id`.
-- Structured components: FAQ and How-To through `components[]`.
-- Component body embeds such as `{{component type="faq"}}` and `{{component type="how_to"}}`.
-- Platform Admin MCP blog tools for list, get, create, update, publish, unpublish, and delete.
+- SEO fields: `seo_description`, `seo_keywords`, `canonical_url`, and `robots`.
+- Canonical body blocks in `content_documents` and `content_blocks`, including FAQ and How-To blocks.
+- Featured media through the `blog_post` / `featured` media placement.
+- Platform Admin MCP blog tools for list, get, create, update, schedule, publish, and delete.
 - Platform analytics via `get_platform_analytics`, including page views, sessions, visitors, top pages, and new signups.
 
 Current content taxonomy is good enough for this strategy, but future cleanup should consider replacing generic categories with product-specific taxonomy such as Local SEO, ChatGPT CMS, Restaurants, Experiences, Analytics, and Case Studies.

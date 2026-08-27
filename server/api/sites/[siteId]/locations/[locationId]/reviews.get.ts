@@ -1,6 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
 import { queryAll } from '~/server/db'
+import { attachReviewMedia } from '~/server/utils/site-reviews'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -13,24 +14,14 @@ export default defineHandler(async (event) => {
   const { db } = await requireLocationAccess(event, siteId, locationId)
 
   const results = await queryAll<ApiValue>(db, `
-    SELECT id, author_name, reviewer_photo_url, rating, title, content, owner_reply, owner_reply_at, photo_urls, source, status, helpful_count, customer_id, booking_id, booking_type, review_request_id, created_at, updated_at
-    FROM reviews
-    WHERE site_id = ? AND location_id = ?
-    ORDER BY created_at DESC
+    SELECT r.id, r.author_name, r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at,
+      r.source, r.status, r.helpful_count, r.customer_id, r.booking_id, r.booking_type, r.review_request_id, r.created_at, r.updated_at
+    FROM reviews r
+    WHERE r.site_id = ? AND r.location_id = ?
+    ORDER BY r.created_at DESC
   `, [siteId, locationId])
 
-  const safeParsePhotoUrls = (photoUrls: unknown): string[] => {
-    if (typeof photoUrls !== 'string' || !photoUrls.trim()) return []
-    const parsed = JSON.parse(photoUrls)
-    if (!Array.isArray(parsed) || !parsed.every(item => typeof item === 'string')) {
-      throw new Error('Stored review photo URLs are invalid')
-    }
-    return parsed.map(item => item.trim()).filter(Boolean)
-  }
-
-  const reviews = (results ?? []).map((review: ApiValue) => ({
-    ...review, photo_urls: safeParsePhotoUrls(review.photo_urls)
-  }))
+  const reviews = await attachReviewMedia(db, siteId, (results ?? []) as Array<Record<string, unknown>>)
 
   return jsonResponse({ success: true, reviews })
 })

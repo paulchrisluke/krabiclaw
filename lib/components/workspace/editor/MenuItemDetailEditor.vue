@@ -50,7 +50,8 @@
               <p class="text-sm font-medium text-highlighted">Image</p>
             </template>
             <MediaPicker
-              v-model="coverAssetId"
+              :model-value="coverAssetId"
+              @update:model-value="handleCoverChange"
               :site-id="siteId"
               :location-id="locationId"
               :initial-prompt="suggestedPrompt"
@@ -187,7 +188,6 @@ const form = reactive({
   sale_ends_at: '',
   available: true,
   featured: false,
-  media: [] as Array<{ asset_id: string }>,
   allergens: '',
   ingredients: '',
   dietary_notes: '',
@@ -200,14 +200,47 @@ watch(() => form.name, (name) => emit('update:item-name', name))
 const siteId = computed(() => props.siteId)
 const itemId = computed(() => props.itemId || null)
 const locationId = computed(() => props.locationId || null)
-const coverAssetId = computed({
-  get: () => form.media[0]?.asset_id ?? null,
-  set: (assetId: string | null) => {
-    const next = assetId?.trim()
-    const rest = form.media.slice(1)
-    form.media = next ? [{ asset_id: next }, ...rest] : rest
-  },
-})
+
+// menu_item:gallery is an ordered collection with exactly one member in this
+// editor today (there is no multi-photo grid here), so it's managed as a
+// single cover image — but membership still only ever changes through the
+// generic attach/remove routes, never a full-array save, so a stale reload
+// of this page can never resurrect a photo someone else removed elsewhere.
+const coverAssetId = ref<string | null>(null)
+const coverPlacement = computed(() => ({ owner_type: 'menu_item' as const, owner_id: props.itemId ?? '', slot: 'gallery' }))
+
+async function handleCoverChange(nextAssetId: string | null) {
+  const previous = coverAssetId.value
+  if (nextAssetId === previous) return
+  if (!props.itemId) {
+    // Item doesn't exist yet — held locally and attached once created.
+    coverAssetId.value = nextAssetId
+    return
+  }
+  const validate = (value: unknown): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids)
+  try {
+    // Attach the new cover before removing the old one, so a failed attach
+    // leaves the previous cover intact instead of leaving the item with none.
+    if (nextAssetId) {
+      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/attach`, {
+        method: 'POST',
+        body: { placement: coverPlacement.value, asset_id: nextAssetId },
+        validate,
+      })
+      coverAssetId.value = result.asset_ids.find(id => id !== previous) ?? nextAssetId
+    }
+    if (previous) {
+      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+        method: 'POST',
+        body: { placement: coverPlacement.value, asset_id: previous },
+        validate,
+      })
+      coverAssetId.value = result.asset_ids[0] ?? null
+    }
+  } catch (err) {
+    toast.add({ description: err instanceof Error ? err.message : 'Failed to update item image', color: 'error' })
+  }
+}
 
 const { menuPath } = useDashboardSiteLinks(props.siteId)
 const backPath = computed(() => menuPath(props.locationId))
@@ -288,7 +321,7 @@ const applyMenu = (loadedMenu: MenuWithItems) => {
     form.sale_ends_at = item.sale_ends_at ? item.sale_ends_at.slice(0, 10) : ''
     form.available = item.available
     form.featured = item.featured
-    form.media = (item.media ?? []).map(asset => ({ asset_id: asset.asset_id }))
+    coverAssetId.value = item.media?.[0]?.asset_id ?? null
     form.allergens = (item.allergens || []).join(', ')
     form.ingredients = (item.ingredients || []).join(', ')
     form.dietary_notes = (item.dietary_notes || []).join(', ')
@@ -342,7 +375,10 @@ const payload = computed<CreateMenuItemRequest & UpdateMenuItemRequest>(() => ({
   sale_ends_at: form.sale_ends_at.trim() || null,
   available: form.available,
   featured: form.featured,
-  media: form.media,
+  // Media is not part of this payload: menu_item:gallery membership only
+  // ever changes through handleCoverChange's direct attach/remove calls
+  // (create-time initial attach is handled separately below), never a
+  // full-array field on the entity save.
   allergens: splitList(form.allergens),
   ingredients: splitList(form.ingredients),
   dietary_notes: splitList(form.dietary_notes),
@@ -367,7 +403,7 @@ const handleSave = async () => {
     } else {
       const res = await dashboardApi<{ menuItem: MenuItem }>(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
         method: 'POST',
-        body: payload.value,
+        body: { ...payload.value, media: coverAssetId.value ? [{ asset_id: coverAssetId.value }] : [] },
         validate: (value): value is { menuItem: MenuItem } =>
           isRecord(value) && isMenuItem(value.menuItem),
       })

@@ -45,12 +45,13 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberSiteRow(db, siteId, session.user.id)
+    const siteAccess = await loadMemberSiteRow(db, env, siteId, session.user.id)
     if (!siteAccess) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
     await assertSiteWideAccess(db, {
+      env,
       memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
 
     const site = await queryFirst<{
@@ -59,19 +60,20 @@ export default defineHandler(async (event) => {
       organization_slug: string | null
       brand_name: string | null
       brand_description: string | null
-      logo_url: string | null
+      has_logo: number
       contact_email: string | null
       subdomain: string | null
       public_url: string | null
       status: string
       last_published_at: string | null
     }>(db, `
-      SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.brand_description, s.logo_url, s.contact_email, s.subdomain, s.public_url, s.status, s.last_published_at
+      SELECT s.id, s.organization_id, ? AS organization_slug, s.brand_name, s.brand_description,
+             EXISTS(SELECT 1 FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active' WHERE mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.slot = 'logo' AND mp.status = 'active') AS has_logo,
+             s.contact_email, s.subdomain, s.public_url, s.status, s.last_published_at
       FROM sites s
-      JOIN organization o ON o.id = s.organization_id
       WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1
-    `, [siteId, siteAccess.organization_id])
+    `, [siteAccess.organization_slug, siteId, siteAccess.organization_id])
 
     if (!site) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -108,8 +110,9 @@ export default defineHandler(async (event) => {
     // Count location photos from media_assets
     const photoCountResult = primaryLocation
       ? await queryFirst<{ count: number }>(db, `
-          SELECT COUNT(*) as count FROM media_assets
-          WHERE site_id = ? AND location_id = ? AND kind = 'image' AND status = 'active'
+          SELECT COUNT(*) as count FROM media_placements mp
+          JOIN media_assets ma ON ma.id = mp.asset_id AND ma.kind = 'image' AND ma.status = 'active'
+          WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ? AND mp.slot = 'gallery' AND mp.status = 'active'
         `, [siteId, primaryLocation.id])
       : { count: 0 }
     const photoCount = photoCountResult?.count ?? 0
@@ -131,7 +134,7 @@ export default defineHandler(async (event) => {
     const hasAddress = !!primaryLocation?.address || !!primaryLocation?.city
     const hasHours = !!primaryLocation?.opening_hours
     const hasFiveMenuItems = menuItemCount >= 5
-    const hasLogo = !!site.logo_url
+    const hasLogo = Boolean(site.has_logo)
     const hasBrandDescription = !!site.brand_description
     const hasPhotos = photoCount >= 3
     const hasAboutPage = !!aboutContent

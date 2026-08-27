@@ -1,13 +1,13 @@
 import { queryAll, type DbClient } from '~/server/db'
-import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { listAccessibleLocationIds } from '~/server/utils/member-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
 import { listTenantPages } from '~/server/utils/tenant-pages'
 import { listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getLinksPage } from '~/server/utils/site-links'
-import { resolveSocialImageUrl, resolveSocialOgImage } from '~/utils/social-metadata'
-import { resolvePublicTemplate } from '~/utils/template-registry'
 
 export interface DashboardHomeLocation {
   id: string
@@ -23,7 +23,7 @@ export interface DashboardHomeLocation {
   latitude: number | null
   longitude: number | null
   map_embed_url: string | null
-  preview_image_url: string
+  media: Array<{ asset_id: string; slot: 'hero'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
 export interface DashboardHomeEvent {
@@ -34,8 +34,6 @@ export interface DashboardHomeEvent {
   location_id: string | null
   metadata: unknown
   created_at: string
-  actor_name: string | null
-  actor_image: string | null
   location_title: string | null
 }
 
@@ -80,32 +78,23 @@ export async function getDashboardHomeData(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  principal: { memberId: string; role: string; ogOrigin: string },
+  principal: { env: CloudflareEnv; memberId: string; role: string },
 ): Promise<DashboardHomeData> {
-  const scoped = principal && !isOrganizationWideRole(principal.role)
+  const accessibleLocationIds = await listAccessibleLocationIds(db, {
+    env: principal.env,
+    memberId: principal.memberId,
+    role: principal.role,
+    organizationId,
+    siteId,
+  })
+  const scoped = accessibleLocationIds !== null
   const locationScopeClause = scoped
-    ? `AND EXISTS (
-        SELECT 1
-        FROM member m
-        JOIN sites s ON s.id = bl.site_id
-        WHERE m.id = ? AND m.organizationId = bl.organization_id
-          AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}
-      )`
+    ? accessibleLocationIds.length > 0 ? `AND bl.id IN (SELECT value FROM json_each(?))` : 'AND 0'
     : ''
-  // bl.team_id is NULL when the event has no location_id (the LEFT JOIN
-  // below doesn't match) — teamAccessPredicate's `tm.teamId IN (s.team_id,
-  // NULL)` then degrades to matching only s.team_id, so this needs no
-  // separate branch for the location-vs-site-wide event case.
   const eventScopeClause = scoped
-    ? `AND EXISTS (
-        SELECT 1
-        FROM member m
-        JOIN sites s ON s.id = e.site_id
-        LEFT JOIN business_locations bl ON bl.id = e.location_id AND bl.site_id = e.site_id
-        WHERE m.id = ? AND m.organizationId = e.organization_id
-          AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}
-      )`
+    ? accessibleLocationIds.length > 0 ? `AND e.location_id IN (SELECT value FROM json_each(?))` : 'AND 0'
     : ''
+  const scopedParams = accessibleLocationIds?.length ? [d1JsonStringSet(accessibleLocationIds)] : []
   const [locations, events, operations, settings, pages, media, linksPage] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
@@ -113,57 +102,44 @@ export async function getDashboardHomeData(
       is_primary: number; status: string; updated_at: string
       address: string | null; maps_url: string | null
       latitude: number | null; longitude: number | null
-      vertical: string | null; theme_id: string | null; brand_name: string | null
-      logo_url: string | null; favicon_url: string | null; brand_color: string | null
-      hero_kind: string | null; hero_public_url: string | null
-      hero_thumbnail_url: string | null; seo_title: string | null
-      seo_description: string | null; short_description: string | null
+      hero_asset_id: string | null; hero_kind: string | null; hero_media_public_url: string | null
+      hero_media_thumbnail_url: string | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
              bl.address, bl.maps_url, bl.latitude, bl.longitude,
              bl.is_primary, bl.status, bl.updated_at,
-             bl.seo_title, bl.seo_description, bl.short_description,
-             s.vertical, s.theme_id, s.brand_name,
-             COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url,
-             (SELECT value FROM site_config WHERE organization_id = s.organization_id AND site_id = s.id AND key = 'brand_color' LIMIT 1) AS brand_color,
-             ma_hero.kind AS hero_kind,
-             ma_hero.public_url AS hero_public_url,
-             ma_hero.thumbnail_url AS hero_thumbnail_url
+             ma_hero.id AS hero_asset_id, ma_hero.kind AS hero_kind,
+             ma_hero.public_url AS hero_media_public_url,
+             ma_hero.thumbnail_url AS hero_media_thumbnail_url
       FROM business_locations bl
-      JOIN sites s ON s.id = bl.site_id AND s.organization_id = bl.organization_id
-      LEFT JOIN media_assets ma_logo ON ma_logo.id = s.logo_asset_id
-        AND ma_logo.organization_id = s.organization_id AND ma_logo.site_id = s.id AND ma_logo.status = 'active'
-      LEFT JOIN media_assets ma_hero ON ma_hero.id = bl.hero_media_asset_id
+      LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = bl.id AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
+      LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id
         AND ma_hero.organization_id = bl.organization_id AND ma_hero.site_id = bl.site_id AND ma_hero.status = 'active'
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
-    `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
+    `, [organizationId, siteId, ...scopedParams]),
 
     queryAll<{
       id: string; event_type: string; entity_type: string | null
       entity_id: string | null; location_id: string | null
       metadata: string | null; created_at: string
-      actor_name: string | null; actor_image: string | null
       location_title: string | null
     }>(db, `
       SELECT e.id, e.event_type, e.entity_type, e.entity_id,
              e.location_id, e.metadata, e.created_at,
-             u.name as actor_name, u.image as actor_image,
              l.title as location_title
       FROM site_events e
-      LEFT JOIN user u ON u.id = e.actor_id
       LEFT JOIN business_locations l ON l.id = e.location_id
       WHERE e.organization_id = ? AND e.site_id = ?
       ${eventScopeClause}
       ORDER BY e.created_at DESC
       LIMIT 15
-    `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
+    `, [organizationId, siteId, ...scopedParams]),
 
     getGuestThreadOperationSummary(db, siteId, {
       principal: scoped && principal
-        ? { memberId: principal.memberId, role: principal.role, organizationId, siteId }
+        ? { env: principal.env, memberId: principal.memberId, role: principal.role, organizationId, siteId }
         : null,
       memberId: principal?.memberId ?? '',
     }),
@@ -176,32 +152,13 @@ export async function getDashboardHomeData(
   return {
     locations: locations.map((l) => {
       const address = parseLocationAddress(l.address)
-      const siteName = l.brand_name?.trim()
-      if (!siteName) throw new Error('Cannot generate dashboard preview: site brand name is missing')
-      const heroImageUrl = resolveSocialImageUrl({
-        kind: l.hero_kind,
-        public_url: l.hero_public_url,
-        thumbnail_url: l.hero_thumbnail_url,
-      })
+      const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url, ...location } = l
       return {
-        ...l,
+        ...location,
         is_primary: Boolean(l.is_primary),
         address,
+        media: hero_asset_id && hero_media_public_url ? [{ asset_id: hero_asset_id, slot: 'hero', public_url: hero_media_public_url, thumbnail_url: hero_media_thumbnail_url, kind: hero_kind }] : [],
         map_embed_url: calculateMapEmbedUrl({ ...l, address: address?.addressLines?.[0] ?? null }),
-        preview_image_url: resolveSocialOgImage({
-          template: resolvePublicTemplate({ themeId: l.theme_id, vertical: l.vertical }).slug,
-          title: l.seo_title?.trim() || `${l.title} | Locations`,
-          description: l.seo_description || l.short_description,
-          canonicalUrl: principal.ogOrigin,
-          location: l.title,
-          brand: {
-            siteName,
-            logoUrl: l.logo_url,
-            faviconUrl: l.favicon_url,
-            primaryColor: l.brand_color,
-          },
-          heroImage: heroImageUrl ? { url: heroImageUrl } : null,
-        }, principal.ogOrigin).url,
       }
     }),
     events: events.map(e => ({

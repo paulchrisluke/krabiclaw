@@ -10,8 +10,7 @@ import { HTTPError, defineHandler  } from 'nitro';
 //   menuId      — optional, existing menu to append to; creates a new one if omitted
 //   menuName    — required when menuId is omitted, name for a newly created menu
 
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
 import { createMenu, createMenuItem } from '~/server/utils/menu-management'
 import { callAiGateway, imageBlock, textBlock, documentBlock } from '~/server/utils/ai-gateway'
@@ -19,6 +18,8 @@ import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { assertResourceAccess, assertSiteWideAccess } from '~/server/utils/member-access'
 import { execute, queryFirst } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 const EXTRACT_SYSTEM = `You are a restaurant menu data extractor. The user will provide a photo or scan of a restaurant menu (including AI-generated food photography with text overlays). Extract ONLY text you can actually see — do not infer or hallucinate dishes.
 
@@ -46,36 +47,12 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
   const platformOrigin = env.NUXT_PUBLIC_PLATFORM_DOMAIN
   if (!platformOrigin) return jsonResponse({ error: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' }, { status: 500 })
-  const db = env.DB
-
-  if (!db) {
-    return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  }
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) {
-    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  }
-
-  // Verify user owns this site
-  const site = await queryFirst<{ id: string; organization_id: string; org_slug: string | null; member_id: string; member_role: string }>(db, `
-    SELECT s.id, s.organization_id, o.slug as org_slug, om.id AS member_id, om.role AS member_role
-    FROM sites s
-    JOIN organization o ON s.organization_id = o.id
-    JOIN member om ON o.id = om.organizationId
-    WHERE s.id = ? AND om.userId = ?
-    LIMIT 1
-  `, [siteId, session.user.id])
-
-  if (!site) {
-    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-  }
 
   const orgId: string = site.organization_id
-  const orgSlug: string = site.org_slug ?? orgId
+  const orgSlug: string = site.organization_slug ?? orgId
 
   // Check credits before doing anything expensive (skipped in local dev)
   const isDev = import.meta.dev
@@ -194,7 +171,7 @@ export default defineHandler(async (event) => {
   }
 
   // Resolve or create a menu to append to
-  const principal = { memberId: site.member_id, role: site.member_role, organizationId: orgId, siteId }
+  const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: orgId, siteId }
   let menuId = formData.get('menuId') as string | null
   if (menuId) {
     const existing = await queryFirst<{ id: string; location_id: string | null }>(db, 'SELECT id, location_id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1', [menuId, orgId, siteId]
@@ -240,9 +217,8 @@ export default defineHandler(async (event) => {
     // Roll back only the items created in this request, preserving pre-existing items
     console.error('[menu/extract] Failed to create menu items, rolling back:', error)
     if (createdItemIds.length > 0) {
-      const placeholders = createdItemIds.map(() => '?').join(', ')
       try {
-        await execute(db, `DELETE FROM menu_items WHERE id IN (${placeholders})`, createdItemIds)
+        await execute(db, `DELETE FROM menu_items WHERE id IN (SELECT value FROM json_each(?))`, [d1JsonStringSet(createdItemIds)])
       } catch (rollbackErr) {
         console.error('[menu/extract] Rollback of menu_items failed — orphaned rows may remain:', rollbackErr)
       }

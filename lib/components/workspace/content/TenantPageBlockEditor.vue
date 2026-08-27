@@ -20,10 +20,15 @@
       <div class="space-y-3">
         <div v-for="(media, index) in mediaForSlot('gallery')" :key="`${media.asset_id}-${index}`" class="flex items-center gap-3">
           <span class="w-6 text-center text-xs text-muted">{{ index + 1 }}</span>
-          <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" accept="image" @update:model-value="setMediaAt('gallery', index, $event)" />
-          <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove gallery image" @click="removeMediaAt('gallery', index)" />
+          <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset(index, $event)" />
+          <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove gallery image" :loading="galleryBusy" :disabled="galleryBusy" @click="commitGalleryAsset(index, null)" />
         </div>
-        <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" @click="addMedia('gallery')">Add image</UButton>
+        <div v-if="pendingNewGallerySlot" class="flex items-center gap-3">
+          <span class="w-6 text-center text-xs text-muted">{{ mediaForSlot('gallery').length + 1 }}</span>
+          <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="null" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset('new', $event)" />
+          <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Cancel adding image" :disabled="galleryBusy" @click="pendingNewGallerySlot = false" />
+        </div>
+        <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" :disabled="pendingNewGallerySlot || galleryBusy" @click="pendingNewGallerySlot = true">Add image</UButton>
       </div>
     </template>
 
@@ -161,8 +166,12 @@ import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { TenantPageBlock, TenantPageType } from '~/utils/tenant-page-blocks'
 import { validateTenantPageBlock } from '~/utils/tenant-page-editor'
 
-const props = defineProps<{ block: TenantPageBlock; siteId: string; pageRecipe?: string | null; pageType: TenantPageType }>()
+const props = defineProps<{ block: TenantPageBlock; siteId: string; isPersisted: boolean; pageRecipe?: string | null; pageType: TenantPageType }>()
 const emit = defineEmits<{ 'update:block': [block: TenantPageBlock] }>()
+const dashboardApi = useDashboardApi()
+const toast = useToast()
+const pendingNewGallerySlot = ref(false)
+const galleryBusy = ref(false)
 
 const headingLevels = [1, 2, 3, 4, 5, 6].map(level => ({ label: `H${level}`, value: level }))
 const toneOptions = ['neutral', 'info', 'success', 'warning', 'error'].map(value => ({ label: value[0]!.toUpperCase() + value.slice(1), value }))
@@ -219,17 +228,122 @@ function mediaAt(slot: string, index: number) {
 
 function setMediaAt(slot: string, index: number, assetId: string | null | undefined) {
   const slotMedia = mediaForSlot(slot)
-  if (assetId !== null && assetId !== undefined) slotMedia[index] = { asset_id: assetId, slot, sort_order: index }
+  if (assetId) slotMedia[index] = { asset_id: assetId, slot, sort_order: index }
   else slotMedia.splice(index, 1)
   emitBlock({ ...props.block, media: [...props.block.media.filter(item => item.slot !== slot), ...slotMedia.map((item, sort_order) => ({ ...item, sort_order }))] })
 }
 
-function addMedia(slot: string) {
-  setMediaAt(slot, mediaForSlot(slot).length, '')
+// content_block:gallery is an ordered collection — once this block is
+// persisted (has a real content_blocks row), its membership only ever
+// changes through the generic attach/remove/reorder routes, never a local
+// array mutation bundled into the page's own save. Before persistence there
+// is nothing to attach to yet, so edits stay purely local until the first
+// save creates the row (see TenantPageEditor.vue's savedBlockIds).
+const galleryPlacement = computed(() => ({ owner_type: 'content_block', owner_id: props.block.id, slot: 'gallery' }))
+
+interface GalleryMediaItem {
+  asset_id: string
+  sort_order?: number
+  public_url?: string | null
+  thumbnail_url?: string | null
+  kind?: string | null
+  alt_text?: string | null
 }
 
-function removeMediaAt(slot: string, index: number) {
-  setMediaAt(slot, index, null)
+const isMediaMutationResponse = (value: unknown): value is { media: GalleryMediaItem[] } =>
+  isRecord(value) && Array.isArray(value.media)
+
+function applyCanonicalGalleryMedia(media: GalleryMediaItem[]) {
+  emitBlock({
+    ...props.block,
+    media: [
+      ...props.block.media.filter(item => item.slot !== 'gallery'),
+      ...media.map((item, index) => ({
+        asset_id: item.asset_id,
+        slot: 'gallery',
+        sort_order: item.sort_order ?? index,
+        public_url: item.public_url ?? null,
+        thumbnail_url: item.thumbnail_url ?? null,
+        kind: item.kind ?? null,
+        alt_text: item.alt_text ?? null,
+      })),
+    ],
+  })
+}
+
+async function commitGalleryAsset(index: number | 'new', assetId: string | null | undefined) {
+  if (!props.isPersisted) {
+    if (index === 'new') {
+      if (assetId) setMediaAt('gallery', mediaForSlot('gallery').length, assetId)
+      pendingNewGallerySlot.value = false
+    } else if (assetId) {
+      setMediaAt('gallery', index, assetId)
+    } else {
+      setMediaAt('gallery', index, null)
+    }
+    return
+  }
+
+  const current = mediaForSlot('gallery')
+  galleryBusy.value = true
+  try {
+    if (index === 'new') {
+      if (!assetId) { pendingNewGallerySlot.value = false; return }
+      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/attach`, {
+        method: 'POST',
+        body: { placement: galleryPlacement.value, asset_id: assetId },
+        validate: isMediaMutationResponse,
+      })
+      applyCanonicalGalleryMedia(result.media)
+      pendingNewGallerySlot.value = false
+      return
+    }
+
+    const existing = current[index]
+    if (!existing) return
+    if (!assetId) {
+      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+        method: 'POST',
+        body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
+        validate: isMediaMutationResponse,
+      })
+      applyCanonicalGalleryMedia(result.media)
+      return
+    }
+    if (assetId === existing.asset_id) return
+
+    // Replace the asset at this position without disturbing anything else:
+    // attach the new one (it lands at the end), remove the old one, then
+    // reorder the new asset back to this exact position. Each step's response
+    // is applied immediately — if a later step throws, whatever already
+    // committed server-side stays reflected in local state instead of going stale.
+    const attachResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/attach`, {
+      method: 'POST',
+      body: { placement: galleryPlacement.value, asset_id: assetId },
+      validate: isMediaMutationResponse,
+    })
+    applyCanonicalGalleryMedia(attachResult.media)
+    const removeResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+      method: 'POST',
+      body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
+      validate: isMediaMutationResponse,
+    })
+    applyCanonicalGalleryMedia(removeResult.media)
+    const anchor = current[index + 1]
+    const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/reorder`, {
+      method: 'POST',
+      body: {
+        placement: galleryPlacement.value,
+        moves: anchor ? [{ asset_id: assetId, before_asset_id: anchor.asset_id }] : [{ asset_id: assetId }],
+      },
+      validate: isMediaMutationResponse,
+    })
+    applyCanonicalGalleryMedia(result.media)
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to update gallery image', color: 'error' })
+  } finally {
+    galleryBusy.value = false
+  }
 }
 
 function setNumber(key: string, value: unknown) {

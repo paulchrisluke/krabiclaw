@@ -1,7 +1,7 @@
 import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
-import { queryAll, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { getMcpTool } from '~/server/utils/mcp-tools'
 import { requireMcpSite, requireMcpUser, type McpUserContext } from '~/server/utils/mcp-auth'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
@@ -9,6 +9,7 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { listSitesForUser } from '~/server/utils/mcp-workflows'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { handleAgentSkillTools } from './agent-skills'
 import { handleAnalyticsTools } from './analytics'
@@ -98,18 +99,14 @@ export async function executeMcpToolCall(
 
   if (toolName === "list_sites") {
     const user = authenticatedUser ?? await requireMcpUser(event);
-    const userRecord = await queryFirst<{
-      id: string;
-      email: string | null;
-      name: string | null;
-      role: string | null;
-    }>(user.db, `SELECT id, email, name, role FROM user WHERE id = ? LIMIT 1`, [user.userId]);
     const allSites = await listSitesForUser(
       user.db,
+      user.env,
       user.userId,
     );
     const workspace = await resolveMcpWorkspace(
       user.db,
+      user.env,
       user.userId,
     );
     const workspaceSitesById = new Map(workspace.sites.map((site) => [site.id, site] as const));
@@ -130,13 +127,11 @@ export async function executeMcpToolCall(
     }));
     const currentUser = {
       id: user.userId,
-      email: userRecord?.email ?? null,
-      name: userRecord?.name ?? null,
-      role: userRecord?.role ?? null,
       isPlatformAdmin: user.isPlatformAdmin,
     };
+    const page = paginateMcpCollection(sites, rawArguments, { resource: `sites:${user.userId}` });
     return renderStructuredResponse(
-      { sites, currentUser },
+      { sites: page.items, currentUser, page_info: page.page_info },
       sites.length === 0
         ? "Welcome to KrabiClaw. You have no sites yet — let's create one."
         : `You have ${sites.length} site${sites.length > 1 ? "s" : ""}: ${sites.map((s: { name: unknown }) => s.name).join(", ")}.`,
@@ -145,32 +140,9 @@ export async function executeMcpToolCall(
 
   if (toolName === "get_current_user") {
     const user = authenticatedUser ?? await requireMcpUser(event);
-    const currentUser = await queryFirst<{
-      id: string;
-      email: string | null;
-      name: string | null;
-      role: string | null;
-    }>(
-      user.db,
-      `
-        SELECT id, email, name, role
-        FROM user
-        WHERE id = ?
-        LIMIT 1
-      `,
-      [user.userId],
-    );
-
-    if (!currentUser) {
-      throw new HTTPError({
-        statusCode: 404,
-        statusMessage: "Current user not found",
-      });
-    }
-
     return {
       user: {
-        ...currentUser,
+        id: user.userId,
         isPlatformAdmin: user.isPlatformAdmin,
       },
     };
@@ -180,6 +152,7 @@ export async function executeMcpToolCall(
     const user = authenticatedUser ?? await requireMcpUser(event);
     const workspace = await resolveMcpWorkspace(
       user.db,
+      user.env,
       user.userId,
     );
     const env = cloudflareEnv(event) as { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string };
@@ -200,6 +173,7 @@ export async function executeMcpToolCall(
     try {
       workspace = await resolveMcpWorkspace(
         user.db,
+        user.env,
         user.userId,
         {
           organizationId,
@@ -225,6 +199,7 @@ export async function executeMcpToolCall(
 
     const refreshed = await resolveMcpWorkspace(
       user.db,
+      user.env,
       user.userId,
       {
         organizationId: workspace.organization?.id ?? null,
@@ -273,7 +248,7 @@ export async function executeMcpToolCall(
     });
     let details;
     try {
-      details = await getPlaceDetails(apiKey, placeId, true);
+      details = await getPlaceDetails(apiKey, placeId);
     } catch (error) {
       const message =
         error instanceof PlaceDetailsError || error instanceof Error
@@ -286,41 +261,6 @@ export async function executeMcpToolCall(
     }
     await chargeFlatCreditsForUser(user, "google_places_details");
 
-    // Upload Google Photos to Cloudflare Images for stable preview URLs.
-    // We don't have an org/site yet, so we do NOT persist media_asset rows here.
-    // The returned cfImageId lets the model create proper media_assets after create_site.
-    const photos: Array<{ cfImageId: string; publicUrl: string }> = [];
-    const hasImagesConfig = hasCloudflareImagesConfig(user.env);
-
-    if (hasImagesConfig && details.photos.length > 0) {
-      for (const photo of details.photos.slice(0, 10)) {
-        try {
-          const imgRes = await fetch(photo.photoUri, {
-            signal: AbortSignal.timeout(15000),
-          });
-          if (!imgRes.ok) continue;
-          const contentLength = Number(imgRes.headers.get("content-length"));
-          if (contentLength > 10 * 1024 * 1024) continue;
-          const buffer = await imgRes.arrayBuffer();
-          if (buffer.byteLength > 10 * 1024 * 1024) continue;
-          const contentType =
-            imgRes.headers.get("content-type") ?? "image/jpeg";
-          const uploaded = await uploadImageBuffer(
-            user.env as Parameters<typeof uploadImageBuffer>[0],
-            buffer,
-            `maps-photo-${placeId}-${photos.length}.jpg`,
-            contentType,
-          );
-          photos.push({
-            cfImageId: uploaded.imageId,
-            publicUrl: uploaded.publicUrl,
-          });
-        } catch {
-          /* skip failed photos */
-        }
-      }
-    }
-
     const structuredContent = {
       business: {
         name: details.name,
@@ -332,13 +272,11 @@ export async function executeMcpToolCall(
         placeId: details.placeId,
         mapsUrl: details.mapsUrl ?? rawUrl,
       },
-      photos,
-      missingPhotos: photos.length < 3,
     };
 
     return renderStructuredResponse(
       structuredContent,
-      `Imported: ${details.name} — ${details.formattedAddress}. ${photos.length} photo${photos.length !== 1 ? "s" : ""} found.`,
+      `Imported: ${details.name} — ${details.formattedAddress}.`,
     );
   }
 
@@ -348,25 +286,25 @@ export async function executeMcpToolCall(
     if (raw.length === 0) {
       throw mcpProtocolError(
         MCP_ERROR.invalidParams,
-        "images must be non-empty. First persist each image with save_generated_image or save_generated_image_file, then pass the assetId and publicUrl here.",
+        "images must be non-empty. First persist each image with save_generated_image or save_generated_image_file, then pass the asset_id and public_url here.",
       );
     }
     for (const img of raw) {
       if (
-        typeof img.assetId !== "string" ||
-        !img.assetId ||
-        typeof img.publicUrl !== "string" ||
-        !img.publicUrl
+        typeof img.asset_id !== "string" ||
+        !img.asset_id ||
+        typeof img.public_url !== "string" ||
+        !img.public_url
       ) {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
-          "Each image must have a non-empty assetId and publicUrl returned by save_generated_image or save_generated_image_file.",
+          "Each image must have a non-empty asset_id and public_url returned by save_generated_image or save_generated_image_file.",
         );
       }
     }
     const images = raw.map((img) => ({
-      assetId: img.assetId as string,
-      publicUrl: img.publicUrl as string,
+      asset_id: img.asset_id as string,
+      public_url: img.public_url as string,
     }));
 
     let activeSiteName: string | null = null;
@@ -390,27 +328,6 @@ export async function executeMcpToolCall(
     }
 
     const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
-    if (picker.assignTool === "set_media" && picker.assignArgs) {
-      const assignArgs = picker.assignArgs;
-      const targetType = assignArgs.target_type;
-      const menuItemId = assignArgs.menu_item_id;
-      if (targetType === "menu_item_media" && typeof menuItemId === "string" && activeSiteContext) {
-        const rows = await queryAll<{ asset_id: string }>(
-          activeSiteContext.db,
-          `
-            SELECT mim.asset_id
-            FROM menu_item_media mim
-            JOIN menu_items mi ON mi.id = mim.menu_item_id
-            JOIN menus m ON m.id = mi.menu_id
-            WHERE mim.site_id = ? AND mim.menu_item_id = ?
-              AND m.organization_id = ? AND m.site_id = ?
-            ORDER BY mim.sort_order ASC
-          `,
-          [activeSiteContext.siteId, menuItemId, activeSiteContext.organizationId, activeSiteContext.siteId],
-        );
-        assignArgs.asset_ids = rows.map((row) => row.asset_id);
-      }
-    }
     const isDebug = normalizedArguments.debug === true;
     return renderStructuredResponse(
       {
@@ -445,6 +362,7 @@ export async function executeMcpToolCall(
     const normalized = normalizeSiteCreationData(result.data);
     const createdSite = await resolveMcpWorkspace(
       user.db,
+      user.env,
       user.userId,
       { siteId: normalized.siteId, requireSite: true },
     );

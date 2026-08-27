@@ -2,11 +2,7 @@
 // Public location gallery, shaped for the Saya photos page.
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listMediaAssets } from '~/server/utils/media-asset-manager'
-
-const PUBLIC_CATEGORY: Record<string, string> = {
-  exterior: 'EXTERIOR', interior: 'INTERIOR', food: 'FOOD', menu: 'MENU', team: 'TEAM', other: 'OTHER'
-}
+import { getMediaPlacements } from '~/server/utils/media-placement'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -21,13 +17,8 @@ export default defineHandler(async (event) => {
     db, `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [siteId, slug], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
-  const assets = await listMediaAssets(db, siteId, { locationId: location.id, kind: 'image', limit: 100 })
-  const photos = assets.map((asset, index) => ({
-    id: asset.id, thumbnail_url: asset.thumbnail_url, // MediaAsset stores one canonical public URL; location galleries expose it under both legacy photo fields.
-    local_url: asset.public_url, google_url: asset.public_url, description: asset.alt_text, category: PUBLIC_CATEGORY[asset.category || 'other'] ?? 'OTHER', sort_order: index
-  }))
-
-  return jsonResponse({ photos })
+  const placements = await getMediaPlacements(db, { siteId, ownerType: 'business_location', ownerIds: [location.id], slot: 'gallery' })
+  return jsonResponse({ media: placements.get(location.id) ?? [] })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

@@ -330,6 +330,10 @@ const editForm = reactive({
   seo_description: '',
   media: [] as MediaFormItem[],
 })
+// Snapshot of media as loaded from the server, used only to compute which
+// specific attach/remove calls this editing session's own changes require —
+// never sent to the server as a full array. See syncPostMedia.
+let originalMedia: MediaFormItem[] = []
 const selectedChannels = ref<string[]>(['site'])
 
 const channelOptions = computed(() => [
@@ -345,6 +349,7 @@ function resetEditForm() {
   editForm.seo_title = ''
   editForm.seo_description = ''
   editForm.media = []
+  originalMedia = []
 }
 
 const openCompose = () => {
@@ -371,6 +376,7 @@ const selectPost = (post: ApiRecord) => {
   editForm.seo_description = post.seo_description ?? ''
   const media = Array.isArray(post.media) ? post.media : []
   editForm.media = normalizeMediaForForm(media)
+  originalMedia = editForm.media.map(item => ({ ...item }))
   selectedChannels.value = ['site']
 }
 
@@ -398,17 +404,57 @@ function normalizeMediaForForm(items: unknown): MediaFormItem[] {
 }
 
 function buildPostPayload(locationId: string, postId?: string) {
-  return {
+  const base = {
     title: editForm.title,
     body: editForm.body,
     slug: editForm.slug || undefined,
     seo_title: editForm.seo_title || null,
     seo_description: editForm.seo_description || null,
     location_id: locationId ?? (postId ? null : undefined),
+  }
+  // Creation only: post:gallery membership on an update never travels as a
+  // full array (see syncPostMedia) — only a brand-new post's initial media
+  // is safe to seed this way, since nothing exists yet to resurrect.
+  if (postId) return base
+  return {
+    ...base,
     media: editForm.media.map(item => ({
       asset_id: item.asset_id,
       slot: item.slot,
+      alt_text: item.alt_text,
     })),
+  }
+}
+
+async function syncPostMedia(postId: string) {
+  const originalCover = originalMedia.find(item => item.slot === 'cover')?.asset_id ?? null
+  const currentCover = editForm.media.find(item => item.slot === 'cover')?.asset_id ?? null
+  if (currentCover !== originalCover) {
+    await dashboardApi(`/api/editor/sites/${siteId}/media/placements`, {
+      method: 'PUT',
+      body: { placement: { owner_type: 'post', owner_id: postId, slot: 'cover' }, asset_id: currentCover },
+      validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
+    })
+  }
+
+  const originalGalleryIds = new Set(originalMedia.filter(item => item.slot === 'gallery').map(item => item.asset_id))
+  const currentGalleryIds = new Set(editForm.media.filter(item => item.slot === 'gallery').map(item => item.asset_id))
+  const placement = { owner_type: 'post', owner_id: postId, slot: 'gallery' }
+  for (const assetId of originalGalleryIds) {
+    if (currentGalleryIds.has(assetId)) continue
+    await dashboardApi(`/api/editor/sites/${siteId}/media/placements/remove`, {
+      method: 'POST',
+      body: { placement, asset_id: assetId },
+      validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
+    })
+  }
+  for (const assetId of currentGalleryIds) {
+    if (originalGalleryIds.has(assetId)) continue
+    await dashboardApi(`/api/editor/sites/${siteId}/media/placements/attach`, {
+      method: 'POST',
+      body: { placement, asset_id: assetId },
+      validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
+    })
   }
 }
 
@@ -418,10 +464,13 @@ const handleSave = async () => {
   saving.value = true
   try {
     if (selectedPost.value) {
-      const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
-        method: 'PATCH', body: buildPostPayload(locationId, String(selectedPost.value.id)),
+      const postId = String(selectedPost.value.id)
+      const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}`, {
+        method: 'PATCH', body: buildPostPayload(locationId, postId),
         validate: isPostResponse,
       })
+      await syncPostMedia(postId)
+      originalMedia = editForm.media.map(item => ({ ...item }))
       if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
     } else {
@@ -432,6 +481,7 @@ const handleSave = async () => {
       if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
       composing.value = false
+      originalMedia = editForm.media.map(item => ({ ...item }))
       if (res.post?.id) {
         trackPostCreated(String(res.post.id), siteId)
       }

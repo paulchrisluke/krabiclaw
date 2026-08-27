@@ -234,9 +234,13 @@ async function save() {
     }
     
     // Run mutations sequentially to handle partial failures
+    const body: Record<string, unknown> = { brand_color: brandColor.value }
+    if (logoAssetId.value) {
+      body.media = [{ asset_id: logoAssetId.value, slot: 'logo' }]
+    }
     await applicationFetch<{ success: true }>(`${siteApiBase.value}/settings`, {
       method: 'PATCH',
-      body: { brand_color: brandColor.value, media: logoAssetId.value ? [{ asset_id: logoAssetId.value, slot: 'logo' }] : [] },
+      body,
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     
@@ -250,15 +254,18 @@ async function save() {
         validate: (value): value is { page: EditableTenantPage } => isRecord(value) && isRecord(value.page) && Array.isArray(value.page.blocks),
       })
       const page = detail.page
-      const blocks = page.blocks.map(block => block.type === 'hero'
-        ? {
-            ...block,
-            media: [
-              ...block.media.filter(item => item.slot !== 'media'),
-              { asset_id: heroAssetId.value!, slot: 'media', sort_order: 0 },
-            ],
-          }
-        : block)
+      const blocks = page.blocks.map((block) => {
+        if (block.type !== 'hero') return block
+        const { asset_id: _retiredAssetId, ...data } = block.data as Record<string, unknown> & { asset_id?: unknown }
+        return {
+          ...block,
+          data,
+          media: [
+            ...block.media.filter(item => item.slot !== 'media'),
+            { asset_id: heroAssetId.value!, slot: 'media', sort_order: 0 },
+          ],
+        }
+      })
       await applicationFetch(`${siteApiBase.value}/pages/${home.id}`, {
         method: 'PATCH',
         body: {

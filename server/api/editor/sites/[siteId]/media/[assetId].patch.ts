@@ -1,5 +1,5 @@
 // PATCH /api/editor/sites/[siteId]/media/[assetId]
-// Update mutable metadata: alt_text only. URLs are managed by Cloudflare.
+// Update mutable asset metadata. Ownership is managed through media placements.
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -11,7 +11,6 @@ interface MediaAssetSiteRow {
   id: string
   site_id: string
   organization_id: string
-  location_id: string | null
 }
 
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
@@ -28,49 +27,28 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   try {
     const asset = await queryFirst<MediaAssetSiteRow>(
-      db, `SELECT id, site_id, organization_id, location_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId], )
+      db, `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId], )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
-    await assertResourceAccess(db, { ...principal, resourceLocationId: asset.location_id })
+    const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+    await assertResourceAccess(db, { ...principal, resourceLocationId: null })
 
     const body = await readBody(event)
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
     }
-    const updates: { alt_text?: string | null; location_id?: string | null; category?: MediaAsset['category'] } = {}
+    const updates: { alt_text?: string | null; category?: MediaAsset['category'] } = {}
     if ('alt_text' in body) {
       if (body.alt_text !== null && typeof body?.alt_text !== 'string') {
         return jsonResponse({ error: 'alt_text must be a string or null' }, { status: 400 })
       }
       updates.alt_text = body.alt_text === null ? null : body.alt_text.trim().slice(0, 500)
-    }
-
-    if ('location_id' in body) {
-      if (body.location_id !== null && body.location_id !== '' && typeof body.location_id !== 'string') {
-        return jsonResponse({ error: 'location_id must be a string or null' }, { status: 400 })
-      }
-      const locationId = typeof body.location_id === 'string' ? body.location_id.trim() : ''
-      if (locationId) {
-        const location = await queryFirst(db, `
-          SELECT id FROM business_locations
-          WHERE id = ? AND site_id = ? AND organization_id = ?
-          LIMIT 1
-        `, [locationId, siteId, asset.organization_id])
-        if (!location) return jsonResponse({ error: 'Invalid location_id' }, { status: 400 })
-      }
-      // Moving the asset to a different location (or making it site-wide) is
-      // itself an access-checked action against the TARGET scope, not just
-      // the asset's current one — otherwise a location-scoped editor could
-      // reassign media into a location (or site-wide) they don't control.
-      await assertResourceAccess(db, { ...principal, resourceLocationId: locationId || null })
-      updates.location_id = locationId || null
     }
 
     if ('category' in body) {

@@ -1,8 +1,7 @@
 // GET /api/public/sites/[siteId]/locations/[slug]/media
 // Returns active media assets for a location. Used by public-facing Saya pages.
-import { queryFirst } from '~/server/db'
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listMediaAssets } from '~/server/utils/media-asset-manager'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -20,7 +19,13 @@ export default defineHandler(async (event) => {
   const query = getQuery(event)
   const kind = typeof query.kind === 'string' ? query.kind : undefined
 
-  const assets = await listMediaAssets(db, siteId, { locationId: location.id, kind, limit: 100 })
+  const assets = await queryAll(db, `
+    SELECT ma.* FROM media_placements mp
+    JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+    WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ? AND mp.slot = 'gallery' AND mp.status = 'active'
+      ${kind ? 'AND ma.kind = ?' : ''}
+    ORDER BY mp.sort_order LIMIT 100
+  `, [siteId, location.id, ...(kind ? [kind] : [])])
   return jsonResponse({ media: assets })
 })
 import { defineHandler } from 'nitro';

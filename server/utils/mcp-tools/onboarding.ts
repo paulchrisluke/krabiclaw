@@ -1,25 +1,10 @@
 import type { McpToolDefinition } from './shared'
 import { fileReferenceObject, generatedImagePickerOutputSchema, globalTool, siteTool, withToolAnnotations } from './shared'
 
-const generatedImageEntityIdFields = ['location_id', 'post_id', 'menu_item_id', 'experience_id'] as const
-const GENERATED_IMAGE_TARGETS = ['logo', 'home_hero', 'about_story_image', 'home_story_image', 'location_hero', 'post_image', 'menu_item_media', 'experience_image'] as const
-type GeneratedImageTarget = typeof GENERATED_IMAGE_TARGETS[number]
-
-function generatedImageTargetBranch(targets: GeneratedImageTarget[], requiredEntityId?: typeof generatedImageEntityIdFields[number]) {
-  const forbiddenEntityIds = generatedImageEntityIdFields.filter(field => field !== requiredEntityId)
-  return {
-    properties: {
-      target: targets.length === 1 ? { const: targets[0] } : { enum: targets },
-    },
-    required: ['target', 'site_id', ...(requiredEntityId ? [requiredEntityId] : [])],
-    not: { anyOf: forbiddenEntityIds.map(field => ({ required: [field] })) },
-  }
-}
-
 export const ONBOARDING_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'import_from_maps',
-      description: 'Import business details from a Google Maps URL or share link. Returns business info and photos. Call this when the user provides a Maps URL during site creation.',
+      description: 'Import business details from a Google Maps URL or share link. Call this when the user provides a Maps URL during site creation. Media is added only after the site exists through the canonical media asset tools.',
       domain: 'onboarding',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -49,26 +34,13 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
             },
             required: ['name', 'address', 'placeId'],
           },
-          photos: {
-            type: 'array',
-            description: 'Photos uploaded to Cloudflare Images. Up to 10.',
-            items: {
-              type: 'object',
-              properties: {
-                cfImageId: { type: 'string' },
-                publicUrl: { type: 'string' },
-              },
-              required: ['cfImageId', 'publicUrl'],
-            },
-          },
-          missingPhotos: { type: 'boolean', description: 'True if fewer than 3 photos were imported — prompt the user to upload their own.' },
         },
-        required: ['business', 'photos', 'missingPhotos'],
+        required: ['business'],
       },
     })),
   globalTool(withToolAnnotations({
       name: 'show_generated_images',
-      description: 'Use this after generating AI photos for the user to pick from — the picker for AI-generated images. First persist each image with save_generated_image or save_generated_image_file, then pass the resulting assetId and publicUrl here. A targeted picker represents exactly one content placement and requires the matching entity id. For multiple menu items, generate one standalone food photo per item and call this separately for each exact menu_item_id; never use a collage, website screenshot, or UI mockup as menu-item media.',
+      description: 'Use this after generating AI photos for the user to pick from. First persist each image, then pass the returned asset_id and public_url. To assign the selection, build placement from the target entity type and id.',
       domain: 'onboarding',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -77,34 +49,24 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
         properties: {
           images: {
             type: 'array',
-            description: 'Array of { assetId, publicUrl } returned by save_generated_image or save_generated_image_file.',
-            items: { type: 'object', properties: { assetId: { type: 'string' }, publicUrl: { type: 'string' } } },
+            description: 'Array of { asset_id, public_url } returned by save_generated_image or save_generated_image_file.',
+            items: { type: 'object', properties: { asset_id: { type: 'string' }, public_url: { type: 'string' } }, required: ['asset_id', 'public_url'], additionalProperties: false },
           },
-          target: {
-            type: 'string',
-            enum: GENERATED_IMAGE_TARGETS,
-            description: 'Optional target that should be updated directly after the user selects an image.',
+          placement: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { owner_type: { type: 'string' }, owner_id: { type: 'string' }, slot: { type: 'string' } },
+            required: ['owner_type', 'owner_id', 'slot'],
           },
-          site_id: { type: 'string', description: 'Required with target. Site ID that owns the target content.' },
-          location_id: { type: 'string' },
-          post_id: { type: 'string' },
-          menu_item_id: { type: 'string' },
-          experience_id: { type: 'string' },
+          site_id: { type: 'string', description: 'Required with placement.' },
           title: { type: 'string', description: 'Optional title override.' },
           subtitle: { type: 'string', description: 'Optional subtitle override.' },
           use_label: { type: 'string', description: 'Optional label for the primary button.' },
           regenerate_label: { type: 'string', description: 'Optional label for the secondary button.' },
         },
         required: ['images'],
-        oneOf: [
-          { not: { required: ['target'] } },
-          generatedImageTargetBranch(['logo', 'home_hero', 'about_story_image', 'home_story_image']),
-          generatedImageTargetBranch(['location_hero'], 'location_id'),
-          generatedImageTargetBranch(['post_image'], 'post_id'),
-          generatedImageTargetBranch(['menu_item_media'], 'menu_item_id'),
-          generatedImageTargetBranch(['experience_image'], 'experience_id'),
-        ],
-        additionalProperties: true,
+        dependentRequired: { placement: ['site_id'] },
+        additionalProperties: false,
       },
       outputSchema: generatedImagePickerOutputSchema,
     })),
@@ -122,11 +84,11 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          assetId: { type: 'string' },
-          publicUrl: { type: 'string' },
-          thumbnailUrl: { type: 'string' },
+          asset_id: { type: 'string' },
+          public_url: { type: 'string' },
+          thumbnail_url: { type: 'string' },
         },
-        required: ['assetId', 'publicUrl'],
+        required: ['asset_id', 'public_url'],
       },
     }),
   siteTool({
@@ -144,11 +106,11 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          assetId: { type: 'string' },
-          publicUrl: { type: 'string' },
-          thumbnailUrl: { type: 'string' },
+          asset_id: { type: 'string' },
+          public_url: { type: 'string' },
+          thumbnail_url: { type: 'string' },
         },
-        required: ['assetId', 'publicUrl'],
+        required: ['asset_id', 'public_url'],
       },
     }),
   siteTool({

@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { HTTPError } from 'nitro';
 import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
@@ -7,6 +7,7 @@ import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagr
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requiredString } from './shared'
 
 async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
@@ -24,16 +25,18 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_posts":
-      return {
-        posts: (await listPosts(
+      {
+        const posts = (await listPosts(
           site.db,
           site.organizationId,
           site.siteId,
           site.env,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
-        )).map((post) => attachViewUrlToRecord(post, site, {}, site.env)),
-      };
+        )).map((post) => attachViewUrlToRecord(post, site, {}, site.env));
+        const page = paginateMcpCollection(posts, args, { resource: `posts:${site.siteId}:${optionalString(args, 'status') ?? ''}:${optionalString(args, 'location_id') ?? ''}` });
+        return { posts: page.items, page_info: page.page_info };
+      }
     case "get_post":
       {
         const post = await getPost(
@@ -53,7 +56,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.db,
           site.organizationId,
           site.siteId,
-          omit(args, ["image_asset_id", "gallery_media"]) as never,
+          args as never,
           site.userId,
           site.env,
         ));
@@ -82,7 +85,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
-          omit(args, ["post_id", "image_asset_id", "gallery_media"]) as never,
+          omit(args, ["post_id"]) as never,
           site.userId,
           site.env,
         ));
@@ -162,14 +165,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const pageId = facebookConnection!.facebook_page_id!;
 
         let imageUrl: string | null = null;
-        if (post.image_asset_id) {
-          const asset = await queryFirst<{ public_url: string | null }>(
-            site.db,
-            `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`,
-            [post.image_asset_id],
-          );
-          imageUrl = asset?.public_url ?? null;
-        }
+        imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url ?? null;
 
         if (wantsFacebook) {
           try {

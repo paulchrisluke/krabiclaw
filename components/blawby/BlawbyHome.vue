@@ -131,8 +131,8 @@ function asOptionalString(value: unknown) {
 }
 
 function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
-  const media = Array.isArray(value?.media) ? value.media : []
-  const item = media.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
+  const media = value?.media
+  const item = media?.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
   return typeof item?.public_url === 'string' ? item.public_url : null
 }
 

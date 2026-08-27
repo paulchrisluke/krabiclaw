@@ -1,5 +1,6 @@
 import { HTTPError } from 'nitro';
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
   createContentDocumentWithBlocks,
   getContentDocumentById,
@@ -21,11 +22,13 @@ import {
   type TenantPageSnapshotMetadata,
   type TenantPageType,
 } from '~/utils/tenant-page-blocks'
-import { hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { normalizeDomain } from '~/server/utils/domain-shared'
 import { normalizeLocale } from '~/server/utils/site-i18n'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
+import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
+import { getMediaPlacements } from '~/server/utils/media-placement'
 
 export interface TenantPageEditorInput {
   id?: string
@@ -186,40 +189,119 @@ async function assertTenantPageSupport(db: DbClient, organizationId: string, sit
       badRequest('canonicalUrl must use an approved domain for this site')
     }
   }
-  const referencedAssetIds = new Set<string>()
-  for (const block of blocks) {
-    if (block.type === 'image') {
-      const assetId = typeof block.data.asset_id === 'string' ? block.data.asset_id : ''
-      if (assetId) referencedAssetIds.add(assetId)
-    }
-    if (block.type === 'gallery' && Array.isArray(block.data.asset_ids)) {
-      for (const value of block.data.asset_ids) {
-        if (typeof value === 'string' && value.trim()) referencedAssetIds.add(value.trim())
-      }
-    }
-  }
-  const media = await hydrateMediaAssetRefs(db, {
-    organizationId,
-    siteId,
-    refs: [...referencedAssetIds].map(asset_id => ({ asset_id })),
-    allowedKinds: ['image', 'video'],
-    fieldName: 'tenant page media',
-  })
-  const mediaById = new Map(media.map(asset => [asset.id, asset]))
-  for (const block of blocks) {
-    if (block.type === 'image') {
-      const assetId = String(block.data.asset_id)
-      if (mediaById.get(assetId)?.kind !== 'image') badRequest(`Image block asset ${assetId} must be an image`)
-    }
-    if (block.type === 'gallery' && Array.isArray(block.data.asset_ids)) {
-      const nonImageId = block.data.asset_ids.find(id => mediaById.get(id)?.kind !== 'image')
-      if (nonImageId) badRequest(`Gallery asset ${nonImageId} must be an image`)
-    }
-  }
 }
 
 function blocksAsInputs(blocks: TenantPageBlock[]): ContentBlockInput[] {
   return blocks.map(block => ({ id: block.id, type: block.type, position: block.position, data: block.data }))
+}
+
+async function tenantPagePlacementQueries(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  blocks: TenantPageBlock[],
+  now?: string,
+): Promise<BatchQuery[]> {
+  if (!blocks.length) return []
+  const queries: BatchQuery[] = []
+  const existingRows = await queryAll<{ id: string }>(db, `
+    SELECT id FROM content_blocks WHERE id IN (SELECT value FROM json_each(?))
+  `, [d1JsonStringSet(blocks.map(block => block.id))])
+  const existingBlockIds = new Set(existingRows.map(row => row.id))
+  const existingPlacements = await getMediaPlacements(db, {
+    siteId,
+    ownerType: 'content_block',
+    ownerIds: blocks.map(block => block.id),
+  })
+  for (const block of blocks) {
+    const bySlot = new Map<string, typeof block.media>()
+    for (const item of block.media) {
+      const slotMedia = bySlot.get(item.slot) ?? []
+      slotMedia.push(item)
+      bySlot.set(item.slot, slotMedia)
+    }
+    if (existingBlockIds.has(block.id)) {
+      const currentBySlot = new Map<string, string[]>()
+      for (const item of existingPlacements.get(block.id) ?? []) {
+        const ids = currentBySlot.get(item.slot) ?? []
+        ids.push(item.asset_id)
+        currentBySlot.set(item.slot, ids)
+      }
+      const slots = new Set([...currentBySlot.keys(), ...bySlot.keys()])
+      for (const slot of slots) {
+        const current = currentBySlot.get(slot) ?? []
+        const requested = (bySlot.get(slot) ?? []).map(item => item.asset_id)
+        if (current.length === requested.length && current.every((assetId, index) => assetId === requested[index])) continue
+        if (!isSingleMediaPlacement({ owner_type: 'content_block', slot })) {
+          badRequest(`blocks.${block.id}.media cannot replace an existing gallery; use attach/remove/reorder media operations`)
+        }
+        const media = await hydrateMediaAssetRefs(db, {
+          organizationId,
+          siteId,
+          refs: (bySlot.get(slot) ?? []).map(item => ({ asset_id: item.asset_id })),
+          allowedKinds: ['image', 'video'],
+          fieldName: `blocks.${block.id}.media`,
+        })
+        queries.push(...buildSingleMediaPlacementQueries({
+          organizationId,
+          siteId,
+          placement: { owner_type: 'content_block', owner_id: block.id, slot },
+          media,
+          now,
+        }))
+      }
+      continue
+    }
+    const canonicalSlot = block.type === 'gallery' ? 'gallery' : ['hero', 'image'].includes(block.type) ? 'media' : null
+    const slots = new Set([...bySlot.keys(), ...(canonicalSlot ? [canonicalSlot] : [])])
+    for (const slot of slots) {
+      const items = bySlot.get(slot) ?? []
+      const media = await hydrateMediaAssetRefs(db, {
+        organizationId,
+        siteId,
+        refs: items.map(item => ({ asset_id: item.asset_id })),
+        allowedKinds: ['image', 'video'],
+        fieldName: `blocks.${block.id}.media`,
+      })
+      queries.push(...insertInitialMediaPlacements({
+        organizationId,
+        siteId,
+        placement: { owner_type: 'content_block', owner_id: block.id, slot },
+        media,
+        now,
+      }))
+    }
+  }
+  return queries
+}
+
+export function preserveOmittedBlockMedia(value: unknown, existingBlocks: TenantPageBlock[]): unknown {
+  if (!Array.isArray(value)) return value
+  const existingById = new Map(existingBlocks.map(block => [block.id, block.media]))
+  return value.map((rawBlock) => {
+    if (!rawBlock || typeof rawBlock !== 'object' || Array.isArray(rawBlock)) return rawBlock
+    if (Object.prototype.hasOwnProperty.call(rawBlock, 'media')) return rawBlock
+    const id = 'id' in rawBlock && typeof rawBlock.id === 'string' ? rawBlock.id : null
+    return id && existingById.has(id)
+      ? { ...rawBlock, media: existingById.get(id) }
+      : rawBlock
+  })
+}
+
+async function attachTenantPageMedia(db: DbClient, siteId: string, blocks: TenantPageBlock[]): Promise<TenantPageBlock[]> {
+  const placements = await getMediaPlacements(db, { siteId, ownerType: 'content_block', ownerIds: blocks.map(block => block.id) })
+  return blocks.map(block => ({
+    ...block,
+    media: (placements.get(block.id) ?? []).map(item => ({
+      asset_id: item.asset_id,
+      slot: item.slot,
+      sort_order: item.sort_order,
+      public_url: item.public_url,
+      thumbnail_url: item.thumbnail_url,
+      kind: item.kind,
+      alt_text: item.alt_text,
+    })),
+  }))
 }
 
 function isReservedPath(path: string): boolean {
@@ -420,7 +502,8 @@ export async function getTenantPageForEditor(db: DbClient, variantId: string, sc
   const document = await getContentDocumentById(db, row.document_id)
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   const snapshot = await getContentEditorSnapshot(db, 'tenant_page', variantId)
-  return pageDto(row, document, (snapshot?.blocks ?? []) as TenantPageBlock[])
+  const blocks = await attachTenantPageMedia(db, row.site_id, (snapshot?.blocks ?? []).map(block => ({ ...block, media: [] })) as TenantPageBlock[])
+  return pageDto(row, document, blocks)
 }
 
 export async function getPublishedTenantPage(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<TenantPageDto | null> {
@@ -445,7 +528,8 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
   const snapshot = await getContentEditorSnapshotForDocument(db, document)
   if (!snapshot) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
-  return pageDto(row, document, snapshot.blocks as TenantPageBlock[])
+  const blocks = await attachTenantPageMedia(db, siteId, snapshot.blocks.map(block => ({ ...block, media: [] })) as TenantPageBlock[])
+  return pageDto(row, document, blocks)
 }
 
 export async function resolvePublishedTenantPageIdentity(
@@ -534,6 +618,7 @@ export async function createTenantPagesBatch(
     const variantId = effectiveData.id ?? crypto.randomUUID()
     const documentId = crypto.randomUUID()
     const now = new Date().toISOString()
+    const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.siteId, blocks, now)
     const pageQuery: BatchQuery = {
       query: "INSERT INTO tenant_pages (id, organization_id, site_id, title, slug, page_type, recipe, summary, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
       params: [pageId, input.organizationId, input.siteId, metadata.title, path === '/' ? 'home' : path.slice(1).replaceAll('/', '-'), metadata.pageType, metadata.recipe, metadata.summary, now, input.userId ?? null],
@@ -545,7 +630,7 @@ export async function createTenantPagesBatch(
     const prepared = prepareContentDocumentWithBlocks('tenant_page', variantId, blocksAsInputs(blocks), {
       documentId,
       additionalQueriesBefore: [pageQuery, variantQuery],
-      additionalQueriesAfter: [{
+      additionalQueriesAfter: [...placementQueries, {
         query: 'UPDATE tenant_page_variants SET updated_at = ?, updated_by = ? WHERE id = ?',
         params: [now, input.userId ?? null, variantId],
       }],
@@ -623,8 +708,8 @@ export async function applyOnboardingTenantPages(
        AND d.owner_type = 'tenant_page'
        AND d.owner_id = v.id
      WHERE v.site_id = ? AND v.organization_id = ? AND v.locale = ?
-       AND v.path IN (${paths.map(() => '?').join(', ')})
-  `, [input.siteId, input.organizationId, locale, ...paths])
+       AND v.path IN (SELECT value FROM json_each(?))
+  `, [input.siteId, input.organizationId, locale, d1JsonStringSet(paths)])
   const existingByPath = new Map<string, OnboardingTenantPageVariantRow>()
   for (const row of existingRows) {
     existingByPath.set(normalizeTenantPagePath(row.path), row)
@@ -669,9 +754,11 @@ export async function applyOnboardingTenantPages(
       updated_at: row.document_updated_at,
     }
     const now = new Date().toISOString()
+    const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.siteId, blocks, now)
     const prepared = prepareContentDocumentBlocksReplacement(document, blocksAsInputs(blocks), {
       expected_document_updated_at: row.document_updated_at,
       additionalQueriesAfter: [
+        ...placementQueries,
         {
           query: 'UPDATE tenant_page_variants SET path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ?, robots = ?, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ? AND document_id = ?',
           params: [page.path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, metadata.robots, now, input.userId, row.variant_id, input.siteId, input.organizationId, row.document_id],
@@ -777,6 +864,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   const variantId = effectiveData.id ?? crypto.randomUUID()
   const documentId = crypto.randomUUID()
   const now = new Date().toISOString()
+  const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.siteId, blocks, now)
   const pageQuery: BatchQuery = {
     query: "INSERT INTO tenant_pages (id, organization_id, site_id, title, slug, page_type, recipe, summary, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
     params: [pageId, input.organizationId, input.siteId, metadata.title, path === '/' ? 'home' : path.slice(1).replaceAll('/', '-'), metadata.pageType, metadata.recipe, metadata.summary, now, input.userId],
@@ -791,7 +879,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       ...(existingPage ? [] : [pageQuery]),
       variantQuery,
     ],
-    additionalQueriesAfter: [{
+    additionalQueriesAfter: [...placementQueries, {
       query: 'UPDATE tenant_page_variants SET updated_at = ?, updated_by = ? WHERE id = ?',
       params: [now, input.userId, variantId],
     }, publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-create')],
@@ -806,6 +894,13 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   const document = await getContentDocumentById(db, row.document_id)
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (!input.data.expectedDocumentUpdatedAt || document.updated_at !== input.data.expectedDocumentUpdatedAt) conflict('Tenant page content was updated by another writer')
+  const currentSnapshot = await getContentEditorSnapshotForDocument(db, document)
+  if (!currentSnapshot) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  const currentBlocks = await attachTenantPageMedia(
+    db,
+    row.site_id,
+    currentSnapshot.blocks.map(block => ({ ...block, media: [] })) as TenantPageBlock[],
+  )
   const identity = await canonicalTenantPageIdentity(db, row, {
     pageType: input.data.pageType,
     recipe: input.data.recipe,
@@ -825,9 +920,10 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   }
   const path = await assertTenantPagePathAvailable(db, { siteId: row.site_id, locale: row.locale, path: input.data.path ?? row.path, excludeVariantId: variantId, allowSystemPath: row.page_type === 'system' })
   const metadata = metadataForInput(effectiveInput, row.locale, path)
-  const blocks = normalizeTenantPageBlocks(input.data.blocks)
+  const blocks = normalizeTenantPageBlocks(preserveOmittedBlockMedia(input.data.blocks, currentBlocks))
   await assertTenantPageSupport(db, row.organization_id, row.site_id, effectiveInput, blocks, { checkCustomPageEntitlement: row.page_type !== 'custom' && pageType === 'custom' })
   const now = new Date().toISOString()
+  const placementQueries = await tenantPagePlacementQueries(db, input.scope.organizationId, input.scope.siteId, blocks, now)
   const pathChanged = path !== row.path
   if (pathChanged) {
     await assertTenantPageRedirectLocaleSafe(db, { siteId: row.site_id, locale: row.locale, fromPath: row.path, variantId })
@@ -878,7 +974,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   }
   await replaceContentDocumentBlocks(db, 'tenant_page', variantId, blocksAsInputs(blocks), {
     expected_document_updated_at: input.data.expectedDocumentUpdatedAt,
-    additionalQueriesAfter: [updateVariant, updatePage, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-update')],
+    additionalQueriesAfter: [...placementQueries, updateVariant, updatePage, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-update')],
   })
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }
 }

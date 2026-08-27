@@ -44,8 +44,6 @@ function canonicalPost() {
     seo_keywords: null,
     canonical_url: null,
     robots: null,
-    author_name: null,
-    site_author_id: null,
     published: true,
     published_at: null,
     status: 'published',
@@ -53,27 +51,13 @@ function canonicalPost() {
     scheduled_for: null,
     created_at: '2026-07-23T00:00:00.000Z',
     updated_at: '2026-07-23T00:00:01.000Z',
-    featured_image: {
-      asset_id: null,
-      public_url: null,
-      kind: null,
-      width: null,
-      height: null,
-    },
+    media: [],
     admin_edit_url: '/dashboard/org/sites/site/blog/post-1',
     edit_url: '/dashboard/org/sites/site/blog/post-1',
     public_path: '/blog/canonical-post',
     public_url: null,
     preview_url: null,
     view_url: 'https://example.com/blog/canonical-post',
-    content_blocks: [{
-      id: 'noncanonical-block',
-      parent_block_id: null,
-      type: 'markdown',
-      position: 0,
-      level: null,
-      data: { markdown: 'Top-level compatibility data must not be read.' },
-    }],
     content_document: {
       document: { updated_at: '2026-07-23T00:00:02.000Z' },
       blocks: [{
@@ -83,6 +67,7 @@ function canonicalPost() {
         position: 0,
         level: 2,
         data: { text: 'Canonical document data' },
+        media: [],
       }],
     },
   }
@@ -132,6 +117,7 @@ test('tenant blog projection rejects missing documents and malformed blocks inst
     position: 0,
     level: null,
     data: {},
+    media: [],
   }]
   assert.throws(
     () => projectBlogPostForMcp(post),

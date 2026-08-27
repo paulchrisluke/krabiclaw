@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const query = getQuery(event)
@@ -33,6 +33,7 @@ export default defineHandler(async (event) => {
   // site-wide-scoped member may see that; a location-scoped editor must
   // filter to their own location.
   await assertResourceAccess(db, {
+    env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId, })
 
   const bookings = await listExperienceBookingsForSite(db, siteId, { locationId })

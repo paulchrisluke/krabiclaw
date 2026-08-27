@@ -15,7 +15,6 @@ interface UploadResolvedMediaInputBase {
   filename: string;
   source: MediaAsset["source"];
   category?: MediaAsset["category"] | null;
-  locationId?: string | null;
   altText?: string | null;
   fileSize?: number | null;
 }
@@ -55,7 +54,6 @@ export async function uploadResolvedMediaToAssetStore(
         id: assetId,
         organization_id: input.organizationId,
         site_id: input.siteId,
-        location_id: input.locationId ?? null,
         kind: input.kind,
         provider: "cloudflare_images",
         source: input.source,
@@ -107,7 +105,6 @@ export async function uploadResolvedMediaToAssetStore(
       id: assetId,
       organization_id: input.organizationId,
       site_id: input.siteId,
-      location_id: input.locationId ?? null,
       kind: input.kind,
       provider: "cloudflare_r2",
       source: input.source,

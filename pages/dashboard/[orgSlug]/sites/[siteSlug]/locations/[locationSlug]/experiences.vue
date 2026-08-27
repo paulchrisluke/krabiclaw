@@ -537,6 +537,7 @@ const emptyForm = () => ({
 })
 
 const form = reactive(emptyForm())
+const originalExperienceMediaIds = ref<string[]>([])
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
 
@@ -554,6 +555,7 @@ function openCreate() {
   for (const day of weekdayNames) recurringInputs[day] = ''
   bookingPolicyDraft.value = {}
   bookingPolicySummary.value = null
+  originalExperienceMediaIds.value = []
   sliderOpen.value = true
 }
 
@@ -589,7 +591,7 @@ function dropGalleryMedia(targetIndex: number) {
   if (item) form.media.splice(targetIndex, 0, item)
 }
 
-function handleGalleryMediaChange(index: number, asset: { asset_id: string; public_url: string; thumbnail_url: string; kind?: string } | null) {
+function handleGalleryMediaChange(index: number, asset: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind?: string | null } | null) {
   const item = form.media[index]
   if (!item) return
   item.asset_id = asset?.asset_id ?? null
@@ -628,6 +630,7 @@ function openEdit(exp: ApiRecord) {
     featured: exp.featured ?? false,
     featured_sort_order: exp.featured_sort_order ?? 0,
   })
+  originalExperienceMediaIds.value = form.media.flatMap(item => item.asset_id ? [item.asset_id] : [])
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
   slotsMode.value = exp.recurring_slots ? 'recurring' : 'flat'
@@ -656,6 +659,42 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
   }
 }
 
+async function syncExperienceMedia(experienceId: string, nextIds: string[]) {
+  const placement = { owner_type: 'experience', owner_id: experienceId, slot: 'gallery' }
+  const previousIds = originalExperienceMediaIds.value
+  const previousSet = new Set(previousIds)
+  const nextSet = new Set(nextIds)
+  const validate = (value: unknown): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids)
+
+  // Track the canonical asset_ids from each response as it lands, not just once
+  // at the end — if a later call in this sequence throws, whatever already
+  // committed server-side stays reflected here instead of leaving this ref
+  // stale relative to the DB, which would otherwise 409 on retry.
+  for (const assetId of nextIds) {
+    if (previousSet.has(assetId)) continue
+    const result = await dashboardApi(`/api/editor/sites/${siteId}/media/placements/attach`, {
+      method: 'POST', body: { placement, asset_id: assetId }, validate,
+    })
+    originalExperienceMediaIds.value = result.asset_ids
+  }
+  for (const assetId of previousIds) {
+    if (nextSet.has(assetId)) continue
+    const result = await dashboardApi(`/api/editor/sites/${siteId}/media/placements/remove`, {
+      method: 'POST', body: { placement, asset_id: assetId }, validate,
+    })
+    originalExperienceMediaIds.value = result.asset_ids
+  }
+  if (nextIds.length > 1) {
+    const moves = nextIds.map((assetId, index) => index === nextIds.length - 1
+      ? { asset_id: assetId }
+      : { asset_id: assetId, before_asset_id: nextIds[index + 1]! })
+    const result = await dashboardApi(`/api/editor/sites/${siteId}/media/placements/reorder`, {
+      method: 'POST', body: { placement, moves: moves.reverse() }, validate,
+    })
+    originalExperienceMediaIds.value = result.asset_ids
+  }
+}
+
 async function save() {
   if (!form.title.trim()) {
     toast.add({ description: 'Title is required.', color: 'error' })
@@ -675,8 +714,10 @@ async function save() {
       const parsed = Number(str)
       return Number.isFinite(parsed) ? parsed : null
     }
+    const mediaIds = form.media.flatMap(item => item.asset_id ? [item.asset_id] : [])
+    const { media: _media, ...formFields } = form
     const payload = {
-      ...form,
+      ...formFields,
       location_id: locationId,
       price_amount: parseNumber(form.price_amount),
       compare_at_price_amount: parseNumber(form.compare_at_price_amount),
@@ -698,9 +739,7 @@ async function save() {
       highlights: linesToArray(form.highlights_input),
       included_items: linesToArray(form.included_items_input),
       what_to_bring: linesToArray(form.what_to_bring_input),
-      media: form.media.filter(item => item.asset_id).map(item => ({
-        asset_id: item.asset_id,
-      })),
+      ...(!editing.value ? { media: mediaIds.map(asset_id => ({ asset_id })) } : {}),
     }
     let experienceResult: ApiRecord | null = null
     if (editing.value) {
@@ -710,7 +749,13 @@ async function save() {
       )
       if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
-      toast.add({ description: 'Experience updated.', color: 'success' })
+      try {
+        await syncExperienceMedia(String(editing.value.id), mediaIds)
+        toast.add({ description: 'Experience updated.', color: 'success' })
+      } catch {
+        if (currentLocationId.value !== locationId) return
+        toast.add({ description: 'Experience saved, but its gallery failed to fully update. Reopen it to retry.', color: 'warning' })
+      }
     } else {
       const response = await dashboardApi<{ experience: ApiRecord }>(
         `/api/editor/sites/${siteId}/experiences`,
