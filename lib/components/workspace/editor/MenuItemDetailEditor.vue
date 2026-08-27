@@ -124,7 +124,7 @@
       </div>
 
       <!-- Action bar -->
-      <div class="mt-6 flex flex-col-reverse gap-2 border-t border-default pt-5 pb-safe sticky bottom-0 bg-default z-10 sm:flex-row sm:items-center sm:justify-between sm:pb-5 sm:static">
+      <div class="mt-6 flex flex-col-reverse gap-2 border-t border-default pt-5 sm:flex-row sm:items-center sm:justify-between">
         <UButton
           v-if="itemId"
           color="error"
