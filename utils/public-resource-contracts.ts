@@ -1,5 +1,6 @@
 import type { RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import type { Experience } from '~/server/utils/experiences'
+import type { Product } from '~/server/types/products'
 
 export interface PublicShellSite {
   brand_name: string | null
@@ -16,7 +17,7 @@ export interface PublicShellPayload {
   googleBusiness: ApiRecord
   locales: { code: string; label: string; is_source: boolean }[]
   hasExperiences: boolean
-  hasMenu: boolean
+  hasProducts: boolean
 }
 
 const nullableString = (value: unknown): value is string | null =>
@@ -51,7 +52,7 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
       && typeof locale.code === 'string'
       && typeof locale.label === 'string'
       && typeof locale.is_source === 'boolean')) return false
-  return typeof value.hasExperiences === 'boolean' && typeof value.hasMenu === 'boolean'
+  return typeof value.hasExperiences === 'boolean' && typeof value.hasProducts === 'boolean'
 }
 
 export interface PublicPagePayload {
@@ -73,7 +74,7 @@ export interface PublicPagePayload {
   experiencePolicyById: Record<string, RenderedBookingPolicySummary>
   experienceDetail: Experience | null
   experiencesList: Experience[]
-  menu: ApiRecord | null
+  products: Product[]
 }
 
 export const isPublicPagePayload = (
@@ -106,4 +107,7 @@ export const isPublicPagePayload = (
   && (value.experienceDetail === null || isRecord(value.experienceDetail))
   && Array.isArray(value.experiencesList)
   && value.experiencesList.every(item => isRecord(item) && typeof item.id === 'string')
-  && (value.menu === null || isRecord(value.menu))
+  && Array.isArray(value.products)
+  && value.products.every(item => isRecord(item) && typeof item.id === 'string'
+    && typeof item.location_id === 'string' && typeof item.category === 'string'
+    && typeof item.slug === 'string' && typeof item.price_amount === 'string')

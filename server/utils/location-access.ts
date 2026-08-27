@@ -58,7 +58,7 @@ export async function loadMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId
 /**
  * Location management access: org-wide roles, a site-wide-scoped editor, or
  * an editor scoped to this exact location. Use for any resource genuinely
- * owned by one location (menus and reviews with a location_id set,
+ * owned by one location (Products and reviews with a location_id set,
  * experiences, bookings, location QA/settings).
  */
 export async function requireLocationAccess(event: H3Event, siteId: string, locationId: string) {

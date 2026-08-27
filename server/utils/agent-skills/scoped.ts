@@ -96,7 +96,7 @@ Use this skill when preparing an AI-generated image brief for tenant or platform
 - Pass the generated image as a file reference. Never pass raw image_generation_call.result base64 to MCP tools.
 - After saving tenant generated images, use show_generated_images with the returned assetId and publicUrl before assigning the asset.
 - For requests covering multiple entities, generate one standalone image per entity. Never combine menu items or other distinct placements into a collage, contact sheet, website screenshot, or UI mockup.
-- Complete the generate, save, show, and assign sequence separately for every entity. For menu items, pass the exact menu_item_id to show_generated_images and set_media for each item; do not stop after producing previews.
+- Complete the generate, save, show, and assign sequence separately for every entity. For Products, pass the exact Product id to show_generated_images and set_media for each item; use slot image for primary media and gallery for detail media.
 
 ## Briefing Rules
 

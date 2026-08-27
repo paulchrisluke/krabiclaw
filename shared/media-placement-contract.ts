@@ -1,7 +1,7 @@
 export const MEDIA_PLACEMENT_SLOTS = {
   site: ['logo', 'logo_dark', 'favicon'],
   business_location: ['hero', 'gallery'],
-  menu_item: ['gallery'],
+  product: ['image', 'gallery'],
   post: ['cover', 'gallery'],
   blog_post: ['featured'],
   experience: ['gallery'],
@@ -17,7 +17,7 @@ export const MEDIA_PLACEMENT_SLOTS = {
 export type MediaPlacementOwnerType = keyof typeof MEDIA_PLACEMENT_SLOTS
 
 export const EDITABLE_MEDIA_PLACEMENT_OWNERS = [
-  'site', 'business_location', 'menu_item', 'post', 'blog_post', 'experience',
+  'site', 'business_location', 'product', 'post', 'blog_post', 'experience',
   'offering', 'content_block', 'review', 'review_request', 'tenant_compliance',
 ] as const satisfies readonly MediaPlacementOwnerType[]
 
@@ -32,7 +32,7 @@ const INDEXED_SLOTS = [
 ] as const satisfies ReadonlyArray<{ ownerType: MediaPlacementOwnerType; runtime: RegExp; sqlGlob: string }>
 
 const ORDERED_PLACEMENTS = new Set([
-  'business_location:gallery', 'menu_item:gallery', 'post:gallery', 'experience:gallery',
+  'business_location:gallery', 'product:gallery', 'post:gallery', 'experience:gallery',
   'offering:gallery', 'content_block:gallery', 'review:gallery', 'review_request:gallery',
   'tenant_compliance:document',
 ])

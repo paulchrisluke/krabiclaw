@@ -18,7 +18,7 @@ interface RouteCapabilitySiteRow {
 }
 
 /** The route-guard half of resolveCmsCapabilities (config/cms-registry.ts) — judges ONLY
- *  whether a `key` (e.g. 'site.qa', 'location.menu') is present in the resolved capability set
+ *  whether a `key` (e.g. 'site.qa', 'location.products') is present in the resolved capability set
  *  for this org/site/location. Deliberately does not assert membership/role access: that stays
  *  member-access.ts's job (assertMemberSiteAccess et al.), called independently by every
  *  /api/dashboard/* route regardless of what this function returns — see issue #342 requirement

@@ -6,11 +6,13 @@ export type SiteEventType =
   // Posts
   | 'post.created'
   | 'post.published'
-  // Menu
-  | 'menu.created'
-  | 'menu.item_added'
-  | 'menu.item_updated'
-  | 'menu.item_deleted'
+  // Products
+  | 'product.created'
+  | 'product.updated'
+  | 'product.deleted'
+  | 'product.reordered'
+  | 'product.category_renamed'
+  | 'product.category_deleted'
   // Content
   | 'content.updated'
   | 'content.published'

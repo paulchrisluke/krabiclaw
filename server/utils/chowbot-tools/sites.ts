@@ -15,7 +15,7 @@ export const SITES_CHOWBOT_TOOLS: AiTool[] = [
     {
       name: "get_site_stats",
       description:
-        "Summary of site content: posts, menus, menu items, locations, reviews.",
+        "Summary of site content: posts, Products, locations, and reviews.",
       input_schema: { type: "object", properties: {} },
     },
   {

@@ -98,14 +98,12 @@ export default defineHandler(async (event) => {
       LIMIT 1
     `, [orgId, siteId])
 
-    // Count published menu items across all menus for this site
-    const menuItemsResult = await queryFirst<{ count: number }>(db, `
-      SELECT COUNT(mi.id) as count
-      FROM menu_items mi
-      JOIN menus m ON mi.menu_id = m.id
-      WHERE m.site_id = ? AND m.organization_id = ? AND m.is_visible = 1 AND mi.available = 1
+    const productsResult = await queryFirst<{ count: number }>(db, `
+      SELECT COUNT(id) as count
+      FROM products
+      WHERE site_id = ? AND organization_id = ? AND is_visible = 1 AND available = 1
     `, [siteId, orgId])
-    const menuItemCount = menuItemsResult?.count ?? 0
+    const productCount = productsResult?.count ?? 0
 
     // Count location photos from media_assets
     const photoCountResult = primaryLocation
@@ -133,7 +131,7 @@ export default defineHandler(async (event) => {
     const hasPrimaryLocation = !!primaryLocation
     const hasAddress = !!primaryLocation?.address || !!primaryLocation?.city
     const hasHours = !!primaryLocation?.opening_hours
-    const hasFiveMenuItems = menuItemCount >= 5
+    const hasFiveProducts = productCount >= 5
     const hasLogo = Boolean(site.has_logo)
     const hasBrandDescription = !!site.brand_description
     const hasPhotos = photoCount >= 3
@@ -158,8 +156,8 @@ export default defineHandler(async (event) => {
       }, {
         id: 'opening_hours', label: 'Opening hours', description: 'Guests need to know when you\'re open.', done: hasHours, required: true, action_url: locationBase ? `${locationBase}/settings` : `${locationsBase}/new`
       }, {
-        id: 'menu_items', label: 'Menu — at least 5 items', description: 'Add menu items so guests know what to expect.', done: hasFiveMenuItems, required: true, action_url: locationBase
-          ? `${locationBase}/menu`
+        id: 'products', label: 'Products — at least 5 items', description: 'Add Products so guests know what you offer.', done: hasFiveProducts, required: true, action_url: locationBase
+          ? `${locationBase}/products`
           : `${locationsBase}/new`
       }, {
         id: 'logo', label: 'Logo', description: 'Upload your logo for a polished look across your site.', done: hasLogo, required: false, action_url: `${siteBase}/settings`

@@ -106,7 +106,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
     }
     case "copy_location_batch": {
       const VALID_ENTITY_TYPES: CopyEntityType[] = [
-        "menus", "menu_items", "media_assets", "reviews", "location_qa", "experiences",
+        "products", "media_assets", "reviews", "location_qa", "experiences",
       ];
       const sourceLocationId = requiredString(args, "source_location_id");
       const targetLocationId = optionalString(args, "target_location_id");
@@ -129,8 +129,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           );
         }
       }
-      const includeTranslations = args.include_translations !== false;
-
       const result = await copyLocationBatch(
         site.env,
         site.db,
@@ -143,7 +141,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           new_location: newLocationTitle ? { title: newLocationTitle } : undefined,
           entities: entityTypes.map((type) => ({
             type: type as CopyEntityType,
-            include_translations: includeTranslations,
           })),
         },
       );

@@ -74,7 +74,7 @@ export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDr
     },
     locales: payload.preview.locales,
     hasExperiences: payload.preview.hasExperiences,
-    hasMenu: Boolean(payload.preview.menu?.items.length),
+    hasProducts: payload.preview.products.length > 0,
   }
 }
 
@@ -194,7 +194,7 @@ export async function loadPublicDraftPage(
   const page = typeof query.page === 'string' ? query.page : 'home'
   const supportedPages = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
+    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'products', 'blog',
   ])
   if (!supportedPages.has(page)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported draft preview page' })
@@ -206,9 +206,9 @@ export async function loadPublicDraftPage(
       ? query.datasets.split(',')
       : [],
   )
-  const includeMenu = requestedDatasets.has('menu')
+  const includeProducts = requestedDatasets.has('products')
   const supportedDatasets = new Set([
-    'content', 'location', 'menu', 'reviews', 'photos', 'qa', 'posts',
+    'content', 'location', 'products', 'reviews', 'photos', 'qa', 'posts',
     'blog', 'blogPost', 'experiences', 'experienceDetail',
     'reservationPolicies', 'experiencePolicies',
   ])
@@ -259,7 +259,9 @@ export async function loadPublicDraftPage(
     },
     locations: payload.preview.locations,
     content,
-    menu: includeMenu ? payload.preview.menu : null,
+    products: includeProducts
+      ? payload.preview.products.filter(product => !resolvedLocation || product.location_id === resolvedLocation.id)
+      : [],
     locationReviews: payload.preview.reviews.slice(0, 3),
     globalReviews: page === 'home' || page === 'reviews' ? payload.preview.reviews : [],
     reviewsAggregate,

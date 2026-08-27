@@ -5,7 +5,7 @@ type SetupEnv = Parameters<typeof hasEntitlement>[0]
 
 export type WorkRequestType =
   | 'content_update'
-  | 'menu_update'
+  | 'product_update'
   | 'seo'
   | 'google_places'
   | 'seasonal'
@@ -19,7 +19,7 @@ export type WorkRequestSource = 'dashboard' | 'chowbot' | 'whatsapp'
 
 export const VALID_WORK_REQUEST_TYPES: WorkRequestType[] = [
   'content_update',
-  'menu_update',
+  'product_update',
   'seo',
   'google_places',
   'seasonal',

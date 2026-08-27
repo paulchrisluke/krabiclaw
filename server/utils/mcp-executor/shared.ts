@@ -982,25 +982,6 @@ export async function mutationContextPayload(
   };
 }
 
-export async function resolveMenuLocationId(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  menuId: string,
-) {
-  const row = await queryFirst<{ location_id: string | null }>(
-    db,
-    `
-      SELECT location_id
-      FROM menus
-      WHERE id = ? AND organization_id = ? AND site_id = ?
-      LIMIT 1
-    `,
-    [menuId, organizationId, siteId],
-  );
-  return row?.location_id ?? null;
-}
-
 export function toolRequiresArgument(
   schema: Record<string, unknown>,
   key: string,
@@ -1212,35 +1193,6 @@ export function omit(source: Record<string, unknown>, keys: string[]) {
   );
 }
 
-export function normalizeMenuItemArgs(
-  args: Record<string, unknown>,
-  { requireSection }: { requireSection: boolean },
-) {
-  const normalized = { ...args };
-  if (Object.prototype.hasOwnProperty.call(normalized, "price")) {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, "Unknown argument: price");
-  }
-
-  if (requireSection) {
-    normalized.section = requiredString(normalized, "section");
-  } else if (
-    normalized.section !== undefined &&
-    typeof normalized.section !== "string"
-  ) {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid section");
-  }
-
-  return normalized;
-}
-
-export function menuItemLookupKey(name: string) {
-  const key = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  return key || name.trim().toLowerCase();
-}
-
 export function toolString(
   record: Record<string, unknown>,
   key: string,
@@ -1383,7 +1335,7 @@ export function normalizeSiteCreationData(data: Record<string, unknown>) {
 
 export const NOT_HANDLED = Symbol('mcp-executor-not-handled')
 
-// Only toolName/args/site are read by domain handlers (handleMenusTools etc.) —
+// Only toolName/args/site are read by domain handlers —
 // event/tool/rawArguments/normalizedArguments/siteId exist for the MCP protocol
 // caller (executeMcpToolCall) and are optional so non-MCP callers (ChowBot, see
 // mcp-executor/chowbot-adapter.ts) can build a context without an H3Event or a

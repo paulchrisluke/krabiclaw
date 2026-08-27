@@ -150,7 +150,7 @@ export async function putPublicResourceCache(
 
 /**
  * Purge all cached public resource entries for a site.
- * Called after any write to public-resource tables (tenant pages, menus,
+ * Called after any write to public-resource tables (tenant pages, products,
  * business_locations, experiences, blog_posts, location_qa, media_assets,
  * site_config, site_locales) so the next read reflects the edit immediately
  * instead of waiting out the TTL.

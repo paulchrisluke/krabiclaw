@@ -64,7 +64,7 @@ export const BLOG_NAV_FIELDS_SCHEMA = {
   featured_order: { type: ['number', 'null'], description: 'Sort position in featured/homepage placements, independent of nav ordering.' },
 }
 
-/** SEO override fields shared across location/menu-item/experience/site tools. */
+/** SEO override fields shared across location/Product/experience/site tools. */
 export function seoOverrideFieldsSchema() {
   return {
     seo_title: { type: ['string', 'null'], description: 'Optional SEO title override. Falls back to the computed default if unset.' },
@@ -166,83 +166,6 @@ export const locationMutationSummaryObject = {
     context: { type: 'object' },
   },
   required: ['ok', 'entity', 'id'],
-}
-
-export const menuItemObject = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    menu_id: { type: 'string' },
-    section: { type: 'string' },
-    name: { type: 'string' },
-    slug: { type: 'string' },
-    description: { type: ['string', 'null'] },
-    price_amount: { type: ['string', 'number', 'null'] },
-    compare_at_price_amount: { type: ['string', 'number', 'null'] },
-    sale_starts_at: { type: ['string', 'null'] },
-    sale_ends_at: { type: ['string', 'null'] },
-    available: { type: 'boolean' },
-    featured: { type: 'boolean' },
-    featured_sort_order: { type: 'number' },
-    sort_order: { type: 'number' },
-    allergens: { type: ['array', 'null'], items: { type: 'string' } },
-    ingredients: { type: ['array', 'null'], items: { type: 'string' } },
-    dietary_notes: { type: ['array', 'null'], items: { type: 'string' } },
-    preparation: { type: ['string', 'null'] },
-    serving_note: { type: ['string', 'null'] },
-    seo_title: { type: ['string', 'null'] },
-    seo_description: { type: ['string', 'null'] },
-    canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
-    created_at: { type: 'string' },
-    updated_at: { type: 'string' },
-    created_by: { type: ['string', 'null'] },
-    updated_by: { type: ['string', 'null'] },
-  },
-  required: ['id', 'menu_id', 'section', 'name', 'slug', 'available', 'featured', 'featured_sort_order', 'sort_order', 'created_at', 'updated_at'],
-}
-
-export const menuMutationResultObject = {
-  type: 'object',
-  properties: {
-    ok: { type: 'boolean' },
-    entity: { type: 'string', enum: ['menu'] },
-    id: { type: 'string' },
-    changed_fields: { type: 'array', items: { type: 'string' } },
-    updated_at: { type: 'string' },
-    context: { type: 'object' },
-  },
-  required: ['ok', 'entity', 'id'],
-}
-
-export const menuItemMutationResultObject = {
-  type: 'object',
-  properties: {
-    ok: { type: 'boolean' },
-    entity: { type: 'string', enum: ['menu_item'] },
-    id: { type: 'string' },
-    slug: { type: 'string' },
-    changed_fields: { type: 'array', items: { type: 'string' } },
-    updated_at: { type: 'string' },
-    context: { type: 'object' },
-  },
-  required: ['ok', 'entity', 'id'],
-}
-
-export const menuObject = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
-    description: { type: ['string', 'null'] },
-    location_id: { type: ['string', 'null'] },
-    is_visible: { type: 'boolean' },
-    section_order: { type: ['array', 'null'], items: { type: 'string' } },
-    items: { type: 'array', items: menuItemObject },
-    created_at: { type: 'string' },
-    updated_at: { type: 'string' },
-  },
-  required: ['id', 'name', 'is_visible', 'items', 'created_at', 'updated_at'],
 }
 
 const faqItemSchema = {
@@ -1084,8 +1007,8 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_site_settings',
   'list_locations',
   'get_location',
-  'list_menus',
-  'get_menu',
+  'list_location_products',
+  'get_product',
   'list_posts',
   'get_post',
   'list_blog_posts',
@@ -1132,7 +1055,7 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'save_generated_image_file',
   'upload_user_media',
   'create_site',
-  'import_menu_from_media',
+  'import_products_from_media',
   'set_brand_color',
   'create_blog_post',
   'update_blog_metadata',
@@ -1147,13 +1070,11 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'create_location',
   'update_location',
   'copy_location_batch',
-  'create_menu',
-  'update_menu',
-  'create_menu_item',
-  'add_menu_items_batch',
-  'update_menu_item',
-  'rename_menu_section',
-  'reorder_menu_items',
+  'create_product',
+  'update_product',
+  'batch_create_products',
+  'rename_product_category',
+  'reorder_products',
   'reorder_blog_posts',
   'publish_post',
   'publish_to_facebook',
@@ -1184,13 +1105,12 @@ export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = ['remove_media'] as const
 export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_media_asset',
   'set_media',
-  'sync_menu_items',
+  'sync_products',
   'update_blog_post',
   'replace_blog_content',
   'delete_location',
-  'delete_menu',
-  'delete_menu_item',
-  'delete_menu_section',
+  'delete_product',
+  'delete_product_category',
   'delete_post',
   'delete_blog_post',
   'delete_location_qa',
