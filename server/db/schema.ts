@@ -606,6 +606,8 @@ export const media_assets = sqliteTable("media_assets", {
 	cloudflare_image_id: text(),
 	r2_key: text(),
 	public_url: text(),
+	// google_media_name intentionally removed 2026-08-27: confirmed zero rows
+	// (local + staging) and zero code references before dropping.
 	thumbnail_url: text(),
 	mime_type: text(),
 	file_name: text(),
@@ -621,7 +623,10 @@ export const media_assets = sqliteTable("media_assets", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	// The historical site/status index covers the media library query path.
 }, (table) => [
-	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other')`),
+	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog')`),
+	check("media_assets_status_check", sql`status IN ('pending', 'active', 'deleted', 'failed')`),
+	check("media_assets_provider_check", sql`provider IN ('cloudflare_images', 'cloudflare_r2')`),
+	check("media_assets_source_check", sql`source IN ('uploaded', 'generated', 'external')`),
 	uniqueIndex("media_assets_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
 ]);
 
