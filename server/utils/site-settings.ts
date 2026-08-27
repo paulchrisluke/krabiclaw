@@ -446,8 +446,9 @@ async function attemptSiteUpdate(
     }
   }
 
-  if (siteMedia !== undefined) {
-    const queries = (['logo', 'favicon'] as const).flatMap(slot => buildSingleMediaPlacementQueries({
+  if (siteMedia !== undefined && siteMedia.length > 0) {
+    const targetSlots = new Set(siteMedia.map(item => item.slot))
+    const queries = [...targetSlots].flatMap(slot => buildSingleMediaPlacementQueries({
       organizationId,
       siteId,
       placement: { owner_type: 'site', owner_id: siteId, slot },
