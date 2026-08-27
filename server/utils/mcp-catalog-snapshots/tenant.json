@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1e45d7964c160834dc83968c11a1b7a6e13f91e3d48d590c13bcecc9082597f4",
+  "fingerprint": "sha256:1d809601458820dfd269c4723a7f87f5a3548eeea3c88b29a519924ab0c3a0bb",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -1803,6 +1803,7 @@
           "media": {
             "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "asset_id": {
                   "description": "Active image or video asset id from get_site_media_assets.",
