@@ -16,17 +16,11 @@
         :class="modelValue ? 'p-1' : 'p-2'"
       >
         <UImage
-          v-if="selectedUrl && selectedKind === 'image'"
+          v-if="selectedUrl"
           :src="selectedUrl"
           class="size-10 shrink-0 rounded object-cover"
           :alt="selectedAlt"
         />
-        <div
-          v-else-if="selectedUrl && selectedKind === 'video'"
-          class="flex size-10 shrink-0 items-center justify-center rounded bg-elevated"
-        >
-          <UIcon name="i-lucide-film" class="size-5 text-muted" />
-        </div>
         <div
           v-else
           class="flex size-10 shrink-0 items-center justify-center rounded bg-elevated"
@@ -187,7 +181,6 @@ const pendingAsset = ref<SelectedMediaAsset | null>(null)
 const generatePanel = ref<ApiRecord | null>(null)
 
 const selectedUrl = ref<string | null>(null)
-const selectedKind = ref<string | null>(null)
 const selectedAlt = ref<string>('')
 const modelLoadController = ref<AbortController | null>(null)
 const modelLoadError = ref<string | null>(null)
@@ -206,7 +199,6 @@ watch(() => props.modelValue, async (id) => {
 
   if (!id) {
     selectedUrl.value = null
-    selectedKind.value = null
     selectedAlt.value = ''
     return
   }
@@ -226,11 +218,9 @@ watch(() => props.modelValue, async (id) => {
     const asset = (res.media ?? [])[0]
     if (asset) {
       selectedUrl.value = asset.thumbnail_url ?? asset.public_url ?? null
-      selectedKind.value = asset.kind ?? 'image'
       selectedAlt.value = assetAlt(asset)
     } else {
       selectedUrl.value = null
-      selectedKind.value = null
       selectedAlt.value = ''
     }
   } catch (err) {
@@ -293,7 +283,6 @@ function onGenerated(asset: { asset_id: string; public_url: string; thumbnail_ur
   }
   pendingAsset.value = selected
   selectedUrl.value = selected.thumbnail_url || selected.public_url
-  selectedKind.value = selected.kind
   selectedAlt.value = ''
   emit('update:modelValue', selected.asset_id)
   emit('change', selected)
@@ -304,7 +293,6 @@ function onGenerated(asset: { asset_id: string; public_url: string; thumbnail_ur
 function confirm() {
   if (!pendingAsset.value) return
   selectedUrl.value = pendingAsset.value.thumbnail_url || pendingAsset.value.public_url
-  selectedKind.value = pendingAsset.value.kind || 'image'
   selectedAlt.value = assetAlt(pendingAsset.value)
   emit('update:modelValue', pendingAsset.value.asset_id)
   emit('change', pendingAsset.value)
@@ -313,7 +301,6 @@ function confirm() {
 
 function clear() {
   selectedUrl.value = null
-  selectedKind.value = null
   selectedAlt.value = ''
   pendingAsset.value = null
   emit('update:modelValue', null)
