@@ -614,7 +614,7 @@ export const media_assets = sqliteTable("media_assets", {
 	height: integer(),
 	duration: integer(),
 	alt_text: text(),
-	category: text().$type<'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other'>(),
+	category: text().$type<'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog'>(),
 	status: text().$type<'pending' | 'active' | 'deleted' | 'failed'>().default("active").notNull(),
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
