@@ -107,8 +107,8 @@
             >
               <div class="size-12 overflow-hidden rounded bg-muted">
                 <img
-                  v-if="item.public_url && item.kind !== 'video'"
-                  :src="item.public_url"
+                  v-if="item.thumbnail_url || item.public_url"
+                  :src="item.thumbnail_url || item.public_url!"
                   :alt="item.alt_text || 'Gallery media'"
                   class="h-full w-full object-cover"
                 />
