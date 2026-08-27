@@ -7,6 +7,9 @@ import { chowbotToolFromMcp } from './from-mcp'
 // which has its own generate_image/WhatsApp-pending-media upload paths.
 const MEDIA_DOMAIN_TOOL_NAMES = new Set([
   'set_media',
+  'attach_media',
+  'remove_media',
+  'reorder_media',
   'get_site_media_assets',
   'update_media_asset',
   'delete_media_asset',
@@ -70,11 +73,6 @@ export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
             type: "string",
             description:
               "Describe the image. Include food type, style, plating, lighting. Be specific.",
-          },
-          location_id: {
-            type: "string",
-            description:
-              "Optional: attach the generated image to a specific location.",
           },
         },
         required: ["prompt"],

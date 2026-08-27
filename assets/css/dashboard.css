@@ -18,26 +18,8 @@
  * pane topology.
  */
 
-:root {
-  /* Fixed mobile bottom nav footprint: bottom-3 (12px) + h-[52px] pill, plus a
-   * breathing-room gap. Shared so any fixed element near the bottom of a
-   * dashboard page (the nav itself, floating pills/CTAs, panel body padding)
-   * clears it consistently instead of each spot hand-tuning its own offset. */
-  --dashboard-mobile-nav-clearance: 5rem;
-}
-
 .w-\(--width\) {
   width: var(--width);
-}
-
-@media (width < 1024px) {
-  /* [data-slot="body"] is UDashboardPanel's own scrollable content region
-   * (@nuxt/ui). Reserve space for the fixed mobile nav only on pages that
-   * actually render it, so the last section of any page's content (e.g. the
-   * menu editor's "Add section" button) never ends up hidden underneath it. */
-  .has-mobile-bottom-nav [data-slot="body"] {
-    padding-bottom: var(--dashboard-mobile-nav-clearance);
-  }
 }
 
 @media (width >= 1024px) {

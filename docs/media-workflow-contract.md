@@ -19,7 +19,7 @@ Related workflow helpers:
 
 - `POST /api/ai/[siteId]/generate-image`
 - `POST /api/ai/[siteId]/menu/extract`
-- ChowBot `import_menu_from_pending_media`
+- ChowBot `import_menu_from_media`
 - ChowBot `resolve_pending_media`
 
 ## Canonical lifecycle
@@ -34,7 +34,7 @@ Related workflow helpers:
    The editor confirms the upload after the provider accepts the file. This transitions the asset from pending to active.
 
 4. metadata update
-   Optional follow-up edits such as alt text, filename, location assignment, or status changes happen through `PATCH`.
+   Optional follow-up edits such as alt text or category changes happen through `PATCH`. Content ownership is never stored on the asset; assignment always uses a placement.
 
 5. downstream workflows
    Confirmed assets may then be used by higher-level flows like menu OCR/import, hero image selection, or AI-assisted generation.
@@ -58,8 +58,8 @@ Related workflow helpers:
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
   - Generate into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
-  - Assignment should happen through the canonical `set_media` tool with a discriminated target and complete `asset_ids` state.
-  - `set_media` uses explicit targets for `/about` and `/` story images because each page has its own `story.image` content field — they commonly point at the same asset, but the page is never inferred
+  - Assignment happens through the canonical placement tools with a `{ owner_type, owner_id, slot }` placement: `set_media` for a single-valued slot (at most one asset — a cover, hero, or logo), or `attach_media`/`remove_media`/`reorder_media` for an ordered collection (a gallery or a compliance document list). Never resubmit a placement's full asset list to change one item — targeted attach/remove/reorder is required so a stale read can never resurrect an asset someone else removed.
+  - Tenant-page media belongs to content-block placements. Block JSON never stores asset IDs or delivery URLs.
 - MCP tools should be coarse-grained and business-level:
   - `get_site_media_assets`
   - `upload_user_media`

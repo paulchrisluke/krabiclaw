@@ -47,8 +47,8 @@
             @click="openLightbox(i)"
           >
             <UImage
-              :src="photo.local_url || photo.google_url || photo.thumbnail_url"
-              :alt="photo.description || ''"
+              :src="photo.public_url"
+              :alt="photo.alt_text || ''"
               loading="lazy"
               class="block w-full transition-opacity duration-200 group-hover:opacity-80"
             />
@@ -79,9 +79,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, photosList, config: pageConfig } = await usePublicPageData({ lazy: false })
-
-const photos = photosList
+const { location, media: photos, config: pageConfig, site: publicSite } = await usePublicPageData({ lazy: false })
 
 const cats = [
   { key: 'ALL', label: 'All' },
@@ -113,10 +111,10 @@ function openLightbox(i: number) {
 
 const lightboxItems = computed(() =>
   sorted.value.map((p: ApiValue) => ({
-    url: p.local_url || p.google_url || p.thumbnail_url,
+    url: p.public_url,
     kind: 'image' as const,
-    description: p.description,
-    alt: p.description || p.category || ''
+    description: p.alt_text,
+    alt: p.alt_text || p.category || ''
   }))
 )
 
@@ -140,12 +138,12 @@ useSocialMetadata(() => ({
   location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: pageConfig.value?.logo_url || null,
-    faviconUrl: pageConfig.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: photos.value[0]?.local_url || photos.value[0]?.google_url || photos.value[0]?.thumbnail_url
-    ? { url: photos.value[0]?.local_url || photos.value[0]?.google_url || photos.value[0]?.thumbnail_url }
+  heroImage: photos.value[0]?.public_url
+    ? { url: photos.value[0].public_url }
     : null,
 }))
 
@@ -154,14 +152,14 @@ useSchemaOrg([
     '@type': 'ImageGallery',
     name: `${location.value?.title ?? ''} Photos`,
     image: photos.value.slice(0, 20).map((p: ApiValue) => {
-      const contentUrl = toAbsoluteUrl(p.thumbnail_url || p.local_url || p.google_url)
-      const thumbnailUrl = toAbsoluteUrl(p.thumbnail_url || p.local_url || p.google_url)
+      const contentUrl = toAbsoluteUrl(p.public_url)
+      const thumbnailUrl = toAbsoluteUrl(p.thumbnail_url)
       if (!contentUrl) return null
       return {
         '@type': 'ImageObject',
         contentUrl,
         thumbnailUrl,
-        description: p.description,
+        description: p.alt_text,
         about: p.category
       }
     }).filter(Boolean)

@@ -1,9 +1,7 @@
 // PATCH /api/editor/sites/[siteId]/locations/[locationId]/qa/[qaId]
-import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { cleanString, jsonResponse } from '~/server/utils/api-response'
 import { updateLocationQa } from '~/server/utils/mcp-workflows'
-import { assertLocationAccess } from '~/server/utils/member-access'
-import { queryFirst } from '~/server/db'
+import { requireLocationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -11,23 +9,7 @@ export default defineHandler(async (event) => {
   const qaId = getRouterParam(event, 'qaId')
   if (!siteId || !locationId || !qaId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ organization_id: string; member_id: string; member_role: string }>(db, `
-    SELECT s.organization_id, m.id AS member_id, m.role AS member_role
-    FROM sites s
-    JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ?
-    LIMIT 1
-  `, [siteId, session.user.id])
-  if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
-
-  await assertLocationAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
+  const { db, site } = await requireLocationAccess(event, siteId, locationId)
 
   const rawBody = await readBody(event)
   if (typeof rawBody !== 'object' || rawBody === null || Array.isArray(rawBody)) {

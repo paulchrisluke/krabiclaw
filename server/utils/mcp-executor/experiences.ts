@@ -3,6 +3,7 @@ import { createExperience, deleteExperience, getExperienceBookingsSummary, getEx
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { loadSettingsPayload, SiteSettingsNotFoundError } from '~/server/utils/site-settings'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
 import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
@@ -19,11 +20,13 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_experiences":
-      return {
-        experiences: (await listExperiences(site.db, site.siteId, {
+      {
+        const experiences = (await listExperiences(site.db, site.siteId, {
           locationId: optionalString(args, "location_id") ?? undefined,
-        })).map((experience) => attachExperienceViewUrl(experience, site)),
-      };
+        })).map((experience) => attachExperienceViewUrl(experience, site));
+        const page = paginateMcpCollection(experiences, args, { resource: `experiences:${site.siteId}:${optionalString(args, 'location_id') ?? ''}` });
+        return { experiences: page.items, page_info: page.page_info };
+      }
     case "get_experience":
       {
         const experience = await getExperienceById(
@@ -148,14 +151,18 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         context: await mutationContextPayload(site),
       };
     case "list_experience_bookings":
-      return {
-        bookings: await listExperienceBookings(
+      {
+        const experienceId = requiredString(args, "experience_id");
+        const locationId = optionalString(args, "location_id") ?? null;
+        const bookings = await listExperienceBookings(
           site.db,
           site.siteId,
-          requiredString(args, "experience_id"),
-          { locationId: optionalString(args, "location_id") ?? null },
-        ),
-      };
+          experienceId,
+          { locationId },
+        );
+        const page = paginateMcpCollection(bookings, args, { resource: `experience-bookings:${site.siteId}:${experienceId}:${locationId ?? ''}` });
+        return { bookings: page.items, page_info: page.page_info };
+      }
     case "list_all_experience_bookings": {
       const [bookings, summary] = await Promise.all([
         listExperienceBookingsForSite(site.db, site.siteId, {
@@ -167,10 +174,8 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           sinceDays: optionalDaysWindow(args, "days"),
         }),
       ]);
-      return {
-        bookings,
-        summary,
-      };
+      const page = paginateMcpCollection(bookings, args, { resource: `all-experience-bookings:${site.siteId}:${optionalString(args, 'location_id') ?? ''}:${optionalDaysWindow(args, 'days') ?? ''}` });
+      return { bookings: page.items, summary, page_info: page.page_info };
     }
     case "update_experience_booking": {
       const bookingId = requiredString(args, "booking_id")

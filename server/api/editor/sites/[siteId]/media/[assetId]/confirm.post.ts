@@ -1,14 +1,12 @@
 // POST /api/editor/sites/[siteId]/media/[assetId]/confirm
 // Called after client has uploaded directly to Cloudflare Images.
 // Marks the asset active and resolves the public URL.
-import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { buildImageUrl, hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { activateMediaAsset, getMediaAsset } from '~/server/utils/media-asset-manager'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assignSiteLogoWithFavicon } from '~/server/utils/media-placement'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -22,7 +20,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const asset = await getMediaAsset(db, assetId, siteId)
@@ -30,7 +28,8 @@ export default defineHandler(async (event) => {
 
   try {
     await assertResourceAccess(db, {
-      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: asset.location_id ?? null, })
+      env,
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: null, })
   } catch (error) {
     rethrowHttpError(error)
     throw error
@@ -46,16 +45,7 @@ export default defineHandler(async (event) => {
   const activated = await activateMediaAsset(db, assetId, siteId, { public_url: publicUrl, thumbnail_url: thumbnailUrl })
   if (!activated) return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
 
-  const siteRecord = await queryFirst<{ logo_asset_id: string | null }>(
-    db, `SELECT logo_asset_id FROM sites WHERE id = ? LIMIT 1`, [siteId], )
-
-  if (siteRecord && asset.category === 'logo' && !siteRecord.logo_asset_id) {
-    await assignSiteLogoWithFavicon(db, {
-      env, organizationId: site.organization_id, siteId, asset: {
-        id: assetId, kind: 'image', public_url: publicUrl, thumbnail_url: thumbnailUrl, mime_type: asset.mime_type, width: asset.width, height: asset.height, duration: null, alt_text: asset.alt_text, provider: 'cloudflare_images', status: 'active', }, onlyIfEmpty: true, })
-  }
-
-  return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'active' })
+  return jsonResponse({ asset_id: assetId, public_url: publicUrl, thumbnail_url: thumbnailUrl, status: 'active' })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

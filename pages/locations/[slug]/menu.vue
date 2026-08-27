@@ -69,14 +69,14 @@
             >
               <!-- Thumbnail left -->
               <NuxtLink
-                v-if="item.public_url && item.available"
+                v-if="hasItemMedia(item) && item.available"
                 :to="`/menu/${itemSlug(item)}`"
                 class="shrink-0"
               >
                 <SayaMenuItemPreview :item="item" />
               </NuxtLink>
               <div
-                v-else-if="item.public_url"
+                v-else-if="hasItemMedia(item)"
                 class="shrink-0"
               >
                 <SayaMenuItemPreview :item="item" disabled />
@@ -146,7 +146,7 @@ if (isBlawby.value) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { data: pageData, location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList } = await usePublicPageData({ lazy: false })
+const { data: pageData, location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList, site: publicSite } = await usePublicPageData({ lazy: false })
 const { formatDate } = useLocaleDate()
 const hasMenu = computed(() => ((pageMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 const locationExperienceHref = computed(() => resolveLocationExperienceHref(slug.value, experiencesList.value))
@@ -204,6 +204,10 @@ function itemSlug(item: ApiValue): string {
   return item.slug || item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
+function hasItemMedia(item: ApiValue): boolean {
+  return Array.isArray(item.media) && item.media.length > 0
+}
+
 function getDietaryTags(item: ApiValue): string[] {
   const tags: string[] = []
   // D1 items: boolean flags (future); static items: dietaryNotes array
@@ -222,8 +226,8 @@ useSocialMetadata(() => ({
   location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: pageConfig.value?.logo_url || null,
-    faviconUrl: pageConfig.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
 }))

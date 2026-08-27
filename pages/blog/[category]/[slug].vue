@@ -13,17 +13,12 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="post.author_name || 'KrabiClaw'" :author-image="post.author_image" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
+      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
-          <div class="shrink-0">
-            <img
-              v-if="post.author_image"
-              :src="post.author_image"
-              :alt="post.author_name || 'Author avatar'"
-              class="h-10 w-10 rounded-full object-cover"
-            />
+          <div v-if="post.author" class="shrink-0">
+            <img v-if="post.author.image" :src="post.author.image" :alt="post.author.name" class="size-10 rounded-full object-cover">
             <div
               v-else
               class="flex h-10 w-10 items-center justify-center rounded-full font-bold text-white"
@@ -32,10 +27,7 @@
               {{ authorInitial }}
             </div>
           </div>
-          <div>
-            <p class="text-sm font-semibold text-default">{{ post.author_name || 'KrabiClaw' }}</p>
-            <p v-if="authorSubtitle" class="text-xs text-dimmed">{{ authorSubtitle }}</p>
-          </div>
+          <p v-if="post.author" class="text-sm font-semibold text-default">{{ post.author.name }}</p>
         </div>
         <PlatformButton to="/blog" variant="outline" size="sm">More Articles</PlatformButton>
       </div>
@@ -79,19 +71,16 @@ interface BlogPost {
   published_at?: string | null
   created_at?: string | null
   updated_at?: string | null
-  author_name?: string | null
-  author_image?: string | null
-  author_subtitle?: string | null
-  author_bio?: string | null
-  featured_image?: {
-    asset_id: string | null
+  author: { id: string; name: string; image: string | null } | null
+  media?: Array<{
+    asset_id: string
+    slot: string
     public_url: string | null
     thumbnail_url: string | null
     kind: string | null
     width: number | null
     height: number | null
-  } | null
-  primary_image?: { public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null } | null
+  }>
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
@@ -120,10 +109,11 @@ const { data, pending, error } = await useAsyncData(
         import('~/server/utils/api-response'),
         import('~/server/utils/platform-content'),
       ])
-      const db = cloudflareEnv(requestEvent).db
+      const env = cloudflareEnv(requestEvent)
+      const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedPlatformBlogPost(db, category, String(route.params.slug)) as BlogPost | null
+      post = await getPublishedPlatformBlogPost(db, category, String(route.params.slug), env) as BlogPost | null
     } else {
       let payload: { post?: BlogPost }
       try {
@@ -143,12 +133,7 @@ const { data, pending, error } = await useAsyncData(
     if (!post) {
       throw createError({ statusCode: 404, statusMessage: 'Article not found' })
     }
-    return {
-      post: {
-        ...post,
-        author_subtitle: post.author_subtitle || post.author_bio || '',
-      },
-    }
+    return { post }
   }
 )
 
@@ -165,7 +150,7 @@ const post = computed(() => data.value?.post ?? null)
 if (!Array.isArray(post.value?.content_blocks) || post.value.content_blocks.length === 0) {
   throw createError({ statusCode: 500, statusMessage: 'Published blog content is missing its canonical blocks' })
 }
-const authorSubtitle = computed(() => post.value?.author_subtitle || '')
+const authorName = computed(() => post.value?.author?.name ?? null)
 
 const tocHtml = computed(() => (post.value?.content_blocks ?? [])
   .filter(block => block.type === 'markdown')
@@ -177,17 +162,17 @@ const renderableComponents = computed(() =>
 )
 
 const readTime = computed(() => {
-  const words = (post.value?.body ?? '')
+  const words = (post.value?.content_blocks ?? [])
+    .map(block => block.type === 'heading' ? block.data.text : block.data.markdown)
+    .filter(value => typeof value === 'string')
+    .join(' ')
     .trim()
     .split(/\s+/)
     .filter(Boolean).length
   return Math.max(1, Math.ceil(words / 200))
 })
 
-const authorInitial = computed(() => {
-  const name = post.value?.author_name ?? ''
-  return name ? name.charAt(0).toUpperCase() : 'K'
-})
+const authorInitial = computed(() => authorName.value?.trim().charAt(0).toUpperCase() || '')
 
 const wasUpdated = computed(() => {
   if (!post.value?.updated_at || !post.value?.published_at) return false
@@ -198,9 +183,7 @@ const wasUpdated = computed(() => {
 })
 
 const selectedPostImage = computed(() => {
-  const primary = post.value?.primary_image
-  if (primary?.public_url) return primary
-  return post.value?.featured_image ?? null
+  return post.value?.media?.find(item => item.slot === 'featured') ?? null
 })
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
 const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
@@ -232,7 +215,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   path: resolvedSeo.value.canonicalUrl,
   brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
   label: post.value?.category || null,
-  author: post.value?.author_name || null,
+  author: authorName.value,
   publishedAt: post.value?.published_at || null,
   heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
   robots: resolvedSeo.value.robots,
@@ -257,7 +240,7 @@ useContentPageSchema(computed(() => {
     imageHeight: selectedPostImage.value?.height ?? undefined,
     datePublished: post.value.published_at,
     dateModified: post.value.updated_at,
-    authorName: post.value.author_name || 'KrabiClaw',
+    authorName: authorName.value,
     articleSection: post.value.category || undefined,
     keywords: post.value.seo_keywords || undefined,
     inLanguage: 'en-US',

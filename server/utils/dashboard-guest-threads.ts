@@ -35,9 +35,10 @@ export async function loadDashboardGuestThreads(
   siteId: string,
   query: DashboardGuestThreadListQuery,
 ) {
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   if (query.locationId) {
     await assertMemberScope(db, {
+      env,
       memberId: site.member_id,
       role: site.member_role,
       organizationId: site.organization_id,
@@ -46,6 +47,7 @@ export async function loadDashboardGuestThreads(
     })
   }
   const principal = {
+    env,
     memberId: site.member_id,
     role: site.member_role,
     organizationId: site.organization_id,
@@ -78,6 +80,7 @@ export async function loadDashboardGuestThread(
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
   await assertMemberScope(db, {
+    env,
     memberId: site.member_id,
     role: site.member_role,
     organizationId: site.organization_id,

@@ -8,7 +8,7 @@ import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces } from '~/server/ut
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { createLocation } from '~/server/utils/location-management'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 
@@ -59,6 +59,7 @@ export default defineHandler(async (event) => {
   const siteId = site.id as string
   const organizationId = organization?.id as string
   await assertSiteWideAccess(db, {
+    env,
     memberId: organization.memberId, role: organization.role, organizationId, siteId, })
 
   const body = await readBody(event) as {
@@ -99,13 +100,7 @@ export default defineHandler(async (event) => {
     }
     await purgePublicResourceCacheSafe(env, siteId)
 
-    const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])
-
-    if (!orgRow) {
-      return jsonResponse({ error: 'Organization not found' }, { status: 404 })
-    }
-
-    return jsonResponse({ success: true, locationSlug: slug, orgSlug: orgRow.slug })
+    return jsonResponse({ success: true, locationSlug: slug, orgSlug: organization.slug })
   }
 
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
@@ -122,9 +117,9 @@ export default defineHandler(async (event) => {
   let chargeSearch = false
   try {
     if (placeId) {
-      place = await getPlaceDetails(apiKey, placeId, false)
+      place = await getPlaceDetails(apiKey, placeId)
     } else if (mapsUrl) {
-      place = await getPlaceDetailsByUrl(apiKey, mapsUrl, false)
+      place = await getPlaceDetailsByUrl(apiKey, mapsUrl)
     } else {
       const results = await searchPlaces(apiKey, query)
       chargeSearch = true
@@ -132,7 +127,7 @@ export default defineHandler(async (event) => {
       if (!top?.placeId) {
         return jsonResponse({ error: `No results found for "${query}". Try a more specific name.` }, { status: 404 })
       }
-      place = await getPlaceDetails(apiKey, top.placeId, false)
+      place = await getPlaceDetails(apiKey, top.placeId)
     }
   } catch (err) {
     return jsonResponse({
@@ -184,26 +179,18 @@ export default defineHandler(async (event) => {
     for (const review of place.reviews ?? []) {
       if (!review.reviewId || !review.rating) continue
       try {
-        await execute(db, `
-          INSERT OR IGNORE INTO reviews
-            (id, organization_id, site_id, location_id, google_review_id, author_name, reviewer_photo_url, rating, content, status, source, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
-        `, [
-          `${siteId}-${review.reviewId.replace(/\//g, '-')}`, organizationId, siteId, locationId, review.reviewId, review.authorName, review.authorPhotoUrl, review.rating, review.text, review.publishedAt ?? now, now, ])
+        const reviewId = `${siteId}-${review.reviewId.replace(/\//g, '-')}`
+        await executeBatch(db, [{
+          query: `INSERT OR IGNORE INTO reviews (id, organization_id, site_id, location_id, google_review_id, author_name, rating, content, status, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'google_places', ?, ?)`,
+          params: [reviewId, organizationId, siteId, locationId, review.reviewId, review.authorName, review.rating, review.text, review.publishedAt ?? now, now],
+        }])
       } catch { /* non-fatal */ }
     }
   }
   await purgePublicResourceCacheSafe(env, siteId)
 
-  // Get org slug for navigation
-  const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])
-
-  if (!orgRow) {
-    return jsonResponse({ error: 'Organization not found' }, { status: 404 })
-  }
-
   return jsonResponse({
-    success: true, siteId, locationSlug: slug, orgSlug: orgRow.slug, })
+    success: true, siteId, locationSlug: slug, orgSlug: organization.slug, })
 })
 import { defineHandler } from 'nitro';
 import { readBody } from 'nitro/h3';

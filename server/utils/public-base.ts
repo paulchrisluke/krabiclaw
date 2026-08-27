@@ -16,8 +16,7 @@ export interface PublicBase {
     brand_name: string | null
     brand_description: string | null
     vertical: string | null
-    logo_url: string | null
-    favicon_url: string | null
+    media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
     seo_title: string | null
     seo_description: string | null
     canonical_url: string | null
@@ -51,11 +50,15 @@ export function loadPublicBase(
     const db = cloudflareEnv(event).DB
     if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
     try {
-      const site = await queryFirst<PublicBase['site']>(
+      const row = await queryFirst<Omit<PublicBase['site'], 'media'> & { media_json: string }>(
         db,
         `SELECT s.id, s.organization_id, s.primary_location_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name, s.vertical,
-                s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-                json_extract(s.settings, '$.favicon_url') AS favicon_url,
+                s.brand_description,
+                (SELECT json_group_array(json_object(
+                  'asset_id', ma.id, 'slot', mp.slot, 'public_url', ma.public_url,
+                  'thumbnail_url', ma.thumbnail_url, 'kind', ma.kind
+                )) FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+                  WHERE mp.site_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active') AS media_json,
                 s.seo_title, s.seo_description, s.canonical_url, s.robots,
                 s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
                 (SELECT sl.locale
@@ -71,13 +74,13 @@ export function loadPublicBase(
                     AND sc.key = 'default_timezone'
                   LIMIT 1) AS default_timezone
            FROM sites s
-           LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
           WHERE s.id = ? AND s.status = 'active'${options.previewAuthorized ? '' : " AND s.onboarding_status = 'active'"}
           LIMIT 1`,
         [siteId],
       )
-      if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-      return { site }
+      if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
+      const { media_json: mediaJson, ...site } = row
+      return { site: { ...site, media: JSON.parse(mediaJson || '[]') } }
     } finally {
       recordRequestPhase(event, 'base', startedAt)
     }

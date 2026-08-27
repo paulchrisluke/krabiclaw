@@ -1,3 +1,5 @@
+import type { DashboardRequestScope } from '~/composables/dashboardFetch'
+
 interface DashboardOrganization {
   id: string
   name: string
@@ -21,7 +23,6 @@ interface DashboardSite {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
-  logo_url: string | null
   feature_overrides: string | null
 }
 
@@ -34,8 +35,7 @@ interface DashboardSiteSummary {
   status: string | null
   onboarding_status: string | null
   plan: string | null
-  logo_url: string | null
-  preview_image_url: string
+  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
 interface DashboardLocation {
@@ -46,7 +46,7 @@ interface DashboardLocation {
   status: string
   city: string | null
   address: { addressLines?: string[] } | null
-  preview_image_url: string
+  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
   feature_overrides: string | null
 }
 
@@ -76,7 +76,6 @@ const isDashboardSite = (value: unknown): value is DashboardSite =>
   && (value.brand_name === null || typeof value.brand_name === 'string')
   && (value.subdomain === null || typeof value.subdomain === 'string')
   && (value.public_url === null || typeof value.public_url === 'string')
-  && (value.logo_url === null || typeof value.logo_url === 'string')
   && typeof value.status === 'string'
   && typeof value.onboarding_status === 'string'
 
@@ -87,7 +86,15 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   && typeof value.title === 'string'
   && typeof value.is_primary === 'boolean'
   && typeof value.status === 'string'
-  && typeof value.preview_image_url === 'string'
+  && Array.isArray(value.media)
+  && value.media.every(item =>
+    isRecord(item)
+    && typeof item.asset_id === 'string'
+    && typeof item.slot === 'string'
+    && (item.public_url === null || typeof item.public_url === 'string')
+    && (item.thumbnail_url === null || typeof item.thumbnail_url === 'string')
+    && (item.kind === null || typeof item.kind === 'string')
+  )
 
 const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
   isRecord(value)
@@ -101,8 +108,15 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     && (site.team_id === null || typeof site.team_id === 'string')
     && (site.brand_name === null || typeof site.brand_name === 'string')
     && (site.subdomain === null || typeof site.subdomain === 'string')
-    && (site.logo_url === null || typeof site.logo_url === 'string')
-    && typeof site.preview_image_url === 'string')
+    && Array.isArray(site.media)
+    && site.media.every(item =>
+      isRecord(item)
+      && typeof item.asset_id === 'string'
+      && typeof item.slot === 'string'
+      && (item.public_url === null || typeof item.public_url === 'string')
+      && (item.thumbnail_url === null || typeof item.thumbnail_url === 'string')
+      && (item.kind === null || typeof item.kind === 'string')
+    ))
   && Array.isArray(value.locations)
   && value.locations.every(isDashboardLocation)
   && typeof value.managedServiceEnabled === 'boolean'
@@ -121,23 +135,28 @@ function getClientDashboardContextReads() {
   return clientDashboardContextReads
 }
 
-// Central legacy dashboard scope adapter. Better Auth migration issue #386 owns
-// removing these route headers; callers must go through dashboardFetch rather
-// than spreading this debt into individual pages or composables.
-// `overrides` lets a caller (e.g. a per-request site-slug filter) set additional
-// headers without losing the org/site ones already on the returned Headers instance
-// (spreading a Headers object with `{ ...headers }` silently drops its entries).
+// The dashboard org/site scope is sent as explicit `org`/`site` query params
+// (see dashboardFetch in composables/dashboardFetch.ts) rather than headers —
+// callers must go through dashboardFetch rather than spreading a bespoke
+// transport into individual pages or composables.
+// `overrides` lets a caller set additional headers (e.g. a cache-control hint)
+// without losing whatever cookie forwarding is already on the returned Headers
+// instance (spreading a Headers object with `{ ...headers }` silently drops
+// its entries).
 export function buildDashboardRequestHeaders(
-  scope: DashboardRequestScope,
   overrides?: Record<string, string>,
 ): Headers {
   const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
-  headers.set('x-dashboard-org-slug', scope.orgSlug)
-  if (scope.siteSlug) headers.set('x-dashboard-site-slug', scope.siteSlug)
   if (overrides) {
     for (const [key, value] of Object.entries(overrides)) headers.set(key, value)
   }
   return headers
+}
+
+export function buildDashboardRequestQuery(scope: DashboardRequestScope): Record<string, string> {
+  const query: Record<string, string> = { org: scope.orgSlug }
+  if (scope.siteSlug) query.site = scope.siteSlug
+  return query
 }
 
 export function useDashboardSite() {

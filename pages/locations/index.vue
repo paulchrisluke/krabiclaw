@@ -39,8 +39,8 @@
           <!-- Photo -->
           <div class="aspect-16/10 overflow-hidden bg-muted">
             <video
-              v-if="loc.public_url && loc.kind === 'video'"
-              :src="loc.public_url"
+              v-if="locationMedia(loc)?.public_url && locationMedia(loc)?.kind === 'video'"
+              :src="locationMedia(loc)?.public_url"
               autoplay
               muted
               loop
@@ -48,8 +48,8 @@
               class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
             <img
-              v-else-if="loc.public_url"
-              :src="loc.public_url"
+              v-else-if="locationMedia(loc)?.public_url"
+              :src="locationMedia(loc)?.public_url"
               :alt="loc.title"
               class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             >
@@ -109,7 +109,10 @@ const { isAuthenticated } = useAuth()
 const { locale } = useI18n()
 const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 
-const { locations, pending, config } = await usePublicPageData()
+const { locations, pending, config, site: publicSite } = await usePublicPageData()
+const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
+  ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
+  : null
 
 function formatAddress(address: AddressInput) {
   if (!address) return ''
@@ -126,8 +129,8 @@ useSocialMetadata(() => ({
   label: 'Locations',
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
 }))

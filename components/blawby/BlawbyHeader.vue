@@ -89,7 +89,7 @@ const props = defineProps<{
 const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
 const route = useRoute()
 const brandName = computed(() => props.site.brand_name || '')
-const logoUrl = computed(() => props.site.logo_url || null)
+const logoUrl = computed(() => props.site.media.find(item => item.slot === 'logo')?.public_url || null)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')

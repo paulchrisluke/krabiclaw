@@ -48,6 +48,14 @@ export interface PlatformAdminUserList {
   total: number
 }
 
+export interface PlatformOrganization {
+  id: string
+  name: string
+  slug: string
+  logo: string | null
+  createdAt: Date
+}
+
 export function adminHeadersForEvent(event: H3Event): HeadersInit {
   return Object.fromEntries(event.req.headers.entries()) as HeadersInit
 }
@@ -207,6 +215,50 @@ export async function countPlatformUsers(authApi: AdminApi, headers: HeadersInit
   return result.total
 }
 
+// An authoritative read of Better Auth's organization table, via its generic
+// adapter (findMany/count on model 'organization') rather than raw SQL or a
+// membership-derived projection — the org plugin itself has no "list all
+// organizations" call (listOrganizations is scoped to one user), so this is
+// the correct sanctioned API for a platform-admin-wide organization listing.
+// A projection built by paginating every user and unioning their memberships
+// would also silently miss any organization unreachable through that page of
+// users (e.g. one whose only member fell outside the enumerated pages).
+export async function listPlatformOrganizations(
+  env: CloudflareEnv,
+  input: { limit?: number; offset?: number } = {},
+): Promise<PlatformOrganization[]> {
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    findMany<T>(_input: {
+      model: string
+      limit?: number
+      offset?: number
+      sortBy?: { field: string; direction: 'asc' | 'desc' }
+    }): Promise<T[]>
+  }
+  const rows = await adapter.findMany<{ id: string; name: string; slug: string; logo: string | null; createdAt: Date }>({
+    model: 'organization',
+    limit: input.limit ?? 50,
+    offset: input.offset ?? 0,
+    sortBy: { field: 'createdAt', direction: 'desc' },
+  })
+  return rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    logo: row.logo ?? null,
+    createdAt: row.createdAt,
+  }))
+}
+
+export async function countPlatformOrganizations(env: CloudflareEnv): Promise<number> {
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    count(_input: { model: string }): Promise<number>
+  }
+  return await adapter.count({ model: 'organization' })
+}
+
 export async function listPlatformAdminUsers(authApi: AdminApi, headers: HeadersInit): Promise<PlatformAdminUser[]> {
   try {
     const result = await authApi.listUsers({
@@ -230,7 +282,7 @@ export async function listPlatformAdminUsers(authApi: AdminApi, headers: Headers
   }
 }
 
-export async function findPlatformUserByEmail(authApi: AdminApi, headers: HeadersInit, email: string): Promise<PlatformAdminUser | null> {
+async function findUserByEmail(authApi: AdminApi, headers: HeadersInit, email: string): Promise<PlatformAdminUser | null> {
   const result = await listPlatformUsers(authApi, headers, {
     search: email,
     limit: 10,
@@ -248,7 +300,7 @@ export async function addPlatformAdminUser(
   const name = input.name?.trim()
   if (!email) throw new HTTPError({ statusCode: 400, statusMessage: 'Email is required' })
 
-  const existing = await findPlatformUserByEmail(authApi, headers, email)
+  const existing = await findUserByEmail(authApi, headers, email)
   if (existing) {
     if (hasPlatformAdminPermission(existing.role)) {
       throw new HTTPError({ statusCode: 409, statusMessage: 'This user is already an admin' })

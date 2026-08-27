@@ -1,4 +1,5 @@
-import { queryFirst } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { listUserOrganizations } from '~/server/utils/member-access'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 
 export type PostLoginDestination = '/admin' | '/dashboard/account' | `/dashboard/${string}`
@@ -9,21 +10,17 @@ export interface PostLoginUser {
 }
 
 export async function resolvePostLoginDestination(
-  db: D1Database,
+  env: CloudflareEnv,
   user: PostLoginUser,
 ): Promise<PostLoginDestination> {
   if (hasPlatformAdminPermission(user.role)) return '/admin'
 
-  const row = await queryFirst<{ slug: string }>(db, `
-    SELECT o.slug
-    FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    WHERE m.userId = ?
-    ORDER BY o.createdAt ASC
-    LIMIT 1
-  `, [user.id])
+  const organizations = await listUserOrganizations(env, user.id)
+  const organization = organizations
+    .slice()
+    .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())[0]
 
-  if (row) return `/dashboard/${encodeURIComponent(row.slug)}`
+  if (organization) return `/dashboard/${encodeURIComponent(organization.slug)}`
 
   return '/dashboard/account'
 }

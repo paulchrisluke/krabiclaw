@@ -40,7 +40,7 @@ on. Do not replace the NCLS snapshot with a smaller hand-curated approximation.
 Complete fixture state includes:
 
 - site metadata, config, locales, domains
-- site logo asset linkage via `logo_asset_id` when a tenant has a logo
+- site logo and favicon media placements when a tenant has them
 - business locations with opening hours, coordinates, contact details
 - media assets — for curated tenants, only `cloudflare_images` (images) and `cloudflare_r2` (videos/files)
 - experiences, reviews, menus, Q&A, posts
@@ -65,7 +65,7 @@ In practice this means:
 - no `/images/<tenant>/...` or `/videos/<tenant>/...` paths in `media_assets` rows for curated tenants
 - no dependency on third-party delivery URLs such as Unsplash in seeded D1 state
 - no third-party or local URLs in tenant-page media blocks, review avatars, post thumbnails, or any other tenant-facing seeded content
-- no legacy `sites.logo_url` dependency for curated tenants; logos must be rehosted in Cloudflare and linked through `sites.logo_asset_id`
+- logos must be rehosted in Cloudflare and assigned through the site `logo` media placement
 - fixture media should mirror the dashboard upload split exactly:
   images -> Cloudflare Images direct upload flow
   videos/files -> R2 upload flow
@@ -101,7 +101,7 @@ Kikuzuki uses `cloudflare_images` for 77 image assets, including the tenant logo
 As of June 11, 2026, the curated Demo and Pottery House fixtures have been normalized onto Cloudflare-hosted media:
 
 - seeded `media_assets` rows now use `cloudflare_images` for images and `cloudflare_r2` for videos/files
-- seeded site logos must resolve through `logo_asset_id` to Cloudflare-hosted media, not raw `logo_url` fallbacks
+- seeded site logos must resolve through the site `logo` media placement to Cloudflare-hosted media
 - seeded tenant-page story/image block URLs are Cloudflare-hosted
 - seeded review avatar URLs are Cloudflare-hosted
 - live tenant pages may still render `media.krabiclaw.com/...-thumb.webp` for video thumbnails; that is expected as long as the parent asset is a `cloudflare_r2` video row
@@ -142,7 +142,8 @@ Commands and entry points:
 Real client data goes through the approved import pipeline, not typed fixtures:
 
 ```text
-client:import --dry-run   → reviewable manifests in client-imports/<slug>/
+client:import --organization-id <existing-better-auth-organization-id> --dry-run
+                        → reviewable manifests in client-imports/<slug>/
 human review
 client:import --approve   → signs the manifest hash
 client:import --apply     → executes only the approved seed
@@ -162,7 +163,7 @@ Demo, Pottery House, Kikuzuki, and NCLS follow the same ephemeral model: typed f
 - `seeds/*.sql` is gitignored and should stay empty for curated tenant seeds
 - `lint-seeds.mjs` fails CI if a new `seeds/*.sql` appears that is not a declared generated output
 - fixture reviews treat any `external_url`, repo-local `/public/` / `/images/` / `/videos/` tenant asset path, or third-party hosted tenant media URL in curated media fields as a regression
-- fixture reviews should also reject direct use of `sites.logo_url` for curated tenant branding when a Cloudflare-hosted logo asset is expected
+- fixture reviews should reject site branding outside canonical logo/favicon media placements
 - template work, seed edits, and onboarding changes must preserve the dashboard storage split:
   images via `/media/request-upload` -> Cloudflare Images
   videos/files via `/media/upload` -> Cloudflare R2

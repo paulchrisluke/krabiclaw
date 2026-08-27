@@ -156,7 +156,7 @@ function collectArtifactMediaUrls(value, urls = new Set()) {
   }
   for (const [key, nested] of Object.entries(value)) {
     if (typeof nested === 'string') {
-      const isMediaField = ['public_url', 'thumbnail_url', 'hero_image_url', 'source_path'].includes(key)
+      const isMediaField = ['public_url', 'thumbnail_url', 'source_path', 'hero_image_url'].includes(key)
       const hasMediaExtension = /\.(?:avif|gif|jpe?g|pdf|png|svg|webp)(?:[?#].*)?$/i.test(nested)
       if (/^(https?:)?\/\//.test(nested) && (isMediaField || hasMediaExtension)) {
         urls.add(nested)
@@ -402,11 +402,11 @@ function validateArtifacts(checks, manifest) {
     'Every nested KrabiClaw media/file reference resolves through verified inventory',
     { unmatched: [...referencedMediaUrls].filter(url => !verifiedMediaUrls.has(url)) },
   )
-  const complianceAssetIds = new Set(manifest.compliance?.document_asset_ids ?? [])
+  const complianceAssetIds = new Set((manifest.compliance?.media ?? []).map(item => item.asset_id))
   pushCheck(
     checks,
     legalFiles.every(file => complianceAssetIds.has(file.asset_id)),
-    'Compliance document asset ids include all legal files',
+    'Compliance media placements include all legal files',
   )
 
   const consultationUrl = manifest.consultation?.external_url

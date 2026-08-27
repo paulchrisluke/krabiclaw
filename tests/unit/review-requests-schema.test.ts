@@ -14,12 +14,10 @@ function findReviewRequestMigration() {
 const migrationSql = findReviewRequestMigration()
 const billingSource = readFileSync('server/utils/billing-entitlements.ts', 'utf8')
 
-test('review request migration creates canonical request and media tables', () => {
+test('review request migration creates the canonical request table', () => {
   assert.match(migrationSql, /CREATE TABLE `review_requests`/)
   assert.match(migrationSql, /`token_hash` text NOT NULL/)
   assert.match(migrationSql, /CREATE UNIQUE INDEX `idx_review_requests_active_booking_unique`/)
-  assert.match(migrationSql, /CREATE TABLE `review_media`/)
-  assert.match(migrationSql, /CONSTRAINT "review_media_status_check"/)
 })
 
 test('review request migration extends bookings, reviews, and locations', () => {

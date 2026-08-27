@@ -1,7 +1,9 @@
-import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
+import { buildDeleteOwnerPlacementsQuery, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
 
 export { normalizePostSlug, postPublicPath }
 
@@ -12,39 +14,20 @@ export class PostValidationError extends Error {
 }
 
 export interface PostMediaInput {
-  media_asset_id: string
-  role?: 'cover' | 'gallery'
-  sort_order?: number
-  caption?: string | null
-  alt_text?: string | null
-}
-
-export interface PostMediaItem {
-  id: string
-  post_id: string
-  media_asset_id: string
-  role: 'cover' | 'gallery'
-  sort_order: number
-  caption: string | null
-  alt_text: string | null
-  public_url: string | null
-  thumbnail_url: string | null
-  kind: string | null
-  width?: number | null
-  height?: number | null
+  asset_id: string
+  slot: 'cover' | 'gallery'
 }
 
 export interface PublicPostMedia {
-  id?: string
-  mediaAssetId?: string
-  url: string
-  thumbnailUrl?: string | null
+  asset_id: string
+  public_url: string
+  thumbnail_url: string | null
   kind: 'image' | 'video'
-  role?: 'cover' | 'gallery'
-  caption?: string | null
-  alt?: string | null
-  width?: number | null
-  height?: number | null
+  slot: 'cover' | 'gallery'
+  sort_order: number
+  alt_text: string | null
+  width: number | null
+  height: number | null
 }
 
 export interface Post {
@@ -57,17 +40,11 @@ export interface Post {
   post_type: 'standard' | 'offer' | 'event' | 'update'
   title: string | null
   body: string
-  image_asset_id: string | null
   seo_title: string | null
   seo_description: string | null
-  /** Resolved cover-media URL injected by joins, not a DB column. */
-  public_url?: string | null
-  thumbnail_url?: string | null
-  kind?: string | null
   public_path?: string | null
   canonical_url?: string | null
   media?: PublicPostMedia[]
-  gallery_media?: PublicPostMedia[]
   cta_type: string | null
   cta_url: string | null
   event_title: string | null
@@ -111,17 +88,17 @@ interface PublishedPostSummary {
   slug: string
   title: string
   summary: string
-  createTime: string | null
-  publicPath: string
+  published_at: string | null
   public_path: string
-  canonicalUrl: string | null
   canonical_url: string | null
-  url: string | null
   media: PublicPostMedia[]
-  gallery: PublicPostMedia[]
-  callToAction?: { actionType: string | null; url: string } | null
-  event?: { title: string | null; startDate: string | null; endDate: string | null } | null
-  offer?: { title: string | null; couponCode: string | null; terms: string | null } | null
+  cta_type: string | null
+  cta_url: string | null
+  event_title: string | null
+  event_start: string | null
+  event_end: string | null
+  offer_coupon: string | null
+  offer_terms: string | null
   location?: { id: string; title: string | null; slug: string | null } | null
 }
 
@@ -135,7 +112,6 @@ interface PublishedPostRow {
   post_type: 'standard' | 'offer' | 'event' | 'update'
   title: string | null
   body: string
-  image_asset_id: string | null
   seo_title: string | null
   seo_description: string | null
   cta_type: string | null
@@ -148,11 +124,6 @@ interface PublishedPostRow {
   published_at: string | null
   created_at: string
   updated_at: string
-  public_url: string | null
-  thumbnail_url: string | null
-  kind: string | null
-  width?: number | null
-  height?: number | null
 }
 
 function cleanString(value: unknown): string | null {
@@ -206,32 +177,23 @@ export function validatePostInput(data: PostWritableInput, existing?: PostWritab
   }
 }
 
-function normalizeRole(value: unknown): 'cover' | 'gallery' {
-  return value === 'cover' ? 'cover' : 'gallery'
-}
-
 function normalizeMediaInputs(value: unknown): PostMediaInput[] | undefined {
   if (value === undefined) return undefined
-  if (!Array.isArray(value)) return []
-  const media: PostMediaInput[] = []
-  value.forEach((item, index) => {
-    if (typeof item === 'string') {
-      const mediaAssetId = item.trim()
-      if (mediaAssetId) media.push({ media_asset_id: mediaAssetId, sort_order: index })
-      return
+  if (!Array.isArray(value)) throw new PostValidationError('media must be an array')
+  const media = value.map((item): PostMediaInput => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new PostValidationError('media items must contain asset_id and slot')
     }
-    if (!item || typeof item !== 'object') return
     const record = item as Record<string, unknown>
-    const mediaAssetId = cleanString(record.media_asset_id ?? record.mediaAssetId ?? record.asset_id ?? record.id)
-    if (!mediaAssetId) return
-    media.push({
-      media_asset_id: mediaAssetId,
-      role: normalizeRole(record.role),
-      sort_order: Number.isFinite(Number(record.sort_order)) ? Number(record.sort_order) : index,
-      caption: cleanString(record.caption),
-      alt_text: cleanString(record.alt_text ?? record.altText),
-    })
+    const mediaAssetId = cleanString(record.asset_id)
+    if (!mediaAssetId) throw new PostValidationError('media items must contain asset_id')
+    const slot = record.slot === 'cover' ? 'cover' : record.slot === 'gallery' ? 'gallery' : null
+    if (!slot) throw new PostValidationError('media items must use cover or gallery slot')
+    return { asset_id: mediaAssetId, slot }
   })
+  if (media.filter(item => item.slot === 'cover').length > 1) {
+    throw new PostValidationError('media accepts at most one cover asset')
+  }
   return media
 }
 
@@ -266,156 +228,51 @@ async function allocatePostSlug(db: DbClient, siteId: string, source: string, ex
   return `${base}-${crypto.randomUUID().slice(0, 8)}`
 }
 
-async function requireActiveMediaAsset(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  mediaAssetId: string,
-  fieldName: string,
-) {
-  const asset = await queryFirst<{ id: string }>(
-    db,
-    `SELECT id FROM media_assets WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' LIMIT 1`,
-    [mediaAssetId, organizationId, siteId],
-  )
-  if (!asset) throw new PostValidationError(`Invalid ${fieldName}`)
-}
-
-async function replacePostMedia(
-  db: DbClient,
+function postMediaPlacementQueries(
   organizationId: string,
   siteId: string,
   postId: string,
-  coverAssetId: string | null | undefined,
-  galleryInput: PostMediaInput[] | undefined,
-  validateCover = true,
-) {
-  if (coverAssetId && validateCover) await requireActiveMediaAsset(db, organizationId, siteId, coverAssetId, 'image_asset_id')
-  for (const item of galleryInput ?? []) {
-    await requireActiveMediaAsset(db, organizationId, siteId, item.media_asset_id, 'gallery media asset')
-  }
-
-  if (galleryInput === undefined) {
-    return
-  }
-
-  await execute(db, `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ?`, [postId, organizationId, siteId])
-
-  const queries = postMediaInsertQueries(organizationId, siteId, postId, coverAssetId, galleryInput)
-  if (queries.length > 0) await executeBatch(db, queries)
-}
-
-function postMediaInsertQueries(
-  organizationId: string,
-  siteId: string,
-  postId: string,
-  coverAssetId: string | null | undefined,
-  galleryInput: PostMediaInput[],
+  mediaInput: PostMediaInput[],
 ) {
   const now = new Date().toISOString()
-  const rows: PostMediaInput[] = []
-  if (coverAssetId) rows.push({ media_asset_id: coverAssetId, role: 'cover', sort_order: 0 })
+  const cover = mediaInput.find(item => item.slot === 'cover')
+  const gallery = mediaInput.filter(item => item.slot === 'gallery')
 
-  // Deduplicate gallery input by media_asset_id and filter out cover asset
-  const seenAssetIds = new Set<string>()
-  if (coverAssetId) seenAssetIds.add(coverAssetId)
+  return [
+    ...insertInitialMediaPlacements({
+      organizationId, siteId,
+      placement: { owner_type: 'post', owner_id: postId, slot: 'cover' },
+      media: cover ? [{ asset_id: cover.asset_id }] : [],
+      now,
+    }),
+    ...insertInitialMediaPlacements({
+      organizationId, siteId,
+      placement: { owner_type: 'post', owner_id: postId, slot: 'gallery' },
+      media: gallery.map(item => ({ asset_id: item.asset_id })),
+      now,
+    }),
+  ]
+}
 
-  const deduplicatedGallery = galleryInput.filter(item => {
-    if (seenAssetIds.has(item.media_asset_id)) return false
-    seenAssetIds.add(item.media_asset_id)
-    return true
+async function getPostMediaByPostIds(db: DbClient, siteId: string, postIds: string[]) {
+  return await getMediaPlacements(db, {
+    siteId,
+    ownerType: 'post',
+    ownerIds: postIds,
   })
-
-  rows.push(...deduplicatedGallery)
-
-  return rows.map((item, index) => ({
-    query: `
-      INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    params: [
-      crypto.randomUUID(),
-      organizationId,
-      siteId,
-      postId,
-      item.media_asset_id,
-      item.role ?? 'gallery',
-      Number.isFinite(item.sort_order) ? Number(item.sort_order) : index,
-      item.caption ?? null,
-      item.alt_text ?? null,
-      now,
-      now,
-    ],
-  }))
 }
 
-export async function syncPostCoverMedia(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  postId: string,
-  coverAssetId: string | null,
-) {
-  if (coverAssetId) await requireActiveMediaAsset(db, organizationId, siteId, coverAssetId, 'image_asset_id')
-
-  const now = new Date().toISOString()
-  const queries: BatchQuery[] = [{
-    query: `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ? AND role = 'cover'`,
-    params: [postId, organizationId, siteId],
-  }]
-
-  if (coverAssetId) {
-    queries.push({
-      query: `
-        INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'cover', 0, NULL, NULL, ?, ?)
-      `,
-      params: [crypto.randomUUID(), organizationId, siteId, postId, coverAssetId, now, now],
-    })
-  }
-
-  await executeBatch(db, queries)
-}
-
-async function getPostMediaByPostIds(db: DbClient, postIds: string[]) {
-  if (postIds.length === 0) return new Map<string, PostMediaItem[]>()
-  const placeholders = postIds.map(() => '?').join(', ')
-  const rows = await queryAll<PostMediaItem>(
-    db,
-    `
-    SELECT pm.id, pm.post_id, pm.media_asset_id, pm.role, pm.sort_order, pm.caption, pm.alt_text,
-           ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
-    FROM post_media pm
-    JOIN media_assets ma ON pm.media_asset_id = ma.id AND ma.status = 'active'
-    WHERE pm.post_id IN (${placeholders})
-    ORDER BY pm.post_id,
-             CASE pm.role WHEN 'cover' THEN 0 ELSE 1 END,
-             pm.sort_order ASC,
-             pm.created_at ASC
-  `,
-    postIds,
-  )
-  const byPost = new Map<string, PostMediaItem[]>()
-  for (const row of rows ?? []) {
-    const items = byPost.get(row.post_id) ?? []
-    items.push(row)
-    byPost.set(row.post_id, items)
-  }
-  return byPost
-}
-
-function publicMediaFromRows(rows: PostMediaItem[] | undefined): PublicPostMedia[] {
+function publicMediaFromRows(rows: MediaPlacementItem[] | undefined): PublicPostMedia[] {
   return (rows ?? [])
     .filter((row) => row.public_url && (row.kind === 'image' || row.kind === 'video'))
     .map((row) => ({
-      id: row.id,
-      mediaAssetId: row.media_asset_id,
-      url: row.public_url!,
-      thumbnailUrl: row.thumbnail_url,
+      asset_id: row.asset_id,
+      public_url: row.public_url!,
+      thumbnail_url: row.thumbnail_url,
       kind: row.kind === 'video' ? 'video' as const : 'image' as const,
-      role: row.role,
-      caption: row.caption,
-      alt: row.alt_text,
+      slot: row.slot === 'cover' ? 'cover' as const : 'gallery' as const,
+      sort_order: row.sort_order,
+      alt_text: row.alt_text,
       width: row.width ?? null,
       height: row.height ?? null,
     }))
@@ -423,7 +280,7 @@ function publicMediaFromRows(rows: PostMediaItem[] | undefined): PublicPostMedia
 
 function attachPostPublicFields<T extends Post>(
   post: T,
-  mediaRows: PostMediaItem[] | undefined,
+  mediaRows: MediaPlacementItem[] | undefined,
   origin: string | null,
 ): T {
   const slug = post.slug ?? post.id
@@ -435,11 +292,10 @@ function attachPostPublicFields<T extends Post>(
     public_path: publicPath,
     canonical_url: absoluteUrl(origin, publicPath),
     media,
-    gallery_media: media,
   }
 }
 
-function formatPublishedPost(row: PublishedPostRow, mediaRows: PostMediaItem[] | undefined, origin: string | null): PublishedPostSummary {
+function formatPublishedPost(row: PublishedPostRow, mediaRows: MediaPlacementItem[] | undefined, origin: string | null): PublishedPostSummary {
   const slug = row.slug ?? row.id
   const publicPath = postPublicPath(slug)
   const media = publicMediaFromRows(mediaRows)
@@ -448,21 +304,17 @@ function formatPublishedPost(row: PublishedPostRow, mediaRows: PostMediaItem[] |
     slug,
     title: row.title ?? '',
     summary: row.body,
-    createTime: row.published_at ?? row.created_at,
-    publicPath,
+    published_at: row.published_at ?? row.created_at,
     public_path: publicPath,
-    canonicalUrl: absoluteUrl(origin, publicPath),
     canonical_url: absoluteUrl(origin, publicPath),
-    url: absoluteUrl(origin, publicPath),
     media,
-    gallery: media,
-    callToAction: row.cta_url ? { actionType: row.cta_type, url: row.cta_url } : null,
-    event: row.post_type === 'event'
-      ? { title: row.event_title ?? row.title, startDate: row.event_start, endDate: row.event_end }
-      : null,
-    offer: row.post_type === 'offer'
-      ? { title: row.title, couponCode: row.offer_coupon, terms: row.offer_terms }
-      : null,
+    cta_type: row.cta_type,
+    cta_url: row.cta_url,
+    event_title: row.event_title,
+    event_start: row.event_start,
+    event_end: row.event_end,
+    offer_coupon: row.offer_coupon,
+    offer_terms: row.offer_terms,
     location: row.location_id
       ? { id: row.location_id, title: row.location_title, slug: row.location_slug }
       : null,
@@ -481,9 +333,8 @@ export async function listPosts(
     throw new PostValidationError('status must be published or scheduled')
   }
   let query = `
-    SELECT p.*, ma.public_url, ma.thumbnail_url, ma.kind
+    SELECT p.*
     FROM posts p
-    LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
     WHERE p.organization_id = ? AND p.site_id = ?
   `
   const params: string[] = [organizationId, siteId]
@@ -498,7 +349,7 @@ export async function listPosts(
   query += ` ORDER BY p.updated_at DESC LIMIT 100`
   const results = await queryAll<Post>(db, query, params)
   const origin = await resolveSitePublicOrigin(db, siteId, env)
-  const mediaByPost = await getPostMediaByPostIds(db, (results ?? []).map((post) => post.id))
+  const mediaByPost = await getPostMediaByPostIds(db, siteId, (results ?? []).map((post) => post.id))
   return (results ?? []).map((post) => attachPostPublicFields(post, mediaByPost.get(post.id), origin))
 }
 
@@ -512,9 +363,8 @@ export async function getPost(
   const post = await queryFirst<Post>(
     db,
     `
-    SELECT p.*, ma.public_url, ma.thumbnail_url, ma.kind
+    SELECT p.*
     FROM posts p
-    LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
     WHERE p.id = ? AND p.organization_id = ? AND p.site_id = ?
     LIMIT 1
   `,
@@ -525,7 +375,7 @@ export async function getPost(
   const [jobs, origin, mediaByPost] = await Promise.all([
     queryAll<PostChannelJob>(db, `SELECT * FROM post_channel_jobs WHERE post_id = ? ORDER BY channel`, [postId]),
     resolveSitePublicOrigin(db, siteId, env),
-    getPostMediaByPostIds(db, [postId]),
+    getPostMediaByPostIds(db, siteId, [postId]),
   ])
 
   return { ...attachPostPublicFields(post, mediaByPost.get(post.id), origin), channels: jobs ?? [] }
@@ -536,13 +386,13 @@ export async function createPost(
   organizationId: string,
   siteId: string,
   data: {
-    title?: string; body: string; image_asset_id?: string | null; scheduled_for?: string
+    title?: string; body: string; scheduled_for?: string
     location_id?: string; post_type?: string
     slug?: string | null; seo_title?: string | null; seo_description?: string | null
     cta_type?: string; cta_url?: string
     event_title?: string; event_start?: string; event_end?: string
     offer_coupon?: string; offer_terms?: string
-    gallery_media?: PostMediaInput[] | unknown
+    media?: PostMediaInput[] | unknown
   },
   createdBy: string,
   env: DomainEnv,
@@ -555,34 +405,37 @@ export async function createPost(
   const title = cleanString(data.title)
   const body = data.body.trim()
   let slug = await allocatePostSlug(db, siteId, cleanString(data.slug) ?? title ?? body.slice(0, 80) ?? id)
-  const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
-  const galleryCoverId = galleryMedia.find(item => item.role === 'cover')?.media_asset_id ?? null
-  const imageAssetId = cleanString(data.image_asset_id) ?? galleryCoverId
-  if (imageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, imageAssetId, 'image_asset_id')
-  for (const item of galleryMedia) await requireActiveMediaAsset(db, organizationId, siteId, item.media_asset_id, 'gallery media asset')
+  const media = normalizeMediaInputs(data.media) ?? []
+  await hydrateMediaAssetRefs(db, {
+    organizationId,
+    siteId,
+    refs: media.map(item => ({ asset_id: item.asset_id })),
+    allowedKinds: ['image', 'video'],
+    fieldName: 'media',
+  })
 
   // Retry slug allocation on unique constraint conflict (race condition)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       await executeBatch(db, [{
         query: `
-        INSERT INTO posts (id, organization_id, site_id, location_id, slug, post_type, title, body, image_asset_id,
+        INSERT INTO posts (id, organization_id, site_id, location_id, slug, post_type, title, body,
           seo_title, seo_description,
           cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
           status, scheduled_for, published_at, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
         params: [
           id, organizationId, siteId,
           data.location_id ?? null, slug, data.post_type ?? 'standard',
-          title, body, imageAssetId,
+          title, body,
           cleanString(data.seo_title), cleanString(data.seo_description),
           data.cta_type ?? null, data.cta_url ?? null,
           data.event_title ?? null, data.event_start ?? null, data.event_end ?? null,
           data.offer_coupon ?? null, data.offer_terms ?? null,
           status, data.scheduled_for ?? null, publishedAt, createdBy, now, now,
         ],
-      }, ...postMediaInsertQueries(organizationId, siteId, id, imageAssetId, galleryMedia)])
+      }, ...postMediaPlacementQueries(organizationId, siteId, id, media)])
       break
     } catch (err) {
       const message = String((err as ApiValue)?.message || err || '')
@@ -635,13 +488,12 @@ export async function updatePost(
   siteId: string,
   postId: string,
   data: {
-    title?: string; body?: string; image_asset_id?: string | null; scheduled_for?: string | null
+    title?: string; body?: string; scheduled_for?: string | null
     location_id?: string | null; post_type?: string
     slug?: string | null; seo_title?: string | null; seo_description?: string | null
     cta_type?: string | null; cta_url?: string | null
     event_title?: string | null; event_start?: string | null; event_end?: string | null
     offer_coupon?: string | null; offer_terms?: string | null
-    gallery_media?: PostMediaInput[] | unknown
   },
   _updatedBy: string,
   env: DomainEnv,
@@ -658,10 +510,6 @@ export async function updatePost(
   const now = new Date().toISOString()
   const sets: string[] = ['updated_at = ?']
   const params: SqlBindValue[] = [now]
-  const imageAssetId = data.image_asset_id !== undefined ? cleanString(data.image_asset_id) : undefined
-  const imageAssetChanged = imageAssetId !== undefined && imageAssetId !== existing.image_asset_id
-
-  if (imageAssetChanged && imageAssetId) await requireActiveMediaAsset(db, organizationId, siteId, imageAssetId, 'image_asset_id')
 
   if (data.slug !== undefined || !existing.slug) {
     const nextSlug = await allocatePostSlug(
@@ -675,7 +523,7 @@ export async function updatePost(
   }
 
   const fields: Array<[string, string | null | undefined]> = [
-    ['title', data.title], ['body', data.body], ['image_asset_id', imageAssetId],
+    ['title', data.title], ['body', data.body],
     ['scheduled_for', data.scheduled_for], ['location_id', data.location_id],
     ['post_type', data.post_type], ['seo_title', data.seo_title], ['seo_description', data.seo_description],
     ['cta_type', data.cta_type], ['cta_url', data.cta_url],
@@ -694,9 +542,9 @@ export async function updatePost(
     }
   }
 
-  const hasContentChange = data.title !== undefined || data.body !== undefined || data.image_asset_id !== undefined ||
+  const hasContentChange = data.title !== undefined || data.body !== undefined ||
     data.slug !== undefined || data.seo_title !== undefined || data.seo_description !== undefined ||
-    data.gallery_media !== undefined || data.post_type !== undefined || data.cta_type !== undefined || data.cta_url !== undefined ||
+    data.post_type !== undefined || data.cta_type !== undefined || data.cta_url !== undefined ||
     data.event_title !== undefined || data.event_start !== undefined || data.event_end !== undefined ||
     data.offer_coupon !== undefined || data.offer_terms !== undefined
   if (hasContentChange) {
@@ -709,7 +557,10 @@ export async function updatePost(
   // Retry slug update on unique constraint conflict (race condition)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await execute(db, `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`, params)
+      await executeBatch(db, [{
+        query: `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`,
+        params,
+      }])
       break
     } catch (err) {
       const message = String((err as ApiValue)?.message || err || '')
@@ -728,14 +579,6 @@ export async function updatePost(
       }
       throw err
     }
-  }
-
-  if (data.gallery_media !== undefined) {
-    const galleryMedia = normalizeMediaInputs(data.gallery_media) ?? []
-    const coverAssetId = data.image_asset_id !== undefined ? imageAssetId : existing.image_asset_id
-    await replacePostMedia(db, organizationId, siteId, postId, coverAssetId, galleryMedia, imageAssetChanged)
-  } else if (data.image_asset_id !== undefined) {
-    await syncPostCoverMedia(db, organizationId, siteId, postId, imageAssetId ?? null)
   }
 
   return await getPost(db, organizationId, siteId, postId, env)
@@ -821,12 +664,14 @@ export async function deletePost(
   siteId: string,
   postId: string,
 ): Promise<boolean> {
-  const result = await execute(
-    db,
-    'DELETE FROM posts WHERE id = ? AND organization_id = ? AND site_id = ?',
-    [postId, organizationId, siteId],
-  )
-  return Number(result.meta.changes ?? 0) > 0
+  const [, deleteResult] = await executeBatch(db, [
+    buildDeleteOwnerPlacementsQuery({ ownerType: 'post', ownerId: postId, organizationId, siteId }),
+    {
+      query: 'DELETE FROM posts WHERE id = ? AND organization_id = ? AND site_id = ?',
+      params: [postId, organizationId, siteId],
+    },
+  ])
+  return Number(deleteResult?.meta.changes ?? 0) > 0
 }
 
 /** Public: published posts for the site, formatted for SayaPosts component. */
@@ -839,14 +684,12 @@ export async function getPublishedPosts(
 ): Promise<PublishedPostSummary[]> {
   let query = `
     SELECT p.id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
-           p.slug, p.post_type, p.title, p.body, p.image_asset_id,
+           p.slug, p.post_type, p.title, p.body,
            p.seo_title, p.seo_description,
            p.cta_type, p.cta_url, p.event_title, p.event_start, p.event_end,
-           p.offer_coupon, p.offer_terms, p.published_at, p.created_at, p.updated_at,
-           ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
+           p.offer_coupon, p.offer_terms, p.published_at, p.created_at, p.updated_at
     FROM posts p
     LEFT JOIN business_locations bl ON p.location_id = bl.id
-    LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
     WHERE p.site_id = ? AND p.status = 'published'
   `
   const params: SqlBindValue[] = [siteId]
@@ -859,7 +702,7 @@ export async function getPublishedPosts(
   const rows = await queryAll<PublishedPostRow>(db, query, params)
   const [origin, mediaByPost] = await Promise.all([
     resolveSitePublicOrigin(db, siteId, env),
-    getPostMediaByPostIds(db, (rows ?? []).map((post) => post.id)),
+    getPostMediaByPostIds(db, siteId, (rows ?? []).map((post) => post.id)),
   ])
 
   return (rows ?? []).map((row) => formatPublishedPost(row, mediaByPost.get(row.id), origin))
@@ -875,14 +718,12 @@ export async function getPublishedPostBySlug(
     db,
     `
     SELECT p.id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
-           p.slug, p.post_type, p.title, p.body, p.image_asset_id,
+           p.slug, p.post_type, p.title, p.body,
            p.seo_title, p.seo_description,
            p.cta_type, p.cta_url, p.event_title, p.event_start, p.event_end,
-           p.offer_coupon, p.offer_terms, p.published_at, p.created_at, p.updated_at,
-           ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
+           p.offer_coupon, p.offer_terms, p.published_at, p.created_at, p.updated_at
     FROM posts p
     LEFT JOIN business_locations bl ON p.location_id = bl.id
-    LEFT JOIN media_assets ma ON p.image_asset_id = ma.id AND ma.status = 'active'
     WHERE p.site_id = ? AND p.status = 'published' AND (p.slug = ? OR p.id = ?)
     LIMIT 1
   `,
@@ -891,7 +732,7 @@ export async function getPublishedPostBySlug(
   if (!row) return null
   const [origin, mediaByPost] = await Promise.all([
     resolveSitePublicOrigin(db, siteId, env),
-    getPostMediaByPostIds(db, [row.id]),
+    getPostMediaByPostIds(db, siteId, [row.id]),
   ])
   const summary = formatPublishedPost(row, mediaByPost.get(row.id), origin)
   return {
@@ -899,6 +740,5 @@ export async function getPublishedPostBySlug(
     ...summary,
     seo_title: row.seo_title,
     seo_description: row.seo_description,
-    cover: summary.media[0] ?? null,
   }
 }

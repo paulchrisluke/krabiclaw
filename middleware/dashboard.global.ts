@@ -80,7 +80,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
       const session = await getAuthSession(event, env)
       if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-      capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
+      capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, env, session.user.id, {
         organizationSlug,
         siteSlug,
         locationSlug,

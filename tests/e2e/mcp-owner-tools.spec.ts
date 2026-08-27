@@ -31,36 +31,55 @@ test.describe('stateless MCP server', () => {
     })
     expect(siteRead.status()).toBe(200)
 
+    const pageList = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'list_tenant_pages',
+      args: { site_id: siteId, locale: 'en' },
+    })
+    expect(pageList.status()).toBe(200)
+    const homeVariant = mcpData<{ pages: Array<{ id: string; path: string }> }>(await pageList.json()).pages.find(page => page.path === '/')
+    expect(homeVariant?.id).toBeTruthy()
+
     const pageBefore = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_page_fields',
-      args: { site_id: siteId, page: 'home' },
+      toolName: 'get_tenant_page',
+      args: { site_id: siteId, variant_id: homeVariant!.id },
     })
     expect(pageBefore.status()).toBe(200)
-    const pageBeforeData = mcpData<{ blocks: Array<{ type: string; data: Record<string, unknown> }> }>(await pageBefore.json())
+    const pageBeforeData = mcpData<{
+      page: {
+        document: { updated_at: string }
+        blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown>; media: unknown[] }>
+      }
+    }>(await pageBefore.json()).page
     const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'update_page_content',
+      toolName: 'update_tenant_page',
       args: {
         site_id: siteId,
-        page: 'home',
-        changes: {
-          blocks: pageBeforeData.blocks.map(block => block.type === 'hero'
-            ? { ...block, data: { ...block.data, title: `MCP Hero ${Date.now()}`, subtitle: 'Drafted through MCP' } }
-            : block),
-        },
+        variant_id: homeVariant!.id,
+        expected_document_updated_at: pageBeforeData.document.updated_at,
+        blocks: pageBeforeData.blocks.map(block => ({
+          id: block.id,
+          type: block.type,
+          position: block.position,
+          data: block.type === 'hero'
+            ? { ...block.data, title: `MCP Hero ${Date.now()}`, subtitle: 'Drafted through MCP' }
+            : block.data,
+          media: block.media,
+        })),
       },
     })
     expect(contentUpdate.status()).toBe(200)
 
     const contentRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_page_fields',
-      args: { site_id: siteId, page: 'home' },
+      toolName: 'get_tenant_page',
+      args: { site_id: siteId, variant_id: homeVariant!.id },
     })
     expect(contentRead.status()).toBe(200)
     const mergedBody = await contentRead.json()
-    const mergedHero = mcpData<{ blocks: Array<{ type: string; data: Record<string, unknown> }> }>(mergedBody).blocks.find(item => item.type === 'hero')
+    const mergedHero = mcpData<{ page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(mergedBody).page.blocks.find(item => item.type === 'hero')
     expect(mergedHero?.data.title).toContain('MCP Hero')
 
     const settingsBefore = await mcpRequest(request, baseURL!, {

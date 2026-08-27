@@ -20,7 +20,7 @@
           <template v-if="post.media?.[0]">
             <video
               v-if="post.media[0].kind === 'video'"
-              :src="post.media[0].url"
+              :src="post.media[0].public_url"
               autoplay
               muted
               loop
@@ -29,7 +29,7 @@
             />
             <img
               v-else
-              :src="post.media[0].url"
+              :src="post.media[0].public_url"
               :alt="post.title || t('saya.posts.image_alt')"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
@@ -40,8 +40,8 @@
         </div>
 
         <div class="p-8 flex flex-col grow">
-          <time :datetime="post.createTime" class="text-[10px] text-muted font-bold uppercase tracking-widest mb-3">
-            {{ formatDate(post.createTime) }}
+          <time :datetime="post.published_at" class="text-[10px] text-muted font-bold uppercase tracking-widest mb-3">
+            {{ formatDate(post.published_at) }}
           </time>
           <h3 class="text-xl font-bold text-default mb-3 leading-tight">{{ post.title || t('saya.posts.business_update') }}</h3>
 
@@ -50,13 +50,13 @@
           </div>
 
           <div v-if="!limit" class="space-y-4 mb-6">
-            <div v-if="post.event" class="rounded-xl border border-default bg-muted p-4 text-xs">
+            <div v-if="post.event_title || post.event_start" class="rounded-xl border border-default bg-muted p-4 text-xs">
               <p class="mb-1 font-bold text-default">{{ t('saya.posts.event_details_label') }}</p>
-              <p class="text-default">{{ post.event.title }} • {{ formatDate(post.event.startDate) }}</p>
+              <p class="text-default">{{ post.event_title }}{{ post.event_title && post.event_start ? ` • ${formatDate(post.event_start)}` : '' }}</p>
             </div>
-            <div v-if="post.offer" class="rounded-xl border border-default bg-muted p-4 text-xs">
+            <div v-if="post.offer_coupon || post.offer_terms" class="rounded-xl border border-default bg-muted p-4 text-xs">
               <p class="mb-1 font-bold text-default">{{ t('saya.posts.special_offer_label') }}</p>
-              <p class="text-default">{{ post.offer.title }} <span v-if="post.offer.couponCode">• {{ t('saya.posts.code_label') }} {{ post.offer.couponCode }}</span></p>
+              <p class="text-default">{{ post.title }} <span v-if="post.offer_coupon">• {{ t('saya.posts.code_label') }} {{ post.offer_coupon }}</span></p>
             </div>
           </div>
 
@@ -123,6 +123,6 @@ const { formatDate } = useLocaleDate()
 const { t } = useI18n()
 
 function resolvePostPath(post) {
-  return post?.publicPath || post?.public_path || ''
+  return post?.public_path
 }
 </script>

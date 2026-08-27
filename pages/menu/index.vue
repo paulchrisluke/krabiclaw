@@ -66,14 +66,14 @@
               >
                 <!-- Thumbnail -->
                 <NuxtLink
-                  v-if="item.public_url && item.available"
+                  v-if="hasItemMedia(item) && item.available"
                   :to="`/menu/${itemSlug(item)}`"
                   class="shrink-0"
                 >
                   <SayaMenuItemPreview :item="item" />
                 </NuxtLink>
                 <div
-                  v-else-if="item.public_url"
+                  v-else-if="hasItemMedia(item)"
                   class="shrink-0"
                 >
                   <SayaMenuItemPreview :item="item" disabled />
@@ -138,7 +138,7 @@ if (isBlawby.value) throw createError({ statusCode: 404 })
 
 const restaurantName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { menu: pageMenu, menuItemsBySection, pending, locations, config: pageConfig, hasExperiences } = await usePublicPageData()
+const { menu: pageMenu, menuItemsBySection, pending, locations, config: pageConfig, hasExperiences, site: publicSite } = await usePublicPageData()
 
 const hasMenu = computed(() => ((pageMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 
@@ -184,6 +184,10 @@ function itemSlug(item: ApiValue): string {
   return slug || `item-${item.id || 'unknown'}`
 }
 
+function hasItemMedia(item: ApiValue): boolean {
+  return Array.isArray(item.media) && item.media.length > 0
+}
+
 function getDietaryTags(item: ApiValue): string[] {
   const tags: string[] = []
   const notes = Array.isArray(item.dietaryNotes) ? item.dietaryNotes : []
@@ -208,8 +212,8 @@ useSocialMetadata(() => ({
   label: 'Menu',
   brand: {
     siteName: restaurantName.value,
-    logoUrl: pageConfig.value?.logo_url || null,
-    faviconUrl: pageConfig.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
 }))

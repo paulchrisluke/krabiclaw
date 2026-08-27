@@ -107,7 +107,7 @@
         </UFormField>
 
         <UFormField label="Featured Image">
-          <PlatformMediaPicker v-model="form.featured_image_asset_id" @change="handleImageChange" />
+          <PlatformMediaPicker v-model="featuredAssetId" />
         </UFormField>
 
         <div class="space-y-4 border-t border-default pt-4">
@@ -195,10 +195,6 @@
                     <UTextarea v-model="step.text" :rows="3" placeholder="Describe exactly what the reader should do." />
                   </UFormField>
 
-                  <UFormField label="Step image">
-                    <PlatformMediaPicker v-model="step.image_asset_id" />
-                  </UFormField>
-
                   <div class="flex gap-2">
                     <UButton color="neutral" variant="ghost" size="sm" :disabled="index === 0" @click="moveItem(form.how_to_steps, index, -1)">Up</UButton>
                     <UButton color="neutral" variant="ghost" size="sm" :disabled="index === form.how_to_steps.length - 1" @click="moveItem(form.how_to_steps, index, 1)">Down</UButton>
@@ -232,23 +228,9 @@
 <script setup lang="ts">
 import { categories, difficultyLevels } from '~/config/documentation'
 import { getErrorMessage } from '~/utils/errors'
-import { createEmptyFaqItem, createEmptyHowToStep } from '~/composables/useBlogForm'
-import { useDocForm } from '~/composables/useDocForm'
+import { createEmptyFaqItem, createEmptyHowToStep, docFormContentBlocks, hydrateDocFormContent, useDocForm } from '~/composables/useDocForm'
 import { PLATFORM_DOC_NAV_SECTION_LABELS } from '~/utils/platform-content-nav'
 import { parseOptionalNumber } from '~/utils/optional-number'
-
-interface DocComponent {
-  type: 'faq' | 'how_to' | 'ai_assistance'
-  label?: string | null
-  status?: 'active' | 'inactive' | null
-  render_enabled?: boolean | null
-  schema_enabled?: boolean | null
-  data?: {
-    items?: Array<{ question?: string | null; answer?: string | null }>
-    steps?: Array<{ name?: string | null; text?: string | null; image_asset_id?: string | null; url?: string | null }>
-    prompts?: Array<{ title?: string | null; prompt?: string | null; description?: string | null; copy_label?: string | null }>
-  } | null
-}
 
 interface Doc {
   id: string
@@ -267,9 +249,9 @@ interface Doc {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  featured_image_asset_id?: string | null
-  body: string
-  components?: DocComponent[]
+  media?: Array<{ asset_id: string; slot: string }>
+  content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
+  document_updated_at: string
 }
 
 interface DocResponse {
@@ -281,14 +263,15 @@ const isDocResponse = (value: unknown): value is DocResponse =>
   && isRecord(value.doc)
   && typeof value.doc.id === 'string'
   && typeof value.doc.title === 'string'
-  && typeof value.doc.body === 'string'
+  && Array.isArray(value.doc.content_blocks)
+  && typeof value.doc.document_updated_at === 'string'
 
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const docId = route.params.docId as string
 
-const { form, canSave, handleImageChange } = useDocForm()
+const { form, canSave, featuredAssetId } = useDocForm()
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))
 const difficultyItems = computed(() => difficultyLevels.map((item) => ({ label: item, value: item })))
 const navSectionItems = computed(() => [
@@ -340,34 +323,12 @@ function moveItem<T>(items: T[], index: number, delta: number) {
   items.splice(nextIndex, 0, item)
 }
 
-function hydrateStructuredContent(components: DocComponent[] | undefined) {
-  const faq = components?.find(component => component.type === 'faq')
-  const howTo = components?.find(component => component.type === 'how_to')
-
-  form.faq_items = faq?.data?.items?.map(item => ({
-    question: item.question ?? '',
-    answer: item.answer ?? '',
-  })) ?? []
-  form.faq_label = faq?.label ?? ''
-  form.faq_status = faq?.status ?? 'active'
-  form.faq_render_enabled = faq?.render_enabled ?? true
-  form.faq_schema_enabled = faq?.schema_enabled ?? true
-
-  form.how_to_steps = howTo?.data?.steps?.map(step => ({
-    name: step.name ?? '',
-    text: step.text ?? '',
-    image_asset_id: step.image_asset_id ?? '',
-    url: step.url ?? '',
-  })) ?? []
-  form.how_to_label = howTo?.label ?? ''
-  form.how_to_status = howTo?.status ?? 'active'
-  form.how_to_render_enabled = howTo?.render_enabled ?? true
-  form.how_to_schema_enabled = howTo?.schema_enabled ?? true
-}
-
 function buildPayload() {
+  const { body: _body, faq_items: _faqItems, faq_label: _faqLabel, faq_status: _faqStatus, faq_render_enabled: _faqRender, faq_schema_enabled: _faqSchema, how_to_steps: _howToSteps, how_to_label: _howToLabel, how_to_status: _howToStatus, how_to_render_enabled: _howToRender, how_to_schema_enabled: _howToSchema, ...fields } = form
   return {
-    ...form,
+    ...fields,
+    content_blocks: docFormContentBlocks(form),
+    expected_document_updated_at: doc.value?.document_updated_at,
     canonical_url: form.canonical_url.trim() || null,
     robots: form.robots.trim() || null,
     nav_section: form.nav_section.trim() || null,
@@ -375,17 +336,6 @@ function buildPayload() {
     nav_order: parseOptionalNumber(form.nav_order),
     nav_section_order: parseOptionalNumber(form.nav_section_order),
     featured_order: parseOptionalNumber(form.featured_order),
-    faq_items: form.faq_items
-      .map(item => ({ question: item.question.trim(), answer: item.answer.trim() }))
-      .filter(item => item.question && item.answer),
-    how_to_steps: form.how_to_steps
-      .map(step => ({
-        name: step.name.trim(),
-        text: step.text.trim(),
-        image_asset_id: step.image_asset_id.trim() || undefined,
-        url: step.url.trim() || undefined,
-      }))
-      .filter(step => step.name && step.text),
   }
 }
 
@@ -412,9 +362,8 @@ async function loadDoc() {
     form.seo_keywords = res.doc.seo_keywords ?? ''
     form.canonical_url = res.doc.canonical_url ?? ''
     form.robots = res.doc.robots ?? ''
-    form.body = res.doc.body
-    form.featured_image_asset_id = res.doc.featured_image_asset_id ?? ''
-    hydrateStructuredContent(res.doc.components)
+    hydrateDocFormContent(form, res.doc.content_blocks)
+    form.media = res.doc.media ?? []
   } catch (err) {
     loadError.value = getErrorMessage(err, 'Failed to load doc.')
   } finally {
@@ -438,7 +387,7 @@ async function update() {
     })
     if (!updated.doc) throw new Error('Doc not found after save')
     doc.value = updated.doc
-    hydrateStructuredContent(updated.doc.components)
+    hydrateDocFormContent(form, updated.doc.content_blocks)
     successMessage.value = 'Live changes saved.'
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to save.')

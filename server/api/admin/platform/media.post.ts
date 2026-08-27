@@ -78,7 +78,7 @@ export default defineHandler(async (event) => {
     new Uint8Array(arrayBuffer).set(new Uint8Array(filePart.data.buffer, filePart.data.byteOffset, filePart.data.byteLength))
     uploaded = await uploadImageBuffer(env, arrayBuffer as ArrayBuffer, filename, contentType)
 
-    await ensurePlatformMediaScope(db)
+    await ensurePlatformMediaScope(env, db)
     const assetId = crypto.randomUUID()
     await createMediaAsset(db, {
       id: assetId, organization_id: PLATFORM_MEDIA_ORG_ID, site_id: PLATFORM_MEDIA_SITE_ID, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: uploaded.imageId, public_url: uploaded.publicUrl, thumbnail_url: uploaded.thumbnailUrl, alt_text: altText, mime_type: contentType, file_name: filename, status: 'active', created_by_user_id: session.user.id, })

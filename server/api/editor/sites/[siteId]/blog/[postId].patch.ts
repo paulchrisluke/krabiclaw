@@ -25,9 +25,9 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { db } = await requireBlogAccess(event, siteId);
+    const { env, db } = await requireBlogAccess(event, siteId);
 
-    const result = await updatePlatformBlogPost(db, postId, body as PlatformBlogUpdateInput, siteId);
+    const result = await updatePlatformBlogPost(db, postId, body as PlatformBlogUpdateInput, siteId, env);
 
     const payload = { success: true, post: result.post };
     return jsonResponse(finalizeRequestMetrics(event, 'editor-blog-post-update', payload));

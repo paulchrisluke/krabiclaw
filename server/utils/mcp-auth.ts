@@ -5,9 +5,8 @@ import { verifyJwsAccessToken } from 'better-auth/oauth2'
 import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
-import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { queryFirst } from '~/server/db'
-import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
+import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
@@ -208,20 +207,7 @@ async function verifyBearerToken(
   }
   const oauthClientId = typeof payload.client_id === 'string' ? payload.client_id : null
 
-  const user = await queryFirst<{ role?: string; email?: string | null }>(
-    db,
-    'SELECT role, email FROM user WHERE id = ? LIMIT 1',
-    [userId],
-  )
-
-  if (!user) {
-    logMcpAuth(event, 'warn', 'credential_rejected', {
-      path: event.path,
-      token_fingerprint: tokenFingerprint,
-      reason: 'user_not_found',
-    })
-    throw new HTTPError({ statusCode: 401, statusMessage: 'User not found' })
-  }
+  const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
 
   logMcpAuth(event, 'info', 'credential_accepted', {
     path: event.path,
@@ -234,7 +220,7 @@ async function verifyBearerToken(
     db,
     userId,
     oauthClientId,
-    isPlatformAdmin: hasPlatformAdminPermission(user.role),
+    isPlatformAdmin,
     scopes,
   }
 }
@@ -358,32 +344,35 @@ export async function requireMcpSite(
 ): Promise<McpSiteContext> {
   const user = authenticatedUser ?? await requireMcpUser(event)
 
-  type MemberSiteRow = { id: string; organization_id: string; role: string; member_id: string; organization_slug: string | null; subdomain: string | null; custom_domain: string | null; public_url: string | null }
-  const memberSiteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>
-    queryFirst<MemberSiteRow>(
+  type SiteRow = { id: string; organization_id: string; subdomain: string | null; custom_domain: string | null; public_url: string | null }
+  const siteByColumn = async (column: 'id' | 'subdomain' | 'custom_domain') =>
+    queryFirst<SiteRow>(
       user.db,
       `
-      SELECT s.id, s.organization_id, m.role, m.id AS member_id, o.slug as organization_slug, s.subdomain, s.custom_domain, s.public_url
+      SELECT s.id, s.organization_id, s.subdomain, s.custom_domain, s.public_url
       FROM sites s
-      JOIN member m ON s.organization_id = m.organizationId
-      LEFT JOIN organization o ON s.organization_id = o.id
-      WHERE s.${column} = ? AND m.userId = ?
+      WHERE s.${column} = ?
       LIMIT 1
     `,
-      [siteId, user.userId],
+      [siteId],
     )
 
   // Check id first, then subdomain, then custom_domain — see note above on
   // why an OR across all three columns is ambiguous.
-  const site = await memberSiteByColumn('id')
-    ?? await memberSiteByColumn('subdomain')
-    ?? await memberSiteByColumn('custom_domain')
+  const site = await siteByColumn('id')
+    ?? await siteByColumn('subdomain')
+    ?? await siteByColumn('custom_domain')
 
-  if (!site?.organization_id || !site.role) {
+  if (!site?.organization_id) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
   }
+  const membership = await resolveOrganizationMembership(user.env, {
+    organizationId: site.organization_id,
+    userId: user.userId,
+  })
+  if (!membership) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
 
-  const role = normalizeRole(site.role)
+  const role = normalizeRole(membership.role)
   if (!role || ROLE_RANK[role] < ROLE_RANK[minimumRole]) {
     throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
@@ -399,7 +388,8 @@ export async function requireMcpSite(
   // explicitly instead of accidentally.
   if (!isOrganizationWideRole(role)) {
     await assertSiteWideAccess(user.db, {
-      memberId: site.member_id,
+      env: user.env,
+      memberId: membership.memberId,
       role,
       organizationId: site.organization_id,
       siteId: site.id,
@@ -410,8 +400,8 @@ export async function requireMcpSite(
     ...user,
     siteId: site.id,
     organizationId: site.organization_id,
-    memberId: site.member_id,
-    organizationSlug: site.organization_slug || undefined,
+    memberId: membership.memberId,
+    organizationSlug: membership.organizationSlug || undefined,
     subdomain: site.subdomain ?? null,
     customDomain: site.custom_domain ?? null,
     publicUrl: site.public_url ?? null,

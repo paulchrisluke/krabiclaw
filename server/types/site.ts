@@ -16,8 +16,7 @@ export interface SiteSettings {
   custom_domain_status: 'none' | 'pending' | 'active' | 'failed'
   brand_name: string
   brand_description: string | null
-  logo_url: string | null
-  logo_asset_id: string | null
+  media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
   brand_color: string
   default_currency: CurrencyCode
@@ -32,8 +31,6 @@ export interface UpdateSiteSettingsRequest {
   name?: string
   brand_name?: string
   brand_description?: string
-  logo_url?: string
-  logo_asset_id?: string
   contact_email?: string
   brand_color?: string
   default_currency?: CurrencyCode
@@ -52,6 +49,7 @@ export interface UpdateSiteSettingsRequest {
   social_facebook_url?: string | null
   social_instagram_url?: string | null
   social_tiktok_url?: string | null
+  media?: Array<{ asset_id: string; slot: 'logo' | 'favicon' }>
   // Additive/subtractive delta on top of the vertical's own module defaults (config/cms-registry.ts
   // ProductFeature ids) — null clears the override back to defaults.
   feature_overrides?: { enabled?: string[]; disabled?: string[] } | null

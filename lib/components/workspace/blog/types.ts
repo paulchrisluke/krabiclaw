@@ -14,8 +14,6 @@ export interface BlogPost {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  featured_image_asset_id?: string | null
-  body: string
   published_at?: string | null
   updated_at?: string | null
   first_published_at?: string | null
@@ -25,8 +23,7 @@ export interface BlogPost {
   visibility?: 'public' | 'unlisted'
   tags?: string[]
   seo_title?: string | null
-  primary_image?: { public_url?: string | null; thumbnail_url?: string | null; kind?: string | null } | null
-  featured_image?: { public_url?: string | null; thumbnail_url?: string | null; kind?: string | null } | null
+  media?: Array<{ asset_id: string; slot: string; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null }>
   edit_url?: string | null
   content_document?: {
     document: { id: string; updated_at: string }
@@ -34,14 +31,10 @@ export interface BlogPost {
   } | null
   editor_template?: 'saya' | 'blawby' | 'platform'
   editor_theme_tokens?: Record<string, unknown>
-  author_name?: string | null
-  author_image?: string | null
-  site_author_id?: string | null
   created_at?: string | null
   editor_site_name?: string | null
   editor_brand_color?: string | null
   public_path?: string | null
-  components?: BlogComponent[]
 }
 
 export interface BlogEditorBlock {
@@ -51,20 +44,8 @@ export interface BlogEditorBlock {
   level?: number | null
   parent_block_id?: string | null
   data: Record<string, unknown>
+  media?: Array<{ asset_id: string; slot: string; sort_order?: number; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null; alt_text?: string | null; caption?: string | null }>
   updated_at?: string
-}
-
-export interface BlogComponent {
-  type: 'faq' | 'how_to' | 'ai_assistance'
-  label?: string | null
-  status?: 'active' | 'inactive' | null
-  render_enabled?: boolean | null
-  schema_enabled?: boolean | null
-  data?: {
-    items?: Array<{ question?: string | null; answer?: string | null }>
-    steps?: Array<{ name?: string | null; text?: string | null; image_asset_id?: string | null; url?: string | null }>
-    prompts?: Array<{ title?: string | null; prompt?: string | null; description?: string | null; copy_label?: string | null }>
-  } | null
 }
 
 export interface PlatformBlogCreateInput {
@@ -79,7 +60,7 @@ export interface PlatformBlogCreateInput {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  featured_image_asset_id?: string | null
+  media?: Array<{ asset_id: string; slot: 'featured' }>
   nav_section?: string | null
   nav_title?: string | null
   nav_order?: number | null
@@ -87,7 +68,6 @@ export interface PlatformBlogCreateInput {
   hide_from_nav?: boolean | number | null
   featured_order?: number | null
   visibility?: 'public' | 'unlisted'
-  site_author_id?: string | null
   scheduled_for?: string | null
 }
 
@@ -101,7 +81,7 @@ export interface PlatformBlogUpdateInput {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  featured_image_asset_id?: string | null
+  media?: Array<{ asset_id: string; slot: 'featured' }>
   nav_section?: string | null
   nav_title?: string | null
   nav_order?: number | null
@@ -115,17 +95,6 @@ export interface PlatformBlogUpdateInput {
   content_blocks?: BlogEditorBlock[]
   expected_document_updated_at?: string
   expected_updated_at?: string
-  site_author_id?: string | null
-}
-
-export interface SiteAuthor {
-  id: string
-  name: string
-  title?: string | null
-  bio?: string | null
-  image_asset_id?: string | null
-  image_public_url?: string | null
-  sort_order?: number
 }
 
 export interface BlogLifecycleState {
@@ -145,6 +114,4 @@ export interface BlogPostRepository {
   update(_postId: string, _input: PlatformBlogUpdateInput): Promise<BlogPost>
   delete(_postId: string): Promise<void>
   publish(_postId: string, _input: { expected_updated_at: string; expected_document_updated_at: string; scheduled_for?: string | null }): Promise<BlogLifecycleState>
-  listAuthors?(): Promise<SiteAuthor[]>
-  createAuthor?(_input: { name: string; title?: string | null }): Promise<SiteAuthor>
 }

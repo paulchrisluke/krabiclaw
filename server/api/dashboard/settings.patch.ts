@@ -1,6 +1,6 @@
 // Direct dashboard settings update handler.
 // Avoids the generic dashboard proxy hop for this request path.
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isDemoOrg } from '~/server/utils/demo'
 import { updateSiteSettingsFields } from '~/server/utils/site-settings'
@@ -18,13 +18,13 @@ export default defineHandler(async (event) => {
       { error: 'No update fields provided' }, { status: 400 }, )
   }
 
-  const env = cloudflareEnv(event)
-  const { db, session, organization, site } = await getDashboardContext(event, { requireSite: true })
+  const { env, db, session, organization, site } = await getDashboardContext(event, { requireSite: true })
 
   if (!site) {
     return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
   await assertSiteWideAccess(db, {
+    env,
     memberId: organization.memberId, role: organization.role, organizationId: organization.id, siteId: site.id, })
 
 

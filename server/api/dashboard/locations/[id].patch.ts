@@ -17,6 +17,7 @@ export default defineHandler(async (event) => {
   const organizationId = organization.id
   const siteId = locationContext.site_id
   await assertMemberScope(db, {
+    env,
     memberId: organization.memberId, role: organization.role, organizationId, siteId, locationId, })
 
   const body = await readBody<Record<string, unknown>>(event)

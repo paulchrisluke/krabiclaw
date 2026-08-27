@@ -20,14 +20,6 @@
         alt="" aria-hidden="true" loading="eager" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
-      <img
-        v-else-if="businessPrimaryPhoto?.google_url"
-        :src="heroImageUrl ?? undefined"
-        :srcset="heroImageSrcset ?? undefined"
-        sizes="100vw"
-        alt="" aria-hidden="true" loading="eager" fetchpriority="high" decoding="async"
-        class="absolute inset-0 h-full w-full object-cover"
-      />
       <!-- No real photo yet: a brand-color + icon treatment, not a stock photo that
            isn't actually theirs and not a blank panel either. -->
       <div
@@ -127,7 +119,6 @@ interface Props {
     businessTitle?: string
     businessSubtitle?: string
     businessCity?: string
-    businessPrimaryPhoto?: { google_url?: string }
     hasOrderLinks?: boolean
     ctaRoute?: string
     reserveCta?: string
@@ -153,7 +144,6 @@ const hasLocations = computed(() => locations.value.length > 0)
 const businessTitle = computed(() => props.data?.businessTitle || '')
 const businessSubtitle = computed(() => props.data?.businessSubtitle || '')
 const businessCity = computed(() => props.data?.businessCity || '')
-const businessPrimaryPhoto = computed(() => props.data?.businessPrimaryPhoto)
 const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
 const ctaRoute = computed(() => props.data?.ctaRoute || '')
 const reserveCta = computed(() => props.data?.reserveCta || '')
@@ -170,7 +160,7 @@ const isExperienceVertical = computed(() => props.data?.vertical === 'experience
 const heroImageSource = computed(() => {
   if (hero.value.thumbnail_url && hero.value.video) return hero.value.thumbnail_url
   if (hero.value.image && hero.value.imageKind === 'image') return hero.value.image
-  return businessPrimaryPhoto.value?.google_url || null
+  return null
 })
 const heroImageUrl = computed(() => {
   const source = heroImageSource.value

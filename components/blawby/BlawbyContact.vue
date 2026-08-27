@@ -42,7 +42,7 @@
       </form>
     </section>
 
-    <BlawbyFaqSection :items="routeData.qa" :decoration-url="assetUrl(qaBlock?.decoration)" />
+    <BlawbyFaqSection :items="routeData.qa" :decoration-url="mediaUrl(qaBlock, 'decoration')" />
     <BlawbyReviewsSection :reviews="routeData.reviews" />
     <BlawbyConsultationCta
       v-if="ctaBlock && ctaBlock.title && ctaBlock.label && ctaBlock.url"
@@ -50,8 +50,8 @@
       :description="optionalString(ctaBlock.description)"
       :label="String(ctaBlock.label || '')"
       :destination="String(ctaBlock.url || '')"
-      :background-url="assetUrl(ctaBlock.background)"
-      :featured-url="assetUrl(ctaBlock.featured)"
+      :background-url="mediaUrl(ctaBlock, 'background')"
+      :featured-url="mediaUrl(ctaBlock, 'featured')"
       @click="trackConsultation"
     />
   </div>
@@ -79,8 +79,10 @@ function block(type: string) {
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null
 }
-function assetUrl(value: unknown) {
-  return value && typeof value === 'object' && typeof (value as ApiRecord).url === 'string' ? String((value as ApiRecord).url) : null
+function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
+  const media = value?.media
+  const item = media?.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
+  return typeof item?.public_url === 'string' ? item.public_url : null
 }
 
 const heroBlock = computed(() => block('page_hero'))
@@ -131,8 +133,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   description: page.value?.seo_description || page.value?.summary || '',
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.logo_url || null,
-    faviconUrl: identity.value.favicon_url || null,
+    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

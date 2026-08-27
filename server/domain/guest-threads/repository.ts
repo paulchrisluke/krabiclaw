@@ -1,4 +1,5 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
   isOrganizationWideRole,
   isScopedRole,
@@ -181,20 +182,19 @@ export async function getGuestThreadOperationSummary(
           return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
         }
       } else {
-        where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
-        params.push(...accessibleLocationIds)
+        where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
+        params.push(d1JsonStringSet(accessibleLocationIds))
       }
     }
   } else if (opts.principal && isScopedRole(opts.principal.role)) {
     const teamIds = opts.principal.teamIds ?? []
     if (teamIds.length === 0) return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
-    const sitePlaceholders = teamIds.map(() => '?').join(', ')
-    const locationPlaceholders = teamIds.map(() => '?').join(', ')
+    const teamIdsJson = d1JsonStringSet(teamIds)
     where += ` AND (
-      EXISTS (SELECT 1 FROM sites scoped_site WHERE scoped_site.id = gt.site_id AND scoped_site.team_id IN (${sitePlaceholders}))
-      OR EXISTS (SELECT 1 FROM business_locations scoped_location WHERE scoped_location.id = gt.location_id AND scoped_location.team_id IN (${locationPlaceholders}))
+      EXISTS (SELECT 1 FROM sites scoped_site WHERE scoped_site.id = gt.site_id AND scoped_site.team_id IN (SELECT value FROM json_each(?)))
+      OR EXISTS (SELECT 1 FROM business_locations scoped_location WHERE scoped_location.id = gt.location_id AND scoped_location.team_id IN (SELECT value FROM json_each(?)))
     )`
-    params.push(...teamIds, ...teamIds)
+    params.push(teamIdsJson, teamIdsJson)
   } else if (opts.principal && !isOrganizationWideRole(opts.principal.role)) {
     return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
   }
@@ -269,8 +269,8 @@ export async function listGuestThreads(
       if (opts.locationId) {
         if (!accessibleLocationIds.includes(opts.locationId)) return []
       } else {
-        where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
-        params.push(...accessibleLocationIds)
+        where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
+        params.push(d1JsonStringSet(accessibleLocationIds))
       }
     }
   }
@@ -378,10 +378,9 @@ export async function listOrganizationGuestThreads(
   if (isScopedRole(opts.principal.role)) {
     const teamIds = opts.principal.teamIds ?? []
     if (teamIds.length === 0) return []
-    const sitePlaceholders = teamIds.map(() => '?').join(', ')
-    const locationPlaceholders = teamIds.map(() => '?').join(', ')
-    where += ` AND (s.team_id IN (${sitePlaceholders}) OR bl.team_id IN (${locationPlaceholders}))`
-    params.push(...teamIds, ...teamIds)
+    const teamIdsJson = d1JsonStringSet(teamIds)
+    where += ` AND (s.team_id IN (SELECT value FROM json_each(?)) OR bl.team_id IN (SELECT value FROM json_each(?)))`
+    params.push(teamIdsJson, teamIdsJson)
   } else if (!isOrganizationWideRole(opts.principal.role)) {
     return []
   }
@@ -475,18 +474,17 @@ export async function listOrganizationGuestThreads(
 
 async function listUnreadThreadIds(db: DbClient, threadIds: string[], memberId: string): Promise<string[]> {
   if (threadIds.length === 0) return []
-  const placeholders = threadIds.map(() => '?').join(', ')
   const rows = await queryAll<{ thread_id: string }>(db, `
     SELECT gt.id AS thread_id
     FROM guest_threads gt
     LEFT JOIN guest_thread_member_state gms ON gms.thread_id = gt.id AND gms.member_id = ?
-    WHERE gt.id IN (${placeholders})
+    WHERE gt.id IN (SELECT value FROM json_each(?))
       AND EXISTS (
         SELECT 1 FROM guest_thread_entries e
         WHERE e.thread_id = gt.id
           AND e.sequence > COALESCE(gms.last_read_sequence, 0)
       )
-  `, [memberId, ...threadIds])
+  `, [memberId, d1JsonStringSet(threadIds)])
   return (rows ?? []).map(row => row.thread_id)
 }
 

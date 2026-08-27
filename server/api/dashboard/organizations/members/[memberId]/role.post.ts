@@ -13,7 +13,7 @@ import { queryFirst } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { addMemberResourceAccess, isOrganizationWideRole, isScopedRole, removeAllMemberResourceAccess } from '~/server/utils/member-access'
+import { addMemberResourceAccess, findOrganizationMemberById, isOrganizationWideRole, isScopedRole, removeAllMemberResourceAccess } from '~/server/utils/member-access'
 
 const ALLOWED_ROLES = new Set(['member', 'admin', 'editor', 'owner'])
 
@@ -53,10 +53,10 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Editors must be assigned to a site' }, { status: 400 })
   }
 
-  const target = await queryFirst<{ id: string; userId: string; role: string }>(db, `
-    SELECT id, userId, role FROM member WHERE id = ? AND organizationId = ? LIMIT 1
-  `, [memberId, organization.id])
-  if (!target) return jsonResponse({ error: 'Member not found' }, { status: 404 })
+  const target = await findOrganizationMemberById(env, memberId)
+  if (!target || target.organizationId !== organization.id) {
+    return jsonResponse({ error: 'Member not found' }, { status: 404 })
+  }
 
   if (role === 'editor') {
     const site = await queryFirst<{ id: string }>(db, `

@@ -77,6 +77,7 @@ const {
   experiencesList,
   pending: pagePending,
   config,
+  site: publicSite,
 } = await usePublicPageData()
 
 const pending = computed(() => pagePending.value)
@@ -121,8 +122,8 @@ useSocialMetadata(() => ({
   location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
   heroImage: experienceSocialImage(experiences.value[0]) ? { url: experienceSocialImage(experiences.value[0])! } : null,

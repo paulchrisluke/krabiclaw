@@ -1,9 +1,9 @@
 import { HTTPError } from 'nitro';
 
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { queryFirst, type DbClient } from '~/server/db'
-import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess, resolveOrganizationMembership } from '~/server/utils/member-access'
 import type { H3Event } from 'nitro';
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
@@ -11,11 +11,15 @@ export interface SiteAccessRow {
   id: string
   organization_id: string
   organization_slug: string
+  organization_name: string
   brand_name: string | null
   subdomain: string | null
   public_url: string | null
   status: string
   onboarding_status: string | null
+  vertical: string | null
+  theme_id: string
+  feature_overrides: string | null
   member_id: string
   member_role: string
 }
@@ -24,28 +28,37 @@ interface LocationAccessRow {
   id: string
 }
 
-export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: string): Promise<SiteAccessRow | null> {
+export async function loadMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: string, userId: string): Promise<SiteAccessRow | null> {
   // No role-name filter here on purpose: access is decided by the caller's
   // requested access class (site-wide / location / context) via
   // member-access.ts, not by which role names are allowed to reach this
   // route. An unrelated org member who isn't owner/admin/editor still fails
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
-  return await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.subdomain, s.public_url, s.status, s.onboarding_status,
-           om.id AS member_id, om.role AS member_role
-    FROM sites s
-    JOIN organization o ON o.id = s.organization_id
-    JOIN member om ON s.organization_id = om.organizationId
-    WHERE s.id = ? AND om.userId = ?
-    LIMIT 1
-  `, [siteId, userId])
+  const site = await queryFirst<Omit<SiteAccessRow, 'organization_slug' | 'organization_name' | 'member_id' | 'member_role'>>(db, `
+    SELECT id, organization_id, brand_name, subdomain, public_url, status, onboarding_status,
+           vertical, theme_id, feature_overrides
+    FROM sites WHERE id = ? LIMIT 1
+  `, [siteId])
+  if (!site) return null
+  const membership = await resolveOrganizationMembership(env, {
+    organizationId: site.organization_id,
+    userId,
+  })
+  if (!membership) return null
+  return {
+    ...site,
+    organization_slug: membership.organizationSlug,
+    organization_name: membership.organizationName,
+    member_id: membership.memberId,
+    member_role: membership.role,
+  }
 }
 
 /**
  * Location management access: org-wide roles, a site-wide-scoped editor, or
  * an editor scoped to this exact location. Use for any resource genuinely
- * owned by one location (menus/media/reviews rows with a location_id set,
+ * owned by one location (menus and reviews with a location_id set,
  * experiences, bookings, location QA/settings).
  */
 export async function requireLocationAccess(event: H3Event, siteId: string, locationId: string) {
@@ -56,10 +69,11 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
   await assertLocationAccess(db, {
+    env,
     memberId: site.member_id,
     role: site.member_role,
     organizationId: site.organization_id,
@@ -105,10 +119,10 @@ export async function requireSiteAccess(
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
   if (accessClass === 'context') {
     await assertSiteContextAccess(db, principal)
   } else {
@@ -126,6 +140,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
     throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
   }
   await assertSiteWideAccess(context.db, {
+    env: context.env,
     memberId: context.organization.memberId,
     role: context.organization.role,
     organizationId: context.organization.id,
@@ -138,6 +153,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
     site: {
       ...context.site,
       organization_slug: context.organization.slug,
+      organization_name: context.organization.name,
       member_id: context.organization.memberId,
       member_role: context.organization.role,
     } satisfies SiteAccessRow,
@@ -152,6 +168,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
     throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
   }
   await assertLocationAccess(context.db, {
+    env: context.env,
     memberId: context.organization.memberId,
     role: context.organization.role,
     organizationId: context.organization.id,
@@ -172,6 +189,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
     site: {
       ...context.site,
       organization_slug: context.organization.slug,
+      organization_name: context.organization.name,
       member_id: context.organization.memberId,
       member_role: context.organization.role,
     } satisfies SiteAccessRow,

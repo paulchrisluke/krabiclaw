@@ -5,6 +5,7 @@
  * Usage:
  *   yarn client:onboard \
  *     --slug pottery-house-krabi \
+ *     --organization-id <existing-better-auth-organization-id> \
  *     --vertical experience \
  *     --maps-url "https://maps.google.com/..." \
  *     --images ./photos
@@ -100,6 +101,7 @@ function parseIntakeYaml(content) {
 const { values: rawArgs } = parseArgs({
   options: {
     slug:              { type: 'string' },
+    'organization-id': { type: 'string' },
     vertical:          { type: 'string' },
     'maps-url':        { type: 'string', multiple: true, default: [] },
     images:            { type: 'string' },
@@ -126,6 +128,7 @@ if (args.from) {
   if (!args.vertical && intake.vertical)   args.vertical = intake.vertical
   if (!args['live-url'] && intake.live_url) args['live-url'] = intake.live_url
   if (!args['site-id']  && intake.site_id)  args['site-id']  = intake.site_id
+  if (!args['organization-id'] && intake.organization_id) args['organization-id'] = intake.organization_id
   if (!args.images      && intake.images_dir) args.images = intake.images_dir
   if (!args['maps-url']?.length && intake.maps_urls?.length) {
     args['maps-url'] = intake.maps_urls
@@ -137,8 +140,12 @@ if (!args.vertical) args.vertical = 'restaurant'
 
 if (!args.slug) {
   console.error('Error: --slug is required (or provide --from <intake.yml>)')
-  console.error('Usage: yarn client:onboard --slug <slug> --vertical <vertical> [--maps-url <url>] [--images <dir>]')
+  console.error('Usage: yarn client:onboard --slug <slug> --organization-id <id> --vertical <vertical> [--maps-url <url>] [--images <dir>]')
   console.error('       yarn client:onboard --from client-intake/<slug>.yml')
+  process.exit(1)
+}
+if (!args['organization-id']) {
+  console.error('Error: --organization-id is required (or provide organization_id in the intake file). Create the organization through Better Auth first.')
   process.exit(1)
 }
 
@@ -196,6 +203,7 @@ async function gate(message) {
 // ── Build forwarded arg lists ─────────────────────────────────────────────────
 
 const importArgs = ['scripts/client-import.mjs', '--slug', SLUG, '--vertical', VERTICAL]
+importArgs.push('--organization-id', args['organization-id'])
 for (const url of (args['maps-url'] ?? [])) importArgs.push('--maps-url', url)
 if (args.images) importArgs.push('--images', args.images)
 if (args['allow-stock']) importArgs.push('--allow-stock')
@@ -218,7 +226,7 @@ if (NON_INTERACTIVE) {
   const approvedPath = join(OUT_DIR, 'approved.json')
   if (!existsSync(approvedPath)) {
     console.error('Error: --non-interactive requires an already-valid approved.json.')
-    console.error(`  Run interactively first: yarn client:onboard --slug ${SLUG} --vertical ${VERTICAL}`)
+    console.error(`  Run interactively first: yarn client:onboard --slug ${SLUG} --organization-id ${args['organization-id']} --vertical ${VERTICAL}`)
     process.exit(1)
   }
   const approved = JSON.parse(await import('node:fs').then(m => m.readFileSync(approvedPath, 'utf8')))
@@ -250,7 +258,7 @@ if (NON_INTERACTIVE) {
   
   if (currentHash !== approved.manifest_hash) {
     console.error('Error: Manifest hash mismatch — the dry-run output has changed since approval.')
-    console.error('  Re-run interactively for human review: yarn client:onboard --slug ${SLUG} --vertical ${VERTICAL}')
+    console.error(`  Re-run interactively for human review: yarn client:onboard --slug ${SLUG} --organization-id ${args['organization-id']} --vertical ${VERTICAL}`)
     process.exit(1)
   }
   

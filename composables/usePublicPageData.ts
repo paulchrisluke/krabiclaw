@@ -5,7 +5,7 @@
 // and route loaders keep persistent chrome and route content on one contract.
 //
 // Usage (in a page):
-//   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()
+//   const { getField, getHero, media, qaList, ... } = await usePublicPageData()
 import { onMounted, onBeforeUnmount } from "vue";
 import {
   usePublicPageRequest,
@@ -25,9 +25,7 @@ interface ContentRow {
   content: string | null;
   hero_title: string | null;
   hero_subtitle: string | null;
-  hero_public_url: string | null;
-  hero_kind: string | null;
-  thumbnail_url: string | null;
+  media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url?: string | null; kind?: string | null }>;
   component: string | null;
   [key: string]: unknown;
 }
@@ -117,7 +115,7 @@ export const usePublicPageData = async (options: {
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
-  const { locations, config, locales, hasExperiences } = shell;
+  const { locations, config, site, locales, hasExperiences } = shell;
   const googleBusiness = computed(() => ({
     ...(shell.googleBusiness.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
@@ -146,7 +144,7 @@ export const usePublicPageData = async (options: {
   // ── Full page datasets (types A / E / F) ─────────────────
   const reviewsAggregate = computed(() => (data.value?.reviewsAggregate ?? null) as ApiRecord | null);
   const reviewsList = computed(() => (data.value?.reviewsList ?? []) as ApiRecord[]);
-  const photosList = computed(() => (data.value?.photosList ?? []) as ApiRecord[]);
+  const media = computed(() => (data.value?.media ?? []) as ApiRecord[]);
   const qaList = computed(() => (data.value?.qaList ?? []) as ApiRecord[]);
   const postsList = computed(() => (data.value?.postsList ?? []) as ApiRecord[]);
   const blogList = computed(() => (data.value?.blogList ?? []) as ApiRecord[]);
@@ -219,11 +217,11 @@ export const usePublicPageData = async (options: {
       if (field === "hero.subtitle")
         return heroRow?.hero_subtitle ?? fieldRow?.content ?? defaultValue;
       if (field === "hero.media")
-        return heroRow?.hero_public_url ?? fieldRow?.content ?? defaultValue;
+        return heroRow?.media?.find(item => item.slot === 'media')?.public_url ?? defaultValue;
     }
     const row = contentMap.value[field];
     if (!row) return defaultValue;
-    const mediaValue = row.hero_public_url || row.content;
+    const mediaValue = row.media?.[0]?.public_url || row.content;
     const val = row.type === "media" ? mediaValue : row.content;
     return val && val.trim() !== "" ? val : defaultValue;
   };
@@ -235,8 +233,8 @@ export const usePublicPageData = async (options: {
     defaults = { title: "", subtitle: "", image: "", video: "" },
   ) => {
     const row = contentMap.value["hero"];
-    const heroMedia = row?.hero_public_url || "";
-    const isVideo = row?.hero_kind === "video";
+    const heroMedia = row?.media?.find(item => item.slot === 'media') ?? null;
+    const isVideo = heroMedia?.kind === "video";
     return {
       title:
         getField("hero.title", row?.hero_title ?? defaults.title) ??
@@ -245,13 +243,13 @@ export const usePublicPageData = async (options: {
         getField("hero.subtitle", row?.hero_subtitle ?? defaults.subtitle) ??
         defaults.subtitle,
       image:
-        (isVideo ? defaults.image : getField("hero.media", heroMedia || defaults.image)) ??
+        (isVideo ? defaults.image : getField("hero.media", heroMedia?.public_url || defaults.image)) ??
         defaults.image,
       video:
-        (isVideo ? getField("hero.media", heroMedia || defaults.video) : defaults.video) ??
+        (isVideo ? getField("hero.media", heroMedia?.public_url || defaults.video) : defaults.video) ??
         defaults.video,
-      thumbnail_url: row?.thumbnail_url || null,
-      imageKind: isVideo ? "image" : (row?.hero_kind || "image"),
+      thumbnail_url: heroMedia?.thumbnail_url || null,
+      imageKind: isVideo ? "image" : (heroMedia?.kind || "image"),
       videoKind: isVideo ? "video" : "video",
     };
   };
@@ -281,13 +279,14 @@ export const usePublicPageData = async (options: {
     pending,
     refresh,
     locations,
+    site,
     location,
     config,
     googleBusiness,
     locationReviews,
     reviewsAggregate,
     reviewsList,
-    photosList,
+    media,
     qaList,
     postsList,
     blogList,

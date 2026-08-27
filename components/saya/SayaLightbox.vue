@@ -70,7 +70,7 @@
 <script setup lang="ts">
 interface LightboxItem {
   url: string
-  kind?: 'image' | 'video'
+  kind?: 'image' | 'video' | 'file'
   alt?: string
   description?: string
   [key: string]: unknown

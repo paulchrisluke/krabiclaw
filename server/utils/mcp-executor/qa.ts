@@ -2,13 +2,18 @@ import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createLocationQa, createQa, deleteLocationQa, deleteQa, listLocationQa, listPageQa, listQa, reorderQa, updateQa } from '~/server/utils/location-qa'
 import { reorderLocationQa, updateLocationQa } from '~/server/utils/mcp-workflows'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, objectArray, omit, requiredString } from './shared'
 
 export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_site_qa":
-      return { items: typeof args.page_path === "string" ? await listPageQa(site.db, site.siteId, args.page_path) : await listQa(site.db, site.siteId, null) };
+      {
+        const items = typeof args.page_path === "string" ? await listPageQa(site.db, site.siteId, args.page_path) : await listQa(site.db, site.siteId, null);
+        const page = paginateMcpCollection(items, args, { resource: `site-qa:${site.siteId}:${typeof args.page_path === 'string' ? args.page_path : ''}` });
+        return { items: page.items, page_info: page.page_info };
+      }
     case "create_site_qa": {
       const result = await createQa(site.db, {
         organizationId: site.organizationId,
@@ -53,13 +58,16 @@ export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
       return { ...result, context: await mutationContextPayload(site) };
     }
     case "list_location_qa":
-      return {
-        items: await listLocationQa(
+      {
+        const locationId = requiredString(args, "location_id");
+        const items = await listLocationQa(
           site.db,
           site.siteId,
-          requiredString(args, "location_id"),
-        ),
-      };
+          locationId,
+        );
+        const page = paginateMcpCollection(items, args, { resource: `location-qa:${site.siteId}:${locationId}` });
+        return { items: page.items, page_info: page.page_info };
+      }
     case "create_location_qa": {
       const locationId = requiredString(args, "location_id");
       const result = await createLocationQa(

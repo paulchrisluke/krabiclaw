@@ -1,13 +1,13 @@
 import { HTTPError } from 'nitro';
+import { getQuery } from 'nitro/h3';
 
 import type { H3Event } from 'nitro'
 
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole } from '~/server/utils/member-access'
-import { resolveSocialImageUrl, resolveSocialOgImage } from '~/utils/social-metadata'
-import { resolvePublicTemplate } from '~/utils/template-registry'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
 
 function safeJsonParse(value: string): unknown {
   return JSON.parse(value)
@@ -59,11 +59,11 @@ export interface DashboardSiteRow {
   primary_location_id: string | null
   default_currency: string | null
   source_locale: string | null
-  logo_url: string | null
   // JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts),
   // or null for pure vertical defaults — see resolveSiteCmsCapabilities
   // (server/utils/cms-capabilities.ts), the one place this is parsed.
   feature_overrides: string | null
+  theme_id: string
 }
 
 export interface DashboardLocationRow {
@@ -74,7 +74,7 @@ export interface DashboardLocationRow {
   status: string
   city: string | null
   address: string | null
-  preview_image_url: string
+  media: Array<{ asset_id: string; slot: 'hero'; public_url: string; thumbnail_url: string | null; kind: string | null }>
   // Same contract as DashboardSiteRow.feature_overrides, one scope down — the delta is applied
   // on top of the parent site's effective feature set (never the vertical defaults directly).
   feature_overrides: string | null
@@ -104,7 +104,6 @@ export interface DashboardLocationContextRow {
   price_level: string | null
   google_place_id: string | null
   google_review_url: string | null
-  hero_media_asset_id: string | null
   notification_phone: string | null
   timezone: string | null
   feature_overrides: string | null
@@ -147,14 +146,28 @@ export interface ResolveOrganizationOptions {
   explicitOrganizationId?: string | null
   // The Better Auth session's session.activeOrganizationId, if the caller wants it
   // considered at all. Pass null/undefined to make this resolution strictly
-  // header/explicit-param-only (the required behavior for billing and any other
+  // query-param/explicit-param-only (the required behavior for billing and any other
   // URL-scoped route — a stale session-wide active org must never silently stand
   // in for the org actually named in the request).
   activeOrganizationId?: string | null
 }
 
+// The dashboard SPA's route (/dashboard/{orgSlug}/...) is the only source of
+// truth for which org/site a request is for. dashboardFetch (composables/dashboardFetch.ts)
+// sends that route context on every /api/dashboard/* request as explicit,
+// visible `org`/`site` query params rather than a bespoke request header.
+function dashboardOrgQueryParam(event: H3Event): string | null {
+  const value = getQuery(event).org
+  return typeof value === 'string' && value ? value : null
+}
+
+function dashboardSiteQueryParam(event: H3Event): string | null {
+  const value = getQuery(event).site
+  return typeof value === 'string' && value ? value : null
+}
+
 // The one place "which org is this request for" gets decided. Both explicit params
-// and the x-dashboard-org-slug header are membership-checked before being trusted;
+// and the `org` query param are membership-checked before being trusted;
 // if both are present and disagree, that's a client bug (stale cached org id vs.
 // current URL) and must fail loudly rather than silently pick one. activeOrganizationId
 // is the last resort and only consulted when the caller explicitly passes it in —
@@ -162,21 +175,16 @@ export interface ResolveOrganizationOptions {
 // route reachable from one) must never pass it.
 export async function resolveRequestedOrganization(
   event: H3Event,
-  db: DbClient,
+  _db: DbClient,
   userId: string,
   options: ResolveOrganizationOptions = {}
 ): Promise<DashboardOrganizationRow | null> {
-  const organizationSlug = options.organizationSlug ?? (event.req.headers.get('x-dashboard-org-slug'))
+  const organizationSlug = options.organizationSlug ?? dashboardOrgQueryParam(event)
   const explicitOrganizationId = options.explicitOrganizationId ?? null
+  const env = cloudflareEnv(event)
 
   const headerOrg = organizationSlug
-    ? await queryFirst<DashboardOrganizationRow>(db, `
-        SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
-        FROM organization o
-        JOIN member m ON o.id = m.organizationId
-        WHERE m.userId = ? AND o.slug = ?
-        LIMIT 1
-      `, [userId, organizationSlug])
+    ? await resolveUserOrganization(env, { userId, organizationSlug })
     : null
 
   if (explicitOrganizationId) {
@@ -188,13 +196,7 @@ export async function resolveRequestedOrganization(
     }
     if (headerOrg) return headerOrg
 
-    return await queryFirst<DashboardOrganizationRow>(db, `
-      SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
-      FROM organization o
-      JOIN member m ON o.id = m.organizationId
-      WHERE m.userId = ? AND o.id = ?
-      LIMIT 1
-    `, [userId, explicitOrganizationId])
+    return await resolveUserOrganization(env, { userId, organizationId: explicitOrganizationId })
   }
 
   if (headerOrg) return headerOrg
@@ -202,13 +204,7 @@ export async function resolveRequestedOrganization(
   const activeOrganizationId = options.activeOrganizationId ?? null
   if (!activeOrganizationId) return null
 
-  return await queryFirst<DashboardOrganizationRow>(db, `
-    SELECT o.id, o.name, o.slug, o.logo, m.role, m.id AS memberId
-    FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    WHERE m.userId = ? AND o.id = ?
-    LIMIT 1
-  `, [userId, activeOrganizationId])
+  return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId })
 }
 
 // Not a guess: the org-scoped /onboarding route has no siteSlug to attach a header
@@ -220,12 +216,9 @@ async function resolveRecentlyTransferredSite(db: DbClient, organizationId: stri
   return await queryFirst<DashboardSiteRow>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
            s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
-           COALESCE(ma_logo.public_url, s.logo_url) AS logo_url, s.feature_overrides
+           s.feature_overrides, s.theme_id
     FROM site_transfer_requests t
     JOIN sites s ON s.id = t.site_id
-    LEFT JOIN media_assets ma_logo
-      ON ma_logo.id = s.logo_asset_id AND ma_logo.site_id = s.id
-     AND ma_logo.organization_id = s.organization_id AND ma_logo.status = 'active'
     WHERE t.claiming_organization_id = ? AND t.accepted_by_user_id = ? AND t.status = 'accepted'
     ORDER BY t.completed_at DESC
     LIMIT 1
@@ -278,7 +271,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // caller has declared it has no URL-scoped org context (requireOrganization: false —
   // the dashboard boot-discovery endpoint and the notifications badge, both of which
   // run outside any /dashboard/{orgSlug}/... route). Every other caller must resolve
-  // strictly from x-dashboard-org-slug; a missing header there is a real error, not
+  // strictly from the `org` query param; a missing one there is a real error, not
   // a cue to guess from a session field that can be stale relative to the URL.
   const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string | null }
   const activeOrganizationId = options.requireOrganization === false && typeof sessionRecord.activeOrganizationId === 'string'
@@ -301,10 +294,10 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         site: null,
       }
     }
-    const hasHeader = Boolean(options.organizationSlug ?? (event.req.headers.get('x-dashboard-org-slug')))
+    const hasQueryParam = Boolean(options.organizationSlug ?? dashboardOrgQueryParam(event))
     throw new HTTPError({
-      statusCode: hasHeader ? 404 : 400,
-      message: hasHeader
+      statusCode: hasQueryParam ? 404 : 400,
+      message: hasQueryParam
         ? 'Organization not found'
         : 'Organization context is required. Use /dashboard/{orgSlug} routes.',
     })
@@ -312,16 +305,16 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   assertDashboardPathPermission(organization.role, options.pathname ?? event.path)
 
   // The organization and active site are resolved explicitly from the route segments,
-  // sent on every /api/dashboard/* request via dashboard headers (see
-  // plugins/dashboard-site-header.client.ts). All dashboard routes must include the site
+  // sent on every /api/dashboard/* request as `org`/`site` query params (see
+  // composables/dashboardFetch.ts). All dashboard routes must include the site
   // explicitly in the URL path for multi-site support. Callers that pass
   // `requireSite: false` (onboarding, org-level routes, and this function's own
   // discovery endpoint /api/dashboard/context) are explicitly designed to work
-  // before a site is known/selected, so a missing header there means "no site
+  // before a site is known/selected, so a missing query param there means "no site
   // selected yet" rather than a client error — only callers that need a site
   // get the hard 400.
   const siteId = options.siteId ?? null
-  const siteSlug = options.siteSlug ?? (event.req.headers.get('x-dashboard-site-slug'))
+  const siteSlug = options.siteSlug ?? dashboardSiteQueryParam(event)
 
   if (!siteId && !siteSlug && options.requireSite !== false) {
     throw new HTTPError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
@@ -331,11 +324,8 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
                s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
-               COALESCE(ma_logo.public_url, s.logo_url) AS logo_url, s.feature_overrides
+               s.feature_overrides, s.theme_id
         FROM sites s
-        LEFT JOIN media_assets ma_logo
-          ON ma_logo.id = s.logo_asset_id AND ma_logo.site_id = s.id
-         AND ma_logo.organization_id = s.organization_id AND ma_logo.status = 'active'
         WHERE s.organization_id = ? AND s.id = ?
         LIMIT 1
       `, [organization.id, siteId])
@@ -343,11 +333,8 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
       ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
                s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
-               COALESCE(ma_logo.public_url, s.logo_url) AS logo_url, s.feature_overrides
+               s.feature_overrides, s.theme_id
         FROM sites s
-        LEFT JOIN media_assets ma_logo
-          ON ma_logo.id = s.logo_asset_id AND ma_logo.site_id = s.id
-         AND ma_logo.organization_id = s.organization_id AND ma_logo.status = 'active'
         WHERE s.organization_id = ? AND s.subdomain = ?
         LIMIT 1
         `, [organization.id, siteSlug])
@@ -361,6 +348,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
 
   if (site) {
     await assertMemberSiteAccess(db, {
+      env,
       memberId: organization.memberId,
       role: organization.role,
       organizationId: organization.id,
@@ -387,73 +375,35 @@ export interface DashboardSiteSummaryRow {
   status: string | null
   onboarding_status: string | null
   plan: string | null
-  logo_url: string | null
-  preview_image_url: string
-}
-
-interface DashboardPreviewSource {
-  vertical: string | null
-  theme_id: string | null
-  brand_name: string | null
-  logo_url: string | null
-  favicon_url: string | null
-  brand_color: string | null
-  hero_kind: string | null
-  hero_public_url: string | null
-  hero_thumbnail_url: string | null
-}
-
-function requiredPreviewText(value: string | null, field: string): string {
-  const text = value?.trim()
-  if (!text) throw new Error(`Cannot generate dashboard preview: ${field} is missing`)
-  return text
-}
-
-export function requiredDashboardPreviewOrigin(platformDomain: string | undefined): string {
-  const value = platformDomain?.trim()
-  if (!value) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required for dashboard previews')
-  return new URL(value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`).origin
+  media: Array<{ asset_id: string; slot: 'media'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
 export async function listOrganizationSites(
   db: DbClient,
   organizationId: string,
-  origin: string,
   principal?: { role: string; teamIds: string[] | null },
 ) {
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
-  const scopedTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
-  const rows = await queryAll<DashboardSiteSummaryRow & Omit<DashboardPreviewSource, 'hero_kind' | 'hero_public_url' | 'hero_thumbnail_url'>>(db, `
+  const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
+  const rows = await queryAll<Omit<DashboardSiteSummaryRow, 'media'>>(db, `
     SELECT s.id, s.team_id, s.brand_name, s.subdomain, s.vertical, s.status,
-           s.onboarding_status, s.plan, s.theme_id,
-           COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-           json_extract(s.settings, '$.favicon_url') AS favicon_url,
-           (SELECT value FROM site_config WHERE organization_id = s.organization_id AND site_id = s.id AND key = 'brand_color' LIMIT 1) AS brand_color
+           s.onboarding_status, s.plan
     FROM sites s
-    LEFT JOIN media_assets ma_logo
-      ON ma_logo.id = s.logo_asset_id
-     AND ma_logo.site_id = s.id
-     AND ma_logo.organization_id = s.organization_id
-     AND ma_logo.status = 'active'
     WHERE s.organization_id = ?
-      ${scopedTeamIds ? `AND s.team_id IN (${scopedTeamPlaceholders})` : ''}
+      ${scopedTeamIds ? `AND s.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY s.created_at ASC, s.id ASC
-  `, scopedTeamIds ? [organizationId, ...scopedTeamIds] : [organizationId])
+  `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
 
   const homeRows = await queryAll<{
     site_id: string
-    title: string
-    seo_title: string | null
-    summary: string | null
-    seo_description: string | null
-    canonical_url: string | null
+    asset_id: string | null
     hero_kind: string | null
-    hero_public_url: string | null
-    hero_thumbnail_url: string | null
+    hero_media_public_url: string | null
+    hero_media_thumbnail_url: string | null
   }>(db, `
-    SELECT v.site_id, v.title, v.seo_title, v.summary, v.seo_description, v.canonical_url,
-           ma.kind AS hero_kind, ma.public_url AS hero_public_url, ma.thumbnail_url AS hero_thumbnail_url
+    SELECT v.site_id, ma.id AS asset_id, ma.kind AS hero_kind,
+           ma.public_url AS hero_media_public_url, ma.thumbnail_url AS hero_media_thumbnail_url
       FROM tenant_page_variants v
       JOIN site_locales sl
         ON sl.site_id = v.site_id
@@ -463,8 +413,10 @@ export async function listOrganizationSites(
       LEFT JOIN content_blocks cb
         ON cb.document_id = v.document_id
        AND cb.type = 'hero'
+      LEFT JOIN media_placements hero_placement
+        ON hero_placement.owner_type = 'content_block' AND hero_placement.owner_id = cb.id AND hero_placement.slot = 'media' AND hero_placement.status = 'active'
       LEFT JOIN media_assets ma
-        ON ma.id = json_extract(cb.data_json, '$.asset_id')
+        ON ma.id = hero_placement.asset_id
        AND ma.organization_id = v.organization_id
        AND ma.site_id = v.site_id
        AND ma.status = 'active'
@@ -476,37 +428,11 @@ export async function listOrganizationSites(
 
   return rows.map(row => {
     const home = homeBySite.get(row.id)
-    if (!home) throw new Error(`Cannot generate dashboard preview: homepage is missing for site ${row.id}`)
-    const siteName = requiredPreviewText(row.brand_name, 'site brand name')
-    const backgroundImageUrl = resolveSocialImageUrl({
-      kind: home.hero_kind,
-      public_url: home.hero_public_url,
-      thumbnail_url: home.hero_thumbnail_url,
-    })
-    const previewImage = resolveSocialOgImage({
-      template: resolvePublicTemplate({ themeId: row.theme_id, vertical: row.vertical }).slug,
-      title: requiredPreviewText(home.seo_title?.trim() || home.title, 'homepage title'),
-      description: home.seo_description || home.summary,
-      canonicalUrl: home.canonical_url || origin,
-      brand: {
-        siteName,
-        logoUrl: row.logo_url,
-        faviconUrl: row.favicon_url,
-        primaryColor: row.brand_color,
-      },
-      heroImage: backgroundImageUrl ? { url: backgroundImageUrl } : null,
-    }, origin).url
     return {
-      id: row.id,
-      team_id: row.team_id,
-      brand_name: row.brand_name,
-      subdomain: row.subdomain,
-      vertical: row.vertical,
-      status: row.status,
-      onboarding_status: row.onboarding_status,
-      plan: row.plan,
-      logo_url: row.logo_url,
-      preview_image_url: previewImage,
+      ...row,
+      media: home?.asset_id && home.hero_media_public_url
+        ? [{ asset_id: home.asset_id, slot: 'media' as const, public_url: home.hero_media_public_url, thumbnail_url: home.hero_media_thumbnail_url, kind: home.hero_kind }]
+        : [],
     }
   })
 }
@@ -542,35 +468,22 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
     throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
   }
 
-  const row = await queryFirst<DashboardLocationContextRow & {
-    organization_name: string
-    organization_slug: string
-    organization_logo: string | null
-    member_role: string
-    member_id: string
-  }>(db, `
-    SELECT bl.*,
-           o.name AS organization_name, o.slug AS organization_slug, o.logo AS organization_logo,
-           m.role AS member_role, m.id AS member_id
+  const row = await queryFirst<DashboardLocationContextRow>(db, `
+    SELECT bl.*
     FROM business_locations bl
-    JOIN organization o ON o.id = bl.organization_id
-    JOIN member m ON m.organizationId = bl.organization_id
-    WHERE bl.id = ? AND m.userId = ?
+    WHERE bl.id = ?
     LIMIT 1
-  `, [locationId, session.user.id])
+  `, [locationId])
 
   if (!row) {
     throw new HTTPError({ statusCode: 404, message: 'Location not found' })
   }
 
-  const organization = {
-    id: row.organization_id,
-    name: row.organization_name,
-    slug: row.organization_slug,
-    logo: row.organization_logo,
-    role: row.member_role,
-    memberId: row.member_id,
-  }
+  const organization = await resolveUserOrganization(env, {
+    userId: session.user.id,
+    organizationId: row.organization_id,
+  })
+  if (!organization) throw new HTTPError({ statusCode: 404, message: 'Location not found' })
 
   assertDashboardPathPermission(organization.role, event.path)
 
@@ -588,48 +501,38 @@ export async function listDashboardLocations(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  origin: string,
   principal?: { role: string; teamIds: string[] | null },
 ) {
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
-  const siteTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
-  const locationTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
-  const locations = await queryAll<DashboardLocationRow & DashboardPreviewSource & {
-    seo_title: string | null
-    seo_description: string | null
-    short_description: string | null
+  const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
+  const locations = await queryAll<Omit<DashboardLocationRow, 'media'> & {
+    hero_asset_id: string | null
+    hero_kind: string | null
+    hero_media_public_url: string | null
+    hero_media_thumbnail_url: string | null
   }>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
            business_locations.is_primary, business_locations.status,
            business_locations.city, business_locations.address, business_locations.feature_overrides,
-           business_locations.seo_title, business_locations.seo_description,
-           business_locations.short_description, sites.vertical, sites.theme_id,
-           sites.brand_name, COALESCE(ma_logo.public_url, sites.logo_url) AS logo_url,
-           json_extract(sites.settings, '$.favicon_url') AS favicon_url,
-           (SELECT value FROM site_config WHERE organization_id = sites.organization_id AND site_id = sites.id AND key = 'brand_color' LIMIT 1) AS brand_color,
+           ma_hero.id AS hero_asset_id,
            ma_hero.kind AS hero_kind,
-           ma_hero.public_url AS hero_public_url,
-           ma_hero.thumbnail_url AS hero_thumbnail_url
+           ma_hero.public_url AS hero_media_public_url,
+           ma_hero.thumbnail_url AS hero_media_thumbnail_url
     FROM business_locations
     JOIN sites ON sites.id = business_locations.site_id AND sites.organization_id = business_locations.organization_id
-    LEFT JOIN media_assets ma_logo ON ma_logo.id = sites.logo_asset_id
-      AND ma_logo.organization_id = sites.organization_id AND ma_logo.site_id = sites.id AND ma_logo.status = 'active'
-    LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_media_asset_id
+    LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = business_locations.id AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
+    LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id
       AND ma_hero.organization_id = business_locations.organization_id AND ma_hero.site_id = business_locations.site_id AND ma_hero.status = 'active'
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
-      ${scopedTeamIds ? `AND (sites.team_id IN (${siteTeamPlaceholders}) OR business_locations.team_id IN (${locationTeamPlaceholders}))` : ''}
+      ${scopedTeamIds ? `AND (sites.team_id IN (SELECT value FROM json_each(?)) OR business_locations.team_id IN (SELECT value FROM json_each(?)))` : ''}
     ORDER BY is_primary DESC, title ASC
-  `, scopedTeamIds ? [organizationId, siteId, ...scopedTeamIds, ...scopedTeamIds] : [organizationId, siteId])
+  `, scopedTeamIdsJson ? [organizationId, siteId, scopedTeamIdsJson, scopedTeamIdsJson] : [organizationId, siteId])
 
   return locations.map((location) => {
-    const siteName = requiredPreviewText(location.brand_name, 'site brand name')
-    const backgroundImageUrl = resolveSocialImageUrl({
-      kind: location.hero_kind,
-      public_url: location.hero_public_url,
-      thumbnail_url: location.hero_thumbnail_url,
-    })
+    const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url, ...fields } = location
     return {
+      ...fields,
       id: location.id,
       slug: location.slug,
       title: location.title,
@@ -638,20 +541,9 @@ export async function listDashboardLocations(
       city: location.city,
       address: parseLocationAddress(location.address),
       feature_overrides: location.feature_overrides,
-      preview_image_url: resolveSocialOgImage({
-        template: resolvePublicTemplate({ themeId: location.theme_id, vertical: location.vertical }).slug,
-        title: location.seo_title?.trim() || `${location.title} | Locations`,
-        description: location.seo_description || location.short_description,
-        canonicalUrl: origin,
-        location: location.title,
-        brand: {
-          siteName,
-          logoUrl: location.logo_url,
-          faviconUrl: location.favicon_url,
-          primaryColor: location.brand_color,
-        },
-        heroImage: backgroundImageUrl ? { url: backgroundImageUrl } : null,
-      }, origin).url,
+      media: hero_asset_id && hero_media_public_url
+        ? [{ asset_id: hero_asset_id, slot: 'hero' as const, public_url: hero_media_public_url, thumbnail_url: hero_media_thumbnail_url, kind: hero_kind }]
+        : [],
     }
   })
 }

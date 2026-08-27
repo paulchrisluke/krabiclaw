@@ -122,7 +122,7 @@
             :review="{
               id: review.id,
               author: review.author_name,
-              avatarUrl: review.reviewer_photo_url,
+              media: review.media,
               rating: review.rating,
               content: review.content,
               title: review.title,
@@ -135,15 +135,15 @@
             </NuxtLink>
 
             <!-- Photos -->
-            <div v-if="review.photo_urls?.length" class="mt-5 flex flex-wrap gap-2">
+            <div v-if="reviewMedia(review, 'media').length" class="mt-5 flex flex-wrap gap-2">
               <div
-                v-for="(url, i) in review.photo_urls"
+                v-for="(asset, i) in reviewMedia(review, 'media')"
                 :key="i"
                 class="size-28 overflow-hidden rounded-xl bg-muted"
               >
                 <img
                   v-if="!failedPhotoIndices[`${review.id}-${i}`]"
-                  :src="url"
+                  :src="asset.kind === 'video' ? asset.thumbnail_url : asset.public_url"
                   alt=""
                   class="h-full w-full object-cover"
                   @error="handleReviewImageError(review.id, i)"
@@ -181,7 +181,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, reviewsAggregate, reviewsList, pending, config } = await usePublicPageData()
+const { location, reviewsAggregate, reviewsList, pending, config, site: publicSite } = await usePublicPageData()
 const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList
@@ -193,12 +193,15 @@ const filters = computed(() => [
   { key: 'photos', label: t('saya.reviews_page.with_photos') }
 ])
 const activeFilter = ref('recent')
+const reviewMedia = (review: ApiRecord, slot: string) => Array.isArray(review.media)
+  ? review.media.filter((item: ApiRecord) => item.slot === slot)
+  : []
 
 const filtered = computed(() => {
   let list = [...reviews.value]
   if (activeFilter.value === 'highest') list.sort((a, b) => b.rating - a.rating)
   else if (activeFilter.value === 'lowest') list.sort((a, b) => a.rating - b.rating)
-  else if (activeFilter.value === 'photos') list = list.filter(r => r.photo_urls?.length)
+  else if (activeFilter.value === 'photos') list = list.filter(r => reviewMedia(r, 'media').length)
   else {
     const ts = (value: ApiValue) => {
       if (typeof value !== 'string' || !value) return 0
@@ -240,8 +243,8 @@ useSocialMetadata(() => ({
   location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
 }))

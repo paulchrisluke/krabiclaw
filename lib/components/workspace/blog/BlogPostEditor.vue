@@ -7,6 +7,8 @@
       </p>
       <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" :disabled="!interactive || !post" @click="share"><span class="hidden sm:inline">Share</span></UButton>
       <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" :disabled="!interactive" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
+      <UButton v-if="post?.status === 'published'" size="sm" :loading="savingExplicitly" :disabled="!interactive || savingExplicitly || loadPending || saveState === 'conflict' || !dirtyState" @click="saveLiveChanges">Save live changes</UButton>
+      <UButton v-else size="sm" :loading="publishing" :disabled="!interactive || publishing || loadPending || saveState === 'conflict'" @click="publish">{{ publishTiming === 'Scheduled' ? (post ? 'Reschedule' : 'Schedule') : 'Publish now' }}</UButton>
     </header>
     <p v-if="actionError" role="alert" class="shrink-0 border-b border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
@@ -20,8 +22,7 @@
           :category="form.category || null"
           :published-at="post?.published_at || post?.created_at || null"
           :updated-at="post?.updated_at || null"
-          :author-name="resolvedAuthorName"
-          :author-image="post?.author_image || null"
+          :author-name="resolvedSiteName"
           :site-name="resolvedSiteName"
           :media-url="resolvedPrimaryMediaUrl"
           :media-kind="resolvedMediaKind"
@@ -41,7 +42,7 @@
             <component
               :is="mediaPickerComponent || PlatformMediaPicker"
               :site-id="siteId"
-              :model-value="String(block.data.asset_id || '')"
+              :model-value="block.media?.find(item => item.slot === 'media')?.asset_id || ''"
               accept="image"
               @change="changeImage(index, $event)"
             />
@@ -54,39 +55,10 @@
       </div>
     </main>
 
-    <!-- Mirrors the Airbnb host app: the header carries only back/title/utility
-         icons, never the primary commit action — Publish/Save live changes
-         always lives in a bottom bar. -->
-    <footer class="flex shrink-0 justify-end border-t border-default bg-elevated p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4">
-      <UButton v-if="post?.status === 'published'" :loading="savingExplicitly" :disabled="!interactive || savingExplicitly || loadPending || saveState === 'conflict' || !dirtyState" @click="saveLiveChanges">Save live changes</UButton>
-      <UButton v-else :loading="publishing" :disabled="!interactive || publishing || loadPending || saveState === 'conflict'" @click="publish">{{ publishTiming === 'Scheduled' ? (post ? 'Reschedule' : 'Schedule') : 'Publish now' }}</UButton>
-    </footer>
-
     <USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal :content="{ onOpenAutoFocus: focusCategory }" @after:leave="restoreSettingsFocus">
       <template #body>
         <div ref="settingsPanel" class="space-y-7 py-5 pb-[env(safe-area-inset-bottom)]" tabindex="-1" @keydown="onSettingsKeydown">
           <UFormField label="Category"><UInput ref="categoryInput" v-model="form.category" /></UFormField>
-          <UFormField v-if="siteId" label="Author">
-            <div class="flex items-center gap-2">
-              <USelect
-                v-model="form.site_author_id"
-                :items="authorItems"
-                value-key="value"
-                label-key="label"
-                placeholder="Site default"
-                class="flex-1"
-              />
-              <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-plus" @click="openAddAuthor">Add</UButton>
-            </div>
-            <UFormField v-if="addingAuthor" class="mt-2">
-              <div class="flex items-center gap-2">
-                <UInput v-model="newAuthorName" class="min-w-0 flex-1" placeholder="Author name" @keyup.enter="submitNewAuthor" />
-                <UButton size="sm" :loading="savingAuthor" :disabled="!newAuthorName.trim()" @click="submitNewAuthor">Save</UButton>
-                <UButton color="neutral" variant="ghost" size="sm" @click="addingAuthor = false">Cancel</UButton>
-              </div>
-            </UFormField>
-            <p v-if="authorError" class="mt-1 text-xs text-error">{{ authorError }}</p>
-          </UFormField>
           <UFormField label="Tags"><UInput v-model="tagsText" placeholder="Comma separated" /></UFormField>
           <UFormField label="Excerpt"><UTextarea v-model="form.excerpt" :placeholder="resolvedExcerpt" /><p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p></UFormField>
           <UCard>
@@ -127,7 +99,7 @@
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import PlatformMediaPicker from '~/lib/components/workspace/media/PlatformMediaPicker.vue'
-import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput, SiteAuthor } from './types'
+import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput } from './types'
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, scheduledLifecycleValue, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
@@ -159,33 +131,7 @@ let serverPostUpdatedAt: string | undefined
 let serverDocumentUpdatedAt: string | undefined
 const slugResetRequested = ref(false)
 
-const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true, site_author_id: '' })
-const authors = ref<SiteAuthor[]>([])
-const authorItems = computed(() => [{ label: 'Site default', value: '' }, ...authors.value.map(author => ({ label: author.name, value: author.id }))])
-const addingAuthor = ref(false)
-const newAuthorName = ref('')
-const savingAuthor = ref(false)
-const authorError = ref('')
-function openAddAuthor() { addingAuthor.value = true; newAuthorName.value = '' }
-async function submitNewAuthor() {
-  if (!newAuthorName.value.trim() || !props.repository.createAuthor) return
-  authorError.value = ''
-  savingAuthor.value = true
-  try {
-    const created = await props.repository.createAuthor({ name: newAuthorName.value.trim() })
-    authors.value = [...authors.value, created]
-    form.site_author_id = created.id
-    addingAuthor.value = false
-  } catch (error) {
-    authorError.value = getErrorMessage(error, 'Failed to create author.')
-  } finally {
-    savingAuthor.value = false
-  }
-}
-async function loadAuthors() {
-  if (!props.siteId || !props.repository.listAuthors) return
-  try { authors.value = await props.repository.listAuthors() } catch (error) { authorError.value = getErrorMessage(error, 'Failed to load authors.') }
-}
+const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
 const tagsText = ref('')
 const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || (route.path.includes('/admin/') ? 'platform' : 'saya'))
@@ -222,32 +168,20 @@ const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : statu
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? '' : 'KrabiClaw'))
-const resolvedAuthorName = computed(() => {
-  const selected = authors.value.find(author => author.id === form.site_author_id)
-  return selected?.name.trim() || post.value?.author_name?.trim() || resolvedSiteName.value
-})
 const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
 const publicPath = computed(() => resolveBlogPublicPath({ scope: props.siteId ? 'tenant' : 'platform', template: templateName.value, slug: slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, category: form.category }))
 const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
 const resolvedPrimaryImageUrl = computed<string | null>(() => {
   const block = blocks.value.find(item => item.type === 'image')
-  const primary = post.value?.primary_image
-  const blockImage = typeof block?.data.thumbnail_url === 'string'
-    ? block.data.thumbnail_url
-    : typeof block?.data.public_url === 'string'
-      ? block.data.public_url
-      : null
-  return resolveSocialImageUrl(primary)
-    || blockImage
-    || resolveSocialImageUrl(post.value?.featured_image)
+  const blockMedia = block?.media?.find(item => item.slot === 'media')
+  const blockImage = blockMedia?.thumbnail_url || blockMedia?.public_url || null
+  return blockImage
+    || resolveSocialImageUrl(post.value?.media?.find(item => item.slot === 'featured'))
 })
 const resolvedPrimaryVideoUrl = computed<string | null>(() => {
   if (resolvedPrimaryImageUrl.value) return null
-  const primary = post.value?.primary_image
-  const candidate = primary?.kind === 'video'
-    ? primary.public_url
-    : post.value?.featured_image?.kind === 'video'
-      ? post.value.featured_image.public_url
+  const candidate = post.value?.media?.find(item => item.slot === 'featured')?.kind === 'video'
+      ? post.value.media?.find(item => item.slot === 'featured')?.public_url
       : null
   return typeof candidate === 'string' && candidate ? candidate : null
 })
@@ -298,7 +232,6 @@ watch([
     robots: form.robots,
     visibility: form.visibility,
     redirect_old_slug: form.redirect_old_slug,
-    site_author_id: form.site_author_id,
   }),
   blocks,
   tagsText,
@@ -318,7 +251,6 @@ onMounted(async () => {
   interactive.value = true
   window.addEventListener('beforeunload', beforeUnload)
   window.addEventListener('popstate', onPopState)
-  void loadAuthors()
   if (!props.initialPost && !props.deferLoad) await load()
 })
 onBeforeUnmount(() => { if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
@@ -335,7 +267,7 @@ function applyLoadedPost(loaded: BlogPost) {
   try {
     syncServerVersions(loaded)
     post.value = loaded
-    Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true, site_author_id: loaded.site_author_id || '' })
+    Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
     slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
@@ -381,7 +313,7 @@ async function flushSave() {
   }
 }
 function buildSaveSnapshot(id = persistedPostId.value): SaveSnapshot {
-  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: structuredClone(toRaw(blocks.value)), site_author_id: form.site_author_id || null } }
+  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: structuredClone(toRaw(blocks.value)) } }
 }
 function lifecycleVersionInput() {
   if (!serverPostUpdatedAt || !serverDocumentUpdatedAt) throw new Error('Blog lifecycle version is unavailable. Reload the editor.')
@@ -446,7 +378,6 @@ async function publish() {
         canonical_url: form.canonical_url || null,
         robots: form.robots || null,
         visibility: form.visibility,
-        site_author_id: form.site_author_id || null,
         scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for),
       })
       applyLoadedPost(created)
@@ -547,7 +478,19 @@ function handleMergeBlock(index: number, direction: 'back' | 'forward') {
   }
   ensureTrailingTextBlock()
 }
-function changeImage(index: number, value: unknown) { const asset = value && typeof value === 'object' ? value as { id?: unknown; publicUrl?: unknown; thumbnailUrl?: unknown } : null; blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, asset_id: typeof asset?.id === 'string' ? asset.id : '', public_url: typeof asset?.publicUrl === 'string' ? asset.publicUrl : typeof asset?.thumbnailUrl === 'string' ? asset.thumbnailUrl : '' } } }
+function changeImage(index: number, value: unknown) {
+  const asset = value && typeof value === 'object'
+    ? value as { asset_id?: unknown; public_url?: unknown; thumbnail_url?: unknown; kind?: unknown; alt_text?: unknown }
+    : null
+  const assetId = typeof asset?.asset_id === 'string' ? asset.asset_id : ''
+  const publicUrl = typeof asset?.public_url === 'string' ? asset.public_url : null
+  const thumbnailUrl = typeof asset?.thumbnail_url === 'string' ? asset.thumbnail_url : null
+  const altText = typeof asset?.alt_text === 'string' ? asset.alt_text : null
+  blocks.value[index] = {
+    ...blocks.value[index]!,
+    media: assetId ? [{ asset_id: assetId, slot: 'media', public_url: publicUrl, thumbnail_url: thumbnailUrl, kind: typeof asset?.kind === 'string' ? asset.kind : 'image', alt_text: altText }] : [],
+  }
+}
 async function share() { if (!post.value || !persistedPostId.value) return; const url = new URL(post.value.edit_url || props.repository.editUrl(persistedPostId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
 async function goBack() {
   if (settingsOpen.value) { closeSettings(); return }

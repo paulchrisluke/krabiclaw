@@ -9,6 +9,7 @@ import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
 
 const props = defineProps<{ path: string; previewToken?: string | null; locale?: string | null }>()
 const { siteId, isTenant, site } = useTenantSite()
+const { site: publicSite } = useSiteShellState()
 const { isBlawby } = usePublicTemplate()
 const route = useRoute()
 const { locale: i18nLocale } = useI18n()
@@ -123,8 +124,8 @@ useSocialMetadata(() => ({
   robots: page.value.robots,
   brand: {
     siteName: site?.brand_name || '',
-    logoUrl: site?.logo_url || null,
-    faviconUrl: site?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
 }))
 </script>

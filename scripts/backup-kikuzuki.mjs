@@ -66,44 +66,27 @@ console.log('Fetching member...')
 out.push('-- member')
 out.push(inserts('member', query(`SELECT * FROM member WHERE organizationId = '${ORG}'`)))
 
-// --- Site (defer logo_asset_id — circular with media_assets) ---
 console.log('Fetching sites...')
 const siteRows = query(`SELECT * FROM sites WHERE organization_id = '${ORG}'`)
-out.push('-- sites (logo_asset_id deferred)')
-out.push(inserts('sites', siteRows, ['logo_asset_id']))
+out.push('-- sites')
+out.push(inserts('sites', siteRows))
 
 console.log('Fetching site_domains...')
 out.push('-- site_domains')
 out.push(inserts('site_domains', query(`SELECT * FROM site_domains WHERE organization_id = '${ORG}'`)))
 
-// --- Location (defer hero asset FKs — circular with media_assets) ---
 console.log('Fetching business_locations...')
 const locRows = query(`SELECT * FROM business_locations WHERE organization_id = '${ORG}'`)
-out.push('-- business_locations (hero asset FKs deferred)')
-out.push(inserts('business_locations', locRows, ['hero_media_asset_id']))
+out.push('-- business_locations')
+out.push(inserts('business_locations', locRows))
 
-// --- Media (no circular deps once site + location exist) ---
 console.log('Fetching media_assets...')
 out.push('-- media_assets')
 out.push(inserts('media_assets', query(`SELECT * FROM media_assets WHERE organization_id = '${ORG}'`)))
 
-// --- Patch deferred FKs ---
-out.push('-- patch deferred FKs')
-for (const row of siteRows) {
-  if (row.logo_asset_id) {
-    out.push(`UPDATE sites SET logo_asset_id = ${esc(row.logo_asset_id)} WHERE id = ${esc(row.id)};`)
-  }
-}
-for (const row of locRows) {
-  if (row.hero_media_asset_id) {
-    out.push(
-      `UPDATE business_locations SET ` +
-      `hero_media_asset_id = ${esc(row.hero_media_asset_id)} ` +
-      `WHERE id = ${esc(row.id)};`
-    )
-  }
-}
-out.push('')
+console.log('Fetching media_placements...')
+out.push('-- media_placements')
+out.push(inserts('media_placements', query(`SELECT * FROM media_placements WHERE organization_id = '${ORG}'`)))
 
 // --- Menus ---
 console.log('Fetching menus...')

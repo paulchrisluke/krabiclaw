@@ -8,8 +8,8 @@
     >
       <div :data-offering-id="offering.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-gray-100">
         <img
-          v-if="offering.thumbnail_url"
-          :src="offering.thumbnail_url || undefined"
+          v-if="offeringMedia(offering)"
+          :src="offeringMedia(offering) || undefined"
           :alt="offering.name"
           width="704"
           height="478"
@@ -34,4 +34,11 @@
 import type { PublicOfferingSummary } from '~/types/blawby'
 
 defineProps<{ offerings: PublicOfferingSummary[] }>()
+
+function offeringMedia(offering: PublicOfferingSummary) {
+  return offering.media.find(item => item.slot === 'thumbnail')?.public_url
+    ?? offering.media.find(item => item.slot === 'hero')?.public_url
+    ?? offering.media.find(item => item.slot === 'gallery')?.public_url
+    ?? null
+}
 </script>

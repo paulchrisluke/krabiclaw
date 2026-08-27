@@ -128,7 +128,7 @@ const { posts, pending, error } = useBlogNav()
 
 const featuredPost = computed(() => posts.value[0] ?? null)
 const featuredPostPath = computed(() => getBlogPostPath(featuredPost.value?.category, featuredPost.value?.slug))
-const featuredMedia = computed(() => resolveMedia(featuredPost.value?.featured_image))
+const featuredMedia = computed(() => resolveMedia(featuredPost.value?.media?.find(item => item.slot === 'featured')))
 const visibleCategories = computed(() => {
   const featuredId = featuredPost.value?.id ?? null
   return BLOG_CATEGORY_LABELS.map(category => ({
@@ -138,7 +138,7 @@ const visibleCategories = computed(() => {
       .filter(post => post.category === category && post.id !== featuredId)
       .map(post => ({
         ...post,
-        media: resolveMedia(post.featured_image),
+        media: resolveMedia(post.media?.find(item => item.slot === 'featured')),
       })),
   }))
 })

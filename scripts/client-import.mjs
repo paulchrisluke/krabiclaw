@@ -38,6 +38,7 @@ import { prepareD1SeedFile } from "./utils/d1-seed-file.mjs";
 const { values: rawArgs } = parseArgs({
   options: {
     slug: { type: "string" },
+    "organization-id": { type: "string" },
     vertical: { type: "string", default: "restaurant" },
     "maps-url": { type: "string", multiple: true, default: [] },
     images: { type: "string" },
@@ -51,6 +52,7 @@ const { values: rawArgs } = parseArgs({
 });
 
 const SLUG = rawArgs.slug;
+const ORGANIZATION_ID = rawArgs["organization-id"]?.trim();
 
 // Slug validation: only allow letters, digits, hyphens, underscores
 const SLUG_SAFE_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -92,6 +94,10 @@ if (!SLUG) {
   console.error(
     "Usage: node scripts/client-import.mjs --slug <slug> [--dry-run | --approve | --apply] [--allow-stock] [--remote]",
   );
+  process.exit(1);
+}
+if (!ORGANIZATION_ID || !SLUG_SAFE_PATTERN.test(ORGANIZATION_ID)) {
+  console.error("Error: --organization-id is required and must be the existing Better Auth organization ID.");
   process.exit(1);
 }
 
@@ -519,7 +525,7 @@ function scanForbiddenCopy(sql, vertical) {
 // ── Seed SQL generation ───────────────────────────────────────────────────────
 
 function generateSeedSql(places, mediaManifest) {
-  const orgId = `org-${SLUG}`;
+  const orgId = ORGANIZATION_ID;
   const siteId = `site-${SLUG}`;
   const now = new Date().toISOString();
 
@@ -606,22 +612,17 @@ ON CONFLICT(id) DO UPDATE SET
 -- REVIEW CAREFULLY before applying — DO NOT run without checking
 -- ============================================================
 
--- Organization
-INSERT INTO organization (id, name, slug)
-VALUES ('${orgId}', '${brandName.replace(/'/g, "''")}', '${SLUG}')
-ON CONFLICT(id) DO UPDATE SET name = excluded.name;
-
 -- Site
 INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
   status, plan, onboarding_status,
-  default_currency, vertical, content_source, media_source
+  default_currency, vertical
 ) VALUES (
   '${siteId}', '${orgId}', 'saya-theme-v1', 'saya', '${SLUG}', '${SLUG}',
   '${brandName.replace(/'/g, "''")}', NULL,
   'active', 'free', 'active',
-  'THB', '${VERTICAL}', 'google_maps', 'client_photos'
+  'THB', '${VERTICAL}'
 ) ON CONFLICT(id) DO UPDATE SET
   brand_name = excluded.brand_name,
   vertical = excluded.vertical,
@@ -696,6 +697,22 @@ function generateRouteManifest(places) {
 
 // ── D1 row-count query (best-effort, for overwrite visibility) ────────────────
 
+// wrangler's --json output is a single top-level array whose own "results"
+// field is itself an array — a non-greedy [\s\S]*? match stops at the first
+// `]` it finds, which is the inner results array's close, producing truncated,
+// unparseable JSON. Slicing from the first `[` to the *last* `]` in the output
+// captures the whole structure instead.
+function extractD1JsonArray(output) {
+  const start = output.indexOf("[");
+  const end = output.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return null;
+  try {
+    return JSON.parse(output.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
 function queryD1Count(table, siteId, remote) {
   const flag = remote ? "--remote" : "--local";
   try {
@@ -714,16 +731,41 @@ function queryD1Count(table, siteId, remote) {
       { encoding: "utf8", cwd: process.cwd() },
     );
     if (result.status !== 0) return null;
-    const jsonMatch = (result.stdout + (result.stderr ?? "")).match(
-      /\[[\s\S]*?\]/,
-    );
-    if (!jsonMatch) return null;
-    const arr = JSON.parse(jsonMatch[0]);
-    const n = arr[0]?.results?.[0]?.n;
+    const arr = extractD1JsonArray(result.stdout + (result.stderr ?? ""));
+    const n = arr?.[0]?.results?.[0]?.n;
     return typeof n === "number" ? n : null;
   } catch {
     return null;
   }
+}
+
+// ── D1 single-row lookup (best-effort, for pre-apply ownership checks) ────────
+
+// Throws on any query execution or parsing failure — this is used for
+// tenant-boundary safety gates, where a failed lookup must abort the import,
+// never be silently treated the same as "no matching row exists."
+function queryD1Row(query, remote) {
+  const flag = remote ? "--remote" : "--local";
+  const result = spawnSync(
+    "yarn",
+    ["wrangler", "d1", "execute", "DB", flag, "--command", query, "--json"],
+    { encoding: "utf8", cwd: process.cwd() },
+  );
+  if (result.error) {
+    throw new Error(`D1 query failed to execute: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `D1 query exited with status ${result.status}: ${result.stderr || result.stdout}`,
+    );
+  }
+  const arr = extractD1JsonArray(result.stdout + (result.stderr ?? ""));
+  if (!arr) {
+    throw new Error(
+      `D1 query returned unparseable output: ${result.stdout.slice(0, 500)}`,
+    );
+  }
+  return arr[0]?.results?.[0] ?? null;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -792,7 +834,7 @@ if (MODE === "approve") {
 
   console.log(`✓ Approval recorded: ${approvedPath}`);
   console.log(`  manifest_hash: ${hash}`);
-  console.log(`\nNext: yarn client:import --slug ${SLUG} --apply`);
+  console.log(`\nNext: yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --apply`);
   process.exit(0);
 }
 
@@ -921,6 +963,36 @@ if (MODE === "apply") {
       console.log(
         "⚠ Proceeding with no client images (--allow-stock set). Update media before launch.",
       );
+    }
+  }
+
+  // Gate 8: organization exists, and any existing site-${SLUG} already belongs
+  // to it — a typo'd --organization-id must never silently re-home an existing
+  // client's site or seed a new one under the wrong tenant.
+  {
+    const siteId = `site-${SLUG}`;
+    const org = queryD1Row(
+      `SELECT id FROM organization WHERE id = '${ORGANIZATION_ID}'`,
+      REMOTE,
+    );
+    if (!org) {
+      console.error(
+        `Error: organization '${ORGANIZATION_ID}' was not found. Check --organization-id.`,
+      );
+      process.exit(1);
+    }
+    const existingSite = queryD1Row(
+      `SELECT organization_id FROM sites WHERE id = '${siteId}'`,
+      REMOTE,
+    );
+    if (existingSite && existingSite.organization_id !== ORGANIZATION_ID) {
+      console.error(
+        `Error: site '${siteId}' already exists under organization '${existingSite.organization_id}', not '${ORGANIZATION_ID}'.`,
+      );
+      console.error(
+        "  Re-check --slug and --organization-id — this import would otherwise cross tenant boundaries.",
+      );
+      process.exit(1);
     }
   }
 
@@ -1257,8 +1329,6 @@ const clientManifest = {
   generated_at: new Date().toISOString(),
   slug: SLUG,
   vertical: VERTICAL,
-  content_source: "google_maps",
-  media_source: "client_photos",
   primary_location: places[0] ?? null,
   secondary_locations: places.slice(1),
   forbidden_copy_domains: FORBIDDEN_BY_VERTICAL[VERTICAL] ?? [],
@@ -1311,13 +1381,13 @@ Next steps:
                client-imports/${SLUG}/generated-copy.json   ← hallucination review surface
                client-imports/${SLUG}/copy-scan.txt
   2. Upload:   images per client-imports/${SLUG}/media-manifest.json
-  3. Approve:  yarn client:import --slug ${SLUG} --approve
-  4. Apply:    yarn client:import --slug ${SLUG} --apply${ALLOW_STOCK ? " --allow-stock" : ""}
+  3. Approve:  yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --approve
+  4. Apply:    yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --apply${ALLOW_STOCK ? " --allow-stock" : ""}
   5. Verify:   yarn client:verify --url http://localhost:3000 --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
   6. Release + verify prod:
                Merge through staging to main; CI deploys and verifies each environment.
                yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
 
   Or use the onboard wrapper (steps 1-5 in one command):
-               yarn client:onboard --slug ${SLUG} --vertical ${VERTICAL}${ALLOW_STOCK ? " --allow-stock" : ""}
+               yarn client:onboard --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --vertical ${VERTICAL}${ALLOW_STOCK ? " --allow-stock" : ""}
 `);

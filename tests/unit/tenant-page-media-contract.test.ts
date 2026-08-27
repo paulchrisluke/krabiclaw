@@ -4,20 +4,19 @@ import Database from 'better-sqlite3'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { normalizeTenantPageBlocks, validateTenantPageSnapshot } from '../../utils/tenant-page-blocks.ts'
-import { replaceStoryImageBlock } from '../../server/utils/media-placement.ts'
 
-test('tenant page image blocks only persist canonical asset IDs', () => {
+test('tenant page image blocks only persist canonical media placements', () => {
   assert.throws(
     () => normalizeTenantPageBlocks([{ type: 'image', data: { url: 'https://example.com/image.jpg' } }]),
-    /image\.url is not canonical; use image\.asset_id/,
+    /image\.url must use the block media array/,
   )
   assert.throws(
     () => normalizeTenantPageBlocks([{ type: 'image', data: { asset_id: '' } }]),
-    /image\.asset_id is required/,
+    /image\.asset_id must use the block media array/,
   )
   assert.deepEqual(
-    normalizeTenantPageBlocks([{ id: 'story', type: 'image', data: { asset_id: ' media-story ', alt: 'Our story' } }]),
-    [{ id: 'story', type: 'image', position: 0, data: { asset_id: 'media-story', alt: 'Our story' } }],
+    normalizeTenantPageBlocks([{ id: 'story', type: 'image', data: { alt: 'Our story' }, media: [{ asset_id: ' media-story ', slot: 'media' }] }]),
+    [{ id: 'story', type: 'image', position: 0, data: { alt: 'Our story' }, media: [{ asset_id: 'media-story', slot: 'media', sort_order: 0 }] }],
   )
   assert.throws(
     () => validateTenantPageSnapshot({
@@ -36,41 +35,8 @@ test('tenant page image blocks only persist canonical asset IDs', () => {
       },
       blocks: [{ id: 'story', type: 'image', position: 0, data: { url: 'legacy-value' } }],
     }),
-    /image\.url is not canonical/,
+    /image\.url must use the block media array/,
   )
-})
-
-test('MCP and CMS story placement share one canonical add, replace, and clear shape', () => {
-  const prose = { id: 'body', type: 'markdown', position: 0, data: { markdown: 'Story' } }
-  const added = replaceStoryImageBlock([prose], 'media-story')
-  assert.deepEqual(added, [
-    prose,
-    {
-      id: added[1]!.id,
-      type: 'image',
-      position: 1,
-      data: { field: 'story.image', asset_id: 'media-story', alt: 'Story image' },
-    },
-  ])
-  const replaced = replaceStoryImageBlock([
-    prose,
-    {
-      id: 'story',
-      type: 'image',
-      position: 1,
-      data: { field: 'story.image', asset_id: 'old-media', url: 'https://legacy.example/image.jpg', alt: 'Story' },
-    },
-  ], 'new-media')
-  assert.deepEqual(replaced, [
-    prose,
-    {
-      id: 'story',
-      type: 'image',
-      position: 1,
-      data: { field: 'story.image', asset_id: 'new-media', alt: 'Story' },
-    },
-  ])
-  assert.deepEqual(replaceStoryImageBlock(replaced, null), [prose])
 })
 
 test('0106 repairs every legacy tenant-page image shape in documents and revisions', () => {

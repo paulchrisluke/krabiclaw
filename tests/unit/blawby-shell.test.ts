@@ -9,7 +9,7 @@ test('Blawby links uses the combined document shell recipe without tenant-page c
   assert.deepEqual(resolveBlawbyRouteTarget('/links'), { recipe: 'links', slug: null })
   assert.deepEqual(resolveBlawbyRouteTarget('/preview/site/site-ncls-blawby/links'), { recipe: 'links', slug: null })
   assert.equal(isBlawbyShellOnlyRouteRecipe('links'), true)
-  const route = await getPublicBlawbyRouteData({} as never, 'site-ncls-blawby', 'links')
+  const route = await getPublicBlawbyRouteData({} as never, 'site-ncls-blawby', 'links', {}, {} as never)
   assert.deepEqual(route, {
     recipe: 'links',
     page: null,
@@ -42,7 +42,7 @@ test('Blawby shell query selects minimal offering links and excludes route bodie
   assert.doesNotMatch(shellLoader, /listPublicOfferings|listPublicTenantPages/)
 
   assert.match(offeringLinksLoader, /SELECT id, name, slug, canonical_path/)
-  assert.doesNotMatch(offeringLinksLoader, /body|features|faqs|media_asset_ids|SELECT\s+o\.\*/)
+  assert.doesNotMatch(offeringLinksLoader, /body|features|faqs|SELECT\s+o\.\*/)
 })
 
 test('Blawby shell has no runtime font or icon provider dependency', () => {

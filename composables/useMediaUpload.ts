@@ -4,7 +4,6 @@ export const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const VIDEO_MAX_SIZE_BYTES = 50 * 1024 * 1024
 
 export interface MediaUploadOptions {
-  locationId?: string | null
   category?: string | null
 }
 
@@ -14,10 +13,10 @@ export interface PendingMediaUpload {
 }
 
 export interface MediaUploadResult {
-  id: string
+  asset_id: string
   kind: 'image' | 'video'
-  publicUrl?: string | null
-  thumbnailUrl?: string
+  public_url?: string | null
+  thumbnail_url?: string
 }
 
 function operationAndCleanupError(
@@ -47,11 +46,11 @@ export function useMediaUpload(siteApiBase: string) {
   async function confirmPendingUpload(assetId: string) {
     await dashboardApi(`${siteApiBase}/media/${assetId}/confirm`, {
       method: 'POST',
-      validate: (value): value is { id: string; publicUrl: string; thumbnailUrl: string; status: 'active' } =>
+      validate: (value): value is { asset_id: string; public_url: string; thumbnail_url: string; status: 'active' } =>
         isRecord(value)
-        && typeof value.id === 'string'
-        && typeof value.publicUrl === 'string'
-        && typeof value.thumbnailUrl === 'string'
+        && typeof value.asset_id === 'string'
+        && typeof value.public_url === 'string'
+        && typeof value.thumbnail_url === 'string'
         && value.status === 'active',
     })
   }
@@ -83,14 +82,13 @@ export function useMediaUpload(siteApiBase: string) {
       }
 
       if (isImage) {
-        const { assetId, uploadUrl } = await dashboardApi<{ assetId: string, uploadUrl: string }>(
+        const { asset_id: assetId, upload_url: uploadUrl } = await dashboardApi<{ asset_id: string, upload_url: string }>(
           `${siteApiBase}/media/request-upload`,
           {
             method: 'POST',
-            validate: validateApiShape({ assetId: 'string', uploadUrl: 'string' }),
+            validate: validateApiShape({ asset_id: 'string', upload_url: 'string' }),
             body: {
               filename: file.name,
-              locationId: options.locationId,
               category: options.category,
             }
           }
@@ -128,17 +126,17 @@ export function useMediaUpload(siteApiBase: string) {
         }
 
         return {
-          id: assetId,
+          asset_id: assetId,
           kind: 'image',
         }
       }
 
       const poster = await generateVideoThumbnail(file)
       const response = await dashboardApi<{
-        id: string
+        asset_id: string
         kind: 'video'
-        publicUrl: string
-        thumbnailUrl: string
+        public_url: string
+        thumbnail_url: string
         status: 'active'
       }>(`${siteApiBase}/media/upload`, {
         method: 'POST',
@@ -150,29 +148,28 @@ export function useMediaUpload(siteApiBase: string) {
         })(),
         query: {
           filename: file.name,
-          locationId: options.locationId || undefined,
           category: options.category || undefined,
         },
         timeout: MEDIA_UPLOAD_TIMEOUT_MS,
         validate: (value): value is {
-          id: string
+          asset_id: string
           kind: 'video'
-          publicUrl: string
-          thumbnailUrl: string
+          public_url: string
+          thumbnail_url: string
           status: 'active'
         } => isRecord(value)
-          && typeof value.id === 'string'
+          && typeof value.asset_id === 'string'
           && value.kind === 'video'
-          && typeof value.publicUrl === 'string'
-          && typeof value.thumbnailUrl === 'string'
+          && typeof value.public_url === 'string'
+          && typeof value.thumbnail_url === 'string'
           && value.status === 'active',
       })
 
       return {
-        id: response.id,
+        asset_id: response.asset_id,
         kind: response.kind,
-        publicUrl: response.publicUrl,
-        thumbnailUrl: response.thumbnailUrl,
+        public_url: response.public_url,
+        thumbnail_url: response.thumbnail_url,
       }
     } catch (uploadError) {
       error.value = getErrorMessage(uploadError, 'Upload failed.')

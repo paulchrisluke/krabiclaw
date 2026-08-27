@@ -38,7 +38,7 @@ const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').tri
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experiencesList, pending: pagePending, getField, config } = await usePublicPageData()
+const { experiencesList, pending: pagePending, getField, config, site: publicSite } = await usePublicPageData()
 
 const pending = computed(() => pagePending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
@@ -59,8 +59,8 @@ useSocialMetadata(() => ({
   label: 'Experiences',
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
   heroImage: experienceSocialImage(experiences.value[0]) ? { url: experienceSocialImage(experiences.value[0])! } : null,

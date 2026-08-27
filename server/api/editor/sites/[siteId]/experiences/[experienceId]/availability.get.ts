@@ -18,10 +18,11 @@ export default defineHandler(async (event) => {
   }
   const days = Math.min(Math.max(Number(query.days) || 1, 1), MAX_DAYS)
 
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   const experience = await getExperienceById(db, siteId, experienceId)
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   await assertResourceAccess(db, {
+    env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: experience.location_id, })
 
   const timezone = await resolveExperienceTimezone(db, site.organization_id, siteId, experience)

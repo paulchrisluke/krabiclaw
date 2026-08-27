@@ -63,7 +63,7 @@
           {{ block.data.text }}
         </component>
         <figure v-else-if="block.type === 'image'" class="space-y-3">
-          <img v-if="block.data.public_url" :src="String(block.data.public_url)" :alt="String(block.data.alt || '')" class="max-h-[70vh] w-full object-cover">
+          <img v-if="blockMedia(block)[0]?.public_url" :src="String(blockMedia(block)[0]?.public_url)" :alt="String(blockMedia(block)[0]?.alt_text || block.data.alt || '')" class="max-h-[70vh] w-full object-cover">
           <div v-else class="flex min-h-48 items-center justify-center bg-black/5 text-sm opacity-70">Choose an image</div>
           <figcaption v-if="block.data.caption" class="text-center text-sm opacity-70">{{ block.data.caption }}</figcaption>
           <slot v-if="editable" name="image-editor" :block="block" :index="index" />
@@ -98,8 +98,8 @@
           <li v-for="(step, stepIndex) in howToSteps(block)" :key="stepIndex">{{ step.text || step.name }}</li>
         </ol>
         <div v-else-if="block.type === 'gallery'" class="grid gap-4 sm:grid-cols-2">
-          <figure v-for="(item, itemIndex) in galleryItems(block)" :key="item.id || itemIndex" class="space-y-2">
-            <img v-if="item.public_url || item.thumbnail_url" :src="String(item.public_url || item.thumbnail_url)" :alt="String(item.alt || '')" class="aspect-video w-full rounded-lg object-cover">
+          <figure v-for="(item, itemIndex) in galleryItems(block)" :key="item.asset_id || itemIndex" class="space-y-2">
+            <img v-if="item.public_url || item.thumbnail_url" :src="String(item.public_url || item.thumbnail_url)" :alt="String(item.alt_text || '')" class="aspect-video w-full rounded-lg object-cover">
             <figcaption v-if="item.caption" class="text-sm opacity-70">{{ item.caption }}</figcaption>
           </figure>
         </div>
@@ -110,6 +110,9 @@
           <div class="prose max-w-none" v-html="renderMarkdown(String(block.data.markdown || block.data.text || ''))" />
         </aside>
         <div v-else-if="block.type === 'cta'" class="rounded-xl border border-current/15 p-6 text-center">
+          <a v-if="blockMedia(block)[0]?.public_url && safeUrl(block.data.url)" :href="safeUrl(block.data.url)!" class="mb-4 block">
+            <img :src="blockMedia(block)[0]!.public_url || ''" :alt="String(blockMedia(block)[0]!.alt_text || block.data.label || '')" class="mx-auto max-h-[28rem] w-full object-contain">
+          </a>
           <h3 v-if="block.data.title" class="text-xl font-semibold">{{ block.data.title }}</h3>
           <p v-if="block.data.description" class="mt-2 opacity-75">{{ block.data.description }}</p>
           <a v-if="safeUrl(block.data.url)" :href="safeUrl(block.data.url)!" class="mt-4 inline-flex rounded-lg bg-current px-4 py-2 font-semibold text-white no-underline"><span class="mix-blend-difference">{{ block.data.label || 'Learn more' }}</span></a>
@@ -217,7 +220,8 @@ function removeHowToStep(index: number, stepIndex: number) {
   emit('update:block', index, { ...block, data: { ...block.data, steps: steps.length ? steps : [{ text: '' }] } })
 }
 function isRenderable(block: BlogEditorBlock) { return block.data.status !== 'inactive' && block.data.render_enabled !== false }
-function galleryItems(block: BlogEditorBlock) { return Array.isArray(block.data.items) ? block.data.items as Array<{ id?: string; public_url?: string; thumbnail_url?: string; alt?: string; caption?: string }> : [] }
+function blockMedia(block: BlogEditorBlock) { return Array.isArray(block.media) ? block.media.filter(item => item.slot === 'media') : [] }
+function galleryItems(block: BlogEditorBlock) { return Array.isArray(block.media) ? block.media.filter(item => item.slot === 'gallery') : [] }
 function safeUrl(value: unknown) { return sanitizeUrl(typeof value === 'string' ? value : null) }
 function aiAssistanceProps(block: BlogEditorBlock) {
   if (block.data.render_enabled === false || block.data.status === 'inactive') return null

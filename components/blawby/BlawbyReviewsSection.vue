@@ -24,7 +24,7 @@
                     <p v-if="review.title" class="mt-1 text-sm text-slate-500">{{ review.title }}</p>
                   </div>
                   <div class="overflow-hidden rounded-full bg-slate-50">
-                    <img v-if="review.reviewer_photo_url" :src="review.reviewer_photo_url" :alt="review.author_name" width="56" height="56" loading="lazy" class="size-14 object-cover">
+                    <img v-if="portrait(review)" :src="portrait(review)!.public_url" :alt="review.author_name" width="56" height="56" loading="lazy" class="size-14 object-cover">
                   </div>
                 </figcaption>
               </figure>
@@ -38,6 +38,8 @@
 
 <script setup lang="ts">
 import type { PublicSiteReview } from '~/types/blawby'
+
+const portrait = (review: PublicSiteReview) => review.media.find(asset => asset.slot === 'portrait') ?? null
 
 const props = withDefaults(defineProps<{
   reviews: PublicSiteReview[]

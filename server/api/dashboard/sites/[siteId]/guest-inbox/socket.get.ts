@@ -14,6 +14,7 @@ export default defineHandler(async (event) => {
   if (!namespace) throw new HTTPError({ statusCode: 503, message: 'Guest inbox binding is not configured' })
 
   const allowedLocationIds = await listAccessibleLocationIds(db, {
+    env,
     memberId: site.member_id,
     role: site.member_role,
     organizationId: site.organization_id,

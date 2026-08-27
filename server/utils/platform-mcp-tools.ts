@@ -23,20 +23,39 @@ export interface PlatformMcpToolDefinition {
 
 const NULLABLE_STRING = { type: ['string', 'null'] }
 const NULLABLE_NUMBER = { type: ['number', 'null'] }
-const NULLABLE_BOOLEAN = { type: ['boolean', 'null'] }
-const COMPONENT_STATUS_ENUM = ['active', 'inactive']
 const ROBOTS_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
 const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
-const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'tenant_blog']
+const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'tenant_blog', 'platform_doc']
 const CONTENT_BLOCK_TYPE_ENUM = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
+const PAGINATION_INPUT_SCHEMA = {
+  limit: { type: 'number', minimum: 1, maximum: 100, description: 'Page size. Defaults to 50; maximum 100.' },
+  cursor: { type: 'string', description: 'Opaque next_cursor from the previous page.' },
+}
+const PAGE_INFO_SCHEMA = {
+  type: 'object',
+  properties: {
+    has_more: { type: 'boolean' },
+    next_cursor: { type: ['string', 'null'] },
+  },
+  required: ['has_more', 'next_cursor'],
+  additionalProperties: false,
+}
 
 const SEO_FIELDS_SCHEMA = {
   seo_description: NULLABLE_STRING,
   seo_keywords: NULLABLE_STRING,
   canonical_url: NULLABLE_STRING,
   robots: { type: ['string', 'null'], enum: [...ROBOTS_ENUM, null] },
-  featured_image_asset_id: NULLABLE_STRING,
+  media: {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: { asset_id: { type: 'string' }, slot: { type: 'string', const: 'featured' } },
+      required: ['asset_id', 'slot'],
+      additionalProperties: false,
+    },
+  },
 }
 
 const NAV_FIELDS_SCHEMA = {
@@ -55,16 +74,17 @@ const DOC_NAV_GROUP_FIELDS_SCHEMA = {
   nav_group_order: { type: ['number', 'null'], description: 'Sort position of this subgroup among other groups in the same nav_section. Only meaningful if nav_group is set.' },
 }
 
-const FEATURED_IMAGE_SCHEMA = {
+const MEDIA_PLACEMENT_SCHEMA = {
   type: 'object',
   properties: {
-    asset_id: NULLABLE_STRING,
+    asset_id: { type: 'string' },
+    slot: { type: 'string' },
     public_url: NULLABLE_STRING,
     kind: NULLABLE_STRING,
     width: NULLABLE_NUMBER,
     height: NULLABLE_NUMBER,
   },
-  required: ['asset_id', 'public_url', 'kind', 'width', 'height'],
+  required: ['asset_id', 'slot', 'public_url', 'kind', 'width', 'height'],
   additionalProperties: false,
 }
 
@@ -101,205 +121,6 @@ const PLATFORM_MEDIA_ASSET_SCHEMA = {
   additionalProperties: false,
 }
 
-const COMPONENT_METADATA_SCHEMA = {
-  label: NULLABLE_STRING,
-  status: { type: ['string', 'null'], enum: [...COMPONENT_STATUS_ENUM, null] },
-  render_enabled: NULLABLE_BOOLEAN,
-  schema_enabled: NULLABLE_BOOLEAN,
-  position: NULLABLE_NUMBER,
-}
-
-const FAQ_ITEM_SCHEMA = {
-  type: 'object',
-  properties: {
-    question: { type: 'string' },
-    answer: { type: 'string' },
-    position: { type: 'number' },
-  },
-  required: ['question', 'answer'],
-  additionalProperties: false,
-}
-
-const HOW_TO_STEP_OUTPUT_SCHEMA = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    text: { type: 'string' },
-    image_asset_id: NULLABLE_STRING,
-    url: NULLABLE_STRING,
-    position: { type: 'number' },
-    image_public_url: NULLABLE_STRING,
-    image_kind: NULLABLE_STRING,
-    image_width: NULLABLE_NUMBER,
-    image_height: NULLABLE_NUMBER,
-  },
-  required: ['name', 'text', 'position', 'image_asset_id', 'url', 'image_public_url', 'image_kind', 'image_width', 'image_height'],
-  additionalProperties: false,
-}
-
-const AI_ASSISTANCE_PROMPT_SCHEMA = {
-  type: 'object',
-  properties: {
-    title: NULLABLE_STRING,
-    prompt: { type: 'string' },
-    description: NULLABLE_STRING,
-    copy_label: NULLABLE_STRING,
-    position: { type: 'number' },
-  },
-  required: ['prompt'],
-  additionalProperties: false,
-}
-
-const FAQ_COMPONENT_SCHEMA = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    content_type: { type: 'string', enum: ['blog_post', 'doc'] },
-    content_id: { type: 'string' },
-    type: { type: 'string', enum: ['faq'] },
-    ...COMPONENT_METADATA_SCHEMA,
-    data: {
-      type: 'object',
-      properties: {
-        items: { type: 'array', items: FAQ_ITEM_SCHEMA },
-      },
-      required: ['items'],
-      additionalProperties: false,
-    },
-    created_at: { type: 'string' },
-    updated_at: { type: 'string' },
-  },
-  required: ['id', 'content_type', 'content_id', 'type', 'position', 'label', 'status', 'render_enabled', 'schema_enabled', 'data', 'created_at', 'updated_at'],
-  additionalProperties: false,
-}
-
-const HOW_TO_COMPONENT_SCHEMA = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    content_type: { type: 'string', enum: ['blog_post', 'doc'] },
-    content_id: { type: 'string' },
-    type: { type: 'string', enum: ['how_to'] },
-    ...COMPONENT_METADATA_SCHEMA,
-    data: {
-      type: 'object',
-      properties: {
-        steps: { type: 'array', items: HOW_TO_STEP_OUTPUT_SCHEMA },
-        estimated_time: NULLABLE_STRING,
-        tool_items: { type: 'array', items: { type: 'string' } },
-        supply_items: { type: 'array', items: { type: 'string' } },
-      },
-      required: ['steps'],
-      additionalProperties: false,
-    },
-    created_at: { type: 'string' },
-    updated_at: { type: 'string' },
-  },
-  required: ['id', 'content_type', 'content_id', 'type', 'position', 'label', 'status', 'render_enabled', 'schema_enabled', 'data', 'created_at', 'updated_at'],
-  additionalProperties: false,
-}
-
-const AI_ASSISTANCE_COMPONENT_SCHEMA = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    content_type: { type: 'string', enum: ['blog_post', 'doc'] },
-    content_id: { type: 'string' },
-    type: { type: 'string', enum: ['ai_assistance'] },
-    ...COMPONENT_METADATA_SCHEMA,
-    data: {
-      type: 'object',
-      properties: {
-        intro: NULLABLE_STRING,
-        collapsed: NULLABLE_BOOLEAN,
-        max_visible_lines: NULLABLE_NUMBER,
-        prompts: { type: 'array', items: AI_ASSISTANCE_PROMPT_SCHEMA },
-      },
-      required: ['prompts'],
-      additionalProperties: false,
-    },
-    created_at: { type: 'string' },
-    updated_at: { type: 'string' },
-  },
-  required: ['id', 'content_type', 'content_id', 'type', 'position', 'label', 'status', 'render_enabled', 'schema_enabled', 'data', 'created_at', 'updated_at'],
-  additionalProperties: false,
-}
-
-const HOW_TO_STEP_INPUT_SCHEMA = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    text: { type: 'string' },
-    image_asset_id: NULLABLE_STRING,
-    url: NULLABLE_STRING,
-    position: { type: 'number' },
-  },
-  required: ['name', 'text'],
-  additionalProperties: false,
-}
-
-const FAQ_COMPONENT_INPUT_DATA_SCHEMA = {
-  type: 'object',
-  properties: {
-    items: { type: 'array', items: FAQ_ITEM_SCHEMA },
-  },
-  required: ['items'],
-  additionalProperties: false,
-}
-
-const HOW_TO_COMPONENT_INPUT_DATA_SCHEMA = {
-  type: 'object',
-  properties: {
-    steps: { type: 'array', items: HOW_TO_STEP_INPUT_SCHEMA },
-    estimated_time: NULLABLE_STRING,
-    tool_items: { type: 'array', items: { type: 'string' } },
-    supply_items: { type: 'array', items: { type: 'string' } },
-  },
-  required: ['steps'],
-  additionalProperties: false,
-}
-
-const AI_ASSISTANCE_COMPONENT_INPUT_DATA_SCHEMA = {
-  type: 'object',
-  properties: {
-    intro: NULLABLE_STRING,
-    collapsed: NULLABLE_BOOLEAN,
-    max_visible_lines: NULLABLE_NUMBER,
-    prompts: { type: 'array', items: AI_ASSISTANCE_PROMPT_SCHEMA },
-  },
-  required: ['prompts'],
-  additionalProperties: false,
-}
-
-const COMPONENT_INPUT_SCHEMA = {
-  type: 'object',
-  properties: {
-    type: { type: 'string', enum: ['faq', 'how_to', 'ai_assistance'] },
-    ...COMPONENT_METADATA_SCHEMA,
-    data: { type: 'object' },
-  },
-  required: ['type', 'data'],
-  additionalProperties: false,
-  // `data`'s shape depends on the sibling `type` field, so it's spelled out per-type here
-  // instead of on the shared `properties.data` above — that's what gives the model the
-  // actual step/item field names (e.g. how_to steps need `name`+`text`) instead of an
-  // opaque object it has to guess the shape of.
-  allOf: [
-    {
-      if: { properties: { type: { const: 'faq' } } },
-      then: { properties: { data: FAQ_COMPONENT_INPUT_DATA_SCHEMA } },
-    },
-    {
-      if: { properties: { type: { const: 'how_to' } } },
-      then: { properties: { data: HOW_TO_COMPONENT_INPUT_DATA_SCHEMA } },
-    },
-    {
-      if: { properties: { type: { const: 'ai_assistance' } } },
-      then: { properties: { data: AI_ASSISTANCE_COMPONENT_INPUT_DATA_SCHEMA } },
-    },
-  ],
-}
-
 const CONTENT_BLOCK_DATA_SCHEMA = { type: 'object' }
 
 const CONTENT_BLOCK_SCHEMA = {
@@ -312,8 +133,9 @@ const CONTENT_BLOCK_SCHEMA = {
     level: NULLABLE_NUMBER,
     updated_at: { type: 'string' },
     data: CONTENT_BLOCK_DATA_SCHEMA,
+    media: { type: 'array', items: MEDIA_PLACEMENT_SCHEMA },
   },
-  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data'],
+  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'updated_at', 'data', 'media'],
   additionalProperties: false,
 }
 
@@ -357,6 +179,15 @@ const CONTENT_BLOCK_INPUT_PROPERTIES = {
   data: CONTENT_BLOCK_DATA_SCHEMA,
   parent_block_id: NULLABLE_STRING,
   level: NULLABLE_NUMBER,
+  media: {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: { asset_id: { type: 'string' }, slot: { type: 'string' } },
+      required: ['asset_id', 'slot'],
+      additionalProperties: false,
+    },
+  },
 }
 
 const BLOG_SUMMARY_SCHEMA = {
@@ -366,7 +197,6 @@ const BLOG_SUMMARY_SCHEMA = {
     title: { type: 'string' },
     slug: { type: 'string' },
     excerpt: NULLABLE_STRING,
-    body: NULLABLE_STRING,
     category: NULLABLE_STRING,
     ...NAV_FIELDS_SCHEMA,
     status: { type: 'string', enum: ['published', 'scheduled'] },
@@ -377,7 +207,7 @@ const BLOG_SUMMARY_SCHEMA = {
     updated_at: { type: 'string' },
     seo_title: NULLABLE_STRING,
     ...SEO_FIELDS_SCHEMA,
-    featured_image: FEATURED_IMAGE_SCHEMA,
+    media: { type: 'array', items: MEDIA_PLACEMENT_SCHEMA },
     admin_edit_url: { type: 'string' },
     public_path: NULLABLE_STRING,
     public_url: NULLABLE_STRING,
@@ -406,8 +236,7 @@ const BLOG_SUMMARY_SCHEMA = {
     'seo_keywords',
     'canonical_url',
     'robots',
-    'featured_image_asset_id',
-    'featured_image',
+    'media',
     'admin_edit_url',
     'public_path',
     'public_url',
@@ -440,7 +269,7 @@ const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
     updated_at: { type: 'string' },
     seo_title: NULLABLE_STRING,
     ...SEO_FIELDS_SCHEMA,
-    featured_image: FEATURED_IMAGE_SCHEMA,
+    media: { type: 'array', items: MEDIA_PLACEMENT_SCHEMA },
     admin_edit_url: { type: 'string' },
     public_path: NULLABLE_STRING,
     public_url: NULLABLE_STRING,
@@ -453,7 +282,7 @@ const PLATFORM_BLOG_POST_PROJECTION_SCHEMA = {
     'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
     'published_at', 'scheduled_for', 'created_at', 'updated_at',
     'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
-    'featured_image', 'admin_edit_url', 'public_path', 'public_url', 'preview_url',
+    'media', 'admin_edit_url', 'public_path', 'public_url', 'preview_url',
     'content_blocks', 'document_updated_at',
   ],
   additionalProperties: false,
@@ -473,7 +302,6 @@ const DOC_SUMMARY_SCHEMA = {
     title: { type: 'string' },
     slug: { type: 'string' },
     excerpt: NULLABLE_STRING,
-    body: NULLABLE_STRING,
     category: NULLABLE_STRING,
     ...NAV_FIELDS_SCHEMA,
     ...DOC_NAV_GROUP_FIELDS_SCHEMA,
@@ -484,7 +312,7 @@ const DOC_SUMMARY_SCHEMA = {
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     ...SEO_FIELDS_SCHEMA,
-    featured_image: FEATURED_IMAGE_SCHEMA,
+    media: { type: 'array', items: MEDIA_PLACEMENT_SCHEMA },
     admin_edit_url: { type: 'string' },
     public_path: NULLABLE_STRING,
     public_url: NULLABLE_STRING,
@@ -513,8 +341,7 @@ const DOC_SUMMARY_SCHEMA = {
     'seo_keywords',
     'canonical_url',
     'robots',
-    'featured_image_asset_id',
-    'featured_image',
+    'media',
     'admin_edit_url',
     'public_path',
     'public_url',
@@ -526,14 +353,10 @@ const DOC_RECORD_SCHEMA = {
   type: 'object',
   properties: {
     ...DOC_SUMMARY_SCHEMA.properties,
-    components: {
-      type: 'array',
-      items: {
-        oneOf: [FAQ_COMPONENT_SCHEMA, HOW_TO_COMPONENT_SCHEMA, AI_ASSISTANCE_COMPONENT_SCHEMA],
-      },
-    },
+    content_blocks: { type: 'array', items: CONTENT_BLOCK_SCHEMA },
+    document_updated_at: { type: 'string' },
   },
-  required: [...DOC_SUMMARY_SCHEMA.required, 'body', 'components'],
+  required: [...DOC_SUMMARY_SCHEMA.required, 'content_blocks', 'document_updated_at'],
   additionalProperties: false,
 }
 
@@ -562,7 +385,7 @@ const DELETE_RESPONSE_SCHEMA = {
 }
 
 const SHARED_TOOL_DESCRIPTION_LINES = [
-  'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set featured_image_asset_id only when the user has selected or uploaded a real platform media asset; otherwise leave it null.',
+  'Set seo_description explicitly for the intended search snippet. Use canonical_url only for deliberate canonical consolidation. Use robots only for non-default index behavior. Set media only when the user has selected or uploaded a real platform media asset; otherwise use an empty array.',
   'Compose and review the complete content with the user before writing. Existing published content changes are public immediately.',
   'Once the user has supplied or approved final content and you have computed the SEO fields, call this tool directly with those values.',
 ]
@@ -571,7 +394,7 @@ const PLATFORM_BLOG_TOOL_DESCRIPTION = [
   'Create or update a KrabiClaw platform blog post with full SEO and structured-content parity.',
   SHARED_TOOL_DESCRIPTION_LINES[0],
   'Use content_blocks[] as the only structured-content authoring shape — there is no separate body field and no separate structured-component array. Each block is { type, data, id?, level?, parent_block_id? } and blocks render in array order, so place a block at the exact index where it should appear on the page instead of embedding a placeholder tag in prose. Block types: heading, markdown, image, gallery, faq, how_to, ai_assistance, cta, callout.',
-  'FAQ blocks (type: "faq") contain data.items[], each item { question: string, answer: string, position?: number }. How-To blocks (type: "how_to") contain data.steps[], each step { name: string, text: string, image_asset_id?: string|null, url?: string|null, position?: number } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), and data may also include estimated_time, tool_items, and supply_items. AI Assistance blocks (type: "ai_assistance") contain data.prompts[], each prompt { prompt: string, title?: string|null, description?: string|null, copy_label?: string|null, position?: number }; each prompt is a writer-authored suggested prompt, not a generated answer. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
+  'FAQ blocks (type: "faq") contain data.items[], each item { question: string, answer: string, position?: number }. How-To blocks (type: "how_to") contain data.steps[], each step { name: string, text: string, url?: string|null, position?: number } (name and text are both required strings; a missing name or text is the most common cause of a rejected update), and data may also include estimated_time, tool_items, and supply_items. AI Assistance blocks (type: "ai_assistance") contain data.prompts[], each prompt { prompt: string, title?: string|null, description?: string|null, copy_label?: string|null, position?: number }; each prompt is a writer-authored suggested prompt, not a generated answer. Keep AI Assistance prompts specific, actionable, page-aware, and rare enough to help the reader act.',
   'On update: omitting content_blocks preserves the existing content exactly; sending a non-empty content_blocks array replaces the complete block set. expected_document_updated_at is required whenever content_blocks is sent.',
   SHARED_TOOL_DESCRIPTION_LINES[1],
   SHARED_TOOL_DESCRIPTION_LINES[2],
@@ -580,7 +403,7 @@ const PLATFORM_BLOG_TOOL_DESCRIPTION = [
 const PLATFORM_DOC_TOOL_DESCRIPTION = [
   'Create or update a KrabiClaw platform documentation page with full SEO parity.',
   SHARED_TOOL_DESCRIPTION_LINES[0],
-  'Use body as the markdown source and components[] for structured visual blocks (faq, how_to) referenced inline via {{component type="..."}} tags. Call get_platform_doc first to see the current body and components before updating.',
+  'Use content_blocks[] as the only content shape. Markdown, media, FAQ, How-To, and AI Assistance are blocks in their exact render order; there is no body or components authoring field. Call get_platform_doc first and preserve existing block ids. expected_document_updated_at is required when replacing blocks.',
   SHARED_TOOL_DESCRIPTION_LINES[1],
   SHARED_TOOL_DESCRIPTION_LINES[2],
 ].join(' ')
@@ -628,10 +451,9 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         currentUser: {
           type: 'object',
           properties: {
-            role: NULLABLE_STRING,
             isPlatformAdmin: { type: 'boolean' },
           },
-          required: ['role', 'isPlatformAdmin'],
+          required: ['isPlatformAdmin'],
         },
       },
       required: ['currentUser'],
@@ -740,7 +562,14 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         page_views: { type: 'number' },
         unique_sessions: { type: 'number' },
         unique_visitors: { type: 'number' },
-        new_signups: { type: 'number', description: 'New platform accounts created in this date range.' },
+        new_signups: {
+          type: 'number',
+          description: 'New platform accounts successfully recorded in this date range. This is a lower bound, not an exact count: the write happens best-effort from a Better Auth signup hook and can occasionally miss one, and it is meaningless before new_signups_ledger_start_date.',
+        },
+        new_signups_ledger_start_date: {
+          type: 'string',
+          description: 'YYYY-MM-DD the signup-tracking mechanism went live. new_signups has no data before this date and should not be interpreted for earlier ranges.',
+        },
         top_pages: {
           type: 'array',
           items: {
@@ -778,19 +607,19 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
           additionalProperties: false,
         },
       },
-      required: ['page_views', 'unique_sessions', 'unique_visitors', 'new_signups', 'top_pages', 'daily_data', 'period'],
+      required: ['page_views', 'unique_sessions', 'unique_visitors', 'new_signups', 'new_signups_ledger_start_date', 'top_pages', 'daily_data', 'period'],
       additionalProperties: false,
     },
   }),
   readTool({
     name: 'list_platform_media_assets',
-    description: 'List active platform media assets for krabiclaw.com blog/docs authoring. Use this before assigning featured_image_asset_id so you can choose a real uploaded asset instead of inventing one.',
+    description: 'List active platform media assets for krabiclaw.com blog/docs authoring. Use this before assigning media so you can choose a real uploaded asset instead of inventing one.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Optional asset id to fetch a single media item.' },
         kind: { type: 'string', enum: ['image', 'video', 'file'], description: 'Optional kind filter. Blog/docs featured images should use kind="image".' },
-        limit: { type: 'number', description: 'Maximum number of media assets to return. Defaults to 50 and caps at 100.' },
+        ...PAGINATION_INPUT_SCHEMA,
       },
       additionalProperties: false,
     },
@@ -798,14 +627,15 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         media: { type: 'array', items: PLATFORM_MEDIA_ASSET_SCHEMA },
+        page_info: PAGE_INFO_SCHEMA,
       },
-      required: ['media'],
+      required: ['media', 'page_info'],
       additionalProperties: false,
     },
   }),
   writeTool({
     name: 'upload_platform_image',
-    description: 'Upload a user-supplied image attachment into the platform media library for krabiclaw.com blog/docs use. Prefer the top-level file argument from a ChatGPT attachment. After upload succeeds, use the returned asset id as featured_image_asset_id or how_to_steps[].image_asset_id.',
+    description: 'Upload a user-supplied image attachment into the platform media library for krabiclaw.com blog/docs use. Prefer the top-level file argument from a ChatGPT attachment.',
     openWorld: true,
     fileParams: ['file'],
     inputSchema: {
@@ -874,13 +704,14 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       properties: {
         status: { type: 'string', enum: ['published', 'scheduled'] },
         site_id: { type: 'string', description: 'Optional site id to list tenant blog posts instead of platform posts.' },
+        ...PAGINATION_INPUT_SCHEMA,
       },
       additionalProperties: false,
     },
     outputSchema: {
       type: 'object',
-      properties: { posts: { type: 'array', items: BLOG_SUMMARY_SCHEMA } },
-      required: ['posts'],
+      properties: { posts: { type: 'array', items: BLOG_SUMMARY_SCHEMA }, page_info: PAGE_INFO_SCHEMA },
+      required: ['posts', 'page_info'],
       additionalProperties: false,
     },
   }),
@@ -1040,19 +871,19 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     description: 'List public KrabiClaw platform documentation pages.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: { ...PAGINATION_INPUT_SCHEMA },
       additionalProperties: false,
     },
     outputSchema: {
       type: 'object',
-      properties: { docs: { type: 'array', items: DOC_SUMMARY_SCHEMA } },
-      required: ['docs'],
+      properties: { docs: { type: 'array', items: DOC_SUMMARY_SCHEMA }, page_info: PAGE_INFO_SCHEMA },
+      required: ['docs', 'page_info'],
       additionalProperties: false,
     },
   }),
   readTool({
     name: 'get_platform_doc',
-    description: 'Fetch one platform doc in the canonical component model with resolved media fields.',
+    description: 'Fetch one platform doc with its canonical content_blocks and resolved media placements.',
     inputSchema: {
       type: 'object',
       properties: { doc_id: { type: 'string', description: 'Doc id, or its slug from the public URL (krabiclaw.com/docs/<slug>).' } },
@@ -1074,7 +905,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         title: { type: 'string' },
-        body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
+        content_blocks: { type: 'array', minItems: 1, items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false } },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
         ...NAV_FIELDS_SCHEMA,
@@ -1082,9 +913,8 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         ...SEO_FIELDS_SCHEMA,
-        components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
       },
-      required: ['title', 'body'],
+      required: ['title', 'content_blocks'],
       additionalProperties: false,
     },
     outputSchema: DOC_WRITE_RESPONSE_SCHEMA,
@@ -1098,7 +928,8 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       properties: {
         doc_id: { type: 'string', description: 'Doc id or slug.' },
         title: { type: 'string' },
-        body: { type: 'string', description: 'Markdown body. To embed a structured visual block inline, add tags like {{component type="faq"}} or {{component type="how_to"}} on their own line where you want the component to render.' },
+        content_blocks: { type: 'array', minItems: 1, items: { type: 'object', properties: CONTENT_BLOCK_INPUT_PROPERTIES, required: ['type', 'data'], additionalProperties: false } },
+        expected_document_updated_at: { type: 'string' },
         excerpt: { type: 'string' },
         category: { type: 'string', enum: DOC_CATEGORY_ENUM },
         ...NAV_FIELDS_SCHEMA,
@@ -1106,7 +937,6 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
         difficulty_level: { type: 'string', enum: DOC_DIFFICULTY_ENUM },
         sort_order: { type: 'number' },
         ...SEO_FIELDS_SCHEMA,
-        components: { type: 'array', items: COMPONENT_INPUT_SCHEMA },
       },
       required: ['doc_id'],
       additionalProperties: false,

@@ -1,4 +1,5 @@
-import { execute, queryAll, type DbClient } from '../db/index.ts'
+import { execute, executeBatch, queryAll, type DbClient } from '../db/index.ts'
+import { getMediaPlacements } from './media-placement.ts'
 
 export const OWNER_REVIEW_COLLECTION_METHODS = ['in_person', 'email', 'phone', 'migration', 'other'] as const
 export type OwnerReviewCollectionMethod = typeof OWNER_REVIEW_COLLECTION_METHODS[number]
@@ -59,15 +60,20 @@ function publicReviewRow(row: Record<string, unknown>) {
 
 export async function listSiteReviews(db: DbClient, siteId: string, options: { publishedOnly?: boolean } = {}) {
   const rows = await queryAll<Record<string, unknown>>(db, `
-    SELECT id, organization_id, site_id, location_id, author_name, reviewer_photo_url, rating, title, content,
-           owner_reply, owner_reply_at, photo_urls, helpful_count, status, source,
+    SELECT r.id, r.organization_id, r.site_id, r.location_id, r.author_name,
+           r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at, r.helpful_count, r.status, r.source,
            review_request_id, entered_by_user_id, collection_method, original_review_date,
            original_reference, publication_authorized, created_at, updated_at
-    FROM reviews
-    WHERE site_id = ? AND location_id IS NULL${options.publishedOnly ? " AND status = 'approved'" : ''}
-    ORDER BY created_at DESC, id ASC
+    FROM reviews r
+    WHERE r.site_id = ? AND r.location_id IS NULL${options.publishedOnly ? " AND r.status = 'approved'" : ''}
+    ORDER BY r.created_at DESC, r.id ASC
   `, [siteId])
-  return rows.map(publicReviewRow)
+  return await attachReviewMedia(db, siteId, rows.map(publicReviewRow))
+}
+
+export async function attachReviewMedia<T extends Record<string, unknown>>(db: DbClient, siteId: string, reviews: T[]) {
+  const placements = await getMediaPlacements(db, { siteId, ownerType: 'review', ownerIds: reviews.map(review => String(review.id)) })
+  return reviews.map(review => ({ ...review, media: placements.get(String(review.id)) ?? [] }))
 }
 
 export async function createOwnerEnteredSiteReview(
@@ -151,10 +157,28 @@ export async function deleteOwnerEnteredSiteReview(
   scope: { organizationId: string; siteId: string },
   reviewId: string,
 ) {
-  const result = await execute(db, `
-    DELETE FROM reviews
-    WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
-  `, [reviewId, scope.organizationId, scope.siteId])
-  if (!Number(result.meta.changes ?? 0)) throw new Error('Owner-entered review not found')
+  const [, result] = await executeBatch(db, [
+    {
+      // Scoped by the exact same owner-entered predicate as the reviews DELETE below,
+      // so a reviewId that exists but isn't owner-entered (or belongs to another
+      // org/site) never has its placements cleared while the review itself survives.
+      query: `
+      DELETE FROM media_placements
+      WHERE owner_type = 'review' AND owner_id IN (
+        SELECT id FROM reviews
+        WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
+      )
+    `,
+      params: [reviewId, scope.organizationId, scope.siteId],
+    },
+    {
+      query: `
+      DELETE FROM reviews
+      WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
+    `,
+      params: [reviewId, scope.organizationId, scope.siteId],
+    },
+  ])
+  if (!Number(result?.meta.changes ?? 0)) throw new Error('Owner-entered review not found')
   return { review_id: reviewId, deleted: true }
 }

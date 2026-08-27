@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, siteId, session.user.id)
+  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Booking not found or access denied' }, { status: 404 })
 
   const booking = await queryFirst<{ id: string; location_id: string }>(db, `
@@ -30,6 +30,7 @@ export default defineHandler(async (event) => {
   if (!booking) return jsonResponse({ error: 'Booking not found or access denied' }, { status: 404 })
 
   await assertResourceAccess(db, {
+    env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: booking.location_id, })
 
   const completed = await markBookingCompleted(db, 'experience_booking', bookingId, 'manual')

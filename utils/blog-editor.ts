@@ -7,6 +7,7 @@ export interface EditorContentBlock {
   level?: number | null
   parent_block_id?: string | null
   data: Record<string, unknown>
+  media?: Array<{ asset_id: string; slot: string; sort_order?: number; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null; alt_text?: string | null; caption?: string | null }>
   updated_at?: string
 }
 
@@ -139,7 +140,7 @@ export function resolveBlogSeo(input: {
 
 export function firstImageAssetId(blocks: EditorContentBlock[]) {
   const image = blocks.find(block => block.type === 'image' && block.data.status !== 'inactive')
-  return image && typeof image.data.asset_id === 'string' ? image.data.asset_id : null
+  return image?.media?.find(item => item.slot === 'media')?.asset_id ?? null
 }
 
 export function parseScheduledFor(value: unknown) {

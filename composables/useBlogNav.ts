@@ -14,13 +14,14 @@ interface PublicBlogPost {
   featured_order?: number | null
   excerpt?: string | null
   published_at?: string | null
-  featured_image?: {
-    asset_id: string | null
+  media?: Array<{
+    asset_id: string
+    slot: string
     public_url: string | null
     kind: string | null
     width: number | null
     height: number | null
-  } | null
+  }>
 }
 
 interface BlogNavCategory {

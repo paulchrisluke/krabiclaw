@@ -8,6 +8,8 @@ import { getPlatformMcpTool, PLATFORM_INTERNAL_MCP_TOOLS, PLATFORM_MCP_TOOLS, PL
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
+import { parseMediaPlacementKey } from '../../server/utils/media-placement.ts'
+import { MAX_MENU_BATCH_ITEMS } from '../../server/utils/menu-batch-limits.ts'
 
 type ToolContract = {
   name: string
@@ -166,6 +168,52 @@ test('validateArguments rejects unknown fields in nested menu items and media re
   )
 })
 
+test('validateArguments enforces recursive array bounds and uniqueness', () => {
+  const batch = tool(MENUS_TOOLS, 'add_menu_items_batch')
+  assert.throws(
+    () => validateArguments(batch.inputSchema, { site_id: 'site-1', menu_id: 'menu-1', items: [] }),
+    isInvalidParamsErrorContaining('items must contain at least 1 item'),
+  )
+  assert.throws(
+    () => validateArguments(batch.inputSchema, {
+      site_id: 'site-1',
+      menu_id: 'menu-1',
+      items: Array.from({ length: MAX_MENU_BATCH_ITEMS + 1 }, (_, index) => ({ section: 'Mains', name: `Item ${index}` })),
+    }),
+    isInvalidParamsErrorContaining(`items must contain at most ${MAX_MENU_BATCH_ITEMS} items`),
+  )
+  assert.doesNotThrow(() => validateArguments(batch.inputSchema, {
+    site_id: 'site-1',
+    menu_id: 'menu-1',
+    items: Array.from({ length: MAX_MENU_BATCH_ITEMS }, (_, index) => ({ section: 'Mains', name: `Item ${index}` })),
+  }))
+
+  const nestedArraySchema = {
+    type: 'object',
+    properties: {
+      groups: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { ids: { type: 'array', minItems: 1, maxItems: 2, uniqueItems: true, items: { type: 'string' } } },
+        },
+      },
+    },
+  }
+  assert.throws(
+    () => validateArguments(nestedArraySchema, { groups: [{ ids: [] }] }),
+    isInvalidParamsErrorContaining('groups[0].ids must contain at least 1 item'),
+  )
+  assert.throws(
+    () => validateArguments(nestedArraySchema, { groups: [{ ids: ['asset-1', 'asset-2', 'asset-3'] }] }),
+    isInvalidParamsErrorContaining('groups[0].ids must contain at most 2 items'),
+  )
+  assert.throws(
+    () => validateArguments(nestedArraySchema, { groups: [{ ids: ['asset-1', 'asset-1'] }] }),
+    isInvalidParamsErrorContaining('groups[0].ids must contain unique items'),
+  )
+})
+
 test('the tenant update_blog_post/create_blog_post schemas are strict (regression: siteTool() defaulted to additionalProperties: true, making tenant validation a no-op)', () => {
   for (const name of ['create_blog_post', 'update_blog_post', 'update_blog_metadata', 'replace_blog_content']) {
     const definition = tool(BLOG_TOOLS, name)
@@ -196,6 +244,29 @@ test('validateArguments accepts a valid tenant update_blog_post call', () => {
   }))
 })
 
+test('tenant set_media cannot target platform control-plane documents', () => {
+  const setMedia = tool(MEDIA_TOOLS, 'set_media')
+  const properties = setMedia.inputSchema.properties as {
+    placement: { properties: { owner_type: { enum: string[] } } }
+  }
+  assert.equal(properties.placement.properties.owner_type.enum.includes('platform_doc'), false)
+  assert.throws(
+    () => parseMediaPlacementKey({ owner_type: 'platform_doc', owner_id: 'doc-1', slot: 'featured' }),
+    (error: unknown) => error instanceof Error && error.message.includes('placement.owner_type is invalid'),
+  )
+})
+
+test('tenant set_media accepts one scalar asset or null and rejects the legacy array input', () => {
+  const setMedia = tool(MEDIA_TOOLS, 'set_media')
+  const placement = { owner_type: 'post', owner_id: 'post-1', slot: 'cover' }
+  assert.doesNotThrow(() => validateArguments(setMedia.inputSchema, { site_id: 'site-1', placement, asset_id: 'asset-1' }))
+  assert.doesNotThrow(() => validateArguments(setMedia.inputSchema, { site_id: 'site-1', placement, asset_id: null }))
+  assert.throws(
+    () => validateArguments(setMedia.inputSchema, { site_id: 'site-1', placement, asset_ids: ['asset-1'] }),
+    isInvalidParamsErrorContaining('asset_ids'),
+  )
+})
+
 test('tenant blog schemas support seo_keywords wherever tenant prompts ask for it', () => {
   for (const name of ['create_blog_post', 'update_blog_post', 'update_blog_metadata']) {
     const definition = tool(BLOG_TOOLS, name)
@@ -223,20 +294,13 @@ test('create_platform_blog_post/replace_platform_blog_content descriptions expos
   }
 })
 
-test('create_platform_doc/update_platform_doc descriptions expose body and components authoring', () => {
+test('create_platform_doc/update_platform_doc descriptions expose only content_blocks authoring', () => {
   for (const name of ['create_platform_doc', 'update_platform_doc']) {
     const definition = tool(PLATFORM_MCP_TOOLS, name) as ToolContract & { description: string }
-    assert.ok(!definition.description.includes('content_blocks'), `${name} description should not mention content_blocks`)
+    assert.ok(definition.description.includes('content_blocks'), `${name} description should mention content_blocks`)
     assert.ok(!definition.description.includes('get_platform_blog_post'), `${name} description should not reference get_platform_blog_post`)
-    assert.ok(definition.description.includes('body'), `${name} description should describe the body field`)
+    assert.ok(definition.description.includes('there is no body'), `${name} description should reject a body field`)
   }
-})
-
-test('the platform blog post projection schema does not require featured_image_asset_id', () => {
-  const getPost = tool(PLATFORM_MCP_TOOLS, 'get_platform_blog_post') as ToolContract & {
-    outputSchema: { properties: { post: { required: string[] } } }
-  }
-  assert.ok(!getPost.outputSchema.properties.post.required.includes('featured_image_asset_id'))
 })
 
 test('the platform blog post projection schema declares visibility', () => {
@@ -258,14 +322,14 @@ test('the platform blog post projection exposes non-null document concurrency an
   assert.ok(post.required.includes('scheduled_for'))
 })
 
-test('update_platform_blog_metadata preserves explicit null SEO/media fields', () => {
+test('update_platform_blog_metadata preserves explicit null SEO fields', () => {
   const source = readFileSync(new URL('../../server/utils/platform-mcp-executor.ts', import.meta.url), 'utf8')
   const caseStart = source.indexOf("case 'update_platform_blog_metadata':")
   const caseEnd = source.indexOf("case 'replace_platform_blog_content':")
   assert.notEqual(caseStart, -1)
   assert.notEqual(caseEnd, -1)
   const caseBody = source.slice(caseStart, caseEnd)
-  for (const field of ['seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'featured_image_asset_id']) {
+  for (const field of ['seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots']) {
     assert.match(caseBody, new RegExp(`${field}: optionalNullableString\\(rawArguments, '${field}'\\)`), `${field} should be parsed with optionalNullableString`)
   }
 })
@@ -287,7 +351,7 @@ test('validateArguments enforces top-level anyOf mutation requirements', () => {
   const updateMedia = tool(MEDIA_TOOLS, 'update_media_asset')
   assert.throws(
     () => validateArguments(updateMedia.inputSchema, { site_id: 'site-1', asset_id: 'asset-1' }),
-    isInvalidParamsErrorContaining('alt_text | location_id | category'),
+    isInvalidParamsErrorContaining('alt_text | category'),
   )
   assert.doesNotThrow(() => validateArguments(updateMedia.inputSchema, {
     site_id: 'site-1',

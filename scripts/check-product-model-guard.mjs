@@ -71,7 +71,6 @@ export const FORBIDDEN_ACTIVE_PATTERNS = [
   /\bupdate_tenant_page_draft\b/,
   /\bblog_draft\b/,
   /\bunpublish_(?:blog_post|platform_blog_post|platform_doc)\b/,
-  /\bowner(?:_|)type\b[^\n]{0,80}['"]platform_doc['"]/i,
 ]
 const FORBIDDEN_SEED_NAMING_PATTERNS = [
   /\bsiteContent\b/,
@@ -79,6 +78,19 @@ const FORBIDDEN_SEED_NAMING_PATTERNS = [
   /\bSeedTenantPageTranslation\b/,
   /\b(?:translations|translatedRows)\b/,
 ]
+// Final publication lifecycle: posts/blog articles persist only as
+// `published` or `scheduled` (creating one publishes it immediately unless
+// `scheduled_for` is future-dated; editing changes the live document as
+// "Save live changes"; public removal is a destructive delete, never an
+// archive/unpublish). Platform docs have no publication status — every
+// persisted one is public. Site locales persist only as `published` or
+// `disabled`. Facebook publication is immediate with no external-draft
+// option. `draft`/`archived`/unpublish states were removed everywhere except
+// onboarding's pre-site-creation `onboarding_drafts` aggregate, which is a
+// resumable private draft that predates the real record and isn't a
+// publication state on an existing one. D1 triggers reject legacy post/blog
+// states because those tables can't be safely rebuilt; this guard is the
+// runtime-code half of that enforcement.
 const PUBLICATION_MODEL_PATH = /(?:^seed-definitions\/|\/(?:chowbot-tools|mcp-catalog-snapshots|mcp-tools|mcp-executor|mcp-prompts)\/|(?:blog|post|locale|platform-content|mcp-catalog|mcp-tools|mcp-executor|mcp-prompts|mcp-workflows|chowbot-agent|facebook)[^/]*\.(?:ts|js|mjs|vue|json)$|\/(?:blog|posts|docs|locales)\/|\/(?:blog|posts|docs|locales)\.(?:ts|vue)$)/i
 const FORBIDDEN_PUBLICATION_PATTERNS = [
   /\b(?:Publication|Publishing)Status\b[^\n]{0,160}['"](?:draft|archived)['"]/,

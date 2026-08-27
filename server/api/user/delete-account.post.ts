@@ -1,6 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
+import { execute, queryAll, queryFirst } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { deleteOrganization, listOrganizationMembers, listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 
 const ACTIVE_STATUSES = ['active', 'trialing', 'past_due']
 
@@ -19,36 +21,26 @@ export default defineHandler(async (event) => {
 
   const userId = session.user.id
 
-  // Find orgs where this user is the SOLE owner (subquery counts all owners per org)
-  const ownedOrgsResult = await queryAll<{ id: string }>(db, `
-    SELECT m.organizationId as id
-    FROM member m
-    WHERE m.userId = ? AND m.role = 'owner'
-    AND (
-      SELECT COUNT(*) FROM member m2
-      WHERE m2.organizationId = m.organizationId AND m2.role = 'owner'
-    ) = 1
-  `, [userId])
-
-  const soleOwnedOrgIds: string[] = (ownedOrgsResult ?? []).map((r) => r.id)
-
-  // Find all org memberships for cleanup
-  const allMemberships = await queryAll<{ organizationId: string }>(db, `
-    SELECT DISTINCT organizationId FROM member WHERE userId = ?
-  `, [userId])
-
-  const allOrgIds: string[] = (allMemberships ?? []).map((r) => r.organizationId)
+  const organizations = await listUserOrganizations(env, userId)
+  const organizationDetails = await Promise.all(organizations.map(async (organization) => ({
+    organization,
+    membership: await resolveOrganizationMembership(env, { organizationId: organization.id, userId }),
+    members: await listOrganizationMembers(env, organization.id),
+  })))
+  const allOrgIds = organizations.map(organization => organization.id)
+  const soleOwnedOrgIds = organizationDetails.flatMap(({ organization, membership, members }) =>
+    membership?.role === 'owner' && members.filter(member => member.role === 'owner').length === 1
+      ? [organization.id]
+      : [])
 
   // Single query: block deletion if any org has an active subscription
   if (allOrgIds.length > 0) {
-    const placeholders = allOrgIds.map(() => '?').join(', ')
-    const statusPlaceholders = ACTIVE_STATUSES.map(() => '?').join(', ')
     const activeSubscription = await queryFirst(db, `
       SELECT organization_id FROM organization_billing
-      WHERE organization_id IN (${placeholders})
-      AND status IN (${statusPlaceholders})
+      WHERE organization_id IN (SELECT value FROM json_each(?))
+      AND status IN (SELECT value FROM json_each(?))
       LIMIT 1
-    `, [...allOrgIds, ...ACTIVE_STATUSES])
+    `, [d1JsonStringSet(allOrgIds), d1JsonStringSet(ACTIVE_STATUSES)])
 
     if (activeSubscription) {
       return jsonResponse(
@@ -59,42 +51,50 @@ export default defineHandler(async (event) => {
 
   // For each sole-owned org, block if other members exist (would lose access)
   for (const orgId of soleOwnedOrgIds) {
-    const otherMembers = await queryFirst<{ count: number }>(db, `
-      SELECT COUNT(*) as count FROM member WHERE organizationId = ? AND userId != ?
-    `, [orgId, userId])
-
-    if ((otherMembers?.count ?? 0) > 0) {
+    const details = organizationDetails.find(({ organization }) => organization.id === orgId)
+    if (details?.members.some(member => member.userId !== userId)) {
       return jsonResponse(
         { error: 'org_has_members', message: 'Transfer ownership or remove all members before deleting your account.' }, { status: 409 }
       )
     }
   }
 
-  // Delete in correct order: member rows first, then orgs (avoids FK violations), // then the user row (cascades sessions/accounts)
-  const statements: BatchQuery[] = []
-
   // Attribution is user-linked data even though the client ID is stored on
   // the organization billing projection. Erase both fields for organizations
   // the user leaves; the FK only protects ga_user_id and would otherwise leave
   // the client identifier behind on co-owned organizations.
-  statements.push({
-    query: `UPDATE organization_billing SET ga_client_id = NULL, ga_user_id = NULL, updated_at = ? WHERE ga_user_id = ?`, params: [new Date().toISOString(), userId], })
+  const billingAttribution = await queryAll<{ id: string; ga_client_id: string | null; ga_user_id: string | null }>(db, `
+    SELECT id, ga_client_id, ga_user_id FROM organization_billing WHERE ga_user_id = ?
+  `, [userId])
+  await execute(db, `
+    UPDATE organization_billing
+    SET ga_client_id = NULL, ga_user_id = NULL, updated_at = ?
+    WHERE ga_user_id = ?
+  `, [new Date().toISOString(), userId])
 
-  // Remove user from all orgs (co-owned orgs: removes membership; sole-owned: clears before org delete)
-  for (const orgId of allOrgIds) {
-    statements.push({ query: `DELETE FROM member WHERE organizationId = ? AND userId = ?`, params: [orgId, userId] })
+  const auth = createAuth(env)
+  const response = await (auth.api as unknown as {
+    deleteUser(_input: { body: Record<string, never>; headers: HeadersInit; asResponse: true }): Promise<Response>
+  }).deleteUser({
+    body: {},
+    headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit,
+    asResponse: true,
+  })
+  if (!response.ok) {
+    const message = await response.text().catch(() => '')
+    const restoredAt = new Date().toISOString()
+    for (const attribution of billingAttribution) {
+      await execute(db, `
+        UPDATE organization_billing
+        SET ga_client_id = ?, ga_user_id = ?, updated_at = ?
+        WHERE id = ?
+      `, [attribution.ga_client_id, attribution.ga_user_id, restoredAt, attribution.id])
+    }
+    return jsonResponse({ error: 'account_deletion_failed', message: message || 'Failed to delete account.' }, { status: response.status })
   }
 
-  // Delete sole-owned orgs (safe now that member rows are removed above)
-  for (const orgId of soleOwnedOrgIds) {
-    statements.push({ query: `DELETE FROM organization WHERE id = ?`, params: [orgId] })
-  }
-
-  // Delete user — cascades to session, account rows
-  statements.push({ query: `DELETE FROM user WHERE id = ?`, params: [userId] })
-
-  if (statements.length > 0) {
-    await executeBatch(db, statements)
+  for (const organizationId of soleOwnedOrgIds) {
+    await deleteOrganization(env, organizationId)
   }
 
   return jsonResponse({ success: true })

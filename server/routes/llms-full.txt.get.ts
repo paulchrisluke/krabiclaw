@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
   if (isTenant && siteId && !siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
 
   if (isTenant && siteId) {
-    const postSummaries = await listPublishedTenantBlogPostsForLlm(db, siteId)
+    const postSummaries = await listPublishedTenantBlogPostsForLlm(db, siteId, env)
     const posts = (await Promise.all(
       (postSummaries ?? []).map((post) => getPublishedTenantBlogPostBySlug(db, siteId, post.slug)), )).filter((post): post is NonNullable<typeof post> => Boolean(post))
 
@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   }
 
   const [docSummaries, postSummaries] = await Promise.all([
-    listPublishedPlatformDocsForLlm(db), listPublishedPlatformBlogPostsForLlm(db), ])
+    listPublishedPlatformDocsForLlm(db), listPublishedPlatformBlogPostsForLlm(db, env), ])
 
   const docs = (await Promise.all(
     (docSummaries ?? []).flatMap((doc) => {

@@ -28,7 +28,7 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { googleBusiness, qaList, locations, config } = await usePublicPageData()
+const { googleBusiness, qaList, locations, config, site: publicSite } = await usePublicPageData()
 const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
@@ -38,8 +38,8 @@ useSocialMetadata(() => ({
   label: 'Q&A',
   brand: {
     siteName: siteName.value,
-    logoUrl: config.value?.logo_url || null,
-    faviconUrl: config.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: config.value?.brand_color || null,
   },
 }))

@@ -1,12 +1,10 @@
 // POST /api/ai/[siteId]/enhance-prompt
 // Rewrites a rough image prompt into a vivid OpenAI image-generation food photography prompt using Claude Haiku.
 // body: { prompt: string, context?: string }
-import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { callAiGateway } from '~/server/utils/ai-gateway'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
-import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 const ENHANCE_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -23,21 +21,7 @@ export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ organization_id: string; member_id: string; member_role: string }>(db, `
-    SELECT s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
-    JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? LIMIT 1
-  `, [siteId, session.user.id])
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-
-  await assertSiteWideAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
+  const { env, db, session, site } = await requireSiteAccess(event, siteId)
 
   const isDev = import.meta.dev
 

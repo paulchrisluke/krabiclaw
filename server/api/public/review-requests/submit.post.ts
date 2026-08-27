@@ -24,16 +24,9 @@ export default defineHandler(async (event) => {
   const title = cleanString(bodyRecord.title, 120) || null
   const content = cleanString(bodyRecord.content, 2000)
   const rating = Number(bodyRecord.rating)
-  const rawMediaAssetIds = Array.isArray(bodyRecord.mediaAssetIds)
-    ? bodyRecord.mediaAssetIds.map(value => cleanString(value, 80)).filter(Boolean)
-    : []
-  const mediaAssetIds = [...new Set(rawMediaAssetIds)]
-
   if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return jsonResponse({ error: 'Rating must be between 1 and 5.' }, { status: 400 })
   if (content.length < 10) return jsonResponse({ error: 'Review text must be at least 10 characters.' }, { status: 400 })
-  if (rawMediaAssetIds.length !== mediaAssetIds.length) return jsonResponse({ error: 'Duplicate media attachments are not allowed.' }, { status: 400 })
-  if (mediaAssetIds.length > 7) return jsonResponse({ error: 'You can attach up to 5 photos and 2 videos.' }, { status: 400 })
 
   const tokenHash = await hashReviewRequestToken(token)
   const clientIp = getClientIp(event)
@@ -54,26 +47,21 @@ export default defineHandler(async (event) => {
   if ((result.request.user_id && result.request.user_id !== sessionUser?.id) || (result.request.anonymous_user_id && result.request.anonymous_user_id !== sessionUser?.id)) {
     return jsonResponse({ error: 'Forbidden' }, { status: 403 })
   }
-  if (mediaAssetIds.length) {
-    const placeholders = mediaAssetIds.map(() => '?').join(', ')
-    const mediaRows = await queryAll<{ media_asset_id: string; kind: string }>(db, `
-      SELECT media_asset_id, kind
-      FROM review_media
-      WHERE review_request_id = ?
-        AND customer_id = ?
-        AND review_id IS NULL
-        AND status = 'pending'
-        AND media_asset_id IN (${placeholders})
-    `, [result.request.id, result.request.customer_id, ...mediaAssetIds])
-    if (mediaRows.length !== mediaAssetIds.length) {
-      return jsonResponse({ error: 'One or more media attachments are not valid for this review request.' }, { status: 400 })
-    }
-    const imageCount = mediaRows.filter(row => row.kind === 'image').length
-    const videoCount = mediaRows.filter(row => row.kind === 'video').length
-    if (imageCount > 5 || videoCount > 2) {
-      return jsonResponse({ error: 'You can attach up to 5 photos and 2 videos.' }, { status: 400 })
-    }
+  const mediaRows = await queryAll<{ asset_id: string; kind: string; asset_status: string }>(db, `
+    SELECT mp.asset_id, ma.kind, ma.status AS asset_status
+    FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id
+    WHERE mp.owner_type = 'review_request' AND mp.owner_id = ? AND mp.status = 'pending'
+    ORDER BY mp.sort_order
+  `, [result.request.id])
+  if (mediaRows.some(row => row.asset_status !== 'active')) {
+    return jsonResponse({ error: 'Wait for all media uploads to finish before submitting.' }, { status: 409 })
   }
+  const imageCount = mediaRows.filter(row => row.kind === 'image').length
+  const videoCount = mediaRows.filter(row => row.kind === 'video').length
+  if (imageCount > 5 || videoCount > 2 || mediaRows.length !== imageCount + videoCount) {
+    return jsonResponse({ error: 'You can attach up to 5 photos and 2 videos.' }, { status: 400 })
+  }
+  const mediaCount = mediaRows.length
   const reviewId = crypto.randomUUID()
   const now = new Date().toISOString()
   const authorName = result.context.customer_name || result.context.guest_name || 'Guest'
@@ -125,20 +113,17 @@ export default defineHandler(async (event) => {
       )`, [
         result.request.customer_id, result.context.organization_id, result.context.site_id, sessionUser.id, ], 'review customer identity changed during submission', ), ]
 
-  if (mediaAssetIds.length) {
-    const placeholders = mediaAssetIds.map(() => '?').join(', ')
+  if (mediaCount) {
     batch.push(batchAssertion(
       `(
         SELECT COUNT(*) = ?
-          AND SUM(CASE WHEN kind = 'image' THEN 1 ELSE 0 END) <= 5
-          AND SUM(CASE WHEN kind = 'video' THEN 1 ELSE 0 END) <= 2
-        FROM review_media
-        WHERE review_request_id = ?
-          AND customer_id = ?
-          AND review_id IS NULL
-          AND status = 'pending'
-          AND media_asset_id IN (${placeholders})
-      )`, [mediaAssetIds.length, result.request.id, result.request.customer_id, ...mediaAssetIds], 'review media state changed during submission', ))
+          AND SUM(CASE WHEN ma.status = 'active' THEN 1 ELSE 0 END) = ?
+          AND SUM(CASE WHEN ma.kind = 'image' THEN 1 ELSE 0 END) <= 5
+          AND SUM(CASE WHEN ma.kind = 'video' THEN 1 ELSE 0 END) <= 2
+        FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id
+        WHERE mp.owner_type = 'review_request' AND mp.owner_id = ?
+          AND mp.status = 'pending'
+      )`, [mediaCount, mediaCount, result.request.id], 'review media state changed during submission', ))
   }
 
   batch.push(
@@ -181,18 +166,14 @@ export default defineHandler(async (event) => {
           AND (user_id IS NULL OR user_id = ?)`, params: [
         now, sessionUser.id, now, result.request.customer_id, result.context.organization_id, result.context.site_id, sessionUser.id, ], }, batchAssertion('changes() = 1', [], 'review customer update lost its scope guard'), )
 
-  if (mediaAssetIds.length) {
-    const placeholders = mediaAssetIds.map(() => '?').join(', ')
+  if (mediaCount) {
     batch.push(
       {
-        query: `UPDATE review_media
-          SET review_id = ?, updated_at = ?
-          WHERE review_request_id = ?
-            AND customer_id = ?
-            AND review_id IS NULL
-            AND status = 'pending'
-            AND media_asset_id IN (${placeholders})`, params: [reviewId, now, result.request.id, result.request.customer_id, ...mediaAssetIds], }, batchAssertion(
-        'changes() = ?', [mediaAssetIds.length], 'review media attachment compare-and-set failed', ), )
+        query: `UPDATE media_placements
+          SET owner_type = 'review', owner_id = ?, updated_at = ?
+          WHERE owner_type = 'review_request' AND owner_id = ?
+            AND status = 'pending'`, params: [reviewId, now, result.request.id], }, batchAssertion(
+        'changes() = ?', [mediaCount], 'review media attachment compare-and-set failed', ), )
   }
 
   await executeBatch(db, batch)

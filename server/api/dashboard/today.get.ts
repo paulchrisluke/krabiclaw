@@ -12,10 +12,10 @@ function shiftUtcDay(date: Date, days: number): string {
 }
 
 export default defineHandler(async (event) => {
-  const { db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
   const now = new Date()
   const common = {
-    organizationSlug: organization.slug, principal: { memberId: organization.memberId, role: organization.role }, }
+    organizationSlug: organization.slug, principal: { env, memberId: organization.memberId, role: organization.role }, }
   const [nearby, attention] = await Promise.all([
     listAgenda(db, organization.id, {
       from: shiftUtcDay(now, -1), to: shiftUtcDay(now, 1), kinds: ['reservation', 'experience_booking', 'post'], ...common, }), listAgenda(db, organization.id, {

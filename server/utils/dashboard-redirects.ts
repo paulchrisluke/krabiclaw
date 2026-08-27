@@ -1,4 +1,6 @@
 import { queryFirst, type DbClient } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { resolveUserOrganization } from '~/server/utils/member-access'
 
 export interface DashboardSiteRouteContext {
   organizationSlug: string
@@ -7,20 +9,24 @@ export interface DashboardSiteRouteContext {
 
 export async function getDashboardSiteRouteContext(
   db: DbClient,
+  env: CloudflareEnv,
+  userId: string,
   organizationId: string,
   siteId: string,
 ): Promise<DashboardSiteRouteContext | null> {
-  const context = await queryFirst<{ organization_slug: string; site_slug: string | null }>(db, `
-    SELECT o.slug AS organization_slug, s.subdomain AS site_slug
-    FROM organization o
-    JOIN sites s ON s.organization_id = o.id
-    WHERE o.id = ? AND s.id = ?
+  const [organization, site] = await Promise.all([
+    resolveUserOrganization(env, { userId, organizationId }),
+    queryFirst<{ site_slug: string | null }>(db, `
+    SELECT subdomain AS site_slug
+    FROM sites
+    WHERE organization_id = ? AND id = ?
     LIMIT 1
-  `, [organizationId, siteId])
+  `, [organizationId, siteId]),
+  ])
 
-  if (!context?.site_slug) return null
+  if (!organization || !site?.site_slug) return null
   return {
-    organizationSlug: context.organization_slug,
-    siteSlug: context.site_slug,
+    organizationSlug: organization.slug,
+    siteSlug: site.site_slug,
   }
 }

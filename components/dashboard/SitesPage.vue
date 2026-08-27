@@ -58,7 +58,9 @@ const addSiteAction = computed(() => canManageOrganization.value
 const selectorItems = computed(() => sites.value.map(site => ({
   id: site.id,
   label: site.brand_name ?? site.subdomain ?? site.id,
-  imageUrl: site.preview_image_url,
+  imageUrl: site.media.find(item => item.slot === 'media')?.thumbnail_url
+    || site.media.find(item => item.slot === 'media')?.public_url
+    || null,
   to: siteDashboardPath(site),
 })))
 

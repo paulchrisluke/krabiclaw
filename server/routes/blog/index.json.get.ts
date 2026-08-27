@@ -11,8 +11,8 @@ export default defineHandler(async (event) => {
   const isTenant = event.context.tenantType === 'tenant'
   const siteId = isTenant ? String(event.context.siteId || '') : ''
   const posts = isTenant && siteId
-    ? await listPublishedTenantBlogPostsForLlm(db, siteId)
-    : await listPublishedPlatformBlogPostsForLlm(db)
+    ? await listPublishedTenantBlogPostsForLlm(db, siteId, env)
+    : await listPublishedPlatformBlogPostsForLlm(db, env)
   const entries = isTenant && siteId
     ? buildTenantBlogLinkEntries(posts ?? [], origin)
     : buildPlatformBlogLinkEntries(posts ?? [], origin)

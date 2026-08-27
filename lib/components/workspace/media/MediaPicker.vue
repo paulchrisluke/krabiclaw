@@ -4,9 +4,11 @@
     @click="open"
     @keydown.enter.prevent="open"
     @keydown.space.prevent="open"
-    class="w-full text-left cursor-pointer"
+    class="w-full text-left"
+    :class="disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
     role="button"
-    tabindex="0"
+    :aria-disabled="disabled"
+    :tabindex="disabled ? -1 : 0"
   >
     <slot>
       <div
@@ -14,17 +16,11 @@
         :class="modelValue ? 'p-1' : 'p-2'"
       >
         <UImage
-          v-if="selectedUrl && selectedKind === 'image'"
+          v-if="selectedUrl"
           :src="selectedUrl"
           class="size-10 shrink-0 rounded object-cover"
           :alt="selectedAlt"
         />
-        <div
-          v-else-if="selectedUrl && selectedKind === 'video'"
-          class="flex size-10 shrink-0 items-center justify-center rounded bg-elevated"
-        >
-          <UIcon name="i-lucide-film" class="size-5 text-muted" />
-        </div>
         <div
           v-else
           class="flex size-10 shrink-0 items-center justify-center rounded bg-elevated"
@@ -70,7 +66,7 @@
       <MediaLibraryGrid
         v-if="panel === 'library'"
         :site-id="siteId"
-        :selected-id="pendingAsset?.id ?? modelValue"
+        :selected-id="pendingAsset?.asset_id ?? modelValue"
         :accept="accept"
         :location-id="locationId"
         @select="onSelect"
@@ -82,7 +78,7 @@
         v-else
         ref="generatePanel"
         :site-id="siteId"
-        :location-id="locationId"
+        :resource-location-id="locationId"
         :initial-prompt="initialPrompt"
         :context="context"
         @keep="onGenerated"
@@ -136,11 +132,12 @@ const props = defineProps<{
   title?: string
   initialPrompt?: string
   context?: string
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [assetId: string | null]
-  change: [asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string; altText?: string } | null]
+  change: [asset: SelectedMediaAsset | null]
 }>()
 
 const { trackImageUploaded, trackVideoUploaded, trackMediaLibraryViewed } = useAnalytics()
@@ -152,11 +149,17 @@ interface PickerMediaAsset {
   kind?: string | null
   public_url?: string | null
   thumbnail_url?: string | null
-  publicUrl?: string | null
-  thumbnailUrl?: string | null
   alt_text?: string | null
   file_name?: string | null
   size?: number | null
+}
+
+interface SelectedMediaAsset {
+  asset_id: string
+  public_url: string | null
+  thumbnail_url: string | null
+  kind: string
+  alt_text: string
 }
 
 const isPickerMediaResponse = (value: unknown): value is { media: PickerMediaAsset[] } =>
@@ -174,11 +177,10 @@ const isPickerMediaResponse = (value: unknown): value is { media: PickerMediaAss
 
 const isOpen = ref(false)
 const panel = ref<Panel>('library')
-const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; kind?: string; altText?: string } | null>(null)
+const pendingAsset = ref<SelectedMediaAsset | null>(null)
 const generatePanel = ref<ApiRecord | null>(null)
 
 const selectedUrl = ref<string | null>(null)
-const selectedKind = ref<string | null>(null)
 const selectedAlt = ref<string>('')
 const modelLoadController = ref<AbortController | null>(null)
 const modelLoadError = ref<string | null>(null)
@@ -187,8 +189,7 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
 }
 
-function assetAlt(asset: Pick<PickerMediaAsset, 'alt_text' | 'file_name'> | { altText?: string | null }): string {
-  if ('altText' in asset && typeof asset.altText === 'string') return asset.altText
+function assetAlt(asset: Pick<PickerMediaAsset, 'alt_text' | 'file_name'> | Pick<SelectedMediaAsset, 'alt_text'>): string {
   if ('alt_text' in asset && typeof asset.alt_text === 'string' && asset.alt_text) return asset.alt_text
   return 'file_name' in asset && typeof asset.file_name === 'string' ? asset.file_name : ''
 }
@@ -198,7 +199,6 @@ watch(() => props.modelValue, async (id) => {
 
   if (!id) {
     selectedUrl.value = null
-    selectedKind.value = null
     selectedAlt.value = ''
     return
   }
@@ -218,11 +218,9 @@ watch(() => props.modelValue, async (id) => {
     const asset = (res.media ?? [])[0]
     if (asset) {
       selectedUrl.value = asset.thumbnail_url ?? asset.public_url ?? null
-      selectedKind.value = asset.kind ?? 'image'
       selectedAlt.value = assetAlt(asset)
     } else {
       selectedUrl.value = null
-      selectedKind.value = null
       selectedAlt.value = ''
     }
   } catch (err) {
@@ -240,6 +238,7 @@ onUnmounted(() => {
 })
 
 function open() {
+  if (props.disabled) return
   pendingAsset.value = null
   panel.value = 'library'
   isOpen.value = true
@@ -248,24 +247,24 @@ function open() {
 
 function onSelect(asset: PickerMediaAsset) {
   pendingAsset.value = {
-    id: asset.id,
-    publicUrl: asset.public_url ?? '',
-    thumbnailUrl: asset.thumbnail_url ?? '',
+    asset_id: asset.id,
+    public_url: asset.public_url ?? null,
+    thumbnail_url: asset.thumbnail_url ?? null,
     kind: asset.kind ?? 'image',
-    altText: assetAlt(asset),
+    alt_text: assetAlt(asset),
   }
 }
 
 function onUploaded(asset: PickerMediaAsset) {
-  const url = asset.publicUrl ?? asset.public_url ?? ''
+  const url = asset.public_url ?? ''
   const kind = asset.kind ?? (url.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
   const size = asset.size ?? 0
   pendingAsset.value = {
-    id: asset.id,
-    publicUrl: url,
-    thumbnailUrl: asset.thumbnailUrl ?? asset.thumbnail_url ?? '',
+    asset_id: asset.id,
+    public_url: asset.public_url ?? null,
+    thumbnail_url: asset.thumbnail_url ?? null,
     kind,
-    altText: assetAlt(asset),
+    alt_text: assetAlt(asset),
   }
   if (kind === 'image') {
     trackImageUploaded(props.siteId, size, 'cloudflare_images')
@@ -274,30 +273,34 @@ function onUploaded(asset: PickerMediaAsset) {
   }
 }
 
-function onGenerated(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string; altText?: string }) {
-  pendingAsset.value = asset
-  selectedUrl.value = asset.thumbnailUrl || asset.publicUrl
-  selectedKind.value = asset.kind || 'image'
-  selectedAlt.value = assetAlt(asset)
-  emit('update:modelValue', asset.id)
-  emit('change', asset)
+function onGenerated(asset: { asset_id: string; public_url: string; thumbnail_url: string }) {
+  const selected = {
+    asset_id: asset.asset_id,
+    public_url: asset.public_url,
+    thumbnail_url: asset.thumbnail_url,
+    kind: 'image',
+    alt_text: '',
+  }
+  pendingAsset.value = selected
+  selectedUrl.value = selected.thumbnail_url || selected.public_url
+  selectedAlt.value = ''
+  emit('update:modelValue', selected.asset_id)
+  emit('change', selected)
   isOpen.value = false
   panel.value = 'library'
 }
 
 function confirm() {
   if (!pendingAsset.value) return
-  selectedUrl.value = pendingAsset.value.thumbnailUrl || pendingAsset.value.publicUrl
-  selectedKind.value = pendingAsset.value.kind || 'image'
+  selectedUrl.value = pendingAsset.value.thumbnail_url || pendingAsset.value.public_url
   selectedAlt.value = assetAlt(pendingAsset.value)
-  emit('update:modelValue', pendingAsset.value.id)
+  emit('update:modelValue', pendingAsset.value.asset_id)
   emit('change', pendingAsset.value)
   isOpen.value = false
 }
 
 function clear() {
   selectedUrl.value = null
-  selectedKind.value = null
   selectedAlt.value = ''
   pendingAsset.value = null
   emit('update:modelValue', null)

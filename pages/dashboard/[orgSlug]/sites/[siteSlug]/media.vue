@@ -169,13 +169,11 @@ interface MediaAsset {
   id: string
   organization_id: string
   site_id: string
-  location_id: string | null
   kind: 'image' | 'video' | 'file'
-  provider: 'cloudflare_images' | 'cloudflare_r2' | 'external_url' | 'chowbot'
-  source: 'uploaded' | 'google_sync' | 'generated' | 'external'
+  provider: 'cloudflare_images' | 'cloudflare_r2'
+  source: 'uploaded' | 'generated'
   cloudflare_image_id: string | null
   r2_key: string | null
-  google_media_name: string | null
   public_url: string | null
   thumbnail_url: string | null
   mime_type: string | null

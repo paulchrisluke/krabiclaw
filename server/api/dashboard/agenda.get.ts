@@ -10,13 +10,13 @@ function stringQuery(value: unknown): string | undefined {
 }
 
 export default defineHandler(async (event) => {
-  const { db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
   const query = getQuery(event)
   const from = stringQuery(query.from)
   const to = stringQuery(query.to)
   if (!from || !to) throw new HTTPError({ statusCode: 400, statusMessage: 'from and to are required' })
   const requestedKinds = stringQuery(query.kinds)?.split(', ').filter((kind): kind is AgendaKind => AGENDA_KINDS.includes(kind as AgendaKind))
   const payload = await listAgenda(db, organization.id, {
-    from, to, siteId: stringQuery(query.siteId), locationId: stringQuery(query.locationId), kinds: requestedKinds, organizationSlug: organization.slug, principal: { memberId: organization.memberId, role: organization.role }, })
+    from, to, siteId: stringQuery(query.siteId), locationId: stringQuery(query.locationId), kinds: requestedKinds, organizationSlug: organization.slug, principal: { env, memberId: organization.memberId, role: organization.role }, })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-agenda', payload))
 })

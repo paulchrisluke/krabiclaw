@@ -1,6 +1,7 @@
 // Cloudflare for SaaS custom domain management.
 
 import { execute, queryAll, queryFirst } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
@@ -203,14 +204,13 @@ export async function hasCustomDomainsEntitlement(db: D1Database, siteId: string
 }
 
 export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeSiteId?: string): Promise<void> {
-  const placeholders = domains.map(() => '?').join(', ')
-  const params = excludeSiteId ? [...domains, excludeSiteId] : domains
+  const params = excludeSiteId ? [d1JsonStringSet(domains), excludeSiteId] : [d1JsonStringSet(domains)]
   const exclusion = excludeSiteId ? 'AND site_id != ?' : ''
 
   const existing = await queryFirst<{ domain?: string }>(db, `
     SELECT domain
     FROM site_domains
-    WHERE domain IN (${placeholders}) AND status != 'deleted' ${exclusion}
+    WHERE domain IN (SELECT value FROM json_each(?)) AND status != 'deleted' ${exclusion}
     LIMIT 1
   `, params)
 

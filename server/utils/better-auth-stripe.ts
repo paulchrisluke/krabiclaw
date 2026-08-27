@@ -1,6 +1,7 @@
 import type Stripe from 'stripe'
 import type { StripePlan, Subscription as BetterAuthSubscription } from '@better-auth/stripe'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
@@ -273,8 +274,8 @@ export async function projectOrganizationSubscription(
   organizationQueries.push({
     query: `DELETE FROM organization_entitlements
       WHERE organization_id = ? AND source = 'better-auth-stripe'
-      AND key NOT IN (${entitlementKeys.map(() => '?').join(', ')})`,
-    params: [input.organizationId, ...entitlementKeys],
+      AND key NOT IN (SELECT value FROM json_each(?))`,
+    params: [input.organizationId, d1JsonStringSet(entitlementKeys)],
   })
   const allQueries = [...organizationQueries]
   for (const site of sites) {
@@ -297,8 +298,8 @@ export async function projectOrganizationSubscription(
     siteQueries.push({
       query: `DELETE FROM site_entitlements
         WHERE site_id = ? AND source = 'better-auth-stripe'
-        AND key NOT IN (${entitlementKeys.map(() => '?').join(', ')})`,
-      params: [site.id, ...entitlementKeys],
+        AND key NOT IN (SELECT value FROM json_each(?))`,
+      params: [site.id, d1JsonStringSet(entitlementKeys)],
     })
     siteQueries.push({
       query: `

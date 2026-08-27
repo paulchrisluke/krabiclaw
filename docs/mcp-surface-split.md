@@ -33,7 +33,7 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 
 ## Auth Model
 
-- ADR 0021 is the canonical target for Better Auth authorization: `docs/adr/0021-better-auth-authorization-target.md`.
+- CLAUDE.md's "Better Auth Boundary Rules" is the canonical statement of Better Auth authorization scope.
 - Platform MCP requires documented Better Auth Admin plugin platform permissions.
 - Tenant MCP requires Better Auth Organization permissions and, for scoped editors, the matching Better Auth Team membership.
 - Org member roles (`owner`, `admin`, `editor`, optional read-only `member`) remain tenant-scoped only and do not grant platform access.

@@ -1,33 +1,21 @@
 // POST /api/ai/[siteId]/generate-image
 // Generates an image via the configured OpenAI image model through CF AI Gateway, uploads to Cloudflare Images,
 // creates a media_asset record, and charges credits from returned token usage.
-// body: { prompt, locationId? }
-import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+// body: { prompt, resource_location_id? }
+import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset, deleteMediaAsset } from '~/server/utils/media-asset-manager'
 import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ organization_id: string; member_id: string; member_role: string }>(db, `
-    SELECT s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
-    JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? LIMIT 1
-  `, [siteId, session.user.id])
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
 
   const orgId: string = site.organization_id
   const isDev = import.meta.dev
@@ -37,14 +25,13 @@ export default defineHandler(async (event) => {
     if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
   }
 
-  const body = await readRequiredBody<{ prompt?: unknown; locationId?: unknown }>(event)
+  const body = await readRequiredBody<{ prompt?: unknown; resource_location_id?: unknown }>(event)
   const prompt = typeof body?.prompt === 'string' ? body.prompt.trim().slice(0, 1000) : ''
-  const locationId = typeof body?.locationId === 'string' ? body.locationId.trim() || null : null
+  const resourceLocationId = typeof body?.resource_location_id === 'string' ? body.resource_location_id.trim() || null : null
   if (!prompt) return jsonResponse({ error: 'prompt required' }, { status: 400 })
 
-  // Validate locationId if provided
-  if (locationId) {
-    const location = await queryFirst(db, 'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [locationId, siteId]
+  if (resourceLocationId) {
+    const location = await queryFirst(db, 'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [resourceLocationId, siteId]
     )
     if (!location) {
       return jsonResponse({ error: 'Invalid location ID' }, { status: 400 })
@@ -52,7 +39,8 @@ export default defineHandler(async (event) => {
   }
 
   await assertResourceAccess(db, {
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId, })
+    env,
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId, })
 
   if (!env.CLOUDFLARE_IMAGES_API_TOKEN) {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
@@ -98,7 +86,7 @@ export default defineHandler(async (event) => {
   const assetId = crypto.randomUUID()
   try {
     await createMediaAsset(db, {
-      id: assetId, organization_id: orgId, site_id: siteId, location_id: locationId, kind: 'image', provider: 'cloudflare_images', source: 'generated', cloudflare_image_id: imageId, public_url: publicUrl, thumbnail_url: thumbnailUrl, mime_type: 'image/png', status: 'active', created_by_user_id: session.user.id, })
+      id: assetId, organization_id: orgId, site_id: siteId, kind: 'image', provider: 'cloudflare_images', source: 'generated', cloudflare_image_id: imageId, public_url: publicUrl, thumbnail_url: thumbnailUrl, mime_type: 'image/png', status: 'active', created_by_user_id: session.user.id, })
   } catch (error) {
     try {
       if (imageId) await deleteImage(env, imageId)
@@ -125,7 +113,7 @@ export default defineHandler(async (event) => {
     }
   }
 
-  return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'active' })
+  return jsonResponse({ asset_id: assetId, public_url: publicUrl, thumbnail_url: thumbnailUrl, status: 'active' })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam  } from 'nitro/h3';

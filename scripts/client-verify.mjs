@@ -393,12 +393,11 @@ if (SITE_ID) {
 
   if (data) {
     const imageUrls = new Set();
-    for (const loc of data.locations ?? []) {
-      if (loc.public_url) imageUrls.add(loc.public_url);
-      if (loc.thumbnail_url) imageUrls.add(loc.thumbnail_url);
-    }
-    for (const exp of data.experiencesList ?? []) {
-      if (exp.image_url) imageUrls.add(exp.image_url);
+    for (const entity of [...(data.locations ?? []), ...(data.experiencesList ?? [])]) {
+      for (const media of entity.media ?? []) {
+        if (media.public_url) imageUrls.add(media.public_url);
+        if (media.thumbnail_url) imageUrls.add(media.thumbnail_url);
+      }
     }
 
     if (imageUrls.size === 0) {

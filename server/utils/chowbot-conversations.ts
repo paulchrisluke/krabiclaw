@@ -1,6 +1,10 @@
 import type { ChowBotToolCall, JsonSerializable } from '~/server/utils/chowbot-agent'
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { assertSiteWideAccess, isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { buildMediaPlacementInsertQuery } from '~/server/utils/media-asset-manager'
+import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
+import { getOrgAdapter } from 'better-auth/plugins'
 
 export type ChowBotChannel = 'dashboard' | 'whatsapp'
 export type ChowBotRole = 'user' | 'assistant' | 'system' | 'tool'
@@ -36,7 +40,6 @@ export interface ChowBotMessage {
   role: ChowBotRole
   channel: ChowBotChannel
   content: string | null
-  media: string | null
   meta_message_id: string | null
   tool_calls: string | null
   status: 'pending' | 'processing' | 'sent' | 'failed' | 'read'
@@ -52,7 +55,7 @@ export interface CreateMessageInput {
   role: ChowBotRole
   channel: ChowBotChannel
   content?: string | null
-  media?: JsonSerializable | null
+  mediaAssetId?: string | null
   metaMessageId?: string | null
   toolCalls?: ChowBotToolCall[] | null
   status?: 'pending' | 'processing' | 'sent' | 'failed' | 'read'
@@ -93,20 +96,25 @@ function isExpectedSiteWideAccessDenial(error: unknown): boolean {
 // rejected rather than silently getting whole-site chat access.
 export async function getSiteForMember(
   db: DbClient,
+  env: CloudflareEnv,
   siteId: string,
   userId: string,
 ): Promise<ChowBotSiteAccess | null> {
-  const result = await queryFirst<ChowBotSiteAccess & { member_id: string }>(db, `
-    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role, m.id AS member_id
-    FROM sites s
-    JOIN member m ON s.organization_id = m.organizationId
-    WHERE s.id = ? AND m.userId = ? AND s.status = 'active'
-    LIMIT 1
-  `, [siteId, userId])
-  if (!result) return null
+  const site = await queryFirst<Omit<ChowBotSiteAccess, 'role' | 'member_id'>>(db, `
+    SELECT id, organization_id, brand_name, default_currency
+    FROM sites WHERE id = ? AND status = 'active' LIMIT 1
+  `, [siteId])
+  if (!site) return null
+  const membership = await resolveOrganizationMembership(env, { organizationId: site.organization_id, userId })
+  if (!membership) return null
+  const result: ChowBotSiteAccess = {
+    ...site,
+    role: membership.role,
+    member_id: membership.memberId,
+  }
   if (!isOrganizationWideRole(result.role)) {
     try {
-      await assertSiteWideAccess(db, { memberId: result.member_id, role: result.role, organizationId: result.organization_id, siteId })
+      await assertSiteWideAccess(db, { env, memberId: result.member_id, role: result.role, organizationId: result.organization_id, siteId })
     } catch (error) {
       if (!isExpectedSiteWideAccessDenial(error)) throw error
       return null
@@ -117,16 +125,48 @@ export async function getSiteForMember(
 
 export async function listSitesForMember(
   db: DbClient,
+  env: CloudflareEnv,
   userId: string,
 ): Promise<ChowBotSiteAccess[]> {
-  return await queryAll<ChowBotSiteAccess>(db, `
-    SELECT s.id, s.organization_id, s.brand_name, s.default_currency, m.role
-    FROM sites s
-    JOIN member m ON s.organization_id = m.organizationId
-    WHERE m.userId = ? AND s.status = 'active'
-      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' })}))
-    ORDER BY s.updated_at DESC
-  `, [userId])
+  const auth = createAuth(env)
+  const context = await auth.$context
+  const adapter = getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
+  const organizations = await adapter.listOrganizations(userId)
+  const memberships = await Promise.all(organizations.map(organization => (
+    adapter.findMemberByOrgId({ userId, organizationId: organization.id })
+  )))
+  const byOrganization = new Map(memberships.filter(Boolean).map(member => [member!.organizationId, member!]))
+  if (byOrganization.size === 0) return []
+  const organizationIds = [...byOrganization.keys()]
+  const sites = await queryAll<Omit<ChowBotSiteAccess, 'role' | 'member_id'>>(db, `
+    SELECT id, organization_id, brand_name, default_currency
+    FROM sites
+    WHERE organization_id IN (SELECT value FROM json_each(?)) AND status = 'active'
+    ORDER BY updated_at DESC
+  `, [d1JsonStringSet(organizationIds)])
+  const accessible: ChowBotSiteAccess[] = []
+  for (const site of sites) {
+    const member = byOrganization.get(site.organization_id)
+    if (!member) continue
+    const candidate = { ...site, role: String(member.role), member_id: member.id }
+    if (isOrganizationWideRole(candidate.role)) {
+      accessible.push(candidate)
+      continue
+    }
+    try {
+      await assertSiteWideAccess(db, {
+        env,
+        memberId: candidate.member_id,
+        role: candidate.role,
+        organizationId: candidate.organization_id,
+        siteId: candidate.id,
+      })
+      accessible.push(candidate)
+    } catch (error) {
+      if (!isExpectedSiteWideAccessDenial(error)) throw error
+    }
+  }
+  return accessible
 }
 
 export async function listConversations(
@@ -261,11 +301,11 @@ export async function createMessage(db: DbClient, input: CreateMessageInput, act
   const id = crypto.randomUUID()
   const now = nowIso()
 
-  await execute(db, `
+  await executeBatch(db, [{ query: `
     INSERT INTO chowbot_messages
-      (id, conversation_id, organization_id, site_id, user_id, role, channel, content, media, meta_message_id, tool_calls, status, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
+      (id, conversation_id, organization_id, site_id, user_id, role, channel, content, meta_message_id, tool_calls, status, error, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, params: [
     id,
     input.conversationId,
     conversation.organization_id,
@@ -274,18 +314,25 @@ export async function createMessage(db: DbClient, input: CreateMessageInput, act
     input.role,
     input.channel,
     input.content ?? null,
-    input.media == null ? null : JSON.stringify(input.media),
     input.metaMessageId ?? null,
     input.toolCalls ? JSON.stringify(input.toolCalls) : null,
     input.status ?? 'sent',
     input.error ?? null,
     now,
-  ])
-
-  // Update conversation timestamp and active_channel to sync with latest message
-  await execute(db, `
-    UPDATE chowbot_conversations SET updated_at = ?, active_channel = ? WHERE id = ?
-  `, [now, input.channel, input.conversationId])
+  ] }, ...(input.mediaAssetId ? [buildMediaPlacementInsertQuery({
+    organizationId: conversation.organization_id,
+    siteId: conversation.site_id,
+    ownerType: 'chowbot_message',
+    ownerId: id,
+    slot: 'attachment',
+    assetId: input.mediaAssetId,
+    sortOrder: 0,
+    createdAt: now,
+    updatedAt: now,
+  })] : []), {
+    query: 'UPDATE chowbot_conversations SET updated_at = ?, active_channel = ? WHERE id = ?',
+    params: [now, input.channel, input.conversationId],
+  }])
 
   const created = await queryFirst<ChowBotMessage>(db, `
     SELECT * FROM chowbot_messages WHERE id = ?
@@ -337,7 +384,9 @@ export async function getChannelState(
   channel: ChowBotChannel
   selected_site_id: string | null
   active_conversation_id: string | null
-  pending_media: string | null
+  pending_message_id: string | null
+  pending_asset_id: string | null
+  pending_asset_site_id: string | null
   pending_confirmation: string | null
   last_inbound_id: string | null
   updated_at: string
@@ -347,12 +396,19 @@ export async function getChannelState(
     channel: ChowBotChannel
     selected_site_id: string | null
     active_conversation_id: string | null
-    pending_media: string | null
+    pending_message_id: string | null
+    pending_asset_id: string | null
+    pending_asset_site_id: string | null
     pending_confirmation: string | null
     last_inbound_id: string | null
     updated_at: string
   }>(db, `
-    SELECT * FROM chowbot_channel_state WHERE user_id = ? AND channel = ? LIMIT 1
+    SELECT state.*, mp.asset_id AS pending_asset_id, mp.site_id AS pending_asset_site_id
+      FROM chowbot_channel_state state
+      LEFT JOIN media_placements mp ON mp.owner_type = 'chowbot_message'
+        AND mp.owner_id = state.pending_message_id AND mp.slot = 'attachment'
+        AND mp.sort_order = 0 AND mp.status = 'active'
+     WHERE state.user_id = ? AND state.channel = ? LIMIT 1
   `, [userId, channel])
   return result ?? null
 }
@@ -364,7 +420,7 @@ export async function upsertChannelState(
     channel: ChowBotChannel
     selectedSiteId?: string | null
     activeConversationId?: string | null
-    pendingMedia?: JsonSerializable | null
+    pendingMessageId?: string | null
     pendingConfirmation?: JsonSerializable | null
     lastInboundId?: string | null
   }
@@ -372,14 +428,14 @@ export async function upsertChannelState(
   const updateFields: string[] = []
   if ('selectedSiteId' in opts) updateFields.push('selected_site_id = excluded.selected_site_id')
   if ('activeConversationId' in opts) updateFields.push('active_conversation_id = excluded.active_conversation_id')
-  if ('pendingMedia' in opts) updateFields.push('pending_media = excluded.pending_media')
+  if ('pendingMessageId' in opts) updateFields.push('pending_message_id = excluded.pending_message_id')
   if ('pendingConfirmation' in opts) updateFields.push('pending_confirmation = excluded.pending_confirmation')
   if ('lastInboundId' in opts) updateFields.push('last_inbound_id = excluded.last_inbound_id')
   updateFields.push('updated_at = excluded.updated_at')
 
   await execute(db, `
     INSERT INTO chowbot_channel_state
-      (user_id, channel, selected_site_id, active_conversation_id, pending_media, pending_confirmation, last_inbound_id, updated_at)
+      (user_id, channel, selected_site_id, active_conversation_id, pending_message_id, pending_confirmation, last_inbound_id, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, channel) DO UPDATE SET
       ${updateFields.join(',\n      ')}
@@ -388,7 +444,7 @@ export async function upsertChannelState(
     opts.channel,
     opts.selectedSiteId ?? null,
     opts.activeConversationId ?? null,
-    jsonOrNull(opts.pendingMedia),
+    opts.pendingMessageId ?? null,
     jsonOrNull(opts.pendingConfirmation),
     opts.lastInboundId ?? null,
     nowIso(),

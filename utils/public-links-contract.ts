@@ -13,7 +13,7 @@ export interface PublicLinksPayload {
     organization_id: string
     brand_name: string | null
     brand_description: string | null
-    logo_url: string | null
+    media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
     template: 'saya' | 'blawby'
   }
   page: {
@@ -41,7 +41,8 @@ export function isPublicLinksPayload(value: unknown): value is PublicLinksPayloa
     && typeof site.organization_id === 'string'
     && isNullableString(site.brand_name)
     && isNullableString(site.brand_description)
-    && isNullableString(site.logo_url)
+    && Array.isArray(site.media)
+    && site.media.every(item => isRecord(item) && typeof item.asset_id === 'string' && typeof item.slot === 'string' && isNullableString(item.public_url) && isNullableString(item.thumbnail_url) && isNullableString(item.kind))
     && (site.template === 'saya' || site.template === 'blawby')
     && page.path === '/links'
     && typeof page.title === 'string'

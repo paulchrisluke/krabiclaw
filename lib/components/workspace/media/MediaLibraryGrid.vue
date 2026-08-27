@@ -218,7 +218,11 @@ async function loadAssets() {
   try {
     const params = new URLSearchParams()
     if (kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
-    if (props.locationId) params.set('locationId', props.locationId)
+    if (props.locationId) {
+      params.set('ownerType', 'business_location')
+      params.set('ownerId', props.locationId)
+      params.set('slot', 'gallery')
+    }
     const res = await dashboardApi<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
       signal: controller.signal,
       validate: isMediaResponse,
@@ -275,9 +279,7 @@ async function upload(file: File) {
   }
 
   try {
-    const result = await uploadMedia(file, {
-      locationId: props.locationId,
-    })
+    const result = await uploadMedia(file)
     if (!result) {
       uploadError.value = mediaUploadError.value ?? 'Upload failed.'
       return
@@ -285,12 +287,12 @@ async function upload(file: File) {
 
     toast.add({ title: 'File uploaded', color: 'success' })
     await loadAssets()
-    emit('uploaded', assets.value.find(asset => asset.id === result.id) ?? {
-      id: result.id,
+    emit('uploaded', assets.value.find(asset => asset.id === result.asset_id) ?? {
+      id: result.asset_id,
       kind: result.kind,
       file_name: file.name,
-      public_url: result.publicUrl ?? undefined,
-      thumbnail_url: result.thumbnailUrl ?? null,
+      public_url: result.public_url ?? undefined,
+      thumbnail_url: result.thumbnail_url ?? null,
     })
   } catch (err) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
@@ -314,13 +316,19 @@ const {
     const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardMedia(requestEvent, props.siteId, {
       kind,
-      locationId: props.locationId ?? undefined,
+      ownerType: props.locationId ? 'business_location' : undefined,
+      ownerId: props.locationId ?? undefined,
+      slot: props.locationId ? 'gallery' : undefined,
       limit: 100,
     })
   }
   const params = new URLSearchParams({ limit: '100' })
   if (kind) params.set('kind', kind)
-  if (props.locationId) params.set('locationId', props.locationId)
+  if (props.locationId) {
+    params.set('ownerType', 'business_location')
+    params.set('ownerId', props.locationId)
+    params.set('slot', 'gallery')
+  }
   return await dashboardApi<{ media: MediaAsset[] }>(
     `/api/editor/sites/${props.siteId}/media?${params}`,
     { validate: isMediaResponse },

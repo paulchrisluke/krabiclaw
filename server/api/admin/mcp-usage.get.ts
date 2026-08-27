@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { platformPermissionJsonResponse } from "~/server/utils/platform-admin-users";
+import { findOrganizationById } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event);
@@ -28,7 +29,7 @@ export default defineHandler(async (event) => {
       GROUP BY tool_name, tool_domain
       ORDER BY calls DESC
       LIMIT 50
-    `, [since, ...siteParam]), queryAll(db, `
+    `, [since, ...siteParam]), queryAll<ApiRecord>(db, `
       SELECT tool_name, error_code, error_message, COUNT(*) AS occurrences, MAX(created_at) AS last_seen
       FROM mcp_tool_call_events e
       WHERE method = 'tools/call' AND status = 'error' AND created_at >= ? ${siteFilter}
@@ -43,11 +44,10 @@ export default defineHandler(async (event) => {
       GROUP BY tool_name
       ORDER BY occurrences DESC
       LIMIT 50
-    `, [since, ...siteParam]), queryAll(db, `
-      SELECT e.site_id, s.brand_name, s.subdomain, o.name AS org_name, COUNT(*) AS calls, SUM(CASE WHEN e.status = 'error' THEN 1 ELSE 0 END) AS errors
+    `, [since, ...siteParam]), queryAll<ApiRecord>(db, `
+      SELECT e.site_id, s.organization_id, s.brand_name, s.subdomain, COUNT(*) AS calls, SUM(CASE WHEN e.status = 'error' THEN 1 ELSE 0 END) AS errors
       FROM mcp_tool_call_events e
       LEFT JOIN sites s ON s.id = e.site_id
-      LEFT JOIN organization o ON o.id = s.organization_id
       WHERE e.method = 'tools/call' AND e.created_at >= ? AND e.site_id IS NOT NULL ${siteFilter}
       GROUP BY e.site_id
       ORDER BY calls DESC
@@ -60,8 +60,16 @@ export default defineHandler(async (event) => {
       LIMIT 50
     `, [since, ...siteParam]), ]);
 
+  const organizationNames = new Map<string, string | null>()
+  const uniqueOrganizationIds = new Set((bySite ?? []).map(row => typeof row.organization_id === 'string' ? row.organization_id : '').filter(Boolean))
+  await Promise.all(Array.from(uniqueOrganizationIds).map(async (organizationId) => {
+    organizationNames.set(organizationId, (await findOrganizationById(env, organizationId))?.name ?? null)
+  }))
   return jsonResponse({
-    range_days: days, site_id: siteId, top_tools: topTools ?? [], failures_by_tool: failuresByTool ?? [], blocked_or_auth_required: blockedTools ?? [], by_site: bySite ?? [], recent_errors: recentErrors ?? [], });
+    range_days: days, site_id: siteId, top_tools: topTools ?? [], failures_by_tool: failuresByTool ?? [], blocked_or_auth_required: blockedTools ?? [], by_site: (bySite ?? []).map((row) => {
+      const { organization_id: organizationId, ...site } = row
+      return { ...site, org_name: organizationNames.get(String(organizationId)) ?? null }
+    }), recent_errors: recentErrors ?? [], });
 });
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';

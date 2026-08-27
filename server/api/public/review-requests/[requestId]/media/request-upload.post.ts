@@ -2,6 +2,7 @@ import { cleanString, cloudflareEnv, jsonResponse, readRequiredBody } from '~/se
 import { getAuthSession } from '~/server/utils/auth'
 import { executeBatch, queryFirst } from '~/server/db'
 import { deleteImage, hasCloudflareImagesConfig, requestImageUpload } from '~/server/utils/cloudflare-images'
+import { buildMediaAssetInsertQuery, buildMediaPlacementInsertQuery } from '~/server/utils/media-asset-manager'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
 
 export default defineHandler(async (event) => {
@@ -32,12 +33,15 @@ export default defineHandler(async (event) => {
   if (result.request.user_id && result.request.user_id !== sessionUser.id) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
   if (result.request.anonymous_user_id && result.request.anonymous_user_id !== sessionUser.id) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-  const existingCount = await queryFirst<{ count: number }>(db, `
-    SELECT COUNT(*) AS count
-    FROM review_media
-    WHERE review_request_id = ? AND kind = 'image' AND status != 'deleted'
+  const existingMedia = await queryFirst<{ count: number; next_sort_order: number }>(db, `
+    SELECT
+      COUNT(CASE WHEN ma.kind = 'image' AND mp.status != 'rejected' THEN 1 END) AS count,
+      COALESCE(MAX(mp.sort_order) + 1, 0) AS next_sort_order
+    FROM media_placements mp
+    JOIN media_assets ma ON ma.id = mp.asset_id
+    WHERE mp.owner_type = 'review_request' AND mp.owner_id = ? AND mp.slot = 'gallery'
   `, [requestId])
-  if (Number(existingCount?.count ?? 0) >= 5) return jsonResponse({ error: 'You can upload up to 5 photos.' }, { status: 400 })
+  if (Number(existingMedia?.count ?? 0) >= 5) return jsonResponse({ error: 'You can upload up to 5 photos.' }, { status: 400 })
   if (!hasCloudflareImagesConfig(env)) return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
 
   const assetId = crypto.randomUUID()
@@ -48,19 +52,33 @@ export default defineHandler(async (event) => {
     imageId = upload.imageId
     const now = new Date().toISOString()
     await executeBatch(db, [
+      buildMediaAssetInsertQuery({
+        id: assetId,
+        organization_id: result.context.organization_id,
+        site_id: result.context.site_id,
+        kind: 'image',
+        provider: 'cloudflare_images',
+        source: 'uploaded',
+        cloudflare_image_id: imageId,
+        file_name: filename,
+        category: 'other',
+        status: 'pending',
+        created_by_user_id: sessionUser.id,
+      }, now),
+      buildMediaPlacementInsertQuery({
+        id: mediaLinkId,
+        organizationId: result.context.organization_id,
+        siteId: result.context.site_id,
+        ownerType: 'review_request',
+        ownerId: requestId,
+        slot: 'gallery',
+        assetId,
+        sortOrder: Number(existingMedia?.next_sort_order ?? 0),
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+      }),
       {
-        query: `
-          INSERT INTO media_assets (
-            id, organization_id, site_id, location_id, kind, provider, source, cloudflare_image_id, file_name, category, status, created_by_user_id, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'uploaded', ?, ?, 'other', 'pending', ?, ?, ?)
-        `, params: [
-          assetId, result.context.organization_id, result.context.site_id, result.context.location_id, imageId, filename, sessionUser.id, now, now, ], }, {
-        query: `
-          INSERT INTO review_media (
-            id, review_request_id, customer_id, media_asset_id, kind, sort_order, status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, 'image', ?, 'pending', ?, ?)
-        `, params: [
-          mediaLinkId, requestId, result.request.customer_id, assetId, Number(existingCount?.count ?? 0), now, now, ], }, {
         query: `
           UPDATE review_requests
           SET user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
@@ -68,7 +86,7 @@ export default defineHandler(async (event) => {
         `, params: [
           sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, requestId, ], }, ])
 
-    return jsonResponse({ assetId, mediaId: mediaLinkId, uploadUrl: upload.uploadUrl, imageId })
+    return jsonResponse({ asset_id: assetId, upload_url: upload.uploadUrl, provider_id: imageId })
   } catch (error) {
     if (imageId) {
       try {

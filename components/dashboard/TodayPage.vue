@@ -124,7 +124,7 @@ const { data: todayData, pending, error: todayError } = await useAsyncData<Today
     const shift = (days: number) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10)
     const common = {
       organizationSlug: orgSlug.value,
-      principal: { memberId: context.organization.memberId, role: context.organization.role },
+      principal: { env: context.env, memberId: context.organization.memberId, role: context.organization.role },
     }
     const [nearby, attention] = await Promise.all([
       listAgenda(context.db, context.organization.id, { from: shift(-1), to: shift(1), kinds: ['reservation', 'experience_booking', 'post'], ...common }),

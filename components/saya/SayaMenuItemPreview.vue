@@ -5,9 +5,9 @@
     :class="disabled ? 'opacity-50 grayscale' : ''"
   >
     <video
-      v-if="isVideo && item.public_url"
-      :src="item.public_url"
-      :poster="item.thumbnail_url || undefined"
+      v-if="isVideo && media?.public_url"
+      :src="media.public_url"
+      :poster="media.thumbnail_url || undefined"
       class="size-24 object-cover"
       muted
       playsinline
@@ -21,7 +21,7 @@
       loading="lazy"
     />
     <span
-      v-if="isVideo && item.public_url"
+      v-if="isVideo && media?.public_url"
       class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
       aria-hidden="true"
     >
@@ -35,9 +35,7 @@
 <script setup lang="ts">
 type PreviewItem = {
   name: string
-  public_url?: string | null
-  thumbnail_url?: string | null
-  kind?: string | null
+  media?: Array<{ public_url?: string | null; thumbnail_url?: string | null; kind?: string | null }>
 }
 
 const props = withDefaults(defineProps<{
@@ -47,9 +45,10 @@ const props = withDefaults(defineProps<{
   disabled: false,
 })
 
-const isVideo = computed(() => props.item.kind === 'video')
+const media = computed(() => props.item.media?.[0] ?? null)
+const isVideo = computed(() => media.value?.kind === 'video')
 const previewUrl = computed(() => {
-  if (isVideo.value) return props.item.thumbnail_url || props.item.public_url || null
-  return props.item.public_url || null
+  if (isVideo.value) return media.value?.thumbnail_url || media.value?.public_url || null
+  return media.value?.public_url || null
 })
 </script>

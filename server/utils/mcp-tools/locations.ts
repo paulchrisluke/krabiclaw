@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
+import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -8,12 +8,14 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: false,
+      inputSchema: { ...paginationInputSchema },
       outputSchema: {
         type: 'object',
         properties: {
           locations: { type: 'array', items: locationListItemObject },
+          page_info: pageInfoObject,
         },
-        required: ['locations'],
+        required: ['locations', 'page_info'],
       },
     }),
   siteTool({
@@ -55,7 +57,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_location',
-      description: 'Update a location\'s own details: regular opening hours, temporary closures/special hours, contact info, and social/delivery links. Use set_media with target_type location_hero and this location\'s exact id for hero media placement. Only provided fields are changed.',
+      description: 'Update a location\'s own details: regular opening hours, temporary closures/special hours, contact info, and social/delivery links. To change its hero media, call set_media with { owner_type: "business_location", owner_id: <location.id>, slot: "hero" }. Only provided fields are changed.',
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: false,

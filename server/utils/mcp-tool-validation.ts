@@ -40,8 +40,55 @@ function validateUnknownArguments(schema: Record<string, unknown>, value: unknow
   }
 }
 
+function canonicalValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalValue).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => `${JSON.stringify(key)}:${canonicalValue(child)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? String(value)
+}
+
+function validateArrayConstraints(schema: Record<string, unknown>, value: unknown, path: string) {
+  if (Array.isArray(value)) {
+    const label = path || 'value'
+    if (typeof schema.minItems === 'number' && value.length < schema.minItems) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} must contain at least ${schema.minItems} item${schema.minItems === 1 ? '' : 's'}.`)
+    }
+    if (typeof schema.maxItems === 'number' && value.length > schema.maxItems) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} must contain at most ${schema.maxItems} items.`)
+    }
+    if (schema.uniqueItems === true) {
+      const seen = new Set<string>()
+      for (const item of value) {
+        const key = canonicalValue(item)
+        if (seen.has(key)) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} must contain unique items.`)
+        }
+        seen.add(key)
+      }
+    }
+    if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
+      value.forEach((item, index) => validateArrayConstraints(schema.items as Record<string, unknown>, item, `${path}[${index}]`))
+    }
+    return
+  }
+
+  if (!value || typeof value !== 'object') return
+  const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
+    ? schema.properties as Record<string, unknown>
+    : {}
+  for (const [key, childSchema] of Object.entries(properties)) {
+    if (!Object.hasOwn(value, key) || !childSchema || typeof childSchema !== 'object' || Array.isArray(childSchema)) continue
+    validateArrayConstraints(childSchema as Record<string, unknown>, (value as Record<string, unknown>)[key], path ? `${path}.${key}` : key)
+  }
+}
+
 export function validateArguments(schema: Record<string, unknown>, args: Record<string, unknown>) {
   validateUnknownArguments(schema, args, '')
+  validateArrayConstraints(schema, args, '')
 
   if (!Array.isArray(schema.anyOf) || schema.anyOf.length === 0) return
   const alternatives = schema.anyOf.map((candidate) => {

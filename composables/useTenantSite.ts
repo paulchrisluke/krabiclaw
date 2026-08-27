@@ -13,9 +13,7 @@ interface TenantSiteState {
 interface TenantSiteInfo {
   brand_name?: string | null
   brand_description?: string | null
-  logo_url?: string | null
-  logo_mime_type?: string | null
-  favicon_url?: string | null
+  media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string; mime_type: string | null }>
   vertical?: string | null
   config?: {
     phone?: string | null

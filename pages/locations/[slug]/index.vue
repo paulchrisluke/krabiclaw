@@ -238,14 +238,14 @@
             >
               <div class="aspect-video overflow-hidden bg-inverted/10">
                 <video
-                  v-if="loc.public_url && loc.kind === 'video'"
-                  :src="loc.public_url"
+                  v-if="locationMedia(loc)?.public_url && locationMedia(loc)?.kind === 'video'"
+                  :src="locationMedia(loc)?.public_url"
                   class="h-full w-full object-contain"
                   autoplay muted loop playsinline
                 />
                 <img
-                  v-else-if="loc.public_url"
-                  :src="loc.public_url"
+                  v-else-if="locationMedia(loc)?.public_url"
+                  :src="locationMedia(loc)?.public_url"
                   :alt="loc.title"
                   class="h-full w-full object-contain transition-transform duration-500 hover:scale-105"
                 >
@@ -331,6 +331,7 @@ const {
   locationReviews,
   pending,
   config: pageConfig,
+  site: publicSite,
   experiencesList,
   contentBlocks,
   postsList,
@@ -342,6 +343,9 @@ const hasMenu = computed(() => {
 })
 
 const isExperienceTenant = computed(() => (site as ApiValue)?.vertical === 'experience')
+const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
+  ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
+  : null
 const locationExperienceHref = computed(() =>
   resolveLocationExperienceHref(slug.value, experiencesList.value)
 )
@@ -426,15 +430,18 @@ const featuredItems = computed(() => {
   if (hasMenu.value) {
     // Use featured menu items
     const items = (pageMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
-    return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 4).map((item: ApiRecord) => ({
-      name: item.name,
-      price: formatMoneyAmount(item.price_amount, defaultCurrency, ''),
-      compareAtPrice: isSaleActive(item) ? formatMoneyAmount(item.compare_at_price_amount, defaultCurrency, '') : '',
-      image: item.kind === 'video' ? (item.thumbnail_url || null) : (item.public_url || null),
-      imageKind: item.kind === 'video' ? 'video' : 'image',
-      alt: item.name ? `${item.name} dish` : 'Featured dish image',
-      href: item.slug ? `/menu/${item.slug}` : `/locations/${slug.value}/menu`,
-    }))
+    return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 4).map((item: ApiRecord) => {
+      const media = resolveMedia(Array.isArray(item.media) ? item.media[0] : null)
+      return {
+        name: item.name,
+        price: formatMoneyAmount(item.price_amount, defaultCurrency, ''),
+        compareAtPrice: isSaleActive(item) ? formatMoneyAmount(item.compare_at_price_amount, defaultCurrency, '') : '',
+        image: media.thumb,
+        imageKind: 'image',
+        alt: item.name ? `${item.name} dish` : 'Featured dish image',
+        href: item.slug ? `/menu/${item.slug}` : `/locations/${slug.value}/menu`,
+      }
+    })
   } else {
     // Use featured experiences
     const experiences = experiencesList.value || []
@@ -482,7 +489,7 @@ const contentHero = computed(() => getContentHero({ title: '', subtitle: '', ima
 const heroMedia = computed(() => {
   if (contentHero.value.video) return resolveMedia({ public_url: contentHero.value.video, thumbnail_url: contentHero.value.thumbnail_url, kind: contentHero.value.videoKind || 'video' })
   if (contentHero.value.image) return resolveMedia({ public_url: contentHero.value.image, kind: contentHero.value.imageKind || 'image' })
-  return resolveMedia({ public_url: location.value?.public_url, kind: location.value?.kind })
+  return resolveMedia(location.value ? locationMedia(location.value as ApiRecord) : null)
 })
 const heroTitle = computed(() => contentHero.value.title || null)
 const heroSubtitle = computed(() => contentHero.value.subtitle || null)
@@ -532,8 +539,8 @@ useSocialMetadata(() => ({
   robots: location.value?.robots || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: pageConfig.value?.logo_url || null,
-    faviconUrl: pageConfig.value?.favicon_url || null,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
     primaryColor: pageConfig.value?.brand_color || null,
   },
   heroImage: heroMedia.value.url

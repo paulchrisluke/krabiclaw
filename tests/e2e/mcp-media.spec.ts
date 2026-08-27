@@ -45,8 +45,8 @@ test.describe('stateless MCP server', () => {
     expect(uploadTool?.inputSchema?.additionalProperties).toBe(false)
     expect(uploadTool?._meta?.['openai/fileParams']).toEqual(['file', 'poster_file'])
     const setMediaTool = toolsBody.result.tools.find(tool => tool.name === 'set_media')
-    expect(setMediaTool?.inputSchema?.required).toEqual(['target_type', 'asset_ids'])
-    expect(setMediaTool?.inputSchema?.properties?.target).toBeUndefined()
+    expect(setMediaTool?.inputSchema?.required).toEqual(['placement', 'asset_id'])
+    expect(setMediaTool?.inputSchema?.properties?.placement).toBeDefined()
     expect(setMediaTool?.inputSchema?.additionalProperties).toBe(false)
     expect(toolsBody.result.tools.filter(tool => tool._meta?.ui || tool._meta?.['openai/outputTemplate'])).toEqual([])
 
@@ -65,15 +65,15 @@ test.describe('stateless MCP server', () => {
       siteId: MCP_GROWTH_SITE_ID,
       args: {
         site_id: MCP_GROWTH_SITE_ID,
-        target_type: 'home_hero',
+        placement: { owner_type: 'business_location', owner_id: locationId, slot: 'hero' },
         location_id: locationId,
-        asset_ids: [],
+        asset_id: 'media-does-not-matter-for-this-check',
       },
     })
     expect(mismatchedTarget.status()).toBe(200)
     const mismatchedTargetBody = await mismatchedTarget.json() as { result?: { isError?: boolean, content?: Array<{ text?: string }> } }
     expect(mismatchedTargetBody.result?.isError).toBe(true)
-    expect(mismatchedTargetBody.result?.content?.[0]?.text).toContain('location_id cannot be used with target_type home_hero')
+    expect(mismatchedTargetBody.result?.content?.[0]?.text).toContain('Unknown argument: location_id')
 
     const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
     expect(resources.status()).toBe(200)
@@ -153,7 +153,7 @@ test.describe('stateless MCP server', () => {
     expect(reviewBody.review.findings.some(finding => finding.message.includes('file reference'))).toBe(true)
   })
 
-  test('ChatGPT-shaped video and poster attachments produce an active, public, assignable hero', async ({ request, baseURL }) => {
+  test('ChatGPT-shaped video and poster attachments produce an active public asset', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAsFreshMcpUser(request, baseURL!, 'media')
     const siteId = await ensureSite(request, baseURL!)
@@ -196,21 +196,8 @@ test.describe('stateless MCP server', () => {
       expect(posterDelivery.status()).toBe(200)
       expect(posterDelivery.headers()['content-type']).toContain('image/')
 
-      const assign = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'set_media',
-        args: { site_id: siteId, target_type: 'home_hero', asset_ids: [assetId] },
-      })
-      if (assign.status() !== 200) console.error(await assign.text())
-      expect(assign.status()).toBe(200)
-      const assigned = mcpData<{ ok: boolean; target: { type: string }; asset_ids: string[] }>(await assign.json())
-      expect(assigned.ok).toBe(true)
-      expect(assigned.target.type).toBe('home_hero')
-      expect(assigned.asset_ids).toEqual([assetId])
     } finally {
       if (assetId) {
-        const clear = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'set_media', args: { site_id: siteId, target_type: 'home_hero', asset_ids: [] } })
-        expect(mcpData<{ ok: boolean; cleared: boolean }>(await clear.json())).toMatchObject({ ok: true, cleared: true })
         const remove = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { site_id: siteId, asset_id: assetId } })
         expect(mcpData<{ deleted: boolean }>(await remove.json()).deleted).toBe(true)
       }

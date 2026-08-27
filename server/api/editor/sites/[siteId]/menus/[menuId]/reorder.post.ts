@@ -1,5 +1,6 @@
 // POST reorder menu items
 import { queryAll, queryFirst } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { MenuNotFoundError, reorderMenuItems } from '~/server/utils/menu-management'
@@ -37,7 +38,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await loadMemberSiteRow(db, siteId, session.user.id)
+    const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({
@@ -59,6 +60,7 @@ export default defineHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
+      env,
       memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: existingMenu.location_id, })
 
     // Validate that all items belong to this menu
@@ -71,8 +73,8 @@ export default defineHandler(async (event) => {
 
     const existingItems = await queryAll(db, `
       SELECT id FROM menu_items
-      WHERE id IN (${itemIds.map(() => '?').join(', ')}) AND menu_id = ?
-    `, [...itemIds, menuId])
+      WHERE id IN (SELECT value FROM json_each(?)) AND menu_id = ?
+    `, [d1JsonStringSet(itemIds), menuId])
 
     if (existingItems.length !== itemIds.length) {
       return jsonResponse({

@@ -1,8 +1,7 @@
 // Walks the real (non-mocked) onboarding + dashboard flows against a local
 // dev server, screenshots each step used by the getting-started docs
-// (scripts/seed-docs.sql), and uploads them via POST /api/admin/platform/media
-// so they land in Cloudflare Images with a public_url ready to paste into the
-// docs' markdown body / how_to step image_asset_id.
+// and uploads them via POST /api/admin/platform/media for assignment through
+// the canonical platform media tools.
 //
 // Requires: E2E_TEST_PASSWORD in the environment, plus the prepared local E2E
 // database and Worker provisioned with that same value. The seeded
@@ -15,9 +14,8 @@
 // outDir defaults to /tmp/krabiclaw-docs-screenshots — override with an
 // absolute path, e.g. a session scratchpad, if you'd rather not write to /tmp.
 //
-// After it runs, paste the printed name -> public_url / asset_id map into
-// scripts/seed-docs.sql (inline ![alt](url) for body images, image_asset_id
-// for how_to component steps).
+// After it runs, use the printed asset IDs with the canonical media-placement
+// workflow. Do not paste delivery URLs into documentation Markdown.
 import { chromium } from 'playwright'
 import { findE2eAuthFixture } from '../config/e2e-auth-fixtures.ts'
 

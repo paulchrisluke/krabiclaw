@@ -1,6 +1,8 @@
 import type { McpToolDefinition } from './shared'
-import { bookingObject, bookingsSummaryObject, experienceMutationResultObject, experienceObject, experienceWriteSchema, siteTool } from './shared'
+import { bookingObject, bookingsSummaryObject, experienceMutationResultObject, experienceObject, experienceWriteSchema, pageInfoObject, paginationInputSchema, siteTool } from './shared'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
+
+const { media: _experienceMedia, ...experienceUpdateWriteSchema } = experienceWriteSchema
 
 export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -9,11 +11,11 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { location_id: { type: 'string' } },
+      inputSchema: { location_id: { type: 'string' }, ...paginationInputSchema },
       outputSchema: {
         type: 'object',
-        properties: { experiences: { type: 'array', items: experienceObject } },
-        required: ['experiences'],
+        properties: { experiences: { type: 'array', items: experienceObject }, page_info: pageInfoObject },
+        required: ['experiences', 'page_info'],
       },
     }),
   siteTool({
@@ -44,7 +46,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       inputSchema: {
         experience_id: { type: 'string', description: 'Experience id or slug.' },
-        ...experienceWriteSchema,
+        ...experienceUpdateWriteSchema,
         location_id: { type: 'string', description: 'Move this experience to a different location. Omit to leave its current location unchanged — unlike create_experience, omitting this does not fall back to the site primary location.' },
       },
       required: ['experience_id'],
@@ -73,12 +75,12 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' } },
+      inputSchema: { experience_id: { type: 'string', description: 'Experience id or slug.' }, ...paginationInputSchema },
       required: ['experience_id'],
       outputSchema: {
         type: 'object',
-        properties: { bookings: { type: 'array', items: bookingObject } },
-        required: ['bookings'],
+        properties: { bookings: { type: 'array', items: bookingObject }, page_info: pageInfoObject },
+        required: ['bookings', 'page_info'],
       },
     }),
   siteTool({
@@ -90,14 +92,16 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         location_id: { type: 'string', description: 'Optional location id to limit to one location.' },
         days: { type: 'number', description: 'Optional: only include bookings made in the last N days (max 90).' },
+        ...paginationInputSchema,
       },
       outputSchema: {
         type: 'object',
         properties: {
           bookings: { type: 'array', items: bookingObject },
           summary: bookingsSummaryObject,
+          page_info: pageInfoObject,
         },
-        required: ['bookings', 'summary'],
+        required: ['bookings', 'summary', 'page_info'],
       },
     }),
   siteTool({

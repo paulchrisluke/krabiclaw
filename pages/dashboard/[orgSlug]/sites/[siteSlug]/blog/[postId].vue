@@ -12,6 +12,7 @@
     :initial-post="postResource?.post ?? null"
     defer-load
     :site-id="siteId"
+    title="Edit Post"
     :back-url="baseUrl"
     back-label="Blog"
     :is-edit="true"
@@ -26,7 +27,7 @@ import BlogPostEditor from '~/lib/components/workspace/blog/BlogPostEditor.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { BlogPost } from '~/lib/components/workspace/blog/types'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog', mobileBottomNav: false })
+definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })
 
 const route = useRoute()
 const orgSlug = route.params.orgSlug as string
@@ -40,7 +41,6 @@ const isPostResponse = (value: unknown): value is { post: BlogPost } =>
   && isRecord(value.post)
   && typeof value.post.id === 'string'
   && typeof value.post.title === 'string'
-  && typeof value.post.body === 'string'
   && isRecord(value.post.content_document)
   && Array.isArray(value.post.content_document.blocks)
 

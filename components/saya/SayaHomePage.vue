@@ -11,7 +11,6 @@
           businessTitle: businessTitle,
           businessSubtitle: businessSubtitle,
           businessCity: businessCity,
-          businessPrimaryPhoto: businessPrimaryPhoto,
           hasOrderLinks: hasOrderLinks,
           ctaRoute: homePrimaryCtaRoute,
           reserveCta: homeCopy.reserveCta,
@@ -308,6 +307,7 @@ const {
   getField,
   getHero,
   config: pageConfig,
+  site: publicSite,
   menuItemsBySection,
   experiencesList,
   contentBlocks,
@@ -355,7 +355,6 @@ const googleBusiness = computed(() => {
     : null
   return {
     ...gb,
-    media: gb.media && gb.media.length ? gb.media : [{ google_url: gb.business?.profile?.photoUrl || '' }],
     reviews: ((supplemental?.reviews ?? gb.reviews) || []).map((r) => ({
       ...r,
       author_name: r.author || r.reviewer?.displayName || r.author_name || '',
@@ -368,7 +367,6 @@ const googleBusiness = computed(() => {
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
 const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description ?? null)
-const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])
 const businessCity = computed(() => googleBusiness.value?.business?.city ?? null)
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
@@ -421,8 +419,8 @@ if (siteId) {
     description: seoDescription.value,
     brand: {
       siteName: site?.brand_name || restaurantName.value,
-      logoUrl: pageConfig.value?.logo_url || null,
-      faviconUrl: pageConfig.value?.favicon_url || null,
+      logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+      faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
       primaryColor: pageConfig.value?.brand_color || null,
     },
     heroImage: hero.value.video
@@ -524,11 +522,11 @@ const featuredReviews = computed(() =>
 // rather than falling back to the generic /posts index.
 const recentPosts = computed(() => {
   const posts = (googlePosts.value || [])
-    .filter(p => p.media?.[0]?.url && (p.publicPath || p.public_path || p.slug))
+    .filter(p => p.public_path)
   return posts.slice(0, 4).map((post, i) => ({
     id: post.slug || String(i),
-    path: post.publicPath || post.public_path,
-    image: post.media?.[0]?.url || null,
+    path: post.public_path,
+    image: post.media?.[0]?.public_url || null,
     imageKind: post.media?.[0]?.kind || 'image',
     poster: post.media?.[0]?.thumbnail_url || null,
     text: post.summary || '',
@@ -547,7 +545,7 @@ const recentBlogPosts = computed(() =>
       excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
       category: typeof post.category === 'string' ? post.category : '',
       publishedAt: typeof post.published_at === 'string' ? post.published_at : null,
-      image: resolveMedia(post.featured_image).url,
+      image: resolveMedia(post.media?.find(item => item.slot === 'featured')).url,
     }))
 )
 
@@ -566,15 +564,12 @@ const featuredContent = computed(() => {
   const featuredItems = hasMenu.value ? featuredMenuItems.value : featuredExperiences.value
   return featuredItems.slice(0, 4).map(item => {
     if (hasMenu.value) {
-      // For video assets use the extracted WebP thumbnail, not the MP4 URL.
-      // Featured cards are small grid tiles — loading a video here wastes bandwidth
-      // and causes a 300-500KB download before the card is even visible.
-      const isVideo = item.kind === 'video'
+      const media = resolveMedia(item.media?.[0])
       return {
         name: item.name,
         price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
         compareAtPrice: isSaleActive(item) ? formatMoneyAmount(item.compare_at_price_amount, defaultCurrency.value, '') : '',
-        image: isVideo ? (item.thumbnail_url || null) : (item.public_url || null),
+        image: media.thumb,
         imageKind: 'image',
         alt: item.name ? `${item.name} dish` : 'Featured dish image',
         href: item.slug ? `/menu/${item.slug}` : '',

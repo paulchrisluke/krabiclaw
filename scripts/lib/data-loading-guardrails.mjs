@@ -140,3 +140,14 @@ export function checkDeleteBodyUsage(file, source) {
     ? [`${file}: DELETE routes must not read request bodies; use query or headers for mutation inputs`]
     : []
 }
+
+export function checkDynamicSqlListBindings(file, source) {
+  // The scan for .map()/.fill() is bounded to the same ${...} interpolation
+  // that opens right after IN ( — excluding `}` from the middle class stops
+  // an unrelated .map()/.fill() call in a later interpolation from falsely
+  // satisfying an earlier, actually-safe IN (${...}) match.
+  const dynamicPlaceholderList = /\b(?:NOT\s+)?IN\s*\(\s*\$\{[^}]*?\.(?:map|fill)\s*\(/gi
+  return dynamicPlaceholderList.test(source)
+    ? [`${file}: variable-length SQL IN/NOT IN lists must use one json_each(?) JSON-array bind`]
+    : []
+}

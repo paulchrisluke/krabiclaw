@@ -1,8 +1,10 @@
 import { HTTPError } from 'nitro';
 
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../db/index.ts'
+import { d1JsonStringSet } from '../db/d1-limits.ts'
+import { assertNoEmbeddedMediaFields } from '../../utils/tenant-page-blocks.ts'
 
-export type ContentDocumentOwnerType = 'platform_blog' | 'tenant_blog' | 'tenant_page'
+export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog' | 'tenant_page'
 export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'divider' | 'ai_assistance' | 'cta' | 'callout' | 'hero' | 'button_group' | 'feature_grid' | 'testimonial_grid' | 'contact_cta' | 'booking_cta' | 'donation_choices' | 'offering_grid' | 'location_grid'
 
 export interface ContentDocumentRow {
@@ -32,12 +34,26 @@ export interface ContentBlockSnapshot {
   position: number
   level: number | null
   data: Record<string, unknown>
+  media?: ContentBlockMedia[]
+}
+
+export interface ContentBlockMedia {
+  asset_id: string
+  slot: string
+  sort_order?: number
+  public_url?: string | null
+  thumbnail_url?: string | null
+  kind?: string | null
+  alt_text?: string | null
+  width?: number | null
+  height?: number | null
 }
 
 export interface ContentBlockInput {
   id?: string
   type: ContentBlockType
   data: Record<string, unknown>
+  media?: ContentBlockMedia[]
   parent_block_id?: string | null
   level?: number | null
   position?: number | null
@@ -74,6 +90,17 @@ function assertBlockType(type: string): ContentBlockType {
 function asObject(value: unknown, field: string) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) badRequest(`${field} must be an object`)
   return value as Record<string, unknown>
+}
+
+function mediaFreeBlockData(type: ContentBlockType, value: unknown, field: string) {
+  const data = asObject(value, field)
+  try {
+    assertNoEmbeddedMediaFields(data, field)
+  } catch (error) {
+    badRequest(error instanceof Error ? error.message : `${field} contains embedded media`)
+  }
+  if (type === 'image' && 'url' in data) badRequest(`${field}.url must use a media placement`)
+  return data
 }
 
 function parseBlockData(row: Pick<ContentBlockRow, 'data_json' | 'id' | 'type'>) {
@@ -223,7 +250,7 @@ function buildDocumentWriteBatch(
     type: assertBlockType(block.type),
     position: typeof block.position === 'number' ? block.position : index,
     level: block.level ?? null,
-    data: asObject(block.data, `content block ${index} data`),
+    data: mediaFreeBlockData(block.type, block.data, `content block ${index} data`),
     updated_at: block.updated_at ?? now,
   }))
   const bodyMarkdown = opts.bodyMarkdown ?? renderContentBlocksToMarkdown(snapshots.map(block => ({
@@ -284,7 +311,20 @@ function buildDocumentWriteBatch(
       }]
     : []
 
+  const retainedIds = snapshots.map(block => block.id)
+  const stalePlacementQuery = retainedIds.length
+    ? {
+        query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (
+          SELECT id FROM content_blocks WHERE document_id = ? AND id NOT IN (SELECT value FROM json_each(?))
+        )`,
+        params: [document.id, d1JsonStringSet(retainedIds)],
+      }
+    : {
+        query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (SELECT id FROM content_blocks WHERE document_id = ?)`,
+        params: [document.id],
+      }
   const liveBlockQueries: { query: string; params: unknown[] }[] = [
+    stalePlacementQuery,
     deleteBlocksQuery,
     ...snapshots.map(block => ({
       query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
@@ -373,29 +413,6 @@ export async function syncContentDocumentFromMarkdown(
   return { document: currentDocument, ...write }
 }
 
-export async function syncContentDocumentFromBlocks(
-  db: DbClient,
-  opts: {
-    ownerType: ContentDocumentOwnerType
-    ownerId: string
-    blocks: ContentBlockInput[]
-  },
-) {
-  const document = await ensureContentDocument(db, opts.ownerType, opts.ownerId)
-  const write = await writeDocumentBlocks(db, document, opts.blocks.map((block, index) => ({
-    id: block.id,
-    parent_block_id: block.parent_block_id ?? null,
-    type: block.type,
-    position: index,
-    level: block.level ?? null,
-    data: block.data,
-  })), {
-  })
-  const currentDocument = await getContentDocumentById(db, document.id)
-  if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
-  return { document: currentDocument, ...write }
-}
-
 export function prepareContentDocumentWithBlocks(
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
@@ -435,15 +452,14 @@ export function prepareContentDocumentWithBlocks(
   return { document, ...write }
 }
 
-// Unlike syncContentDocumentFromBlocks, this never calls ensureContentDocument
+// This never calls ensureContentDocument
 // (which INSERTs standalone, outside any batch). It folds the content_documents
 // INSERT into the same additionalQueriesBefore array as the caller's own
 // owner-row INSERT (e.g. blog_posts), so the block writer's single
 // executeBatch call becomes the entire create operation: document, owner row,
 // and blocks all commit or all fail together. Use this whenever a
 // content document needs to be created atomically alongside the row it belongs
-// to — not for adding a document to an already-existing owner row (use
-// ensureContentDocument/syncContentDocumentFromBlocks for that).
+// to — not for adding a document to an already-existing owner row.
 export async function createContentDocumentWithBlocks(
   db: DbClient,
   ownerType: ContentDocumentOwnerType,
@@ -467,14 +483,6 @@ export async function createContentDocumentWithBlocks(
   }
 }
 
-export async function deleteContentDocumentForOwner(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
-  await execute(
-    db,
-    'DELETE FROM content_documents WHERE owner_type = ? AND owner_id = ?',
-    [ownerType, ownerId],
-  )
-}
-
 function formatBlockOutline(block: ContentBlockRow) {
   return {
     id: block.id,
@@ -487,9 +495,32 @@ function formatBlockOutline(block: ContentBlockRow) {
   }
 }
 
+async function attachContentBlockMedia(db: DbClient, documentId: string, blocks: ReturnType<typeof formatBlockOutline>[]) {
+  const media = await queryAll<ContentBlockMedia & { owner_id: string }>(
+    db,
+    `SELECT mp.owner_id, mp.asset_id, mp.slot, mp.sort_order,
+            ma.alt_text,
+            ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
+       FROM media_placements mp
+       JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+       JOIN content_blocks cb ON cb.id = mp.owner_id
+      WHERE cb.document_id = ? AND mp.owner_type = 'content_block' AND mp.status = 'active'
+      ORDER BY cb.position, mp.slot, mp.sort_order`,
+    [documentId],
+  ) ?? []
+  const byBlock = new Map<string, ContentBlockMedia[]>()
+  for (const item of media) {
+    const items = byBlock.get(item.owner_id) ?? []
+    const { owner_id: _ownerId, ...placement } = item
+    items.push(placement)
+    byBlock.set(item.owner_id, items)
+  }
+  return blocks.map(block => ({ ...block, media: byBlock.get(block.id) ?? [] }))
+}
+
 export async function getContentOutline(db: DbClient, documentId: string) {
   const blocks = await listBlocksForDocument(db, documentId)
-  return blocks.map(formatBlockOutline)
+  return await attachContentBlockMedia(db, documentId, blocks.map(formatBlockOutline))
 }
 
 export async function getContentBlock(db: DbClient, blockId: string) {
@@ -502,7 +533,8 @@ export async function getContentBlock(db: DbClient, blockId: string) {
     [blockId],
   )
   if (!block) notFound('Content block not found')
-  return { ...block, data: parseBlockData(block) }
+  const [outlined] = await attachContentBlockMedia(db, block.document_id, [formatBlockOutline(block)])
+  return { ...block, data: outlined!.data, media: outlined!.media }
 }
 
 export async function listBlocksForDocument(db: DbClient, documentId: string) {
@@ -641,7 +673,7 @@ export async function deleteContentBlock(
 
 export async function renderContentPreview(db: DbClient, documentId: string) {
   const blocks = await listBlocksForDocument(db, documentId)
-  return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: blocks.map(formatBlockOutline) }
+  return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: await attachContentBlockMedia(db, documentId, blocks.map(formatBlockOutline)) }
 }
 
 /** Editor-oriented snapshot read. Unknown/future block types remain opaque data
@@ -654,14 +686,14 @@ export async function getContentEditorSnapshot(db: DbClient, ownerType: ContentD
 
 export async function getContentEditorSnapshotForDocument(db: DbClient, document: ContentDocumentRow) {
   const blocks = await listBlocksForDocument(db, document.id)
-  return { document, blocks: blocks.map(formatBlockOutline) }
+  return { document, blocks: await attachContentBlockMedia(db, document.id, blocks.map(formatBlockOutline)) }
 }
 
 export async function getContentBlocksForOwner(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) return null
   const blocks = await listBlocksForDocument(db, document.id)
-  return blocks.map(b => ({
+  return await attachContentBlockMedia(db, document.id, blocks.map(b => ({
     id: b.id,
     parent_block_id: b.parent_block_id,
     type: b.type,
@@ -670,7 +702,7 @@ export async function getContentBlocksForOwner(db: DbClient, ownerType: ContentD
     data: b.data_json ? JSON.parse(b.data_json) : {},
     created_at: b.created_at,
     updated_at: b.updated_at
-  }))
+  })))
 }
 
 
@@ -740,152 +772,4 @@ export function prepareContentDocumentBlocksReplacement(
     additionalQueriesBefore: opts.additionalQueriesBefore,
     additionalQueriesAfter: opts.additionalQueriesAfter,
   })
-}
-
-export interface LegacyBlogBackfillFinding {
-  post_id: string
-  component_id: string
-  type: 'faq' | 'how_to'
-  action: 'insert' | 'skip_existing' | 'malformed' | 'unmatched_placeholder' | 'duplicate'
-  detail?: string
-  target?: 'current'
-}
-
-const LEGACY_COMPONENT_PLACEHOLDER_RE = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
-
-export function mergeLegacyBlogComponents(
-  sourceBlocks: ContentBlockInput[],
-  components: Array<{ component_id: string; type: 'faq' | 'how_to'; position: number; data: Record<string, unknown> }>,
-) {
-  const findings: LegacyBlogBackfillFinding[] = []
-  const remaining = [...components].sort((a, b) => a.position - b.position)
-  const canonicalTypes = new Set(sourceBlocks.filter(block => block.type === 'faq' || block.type === 'how_to').map(block => block.type))
-  const blocks: ContentBlockInput[] = []
-
-  for (const block of sourceBlocks) {
-    if (block.type !== 'markdown' || typeof block.data.markdown !== 'string') { blocks.push(block); continue }
-    const markdown = block.data.markdown
-    let cursor = 0
-    for (const match of markdown.matchAll(LEGACY_COMPONENT_PLACEHOLDER_RE)) {
-      const index = match.index ?? 0
-      const prose = markdown.slice(cursor, index)
-      if (prose.trim()) blocks.push({ ...block, id: cursor === 0 ? block.id : undefined, data: { ...block.data, markdown: prose } })
-      const rawType = match[1] ?? match[2] ?? match[3] ?? ''
-      const type = rawType === 'faq' || rawType === 'how_to' ? rawType : null
-      const componentIndex = type ? remaining.findIndex(component => component.type === type) : -1
-      if (componentIndex < 0 || !type) {
-        findings.push({ post_id: '', component_id: '', type: type ?? 'faq', action: 'unmatched_placeholder', detail: `No valid legacy component matched ${rawType || 'unknown'}` })
-        blocks.push({ type: 'markdown', data: { markdown: match[0] } })
-      } else {
-        const [component] = remaining.splice(componentIndex, 1)
-        if (canonicalTypes.has(type)) findings.push({ post_id: '', component_id: component!.component_id, type, action: 'duplicate', detail: 'Canonical block of this type already exists' })
-        else {
-          blocks.push({ type, data: component!.data })
-          canonicalTypes.add(type)
-          findings.push({ post_id: '', component_id: component!.component_id, type, action: 'insert', detail: 'Replaced body placeholder in place' })
-        }
-      }
-      cursor = index + match[0].length
-    }
-    const trailing = markdown.slice(cursor)
-    if (trailing.trim()) blocks.push({ ...block, id: cursor === 0 ? block.id : undefined, data: { ...block.data, markdown: trailing } })
-  }
-
-  for (const component of remaining) {
-    if (canonicalTypes.has(component.type)) {
-      findings.push({ post_id: '', component_id: component.component_id, type: component.type, action: 'duplicate', detail: 'Duplicate legacy component type' })
-      continue
-    }
-    const position = Math.max(0, Math.min(blocks.length, component.position))
-    blocks.splice(position, 0, { type: component.type, data: component.data })
-    canonicalTypes.add(component.type)
-    findings.push({ post_id: '', component_id: component.component_id, type: component.type, action: 'insert', detail: 'Inserted at legacy position because no placeholder existed' })
-  }
-  return { blocks: blocks.map((block, position) => ({ ...block, position })), findings }
-}
-
-/** Idempotent migration/report for the old blog component authoring surface.
- * Dry-run is the default; apply writes only missing FAQ/How-To block types and
- * never removes legacy/unknown blocks. Compatibility component rows remain
- * readable until all external consumers have migrated. */
-export async function backfillLegacyBlogStructuredBlocks(
-  db: DbClient,
-  opts: { apply?: boolean; siteId?: string | null } = {},
-) {
-  const rows = await queryAll<{
-    post_id: string
-    site_id: string | null
-    body: string
-    published_at: string | null
-    component_id: string
-    type: string
-    position: number
-    data_json: string
-  }>(db, `
-    SELECT p.id AS post_id, p.site_id, p.body, p.published_at, c.id AS component_id, c.type, c.position, c.data_json
-      FROM blog_posts p
-      JOIN platform_content_components c ON c.content_type = 'blog_post' AND c.content_id = p.id
-     WHERE c.type IN ('faq', 'how_to')
-       ${opts.siteId === undefined ? '' : opts.siteId === null ? 'AND p.site_id IS NULL' : 'AND p.site_id = ?'}
-     ORDER BY p.id, c.position, c.created_at
-  `, typeof opts.siteId === 'string' ? [opts.siteId] : [])
-
-  const findings: LegacyBlogBackfillFinding[] = []
-  const grouped = new Map<string, typeof rows>()
-  for (const row of rows ?? []) grouped.set(row.post_id, [...(grouped.get(row.post_id) ?? []), row])
-
-  for (const [postId, components] of grouped) {
-    const first = components[0]!
-    const ownerType: ContentDocumentOwnerType = first.site_id ? 'tenant_blog' : 'platform_blog'
-    let snapshot = await getContentEditorSnapshot(db, ownerType, postId)
-    if (!snapshot && opts.apply) {
-      await syncContentDocumentFromMarkdown(db, { ownerType, ownerId: postId, bodyMarkdown: first.body })
-      snapshot = await getContentEditorSnapshot(db, ownerType, postId)
-    }
-    const sourceBlocks = (snapshot?.blocks ?? markdownToContentBlocks(first.body)) as Array<ContentBlockInput & { id?: string }>
-    const blocks: ContentBlockInput[] = sourceBlocks.map(block => ({
-      ...(block.id ? { id: block.id } : {}), type: block.type, data: block.data,
-      parent_block_id: block.parent_block_id, level: block.level, position: block.position,
-    }))
-    const validComponents: Array<{ component_id: string; type: 'faq' | 'how_to'; position: number; data: Record<string, unknown> }> = []
-    for (const component of components) {
-      const type = component.type as 'faq' | 'how_to'
-      let data: Record<string, unknown>
-      try {
-        data = asObject(JSON.parse(component.data_json), `legacy component ${component.component_id} data`)
-      } catch {
-        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'malformed', detail: 'Malformed data_json' })
-        continue
-      }
-      const required = type === 'faq' ? data.items : data.steps
-      if (!Array.isArray(required) || required.length === 0) {
-        findings.push({ post_id: postId, component_id: component.component_id, type, action: 'malformed', detail: `Missing ${type === 'faq' ? 'items' : 'steps'}` })
-        continue
-      }
-      validComponents.push({ component_id: component.component_id, type, position: component.position, data })
-    }
-    const merged = mergeLegacyBlogComponents(blocks, validComponents)
-    blocks.splice(0, blocks.length, ...merged.blocks)
-    findings.push(...merged.findings.map(finding => ({ ...finding, post_id: postId, target: 'current' as const })))
-
-    if (opts.apply && snapshot) {
-      const changed = merged.findings.some(finding => finding.action === 'insert')
-      if (changed) {
-        await replaceContentDocumentBlocks(db, ownerType, postId, blocks, {
-          expected_document_updated_at: snapshot.document.updated_at,
-        })
-      }
-    }
-  }
-  return {
-    apply: Boolean(opts.apply),
-    findings,
-    totals: {
-      insert: findings.filter(f => f.action === 'insert').length,
-      skip_existing: findings.filter(f => f.action === 'skip_existing').length,
-      malformed: findings.filter(f => f.action === 'malformed').length,
-      unmatched_placeholder: findings.filter(f => f.action === 'unmatched_placeholder').length,
-      duplicate: findings.filter(f => f.action === 'duplicate').length,
-    },
-  }
 }

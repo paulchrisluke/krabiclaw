@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { postMutationResultObject, postObject, postPublishResultObject, siteTool } from './shared'
+import { pageInfoObject, paginationInputSchema, postMutationResultObject, postObject, postPublishResultObject, siteTool } from './shared'
 
 export const POSTS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -11,11 +11,12 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         status: { type: 'string', enum: ['published', 'scheduled'] },
         location_id: { type: 'string', description: 'Filter to posts restricted to this location.' },
+        ...paginationInputSchema,
       },
       outputSchema: {
         type: 'object',
-        properties: { posts: { type: 'array', items: postObject } },
-        required: ['posts'],
+        properties: { posts: { type: 'array', items: postObject }, page_info: pageInfoObject },
+        required: ['posts', 'page_info'],
       },
     }),
   siteTool({

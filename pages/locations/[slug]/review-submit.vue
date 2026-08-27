@@ -84,17 +84,17 @@
             </button>
             <div
               v-for="item in media"
-              :key="item.assetId"
+              :key="item.asset_id"
               class="relative h-20 w-20 overflow-hidden rounded-lg border border-default bg-elevated"
             >
-              <img v-if="item.previewUrl && item.kind === 'image'" :src="item.previewUrl" alt="" class="h-full w-full object-cover">
+              <img v-if="item.preview_url && item.kind === 'image'" :src="item.preview_url" alt="" class="h-full w-full object-cover">
               <div v-else class="flex h-full w-full items-center justify-center text-xs text-muted">Video</div>
               <button
                 type="button"
                 class="absolute right-1 top-1 rounded-full bg-default/90 px-1.5 text-xs disabled:cursor-wait disabled:opacity-60"
                 :disabled="removingMediaAssetId !== null"
-                :aria-label="removingMediaAssetId === item.assetId ? 'Removing media' : 'Remove media'"
-                @click="removeMedia(item.assetId)"
+                :aria-label="removingMediaAssetId === item.asset_id ? 'Removing media' : 'Remove media'"
+                @click="removeMedia(item.asset_id)"
               >x</button>
             </div>
           </div>
@@ -139,7 +139,7 @@ const mediaError = ref('')
 const uploadingMedia = ref(false)
 const removingMediaAssetId = ref<string | null>(null)
 const mediaInput = ref<HTMLInputElement | null>(null)
-const media = ref<Array<{ assetId: string; kind: 'image' | 'video'; previewUrl: string | null }>>([])
+const media = ref<Array<{ asset_id: string; kind: 'image' | 'video'; preview_url: string | null }>>([])
 const activeVideoUploads = new Set<AbortController>()
 const imageCount = computed(() => media.value.filter(item => item.kind === 'image').length)
 const videoCount = computed(() => media.value.filter(item => item.kind === 'video').length)
@@ -174,7 +174,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   for (const controller of activeVideoUploads) controller.abort()
   for (const item of media.value) {
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    if (item.preview_url) URL.revokeObjectURL(item.preview_url)
   }
 })
 
@@ -225,39 +225,39 @@ async function handleMediaSelect(event: Event) {
 async function uploadImage(file: File) {
   const requestId = requestData.value?.request?.id
   if (!requestId) return
-  const upload = await publicApiMutation<{ assetId: string; uploadUrl: string }>(`/api/public/review-requests/${requestId}/media/request-upload`, {
+  const upload = await publicApiMutation<{ asset_id: string; upload_url: string }>(`/api/public/review-requests/${requestId}/media/request-upload`, {
     method: 'POST',
     body: { token: token.value, kind: 'image', filename: file.name },
-    validate: (value): value is { assetId: string; uploadUrl: string } =>
+    validate: (value): value is { asset_id: string; upload_url: string } =>
       isRecord(value)
-      && typeof value.assetId === 'string'
-      && typeof value.uploadUrl === 'string',
+      && typeof value.asset_id === 'string'
+      && typeof value.upload_url === 'string',
   })
   try {
     const form = new FormData()
     form.append('file', file)
-    const uploaded = await fetch(upload.uploadUrl, {
+    const uploaded = await fetch(upload.upload_url, {
       method: 'POST',
       body: form,
       signal: mediaUploadSignal(),
     })
     if (!uploaded.ok) throw new Error('Image upload failed.')
-    await publicApiMutation<{ id: string; publicUrl: string; thumbnailUrl: string }>(
-      `/api/public/review-requests/${requestId}/media/${upload.assetId}/confirm`,
+    await publicApiMutation<{ asset_id: string; public_url: string; thumbnail_url: string }>(
+      `/api/public/review-requests/${requestId}/media/${upload.asset_id}/confirm`,
       {
         method: 'POST',
         body: { token: token.value },
-        validate: (value): value is { id: string; publicUrl: string; thumbnailUrl: string } =>
+        validate: (value): value is { asset_id: string; public_url: string; thumbnail_url: string } =>
           isRecord(value)
-          && typeof value.id === 'string'
-          && typeof value.publicUrl === 'string'
-          && typeof value.thumbnailUrl === 'string',
+          && typeof value.asset_id === 'string'
+          && typeof value.public_url === 'string'
+          && typeof value.thumbnail_url === 'string',
       },
     )
-    media.value.push({ assetId: upload.assetId, kind: 'image', previewUrl: URL.createObjectURL(file) })
+    media.value.push({ asset_id: upload.asset_id, kind: 'image', preview_url: URL.createObjectURL(file) })
   } catch (error) {
     try {
-      await discardReviewMedia(requestId, upload.assetId)
+      await discardReviewMedia(requestId, upload.asset_id)
     } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], 'Image upload and cleanup failed.')
     }
@@ -304,13 +304,12 @@ async function uploadVideo(file: File) {
     if (!response.ok) {
       throw normalizeApiError({ statusCode: response.status, response, data: payload })
     }
-    if (isRecord(payload) && typeof payload.assetId === 'string') assetId = payload.assetId
+    if (isRecord(payload) && typeof payload.asset_id === 'string') assetId = payload.asset_id
     if (
       !isRecord(payload)
-      || typeof payload.assetId !== 'string'
-      || typeof payload.mediaId !== 'string'
-      || typeof payload.publicUrl !== 'string'
-      || typeof payload.thumbnailUrl !== 'string'
+      || typeof payload.asset_id !== 'string'
+      || typeof payload.public_url !== 'string'
+      || typeof payload.thumbnail_url !== 'string'
       || payload.kind !== 'video'
       || payload.status !== 'active'
     ) {
@@ -321,7 +320,7 @@ async function uploadVideo(file: File) {
         data: isRecord(payload) ? payload : {},
       })
     }
-    media.value.push({ assetId: payload.assetId, kind: 'video', previewUrl: payload.thumbnailUrl })
+    media.value.push({ asset_id: payload.asset_id, kind: 'video', preview_url: payload.thumbnail_url })
   } catch (error) {
     if (assetId) {
       try {
@@ -339,7 +338,7 @@ async function uploadVideo(file: File) {
 async function removeMedia(assetId: string) {
   if (removingMediaAssetId.value) return
   const requestId = requestData.value?.request?.id
-  const item = media.value.find(entry => entry.assetId === assetId)
+  const item = media.value.find(entry => entry.asset_id === assetId)
   if (!requestId || !item) return
 
   mediaError.value = ''
@@ -348,8 +347,8 @@ async function removeMedia(assetId: string) {
     await ensureCustomerSession()
     await discardReviewMedia(requestId, assetId)
 
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
-    media.value = media.value.filter(entry => entry.assetId !== assetId)
+    if (item.preview_url) URL.revokeObjectURL(item.preview_url)
+    media.value = media.value.filter(entry => entry.asset_id !== assetId)
   } catch (error) {
     mediaError.value = error instanceof Error
       ? error.message
@@ -360,13 +359,13 @@ async function removeMedia(assetId: string) {
 }
 
 function discardReviewMedia(requestId: string, assetId: string) {
-  return publicApiMutation<{ deleted: true; assetId: string }>(
+  return publicApiMutation<{ deleted: true; asset_id: string }>(
     `/api/public/review-requests/${encodeURIComponent(requestId)}/media/${encodeURIComponent(assetId)}`,
     {
       method: 'DELETE',
       body: { token: token.value },
-      validate: (value): value is { deleted: true; assetId: string } =>
-        isRecord(value) && value.deleted === true && value.assetId === assetId,
+      validate: (value): value is { deleted: true; asset_id: string } =>
+        isRecord(value) && value.deleted === true && value.asset_id === assetId,
     },
   )
 }
@@ -391,7 +390,6 @@ async function submitReview() {
         rating: rating.value,
         title: title.value,
         content: content.value,
-        mediaAssetIds: media.value.map(item => item.assetId),
       },
       validate: (value): value is { success: true; reviewId: string; status: 'pending' } =>
         isRecord(value)

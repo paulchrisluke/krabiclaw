@@ -34,27 +34,27 @@ and plain-language requests, not just exact/technical phrasing.
 
 | User says | Expected behavior |
 | --- | --- |
-| "Change the big photo" | Calls `get_site_media_assets`, then `set_media` with `target_type: "home_hero"` (or asks which page/location if ambiguous) |
-| "Change the cover photo for my downtown location" | Calls `list_locations` to resolve the location, then `set_media` with `target_type: "location_hero"` and the exact `location_id` |
-| "Add pictures of my food" | Asks the user to attach photos, calls `upload_user_media` once per attachment, then calls `set_media` with `target_type: "menu_item_media"` and the exact `menu_item_id`, or asks a placement question |
-| "Change our logo" | Calls `get_site_media_assets`, then `set_media` with `target_type: "site_logo"` |
+| "Change the big photo" | Calls `get_site_media_assets`, then `set_media` with the home hero content block's `{ owner_type: "content_block", owner_id, slot: "media" }` placement (or asks which page/location if ambiguous) |
+| "Change the cover photo for my downtown location" | Calls `list_locations` to resolve the location, then `set_media` with `{ owner_type: "business_location", owner_id: location_id, slot: "hero" }` |
+| "Add pictures of my food" | Asks the user to attach photos, calls `upload_user_media` once per attachment, then calls `attach_media` once per uploaded asset with the confirmed owner's canonical `gallery` placement |
+| "Change our logo" | Calls `get_site_media_assets`, then `set_media` with `{ owner_type: "site", owner_id: site_id, slot: "logo" }` |
 | "Post this on my site" | Calls `create_post`, then `publish_post` without stopping to just describe the step |
 
 ## Indirect / fuzzy-intent prompts
 
 | User says | Expected behavior |
 | --- | --- |
-| "Make my website look better" | Inspects site (`get_page_fields`, `get_site_media_assets`), suggests 2-3 concrete top improvements, asks which to act on first |
+| "Make my website look better" | Inspects site (`list_tenant_pages`, `get_tenant_page`, `get_site_media_assets`), suggests 2-3 concrete top improvements, asks which to act on first |
 | "I want more bookings" | Reviews CTA/contact info/menu-or-experience completeness, suggests specific changes, doesn't just say "add a booking button" without context |
 | "I don't know what to do next" | Routes to a checklist-style flow — calls `get_workspace_context` and relevant list/get tools, identifies the single most important missing piece |
 | "Help me add my best photos to the site" | Asks the user to attach photos if none are attached yet, then places them with the right assignment tool per placement |
-| "The homepage feels empty" | Investigates `get_page_fields` for "home", suggests filling in story/photos rather than guessing |
+| "The homepage feels empty" | Resolves the `/` variant with `list_tenant_pages`, inspects it with `get_tenant_page`, and suggests filling in story/photos rather than guessing |
 
 ## Negative prompts (should NOT mutate without confirmation)
 
 | User says | Expected behavior |
 | --- | --- |
-| "What does my site look like right now?" | Read-only tools only (`get_page_fields`, `get_site_media_assets`, `show_site_preview`) — no `set_*`/`update_*`/`create_*` calls |
+| "What does my site look like right now?" | Read-only tools only (`list_tenant_pages`, `get_tenant_page`, `get_site_media_assets`, `show_site_preview`) — no `set_*`/`update_*`/`create_*` calls |
 | "I'm just looking, don't change anything yet" | No mutating tool calls even if the model has enough info to act |
 | Ambiguous site reference when the account has 2+ sites | Calls `list_sites` and asks the user to choose — does not guess a site_id |
 | "Delete my old logo" (no replacement given) | Asks for confirmation / a replacement asset before calling anything destructive — there's no bare "remove logo" tool, so this should surface as a clarifying question, not a wrong tool call |
@@ -66,11 +66,11 @@ described flow when invoked via `prompts/get`:
 
 | Prompt name | Should route through |
 | --- | --- |
-| `improve_my_homepage` | `get_page_fields` (home) → `get_site_media_assets` → suggestions → confirm → `update_page_content`/`set_media` |
-| `add_photos_to_site` | attach → `upload_user_media` once per attachment → `set_media` with `target_type: "experience_media"`, `target_type: "menu_item_media"`, or the confirmed placement |
+| `improve_my_homepage` | `list_tenant_pages` → `get_tenant_page` (`/`) → `get_site_media_assets` → suggestions → confirm → `update_tenant_page`/`set_media` |
+| `add_photos_to_site` | attach → `upload_user_media` once per attachment → `attach_media` once per uploaded asset with the confirmed owner's canonical `gallery` placement |
 | `finish_my_site_setup` | `get_workspace_context` → media/page/menu/experience checks → single next step |
-| `make_site_more_bookable` | `get_page_fields` (home) → `list_locations` → `list_menus`/`list_experiences` → suggestions |
-| `make_my_site_look_better` | `get_page_fields` → `get_site_media_assets` → suggestions, biggest visual impact first |
+| `make_site_more_bookable` | `list_tenant_pages` → `get_tenant_page` (`/`) → `list_locations` → `list_menus`/`list_experiences` → suggestions |
+| `make_my_site_look_better` | `list_tenant_pages` → `get_tenant_page` (`/`) → `get_site_media_assets` → suggestions, biggest visual impact first |
 | `onboard_new_site` (existing) | `import_from_maps` → required/optional context → `create_site` → `create_location` → `show_site_preview` |
 | `triage_inbox` (existing) | `get_contact_inquiries` / `get_reservation_inquiries` / `list_experience_bookings` |
 

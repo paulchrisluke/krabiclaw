@@ -1,7 +1,8 @@
 import type { McpExecutorContext } from './shared'
-import { createPlatformBlogPost, createSiteAuthor, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, listSiteAuthors, reorderPlatformBlogPosts, updatePlatformBlogLifecycle, updatePlatformBlogPost } from '~/server/utils/platform-content'
+import { createPlatformBlogPost, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, reorderPlatformBlogPosts, updatePlatformBlogLifecycle, updatePlatformBlogPost } from '~/server/utils/platform-content'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, objectArray, omit, optionalString, requiredString } from './shared'
 
 const UPDATE_BLOG_MUTATION_FIELDS = [
@@ -19,7 +20,6 @@ const UPDATE_BLOG_MUTATION_FIELDS = [
   'slug',
   'redirect_old_slug',
   'reset_slug_override',
-  'site_author_id',
 ]
 
 const BLOG_METADATA_FIELDS = [
@@ -42,7 +42,6 @@ const BLOG_METADATA_FIELDS = [
   'slug',
   'redirect_old_slug',
   'reset_slug_override',
-  'site_author_id',
 ]
 
 const BLOG_CONTENT_BLOCK_TYPES = new Set([
@@ -118,16 +117,20 @@ function responseStringArray(value: unknown, path: string) {
   return value as string[]
 }
 
-function toFeaturedImage(value: unknown) {
-  if (value === null) return null
-  const image = responseRecord(value, 'post.featured_image')
-  return {
-    asset_id: responseNullableString(image.asset_id, 'post.featured_image.asset_id'),
-    public_url: responseNullableString(image.public_url, 'post.featured_image.public_url'),
-    kind: responseNullableString(image.kind, 'post.featured_image.kind'),
-    width: responseNullableNumber(image.width, 'post.featured_image.width'),
-    height: responseNullableNumber(image.height, 'post.featured_image.height'),
-  }
+function toMedia(value: unknown) {
+  if (!Array.isArray(value)) invalidBlogResponse('post.media', 'an array')
+  return value.map((item, index) => {
+    const path = `post.media[${index}]`
+    const media = responseRecord(item, path)
+    return {
+      asset_id: responseString(media.asset_id, `${path}.asset_id`),
+      slot: responseString(media.slot, `${path}.slot`),
+      public_url: responseNullableString(media.public_url, `${path}.public_url`),
+      kind: responseNullableString(media.kind, `${path}.kind`),
+      width: responseNullableNumber(media.width, `${path}.width`),
+      height: responseNullableNumber(media.height, `${path}.height`),
+    }
+  })
 }
 
 function toContentBlockProjection(value: unknown, index: number) {
@@ -141,6 +144,7 @@ function toContentBlockProjection(value: unknown, index: number) {
     position: responseNumber(block.position, `${path}.position`),
     level: responseNullableNumber(block.level, `${path}.level`),
     data,
+    media: toMedia(block.media),
   }
 }
 
@@ -170,7 +174,7 @@ function toBlogPostSummary(post: Record<string, unknown>) {
     scheduled_for: responseNullableString(post.scheduled_for, 'post.scheduled_for'),
     created_at: responseString(post.created_at, 'post.created_at'),
     updated_at: responseString(post.updated_at, 'post.updated_at'),
-    featured_image: toFeaturedImage(post.featured_image),
+    media: toMedia(post.media),
     admin_edit_url: responseNullableString(post.admin_edit_url, 'post.admin_edit_url'),
     edit_url: responseNullableString(post.edit_url, 'post.edit_url'),
     public_path: responseNullableString(post.public_path, 'post.public_path'),
@@ -186,8 +190,6 @@ export function projectBlogPostForMcp(post: Record<string, unknown>) {
   if (!Array.isArray(contentDocument.blocks)) invalidBlogResponse('post.content_document.blocks', 'an array')
   return {
     ...toBlogPostSummary(post),
-    author_name: responseNullableString(post.author_name, 'post.author_name'),
-    site_author_id: responseNullableString(post.site_author_id, 'post.site_author_id'),
     content_blocks: contentDocument.blocks.map((block, index) => toContentBlockProjection(block, index)),
     document_updated_at: responseString(document.updated_at, 'post.content_document.document.updated_at'),
   }
@@ -205,19 +207,23 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_blog_posts":
-      return {
-        posts: (await listPlatformBlogPosts(
+      {
+        const posts = (await listPlatformBlogPosts(
           site.db,
           optionalString(args, "status"),
           site.siteId,
-        )).map((post) => toBlogPostSummary(attachViewUrlToRecord(post, site, {}, site.env))),
-      };
+          site.env,
+        )).map((post) => toBlogPostSummary(attachViewUrlToRecord(post, site, {}, site.env)));
+        const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${site.siteId}` });
+        return { posts: items, page_info };
+      }
     case "get_blog_post":
       {
         const post = await getPlatformBlogPost(
           site.db,
           requiredString(args, "post_id"),
           site.siteId,
+          site.env,
         );
         return {
           post: projectBlogPostForMcp(attachViewUrlToRecord(post, site, {}, site.env)),
@@ -229,6 +235,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         site.userId,
         args as never,
         { site_id: site.siteId, organization_id: site.organizationId },
+        site.env,
       );
       const hydratedBlogPost = attachViewUrlToRecord(result.post, site, {}, site.env);
       return renderStructuredResponse(
@@ -243,6 +250,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         requiredString(args, "post_id"),
         omit(args, ["post_id", "site_id"]) as never,
         site.siteId,
+        site.env,
       );
       const hydratedUpdatedBlogPost = attachViewUrlToRecord(result.post, site, {}, site.env);
       return renderStructuredResponse(
@@ -257,6 +265,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         requiredString(args, "post_id"),
         omit(args, ["post_id", "site_id"]) as never,
         site.siteId,
+        site.env,
       )
       return blogPostResponse(
         result.post,
@@ -273,6 +282,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           expected_document_updated_at: requiredString(args, "expected_document_updated_at"),
         } as never,
         site.siteId,
+        site.env,
       )
       return blogPostResponse(
         result.post,
@@ -296,7 +306,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           ? { scheduled_for: normalizedScheduledFor as string | null }
           : {}),
       }, site.siteId)
-      const result = await getPlatformBlogPost(site.db, postId, site.siteId)
+      const result = await getPlatformBlogPost(site.db, postId, site.siteId, site.env)
       const post = attachViewUrlToRecord(result, site, {}, site.env)
       return renderStructuredResponse(
         { post: projectBlogPostForMcp(post) },
@@ -343,7 +353,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         }
         return result as { post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }
       })
-      const result = await reorderPlatformBlogPosts(site.db, items, site.siteId)
+      const result = await reorderPlatformBlogPosts(site.db, items, site.siteId, site.env)
       return {
         success: result.success,
         posts: result.posts.map((post) => toBlogPostSummary(attachViewUrlToRecord(post, site, {}, site.env))),
@@ -353,41 +363,6 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const postId = requiredString(args, "post_id");
       await deletePlatformBlogPost(site.db, postId, site.siteId);
       return { post_id: postId, deleted: true };
-    }
-    case "list_blog_authors": {
-      if (!site.siteId) throw mcpProtocolError(MCP_ERROR.invalidParams, "list_blog_authors requires a tenant site.")
-      const authors = await listSiteAuthors(site.db, site.siteId)
-      return {
-        authors: authors.map((author) => ({
-          id: author.id,
-          name: author.name,
-          title: author.title,
-          bio: author.bio,
-          image_public_url: author.image_public_url,
-        })),
-      }
-    }
-    case "create_blog_author": {
-      if (!site.siteId || !site.organizationId) throw mcpProtocolError(MCP_ERROR.invalidParams, "create_blog_author requires a tenant site.")
-      const result = await createSiteAuthor(site.db, { site_id: site.siteId, organization_id: site.organizationId }, {
-        name: requiredString(args, "name"),
-        title: optionalString(args, "title") ?? null,
-        bio: optionalString(args, "bio") ?? null,
-      })
-      const authors = await listSiteAuthors(site.db, site.siteId)
-      const created = authors.find((author) => author.id === result.id)
-      if (!created) {
-        throw mcpProtocolError(MCP_ERROR.internal, `Created blog author ${result.id} could not be read.`)
-      }
-      return {
-        author: {
-          id: created.id,
-          name: created.name,
-          title: created.title,
-          bio: created.bio,
-          image_public_url: created.image_public_url,
-        },
-      }
     }
     default:
       return NOT_HANDLED

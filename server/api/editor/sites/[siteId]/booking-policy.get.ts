@@ -1,28 +1,14 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { assertResourceAccess } from '~/server/utils/member-access'
+import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(
-    db, `SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
-     FROM sites s
-     JOIN organization o ON s.organization_id = o.id
-     JOIN member om ON o.id = om.organizationId
-     WHERE s.id = ? AND om.userId = ?
-     LIMIT 1`, [siteId, session.user.id], )
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
 
   const query = getQuery(event)
   const policyType: BookingPolicyType = query.policy_type === 'experience' ? 'experience' : 'reservation'
@@ -32,7 +18,7 @@ export default defineHandler(async (event) => {
   const scopeType: BookingPolicyScopeType = query.scope_type === 'location' || query.scope_type === 'experience' ? query.scope_type : 'site'
   validateBookingPolicyScope({ policyType, scopeType, locationId, experienceId })
 
-  const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
   if (locationId) {
     const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })

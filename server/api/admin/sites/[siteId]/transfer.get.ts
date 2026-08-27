@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { resolveOrganizationMembership } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -18,14 +19,16 @@ export default defineHandler(async (event) => {
   const userId = session.user.id
   const isPlatAdmin = await hasPlatformEventPermission(event, env, { platform: ['organizations'] })
 
-  const site = await queryFirst<{ id: string }>(
-    db, isPlatAdmin
-      ? `SELECT id FROM sites WHERE id = ? LIMIT 1`
-      : `SELECT s.id FROM sites s
-         JOIN member m ON m.organizationId = s.organization_id
-         WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin') LIMIT 1`, isPlatAdmin ? [siteId] : [siteId, userId], )
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
+    SELECT id, organization_id FROM sites WHERE id = ? LIMIT 1
+  `, [siteId])
+  const membership = site && !isPlatAdmin
+    ? await resolveOrganizationMembership(env, { organizationId: site.organization_id, userId })
+    : null
 
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  if (!site || (!isPlatAdmin && !['owner', 'admin'].includes(membership?.role ?? ''))) {
+    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  }
 
   const transfer = await queryFirst<{
     id: string

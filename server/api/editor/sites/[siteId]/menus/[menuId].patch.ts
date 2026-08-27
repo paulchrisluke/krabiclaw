@@ -43,7 +43,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await loadMemberSiteRow(db, siteId, session.user.id)
+    const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({
@@ -65,6 +65,7 @@ export default defineHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
+      env,
       memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: existingMenu.location_id, })
 
     const menu = await updateMenu(db, site.organization_id, siteId, menuId, body, session.user.id)

@@ -1,10 +1,6 @@
 <template>
   <UApp>
-    <div
-      class="platform-theme"
-      :class="{ 'has-mobile-bottom-nav': showMobileBottomNav }"
-      :style="{ '--dashboard-sidebar-width': `${sidebarWidthPx}px` }"
-    >
+    <div class="platform-theme">
     <div v-if="impersonatedBy" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 sm:left-1/2 sm:right-auto sm:w-1/3 sm:-translate-x-1/2 sm:px-0">
       <div class="pointer-events-auto flex w-full max-w-full flex-wrap items-center justify-center gap-3 rounded-t-2xl border border-warning/40 border-b-0 bg-default px-6 py-4 shadow-[0_-4px_24px_rgba(0,0,0,0.15)]">
         <span class="relative flex size-2 shrink-0">
@@ -54,7 +50,7 @@
         collapsible
         class="hidden lg:flex"
         :menu="{ close: false }"
-        :ui="{ root: 'dashboard-sidebar-root h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
+        :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
       >
         <template #header="{ collapsed }">
           <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
@@ -92,7 +88,7 @@
     </UDashboardGroup>
 
     <div
-      v-if="showMobileBottomNav"
+      v-if="mobileNavItems.length && !isAccountRoute"
       class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden"
       data-testid="dashboard-mobile-nav"
     >
@@ -127,7 +123,7 @@ import { dashboardAccountRouteQueryKey, dashboardOrganizationParentKey, dashboar
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import '~/assets/css/dashboard.css'
@@ -144,17 +140,18 @@ import '~/assets/css/dashboard.css'
 //   > orgSlug), never from route.path regexes, residual dashboard-context state,
 //   or a "last visited" fallback — those misclassify scope at ancestor routes
 //   once state has been populated from a deeper page in the same session.
+// - Nav is strictly scope-exclusive: a manager only appears when its OWN
+//   registry `scope` matches the current drill-in level (see managerNavItems).
+//   Site items must not leak into location scope and vice versa — this was a
+//   real bug here once, caused by checking "does siteBase/locationBase exist"
+//   instead of "does the manager's scope match the CURRENT scope".
 // - At lg and above, the parent row is a normal UNavigationMenu item built from
 //   scopeHeaderModel.parent. Below lg the same model is provided to
 //   DashboardNavbarLeading because the sidebar is hidden.
-// - The always-on content managers (blog, media, links, reviews, testimonials,
-//   qa — see ALWAYS_ON_FEATURES in config/cms-registry.ts) have no entry here
-//   in the persistent sidebar; they're reached via the "Pages" tab on the site
-//   overview (pages/.../sites/[siteSlug]/index.vue's pageRows/managers list).
-//   A capability-driven manager nav (managerNavItems/_contentGroup/etc.) used
-//   to assemble a sidebar version of the same list but was never wired into
-//   navigationItems below, and was removed as dead code — confirmed via the
-//   Pages tab that this isn't a reachability gap, just one surface, not two.
+// - New verticals/templates need zero changes here — add the combination to
+//   cmsCapabilityRegistry and nav/capabilities update automatically. A new
+//   manager id (not just a new vertical reusing existing ids) needs an entry
+//   in MANAGER_GROUP/MANAGER_ICON below, nothing else.
 // ─────────────────────────────────────────────────────────────────────────
 
 interface AuthOrganization {
@@ -165,14 +162,15 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
+const _config = useRuntimeConfig()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
-const sidebarWidthPx = ref(0)
-const { data: sessionData, refreshSession } = useAuth()
+const { data: sessionData, refreshSession, signOut: _signOut } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
+const _chowBot = useChowBot()
 const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
 
@@ -202,44 +200,6 @@ const dashboardContextError = computed(() =>
     ? dashboardContextErrors.value[dashboard.contextKey.value] ?? null
     : null,
 )
-
-// Measured (not assumed) so it tracks the sidebar's actual rendered width —
-// including user drag-resizing and the collapsed rail state — rather than
-// hardcoding its default size. Exposed as --dashboard-sidebar-width so a
-// `fixed` element elsewhere (e.g. a floating "View" pill) can offset itself
-// clear of the sidebar at lg and above instead of centering against the
-// full viewport width, which is wrong the moment the sidebar is visible.
-if (import.meta.client) {
-  let sidebarResizeObserver: ResizeObserver | null = null
-  let observedSidebarEl: Element | null = null
-  // watchEffect (not onMounted) because the sidebar sits behind the
-  // dashboard.pending/dashboardContextError v-if chain above and may not
-  // exist in the DOM yet on first mount — this re-queries after every
-  // post-render where either of those flips, picking the sidebar up
-  // whenever it actually appears (or disappears, e.g. the error state).
-  watchEffect(() => {
-    void dashboard.pending.value
-    void dashboardContextError.value
-    // UDashboardSidebar's component ref exposes `$el` pointing at an internal
-    // placeholder text/comment node, not its rendered root — so this queries
-    // the stable marker class added to :ui.root above instead.
-    const el = document.querySelector('.dashboard-sidebar-root')
-    if (el === observedSidebarEl) return
-    sidebarResizeObserver?.disconnect()
-    observedSidebarEl = el
-    if (!(el instanceof HTMLElement)) {
-      sidebarWidthPx.value = 0
-      return
-    }
-    sidebarWidthPx.value = Math.round(el.getBoundingClientRect().width)
-    sidebarResizeObserver = new ResizeObserver(([entry]) => {
-      sidebarWidthPx.value = entry ? Math.round(entry.contentRect.width) : 0
-    })
-    sidebarResizeObserver.observe(el)
-  }, { flush: 'post' })
-  onBeforeUnmount(() => sidebarResizeObserver?.disconnect())
-}
-
 let dashboardContextController: AbortController | null = null
 
 function setDashboardContextError(scopeKey: string, error: unknown) {
@@ -346,11 +306,6 @@ const locationBase = computed(() => locationsBase.value && currentLocationSlug.v
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
-// Detail/edit pages (single-record forms) opt out via definePageMeta({ mobileBottomNav: false })
-// and render their own contextual save bar instead — mirrors the Airbnb host app pattern where
-// the shared tab bar shows on list/overview screens but hides on a field's edit sheet.
-const hidesMobileBottomNav = computed(() => route.meta.mobileBottomNav === false)
-const showMobileBottomNav = computed(() => mobileNavItems.value.length > 0 && !isAccountRoute.value && !hidesMobileBottomNav.value)
 const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
 const showChowBot = computed(() => !isConversationsRoute.value
   && (dashboard.siteAccess.value !== 'location' || scope.value === 'location'))
@@ -380,6 +335,10 @@ const capabilities = computed(() => {
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
 
 const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
+const siteAvatar = (candidate: (typeof sites.value)[number] | undefined) => {
+  const media = candidate?.media.find(item => item.slot === 'media')
+  return media?.thumbnail_url || media?.public_url || undefined
+}
 // Progressive drill-in: exactly one scope is active per route, and the sidebar's
 // single ContextSwitcher (this dropdown) and NavigationGroups both key off it —
 // there is no separate sidebar shell per scope, only scope-driven content inside
@@ -395,20 +354,22 @@ const scope = computed<'organization' | 'site' | 'location'>(() => {
 // parent, but scope navigation never infers a parent from browser history.
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   if (scope.value === 'site' || scope.value === 'location') {
+    const currentSite = sites.value.find(candidate => candidate.id === site.value?.id)
+    const currentSiteAvatar = siteAvatar(currentSite)
     return {
       scope: 'site',
       current: {
         label: siteLabel.value,
-        avatar: site.value?.logo_url ?? undefined,
-        icon: site.value?.logo_url ? undefined : 'i-lucide-globe'
+        avatar: currentSiteAvatar,
+        icon: currentSiteAvatar ? undefined : 'i-lucide-globe'
       },
       parent: scope.value === 'location' && siteBase.value
         ? { label: siteLabel.value, to: siteBase.value }
         : orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
       peers: sites.value.map((s) => ({
         label: s.brand_name ?? s.subdomain ?? s.id,
-        avatar: s.logo_url ?? undefined,
-        icon: s.logo_url ? undefined : 'i-lucide-globe',
+        avatar: siteAvatar(s),
+        icon: siteAvatar(s) ? undefined : 'i-lucide-globe',
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
       })),
@@ -437,10 +398,130 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   }
 })
 
-// 'locations' and 'settings' are always-on infra features so they render here directly rather
-// than through a capability-driven manager list — the label still comes from the resolved
-// capabilities (locationVocabulary), not a hardcoded string, so a professional_service site
-// correctly reads "Offices / Service Areas" instead of "Locations".
+type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing'
+
+// A NEW VERTICAL never requires touching this layout: add its combination to
+// verticalDefaultFeatures (config/cms-registry.ts) and nav updates automatically
+// via resolveCmsCapabilities. The one exception is a genuinely NEW feature id
+// (not just a new vertical using existing ids like menu/reviews/blog) — that
+// needs an entry in both maps below. managerNavItems filters on
+// `MANAGER_GROUP[manager.id] !== group`, so a ProductFeature missing from this map
+// matches no group at all and is omitted from every group's nav — not rendered
+// with a missing icon, simply never rendered.
+// 'locations' and 'settings' are deliberately absent — they're always-on infra
+// features rendered directly by overviewGroup/siteOverviewGroup/locationOverviewGroup
+// below, not through the toggleable manager nav.
+const MANAGER_GROUP: Partial<Record<ProductFeature, NavGroupId>> = {
+  media: 'Content',
+  links: 'Content',
+  posts: 'Content',
+  photos: 'Content',
+  menu: 'Operate',
+  ordering: 'Operate',
+  reservations: 'Operate',
+  experiences: 'Operate',
+  services: 'Operate',
+  testimonials: 'Reputation',
+  reviews: 'Reputation',
+  qa: 'Reputation',
+  blog: 'Publishing',
+}
+
+const MANAGER_ICON: Partial<Record<ProductFeature, string>> = {
+  media: 'i-lucide-image',
+  links: 'i-lucide-link',
+  posts: 'i-lucide-megaphone',
+  photos: 'i-lucide-image',
+  menu: 'i-lucide-utensils',
+  ordering: 'i-lucide-shopping-bag',
+  reservations: 'i-lucide-calendar-check',
+  experiences: 'i-lucide-ticket',
+  services: 'i-lucide-briefcase',
+  testimonials: 'i-lucide-star',
+  reviews: 'i-lucide-star',
+  qa: 'i-lucide-message-circle-question',
+  blog: 'i-lucide-pencil',
+}
+
+function managerHref(manager: CmsManagerCapability): string | null {
+  if (manager.id === 'settings') {
+    if (manager.scope === 'location') return locationBase.value ? `${locationBase.value}/settings` : null
+    return siteBase.value ? `${siteBase.value}/settings` : null
+  }
+  if (manager.scope === 'location') {
+    if (!locationBase.value) return null
+    const rel = manager.route.replace(/^:location\/?/, '')
+    return rel ? `${locationBase.value}/${rel}` : locationBase.value
+  }
+  if (!siteBase.value) return null
+  return manager.route ? `${siteBase.value}/${manager.route}` : siteBase.value
+}
+
+// Strict scope-exclusivity: a manager only appears in nav when its OWN
+// registry scope ('site' | 'location') matches the current drill-in level.
+// Without this, a manager still resolves an href whenever siteBase/locationBase
+// merely *exist* — which they do at every deeper scope too — so site-scoped
+// items (Blog, Reviews, Settings) would keep showing while drilled into a
+// location, and org-level items would keep showing at site scope. Each scope
+// must show only its own level's nav, not the union of it and its ancestors.
+function managerNavItems(group: NavGroupId) {
+  const managers = capabilities.value?.managers ?? []
+  const seen = new Set<string>()
+  const items: { label: string; icon?: string; to: string }[] = []
+  for (const manager of managers) {
+    if (scope.value === 'site' && !canManageSite.value) continue
+    if (MANAGER_GROUP[manager.id] !== group) continue
+    if (manager.scope !== scope.value) continue
+    const href = managerHref(manager)
+    if (!href || seen.has(href)) continue
+    seen.add(href)
+    items.push({ label: manager.label, icon: MANAGER_ICON[manager.id], to: href })
+  }
+  return items
+}
+
+function _managerAction(manager: CmsManagerCapability, href: string) {
+  return {
+    label: manager.label,
+    to: href,
+    icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle',
+    feature: manager.id,
+  }
+}
+
+function _revenueLabel(item: ReturnType<typeof _managerAction>) {
+  if (item.feature === 'reservations') return 'Bookings'
+  if (item.feature === 'services') return 'Schedule'
+  return item.label
+}
+
+const organizationNavigationItems = computed(() => {
+  if (!orgBase.value) return []
+  return [
+    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: orgBase.value },
+    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
+    { key: 'sites', label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
+    { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${orgBase.value}/inbox` },
+  ]
+})
+
+const _overviewGroup = computed(() => {
+  if (scope.value !== 'organization' || !orgBase.value) return []
+  return organizationNavigationItems.value.map(({ key: _key, ...item }) => item)
+})
+
+// The parent row renders as a plain UNavigationMenu item (same size/padding as
+// every other item) rather than custom-styled markup in the switcher header —
+// guarantees visual consistency by construction instead of hand-matching CSS.
+function parentNavItem() {
+  const parent = scopeHeaderModel.value.parent
+  return parent ? [{ label: parent.label, icon: 'i-lucide-chevron-left', to: parent.to }] : []
+}
+
+// 'locations' and 'settings' are always-on infra features (see MANAGER_GROUP's comment) so they
+// render here directly rather than through managerNavItems — the label still comes from the
+// resolved capabilities (locationVocabulary), not a hardcoded string, so a professional_service
+// site correctly reads "Offices / Service Areas" instead of "Locations".
 const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
 const locationsNavTarget = computed(() => {
   if (!locationsBase.value) return null
@@ -465,12 +546,10 @@ const _siteOverviewGroup = computed(() => {
   ]
 })
 
-// Posts/Photos/Q&A used to be hardcoded here regardless of capability — moved to the location
-// overview page's own row list (locations/[locationSlug]/index.vue, gated by hasFeature) so a
-// location override can actually turn them off. A capability-driven sidebar version of the same
-// list (managerNavItems/etc.) was never wired in and was removed as dead code; the location
-// overview page is the one real surface for these, same pattern as the site-level Pages tab.
-// Overview/Inbox/Settings stay here regardless: universal chrome with no capability toggle.
+// Posts/Photos/Q&A used to be hardcoded here regardless of capability — moved to
+// managerNavItems('Content'/'Reputation') (location.posts/location.photos/location.qa in
+// config/cms-registry.ts) so a location override can actually turn them off. Overview/Content/
+// Inbox/Settings stay here: universal chrome with no ProductFeature toggle.
 const _locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
   return [
@@ -480,6 +559,38 @@ const _locationOverviewGroup = computed(() => {
     ...(siteBase.value && canManageSite.value ? [{ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` }] : []),
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
   ]
+})
+
+const _parentGroup = computed(() => parentNavItem())
+
+const _contentGroup = computed(() => {
+  const items: { label: string; icon?: string; to?: string; type?: string }[] = []
+  const managerItems = managerNavItems('Content')
+  if (scope.value === 'site' && siteBase.value && canManageSite.value) {
+    items.push({ label: 'Content', type: 'label' })
+    items.push({ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` })
+  }
+  if (managerItems.length > 0) {
+    if (items.length === 0) items.push({ label: 'Content', type: 'label' })
+    items.push(...managerItems)
+  }
+  return items
+})
+
+const _operateGroup = computed(() => {
+  const items = managerNavItems('Operate')
+  if (items.length === 0) return items
+  return [{ label: 'Operate', type: 'label' }, ...items]
+})
+const _reputationGroup = computed(() => {
+  const items = managerNavItems('Reputation')
+  if (items.length === 0) return items
+  return [{ label: 'Reputation', type: 'label' }, ...items]
+})
+const _publishingGroup = computed(() => {
+  const items = managerNavItems('Publishing')
+  if (items.length === 0) return items
+  return [{ label: 'Publishing', type: 'label' }, ...items]
 })
 
 const settingsGroup = computed(() => {

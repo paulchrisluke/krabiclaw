@@ -92,9 +92,8 @@ paid-plan history still has one bounded load.
   video JavaScript into the cold path.
 - Post videos remain poster-only until their card enters a 200px viewport
   margin; autoplay is mounted only after that visibility gate opens.
-- The Google Places photo contract is `google_url`. Reading it with the old
-  camel-case name left tenants without CMS hero media with an empty hero image;
-  the home hero now uses the canonical response field.
+- Public hero and gallery rendering reads only canonical media placements;
+  Google Places source URLs are not projected as tenant media.
 
 The public surfaces also had a concrete first-paint bug: their layouts imported
 entry CSS as a client-side module side effect. SSR could therefore deliver the

@@ -30,10 +30,11 @@ export function appendPublicShellQueries(
                      bl.neighborhood, bl.grab_url, bl.uber_eats_url,
                      bl.foodpanda_url, bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
-                     bl.canonical_url, bl.robots, ma.public_url AS hero_public_url,
-                     ma.thumbnail_url AS hero_thumbnail_url, ma.kind AS hero_kind
+                     bl.canonical_url, bl.robots, mp.asset_id AS asset_id,
+                     ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind
                 FROM business_locations bl
-                LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id
+                LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+                LEFT JOIN media_assets ma ON mp.asset_id = ma.id
                   AND ma.status = 'active'
                   AND ma.organization_id = bl.organization_id
                   AND ma.site_id = bl.site_id
@@ -66,7 +67,7 @@ export function buildPublicShellPayload(
 ): PublicShellPayload {
   const rawLocations = (results[indexes.locations]?.results ?? []) as Record<string, unknown>[]
   const locations = rawLocations.map(location => {
-    const publicUrl = location.hero_public_url as string | null
+    const publicUrl = location.media_public_url as string | null
     return {
       id: location.id,
       slug: location.slug,
@@ -93,10 +94,7 @@ export function buildPublicShellPayload(
       review_count: location.review_count,
       is_primary: Boolean(location.is_primary),
       status: location.status,
-      public_url: publicUrl,
-      kind: publicUrl ? location.hero_kind : null,
-      hero_public_url: publicUrl,
-      thumbnail_url: location.hero_thumbnail_url,
+      media: publicUrl ? [{ asset_id: location.asset_id, slot: 'hero', public_url: publicUrl, thumbnail_url: location.media_thumbnail_url, kind: location.media_kind }] : [],
       city: location.city,
       neighborhood: location.neighborhood ?? null,
       short_description: location.short_description ?? null,
@@ -119,8 +117,6 @@ export function buildPublicShellPayload(
   if (site.contact_phone) config.contact_phone = site.contact_phone
   if (site.brand_name) config.brand_name = site.brand_name
   if (site.brand_description) config.brand_description = site.brand_description
-  if (site.logo_url) config.logo_url = site.logo_url
-  if (site.favicon_url) config.favicon_url = site.favicon_url
   if (site.seo_title) config.seo_title = site.seo_title
   if (site.seo_description) config.seo_description = site.seo_description
   if (site.canonical_url) config.canonical_url = site.canonical_url
@@ -153,9 +149,7 @@ export function buildPublicShellPayload(
       brand_name: site.brand_name,
       brand_description: site.brand_description,
       vertical: site.vertical,
-      logo_url: site.logo_url,
-      logo_mime_type: null,
-      favicon_url: site.favicon_url,
+      media: site.media,
       config: { phone: site.contact_phone },
     },
     locations,

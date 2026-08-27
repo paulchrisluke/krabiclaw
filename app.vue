@@ -22,7 +22,9 @@ const { isBlawby } = usePublicTemplate()
 const siteShell = isBlawby.value ? null : useSiteShellState()
 const config = siteShell?.config
 const route = useRoute()
-const tenantLogoUrl = computed(() => config?.value.logo_url || site?.logo_url || null)
+const siteMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
+const tenantLogoUrl = computed(() => siteMedia.value.find(item => item.slot === 'logo')?.public_url ?? null)
+const tenantFaviconUrl = computed(() => siteMedia.value.find(item => item.slot === 'favicon')?.public_url ?? null)
 const tenantBrandName = computed(() => config?.value.brand_name || site?.brand_name || '')
 
 useHead(() => {
@@ -30,7 +32,7 @@ useHead(() => {
     link: buildTenantHeadLinks({
       isPlatform,
       tenantLogoUrl: tenantLogoUrl.value,
-      tenantFaviconUrl: site?.favicon_url || null,
+      tenantFaviconUrl: tenantFaviconUrl.value,
       tenantBrandName: tenantBrandName.value,
       isDraftPreview: route.path.startsWith('/preview/draft/'),
       isSitePreview: route.path.startsWith('/preview/site/'),

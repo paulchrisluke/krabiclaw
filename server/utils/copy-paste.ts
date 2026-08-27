@@ -2,6 +2,7 @@ import { executeBatch, queryAll, queryFirst, rawClient, type BatchQuery, type Db
 import { createLocation, deleteLocation, updateLocation, type CreateLocationInput } from '~/server/utils/location-management'
 import { uniqueSlug } from '~/server/utils/experiences'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { buildMediaPlacementInsertQuery } from '~/server/utils/media-asset-manager'
 
 type SetupEnv = CloudflareEnv
 
@@ -172,9 +173,7 @@ export async function copyLocationBatch(
     }
   }
 
-  // Process entities in dependency order (media_assets before anything that
-  // references image_asset_id/hero_media_asset_id; menus before menu_items)
-  // regardless of the order the caller listed them in.
+  // Process entities in dependency order so copied owners exist before their placements.
   const entityOrder: CopyEntityType[] = ['media_assets', 'menus', 'menu_items', 'experiences', 'reviews', 'location_qa']
   const requestedConfigs = new Map(entities.map((config) => [config.type, config]))
 
@@ -291,28 +290,24 @@ async function copyMenuItems(
 
     statements.push({
       query: `
-        INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, image_asset_id, available, featured, featured_sort_order, sort_order, allergens, ingredients, dietary_notes, preparation, serving_note, created_at, updated_at, created_by, updated_by)
-        SELECT ?, ?, section, name, slug, description, price_amount, ?, available, featured, featured_sort_order, sort_order, allergens, ingredients, dietary_notes, preparation, serving_note, ?, updated_at, created_by, updated_by
+        INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, available, featured, featured_sort_order, sort_order, allergens, ingredients, dietary_notes, preparation, serving_note, created_at, updated_at, created_by, updated_by)
+        SELECT ?, ?, section, name, slug, description, price_amount, available, featured, featured_sort_order, sort_order, allergens, ingredients, dietary_notes, preparation, serving_note, ?, updated_at, created_by, updated_by
         FROM menu_items WHERE id = ?
       `,
-      params: [newId, newMenuId, null, now, item.id],
+      params: [newId, newMenuId, now, item.id],
     })
 
     const mediaRows = await queryAll<{ asset_id: string; sort_order: number }>(
       db,
-      `SELECT asset_id, sort_order FROM menu_item_media WHERE site_id = ? AND menu_item_id = ? ORDER BY sort_order`,
+      `SELECT asset_id, sort_order FROM media_placements WHERE site_id = ? AND owner_type = 'menu_item' AND owner_id = ? AND slot = 'gallery' AND status = 'active' ORDER BY sort_order`,
       [siteId, item.id],
     )
     for (const media of mediaRows) {
-      const newAssetId = idMappings[media.asset_id]
-      if (!newAssetId) continue
-      statements.push({
-        query: `
-          INSERT INTO menu_item_media (id, organization_id, site_id, menu_item_id, asset_id, sort_order, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-        params: [crypto.randomUUID(), organizationId, siteId, newId, newAssetId, media.sort_order, now, now],
-      })
+      const newAssetId = idMappings[media.asset_id] ?? media.asset_id
+      statements.push(buildMediaPlacementInsertQuery({
+        organizationId, siteId, ownerType: 'menu_item', ownerId: newId, slot: 'gallery',
+        assetId: newAssetId, sortOrder: media.sort_order, createdAt: now, updatedAt: now,
+      }))
     }
 
     manifest.entities.menu_items.copied++
@@ -329,25 +324,22 @@ async function copyMediaAssets(
   statements: BatchQuery[],
   manifest: CopyManifest,
 ) {
-  const assets = await queryAll<{ id: string }>(
+  const assets = await queryAll<{ asset_id: string; sort_order: number }>(
     db,
-    `SELECT id FROM media_assets WHERE location_id = ? AND organization_id = ? AND site_id = ? AND status = 'active'`,
+    `SELECT mp.asset_id, mp.sort_order
+       FROM media_placements mp
+       JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+      WHERE mp.owner_type = 'business_location' AND mp.owner_id = ? AND mp.slot = 'gallery'
+        AND mp.organization_id = ? AND mp.site_id = ? AND mp.status = 'active'
+      ORDER BY mp.sort_order`,
     [sourceLocationId, organizationId, siteId],
   )
 
   for (const asset of assets) {
-    const newId = crypto.randomUUID()
-    manifest.id_mappings[asset.id] = newId
-    manifest.entities.media_assets.new_ids.push(newId)
-
-    statements.push({
-      query: `
-        INSERT INTO media_assets (id, organization_id, site_id, location_id, kind, provider, source, cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url, mime_type, file_name, file_size, width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at)
-        SELECT ?, organization_id, site_id, ?, kind, provider, source, cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url, mime_type, file_name, file_size, width, height, duration, alt_text, category, status, created_by_user_id, ?, ?
-        FROM media_assets WHERE id = ?
-      `,
-      params: [newId, targetLocationId, now, now, asset.id],
-    })
+    statements.push(buildMediaPlacementInsertQuery({
+      organizationId, siteId, ownerType: 'business_location', ownerId: targetLocationId, slot: 'gallery',
+      assetId: asset.asset_id, sortOrder: asset.sort_order, createdAt: now, updatedAt: now,
+    }))
 
     manifest.entities.media_assets.copied++
   }
@@ -429,12 +421,24 @@ async function copyReviews(
     // are visitor PII tied to the original submission — none should carry over to a copy.
     statements.push({
       query: `
-        INSERT INTO reviews (id, organization_id, site_id, location_id, menu_item_slug, author_name, reviewer_photo_url, rating, title, content, google_review_id, owner_reply, owner_reply_at, photo_urls, helpful_count, status, source, ip_hash, user_agent, created_at, updated_at)
-        SELECT ?, organization_id, site_id, ?, menu_item_slug, author_name, reviewer_photo_url, rating, title, content, NULL, owner_reply, owner_reply_at, photo_urls, helpful_count, status, source, NULL, NULL, ?, ?
+        INSERT INTO reviews (id, organization_id, site_id, location_id, menu_item_slug, author_name, rating, title, content, google_review_id, owner_reply, owner_reply_at, helpful_count, status, source, ip_hash, user_agent, created_at, updated_at)
+        SELECT ?, organization_id, site_id, ?, menu_item_slug, author_name, rating, title, content, NULL, owner_reply, owner_reply_at, helpful_count, status, source, NULL, NULL, ?, ?
         FROM reviews WHERE id = ?
       `,
       params: [newId, targetLocationId, now, now, review.id],
     })
+
+    const media = await queryAll<{ slot: string; asset_id: string; sort_order: number }>(db, `
+      SELECT slot, asset_id, sort_order FROM media_placements
+       WHERE organization_id = ? AND site_id = ? AND owner_type = 'review' AND owner_id = ? AND status = 'active'
+       ORDER BY slot, sort_order
+    `, [organizationId, siteId, review.id])
+    for (const placement of media) {
+      statements.push(buildMediaPlacementInsertQuery({
+        organizationId, siteId, ownerType: 'review', ownerId: newId, slot: placement.slot,
+        assetId: placement.asset_id, sortOrder: placement.sort_order, createdAt: now, updatedAt: now,
+      }))
+    }
 
     manifest.entities.reviews.copied++
   }
@@ -510,20 +514,17 @@ async function copyExperiences(
     const experienceMedia = await queryAll<{ asset_id: string; sort_order: number }>(
       db,
       `SELECT asset_id, sort_order
-         FROM experience_media
-        WHERE organization_id = ? AND site_id = ? AND experience_id = ?
+         FROM media_placements
+        WHERE organization_id = ? AND site_id = ? AND owner_type = 'experience' AND owner_id = ? AND slot = 'gallery' AND status = 'active'
         ORDER BY sort_order ASC`,
       [organizationId, siteId, exp.id],
     )
     for (const item of experienceMedia) {
       const newAssetId = idMappings[item.asset_id] ?? item.asset_id
-      statements.push({
-        query: `
-          INSERT INTO experience_media (id, organization_id, site_id, experience_id, asset_id, sort_order, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-        params: [crypto.randomUUID(), organizationId, siteId, newId, newAssetId, item.sort_order, now, now],
-      })
+      statements.push(buildMediaPlacementInsertQuery({
+        organizationId, siteId, ownerType: 'experience', ownerId: newId, slot: 'gallery',
+        assetId: newAssetId, sortOrder: item.sort_order, createdAt: now, updatedAt: now,
+      }))
     }
 
     statements.push({

@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'orgSlug, siteSlug, and key are required' }, { status: 400 })
   }
 
-  const allowed = await isDashboardRouteCapabilityAllowed(db, session.user.id, {
+  const allowed = await isDashboardRouteCapabilityAllowed(db, env, session.user.id, {
     organizationSlug, siteSlug, locationSlug, capabilityKey, })
 
   return jsonResponse({ allowed })
