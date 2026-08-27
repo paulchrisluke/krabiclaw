@@ -6,6 +6,12 @@
       "runtimeExecutable": "yarn",
       "runtimeArgs": ["dev"],
       "port": 3000
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": ["dev:worker"],
+      "port": 3000
     }
   ]
 }

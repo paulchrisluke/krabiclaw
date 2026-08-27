@@ -10,9 +10,12 @@ export default defineHandler(async (event) => {
 
   try {
     const { env, db, site } = await requireSiteAccess(event, siteId)
-    const body = await readRequiredBody<{ placement?: unknown; asset_ids?: unknown }>(event)
+    const body = await readRequiredBody<{ placement?: unknown; asset_ids?: unknown; expected_revision?: unknown }>(event)
     if (!Array.isArray(body.asset_ids) || !body.asset_ids.every(id => typeof id === 'string')) {
       return jsonResponse({ error: 'asset_ids must be an array of strings' }, { status: 400 })
+    }
+    if (body.expected_revision !== undefined && body.expected_revision !== null && typeof body.expected_revision !== 'string') {
+      return jsonResponse({ error: 'expected_revision must be a string or null' }, { status: 400 })
     }
     const result = await setMediaPlacement(db, {
       env,
@@ -22,6 +25,7 @@ export default defineHandler(async (event) => {
       role: site.member_role,
       placement: parseMediaPlacementKey(body.placement),
       assetIds: body.asset_ids,
+      expectedRevision: body.expected_revision as string | null | undefined,
     })
     return jsonResponse(result)
   } catch (error) {

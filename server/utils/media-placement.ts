@@ -59,6 +59,18 @@ export function parseMediaPlacementKey(value: unknown): MediaPlacementKey {
   return { owner_type: ownerType as EditableMediaPlacementOwnerType, owner_id: ownerId, slot }
 }
 
+async function currentPlacementRevision(db: DbClient, input: {
+  organizationId: string
+  siteId: string
+  placement: MediaPlacementKey
+}): Promise<string | null> {
+  const row = await queryFirst<{ revision: string | null }>(db, `
+    SELECT MAX(updated_at) AS revision FROM media_placements
+     WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+  `, [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot])
+  return row?.revision ?? null
+}
+
 export async function setMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
@@ -67,6 +79,12 @@ export async function setMediaPlacement(db: DbClient, input: {
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
   assetIds: string[]
+  // Full-replacement writes are otherwise last-write-wins: two editors reordering
+  // the same gallery concurrently would silently clobber each other with no
+  // conflict signal. When provided, must match MAX(updated_at) across the
+  // owner+slot's current placements (or null when the slot is currently empty)
+  // or the write is rejected with a 409 instead of applied.
+  expectedRevision?: string | null
 }) {
   const locationId = await requirePlacementOwner(db, input)
   if (input.memberId && input.role) {
@@ -94,7 +112,40 @@ export async function setMediaPlacement(db: DbClient, input: {
     allowedKinds: input.placement.owner_type === 'tenant_compliance' ? ['file'] : ['image', 'video'],
     fieldName: 'asset_ids',
   })
-  await executeBatch(db, buildReplaceMediaPlacementQueries({ ...input, media }))
+  const queries = buildReplaceMediaPlacementQueries({ ...input, media })
+  if (input.expectedRevision !== undefined) {
+    const now = new Date().toISOString()
+    // A D1 batch is one implicit atomic transaction: if this guard row's
+    // owner_type fails media_placements_owner_type_check, the whole batch
+    // (including the real delete+insert below) rolls back. The guard only
+    // attempts to insert when the current revision no longer matches what
+    // the caller last read, so a concurrent write between then and now
+    // aborts this one instead of silently overwriting it.
+    queries.unshift({
+      query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+        SELECT ?, ?, ?, '__concurrency_guard__', ?, ?, '__concurrency_guard__', 0, 'active', ?, ?
+         WHERE COALESCE((
+           SELECT MAX(updated_at) FROM media_placements
+            WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+         ), '') != COALESCE(?, '')`,
+      params: [
+        crypto.randomUUID(), input.organizationId, input.siteId, input.placement.owner_id, input.placement.slot, now, now,
+        input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot,
+        input.expectedRevision,
+      ],
+    })
+  }
+  try {
+    await executeBatch(db, queries)
+  } catch (error) {
+    if (input.expectedRevision !== undefined) {
+      const latest = await currentPlacementRevision(db, input)
+      if (latest !== input.expectedRevision) {
+        throw new HTTPError({ statusCode: 409, statusMessage: 'This gallery was updated by someone else. Reload and try again.' })
+      }
+    }
+    throw error
+  }
   return {
     entity: input.placement.owner_type,
     id: input.placement.owner_id,
@@ -156,7 +207,7 @@ async function requirePlacementOwner(db: DbClient, input: {
   } else {
     const table = OWNER_TABLES[placement.owner_type]
     if (table) {
-      const hasLocation = ['business_location', 'post', 'experience', 'offering', 'review', 'review_request'].includes(placement.owner_type)
+      const hasLocation = ['post', 'experience', 'offering', 'review', 'review_request'].includes(placement.owner_type)
       const row = await queryFirst<{ location_id?: string | null }>(db, `SELECT id${hasLocation ? ', location_id' : ''} FROM ${table} WHERE id = ? AND site_id = ? LIMIT 1`, [placement.owner_id, input.siteId])
       if (row) return placement.owner_type === 'business_location' ? placement.owner_id : row.location_id ?? null
     }

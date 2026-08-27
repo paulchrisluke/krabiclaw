@@ -125,6 +125,7 @@ interface MediaAsset {
   alt_text: string | null
   file_name: string | null
   category: string | null
+  placement_updated_at?: string | null
 }
 
 const dashboardLocation = useDashboardLocation()
@@ -164,6 +165,19 @@ const categoryItems = [
 const filteredAssets = computed(() => {
   if (categoryFilter.value === 'all') return assets.value
   return assets.value.filter(asset => (asset.category || 'other') === categoryFilter.value)
+})
+
+// The gallery replace endpoint does a full-replacement PUT (delete all, insert
+// new), so it has no single row's updated_at to compare against. This reduces
+// to the max placement updated_at across the currently loaded set — matching
+// the server's own MAX(updated_at) revision check in setMediaPlacement — and
+// is null when the gallery is currently empty.
+const galleryRevision = computed<string | null>(() => {
+  let max: string | null = null
+  for (const asset of assets.value) {
+    if (asset.placement_updated_at && (!max || asset.placement_updated_at > max)) max = asset.placement_updated_at
+  }
+  return max
 })
 
 function categoryLabel(category: string | null) {
@@ -279,6 +293,7 @@ async function replaceGallery(assetIds: string[], successMessage: string) {
       body: {
         placement: { owner_type: 'business_location', owner_id: locationId.value, slot: 'gallery' },
         asset_ids: assetIds,
+        expected_revision: galleryRevision.value,
       },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
     })
@@ -286,6 +301,11 @@ async function replaceGallery(assetIds: string[], successMessage: string) {
     await loadPhotos()
     return true
   } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 409) {
+      toast.add({ description: 'This gallery was updated elsewhere. Reloading the latest version.', color: 'warning' })
+      await loadPhotos()
+      return false
+    }
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update location media', color: 'error' })
     return false
   } finally {

@@ -36,8 +36,9 @@ export interface MediaAsset {
   height: number | null
   duration: number | null
   alt_text: string | null
-  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | null
+  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog' | null
   status: 'pending' | 'active' | 'deleted' | 'failed'
+  placement_updated_at?: string | null
   created_by_user_id: string | null
   created_at: string
   updated_at: string
@@ -321,6 +322,7 @@ export async function listMediaAssets(
             ma.cloudflare_image_id, ma.r2_key,
             ma.public_url, ma.thumbnail_url, ma.mime_type, ma.file_name, ma.file_size,
             ma.width, ma.height, ma.duration, ma.alt_text, ma.category, ma.status, ma.created_by_user_id, ma.created_at, ma.updated_at
+            ${opts.ownerType && opts.ownerId ? ', mp.updated_at AS placement_updated_at' : ''}
      FROM media_assets ma
      ${opts.ownerType && opts.ownerId ? 'JOIN media_placements mp ON mp.asset_id = ma.id AND mp.site_id = ma.site_id' : ''}
      WHERE ${conditions.join(' AND ')} ORDER BY ${opts.ownerType && opts.ownerId ? 'mp.sort_order' : 'ma.created_at DESC'} LIMIT ? OFFSET ?`
