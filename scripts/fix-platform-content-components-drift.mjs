@@ -47,11 +47,7 @@ console.log(`Found ${driftRows.length} row(s) outside 0129's expected shape:`)
 for (const row of driftRows) console.log(`  ${row.id}  content_type=${row.content_type}  content_id=${row.content_id}  type=${row.type}`)
 
 const statements = []
-const handledIds = []
-
 for (const row of driftRows) {
-  handledIds.push(row.id)
-
   if (row.content_type !== 'blog_post') {
     console.log(`  -> ${row.id}: unrecognized content_type "${row.content_type}", no migration path known. Refusing to guess - handle this one by hand.`)
     process.exit(1)
@@ -61,15 +57,23 @@ for (const row of driftRows) {
 
   if (!blogPost) {
     console.log(`  -> ${row.id}: content_id ${row.content_id} matches no blog_posts row (and it's the only owner type this content_type can have). Orphaned - will be deleted, nothing to preserve.`)
+    statements.push(`DELETE FROM platform_content_components WHERE id = '${row.id}';`)
     continue
   }
 
   const ownerType = blogPost.site_id === null ? 'platform_blog' : 'tenant_blog'
   const docId = `migration-doc-blog-${blogPost.id}`
+  const bodyBlockId = `migration-block-blog-${blogPost.id}`
   const blockId = `migration-component-${row.id}`
 
-  console.log(`  -> ${row.id}: real FAQ/component on blog_posts.id=${blogPost.id} (${ownerType}). Will migrate into content_documents/content_blocks as ${blockId}.`)
+  console.log(`  -> ${row.id}: real FAQ/component on blog_posts.id=${blogPost.id} (${ownerType}). Will migrate the post body + this component into content_documents/content_blocks as ${bodyBlockId} and ${blockId}.`)
 
+  // Document creation, then the position-0 markdown body block, mirroring 0129's
+  // own blog_posts migration exactly (lines 70-80) - including its idempotency
+  // condition (skip the body block if this document already has ANY block).
+  // This MUST run before the component insert below: 0129 will see this same
+  // document already has a block and skip re-inserting the body, so if the
+  // component block landed first, the real post body would never migrate.
   statements.push(`
 INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at)
 SELECT '${docId}', '${ownerType}', '${blogPost.id}', '${blogPost.created_at}', '${blogPost.updated_at}'
@@ -77,12 +81,20 @@ SELECT '${docId}', '${ownerType}', '${blogPost.id}', '${blogPost.created_at}', '
 
   statements.push(`
 INSERT INTO content_blocks (id, document_id, type, position, data_json, created_at, updated_at)
+SELECT '${bodyBlockId}', d.id, 'markdown', 0, json_object('markdown', b.body, 'editor_mode', 'source'), b.created_at, b.updated_at
+  FROM blog_posts b JOIN content_documents d ON d.owner_type = '${ownerType}' AND d.owner_id = b.id
+ WHERE b.id = '${blogPost.id}' AND NOT EXISTS (SELECT 1 FROM content_blocks cb WHERE cb.document_id = d.id);`)
+
+  statements.push(`
+INSERT INTO content_blocks (id, document_id, type, position, data_json, created_at, updated_at)
 SELECT '${blockId}', d.id, '${row.type}', ${row.position} + 1, '${row.data_json.replace(/'/g, "''")}', '${row.created_at}', '${row.updated_at}'
   FROM content_documents d WHERE d.owner_type = '${ownerType}' AND d.owner_id = '${blogPost.id}'
    AND NOT EXISTS (SELECT 1 FROM content_blocks WHERE id = '${blockId}');`)
-}
 
-statements.push(`DELETE FROM platform_content_components WHERE id IN (${handledIds.map(id => `'${id}'`).join(', ')});`)
+  // Only drop the source row once both inserts above are in the same statement
+  // list ahead of it - if either insert were to fail, this DELETE never runs.
+  statements.push(`DELETE FROM platform_content_components WHERE id = '${row.id}';`)
+}
 
 if (!isApply) {
   console.log('\n--- SQL that --apply would run ---')
