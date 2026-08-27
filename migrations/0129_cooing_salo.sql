@@ -22,6 +22,14 @@ INSERT INTO `__media_migration_guard`
 SELECT 'deprecated chowbot media payloads',
        (SELECT COUNT(*) FROM `chowbot_messages` WHERE `media` IS NOT NULL AND trim(`media`) NOT IN ('', '[]', '{}', 'null'))
      + (SELECT COUNT(*) FROM `chowbot_channel_state` WHERE `pending_media` IS NOT NULL AND trim(`pending_media`) NOT IN ('', '[]', '{}', 'null'));--> statement-breakpoint
+-- notification_events.location_id has no equivalent column in the target
+-- schema (server/db/schema.ts) and the very next migration's full table
+-- rebuild drops it unconditionally regardless of value, so there is nothing
+-- to preserve here. Clear it first instead of just asserting it's already
+-- empty: staging accumulated a handful of stray values from demo-fixture
+-- guest_thread_reply events, and a hard assertion failure would block this
+-- migration on every environment that ever ran that fixture flow.
+UPDATE `notification_events` SET `location_id` = NULL WHERE `location_id` IS NOT NULL;--> statement-breakpoint
 INSERT INTO `__media_migration_guard`
 SELECT 'notification location shadow scope', COUNT(*) FROM `notification_events` WHERE `location_id` IS NOT NULL;--> statement-breakpoint
 INSERT INTO `__media_migration_guard`
