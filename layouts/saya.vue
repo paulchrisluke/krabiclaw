@@ -2,6 +2,7 @@
   <div
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
+    :data-hydrated="hydrated ? 'true' : 'false'"
     :data-public-critical-shell="isHome ? 'true' : undefined"
   >
     <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
@@ -48,6 +49,8 @@ import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 
 const route = useRoute()
+const hydrated = ref(false)
+onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
 const isHome = computed(() => route.path === '/' || getPreviewSubpath(route.path) === '/')
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'

@@ -45,7 +45,7 @@ test.describe('stateless MCP server', () => {
     expect(uploadTool?.inputSchema?.additionalProperties).toBe(false)
     expect(uploadTool?._meta?.['openai/fileParams']).toEqual(['file', 'poster_file'])
     const setMediaTool = toolsBody.result.tools.find(tool => tool.name === 'set_media')
-    expect(setMediaTool?.inputSchema?.required).toEqual(['placement', 'asset_ids'])
+    expect(setMediaTool?.inputSchema?.required).toEqual(['placement', 'asset_id'])
     expect(setMediaTool?.inputSchema?.properties?.placement).toBeDefined()
     expect(setMediaTool?.inputSchema?.additionalProperties).toBe(false)
     expect(toolsBody.result.tools.filter(tool => tool._meta?.ui || tool._meta?.['openai/outputTemplate'])).toEqual([])
@@ -67,7 +67,7 @@ test.describe('stateless MCP server', () => {
         site_id: MCP_GROWTH_SITE_ID,
         placement: { owner_type: 'business_location', owner_id: locationId, slot: 'hero' },
         location_id: locationId,
-        asset_ids: [],
+        asset_id: 'media-does-not-matter-for-this-check',
       },
     })
     expect(mismatchedTarget.status()).toBe(200)

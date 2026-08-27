@@ -80,8 +80,8 @@ test.describe('stateless MCP server', () => {
   // creations = 6 total; now 2 total. Cross-tenant isolation tests were
   // intermittently timing out under preview-deploy cold-start load
   // (mcpRequest/ensureSite round trips each paying real latency); this
-  // reduces the total request volume this group puts on the preview Worker
-  // rather than papering over it with a longer timeout.
+  // reduces the total request volume this group puts on the preview Worker.
+  // The hook budget covers the two full site-creation flows it owns.
   //
   // Playwright's built-in `request` fixture cannot be reused across
   // beforeAll and a test — it's disposed the instant beforeAll returns (see
@@ -94,7 +94,8 @@ test.describe('stateless MCP server', () => {
     let siteB: string
     let sharedRequest: APIRequestContext
 
-    test.beforeAll(async ({ baseURL }) => {
+    test.beforeAll(async ({ baseURL }, testInfo) => {
+      testInfo.setTimeout(60_000)
       sharedRequest = await playwrightRequest.newContext()
       await loginAsFreshMcpUser(sharedRequest, baseURL!, 'cross-a')
       siteA = await ensureSite(sharedRequest, baseURL!)
