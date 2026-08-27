@@ -2,8 +2,8 @@
   <AppSection v-if="items.length && !allUnavailable" :bg="bg" :padding="padding">
     <div class="mb-12 flex flex-wrap items-end justify-between gap-4">
       <div class="max-w-2xl">
-        <p class="saya-kicker mb-6">{{ sectionKicker }}</p>
-        <h2 class="saya-display-md text-default">{{ sectionHeading }}</h2>
+        <p class="saya-kicker mb-6">{{ data.kicker }}</p>
+        <h2 class="saya-display-md text-default">{{ data.heading }}</h2>
       </div>
       <NuxtLink
         v-if="items.length && linkTarget"
@@ -77,8 +77,8 @@ interface Props {
       href?: string
       unavailable?: boolean
     }>
-    hasMenu?: boolean
-    vertical?: string
+    kicker: string
+    heading: string
     linkTarget?: string | null
   }
   bg?: string
@@ -86,12 +86,10 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  data: () => ({ items: [], hasMenu: false, vertical: undefined }),
+  data: () => ({ items: [], kicker: '', heading: '' }),
   bg: 'default',
   padding: 'lg'
 })
-
-const { site } = useTenantSite()
 
 const items = computed(() => (props.data?.items || []).filter(item => Boolean(item.href)))
 // A location-wide closure marks every item unavailable at once — showing a
@@ -100,16 +98,7 @@ const allUnavailable = computed(() => {
   const list = items.value
   return list.length > 0 && list.every(item => item.unavailable)
 })
-const hasMenu = computed(() => props.data?.hasMenu || false)
 const linkTarget = computed(() => props.data?.linkTarget || '')
-
-const sectionKicker = computed(() => hasMenu.value ? 'The menu' : 'Experiences')
-const sectionHeading = computed(() => {
-  const siteRecord = site as Record<string, unknown>
-  const brandName = typeof siteRecord?.brand_name === 'string' ? siteRecord.brand_name : null
-  if (hasMenu.value) return brandName ? `What we're cooking at ${brandName}.` : 'Menu'
-  return brandName ? `What we're offering at ${brandName}.` : 'Experiences'
-})
 
 const clientReady = ref(false)
 onMounted(() => { clientReady.value = true })

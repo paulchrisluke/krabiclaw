@@ -75,13 +75,13 @@ export const useSiteShellState = () => {
     ready = import.meta.server ? asyncData : Promise.resolve()
   }
 
-  const locations = computed(() => (data.value?.locations ?? []) as ApiRecord[]);
+  const locations = computed(() => data.value?.locations ?? []);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
   const shellSite = computed(() => data.value?.site ?? null);
   const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
   const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
-  const hasMenu = computed(() => data.value?.hasMenu ?? false);
+  const hasProducts = computed(() => data.value?.hasProducts ?? false);
   return {
     locations,
     config,
@@ -89,7 +89,7 @@ export const useSiteShellState = () => {
     googleBusiness,
     locales,
     hasExperiences,
-    hasMenu,
+    hasProducts,
     data,
     pending,
     error,

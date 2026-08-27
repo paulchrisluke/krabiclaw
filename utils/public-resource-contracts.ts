@@ -10,9 +10,15 @@ export interface PublicShellSite {
   config: { phone: string | null } | null
 }
 
+export interface PublicShellLocation {
+  id: string
+  slug: string
+  title: string
+}
+
 export interface PublicShellPayload {
   site: PublicShellSite
-  locations: ApiRecord[]
+  locations: PublicShellLocation[]
   config: Record<string, string>
   googleBusiness: ApiRecord
   locales: { code: string; label: string; is_source: boolean }[]

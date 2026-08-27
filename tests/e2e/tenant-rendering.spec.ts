@@ -30,7 +30,8 @@ const tenants: Tenant[] = [
     name: 'Kikuzuki', baseURL: kikuzukiTestBaseUrl(), headers: kikuzukiTestExtraHeaders(),
     shell: '.tenant-layout', identity: /Kikuzuki/i,
     definingContent: /Japanese|Robatayaki|Izakaya|寿司|อาหารญี่ปุ่น/i,
-    primaryLabel: /menu|เมนู|reservation|จอง/i, detailPath: '/menu/tuna-sushi',
+    primaryLabel: /menu|เมนู|reservation|จอง/i,
+    detailPath: '/locations/kikuzuki-japanese-robatayaki-izakaya/menu/tuna-sushi',
     detailContent: /Tuna Sushi/i, forbidden: [/Ember & Slice/i, /Menu coming soon/i],
   },
   {

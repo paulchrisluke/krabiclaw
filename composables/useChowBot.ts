@@ -1,7 +1,7 @@
 import { useChowBotHistory, type ChowBotConv } from './useChowBotHistory'
 import { useAnalytics } from './useAnalytics'
 
-const MENU_TOOLS = new Set(['create_menu', 'rename_menu', 'rename_menu_section', 'delete_menu_section', 'add_menu_item', 'update_menu_item', 'delete_menu_item', 'sync_menu_items', 'publish_menu', 'add_menu_items_batch', 'delete_menu', 'set_default_currency'])
+const PRODUCT_TOOLS = new Set(['create_product', 'update_product', 'delete_product', 'reorder_products', 'rename_product_category', 'delete_product_category', 'batch_create_products', 'sync_products', 'import_products_from_media'])
 
 export interface ChowbotToolCall {
   name: string
@@ -81,8 +81,8 @@ export const useChowBot = () => {
       useState<number>('site:refresh', () => 0).value++
     }
 
-    if ([...names].some(n => MENU_TOOLS.has(n))) {
-      useState<number>('menu:refresh', () => 0).value++
+    if ([...names].some(n => PRODUCT_TOOLS.has(n))) {
+      useState<number>('products:refresh', () => 0).value++
     }
 
     // Keep panel open across navigation — set isLoading briefly as a guard
@@ -97,9 +97,9 @@ export const useChowBot = () => {
       target = locationId ? dashboardLinks.locationPath(locationId) : paths.site
     } else if (names.has('create_location')) {
       target = paths.site
-    } else if ([...names].some(n => MENU_TOOLS.has(n))) {
+    } else if ([...names].some(n => PRODUCT_TOOLS.has(n))) {
       const locId = selectedLocation.value?.id ?? null
-      target = locId ? dashboardLinks.locationMenuPath(locId) : paths.menu
+      target = locId ? dashboardLinks.locationProductsPath(locId) : paths.site
     }
 
     if (target) {

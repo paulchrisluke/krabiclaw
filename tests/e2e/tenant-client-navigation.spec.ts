@@ -43,7 +43,7 @@ test('Pottery home → experiences → experience detail', async ({ page }) => {
 test('Kikuzuki home → menu → menu item', async ({ page }) => {
   await clientJourney(page, {
     baseURL: kikuzukiTestBaseUrl(), headers: kikuzukiTestExtraHeaders(), identity: /Kikuzuki/i,
-    listPath: '/menu', detailPath: '/menu/tuna-sushi', detailText: /Tuna Sushi/i,
+    listPath: '/menu', detailPath: '/locations/kikuzuki-japanese-robatayaki-izakaya/menu/tuna-sushi', detailText: /Tuna Sushi/i,
     forbidden: [/Ember & Slice/i, /Menu coming soon/i],
   })
 })

@@ -7,9 +7,8 @@ import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
 import { getPlatformMcpTool, PLATFORM_INTERNAL_MCP_TOOLS, PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
-import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
+import { PRODUCTS_TOOLS } from '../../server/utils/mcp-tools/products.ts'
 import { parseMediaPlacementKey } from '../../server/utils/media-placement.ts'
-import { MAX_MENU_BATCH_ITEMS } from '../../server/utils/menu-batch-limits.ts'
 
 type ToolContract = {
   name: string
@@ -148,44 +147,37 @@ test('validateArguments sorts multiple unknown keys deterministically', () => {
   )
 })
 
-test('validateArguments rejects unknown fields in nested menu items and media references', () => {
-  const batch = tool(MENUS_TOOLS, 'add_menu_items_batch')
+test('validateArguments rejects unknown fields in nested Products', () => {
+  const batch = tool(PRODUCTS_TOOLS, 'batch_create_products')
   assert.throws(
     () => validateArguments(batch.inputSchema, {
       site_id: 'site-1',
-      menu_id: 'menu-1',
-      items: [{ section: 'Mains', name: 'Curry', prize_amount: 250 }],
+      location_id: 'location-1',
+      products: [{ category: 'Mains', name: 'Curry', price_amount: '250', prize_amount: 250 }],
     }),
-    isInvalidParamsErrorContaining('items[0].prize_amount'),
-  )
-  assert.throws(
-    () => validateArguments(batch.inputSchema, {
-      site_id: 'site-1',
-      menu_id: 'menu-1',
-      items: [{ section: 'Mains', name: 'Curry', media: [{ asset_id: 'asset-1', url: 'ignored' }] }],
-    }),
-    isInvalidParamsErrorContaining('items[0].media[0].url'),
+    isInvalidParamsErrorContaining('products[0].prize_amount'),
   )
 })
 
 test('validateArguments enforces recursive array bounds and uniqueness', () => {
-  const batch = tool(MENUS_TOOLS, 'add_menu_items_batch')
+  const batch = tool(PRODUCTS_TOOLS, 'batch_create_products')
+  const maxProducts = ((batch.inputSchema.properties as Record<string, { maxItems?: number }>).products.maxItems)!
   assert.throws(
-    () => validateArguments(batch.inputSchema, { site_id: 'site-1', menu_id: 'menu-1', items: [] }),
-    isInvalidParamsErrorContaining('items must contain at least 1 item'),
+    () => validateArguments(batch.inputSchema, { site_id: 'site-1', location_id: 'location-1', products: [] }),
+    isInvalidParamsErrorContaining('products must contain at least 1 item'),
   )
   assert.throws(
     () => validateArguments(batch.inputSchema, {
       site_id: 'site-1',
-      menu_id: 'menu-1',
-      items: Array.from({ length: MAX_MENU_BATCH_ITEMS + 1 }, (_, index) => ({ section: 'Mains', name: `Item ${index}` })),
+      location_id: 'location-1',
+      products: Array.from({ length: maxProducts + 1 }, (_, index) => ({ category: 'Mains', name: `Product ${index}`, price_amount: '1' })),
     }),
-    isInvalidParamsErrorContaining(`items must contain at most ${MAX_MENU_BATCH_ITEMS} items`),
+    isInvalidParamsErrorContaining(`products must contain at most ${maxProducts} items`),
   )
   assert.doesNotThrow(() => validateArguments(batch.inputSchema, {
     site_id: 'site-1',
-    menu_id: 'menu-1',
-    items: Array.from({ length: MAX_MENU_BATCH_ITEMS }, (_, index) => ({ section: 'Mains', name: `Item ${index}` })),
+    location_id: 'location-1',
+    products: Array.from({ length: maxProducts }, (_, index) => ({ category: 'Mains', name: `Product ${index}`, price_amount: '1' })),
   }))
 
   const nestedArraySchema = {

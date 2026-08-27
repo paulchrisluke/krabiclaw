@@ -41,7 +41,7 @@ test('tenant scoped resolution includes platform baseline without tenant data in
   assert.equal(guidance.skills[0]?.source, 'code_baseline')
   assert.match(guidance.skills[0]?.instructions_markdown ?? '', /save_generated_image_file/)
   assert.match(guidance.skills[0]?.instructions_markdown ?? '', /one standalone image per entity/)
-  assert.match(guidance.skills[0]?.instructions_markdown ?? '', /exact menu_item_id/)
+  assert.match(guidance.skills[0]?.instructions_markdown ?? '', /exact Product id/)
   assert.doesNotMatch(guidance.skills[0]?.instructions_markdown ?? '', /NCLS|Pottery House|Kikuzuki/i)
 })
 

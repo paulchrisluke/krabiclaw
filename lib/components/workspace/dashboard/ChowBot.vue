@@ -179,8 +179,8 @@
               @click="fileInputRef?.inputRef?.click()"
             />
           </UTooltip>
-          <span v-if="isUploading" class="text-xs text-muted">Extracting menu…</span>
-          <span v-else-if="siteId && !setupMode" class="text-xs text-muted">or drag & drop a menu file anywhere</span>
+          <span v-if="isUploading" class="text-xs text-muted">Extracting Products…</span>
+          <span v-else-if="siteId && !setupMode" class="text-xs text-muted">or drag & drop a Product file anywhere</span>
         </div>
         <p v-if="!siteId && !setupMode" class="mt-2 text-center text-xs text-muted">
           Create your workspace to use ChowBot.
@@ -215,6 +215,7 @@ const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
 const setupMode = computed(() => Boolean(props.setupMode))
 
 const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
 const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
 const orgSettings = useOrgSettings()
@@ -560,6 +561,11 @@ const stageFile = (file: File) => {
 
 const processFile = async (file: File, caption = '') => {
   if (!siteId.value) return
+  const locationId = dashboardLocation.currentLocationId.value
+  if (!locationId) {
+    messages.value = [...messages.value, { role: 'assistant', content: 'Choose a location before importing Products.', error: true }]
+    return
+  }
 
   const label = caption ? `📎 ${file.name} — ${caption}` : `📎 ${file.name}`
   messages.value = [...messages.value, { role: 'user', content: label }]
@@ -568,44 +574,39 @@ const processFile = async (file: File, caption = '') => {
   try {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('menuName', caption || file.name.replace(/\.[^.]+$/, '').trim())
-
     const res = await dashboardApi<{
-      success: boolean
-      menuId: string
-      menuItems: Array<Record<string, unknown>>
+      success: true
+      products: Array<Record<string, unknown>>
       warning: string | null
-    }>(`/api/ai/${siteId.value}/menu/extract`, {
+    }>(`/api/ai/${siteId.value}/locations/${locationId}/products/extract`, {
       method: 'POST',
       body: formData,
       validate: (value): value is {
-        success: boolean
-        menuId: string
-        menuItems: Array<Record<string, unknown>>
+        success: true
+        products: Array<Record<string, unknown>>
         warning: string | null
       } => isRecord(value)
-        && typeof value.success === 'boolean'
-        && typeof value.menuId === 'string'
-        && Array.isArray(value.menuItems)
-        && value.menuItems.every(isRecord)
+        && value.success === true
+        && Array.isArray(value.products)
+        && value.products.every(isRecord)
         && (value.warning === null || typeof value.warning === 'string'),
     })
 
-    const count = res.menuItems?.length ?? 0
+    const count = res.products?.length ?? 0
     const msg = count > 0
-      ? `Extracted **${count} menu item${count === 1 ? '' : 's'}** and added to your menu.${res.warning ? `\n\n⚠️ ${res.warning}` : ''}`
+      ? `Extracted **${count} Product${count === 1 ? '' : 's'}**.${res.warning ? `\n\n⚠️ ${res.warning}` : ''}`
       : `No items found in that file.${res.warning ? ` ${res.warning}` : ''} Try a higher-resolution photo.`
 
     messages.value = [...messages.value, { role: 'assistant', content: msg }]
     if (count > 0) {
-      await navigateTo(dashboardSiteLinkPaths.value.menu)
+      await navigateTo(dashboardSiteLinkPaths.value.products)
     }
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err))
     console.error('[ChowBot] processFile failed:', error.message)
     messages.value = [...messages.value, {
       role: 'assistant',
-      content: error.message || 'Menu extraction failed. Please try again.',
+      content: error.message || 'Product extraction failed. Please try again.',
       error: true,
     }]
   } finally {
@@ -620,24 +621,23 @@ const toolLabel = (name: string): string => {
     get_posts: 'Fetching posts…',
     create_post: 'Creating post…',
     publish_post: 'Publishing post…',
-    get_menu: 'Loading menu…',
+    list_location_products: 'Loading Products…',
+    get_product: 'Loading Product…',
     get_site_stats: 'Checking stats…',
     rename_site: 'Renaming site…',
     get_locations: 'Fetching locations…',
     create_location: 'Creating location…',
     update_location: 'Updating location…',
-    add_menu_item: 'Adding menu item…',
-    add_menu_items_batch: 'Adding menu items…',
-    sync_menu_items: 'Updating menu items…',
-    update_menu_item: 'Updating menu item…',
-    delete_menu_item: 'Deleting menu item…',
-    delete_menu_section: 'Deleting menu section…',
-    publish_menu: 'Publishing menu…',
-    delete_menu: 'Deleting menu…',
-    create_menu: 'Creating menu…',
-    rename_menu: 'Renaming menu…',
+    create_product: 'Creating Product…',
+    batch_create_products: 'Creating Products…',
+    sync_products: 'Updating Products…',
+    update_product: 'Updating Product…',
+    delete_product: 'Deleting Product…',
+    delete_product_category: 'Deleting Product category…',
+    reorder_products: 'Reordering Products…',
+    rename_product_category: 'Renaming Product category…',
+    import_products_from_media: 'Extracting Products…',
     set_default_currency: 'Updating currency…',
-    rename_menu_section: 'Renaming menu section…',
     get_reviews: 'Fetching reviews…',
     reply_to_review: 'Saving reply…',
     get_location_media: 'Fetching media…',

@@ -18,8 +18,7 @@
     <SayaHeader
       :site="resolvedSite"
       :locations="locations"
-      :menu="menu"
-      :has-menu="shell.hasMenu.value"
+      :has-products="shell.hasProducts.value"
       :has-experiences="showExperiences"
       :experience-cta-path="locationExperienceCtaPath"
     />
@@ -33,8 +32,7 @@
       :locales="locales"
       :error="bootstrapError"
       :config="config"
-      :menu="menu"
-      :has-menu="shell.hasMenu.value"
+      :has-products="shell.hasProducts.value"
       :has-experiences="showExperiences"
     />
     <ConsentBanner v-if="!isDemoHost" />
@@ -83,7 +81,7 @@ declare global {
 
 if (import.meta.dev) useDebugLCP()
 
-// Persistent chrome uses the minimal shell contract. Route-specific menu and
+// Persistent chrome uses the minimal shell contract. Route-specific Product and
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
 if (import.meta.server && isHome.value) await shell.ready
@@ -97,7 +95,6 @@ const pagePayload = computed(() =>
   ?? (nuxtApp.static.data[activePageKey.value] as ApiRecord | undefined)
   ?? null,
 )
-const menu = computed(() => (pagePayload.value?.menu as ApiRecord | null | undefined) ?? null)
 const experiencesList = computed(() =>
   Array.isArray(pagePayload.value?.experiencesList)
     ? pagePayload.value.experiencesList as ApiRecord[]

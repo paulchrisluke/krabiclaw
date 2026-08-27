@@ -6,7 +6,7 @@ import { MCP_GROWTH_SITE_ID, MCP_GROWTH_SERVICE_SITE_ID, mcpRequest, mcpData, cr
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
 // for why. This group covers the bulk of an owner's MCP tool surface: site
 // page/settings, notifications/submissions, location/reviews/QA
-// lifecycle, and menus/posts/media/experiences workflows.
+// lifecycle, and Products/posts/media/experiences workflows.
 
 test.describe('stateless MCP server', () => {
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
@@ -372,8 +372,8 @@ test.describe('stateless MCP server', () => {
     }
   })
 
-  // The single 31-round-trip "menus, posts, media, and experiences" test below
-  // was split into 4 independent tests, one per domain (location, menu, post,
+  // The single 31-round-trip "Products, posts, media, and experiences" test below
+  // was split into 4 independent tests, one per domain (location, Product, post,
   // media/experience) — each domain's calls are self-contained (no shared
   // state crosses the split points) and each gets its own timeout budget
   // sized to its own call count, instead of every domain sharing one budget
@@ -399,132 +399,107 @@ test.describe('stateless MCP server', () => {
       expect(deleteLocationRes.status()).toBe(200)
     })
 
-    test('owner can manage menu and menu-item tools', async ({ request, baseURL }) => {
+    test('owner can manage location-owned Product tools', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
       const siteId = MCP_GROWTH_SERVICE_SITE_ID
+      const locationId = await createScratchLocation(request, baseURL!, siteId)
 
-      const menu = await mcpRequest(request, baseURL!, {
+      const product = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'create_menu',
-        args: { site_id: siteId, name: `MCP Menu ${Date.now()}` },
+        toolName: 'create_product',
+        args: { site_id: siteId, location_id: locationId, category: 'Mains', name: 'MCP Curry', price_amount: '12.5' },
       })
-      expect(menu.status()).toBe(200)
-      const menuBody = await menu.json()
-      const menuId = mcpData<{ id: string }>(menuBody).id
-      expect(menuId).toEqual(expect.any(String))
+      expect(product.status()).toBe(200)
+      const productId = mcpData<{ product: { id: string } }>(await product.json()).product.id
+      expect(productId).toEqual(expect.any(String))
 
-      const menuItem = await mcpRequest(request, baseURL!, {
+      const batch = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'create_menu_item',
-        args: { site_id: siteId, menu_id: menuId, section: 'Mains', name: 'MCP Curry', price_amount: '12.50' },
-      })
-      expect(menuItem.status()).toBe(200)
-      const menuItemBody = await menuItem.json()
-      const menuItemId = mcpData<{ id: string }>(menuItemBody).id
-      expect(menuItemId).toEqual(expect.any(String))
-
-      const secondMenuItem = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'create_menu_item',
-        args: { site_id: siteId, menu_id: menuId, section: 'Mains', name: 'MCP Noodles', price_amount: '11.25', sort_order: 2 },
-      })
-      expect(secondMenuItem.status()).toBe(200)
-      const secondMenuItemBody = await secondMenuItem.json()
-      const menuItemIdSecond = mcpData<{ id: string }>(secondMenuItemBody).id
-      expect(menuItemIdSecond).toEqual(expect.any(String))
-
-      const dessertMenuItem = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'create_menu_item',
-        args: { site_id: siteId, menu_id: menuId, section: 'Desserts', name: 'MCP Mango Sticky Rice', price_amount: '8.00' },
-      })
-      expect(dessertMenuItem.status()).toBe(200)
-
-      const menuRead = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'get_menu',
-        args: { site_id: siteId, menu_id: menuId },
-      })
-      expect(menuRead.status()).toBe(200)
-      const menuReadBody = await menuRead.json()
-      expect(mcpData<{ menu: { items: Array<{ name: string }> } }>(menuReadBody).menu.items.some(item => item.name === 'MCP Curry')).toBe(true)
-
-      const menusList = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'list_menus',
-        args: { site_id: siteId },
-      })
-      expect(menusList.status()).toBe(200)
-
-      const menuUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_menu',
-        args: { site_id: siteId, menu_id: menuId, description: 'Updated through MCP', status: 'published' },
-      })
-      expect(menuUpdate.status()).toBe(200)
-
-      const menuItemUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_menu_item',
-        args: { site_id: siteId, menu_item_id: menuItemId, name: 'MCP Green Curry', price_amount: '13.00' },
-      })
-      expect(menuItemUpdate.status()).toBe(200)
-
-      const renameSection = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'rename_menu_section',
-        args: { site_id: siteId, menu_id: menuId, old_name: 'Mains', new_name: 'Entrees' },
-      })
-      expect(renameSection.status()).toBe(200)
-
-      const reorderMenu = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'reorder_menu_items',
-        idempotent: true,
+        toolName: 'batch_create_products',
         args: {
           site_id: siteId,
-          menu_id: menuId,
-          updates: [
-            { id: menuItemId, sort_order: 2 },
-            { id: menuItemIdSecond, sort_order: 1 },
+          location_id: locationId,
+          products: [
+            { category: 'Mains', name: 'MCP Noodles', price_amount: '11.25' },
+            { category: 'Desserts', name: 'MCP Mango Sticky Rice', price_amount: '8' },
           ],
         },
       })
-      expect(reorderMenu.status()).toBe(200)
+      expect(batch.status()).toBe(200)
+      const batchedProducts = mcpData<{ products: Array<{ id: string }> }>(await batch.json()).products
+      expect(batchedProducts).toHaveLength(2)
+      const secondProductId = batchedProducts[0]!.id
 
-      const reorderedMenu = await mcpRequest(request, baseURL!, {
+      const productRead = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'get_menu',
+        toolName: 'get_product',
+        args: { site_id: siteId, product_id: productId },
+      })
+      expect(productRead.status()).toBe(200)
+      expect(mcpData<{ product: { name: string } }>(await productRead.json()).product.name).toBe('MCP Curry')
+
+      const productsList = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'list_location_products',
+        args: { site_id: siteId, location_id: locationId },
+      })
+      expect(productsList.status()).toBe(200)
+
+      const productUpdate = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'update_product',
+        args: { site_id: siteId, product_id: productId, name: 'MCP Green Curry', price_amount: '13' },
+      })
+      expect(productUpdate.status()).toBe(200)
+
+      const renameCategory = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'rename_product_category',
+        args: { site_id: siteId, location_id: locationId, old_category: 'Mains', new_category: 'Entrees' },
+      })
+      expect(renameCategory.status()).toBe(200)
+
+      const reorder = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'reorder_products',
         idempotent: true,
-        args: { site_id: siteId, menu_id: menuId },
+        args: {
+          site_id: siteId,
+          location_id: locationId,
+          products: [
+            { id: productId, sort_order: 1 },
+            { id: secondProductId, sort_order: 0 },
+            { id: batchedProducts[1]!.id, sort_order: 2 },
+          ],
+        },
       })
-      expect(reorderedMenu.status()).toBe(200)
-      const reorderedMenuBody = await reorderedMenu.json()
-      const reorderedItems = mcpData<{ menu: { items: Array<{ id: string; sort_order: number }> } }>(reorderedMenuBody).menu.items
-      expect(reorderedItems.find(item => item.id === menuItemId)?.sort_order).toBe(2)
-      expect(reorderedItems.find(item => item.id === menuItemIdSecond)?.sort_order).toBe(1)
+      expect(reorder.status()).toBe(200)
 
-      const deleteDessertSection = await mcpRequest(request, baseURL!, {
+      const reordered = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'delete_menu_section',
-        args: { site_id: siteId, menu_id: menuId, section_name: 'Desserts' },
+        toolName: 'list_location_products',
+        idempotent: true,
+        args: { site_id: siteId, location_id: locationId },
       })
-      expect(deleteDessertSection.status()).toBe(200)
+      expect(reordered.status()).toBe(200)
+      const reorderedProducts = mcpData<{ products: Array<{ id: string; sort_order: number }> }>(await reordered.json()).products
+      expect(reorderedProducts.find(item => item.id === productId)?.sort_order).toBe(1)
+      expect(reorderedProducts.find(item => item.id === secondProductId)?.sort_order).toBe(0)
 
-      const deleteMenuItemRes = await mcpRequest(request, baseURL!, {
+      const deleteDesserts = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'delete_menu_item',
-        args: { site_id: siteId, menu_item_id: menuItemIdSecond },
+        toolName: 'delete_product_category',
+        args: { site_id: siteId, location_id: locationId, category: 'Desserts' },
       })
-      expect(deleteMenuItemRes.status()).toBe(200)
+      expect(deleteDesserts.status()).toBe(200)
 
-      const deleteMenuRes = await mcpRequest(request, baseURL!, {
+      const deleteProductRes = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'delete_menu',
-        args: { site_id: siteId, menu_id: menuId },
+        toolName: 'delete_product',
+        args: { site_id: siteId, product_id: secondProductId },
       })
-      expect(deleteMenuRes.status()).toBe(200)
+      expect(deleteProductRes.status()).toBe(200)
     })
 
     test('owner can manage post tools', async ({ request, baseURL }) => {

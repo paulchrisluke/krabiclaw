@@ -2,12 +2,9 @@ import type {
   CompiledSeedBusinessLocationTranslation,
   CompiledCuratedSiteBundle,
   CompiledSeedExperience,
-  CompiledSeedMenuItemTranslation,
-  CompiledSeedMenuTranslation,
   CompiledSeedLocationQa,
   CompiledSeedMediaAsset,
-  CompiledSeedMenu,
-  CompiledSeedMenuItem,
+  CompiledSeedProduct,
   CompiledSeedPost,
   CompiledSeedPostChannelJob,
   CompiledSeedReview,
@@ -51,15 +48,13 @@ export function compileCuratedSiteFixture(
   uniqueStrings(fixture.experiences.map((e) => e.id), 'experience id')
   uniqueStrings(fixture.experiences.map((e) => e.slug), 'experience slug')
   uniqueStrings(fixture.reviews.map((r) => r.id), 'review id')
-  uniqueStrings(fixture.menus.map((m) => m.id), 'menu id')
-  uniqueStrings(fixture.menus.flatMap((m) => m.items.map((i) => i.id)), 'menu item id')
+  uniqueStrings(fixture.products.map((product) => product.id), 'Product id')
+  uniqueStrings(fixture.products.map((product) => `${product.locationId}:${product.slug}`), 'location Product slug')
   uniqueStrings(fixture.locationQa.map((q) => q.id), 'location qa id')
   uniqueStrings(fixture.posts.map((p) => p.id), 'post id')
   uniqueStrings(fixture.posts.flatMap((p) => p.channelJobs.map((j) => j.id)), 'post channel job id')
   uniqueStrings((fixture.tenantPageLocaleFields ?? []).map((entry) => entry.id), 'tenant page locale field id')
   uniqueStrings((fixture.businessLocationTranslations ?? []).map((entry) => entry.id), 'business location translation id')
-  uniqueStrings((fixture.menuTranslations ?? []).map((entry) => entry.id), 'menu translation id')
-  uniqueStrings((fixture.menuItemTranslations ?? []).map((entry) => entry.id), 'menu item translation id')
   uniqueStrings(fixture.publicRoutes.map((r) => r.path), 'public route path')
 
   const validatedSiteMedia = validateMedia(fixture.site.media, mediaIds, 'Site')
@@ -178,44 +173,27 @@ export function compileCuratedSiteFixture(
     }
   })
 
-  const menus: CompiledSeedMenu[] = fixture.menus.map((menu) => {
-    if (!locationIds.has(menu.locationId)) {
-      throw new Error(`Menu "${menu.id}" references unknown location "${menu.locationId}"`)
+  const products: CompiledSeedProduct[] = fixture.products.map((product) => {
+    if (!locationIds.has(product.locationId)) {
+      throw new Error(`Product "${product.id}" references unknown location "${product.locationId}"`)
     }
-    const items: CompiledSeedMenuItem[] = menu.items.map((item) => {
-      const media = validateMedia(item.media, mediaIds, `Menu item "${item.id}"`)
-      return {
-        id: item.id,
-        menuId: menu.id,
-        organizationId: fixture.organizationId,
-        siteId: fixture.siteId,
-        section: item.section,
-        name: item.name,
-        slug: item.slug,
-        description: item.description,
-        priceAmount: item.priceAmount,
-        media,
-        allergens: item.allergens,
-        dietaryNotes: item.dietaryNotes,
-        available: item.available,
-        sortOrder: item.sortOrder,
-      }
-    })
     return {
-      id: menu.id,
+      id: product.id,
       organizationId: fixture.organizationId,
       siteId: fixture.siteId,
-      locationId: menu.locationId,
-      name: menu.name,
-      description: menu.description,
-      sectionOrder: [...menu.sectionOrder],
-      status: menu.status,
-      items,
+      locationId: product.locationId,
+      category: product.category,
+      name: product.name,
+      slug: product.slug,
+      description: product.description,
+      priceAmount: product.priceAmount,
+      media: validateMedia(product.media, mediaIds, `Product "${product.id}"`),
+      allergens: product.allergens,
+      dietaryNotes: product.dietaryNotes,
+      available: product.available,
+      sortOrder: product.sortOrder,
     }
   })
-
-  const menuIds = new Set(menus.map((menu) => menu.id))
-  const menuItemIds = new Set(menus.flatMap((menu) => menu.items.map((item) => item.id)))
 
   const locationQa: CompiledSeedLocationQa[] = fixture.locationQa.map((qa) => {
     if (!locationIds.has(qa.locationId)) {
@@ -325,60 +303,6 @@ export function compileCuratedSiteFixture(
     }
   })
 
-  const menuTranslations: CompiledSeedMenuTranslation[] = (fixture.menuTranslations ?? []).map((entry) => {
-    if (entry.locale === sourceLocale) {
-      throw new Error(`Menu translation "${entry.id}" must target a non-source locale`)
-    }
-    if (!siteLocaleIds.has(entry.locale)) {
-      throw new Error(`Menu translation "${entry.id}" references unknown locale "${entry.locale}"`)
-    }
-    if (!menuIds.has(entry.menuId)) {
-      throw new Error(`Menu translation "${entry.id}" references unknown menu "${entry.menuId}"`)
-    }
-    return {
-      id: entry.id,
-      organizationId: fixture.organizationId,
-      siteId: fixture.siteId,
-      menuId: entry.menuId,
-      locale: entry.locale,
-      name: entry.name,
-      description: entry.description,
-      sectionOrder: entry.sectionOrder ? [...entry.sectionOrder] : null,
-      status: entry.status,
-      sourceHash: entry.sourceHash,
-      translatedAt: entry.translatedAt,
-      reviewedAt: entry.reviewedAt,
-    }
-  })
-
-  const menuItemTranslations: CompiledSeedMenuItemTranslation[] = (fixture.menuItemTranslations ?? []).map((entry) => {
-    if (entry.locale === sourceLocale) {
-      throw new Error(`Menu item translation "${entry.id}" must target a non-source locale`)
-    }
-    if (!siteLocaleIds.has(entry.locale)) {
-      throw new Error(`Menu item translation "${entry.id}" references unknown locale "${entry.locale}"`)
-    }
-    if (!menuItemIds.has(entry.menuItemId)) {
-      throw new Error(`Menu item translation "${entry.id}" references unknown menu item "${entry.menuItemId}"`)
-    }
-    return {
-      id: entry.id,
-      organizationId: fixture.organizationId,
-      siteId: fixture.siteId,
-      menuItemId: entry.menuItemId,
-      locale: entry.locale,
-      section: entry.section,
-      name: entry.name,
-      description: entry.description,
-      allergens: entry.allergens,
-      dietaryNotes: entry.dietaryNotes,
-      status: entry.status,
-      sourceHash: entry.sourceHash,
-      translatedAt: entry.translatedAt,
-      reviewedAt: entry.reviewedAt,
-    }
-  })
-
   return {
     identity: {
       fixtureId: fixture.fixtureId,
@@ -394,13 +318,11 @@ export function compileCuratedSiteFixture(
     tenantPageContent,
     experiences,
     reviews,
-    menus,
+    products,
     locationQa,
     posts,
     tenantPageLocaleFields,
     businessLocationTranslations,
-    menuTranslations,
-    menuItemTranslations,
     publicRoutes: fixture.publicRoutes.map((route) => ({ ...route })),
     routeManifest: {
       locations: fixture.locations.map((l) => `/locations/${l.slug}`),

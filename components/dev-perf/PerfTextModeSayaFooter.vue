@@ -17,7 +17,7 @@
           :locales="[]"
           :error="null"
           :config="{}"
-          :menu="null"
+          :has-products="false"
           :has-experiences="false"
         />
       </UTheme>

@@ -35,7 +35,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       project: locationBase,
       conversations: `${siteBase}/conversations`,
       pages: `${siteBase}/pages`,
-      menu: `${locationBase}/menu`,
+      products: `${locationBase}/products`,
       posts: `${locationBase}/posts`,
       photos: `${locationBase}/photos`,
       qa: `${locationBase}/qa`,
@@ -115,20 +115,20 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
   }
   const locationBasePath = (locationId: string) => locationPath(locationId)
   const locationSettingsPath = (locationId: string) => `${locationBasePath(locationId)}/settings`
-  const locationMenuPath = (locationId: string) => `${locationBasePath(locationId)}/menu`
+  const locationProductsPath = (locationId: string) => `${locationBasePath(locationId)}/products`
   const locationContentPath = (_locationId: string) => paths.value.pages
 
-  const menuPath = (locationId?: string | null) => {
+  const productsPath = (locationId?: string | null) => {
     if (locationId) {
       const location = dashboard.locations.value.find(candidate => candidate.id === locationId || candidate.slug === locationId)
       const locationSlug = location?.slug ?? locationId
       return {
-        path: `${paths.value.site}/locations/${locationSlug}/menu`,
+        path: `${paths.value.site}/locations/${locationSlug}/products`,
         query: {}
       }
     }
     return {
-      path: paths.value.menu,
+      path: paths.value.products,
       query: {}
     }
   }
@@ -144,9 +144,9 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     buildHeaderLinks,
     locationPath,
     locationSettingsPath,
-    locationMenuPath,
+    locationProductsPath,
     locationContentPath,
-    menuPath,
+    productsPath,
     contentPath,
     editorBackPath
   }

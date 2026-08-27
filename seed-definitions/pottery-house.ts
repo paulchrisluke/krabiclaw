@@ -609,7 +609,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     { id: 'gplaces-beach-1767088509', locationId: 'loc-pottery-beachfront', authorName: 'Alexandros Karamitsos', rating: 5, content: 'Fantastic experience. We brought our two young daughters 6 and 8 years old for pottery. They were super focused for 2h and enjoyed it very much.', ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
     { id: 'gplaces-beach-1763788324', locationId: 'loc-pottery-beachfront', authorName: 'Ory Covo', rating: 5, content: "Didn't know really what to except and how will we spend our time , staff where great and time well spent !", ownerReply: null, ownerReplyAt: null, status: 'approved', source: 'google' },
   ],
-  menus: [],
+  products: [],
   locationQa: [
     {
       id: 'qa-ph-1',

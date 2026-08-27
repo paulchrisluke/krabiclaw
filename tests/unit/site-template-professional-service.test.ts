@@ -58,7 +58,7 @@ function flattenBatch(batch: Batch[]): string {
   return batch.map(b => `${b.query} ${JSON.stringify(b.params)}`).join(' \n ').toLowerCase()
 }
 
-test('seedNewSite creates no menu/menu_items rows for professional_service', async () => {
+test('seedNewSite creates no Product rows for professional_service', async () => {
   capturedBatches.length = 0
   createdTenantPages.length = 0
   await seedNewSite({} as never, {
@@ -70,8 +70,8 @@ test('seedNewSite creates no menu/menu_items rows for professional_service', asy
 
   assert.equal(capturedBatches.length, 1)
   const batch = capturedBatches[0]!
-  const menuInserts = batch.filter(b => /INSERT[\s\S]*INTO menus\b/i.test(b.query) || /INSERT[\s\S]*INTO menu_items\b/i.test(b.query))
-  assert.equal(menuInserts.length, 0, 'expected no menus/menu_items inserts for professional_service')
+  const productInserts = batch.filter(b => /INSERT[\s\S]*INTO products\b/i.test(b.query))
+  assert.equal(productInserts.length, 0, 'expected no Product inserts for professional_service')
 })
 
 test('seedNewSite professional_service copy has no restaurant/experience leakage', async () => {
@@ -97,7 +97,7 @@ test('seedNewSite professional_service copy has no restaurant/experience leakage
   }
 })
 
-test('seedNewSite does not fabricate menu content for restaurant either', async () => {
+test('seedNewSite does not fabricate Product content for restaurant either', async () => {
   capturedBatches.length = 0
   createdTenantPages.length = 0
   await seedNewSite({} as never, {
@@ -108,6 +108,6 @@ test('seedNewSite does not fabricate menu content for restaurant either', async 
   })
 
   const batch = capturedBatches[0]!
-  const menuInserts = batch.filter(b => /INSERT[\s\S]*INTO menus\b/i.test(b.query))
-  assert.equal(menuInserts.length, 0, 'expected restaurant seeding to leave menu content canonical and owner-supplied')
+  const productInserts = batch.filter(b => /INSERT[\s\S]*INTO products\b/i.test(b.query))
+  assert.equal(productInserts.length, 0, 'expected restaurant seeding to leave Product content canonical and owner-supplied')
 })

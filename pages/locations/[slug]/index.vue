@@ -158,13 +158,22 @@
         </div>
       </section>
 
-      <!-- Featured content (menu items / experiences) -->
       <LazySayaFeaturedContent
+        v-if="isExperienceTenant && featuredExperienceItems.length"
         :data="{
-          items: featuredItems,
-          hasMenu: hasMenu,
-          vertical: (site as ApiValue)?.vertical,
-          linkTarget: featuredContentLinkTarget
+          items: featuredExperienceItems,
+          kicker: 'Experiences',
+          heading: `Experiences at ${location.title}.`,
+          linkTarget: locationExperienceHref
+        }"
+      />
+      <LazySayaFeaturedContent
+        v-if="productPresentation && featuredProductItems.length"
+        :data="{
+          items: featuredProductItems,
+          kicker: productPresentation.collectionLabel,
+          heading: productPresentation.locationCollectionSegment === 'menu' ? `The menu at ${location.title}.` : `Products at ${location.title}.`,
+          linkTarget: productCollectionPath
         }"
       />
 
@@ -301,7 +310,10 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage, nowInTimezone } from '~/utils/formatters'
-import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
+import { isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
+import { isCurrencyCode } from '~/shared/currencies'
+import { formatProductMoney } from '~/utils/product-money'
+import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 import type { Experience } from '~/server/utils/experiences'
@@ -321,13 +333,12 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-// Bootstrap: location + all locations + page content + menu + reviews + posts — 1 SSR call
 const {
   location,
   locations,
   getField: getContentField,
   getHero: getContentHero,
-  menu: pageMenu,
+  products,
   locationReviews,
   pending,
   config: pageConfig,
@@ -337,12 +348,13 @@ const {
   postsList,
 } = await usePublicPageData()
 
-const hasMenu = computed(() => {
-  const m = pageMenu.value as { items?: unknown[] } | null
-  return !!(m && m.items && m.items.length > 0)
-})
-
 const isExperienceTenant = computed(() => (site as ApiValue)?.vertical === 'experience')
+const productPresentation = computed(() => resolveProductPresentation((site as ApiValue)?.vertical as string | null | undefined))
+const locationProducts = computed(() => products.value.filter(product => product.location_id === location.value?.id))
+const productCollectionPath = computed(() => {
+  if (!productPresentation.value || !location.value) return null
+  return productLocationCollectionPath((site as ApiValue)?.vertical as string, location.value.slug)
+})
 const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
   : null
@@ -357,24 +369,17 @@ const primaryCtaPath = computed(() => {
 const primaryCtaLabel = computed(() => locationIndexCopy.value.reserveCta)
 
 const secondaryCtaPath = computed(() => {
-  if (isExperienceTenant.value) {
-    return hasMenu.value ? `/locations/${slug.value}/menu` : null
-  }
-  if (hasMenu.value) return `/locations/${slug.value}/menu`
+  if (locationProducts.value.length > 0) return productCollectionPath.value
   if (locationExperienceHref.value) return locationExperienceHref.value
   return null
 })
 
 const secondaryCtaLabel = computed(() => {
-  if (hasMenu.value) return 'View menu'
+  if (locationProducts.value.length > 0) return productPresentation.value?.collectionLabel === 'Menu' ? 'View menu' : 'View products'
   if (!isExperienceTenant.value && locationExperienceHref.value) return 'View experiences'
   return null
 })
 
-const featuredContentLinkTarget = computed(() => {
-  if (hasMenu.value) return `/locations/${slug.value}/menu`
-  return locationExperienceHref.value
-})
 
 // Contact details are location-owned; missing or placeholder values stay absent.
 const displayPhone = computed(() => {
@@ -423,58 +428,46 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-// Featured items from bootstrap menu or experiences (if no menu)
-const featuredItems = computed(() => {
-  const defaultCurrency = pageConfig.value?.default_currency || 'THB'
-  
-  if (hasMenu.value) {
-    // Use featured menu items
-    const items = (pageMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
-    return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 4).map((item: ApiRecord) => {
-      const media = resolveMedia(Array.isArray(item.media) ? item.media[0] : null)
-      return {
-        name: item.name,
-        price: formatMoneyAmount(item.price_amount, defaultCurrency, ''),
-        compareAtPrice: isSaleActive(item) ? formatMoneyAmount(item.compare_at_price_amount, defaultCurrency, '') : '',
-        image: media.thumb,
-        imageKind: 'image',
-        alt: item.name ? `${item.name} dish` : 'Featured dish image',
-        href: item.slug ? `/menu/${item.slug}` : `/locations/${slug.value}/menu`,
-      }
-    })
-  } else {
-    // Use featured experiences
-    const experiences = experiencesList.value || []
-    function safeNum(val: unknown) {
-      const n = Number(val);
-      return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
-    }
-    const featured = experiences
-      .filter(exp => exp.status === 'active' && exp.featured)
-      .sort((a, b) => {
-        const fa = safeNum(a.featured_sort_order);
-        const fb = safeNum(b.featured_sort_order);
-        if (fa !== fb) return fa - fb;
-        const sa = safeNum(a.sort_order);
-        const sb = safeNum(b.sort_order);
-        if (sa !== sb) return sa - sb;
-        return String(a.title ?? '').localeCompare(String(b.title ?? ''));
-      })
-    const toUse = featured.length > 0 ? featured : experiences.filter(exp => exp.status === 'active')
-    // A location-wide closure (special_hours) makes every experience at this
-    // location unavailable for booking without touching the experience's own
-    // status — the closure is time-boxed and reopens automatically.
-    const closureMessage = activeClosureMessage.value
-    return toUse.slice(0, 4).map(exp => ({
-      name: exp.title,
-      ...resolveOverridePriceDisplay(exp, defaultCurrency),
-      image: experienceCoverImage(exp),
+const productCurrency = computed(() => {
+  const currency = pageConfig.value?.default_currency
+  if (!isCurrencyCode(currency)) throw new Error(`Unsupported site currency: ${currency}`)
+  return currency
+})
+
+const featuredProductItems = computed(() => {
+  const presentation = productPresentation.value
+  if (!presentation) return []
+  return locationProducts.value
+    .filter(product => product.featured)
+    .sort((a, b) => a.featured_sort_order - b.featured_sort_order || a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+    .slice(0, 4)
+    .map(product => ({
+      name: product.name,
+      price: formatProductMoney(product.price_amount, productCurrency.value),
+      compareAtPrice: isSaleActive(product) && product.compare_at_price_amount
+        ? formatProductMoney(product.compare_at_price_amount, productCurrency.value)
+        : '',
+      image: product.image?.public_url || null,
       imageKind: 'image',
-      alt: exp.title ? `${exp.title} experience` : 'Featured experience image',
-      href: exp.slug ? `/experiences/${exp.slug}` : locationExperienceHref.value || undefined,
-      unavailable: !!closureMessage,
+      alt: product.image?.alt_text || product.name,
+      href: presentation.productPath(slug.value, product.slug),
+      unavailable: !product.available,
     }))
-  }
+})
+
+const featuredExperienceItems = computed(() => {
+  const featured = experiencesList.value
+    .filter(experience => experience.status === 'active' && experience.featured && experience.location_id === location.value?.id)
+    .sort((a, b) => Number(a.featured_sort_order) - Number(b.featured_sort_order) || Number(a.sort_order) - Number(b.sort_order) || String(a.id).localeCompare(String(b.id)))
+  return featured.slice(0, 4).map(experience => ({
+    name: experience.title,
+    ...resolveOverridePriceDisplay(experience, productCurrency.value),
+    image: experienceCoverImage(experience),
+    imageKind: 'image',
+    alt: experience.title ? `${experience.title} experience` : 'Featured experience image',
+    href: experience.slug ? `/experiences/${experience.slug}` : locationExperienceHref.value || undefined,
+    unavailable: Boolean(activeClosureMessage.value),
+  }))
 })
 
 function experienceCoverImage(exp: Experience): string | null {
