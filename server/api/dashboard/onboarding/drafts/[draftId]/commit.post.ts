@@ -184,7 +184,7 @@ export default defineHandler(async (event) => {
           JOIN content_documents d ON d.id = cb.document_id AND d.owner_type = 'tenant_page'
           JOIN tenant_page_variants v ON v.id = d.owner_id
           WHERE v.site_id = ? AND v.path = ?
-            AND (cb.type = 'hero' AND ? = 'hero' OR json_extract(cb.data, '$.field') = ?)
+            AND (cb.type = 'hero' AND ? = 'hero' OR json_extract(cb.data_json, '$.field') = ?)
           ORDER BY cb.position LIMIT 1
         `, [siteId, onboardingPagePath(pageName), row.field, row.field])
         if (block) {
