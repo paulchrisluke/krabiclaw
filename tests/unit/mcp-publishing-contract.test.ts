@@ -140,7 +140,7 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.equal(MCP_PUBLIC_TOOLS.some(candidate => candidate.name === 'upload_user_photo'), false)
 
   const setMedia = tool(MEDIA_TOOLS, 'set_media')
-  assert.deepEqual(setMedia.inputSchema.required, ['placement', 'asset_ids'])
+  assert.deepEqual(setMedia.inputSchema.required, ['placement', 'asset_id'])
   assert.equal(setMedia.inputSchema.additionalProperties, false)
   assert.deepEqual(setMedia.inputSchema.properties?.placement, {
     type: 'object',

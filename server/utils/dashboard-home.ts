@@ -1,4 +1,5 @@
 import { queryAll, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { listAccessibleLocationIds } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
@@ -87,14 +88,13 @@ export async function getDashboardHomeData(
     siteId,
   })
   const scoped = accessibleLocationIds !== null
-  const locationPlaceholders = accessibleLocationIds?.map(() => '?').join(', ') ?? ''
   const locationScopeClause = scoped
-    ? accessibleLocationIds.length > 0 ? `AND bl.id IN (${locationPlaceholders})` : 'AND 0'
+    ? accessibleLocationIds.length > 0 ? `AND bl.id IN (SELECT value FROM json_each(?))` : 'AND 0'
     : ''
   const eventScopeClause = scoped
-    ? accessibleLocationIds.length > 0 ? `AND e.location_id IN (${locationPlaceholders})` : 'AND 0'
+    ? accessibleLocationIds.length > 0 ? `AND e.location_id IN (SELECT value FROM json_each(?))` : 'AND 0'
     : ''
-  const scopedParams = accessibleLocationIds ?? []
+  const scopedParams = accessibleLocationIds?.length ? [d1JsonStringSet(accessibleLocationIds)] : []
   const [locations, events, operations, settings, pages, media, linksPage] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null

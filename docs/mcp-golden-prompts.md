@@ -36,7 +36,7 @@ and plain-language requests, not just exact/technical phrasing.
 | --- | --- |
 | "Change the big photo" | Calls `get_site_media_assets`, then `set_media` with the home hero content block's `{ owner_type: "content_block", owner_id, slot: "media" }` placement (or asks which page/location if ambiguous) |
 | "Change the cover photo for my downtown location" | Calls `list_locations` to resolve the location, then `set_media` with `{ owner_type: "business_location", owner_id: location_id, slot: "hero" }` |
-| "Add pictures of my food" | Asks the user to attach photos, calls `upload_user_media` once per attachment, then calls `set_media` with the confirmed owner's canonical `gallery` placement |
+| "Add pictures of my food" | Asks the user to attach photos, calls `upload_user_media` once per attachment, then calls `attach_media` once per uploaded asset with the confirmed owner's canonical `gallery` placement |
 | "Change our logo" | Calls `get_site_media_assets`, then `set_media` with `{ owner_type: "site", owner_id: site_id, slot: "logo" }` |
 | "Post this on my site" | Calls `create_post`, then `publish_post` without stopping to just describe the step |
 
@@ -67,7 +67,7 @@ described flow when invoked via `prompts/get`:
 | Prompt name | Should route through |
 | --- | --- |
 | `improve_my_homepage` | `list_tenant_pages` → `get_tenant_page` (`/`) → `get_site_media_assets` → suggestions → confirm → `update_tenant_page`/`set_media` |
-| `add_photos_to_site` | attach → `upload_user_media` once per attachment → `set_media` with the confirmed owner's canonical `gallery` placement |
+| `add_photos_to_site` | attach → `upload_user_media` once per attachment → `attach_media` once per uploaded asset with the confirmed owner's canonical `gallery` placement |
 | `finish_my_site_setup` | `get_workspace_context` → media/page/menu/experience checks → single next step |
 | `make_site_more_bookable` | `list_tenant_pages` → `get_tenant_page` (`/`) → `list_locations` → `list_menus`/`list_experiences` → suggestions |
 | `make_my_site_look_better` | `list_tenant_pages` → `get_tenant_page` (`/`) → `get_site_media_assets` → suggestions, biggest visual impact first |

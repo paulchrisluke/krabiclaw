@@ -20,7 +20,7 @@
           <template v-if="locationMedia(loc)?.kind === 'video' && locationMedia(loc)?.public_url && visibleLocCards.has(locIdx)">
             <ClientOnly>
               <video
-                :src="locationMedia(loc)?.public_url || ''"
+                :src="locationMedia(loc)?.public_url ?? undefined"
                 :poster="locationMedia(loc)?.thumbnail_url || undefined"
                 autoplay muted loop playsinline preload="none"
                 class="aspect-video w-full object-contain"
@@ -29,14 +29,14 @@
           </template>
           <UImage
             v-else-if="locationMedia(loc)?.thumbnail_url"
-            :src="locationMedia(loc)?.thumbnail_url || ''"
+            :src="locationMedia(loc)?.thumbnail_url"
             :alt="loc.title"
             loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
           <UImage
             v-else-if="locationMedia(loc)?.kind !== 'video' && locationMedia(loc)?.public_url"
-            :src="locationMedia(loc)?.public_url || ''"
+            :src="locationMedia(loc)?.public_url"
             :alt="loc.title"
             loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"

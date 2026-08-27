@@ -2,8 +2,10 @@ import { HTTPError } from 'nitro';
 import { deleteImage } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import {
+  isSingleMediaPlacement,
   isSupportedMediaPlacement,
   MAX_ORDERED_MEDIA_ASSETS,
 } from '~/shared/media-placement-contract'
@@ -110,7 +112,16 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
   }
 }
 
-export function buildReplaceMediaPlacementQueries(input: {
+// Not exported: a bare "delete everything, insert the given array" is only
+// ever safe for a single-value slot (cardinality <= 1, so there is nothing
+// to resurrect) or for seeding an ordered collection at true creation time
+// (nothing existed before, so nothing can be stale). Any update path on an
+// existing ordered collection must go through attachMediaPlacement /
+// removeMediaPlacement / reorderMediaPlacements in media-placement.ts
+// instead — a client holding a stale read of the list otherwise silently
+// resurrects assets someone else already removed. See setSingleMediaPlacement
+// and insertInitialMediaPlacements below for the two sanctioned callers.
+function buildMediaPlacementReplacementQueries(input: {
   organizationId: string
   siteId: string
   placement: { owner_type: string; owner_id: string; slot: string }
@@ -138,6 +149,42 @@ export function buildReplaceMediaPlacementQueries(input: {
       updatedAt: now,
     })),
   ]
+}
+
+// For a single-value slot only (logo, cover, hero, featured, thumbnail, ...).
+// Cardinality is always <= 1, so a plain replace is the correct semantic —
+// there is no ordering and nothing to resurrect. Throws if placement is an
+// ordered collection; use attach/remove/reorder for those instead.
+export function buildSingleMediaPlacementQueries(input: {
+  organizationId: string
+  siteId: string
+  placement: { owner_type: string; owner_id: string; slot: string }
+  media: Array<{ asset_id: string }>
+  now?: string
+}): BatchQuery[] {
+  if (!isSingleMediaPlacement(input.placement)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'This placement is an ordered collection; use attach/remove/reorder instead of a full replace' })
+  }
+  if (input.media.length > 1) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'This media placement accepts at most one asset' })
+  }
+  return buildMediaPlacementReplacementQueries(input)
+}
+
+// For seeding an ordered collection's initial members in the SAME atomic
+// batch that creates the owning row. Safe only when the owner cannot already
+// exist (a brand-new id, inserted in this same batch) — never call this from
+// an update path, and never let a retry of a create request turn into an
+// update of an existing owner's placements. Use attach/remove/reorder for
+// every other write to an ordered collection.
+export function insertInitialMediaPlacements(input: {
+  organizationId: string
+  siteId: string
+  placement: { owner_type: string; owner_id: string; slot: string }
+  media: Array<{ asset_id: string }>
+  now?: string
+}): BatchQuery[] {
+  return buildMediaPlacementReplacementQueries(input)
 }
 
 // media_placements.owner_id is polymorphic with no owner foreign key, so every
@@ -225,8 +272,8 @@ export async function hydrateMediaAssetRefs(
     db,
     `SELECT * FROM media_assets
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
-        AND id IN (${ids.map(() => '?').join(',')})`,
-    [input.organizationId, input.siteId, ...ids],
+        AND id IN (SELECT value FROM json_each(?))`,
+    [input.organizationId, input.siteId, d1JsonStringSet(ids)],
   )
   const byId = new Map((rows ?? []).map(row => [row.id, row]))
   const missing = ids.find(id => !byId.has(id))

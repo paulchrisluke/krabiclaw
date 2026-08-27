@@ -1,31 +1,36 @@
 import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { parseMediaPlacementKey, setMediaPlacement } from '~/server/utils/media-placement'
+import { parseMediaPlacementKey, setSingleMediaPlacement } from '~/server/utils/media-placement'
+import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
+// Single-value placements only (logo, cover, hero, featured, thumbnail, ...).
+// Ordered collections (galleries, compliance documents) use the dedicated
+// attach/remove/reorder routes in this same directory instead — a full
+// replace is the wrong operation for anything with more than one member.
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
   try {
     const { env, db, site } = await requireSiteAccess(event, siteId)
-    const body = await readRequiredBody<{ placement?: unknown; asset_ids?: unknown; expected_revision?: unknown }>(event)
-    if (!Array.isArray(body.asset_ids) || !body.asset_ids.every(id => typeof id === 'string')) {
-      return jsonResponse({ error: 'asset_ids must be an array of strings' }, { status: 400 })
+    const body = await readRequiredBody<{ placement?: unknown; asset_id?: unknown }>(event)
+    if (body.asset_id !== null && (typeof body.asset_id !== 'string' || !body.asset_id.trim())) {
+      return jsonResponse({ error: 'asset_id must be a non-empty string or null' }, { status: 400 })
     }
-    if (body.expected_revision !== undefined && body.expected_revision !== null && typeof body.expected_revision !== 'string') {
-      return jsonResponse({ error: 'expected_revision must be a string or null' }, { status: 400 })
+    const placement = parseMediaPlacementKey(body.placement)
+    if (!isSingleMediaPlacement(placement)) {
+      return jsonResponse({ error: 'This placement is an ordered collection; use attach/remove/reorder instead' }, { status: 400 })
     }
-    const result = await setMediaPlacement(db, {
+    const result = await setSingleMediaPlacement(db, {
       env,
       organizationId: site.organization_id,
       siteId,
       memberId: site.member_id,
       role: site.member_role,
-      placement: parseMediaPlacementKey(body.placement),
-      assetIds: body.asset_ids,
-      expectedRevision: body.expected_revision as string | null | undefined,
+      placement,
+      assetId: typeof body.asset_id === 'string' ? body.asset_id.trim() : null,
     })
     return jsonResponse(result)
   } catch (error) {

@@ -20,7 +20,10 @@ import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { normalizeBlogSlug, parseScheduledFor, resolveBlogPublicPath, resolveSlugMutation } from '~/utils/blog-editor'
 import { createBlogRedirect } from '~/server/utils/blog-publishing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { buildReplaceMediaPlacementQueries } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
+import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
+import { getMediaPlacements } from '~/server/utils/media-placement'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
 
@@ -375,31 +378,61 @@ async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<Conten
   }))
 }
 
-function contentBlockPlacementQueries(
+async function contentBlockPlacementQueries(
+  db: DbClient,
   blocks: NormalizedEditorBlock[],
   scope: { organizationId: string; siteId: string },
   now?: string,
 ) {
-  return blocks.flatMap((block) => {
+  if (!blocks.length) return []
+  const existingRows = await queryAll<{ id: string }>(db, `
+    SELECT id FROM content_blocks WHERE id IN (SELECT value FROM json_each(?))
+  `, [d1JsonStringSet(blocks.map(block => block.id))])
+  const existingIds = new Set(existingRows.map(row => row.id))
+  const existingPlacements = await getMediaPlacements(db, {
+    siteId: scope.siteId,
+    ownerType: 'content_block',
+    ownerIds: blocks.map(block => block.id),
+  })
+  const queries: BatchQuery[] = []
+  for (const block of blocks) {
     const bySlot = new Map<string, Array<{ asset_id: string }>>()
     for (const item of block.placement_media) {
       const items = bySlot.get(item.slot) ?? []
       items.push({ asset_id: item.asset_id })
       bySlot.set(item.slot, items)
     }
-    return [
-      {
-        query: 'DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ?',
-        params: [scope.organizationId, scope.siteId, 'content_block', block.id],
-      },
-      ...[...bySlot.keys()].flatMap(slot => buildReplaceMediaPlacementQueries({
+    if (existingIds.has(block.id)) {
+      const currentBySlot = new Map<string, string[]>()
+      for (const item of existingPlacements.get(block.id) ?? []) {
+        const ids = currentBySlot.get(item.slot) ?? []
+        ids.push(item.asset_id)
+        currentBySlot.set(item.slot, ids)
+      }
+      for (const slot of new Set([...currentBySlot.keys(), ...bySlot.keys()])) {
+        const current = currentBySlot.get(slot) ?? []
+        const requested = (bySlot.get(slot) ?? []).map(item => item.asset_id)
+        if (current.length === requested.length && current.every((assetId, index) => assetId === requested[index])) continue
+        if (!isSingleMediaPlacement({ owner_type: 'content_block', slot })) {
+          badRequest(`content_blocks.${block.id}.media cannot replace an existing gallery; use attach/remove/reorder media operations`)
+        }
+        queries.push(...buildSingleMediaPlacementQueries({
+          ...scope,
+          placement: { owner_type: 'content_block', owner_id: block.id, slot },
+          media: bySlot.get(slot) ?? [],
+          now,
+        }))
+      }
+      continue
+    }
+    queries.push(...[...bySlot.keys()].flatMap(slot => insertInitialMediaPlacements({
         ...scope,
         placement: { owner_type: 'content_block', owner_id: block.id, slot },
         media: bySlot.get(slot) ?? [],
         now,
-      })),
-    ]
-  })
+      })))
+  }
+  return queries
 }
 
 function renderCanonicalBlogBody(blocks: Array<ContentBlockInput & { id?: string }>) {
@@ -907,8 +940,8 @@ export async function createPlatformBlogPost(
         bodyMarkdown: canonicalBody,
         additionalQueriesBefore: [blogPostInsert],
         additionalQueriesAfter: [
-          ...buildReplaceMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'blog_post', owner_id: id, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [], now }),
-          ...contentBlockPlacementQueries(canonicalBlocks, placementScope, now),
+          ...insertInitialMediaPlacements({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'blog_post', owner_id: id, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [], now }),
+          ...await contentBlockPlacementQueries(db, canonicalBlocks, placementScope, now),
         ],
       })
       const post = await getPlatformBlogPost(db, id, siteId, env)
@@ -1197,7 +1230,7 @@ export async function updatePlatformBlogPost(
       await replaceContentDocumentBlocks(db, blogContentOwnerType(siteId), postId, normalizedBlocks, {
         expected_document_updated_at: input.expected_document_updated_at ?? contentDocument.document.updated_at,
         additionalQueriesBefore: before,
-        additionalQueriesAfter: contentBlockPlacementQueries(normalizedBlocks as NormalizedEditorBlock[], placementScope, now),
+        additionalQueriesAfter: await contentBlockPlacementQueries(db, normalizedBlocks as NormalizedEditorBlock[], placementScope, now),
       })
     } else {
       const post = await queryFirst<ApiRecord | null>(db, `${rowUpdate.query} RETURNING id`, rowUpdate.params)
@@ -1208,7 +1241,7 @@ export async function updatePlatformBlogPost(
 
     if (featuredId !== undefined) {
       const placementScope = await mediaPlacementScope(db, siteId, current.organization_id)
-      await executeBatch(db, buildReplaceMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'blog_post', owner_id: postId, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [] }))
+      await executeBatch(db, buildSingleMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'blog_post', owner_id: postId, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [] }))
     }
 
     if (requestedSlug && requestedSlug !== current?.slug && current?.first_published_at && input.redirect_old_slug !== false) {
@@ -1409,8 +1442,8 @@ export async function createPlatformDoc(
         bodyMarkdown: canonicalBody,
         additionalQueriesBefore: [docInsert],
         additionalQueriesAfter: [
-          ...buildReplaceMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'platform_doc', owner_id: id, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [], now }),
-          ...contentBlockPlacementQueries(normalizedBlocks, placementScope, now),
+          ...insertInitialMediaPlacements({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'platform_doc', owner_id: id, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [], now }),
+          ...await contentBlockPlacementQueries(db, normalizedBlocks, placementScope, now),
         ],
       })
 
@@ -1502,7 +1535,7 @@ export async function updatePlatformDoc(
     ? await mediaPlacementScope(db, null, null)
     : null
   if (featuredId !== undefined && placementScope) {
-    mutationQueries.push(...buildReplaceMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'platform_doc', owner_id: docId, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [], now }))
+    mutationQueries.push(...buildSingleMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'platform_doc', owner_id: docId, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [], now }))
   }
   try {
     if (normalizedBlocks && placementScope) {
@@ -1511,7 +1544,7 @@ export async function updatePlatformDoc(
         additionalQueriesBefore: [rowUpdate],
         additionalQueriesAfter: [
           ...mutationQueries.slice(1),
-          ...contentBlockPlacementQueries(normalizedBlocks, placementScope, now),
+          ...await contentBlockPlacementQueries(db, normalizedBlocks, placementScope, now),
         ],
       })
     } else {

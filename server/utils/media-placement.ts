@@ -1,11 +1,12 @@
 import { HTTPError } from 'nitro'
-import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { executeBatch, execute, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { assertResourceAccess, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   hydrateMediaAssetRefs,
   MAX_ORDERED_MEDIA_ASSETS,
-  buildReplaceMediaPlacementQueries,
+  buildSingleMediaPlacementQueries,
   isSingleMediaPlacement,
   isSupportedMediaPlacement,
   toResolvedMediaAsset,
@@ -27,6 +28,15 @@ export type MediaPlacementItem = ResolvedMediaAsset & {
   placement_id: string
   slot: string
   sort_order: number
+}
+
+interface PlacementAuthInput {
+  organizationId: string
+  siteId: string
+  env?: CloudflareEnv
+  memberId?: string
+  role?: MemberAccessPrincipal['role']
+  placement: MediaPlacementKey
 }
 
 const OWNER_TABLES: Partial<Record<MediaPlacementOwnerType, string>> = {
@@ -59,33 +69,40 @@ export function parseMediaPlacementKey(value: unknown): MediaPlacementKey {
   return { owner_type: ownerType as EditableMediaPlacementOwnerType, owner_id: ownerId, slot }
 }
 
-async function currentPlacementRevision(db: DbClient, input: {
-  organizationId: string
-  siteId: string
-  placement: MediaPlacementKey
-}): Promise<string | null> {
-  const row = await queryFirst<{ revision: string | null }>(db, `
-    SELECT MAX(updated_at) AS revision FROM media_placements
-     WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
-  `, [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot])
-  return row?.revision ?? null
+export function parseMediaPlacementMoves(value: unknown): MediaPlacementMove[] {
+  if (!Array.isArray(value)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'moves must be an array' })
+  }
+  return value.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'each move must be an object' })
+    }
+    const record = item as Record<string, unknown>
+    if (typeof record.asset_id !== 'string' || !record.asset_id.trim()) {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'each move requires asset_id' })
+    }
+    const move: MediaPlacementMove = { asset_id: record.asset_id }
+    if (record.before_asset_id !== undefined) {
+      if (typeof record.before_asset_id !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: 'before_asset_id must be a string' })
+      move.before_asset_id = record.before_asset_id
+    }
+    if (record.after_asset_id !== undefined) {
+      if (typeof record.after_asset_id !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: 'after_asset_id must be a string' })
+      move.after_asset_id = record.after_asset_id
+    }
+    return move
+  })
 }
 
-export async function setMediaPlacement(db: DbClient, input: {
-  organizationId: string
-  siteId: string
-  env?: CloudflareEnv
-  memberId?: string
-  role?: MemberAccessPrincipal['role']
-  placement: MediaPlacementKey
-  assetIds: string[]
-  // Full-replacement writes are otherwise last-write-wins: two editors reordering
-  // the same gallery concurrently would silently clobber each other with no
-  // conflict signal. When provided, must match MAX(updated_at) across the
-  // owner+slot's current placements (or null when the slot is currently empty)
-  // or the write is rejected with a 409 instead of applied.
-  expectedRevision?: string | null
-}) {
+function isUniqueConstraintError(error: unknown): boolean {
+  return /UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error))
+}
+
+function allowedKindsFor(placement: MediaPlacementKey): Array<'image' | 'video' | 'file'> {
+  return placement.owner_type === 'tenant_compliance' ? ['file'] : ['image', 'video']
+}
+
+async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput): Promise<void> {
   const locationId = await requirePlacementOwner(db, input)
   if (input.memberId && input.role) {
     if (!input.env) throw new Error('Authenticated media placement requires the Better Auth environment')
@@ -98,61 +115,271 @@ export async function setMediaPlacement(db: DbClient, input: {
       resourceLocationId: locationId,
     })
   }
-  if (isSingleMediaPlacement(input.placement) && input.assetIds.length > 1) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'This media placement accepts at most one asset' })
-  }
-  if (input.assetIds.length > MAX_ORDERED_MEDIA_ASSETS) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `Media placements accept at most ${MAX_ORDERED_MEDIA_ASSETS} assets` })
-  }
-  const refs: MediaAssetRefInput[] = input.assetIds.map(asset_id => ({ asset_id }))
-  const media = await hydrateMediaAssetRefs(db, {
-    organizationId: input.organizationId,
+}
+
+// The canonical, server-authoritative state of one owner+slot's media after
+// a mutation. Every attach/remove/reorder response returns this so callers
+// replace their local list wholesale rather than trying to reconcile it
+// against whatever they sent — the response, not the request, is the truth.
+async function canonicalPlacementState(db: DbClient, input: {
+  siteId: string
+  placement: MediaPlacementKey
+}) {
+  const items = (await getMediaPlacements(db, {
     siteId: input.siteId,
-    refs,
-    allowedKinds: input.placement.owner_type === 'tenant_compliance' ? ['file'] : ['image', 'video'],
-    fieldName: 'asset_ids',
-  })
-  const queries = buildReplaceMediaPlacementQueries({ ...input, media })
-  if (input.expectedRevision !== undefined) {
-    const now = new Date().toISOString()
-    // A D1 batch is one implicit atomic transaction: if this guard row's
-    // owner_type fails media_placements_owner_type_check, the whole batch
-    // (including the real delete+insert below) rolls back. The guard only
-    // attempts to insert when the current revision no longer matches what
-    // the caller last read, so a concurrent write between then and now
-    // aborts this one instead of silently overwriting it.
-    queries.unshift({
-      query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-        SELECT ?, ?, ?, '__concurrency_guard__', ?, ?, '__concurrency_guard__', 0, 'active', ?, ?
-         WHERE COALESCE((
-           SELECT MAX(updated_at) FROM media_placements
-            WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
-         ), '') != COALESCE(?, '')`,
-      params: [
-        crypto.randomUUID(), input.organizationId, input.siteId, input.placement.owner_id, input.placement.slot, now, now,
-        input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot,
-        input.expectedRevision,
-      ],
-    })
-  }
-  try {
-    await executeBatch(db, queries)
-  } catch (error) {
-    if (input.expectedRevision !== undefined) {
-      const latest = await currentPlacementRevision(db, input)
-      if (latest !== input.expectedRevision) {
-        throw new HTTPError({ statusCode: 409, statusMessage: 'This gallery was updated by someone else. Reload and try again.' })
-      }
-    }
-    throw error
-  }
+    ownerType: input.placement.owner_type,
+    ownerIds: [input.placement.owner_id],
+    slot: input.placement.slot,
+  })).get(input.placement.owner_id) ?? []
   return {
     entity: input.placement.owner_type,
     id: input.placement.owner_id,
     placement: input.placement,
-    asset_ids: media.map(asset => asset.asset_id),
-    media,
-    cleared: media.length === 0,
+    asset_ids: items.map(item => item.asset_id),
+    media: items,
+    cleared: items.length === 0,
+  }
+}
+
+// Single-value slots (logo, cover, hero, featured, thumbnail, ...): cardinality
+// is always <= 1, so a plain replace is the correct, safe semantic — there is
+// no ordering and nothing to resurrect. Throws for an ordered collection; use
+// attachMediaPlacement/removeMediaPlacement/reorderMediaPlacements for those.
+export async function setSingleMediaPlacement(db: DbClient, input: {
+  organizationId: string
+  siteId: string
+  env?: CloudflareEnv
+  memberId?: string
+  role?: MemberAccessPrincipal['role']
+  placement: MediaPlacementKey
+  assetId: string | null
+}) {
+  await authorizePlacementWrite(db, input)
+  const refs: MediaAssetRefInput[] = input.assetId ? [{ asset_id: input.assetId }] : []
+  const media = await hydrateMediaAssetRefs(db, {
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    refs,
+    allowedKinds: allowedKindsFor(input.placement),
+    fieldName: 'asset_id',
+  })
+  await executeBatch(db, buildSingleMediaPlacementQueries({ ...input, media }))
+  return canonicalPlacementState(db, input)
+}
+
+// Attaches one asset to an ordered collection. Appends at the end (its
+// position within the current live count, computed atomically inside the
+// INSERT itself — not from any earlier read) unless the collection is
+// already at MAX_ORDERED_MEDIA_ASSETS, in which case the INSERT's WHERE
+// clause makes it a no-op and this throws. A duplicate attach attempt hits
+// the DB's own unique(owner_type, owner_id, slot, asset_id) constraint and
+// is reported as a 409, not silently ignored — callers that want idempotent
+// "make sure this is attached" behavior should treat 409 as success.
+export async function attachMediaPlacement(db: DbClient, input: {
+  organizationId: string
+  siteId: string
+  env?: CloudflareEnv
+  memberId?: string
+  role?: MemberAccessPrincipal['role']
+  placement: MediaPlacementKey
+  assetId: string
+}) {
+  if (isSingleMediaPlacement(input.placement)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'This placement is single-valued; use setSingleMediaPlacement instead' })
+  }
+  await authorizePlacementWrite(db, input)
+  const [asset] = await hydrateMediaAssetRefs(db, {
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    refs: [{ asset_id: input.assetId }],
+    allowedKinds: allowedKindsFor(input.placement),
+    fieldName: 'asset_id',
+  })
+  if (!asset) throw new HTTPError({ statusCode: 400, statusMessage: 'asset_id is required' })
+  const now = new Date().toISOString()
+  const scopeParams = [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
+  let results
+  try {
+    results = await executeBatch(db, [{
+      query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+        SELECT ?, ?, ?, ?, ?, ?, ?,
+          COALESCE((SELECT MAX(sort_order) + 1 FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?), 0),
+          'active', ?, ?
+        WHERE (SELECT COUNT(*) FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?) < ?`,
+      params: [
+        crypto.randomUUID(), ...scopeParams, asset.asset_id,
+        ...scopeParams,
+        now, now,
+        ...scopeParams,
+        MAX_ORDERED_MEDIA_ASSETS,
+      ],
+    }])
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Media asset is already attached to this placement' })
+    }
+    throw error
+  }
+  if (Number(results[0]?.meta?.changes ?? 0) === 0) {
+    throw new HTTPError({ statusCode: 422, statusMessage: `Media placements accept at most ${MAX_ORDERED_MEDIA_ASSETS} assets` })
+  }
+  return canonicalPlacementState(db, input)
+}
+
+// Detaches one asset from an ordered collection. Idempotent: removing an
+// asset that's already gone (or was never attached) affects zero rows and
+// is not an error — it never mutates anything else in the collection, so
+// unmentioned assets keep their exact position.
+export async function removeMediaPlacement(db: DbClient, input: {
+  organizationId: string
+  siteId: string
+  env?: CloudflareEnv
+  memberId?: string
+  role?: MemberAccessPrincipal['role']
+  placement: MediaPlacementKey
+  assetId: string
+}) {
+  await authorizePlacementWrite(db, input)
+  await execute(db, `
+    DELETE FROM media_placements
+     WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?
+  `, [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, input.assetId])
+  return canonicalPlacementState(db, input)
+}
+
+export interface MediaPlacementMove {
+  asset_id: string
+  before_asset_id?: string
+  after_asset_id?: string
+}
+
+// Rewrites positions within an ordered collection without ever changing
+// membership. Moves are anchored (before/after another asset already in the
+// collection) rather than numeric, since a numeric index is only meaningful
+// against a snapshot the caller may no longer hold; moves apply sequentially
+// in the order given, each against the result of the previous one.
+//
+// Membership can never change here: every referenced asset (moved or anchor)
+// must already be in the collection or the whole call is rejected before any
+// write happens. The write itself is guarded atomically against the exact
+// live membership read moments earlier — if anything attached or detached in
+// between, the guard row's owner_type fails media_placements_owner_type_check,
+// the whole batch (including every position update) rolls back, and the
+// caller gets a 409 to re-read and retry. This is stricter than checking just
+// the moved assets: it also catches an unrelated concurrent attach/remove
+// that this reorder's plan never accounted for.
+//
+// Positions are dense integers with a unique(owner, sort_order) constraint,
+// so a straight per-row UPDATE to final positions can collide mid-batch
+// (e.g. swapping two rows). Every affected row is first moved to a negative,
+// collision-free temporary position, then to its final dense position — two
+// full passes, not a partial per-row update.
+export async function reorderMediaPlacements(db: DbClient, input: {
+  organizationId: string
+  siteId: string
+  env?: CloudflareEnv
+  memberId?: string
+  role?: MemberAccessPrincipal['role']
+  placement: MediaPlacementKey
+  moves: MediaPlacementMove[]
+}) {
+  if (isSingleMediaPlacement(input.placement)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'This placement is single-valued and has no order' })
+  }
+  await authorizePlacementWrite(db, input)
+  if (input.moves.length === 0) return canonicalPlacementState(db, input)
+
+  const scopeParams = [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
+  const currentRows = await queryAll<{ asset_id: string }>(db, `
+    SELECT asset_id FROM media_placements
+     WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+     ORDER BY sort_order ASC
+  `, scopeParams)
+  const currentOrder = currentRows.map(row => row.asset_id)
+  const currentSet = new Set(currentOrder)
+
+  for (const move of input.moves) {
+    if (!currentSet.has(move.asset_id)) {
+      throw new HTTPError({ statusCode: 409, statusMessage: `Media asset is no longer attached to this placement: ${move.asset_id}` })
+    }
+    if (move.before_asset_id && move.after_asset_id) {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'A move may specify before_asset_id or after_asset_id, not both' })
+    }
+    const anchor = move.before_asset_id ?? move.after_asset_id
+    if (anchor && !currentSet.has(anchor)) {
+      throw new HTTPError({ statusCode: 409, statusMessage: `Media asset is no longer attached to this placement: ${anchor}` })
+    }
+  }
+
+  let order = [...currentOrder]
+  for (const move of input.moves) {
+    order = order.filter(assetId => assetId !== move.asset_id)
+    if (move.before_asset_id) {
+      const anchorIndex = order.indexOf(move.before_asset_id)
+      order.splice(anchorIndex, 0, move.asset_id)
+    } else if (move.after_asset_id) {
+      const anchorIndex = order.indexOf(move.after_asset_id)
+      order.splice(anchorIndex + 1, 0, move.asset_id)
+    } else {
+      order.push(move.asset_id)
+    }
+  }
+
+  const queries: BatchQuery[] = [buildMembershipGuardQuery({
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    placement: input.placement,
+    expectedAssetIds: currentOrder,
+  })]
+  order.forEach((assetId, index) => {
+    queries.push({
+      query: `UPDATE media_placements SET sort_order = ? WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?`,
+      params: [-(index + 1), ...scopeParams, assetId],
+    })
+  })
+  order.forEach((assetId, index) => {
+    queries.push({
+      query: `UPDATE media_placements SET sort_order = ?, updated_at = ? WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?`,
+      params: [index, new Date().toISOString(), ...scopeParams, assetId],
+    })
+  })
+
+  try {
+    await executeBatch(db, queries)
+  } catch (error) {
+    throw new HTTPError({ statusCode: 409, statusMessage: 'This collection changed while reordering. Reload and try again.', cause: error })
+  }
+  return canonicalPlacementState(db, input)
+}
+
+function buildMembershipGuardQuery(input: {
+  organizationId: string
+  siteId: string
+  placement: MediaPlacementKey
+  expectedAssetIds: string[]
+}): BatchQuery {
+  const scopeParams = [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
+  const expectedAssetIds = d1JsonStringSet(input.expectedAssetIds)
+  const values = `SELECT value AS asset_id FROM json_each(?)`
+  const now = new Date().toISOString()
+  return {
+    query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+      SELECT ?, ?, ?, '__reorder_guard__', ?, ?, '__reorder_guard__', 0, 'active', ?, ?
+       WHERE EXISTS (
+         SELECT asset_id FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+         EXCEPT
+         ${values}
+       )
+       OR EXISTS (
+         ${values}
+         EXCEPT
+         SELECT asset_id FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+       )`,
+    params: [
+      crypto.randomUUID(), input.organizationId, input.siteId, input.placement.owner_id, input.placement.slot, now, now,
+      ...scopeParams, expectedAssetIds,
+      expectedAssetIds, ...scopeParams,
+    ],
   }
 }
 
@@ -171,11 +398,11 @@ export async function getMediaPlacements(db: DbClient, input: {
       FROM media_placements mp
       JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id AND ma.site_id = mp.site_id
      WHERE mp.site_id = ? AND mp.owner_type = ?
-       AND mp.owner_id IN (${ownerIds.map(() => '?').join(',')})
+       AND mp.owner_id IN (SELECT value FROM json_each(?))
        ${input.slot ? 'AND mp.slot = ?' : ''}
        AND mp.status = 'active' AND ma.status = 'active'
      ORDER BY mp.owner_id, mp.slot, mp.sort_order
-  `, [input.siteId, input.ownerType, ...ownerIds, ...(input.slot ? [input.slot] : [])])
+  `, [input.siteId, input.ownerType, d1JsonStringSet(ownerIds), ...(input.slot ? [input.slot] : [])])
   for (const row of rows) {
     const resolved = toResolvedMediaAsset(row as unknown as MediaAsset)
     result.get(String(row.owner_id))?.push({

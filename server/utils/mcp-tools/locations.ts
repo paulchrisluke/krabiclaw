@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
+import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -8,12 +8,14 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: false,
+      inputSchema: { ...paginationInputSchema },
       outputSchema: {
         type: 'object',
         properties: {
           locations: { type: 'array', items: locationListItemObject },
+          page_info: pageInfoObject,
         },
-        required: ['locations'],
+        required: ['locations', 'page_info'],
       },
     }),
   siteTool({

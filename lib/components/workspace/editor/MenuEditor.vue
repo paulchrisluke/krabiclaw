@@ -234,7 +234,7 @@
               :location-id="props.locationId"
               accept="any"
               title="Item image or video"
-              @update:model-value="handleQuickUpdateItem(item, coverMediaUpdate(item, $event))"
+              @update:model-value="handleQuickUpdateItemCover(item, $event)"
             >
               <div class="group relative size-14 overflow-hidden rounded-md border border-default bg-muted">
                 <img
@@ -339,6 +339,7 @@ const {
   createMenu,
   deleteMenu,
   updateMenuItem,
+  updateMenuItemCoverMedia,
   renameMenuSection,
   deleteMenuSection,
   updateMenu
@@ -431,10 +432,13 @@ const itemEditPath = (item: MenuItem) => ({
   query: menuRouteQuery.value
 })
 
-const coverMediaUpdate = (item: MenuItem, assetId: string | null): UpdateMenuItemRequest => {
-  const rest = (item.media ?? []).slice(1).map((media) => ({ asset_id: media.asset_id }))
-  const next = assetId?.trim()
-  return { media: next ? [{ asset_id: next }, ...rest] : rest }
+const handleQuickUpdateItemCover = async (item: MenuItem, assetId: string | null) => {
+  try {
+    await updateMenuItemCoverMedia(item.id, assetId?.trim() || null, item.media?.[0]?.asset_id ?? null)
+  } catch (err) {
+    console.error('handleQuickUpdateItemCover failed:', err)
+    toast.add({ description: 'Failed to update item image', color: 'error' })
+  }
 }
 
 const handleQuickUpdateItem = async (item: MenuItem, updates: UpdateMenuItemRequest) => {

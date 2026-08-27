@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { bookingPolicyObject, bookingPolicyWriteSchema, renderedBookingPolicySummaryObject, siteTool } from './shared'
+import { bookingPolicyObject, bookingPolicyWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, siteTool } from './shared'
 
 const TENANT_PAGE_METADATA_SCHEMA = {
   path: { type: 'string' },
@@ -51,8 +51,8 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { locale: { type: ['string', 'null'] } },
-      outputSchema: { type: 'object', properties: { pages: { type: 'array', items: { type: 'object' } } }, required: ['pages'] },
+      inputSchema: { locale: { type: ['string', 'null'] }, ...paginationInputSchema },
+      outputSchema: { type: 'object', properties: { pages: { type: 'array', items: { type: 'object' } }, page_info: pageInfoObject }, required: ['pages', 'page_info'] },
     }),
   siteTool({
       name: 'get_tenant_page',

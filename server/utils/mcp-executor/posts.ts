@@ -7,6 +7,7 @@ import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagr
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requiredString } from './shared'
 
 async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
@@ -24,16 +25,18 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_posts":
-      return {
-        posts: (await listPosts(
+      {
+        const posts = (await listPosts(
           site.db,
           site.organizationId,
           site.siteId,
           site.env,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
-        )).map((post) => attachViewUrlToRecord(post, site, {}, site.env)),
-      };
+        )).map((post) => attachViewUrlToRecord(post, site, {}, site.env));
+        const page = paginateMcpCollection(posts, args, { resource: `posts:${site.siteId}:${optionalString(args, 'status') ?? ''}:${optionalString(args, 'location_id') ?? ''}` });
+        return { posts: page.items, page_info: page.page_info };
+      }
     case "get_post":
       {
         const post = await getPost(

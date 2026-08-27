@@ -1,4 +1,5 @@
 import { queryAll, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -278,10 +279,10 @@ export async function listAgenda(
     }]
   }).sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.id.localeCompare(right.id))
 
-  const locationParams: unknown[] = [organizationId, ...capabilitySites.map(site => site.id)]
+  const locationParams: unknown[] = [organizationId, d1JsonStringSet(capabilitySites.map(site => site.id))]
   const locations = capabilitySites.length === 0 ? [] : await queryAll<LocationRow>(db, `
     SELECT l.id, l.site_id, l.title FROM business_locations l
-    WHERE l.organization_id = ? AND l.site_id IN (${capabilitySites.map(() => '?').join(', ')})
+    WHERE l.organization_id = ? AND l.site_id IN (SELECT value FROM json_each(?))
     ORDER BY l.title, l.id
   `, locationParams).then(rows => rows.filter((location) => {
     if (!scoped) return true

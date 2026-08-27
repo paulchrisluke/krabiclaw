@@ -1,5 +1,6 @@
 import { HTTPError } from 'nitro';
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
   createContentDocumentWithBlocks,
   getContentDocumentById,
@@ -25,7 +26,8 @@ import { hasSiteEntitlement } from '~/server/utils/billing'
 import { normalizeDomain } from '~/server/utils/domain-shared'
 import { normalizeLocale } from '~/server/utils/site-i18n'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { buildReplaceMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 
 export interface TenantPageEditorInput {
@@ -200,7 +202,12 @@ async function tenantPagePlacementQueries(
   blocks: TenantPageBlock[],
   now?: string,
 ): Promise<BatchQuery[]> {
+  if (!blocks.length) return []
   const queries: BatchQuery[] = []
+  const existingRows = await queryAll<{ id: string }>(db, `
+    SELECT id FROM content_blocks WHERE id IN (SELECT value FROM json_each(?))
+  `, [d1JsonStringSet(blocks.map(block => block.id))])
+  const existingBlockIds = new Set(existingRows.map(row => row.id))
   const existingPlacements = await getMediaPlacements(db, {
     siteId,
     ownerType: 'content_block',
@@ -213,12 +220,40 @@ async function tenantPagePlacementQueries(
       slotMedia.push(item)
       bySlot.set(item.slot, slotMedia)
     }
+    if (existingBlockIds.has(block.id)) {
+      const currentBySlot = new Map<string, string[]>()
+      for (const item of existingPlacements.get(block.id) ?? []) {
+        const ids = currentBySlot.get(item.slot) ?? []
+        ids.push(item.asset_id)
+        currentBySlot.set(item.slot, ids)
+      }
+      const slots = new Set([...currentBySlot.keys(), ...bySlot.keys()])
+      for (const slot of slots) {
+        const current = currentBySlot.get(slot) ?? []
+        const requested = (bySlot.get(slot) ?? []).map(item => item.asset_id)
+        if (current.length === requested.length && current.every((assetId, index) => assetId === requested[index])) continue
+        if (!isSingleMediaPlacement({ owner_type: 'content_block', slot })) {
+          badRequest(`blocks.${block.id}.media cannot replace an existing gallery; use attach/remove/reorder media operations`)
+        }
+        const media = await hydrateMediaAssetRefs(db, {
+          organizationId,
+          siteId,
+          refs: (bySlot.get(slot) ?? []).map(item => ({ asset_id: item.asset_id })),
+          allowedKinds: ['image', 'video'],
+          fieldName: `blocks.${block.id}.media`,
+        })
+        queries.push(...buildSingleMediaPlacementQueries({
+          organizationId,
+          siteId,
+          placement: { owner_type: 'content_block', owner_id: block.id, slot },
+          media,
+          now,
+        }))
+      }
+      continue
+    }
     const canonicalSlot = block.type === 'gallery' ? 'gallery' : ['hero', 'image'].includes(block.type) ? 'media' : null
-    const slots = new Set([
-      ...(existingPlacements.get(block.id) ?? []).map(item => item.slot),
-      ...bySlot.keys(),
-      ...(canonicalSlot ? [canonicalSlot] : []),
-    ])
+    const slots = new Set([...bySlot.keys(), ...(canonicalSlot ? [canonicalSlot] : [])])
     for (const slot of slots) {
       const items = bySlot.get(slot) ?? []
       const media = await hydrateMediaAssetRefs(db, {
@@ -228,7 +263,7 @@ async function tenantPagePlacementQueries(
         allowedKinds: ['image', 'video'],
         fieldName: `blocks.${block.id}.media`,
       })
-      queries.push(...buildReplaceMediaPlacementQueries({
+      queries.push(...insertInitialMediaPlacements({
         organizationId,
         siteId,
         placement: { owner_type: 'content_block', owner_id: block.id, slot },
@@ -673,8 +708,8 @@ export async function applyOnboardingTenantPages(
        AND d.owner_type = 'tenant_page'
        AND d.owner_id = v.id
      WHERE v.site_id = ? AND v.organization_id = ? AND v.locale = ?
-       AND v.path IN (${paths.map(() => '?').join(', ')})
-  `, [input.siteId, input.organizationId, locale, ...paths])
+       AND v.path IN (SELECT value FROM json_each(?))
+  `, [input.siteId, input.organizationId, locale, d1JsonStringSet(paths)])
   const existingByPath = new Map<string, OnboardingTenantPageVariantRow>()
   for (const row of existingRows) {
     existingByPath.set(normalizeTenantPagePath(row.path), row)

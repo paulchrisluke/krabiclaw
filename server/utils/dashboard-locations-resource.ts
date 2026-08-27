@@ -2,6 +2,7 @@ import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { listAccessibleLocationIds } from '~/server/utils/member-access'
 
@@ -40,7 +41,7 @@ export async function listDashboardLocationsResource(
   })
   if (accessibleLocationIds?.length === 0) return { success: true as const, locations: [] }
   const locationFilter = accessibleLocationIds
-    ? `AND id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
+    ? `AND id IN (SELECT value FROM json_each(?))`
     : ''
   const locations = await queryAll<DashboardLocationResource>(db, `
     SELECT id, slug, title, city, is_primary, status, address, phone, email,
@@ -49,7 +50,7 @@ export async function listDashboardLocationsResource(
      WHERE organization_id = ? AND site_id = ?
        ${locationFilter}
      ORDER BY is_primary DESC, title ASC
-  `, [organization.id, site.id, ...(accessibleLocationIds ?? [])])
+  `, [organization.id, site.id, ...(accessibleLocationIds ? [d1JsonStringSet(accessibleLocationIds)] : [])])
   return {
     success: true as const,
     locations: locations.map(location => ({

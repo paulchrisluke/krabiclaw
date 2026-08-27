@@ -2,12 +2,13 @@ import { HTTPError } from 'nitro';
 
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import {
-  buildReplaceMediaPlacementQueries,
+  insertInitialMediaPlacements,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
@@ -446,7 +447,7 @@ export async function createExperience(
     },
   ]
   if (media) {
-    queries.push(...buildReplaceMediaPlacementQueries({
+    queries.push(...insertInitialMediaPlacements({
       organizationId,
       siteId,
       placement: { owner_type: 'experience', owner_id: id, slot: 'gallery' },
@@ -482,8 +483,7 @@ export async function createExperience(
   return created
 }
 
-export type UpdateExperienceInput = Partial<CreateExperienceInput> & { slug?: string }
-
+export type UpdateExperienceInput = Omit<Partial<CreateExperienceInput>, 'media'> & { slug?: string }
 export async function updateExperience(
   db: DbClient,
   siteId: string,
@@ -497,15 +497,6 @@ export async function updateExperience(
   assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
   const owner = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
   if (!owner) return null
-  const media = input.media !== undefined
-    ? await hydrateMediaAssetRefs(db, {
-      organizationId: owner.organization_id,
-      siteId,
-      refs: input.media ?? [],
-      allowedKinds: ['image', 'video'],
-      fieldName: 'media',
-    })
-    : null
   const sets: string[] = []
   const params: (string | number | null)[] = []
 
@@ -562,23 +553,6 @@ export async function updateExperience(
   if (input.robots !== undefined) { sets.push('robots = ?'); params.push(input.robots ?? null) }
 
   if (sets.length === 0) {
-    if (media) {
-      const now = new Date().toISOString()
-      const [result] = await executeBatch(db, [
-        {
-          query: `UPDATE experiences SET updated_at = ? WHERE organization_id = ? AND site_id = ? AND id = ?`,
-          params: [now, owner.organization_id, siteId, id],
-        },
-        ...buildReplaceMediaPlacementQueries({
-          organizationId: owner.organization_id,
-          siteId,
-          placement: { owner_type: 'experience', owner_id: id, slot: 'gallery' },
-          media,
-          now,
-        }),
-      ])
-      if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
-    }
     return getExperienceById(db, siteId, id)
   }
 
@@ -591,22 +565,8 @@ export async function updateExperience(
     query: `UPDATE experiences SET ${sets.join(', ')} WHERE organization_id = ? AND site_id = ? AND id = ?`,
     params,
   }
-  if (media) {
-    const [result] = await executeBatch(db, [
-      updateQuery,
-      ...buildReplaceMediaPlacementQueries({
-        organizationId: owner.organization_id,
-        siteId,
-        placement: { owner_type: 'experience', owner_id: id, slot: 'gallery' },
-        media,
-        now,
-      }),
-    ])
-    if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
-  } else {
-    const result = await execute(db, updateQuery.query, updateQuery.params)
-    if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
-  }
+  const result = await execute(db, updateQuery.query, updateQuery.params)
+  if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
 
   return getExperienceById(db, siteId, id)
 }
@@ -1345,30 +1305,17 @@ export async function attachAvailabilitySummaries<T extends Experience>(
   toCursor.setUTCDate(toCursor.getUTCDate() + AVAILABILITY_SUMMARY_WINDOW_DAYS - 1)
   const toDate = toCursor.toISOString().slice(0, 10)
 
-  // Chunk locationIds to stay within D1's parameter limit (circa 100 params per statement).
-  // locationIds query includes site_id + each location id, so max ~97 locations per chunk.
-  const locationChunks: string[][] = []
-  for (let index = 0; index < locationIds.length; index += 97) {
-    locationChunks.push(locationIds.slice(index, index + 97))
-  }
-
-  const chunks: string[][] = []
-  for (let index = 0; index < experienceIds.length; index += 97) {
-    chunks.push(experienceIds.slice(index, index + 97))
-  }
+  const experienceIdsJson = d1JsonStringSet(experienceIds)
 
   const [locationRows, configRows, chunkRows] = await Promise.all([
     context
       ? Promise.resolve(context.locations)
       : locationIds.length
-      ? Promise.all(locationChunks.map(async (chunk) => {
-        const placeholders = chunk.map(() => '?').join(',')
-        return queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
+      ? queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
           db,
-          `SELECT id, special_hours, timezone FROM business_locations WHERE site_id = ? AND id IN (${placeholders})`,
-          [siteId, ...chunk],
+          `SELECT id, special_hours, timezone FROM business_locations WHERE site_id = ? AND id IN (SELECT value FROM json_each(?))`,
+          [siteId, d1JsonStringSet(locationIds)],
         )
-      })).then((results) => results.flatMap(r => r ?? []))
       : Promise.resolve([]),
     context
       ? Promise.resolve([{ key: "default_timezone", value: context.defaultTimezone }])
@@ -1377,30 +1324,29 @@ export async function attachAvailabilitySummaries<T extends Experience>(
           `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'default_timezone'`,
           [organizationId, siteId],
         ),
-    Promise.all(chunks.map(async (chunk) => {
-      const placeholders = chunk.map(() => '?').join(',')
+    Promise.all([async () => {
       const rows = await queryAll<AvailabilityDataRow>(
         db,
         `SELECT 'booking' AS row_kind, experience_id, booking_date AS event_date,
                 time_slot, SUM(party_size) AS booked, NULL AS status,
                 NULL AS capacity_override
            FROM experience_bookings
-          WHERE site_id = ? AND experience_id IN (${placeholders})
+          WHERE site_id = ? AND experience_id IN (SELECT value FROM json_each(?))
             AND booking_date BETWEEN ? AND ? AND status IN ('pending', 'confirmed')
           GROUP BY experience_id, booking_date, time_slot
          UNION ALL
          SELECT 'override' AS row_kind, experience_id, override_date AS event_date,
                 time_slot, NULL AS booked, status, capacity_override
            FROM experience_slot_overrides
-          WHERE site_id = ? AND experience_id IN (${placeholders})
+          WHERE site_id = ? AND experience_id IN (SELECT value FROM json_each(?))
             AND override_date BETWEEN ? AND ?`,
         [
           siteId,
-          ...chunk,
+          experienceIdsJson,
           fromDate,
           toDate,
           siteId,
-          ...chunk,
+          experienceIdsJson,
           fromDate,
           toDate,
         ],
@@ -1427,7 +1373,7 @@ export async function attachAvailabilitySummaries<T extends Experience>(
           capacity_override: row.capacity_override,
         }))
       return { bookings, overrides }
-    })),
+    }].map(load => load())),
   ])
   const bookingRows = chunkRows.flatMap(chunk => chunk.bookings)
   const overrideRows = chunkRows.flatMap(chunk => chunk.overrides)

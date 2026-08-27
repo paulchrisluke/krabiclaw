@@ -25,18 +25,17 @@ export default defineHandler(async (event) => {
         FROM business_locations
         ORDER BY is_primary DESC, title ASC
       `), ])
-    const organizationRows: OrganizationRow[] = []
-    for (const organization of organizations) {
+    const organizationRows: OrganizationRow[] = await Promise.all(organizations.map(async (organization) => {
       const members = await listOrganizationMembers(env, organization.id)
       const impersonationUser = members.find(member => member.role === 'owner')
         ?? members.find(member => member.role === 'admin')
-      organizationRows.push({
+      return {
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
         impersonation_user_id: impersonationUser?.userId ?? null,
-      })
-    }
+      }
+    }))
     organizationRows.sort((left, right) => left.name.localeCompare(right.name))
 
     const locationsBySite = new Map<string, LocationRow[]>()

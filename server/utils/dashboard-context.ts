@@ -6,6 +6,7 @@ import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
 
 function safeJsonParse(value: string): unknown {
@@ -215,7 +216,7 @@ async function resolveRecentlyTransferredSite(db: DbClient, organizationId: stri
   return await queryFirst<DashboardSiteRow>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
            s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
-           s.feature_overrides
+           s.feature_overrides, s.theme_id
     FROM site_transfer_requests t
     JOIN sites s ON s.id = t.site_id
     WHERE t.claiming_organization_id = ? AND t.accepted_by_user_id = ? AND t.status = 'accepted'
@@ -384,15 +385,15 @@ export async function listOrganizationSites(
 ) {
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
-  const scopedTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
+  const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
   const rows = await queryAll<Omit<DashboardSiteSummaryRow, 'media'>>(db, `
     SELECT s.id, s.team_id, s.brand_name, s.subdomain, s.vertical, s.status,
            s.onboarding_status, s.plan
     FROM sites s
     WHERE s.organization_id = ?
-      ${scopedTeamIds ? `AND s.team_id IN (${scopedTeamPlaceholders})` : ''}
+      ${scopedTeamIds ? `AND s.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY s.created_at ASC, s.id ASC
-  `, scopedTeamIds ? [organizationId, ...scopedTeamIds] : [organizationId])
+  `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
 
   const homeRows = await queryAll<{
     site_id: string
@@ -504,8 +505,7 @@ export async function listDashboardLocations(
 ) {
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
-  const siteTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
-  const locationTeamPlaceholders = scopedTeamIds?.map(() => '?').join(', ') ?? ''
+  const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
   const locations = await queryAll<Omit<DashboardLocationRow, 'media'> & {
     hero_asset_id: string | null
     hero_kind: string | null
@@ -525,9 +525,9 @@ export async function listDashboardLocations(
     LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id
       AND ma_hero.organization_id = business_locations.organization_id AND ma_hero.site_id = business_locations.site_id AND ma_hero.status = 'active'
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
-      ${scopedTeamIds ? `AND (sites.team_id IN (${siteTeamPlaceholders}) OR business_locations.team_id IN (${locationTeamPlaceholders}))` : ''}
+      ${scopedTeamIds ? `AND (sites.team_id IN (SELECT value FROM json_each(?)) OR business_locations.team_id IN (SELECT value FROM json_each(?)))` : ''}
     ORDER BY is_primary DESC, title ASC
-  `, scopedTeamIds ? [organizationId, siteId, ...scopedTeamIds, ...scopedTeamIds] : [organizationId, siteId])
+  `, scopedTeamIdsJson ? [organizationId, siteId, scopedTeamIdsJson, scopedTeamIdsJson] : [organizationId, siteId])
 
   return locations.map((location) => {
     const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url, ...fields } = location

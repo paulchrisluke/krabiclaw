@@ -8,7 +8,7 @@ import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, togglea
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
 import type { SiteVertical } from '~/utils/vertical-copy'
-import { buildReplaceMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -43,6 +43,10 @@ interface FullSiteRow extends SiteSettingsRow {
   logo_public_url: string | null
   logo_thumbnail_url: string | null
   logo_kind: 'image' | 'video' | null
+  favicon_media_id: string | null
+  favicon_public_url: string | null
+  favicon_thumbnail_url: string | null
+  favicon_kind: 'image' | 'video' | null
   contact_email: string | null
   last_published_at: string | null
   seo_title: string | null
@@ -82,6 +86,8 @@ export async function loadSettingsPayload(
            brand_name, brand_description,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
            ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
+           fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
+           fma.thumbnail_url AS favicon_thumbnail_url, fma.kind AS favicon_kind,
            contact_email,
            seo_title, seo_description, canonical_url, robots,
            social_facebook_url, social_instagram_url, social_tiktok_url,
@@ -91,6 +97,9 @@ export async function loadSettingsPayload(
     LEFT JOIN media_placements mp ON mp.site_id = sites.id AND mp.owner_type = 'site'
       AND mp.owner_id = sites.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+    LEFT JOIN media_placements fmp ON fmp.site_id = sites.id AND fmp.owner_type = 'site'
+      AND fmp.owner_id = sites.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
+    LEFT JOIN media_assets fma ON fma.id = fmp.asset_id AND fma.status = 'active'
     WHERE sites.id = ? AND sites.organization_id = ?
     LIMIT 1
   `, [siteId, organizationId])
@@ -128,13 +137,22 @@ export async function loadSettingsPayload(
     custom_domain_status: updatedSite.custom_domain_status || 'none',
     brand_name: updatedSite.brand_name,
     brand_description: updatedSite.brand_description,
-    media: updatedSite.logo_media_id ? [{
-      asset_id: updatedSite.logo_media_id,
-      slot: 'logo',
-      public_url: updatedSite.logo_public_url,
-      thumbnail_url: updatedSite.logo_thumbnail_url,
-      kind: updatedSite.logo_kind,
-    }] : [],
+    media: [
+      ...(updatedSite.logo_media_id ? [{
+        asset_id: updatedSite.logo_media_id,
+        slot: 'logo',
+        public_url: updatedSite.logo_public_url,
+        thumbnail_url: updatedSite.logo_thumbnail_url,
+        kind: updatedSite.logo_kind,
+      }] : []),
+      ...(updatedSite.favicon_media_id ? [{
+        asset_id: updatedSite.favicon_media_id,
+        slot: 'favicon',
+        public_url: updatedSite.favicon_public_url,
+        thumbnail_url: updatedSite.favicon_thumbnail_url,
+        kind: updatedSite.favicon_kind,
+      }] : []),
+    ],
     contact_email: updatedSite.contact_email,
     seo_title: updatedSite.seo_title,
     seo_description: updatedSite.seo_description,
@@ -429,7 +447,7 @@ async function attemptSiteUpdate(
   }
 
   if (siteMedia !== undefined) {
-    const queries = (['logo', 'favicon'] as const).flatMap(slot => buildReplaceMediaPlacementQueries({
+    const queries = (['logo', 'favicon'] as const).flatMap(slot => buildSingleMediaPlacementQueries({
       organizationId,
       siteId,
       placement: { owner_type: 'site', owner_id: siteId, slot },

@@ -20,11 +20,21 @@ export function createEmptyHowToStep(): BlogHowToStepForm {
 }
 
 export function docFormContentBlocks(form: ReturnType<typeof useDocForm>['form']): BlogEditorBlock[] {
-  const blocks: BlogEditorBlock[] = [{ id: form.markdown_block_id || crypto.randomUUID(), type: 'markdown', position: 0, parent_block_id: null, level: null, data: { markdown: form.body, editor_mode: 'source' }, media: [] }]
+  // Generated ids are written back onto the form so a second call before the
+  // next save/hydrate round-trip (e.g. a client-side-validation retry) reuses
+  // the same block id instead of minting a new one and orphaning the first.
+  form.markdown_block_id ||= crypto.randomUUID()
+  const blocks: BlogEditorBlock[] = [{ id: form.markdown_block_id, type: 'markdown', position: 0, parent_block_id: null, level: null, data: { markdown: form.body, editor_mode: 'source' }, media: [] }]
   const faqItems = form.faq_items.map(item => ({ question: item.question.trim(), answer: item.answer.trim() })).filter(item => item.question && item.answer)
-  if (faqItems.length) blocks.push({ id: form.faq_block_id || crypto.randomUUID(), type: 'faq', position: blocks.length, parent_block_id: null, level: null, data: { items: faqItems, label: form.faq_label, status: form.faq_status, render_enabled: form.faq_render_enabled, schema_enabled: form.faq_schema_enabled }, media: [] })
+  if (faqItems.length) {
+    form.faq_block_id ||= crypto.randomUUID()
+    blocks.push({ id: form.faq_block_id, type: 'faq', position: blocks.length, parent_block_id: null, level: null, data: { items: faqItems, label: form.faq_label, status: form.faq_status, render_enabled: form.faq_render_enabled, schema_enabled: form.faq_schema_enabled }, media: [] })
+  }
   const steps = form.how_to_steps.map(step => ({ name: step.name.trim(), text: step.text.trim(), url: step.url.trim() || null })).filter(step => step.name && step.text)
-  if (steps.length) blocks.push({ id: form.how_to_block_id || crypto.randomUUID(), type: 'how_to', position: blocks.length, parent_block_id: null, level: null, data: { steps, label: form.how_to_label, status: form.how_to_status, render_enabled: form.how_to_render_enabled, schema_enabled: form.how_to_schema_enabled }, media: [] })
+  if (steps.length) {
+    form.how_to_block_id ||= crypto.randomUUID()
+    blocks.push({ id: form.how_to_block_id, type: 'how_to', position: blocks.length, parent_block_id: null, level: null, data: { steps, label: form.how_to_label, status: form.how_to_status, render_enabled: form.how_to_render_enabled, schema_enabled: form.how_to_schema_enabled }, media: [] })
+  }
   return blocks
 }
 

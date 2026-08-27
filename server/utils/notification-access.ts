@@ -3,6 +3,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryAll } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 
 export interface NotificationVisibilityPrincipal {
   userId: string
@@ -35,14 +36,18 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
     } else {
       const accessClauses: string[] = []
       if (principal.siteWideSiteIds?.length) {
-        accessClauses.push(`n.site_id IN (${principal.siteWideSiteIds.map(() => '?').join(', ')})`)
+        accessClauses.push(`n.site_id IN (SELECT value FROM json_each(?))`)
       }
       if (principal.locationIds?.length) {
-        accessClauses.push(`n.location_id IN (${principal.locationIds.map(() => '?').join(', ')})`)
+        accessClauses.push(`n.location_id IN (SELECT value FROM json_each(?))`)
       }
       if (accessClauses.length) {
         visibilityClauses.push(`(n.scope = 'site' AND n.organization_id = ? AND (${accessClauses.join(' OR ')}))`)
-        params.push(principal.organization.id, ...(principal.siteWideSiteIds ?? []), ...(principal.locationIds ?? []))
+        params.push(
+          principal.organization.id,
+          ...(principal.siteWideSiteIds?.length ? [d1JsonStringSet(principal.siteWideSiteIds)] : []),
+          ...(principal.locationIds?.length ? [d1JsonStringSet(principal.locationIds)] : []),
+        )
       }
     }
   }

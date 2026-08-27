@@ -2,7 +2,7 @@ import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/se
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
-import { buildDeleteOwnerPlacementsQuery, buildReplaceMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { buildDeleteOwnerPlacementsQuery, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
 
 export { normalizePostSlug, postPublicPath }
@@ -239,13 +239,13 @@ function postMediaPlacementQueries(
   const gallery = mediaInput.filter(item => item.slot === 'gallery')
 
   return [
-    ...buildReplaceMediaPlacementQueries({
+    ...insertInitialMediaPlacements({
       organizationId, siteId,
       placement: { owner_type: 'post', owner_id: postId, slot: 'cover' },
       media: cover ? [{ asset_id: cover.asset_id }] : [],
       now,
     }),
-    ...buildReplaceMediaPlacementQueries({
+    ...insertInitialMediaPlacements({
       organizationId, siteId,
       placement: { owner_type: 'post', owner_id: postId, slot: 'gallery' },
       media: gallery.map(item => ({ asset_id: item.asset_id })),
@@ -494,7 +494,6 @@ export async function updatePost(
     cta_type?: string | null; cta_url?: string | null
     event_title?: string | null; event_start?: string | null; event_end?: string | null
     offer_coupon?: string | null; offer_terms?: string | null
-    media?: PostMediaInput[] | unknown
   },
   _updatedBy: string,
   env: DomainEnv,
@@ -507,16 +506,6 @@ export async function updatePost(
   if (!existing) return null
 
   validatePostInput(data, existing)
-  const media = normalizeMediaInputs(data.media)
-  if (media) {
-    await hydrateMediaAssetRefs(db, {
-      organizationId,
-      siteId,
-      refs: media.map(item => ({ asset_id: item.asset_id })),
-      allowedKinds: ['image', 'video'],
-      fieldName: 'media',
-    })
-  }
 
   const now = new Date().toISOString()
   const sets: string[] = ['updated_at = ?']
@@ -555,7 +544,7 @@ export async function updatePost(
 
   const hasContentChange = data.title !== undefined || data.body !== undefined ||
     data.slug !== undefined || data.seo_title !== undefined || data.seo_description !== undefined ||
-    data.media !== undefined || data.post_type !== undefined || data.cta_type !== undefined || data.cta_url !== undefined ||
+    data.post_type !== undefined || data.cta_type !== undefined || data.cta_url !== undefined ||
     data.event_title !== undefined || data.event_start !== undefined || data.event_end !== undefined ||
     data.offer_coupon !== undefined || data.offer_terms !== undefined
   if (hasContentChange) {
@@ -571,7 +560,7 @@ export async function updatePost(
       await executeBatch(db, [{
         query: `UPDATE posts SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ?`,
         params,
-      }, ...(media ? postMediaPlacementQueries(organizationId, siteId, postId, media) : [])])
+      }])
       break
     } catch (err) {
       const message = String((err as ApiValue)?.message || err || '')

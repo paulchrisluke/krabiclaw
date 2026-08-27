@@ -3,7 +3,7 @@ import { cleanString } from '~/server/utils/api-response'
 import { getPublicBlawbyData } from '~/server/utils/professional-services'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
-import { buildReplaceMediaPlacementQueries } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { assertNoEmbeddedMediaFields } from '~/utils/tenant-page-blocks'
 
@@ -244,6 +244,11 @@ export async function upsertProfessionalServiceContent(
   const statements: BatchQuery[] = []
   const existingOfferings = await queryAll<{ id: string; slug: string }>(db, 'SELECT id, slug FROM offerings WHERE site_id = ?', [siteId])
   const offeringIdBySlug = new Map(existingOfferings.map(offering => [offering.slug, offering.id]))
+  const existingOfferingMedia = await getMediaPlacements(db, {
+    siteId,
+    ownerType: 'offering',
+    ownerIds: existingOfferings.map(offering => offering.id),
+  })
   for (const field of ['compliance', 'consultation', 'themeTokens'] as const) {
     if (Object.hasOwn(data, field) && (data[field] == null || typeof data[field] !== 'object' || Array.isArray(data[field]))) {
       validationError(`${field} must be an object.`)
@@ -251,11 +256,15 @@ export async function upsertProfessionalServiceContent(
   }
 
 
+  const incomingOfferingSlugs = new Set<string>()
   for (const item of recordArray(data.offerings, 'offerings')) {
     const name = cleanString(item.name, 200)
     const slug = cleanString(item.slug, 180)
     if (!name || !slug) validationError('Each offering needs name and slug.')
-    const id = offeringIdBySlug.get(slug) ?? cleanString(item.id, 80) ?? idWith('offering')
+    if (incomingOfferingSlugs.has(slug)) validationError(`Duplicate offering slug: ${slug}.`)
+    incomingOfferingSlugs.add(slug)
+    const existingOfferingId = offeringIdBySlug.get(slug)
+    const id = existingOfferingId ?? cleanString(item.id, 80) ?? idWith('offering')
     validateOfferingContent(item, slug)
     const offeringMedia = strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
     statements.push({
@@ -302,32 +311,58 @@ export async function upsertProfessionalServiceContent(
         updatedBy,
       ],
     })
-    statements.push(
-      ...buildReplaceMediaPlacementQueries({
-        organizationId,
-        siteId,
-        placement: { owner_type: 'offering', owner_id: id, slot: 'thumbnail' },
-        media: offeringMedia.filter(item => item.slot === 'thumbnail').map(item => ({ asset_id: item.asset_id })),
-      }),
-      ...buildReplaceMediaPlacementQueries({
-        organizationId,
-        siteId,
-        placement: { owner_type: 'offering', owner_id: id, slot: 'hero' },
-        media: offeringMedia.filter(item => item.slot === 'hero').map(item => ({ asset_id: item.asset_id })),
-      }),
-      ...buildReplaceMediaPlacementQueries({
-        organizationId,
-        siteId,
-        placement: { owner_type: 'offering', owner_id: id, slot: 'gallery' },
-        media: offeringMedia.filter(item => item.slot === 'gallery').map(item => ({ asset_id: item.asset_id })),
-      }),
-    )
+    if (!existingOfferingId) {
+      statements.push(
+        ...insertInitialMediaPlacements({
+          organizationId,
+          siteId,
+          placement: { owner_type: 'offering', owner_id: id, slot: 'thumbnail' },
+          media: offeringMedia.filter(item => item.slot === 'thumbnail').map(item => ({ asset_id: item.asset_id })),
+        }),
+        ...insertInitialMediaPlacements({
+          organizationId,
+          siteId,
+          placement: { owner_type: 'offering', owner_id: id, slot: 'hero' },
+          media: offeringMedia.filter(item => item.slot === 'hero').map(item => ({ asset_id: item.asset_id })),
+        }),
+        ...insertInitialMediaPlacements({
+          organizationId,
+          siteId,
+          placement: { owner_type: 'offering', owner_id: id, slot: 'gallery' },
+          media: offeringMedia.filter(item => item.slot === 'gallery').map(item => ({ asset_id: item.asset_id })),
+        }),
+      )
+    } else {
+      const currentBySlot = new Map<string, string[]>()
+      for (const placement of existingOfferingMedia.get(existingOfferingId) ?? []) {
+        const ids = currentBySlot.get(placement.slot) ?? []
+        ids.push(placement.asset_id)
+        currentBySlot.set(placement.slot, ids)
+      }
+      for (const slot of ['thumbnail', 'hero', 'gallery'] as const) {
+        const current = currentBySlot.get(slot) ?? []
+        const requested = offeringMedia.filter(item => item.slot === slot).map(item => item.asset_id)
+        if (current.length === requested.length && current.every((assetId, index) => assetId === requested[index])) continue
+        // thumbnail/hero have cardinality <= 1, so a full replace is the
+        // correct, safe semantic. gallery is an ordered collection — its
+        // membership only changes through attachMediaPlacement/
+        // removeMediaPlacement/reorderMediaPlacements, never a full array.
+        if (slot === 'gallery') {
+          validationError(`offerings.${slug}.media cannot replace an existing gallery; use attach/remove/reorder media operations`)
+        }
+        statements.push(...buildSingleMediaPlacementQueries({
+          organizationId,
+          siteId,
+          placement: { owner_type: 'offering', owner_id: existingOfferingId, slot },
+          media: requested.map(assetId => ({ asset_id: assetId })),
+        }))
+      }
+    }
     written.offerings = (written.offerings ?? 0) + 1
   }
 
   if (typeof data.compliance === 'object' && data.compliance) {
     const item = data.compliance as ApiRecord
-    const complianceMedia = strictMediaRefs(item.media, 'compliance.media', ['document'])
     // Canonical contract: nonprofit_status must be a recognized schema.org
     // nonprofit enumeration value (e.g. https://schema.org/Nonprofit501c3),
     // not free text like "501(c)(3)". Reject rather than silently store an
@@ -357,6 +392,10 @@ export async function upsertProfessionalServiceContent(
 
     const existingCompliance = await queryFirst<{ id: string }>(db, 'SELECT id FROM tenant_compliance WHERE site_id = ? LIMIT 1', [siteId])
     const complianceId = existingCompliance?.id || cleanString(item.id, 80) || `compliance_${siteId}`
+    if (existingCompliance && Object.hasOwn(item, 'media')) {
+      validationError('compliance.media cannot replace an existing placement; use attach/remove/reorder media operations')
+    }
+    const complianceMedia = existingCompliance ? [] : strictMediaRefs(item.media, 'compliance.media', ['document'])
 
     statements.push({
       query: `
@@ -398,7 +437,7 @@ export async function upsertProfessionalServiceContent(
         updatedBy,
       ],
     })
-    statements.push(...buildReplaceMediaPlacementQueries({
+    if (!existingCompliance) statements.push(...insertInitialMediaPlacements({
       organizationId,
       siteId,
       placement: { owner_type: 'tenant_compliance', owner_id: complianceId, slot: 'document' },

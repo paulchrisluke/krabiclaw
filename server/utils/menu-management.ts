@@ -9,11 +9,11 @@ import type {
   UpdateMenuItemRequest,
 } from "../types/menu";
 import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 import {
   buildDeleteOwnerPlacementsQuery,
-  buildReplaceMediaPlacementQueries,
+  insertInitialMediaPlacements,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
 } from "~/server/utils/media-asset-manager";
@@ -22,6 +22,13 @@ import { getMediaPlacements } from '~/server/utils/media-placement'
 const MAX_SUFFIX_ATTEMPTS = 50;
 
 type SqlBindValue = string | number | boolean | null;
+
+function touchMenuQuery(menuId: string, updatedAt: string, updatedBy?: string | null): BatchQuery {
+  return {
+    query: `UPDATE menus SET updated_at = ?, updated_by = ? WHERE id = ?`,
+    params: [updatedAt, updatedBy ?? null, menuId],
+  }
+}
 
 
 
@@ -745,9 +752,9 @@ export async function createMenuItem(
   item: CreateMenuItemRequest,
   createdBy: string,
 ): Promise<MenuItem> {
-  const menuOwner = await queryFirst<{ id: string }>(
+  const menuOwner = await queryFirst<{ id: string; section_order: unknown }>(
     db,
-    `SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
+    `SELECT id, section_order FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
     [menuId, organizationId, siteId],
   );
   if (!menuOwner) throw new HTTPError({ statusCode: 404, statusMessage: "Menu not found" });
@@ -799,15 +806,21 @@ export async function createMenuItem(
       createdBy,
     ] as SqlBindValue[],
   };
+  const sectionOrder = normalizeSectionOrder(menuOwner.section_order)
+  const nextSectionOrder = sectionOrder.includes(item.section) ? sectionOrder : [...sectionOrder, item.section]
   const [result] = await executeBatch(db, [
     insertQuery,
-    ...(media ? buildReplaceMediaPlacementQueries({
+    ...(media ? insertInitialMediaPlacements({
       organizationId,
       siteId,
       placement: { owner_type: 'menu_item', owner_id: id, slot: 'gallery' },
       media,
       now,
     }) : []),
+    {
+      query: `UPDATE menus SET section_order = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
+      params: [JSON.stringify(nextSectionOrder), now, createdBy, menuId],
+    },
   ]);
 
   // Rely on DB unique index (menu_id, slug) for concurrent writes.
@@ -837,8 +850,6 @@ export async function createMenuItem(
     throw new Error("Menu item not found after creation");
   }
   const [createdItemWithMedia] = await attachMenuItemMedia(db, siteId, [mapMenuItem(createdItem)]);
-
-  await ensureMenuSectionInOrder(db, menuId, item.section, createdBy);
 
   await fireSiteEventSafe({
     db,
@@ -889,11 +900,6 @@ export async function updateMenuItem(
   if (!existing) {
     throw new Error(`Menu item not found: ${menuItemId}`);
   }
-
-  const mediaRefs = menuItemMediaRefsFromInput(updates);
-  const media = mediaRefs
-    ? await validateMenuItemMediaRefs(db, { organizationId, siteId, refs: mediaRefs })
-    : null;
 
   // Build dynamic update query
   const setParts: string[] = [];
@@ -998,7 +1004,7 @@ export async function updateMenuItem(
   // Only change source to manual when actual content is edited, not for metadata-only changes
   const hasContentChange = updates.name !== undefined || updates.description !== undefined || updates.section !== undefined ||
     updates.price_amount !== undefined || updates.compare_at_price_amount !== undefined || updates.sale_starts_at !== undefined ||
-    updates.sale_ends_at !== undefined || updates.media !== undefined || updates.allergens !== undefined ||
+    updates.sale_ends_at !== undefined || updates.allergens !== undefined ||
     updates.ingredients !== undefined || updates.dietary_notes !== undefined || updates.preparation !== undefined ||
     updates.serving_note !== undefined
   if (hasContentChange) {
@@ -1012,18 +1018,10 @@ export async function updateMenuItem(
     query: `UPDATE menu_items SET ${setParts.join(", ")} WHERE id = ?`,
     params,
   };
-  const [result] = media
-    ? await executeBatch(db, [
-        updateQuery,
-        ...buildReplaceMediaPlacementQueries({
-          organizationId,
-          siteId,
-          placement: { owner_type: 'menu_item', owner_id: menuItemId, slot: 'gallery' },
-          media,
-          now,
-        }),
-      ])
-    : [await execute(db, updateQuery.query, updateQuery.params)];
+  const [result] = await executeBatch(db, [
+    updateQuery,
+    touchMenuQuery(existing.menu_id, now, updatedBy),
+  ]);
 
   // Rely on DB unique index (menu_id, slug) for concurrent writes.
   // Callers can safely retry updates on unique-constraint failures with backoff.
@@ -1119,9 +1117,11 @@ export async function deleteMenuItem(
 
   if (!existing) return false;
 
+  const now = new Date().toISOString()
   const [, result] = await executeBatch(db, [
     buildDeleteOwnerPlacementsQuery({ ownerType: 'menu_item', ownerId: menuItemId }),
     { query: `DELETE FROM menu_items WHERE id = ?`, params: [menuItemId] },
+    touchMenuQuery(existing.menu_id, now, updatedBy),
   ]);
 
   if (!result?.success) {
@@ -1182,9 +1182,8 @@ export async function renameMenuSection(
     throw new MenuSectionConflictError();
   }
 
-  const result = await execute(
-    db,
-    `
+  const [result] = await executeBatch(db, [{
+    query: `
     UPDATE menu_items
     SET section = ?, updated_at = ?, updated_by = ?
     WHERE menu_id = ? AND section = ?
@@ -1193,14 +1192,14 @@ export async function renameMenuSection(
         WHERE menu_id = ? AND section = ?
       )
   `,
-    [newSection, now, updatedBy, menuId, oldSection, menuId, newSection],
-  );
+    params: [newSection, now, updatedBy, menuId, oldSection, menuId, newSection],
+  }, touchMenuQuery(menuId, now, updatedBy)]);
 
-  if (!result.success) {
+  if (!result?.success) {
     throw new Error("Failed to rename menu section");
   }
 
-  const changes = Number(result.meta.changes ?? 0);
+  const changes = Number(result.meta?.changes ?? 0);
   if (changes > 0 || oldSectionInOrder) {
     const nextSectionOrder = sectionOrder.map((section) =>
       section === oldSection ? newSection : section,
@@ -1250,6 +1249,7 @@ export async function deleteMenuSection(
 ): Promise<number> {
   await assertMenuOwnership(db, menuId, organizationId, siteId);
   const sectionOrder = await getMenuSectionOrder(db, menuId);
+  const now = new Date().toISOString()
   const [, result] = await executeBatch(db, [
     {
       query: `
@@ -1265,6 +1265,7 @@ export async function deleteMenuSection(
     `,
       params: [menuId, section],
     },
+    touchMenuQuery(menuId, now),
   ]);
 
   if (!result?.success) {
@@ -1293,22 +1294,24 @@ export async function reorderMenuItems(
   await assertMenuOwnership(db, menuId, organizationId, siteId);
   // Reorder must commit atomically: a partial failure here must not leave
   // items with inconsistent sort_order relative to each other.
+  const now = new Date().toISOString()
   const results = await executeBatch(
     db,
-    items.map((item) => ({
+    [...items.map((item) => ({
       query: `
       UPDATE menu_items
-      SET sort_order = ?, updated_at = CURRENT_TIMESTAMP
+      SET sort_order = ?, updated_at = ?
       WHERE id = ? AND menu_id = ?
     `,
-      params: [item.sort_order, item.id, menuId],
-    })),
+      params: [item.sort_order, now, item.id, menuId],
+    })), touchMenuQuery(menuId, now)],
+    { operation: 'reorder menu items' },
   );
 
   // The WHERE clause scopes each update to this menu, so a stale/foreign id
   // can't corrupt another menu's rows — but it would otherwise fail silently
   // (zero rows affected) instead of surfacing the bad id to the caller.
-  const unmatched = results.reduce(
+  const unmatched = results.slice(0, items.length).reduce(
     (count, result, index) => (Number(result?.meta?.changes ?? 0) > 0 ? count : count + (items[index] ? 1 : 0)),
     0,
   );

@@ -241,6 +241,48 @@ export const useMenuEditor = async (siteId: string, locationId?: string | null) 
     }
   }
 
+  // menu_item:gallery is an ordered collection with exactly one member in
+  // this quick-editor (there is no multi-photo grid here), managed as a
+  // single cover image via targeted attach/remove — never a full-array
+  // PATCH — so a stale reload can never resurrect a photo someone else
+  // removed elsewhere.
+  const updateMenuItemCoverMedia = async (itemId: string, nextAssetId: string | null, previousAssetId: string | null) => {
+    if (!currentMenu.value) throw new Error('No menu selected')
+    if (nextAssetId === previousAssetId) return
+    saving.value = true
+    error.value = null
+    try {
+      const placement = { owner_type: 'menu_item', owner_id: itemId, slot: 'gallery' }
+      const validate = (value: unknown): value is { asset_ids: string[]; media: MenuItem['media'] } =>
+        isRecord(value) && Array.isArray(value.asset_ids)
+      let result: { asset_ids: string[]; media: MenuItem['media'] } | null = null
+      // Attach the new cover before removing the old one, so a failed attach
+      // leaves the previous cover intact instead of leaving the item with none.
+      if (nextAssetId) {
+        result = await applicationFetch(`/api/editor/sites/${siteId}/media/placements/attach`, {
+          method: 'POST',
+          body: { placement, asset_id: nextAssetId },
+          validate,
+        })
+      }
+      if (previousAssetId) {
+        result = await applicationFetch(`/api/editor/sites/${siteId}/media/placements/remove`, {
+          method: 'POST',
+          body: { placement, asset_id: previousAssetId },
+          validate,
+        })
+      }
+      const index = currentMenu.value.items.findIndex(item => item.id === itemId)
+      const target = index !== -1 ? currentMenu.value.items[index] : undefined
+      if (target && result) target.media = result.media
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    } finally {
+      saving.value = false
+    }
+  }
+
   const deleteMenuItem = async (itemId: string) => {
     if (!currentMenu.value) throw new Error('No menu selected')
     saving.value = true
@@ -380,6 +422,7 @@ export const useMenuEditor = async (siteId: string, locationId?: string | null) 
     deleteMenu,
     createMenuItem,
     updateMenuItem,
+    updateMenuItemCoverMedia,
     deleteMenuItem,
     renameMenuSection,
     deleteMenuSection,

@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { siteTool, workRequestObject } from './shared'
+import { pageInfoObject, paginationInputSchema, siteTool, workRequestObject } from './shared'
 
 export const MANAGED_SERVICE_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -9,10 +9,11 @@ export const MANAGED_SERVICE_TOOLS: McpToolDefinition[] = [
       minimumRole: 'editor',
       confirmRequired: false,
       requiredEntitlement: 'managed_service',
+      inputSchema: { ...paginationInputSchema },
       outputSchema: {
         type: 'object',
-        properties: { requests: { type: 'array', items: workRequestObject } },
-        required: ['requests'],
+        properties: { requests: { type: 'array', items: workRequestObject }, page_info: pageInfoObject },
+        required: ['requests', 'page_info'],
       },
     }),
   siteTool({

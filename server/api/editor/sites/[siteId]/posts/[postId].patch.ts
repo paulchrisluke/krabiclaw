@@ -7,7 +7,7 @@ import { loadMemberSiteRow } from '~/server/utils/location-access'
 interface EditorPostUpdateBody {
   title?: string; body?: string; slug?: string | null
   seo_title?: string | null; seo_description?: string | null
-  media?: unknown; scheduled_for?: string | null; location_id?: string | null
+  scheduled_for?: string | null; location_id?: string | null
   post_type?: string; cta_type?: string | null; cta_url?: string | null
   event_title?: string | null; event_start?: string | null; event_end?: string | null
   offer_coupon?: string | null; offer_terms?: string | null
@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
 
   const body = await readStrictBody<EditorPostUpdateBody>(event, {
     title: 'string', body: 'string', slug: 'nullable-string',
-    seo_title: 'nullable-string', seo_description: 'nullable-string', media: 'unknown',
+    seo_title: 'nullable-string', seo_description: 'nullable-string',
     scheduled_for: 'nullable-string', location_id: 'nullable-string', post_type: 'string',
     cta_type: 'nullable-string', cta_url: 'nullable-string', event_title: 'nullable-string',
     event_start: 'nullable-string', event_end: 'nullable-string', offer_coupon: 'nullable-string',
@@ -51,7 +51,7 @@ export default defineHandler(async (event) => {
   let post
   try {
     post = await updatePost(db, site.organization_id, siteId, postId, {
-      title: body.title, body: body.body, slug: body.slug, seo_title: body.seo_title, seo_description: body.seo_description, media: body.media, scheduled_for: body.scheduled_for, location_id: body.location_id, post_type: body.post_type, cta_type: body.cta_type, cta_url: body.cta_url, event_title: body.event_title, event_start: body.event_start, event_end: body.event_end, offer_coupon: body.offer_coupon, offer_terms: body.offer_terms, }, session.user.id, env)
+      title: body.title, body: body.body, slug: body.slug, seo_title: body.seo_title, seo_description: body.seo_description, scheduled_for: body.scheduled_for, location_id: body.location_id, post_type: body.post_type, cta_type: body.cta_type, cta_url: body.cta_url, event_title: body.event_title, event_start: body.event_start, event_end: body.event_end, offer_coupon: body.offer_coupon, offer_terms: body.offer_terms, }, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:5ee70b31229f7dbf6bf4f76ef73cfe756631ccb8b4b81b5b31cb74f7122a0a8c",
+  "fingerprint": "sha256:1e45d7964c160834dc83968c11a1b7a6e13f91e3d48d590c13bcecc9082597f4",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -8,7 +8,7 @@
         "additionalProperties": false,
         "properties": {
           "items": {
-            "description": "Up to 100 new menu items to add.",
+            "description": "The complete set of new items to add atomically. Up to 500.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -68,7 +68,9 @@
                     ],
                     "type": "object"
                   },
-                  "type": "array"
+                  "maxItems": 20,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "name": {
                   "type": "string"
@@ -121,6 +123,8 @@
               ],
               "type": "object"
             },
+            "maxItems": 500,
+            "minItems": 1,
             "type": "array"
           },
           "menu_id": {
@@ -270,6 +274,201 @@
           "answer",
           "creditsRemaining",
           "stats"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "attach_media",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_id": {
+            "description": "The single media asset id to attach.",
+            "type": "string"
+          },
+          "placement": {
+            "additionalProperties": false,
+            "properties": {
+              "owner_id": {
+                "type": "string"
+              },
+              "owner_type": {
+                "enum": [
+                  "site",
+                  "business_location",
+                  "menu_item",
+                  "post",
+                  "blog_post",
+                  "experience",
+                  "offering",
+                  "content_block",
+                  "review",
+                  "review_request",
+                  "tenant_compliance"
+                ],
+                "type": "string"
+              },
+              "slot": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner_type",
+              "owner_id",
+              "slot"
+            ],
+            "type": "object"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "placement",
+          "asset_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "media": {
+            "items": {
+              "properties": {
+                "alt_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "asset_id": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "height": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "image",
+                    "video",
+                    "file"
+                  ],
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "public_url": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active"
+                  ],
+                  "type": "string"
+                },
+                "thumbnail_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "width": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "asset_id",
+                "kind",
+                "public_url",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "placement": {
+            "additionalProperties": false,
+            "properties": {
+              "owner_id": {
+                "type": "string"
+              },
+              "owner_type": {
+                "enum": [
+                  "site",
+                  "business_location",
+                  "menu_item",
+                  "post",
+                  "blog_post",
+                  "experience",
+                  "offering",
+                  "content_block",
+                  "review",
+                  "review_request",
+                  "tenant_compliance"
+                ],
+                "type": "string"
+              },
+              "slot": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner_type",
+              "owner_id",
+              "slot"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id",
+          "placement",
+          "asset_ids",
+          "media",
+          "cleared"
         ],
         "type": "object"
       }
@@ -1615,7 +1814,9 @@
               ],
               "type": "object"
             },
-            "type": "array"
+            "maxItems": 20,
+            "type": "array",
+            "uniqueItems": true
           },
           "menu_id": {
             "type": "string"
@@ -3872,6 +4073,48 @@
                   "null"
                 ]
               },
+              "media": {
+                "items": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video"
+                      ],
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "number"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "sort_order"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "neighborhood": {
                 "type": [
                   "string",
@@ -3991,6 +4234,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "menu_id": {
             "type": "string"
           },
@@ -4006,8 +4259,29 @@
       },
       "outputSchema": {
         "properties": {
+          "item_page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "menu": {
             "properties": {
+              "created_at": {
+                "type": "string"
+              },
               "description": {
                 "type": [
                   "string",
@@ -4020,6 +4294,167 @@
               "is_visible": {
                 "type": "boolean"
               },
+              "items": {
+                "items": {
+                  "properties": {
+                    "allergens": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "canonical_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "compare_at_price_amount": {
+                      "type": [
+                        "string",
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "created_by": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "dietary_notes": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "featured": {
+                      "type": "boolean"
+                    },
+                    "featured_sort_order": {
+                      "type": "number"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "ingredients": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "menu_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "preparation": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "price_amount": {
+                      "type": [
+                        "string",
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "robots": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sale_ends_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sale_starts_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": "string"
+                    },
+                    "seo_description": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "seo_title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "serving_note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "number"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "updated_by": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "menu_id",
+                    "section",
+                    "name",
+                    "slug",
+                    "available",
+                    "featured",
+                    "featured_sort_order",
+                    "sort_order",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "location_id": {
                 "type": [
                   "string",
@@ -4029,187 +4464,33 @@
               "name": {
                 "type": "string"
               },
-              "sections": {
+              "section_order": {
                 "items": {
-                  "properties": {
-                    "items": {
-                      "items": {
-                        "properties": {
-                          "allergens": {
-                            "items": {
-                              "type": "string"
-                            },
-                            "type": [
-                              "array",
-                              "null"
-                            ]
-                          },
-                          "available": {
-                            "type": "boolean"
-                          },
-                          "canonical_url": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "compare_at_price_amount": {
-                            "type": [
-                              "string",
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "created_at": {
-                            "type": "string"
-                          },
-                          "created_by": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "description": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "dietary_notes": {
-                            "items": {
-                              "type": "string"
-                            },
-                            "type": [
-                              "array",
-                              "null"
-                            ]
-                          },
-                          "featured": {
-                            "type": "boolean"
-                          },
-                          "featured_sort_order": {
-                            "type": "number"
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "ingredients": {
-                            "items": {
-                              "type": "string"
-                            },
-                            "type": [
-                              "array",
-                              "null"
-                            ]
-                          },
-                          "menu_id": {
-                            "type": "string"
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "preparation": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "price_amount": {
-                            "type": [
-                              "string",
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "robots": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "sale_ends_at": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "sale_starts_at": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "section": {
-                            "type": "string"
-                          },
-                          "seo_description": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "seo_title": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "serving_note": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "slug": {
-                            "type": "string"
-                          },
-                          "sort_order": {
-                            "type": "number"
-                          },
-                          "updated_at": {
-                            "type": "string"
-                          },
-                          "updated_by": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "menu_id",
-                          "section",
-                          "name",
-                          "slug",
-                          "available",
-                          "featured",
-                          "featured_sort_order",
-                          "sort_order",
-                          "created_at",
-                          "updated_at"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "name": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
+                  "type": "string"
                 },
-                "type": "array"
+                "type": [
+                  "array",
+                  "null"
+                ]
               },
-              "sort_order": {
-                "type": "number"
+              "updated_at": {
+                "type": "string"
               }
             },
+            "required": [
+              "id",
+              "name",
+              "is_visible",
+              "items",
+              "created_at",
+              "updated_at"
+            ],
             "type": "object"
           }
         },
         "required": [
-          "menu"
+          "menu",
+          "item_page_info"
         ],
         "type": "object"
       }
@@ -4959,6 +5240,10 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
           "kind": {
             "description": "Filter by asset type.",
             "enum": [
@@ -4967,6 +5252,12 @@
               "file"
             ],
             "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -5051,10 +5342,29 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "assets"
+          "assets",
+          "page_info"
         ],
         "type": "object"
       }
@@ -5629,8 +5939,18 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
           "days": {
             "description": "Optional: only include bookings made in the last N days (max 90).",
+            "type": "number"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "number"
           },
           "location_id": {
@@ -5723,6 +6043,24 @@
             },
             "type": "array"
           },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "summary": {
             "properties": {
               "by_experience": {
@@ -5762,7 +6100,8 @@
         },
         "required": [
           "bookings",
-          "summary"
+          "summary",
+          "page_info"
         ],
         "type": "object"
       }
@@ -5772,6 +6111,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
@@ -5790,6 +6139,24 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "posts": {
             "items": {
               "additionalProperties": false,
@@ -6043,7 +6410,8 @@
           }
         },
         "required": [
-          "posts"
+          "posts",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6053,9 +6421,19 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
           "experience_id": {
             "description": "Experience id or slug.",
             "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -6144,10 +6522,29 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "bookings"
+          "bookings",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6157,6 +6554,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "location_id": {
             "type": "string"
           },
@@ -6435,10 +6842,29 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "experiences"
+          "experiences",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6448,6 +6874,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
@@ -6478,10 +6914,29 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "locales"
+          "locales",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6491,6 +6946,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "location_id": {
             "type": "string"
           },
@@ -6534,10 +6999,29 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "items"
+          "items",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6547,6 +7031,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "location_id": {
             "type": "string"
           },
@@ -6562,6 +7056,24 @@
       },
       "outputSchema": {
         "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "reviews": {
             "items": {
               "properties": {
@@ -6644,7 +7156,8 @@
           }
         },
         "required": [
-          "reviews"
+          "reviews",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6654,6 +7167,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
@@ -6704,10 +7227,29 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "locations"
+          "locations",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6717,6 +7259,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
@@ -6739,6 +7291,9 @@
                 "id": {
                   "type": "string"
                 },
+                "is_visible": {
+                  "type": "boolean"
+                },
                 "location_id": {
                   "type": [
                     "string",
@@ -6748,21 +7303,51 @@
                 "name": {
                   "type": "string"
                 },
-                "sort_order": {
-                  "type": "number"
+                "section_order": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                },
+                "updated_at": {
+                  "type": "string"
                 }
               },
               "required": [
                 "id",
-                "name"
+                "name",
+                "is_visible",
+                "updated_at"
               ],
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "menus"
+          "menus",
+          "page_info"
         ],
         "type": "object"
       }
@@ -6772,6 +7357,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "location_id": {
             "description": "Filter to posts restricted to this location.",
             "type": "string"
@@ -6793,6 +7388,24 @@
       },
       "outputSchema": {
         "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "posts": {
             "items": {
               "properties": {
@@ -7044,7 +7657,8 @@
           }
         },
         "required": [
-          "posts"
+          "posts",
+          "page_info"
         ],
         "type": "object"
       }
@@ -7054,6 +7668,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "page_path": {
             "description": "Public route path such as /about, /pricing, or /blog. Omit for general site Q&A.",
             "type": [
@@ -7099,10 +7723,29 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "items"
+          "items",
+          "page_info"
         ],
         "type": "object"
       }
@@ -7112,6 +7755,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
@@ -7122,6 +7775,24 @@
       },
       "outputSchema": {
         "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "reviews": {
             "items": {
               "properties": {
@@ -7204,7 +7875,8 @@
           }
         },
         "required": [
-          "reviews"
+          "reviews",
+          "page_info"
         ],
         "type": "object"
       }
@@ -7213,7 +7885,18 @@
       "name": "list_sites",
       "inputSchema": {
         "additionalProperties": true,
-        "properties": {},
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          }
+        },
         "type": "object"
       },
       "outputSchema": {
@@ -7230,6 +7913,24 @@
             "required": [
               "id",
               "isPlatformAdmin"
+            ],
+            "type": "object"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
             ],
             "type": "object"
           },
@@ -7294,7 +7995,8 @@
         },
         "required": [
           "sites",
-          "currentUser"
+          "currentUser",
+          "page_info"
         ],
         "type": "object"
       }
@@ -7304,6 +8006,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "locale": {
             "type": [
               "string",
@@ -7320,6 +8032,24 @@
       },
       "outputSchema": {
         "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "pages": {
             "items": {
               "type": "object"
@@ -7328,7 +8058,8 @@
           }
         },
         "required": [
-          "pages"
+          "pages",
+          "page_info"
         ],
         "type": "object"
       }
@@ -7338,6 +8069,16 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
@@ -7348,6 +8089,24 @@
       },
       "outputSchema": {
         "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
           "requests": {
             "items": {
               "properties": {
@@ -7402,7 +8161,8 @@
           }
         },
         "required": [
-          "requests"
+          "requests",
+          "page_info"
         ],
         "type": "object"
       }
@@ -8257,6 +9017,201 @@
       }
     },
     {
+      "name": "remove_media",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_id": {
+            "description": "The single media asset id to detach.",
+            "type": "string"
+          },
+          "placement": {
+            "additionalProperties": false,
+            "properties": {
+              "owner_id": {
+                "type": "string"
+              },
+              "owner_type": {
+                "enum": [
+                  "site",
+                  "business_location",
+                  "menu_item",
+                  "post",
+                  "blog_post",
+                  "experience",
+                  "offering",
+                  "content_block",
+                  "review",
+                  "review_request",
+                  "tenant_compliance"
+                ],
+                "type": "string"
+              },
+              "slot": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner_type",
+              "owner_id",
+              "slot"
+            ],
+            "type": "object"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "placement",
+          "asset_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "media": {
+            "items": {
+              "properties": {
+                "alt_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "asset_id": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "height": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "image",
+                    "video",
+                    "file"
+                  ],
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "public_url": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active"
+                  ],
+                  "type": "string"
+                },
+                "thumbnail_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "width": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "asset_id",
+                "kind",
+                "public_url",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "placement": {
+            "additionalProperties": false,
+            "properties": {
+              "owner_id": {
+                "type": "string"
+              },
+              "owner_type": {
+                "enum": [
+                  "site",
+                  "business_location",
+                  "menu_item",
+                  "post",
+                  "blog_post",
+                  "experience",
+                  "offering",
+                  "content_block",
+                  "review",
+                  "review_request",
+                  "tenant_compliance"
+                ],
+                "type": "string"
+              },
+              "slot": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner_type",
+              "owner_id",
+              "slot"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id",
+          "placement",
+          "asset_ids",
+          "media",
+          "cleared"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "rename_menu_section",
       "inputSchema": {
         "additionalProperties": true,
@@ -8652,6 +9607,219 @@
         },
         "required": [
           "updated"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "reorder_media",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "moves": {
+            "description": "Ordered list of moves to apply sequentially.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "after_asset_id": {
+                  "type": "string"
+                },
+                "asset_id": {
+                  "type": "string"
+                },
+                "before_asset_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "placement": {
+            "additionalProperties": false,
+            "properties": {
+              "owner_id": {
+                "type": "string"
+              },
+              "owner_type": {
+                "enum": [
+                  "site",
+                  "business_location",
+                  "menu_item",
+                  "post",
+                  "blog_post",
+                  "experience",
+                  "offering",
+                  "content_block",
+                  "review",
+                  "review_request",
+                  "tenant_compliance"
+                ],
+                "type": "string"
+              },
+              "slot": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner_type",
+              "owner_id",
+              "slot"
+            ],
+            "type": "object"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "placement",
+          "moves"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "media": {
+            "items": {
+              "properties": {
+                "alt_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "asset_id": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "height": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "image",
+                    "video",
+                    "file"
+                  ],
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "public_url": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active"
+                  ],
+                  "type": "string"
+                },
+                "thumbnail_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "width": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "asset_id",
+                "kind",
+                "public_url",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "placement": {
+            "additionalProperties": false,
+            "properties": {
+              "owner_id": {
+                "type": "string"
+              },
+              "owner_type": {
+                "enum": [
+                  "site",
+                  "business_location",
+                  "menu_item",
+                  "post",
+                  "blog_post",
+                  "experience",
+                  "offering",
+                  "content_block",
+                  "review",
+                  "review_request",
+                  "tenant_compliance"
+                ],
+                "type": "string"
+              },
+              "slot": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner_type",
+              "owner_id",
+              "slot"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id",
+          "placement",
+          "asset_ids",
+          "media",
+          "cleared"
         ],
         "type": "object"
       }
@@ -10006,13 +11174,12 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "asset_ids": {
-            "description": "Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "uniqueItems": true
+          "asset_id": {
+            "description": "One asset id, or null to clear this single-valued placement.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "placement": {
             "additionalProperties": false,
@@ -10054,7 +11221,7 @@
         },
         "required": [
           "placement",
-          "asset_ids"
+          "asset_id"
         ],
         "type": "object"
       },
@@ -10816,7 +11983,7 @@
         "additionalProperties": false,
         "properties": {
           "items": {
-            "description": "Items to reconcile. Up to 100.",
+            "description": "The complete item set to reconcile atomically. Up to 500.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -10857,23 +12024,6 @@
                 "item_id": {
                   "description": "Existing menu item ID when known.",
                   "type": "string"
-                },
-                "media": {
-                  "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
-                  "items": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "asset_id": {
-                        "description": "Active image or video asset id from get_site_media_assets.",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "asset_id"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
                 },
                 "name": {
                   "type": "string"
@@ -10916,13 +12066,15 @@
               },
               "type": "object"
             },
+            "maxItems": 500,
+            "minItems": 1,
             "type": "array"
           },
           "menu_id": {
             "type": "string"
           },
           "set_missing_unavailable": {
-            "description": "Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable.",
+            "description": "Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable and this call contains the complete intended menu (up to 500 items).",
             "type": "boolean"
           },
           "site_id": {
@@ -12401,22 +13553,6 @@
               "null"
             ]
           },
-          "media": {
-            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
-            "items": {
-              "properties": {
-                "asset_id": {
-                  "description": "Active image or video asset id from get_site_media_assets.",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
           "meeting_point": {
             "description": "Specific arrival or check-in instruction for guests.",
             "type": [
@@ -13140,22 +14276,6 @@
           "ingredients": {
             "items": {
               "type": "string"
-            },
-            "type": "array"
-          },
-          "media": {
-            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
-            "items": {
-              "properties": {
-                "asset_id": {
-                  "description": "Active image or video asset id from get_site_media_assets.",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id"
-              ],
-              "type": "object"
             },
             "type": "array"
           },

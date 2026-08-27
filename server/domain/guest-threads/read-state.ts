@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { listAccessibleLocationIds, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import type { GuestThreadMemberStateRow } from './types'
 
@@ -95,8 +96,8 @@ export async function countUnreadForMemberInScope(
     const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) return 0
-      where += ` AND gt.location_id IN (${accessibleLocationIds.map(() => '?').join(', ')})`
-      params.push(...accessibleLocationIds)
+      where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
+      params.push(d1JsonStringSet(accessibleLocationIds))
     }
   }
 

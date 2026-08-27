@@ -9,9 +9,8 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { listSitesForUser } from '~/server/utils/mcp-workflows'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { hasSiteEntitlement } from '~/server/utils/billing'
-import { isSingleMediaPlacement } from '~/server/utils/media-asset-manager'
-import { getMediaPlacements, type MediaPlacementKey } from '~/server/utils/media-placement'
 import { handleAgentSkillTools } from './agent-skills'
 import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
@@ -130,8 +129,9 @@ export async function executeMcpToolCall(
       id: user.userId,
       isPlatformAdmin: user.isPlatformAdmin,
     };
+    const page = paginateMcpCollection(sites, rawArguments, { resource: `sites:${user.userId}` });
     return renderStructuredResponse(
-      { sites, currentUser },
+      { sites: page.items, currentUser, page_info: page.page_info },
       sites.length === 0
         ? "Welcome to KrabiClaw. You have no sites yet — let's create one."
         : `You have ${sites.length} site${sites.length > 1 ? "s" : ""}: ${sites.map((s: { name: unknown }) => s.name).join(", ")}.`,
@@ -328,19 +328,6 @@ export async function executeMcpToolCall(
     }
 
     const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
-    if (picker.assignTool === "set_media" && picker.assignArgs) {
-      const assignArgs = picker.assignArgs;
-      const placement = assignArgs.placement as MediaPlacementKey;
-      if (activeSiteContext && !isSingleMediaPlacement(placement)) {
-        const placements = await getMediaPlacements(activeSiteContext.db, {
-          siteId: activeSiteContext.siteId,
-          ownerType: placement.owner_type,
-          ownerIds: [placement.owner_id],
-          slot: placement.slot,
-        });
-        assignArgs.asset_ids = (placements.get(placement.owner_id) ?? []).map(item => item.asset_id);
-      }
-    }
     const isDebug = normalizedArguments.debug === true;
     return renderStructuredResponse(
       {

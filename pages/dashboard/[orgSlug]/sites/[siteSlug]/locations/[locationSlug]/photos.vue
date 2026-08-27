@@ -167,19 +167,6 @@ const filteredAssets = computed(() => {
   return assets.value.filter(asset => (asset.category || 'other') === categoryFilter.value)
 })
 
-// The gallery replace endpoint does a full-replacement PUT (delete all, insert
-// new), so it has no single row's updated_at to compare against. This reduces
-// to the max placement updated_at across the currently loaded set — matching
-// the server's own MAX(updated_at) revision check in setMediaPlacement — and
-// is null when the gallery is currently empty.
-const galleryRevision = computed<string | null>(() => {
-  let max: string | null = null
-  for (const asset of assets.value) {
-    if (asset.placement_updated_at && (!max || asset.placement_updated_at > max)) max = asset.placement_updated_at
-  }
-  return max
-})
-
 function categoryLabel(category: string | null) {
   return categoryItems.find(item => item.id === (category || 'other'))?.label ?? 'Other'
 }
@@ -240,7 +227,7 @@ async function uploadSelectedFile(file: File, existingOptions?: { category?: str
       return
     }
 
-    await replaceGallery([...assets.value.map(asset => asset.id), result.asset_id], result.kind === 'video' ? 'Video uploaded and attached' : 'Photo uploaded and attached')
+    await attachPhotoById(result.asset_id, result.kind === 'video' ? 'Video uploaded and attached' : 'Photo uploaded and attached')
   } catch (error) {
     toast.add({ description: uploadError.value ?? (error instanceof Error ? error.message : 'Failed to upload file'), color: 'error' })
   }
@@ -284,17 +271,15 @@ async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: st
   }
 }
 
-async function replaceGallery(assetIds: string[], successMessage: string) {
+const GALLERY_PLACEMENT = () => ({ owner_type: 'business_location' as const, owner_id: locationId.value as string, slot: 'gallery' })
+
+async function attachPhotoById(assetId: string, successMessage: string): Promise<boolean> {
   if (!locationId.value) return false
   galleryMutating.value = true
   try {
-    await dashboardApi(`${siteApiBase}/media/placements`, {
-      method: 'PUT',
-      body: {
-        placement: { owner_type: 'business_location', owner_id: locationId.value, slot: 'gallery' },
-        asset_ids: assetIds,
-        expected_revision: galleryRevision.value,
-      },
+    await dashboardApi(`${siteApiBase}/media/placements/attach`, {
+      method: 'POST',
+      body: { placement: GALLERY_PLACEMENT(), asset_id: assetId },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
     })
     toast.add({ description: successMessage, color: 'success' })
@@ -302,11 +287,11 @@ async function replaceGallery(assetIds: string[], successMessage: string) {
     return true
   } catch (error) {
     if (error instanceof ApiClientError && error.statusCode === 409) {
-      toast.add({ description: 'This gallery was updated elsewhere. Reloading the latest version.', color: 'warning' })
+      toast.add({ description: 'This photo is already attached.', color: 'warning' })
       await loadPhotos()
       return false
     }
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update location media', color: 'error' })
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to attach media', color: 'error' })
     return false
   } finally {
     galleryMutating.value = false
@@ -314,14 +299,28 @@ async function replaceGallery(assetIds: string[], successMessage: string) {
 }
 
 async function attachPhoto(asset: MediaAsset) {
-  const updated = await replaceGallery([...assets.value.map(item => item.id), asset.id], 'Media attached')
+  const updated = await attachPhotoById(asset.id, 'Media attached')
   if (updated) {
     attachableAssets.value = attachableAssets.value.filter(item => item.id !== asset.id)
   }
 }
 
 async function detachPhoto(asset: MediaAsset) {
-  await replaceGallery(assets.value.filter(item => item.id !== asset.id).map(item => item.id), 'Media detached from this location')
+  if (!locationId.value) return
+  galleryMutating.value = true
+  try {
+    await dashboardApi(`${siteApiBase}/media/placements/remove`, {
+      method: 'POST',
+      body: { placement: GALLERY_PLACEMENT(), asset_id: asset.id },
+      validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
+    })
+    toast.add({ description: 'Media detached from this location', color: 'success' })
+    await loadPhotos()
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove media', color: 'error' })
+  } finally {
+    galleryMutating.value = false
+  }
 }
 
 function categoryMenu(asset: MediaAsset) {

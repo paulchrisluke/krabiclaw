@@ -28,6 +28,19 @@ const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customiz
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
 const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'tenant_blog', 'platform_doc']
 const CONTENT_BLOCK_TYPE_ENUM = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
+const PAGINATION_INPUT_SCHEMA = {
+  limit: { type: 'number', minimum: 1, maximum: 100, description: 'Page size. Defaults to 50; maximum 100.' },
+  cursor: { type: 'string', description: 'Opaque next_cursor from the previous page.' },
+}
+const PAGE_INFO_SCHEMA = {
+  type: 'object',
+  properties: {
+    has_more: { type: 'boolean' },
+    next_cursor: { type: ['string', 'null'] },
+  },
+  required: ['has_more', 'next_cursor'],
+  additionalProperties: false,
+}
 
 const SEO_FIELDS_SCHEMA = {
   seo_description: NULLABLE_STRING,
@@ -289,7 +302,6 @@ const DOC_SUMMARY_SCHEMA = {
     title: { type: 'string' },
     slug: { type: 'string' },
     excerpt: NULLABLE_STRING,
-    body: NULLABLE_STRING,
     category: NULLABLE_STRING,
     ...NAV_FIELDS_SCHEMA,
     ...DOC_NAV_GROUP_FIELDS_SCHEMA,
@@ -607,7 +619,7 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       properties: {
         id: { type: 'string', description: 'Optional asset id to fetch a single media item.' },
         kind: { type: 'string', enum: ['image', 'video', 'file'], description: 'Optional kind filter. Blog/docs featured images should use kind="image".' },
-        limit: { type: 'number', description: 'Maximum number of media assets to return. Defaults to 50 and caps at 100.' },
+        ...PAGINATION_INPUT_SCHEMA,
       },
       additionalProperties: false,
     },
@@ -615,8 +627,9 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       type: 'object',
       properties: {
         media: { type: 'array', items: PLATFORM_MEDIA_ASSET_SCHEMA },
+        page_info: PAGE_INFO_SCHEMA,
       },
-      required: ['media'],
+      required: ['media', 'page_info'],
       additionalProperties: false,
     },
   }),
@@ -691,13 +704,14 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
       properties: {
         status: { type: 'string', enum: ['published', 'scheduled'] },
         site_id: { type: 'string', description: 'Optional site id to list tenant blog posts instead of platform posts.' },
+        ...PAGINATION_INPUT_SCHEMA,
       },
       additionalProperties: false,
     },
     outputSchema: {
       type: 'object',
-      properties: { posts: { type: 'array', items: BLOG_SUMMARY_SCHEMA } },
-      required: ['posts'],
+      properties: { posts: { type: 'array', items: BLOG_SUMMARY_SCHEMA }, page_info: PAGE_INFO_SCHEMA },
+      required: ['posts', 'page_info'],
       additionalProperties: false,
     },
   }),
@@ -857,13 +871,13 @@ export const PLATFORM_PUBLIC_MCP_TOOLS: PlatformMcpToolDefinition[] = [
     description: 'List public KrabiClaw platform documentation pages.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: { ...PAGINATION_INPUT_SCHEMA },
       additionalProperties: false,
     },
     outputSchema: {
       type: 'object',
-      properties: { docs: { type: 'array', items: DOC_SUMMARY_SCHEMA } },
-      required: ['docs'],
+      properties: { docs: { type: 'array', items: DOC_SUMMARY_SCHEMA }, page_info: PAGE_INFO_SCHEMA },
+      required: ['docs', 'page_info'],
       additionalProperties: false,
     },
   }),

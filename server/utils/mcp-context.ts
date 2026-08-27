@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 
@@ -94,9 +95,9 @@ export async function listAccessibleSitesForMcp(
     SELECT id, organization_id, brand_name, subdomain, custom_domain, public_url, status,
            onboarding_status, primary_location_id
     FROM sites
-    WHERE organization_id IN (${organizations.map(() => '?').join(', ')})
+    WHERE organization_id IN (SELECT value FROM json_each(?))
     ORDER BY updated_at DESC, created_at DESC
-  `, organizations.map(organization => organization.id))
+  `, [d1JsonStringSet(organizations.map(organization => organization.id))])
   return rows.flatMap((site) => {
     const organization = organizationById.get(site.organization_id)
     const role = roleByOrganizationId.get(site.organization_id)

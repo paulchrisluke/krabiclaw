@@ -145,7 +145,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Based on this description, call create_experience with a sensible title, tagline, body, and any of price_amount/duration_minutes/max_capacity/time_slots that are implied or stated: ${description}`,
           "Use active only when the user has approved making the experience public; otherwise use inactive.",
-          "If the user has media ready, call set_media after creation with placement { owner_type: 'experience', owner_id: <exact experience id>, slot: 'gallery' } and the complete ordered asset_ids list.",
+          "If the user has media ready, call attach_media once per asset after creation with placement { owner_type: 'experience', owner_id: <exact experience id>, slot: 'gallery' }, then use reorder_media only if the requested order differs.",
           "Report back what was created, its current status, and the live URL when one is available.",
         ].join(" "),
       };
@@ -170,7 +170,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Call get_workspace_context to confirm the active site, then call list_tenant_pages and resolve the page whose path is \"/\", call get_tenant_page with that variant id to see the current homepage content, and get_site_media_assets to see what photos are already available.",
           "Look at the main photo at the top of the page (the hero/cover photo), the headline and call-to-action button text, and the story section photo and text.",
           "Suggest 2-3 concrete, highest-impact changes — for example a stronger call-to-action, a better main photo, or a punchier headline. Explain each suggestion in plain language, not in terms of field names.",
-          "Ask the user which suggestion to act on first rather than changing everything at once. Apply media suggestions with set_media and copy/text suggestions with update_tenant_page only after they confirm; preserve every unchanged block and each block's media array.",
+          "Ask the user which suggestion to act on first rather than changing everything at once. After confirmation, use set_media for a single hero/image placement, or attach_media/remove_media/reorder_media for a gallery. Apply copy/text suggestions with update_tenant_page without resubmitting media arrays.",
         ].join(" "),
       };
     }
@@ -181,7 +181,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
           "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
-          "After confirmation, call upload_user_media exactly once for each confirmed attachment with file set to its resolved ChatGPT file reference. Upload every confirmed photo before reporting any of them as placed, then call set_media with placement { owner_type, owner_id, slot } using the exact owner id returned by a read tool. Never switch to a bare file_id or invent a download URL. For ordered placements, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
+          "After confirmation, call upload_user_media exactly once for each confirmed attachment with file set to its resolved ChatGPT file reference. Upload every confirmed photo before reporting any of them as placed. Use set_media with asset_id for a single cover/hero/logo placement; use attach_media once per new asset for a gallery or document list, and reorder_media only when needed. Always use the exact owner id returned by a read tool. Never switch to a bare file_id or invent a download URL.",
           "Reply confirming exactly where each photo was placed.",
         ].join(" "),
       };

@@ -140,3 +140,10 @@ export function checkDeleteBodyUsage(file, source) {
     ? [`${file}: DELETE routes must not read request bodies; use query or headers for mutation inputs`]
     : []
 }
+
+export function checkDynamicSqlListBindings(file, source) {
+  const dynamicPlaceholderList = /\b(?:NOT\s+)?IN\s*\(\s*\$\{[\s\S]{0,300}?\.(?:map|fill)\s*\(/gi
+  return dynamicPlaceholderList.test(source)
+    ? [`${file}: variable-length SQL IN/NOT IN lists must use one json_each(?) JSON-array bind`]
+    : []
+}

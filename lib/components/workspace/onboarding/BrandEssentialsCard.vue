@@ -254,15 +254,18 @@ async function save() {
         validate: (value): value is { page: EditableTenantPage } => isRecord(value) && isRecord(value.page) && Array.isArray(value.page.blocks),
       })
       const page = detail.page
-      const blocks = page.blocks.map(block => block.type === 'hero'
-        ? {
-            ...block,
-            media: [
-              ...block.media.filter(item => item.slot !== 'media'),
-              { asset_id: heroAssetId.value!, slot: 'media', sort_order: 0 },
-            ],
-          }
-        : block)
+      const blocks = page.blocks.map((block) => {
+        if (block.type !== 'hero') return block
+        const { asset_id: _retiredAssetId, ...data } = block.data as Record<string, unknown> & { asset_id?: unknown }
+        return {
+          ...block,
+          data,
+          media: [
+            ...block.media.filter(item => item.slot !== 'media'),
+            { asset_id: heroAssetId.value!, slot: 'media', sort_order: 0 },
+          ],
+        }
+      })
       await applicationFetch(`${siteApiBase.value}/pages/${home.id}`, {
         method: 'PATCH',
         body: {

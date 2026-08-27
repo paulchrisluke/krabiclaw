@@ -1,6 +1,5 @@
 import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { updateExperience } from '~/server/utils/experiences'
-import { parseMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 import { queryFirst } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
@@ -32,14 +31,12 @@ export default defineHandler(async (event) => {
 
   let body: Record<string, ApiValue>
   try { body = await readRequiredBody<Record<string, ApiValue>>(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
+  if ('media' in body) return jsonResponse({ error: 'Experience gallery changes must use media placement attach/remove/reorder operations' }, { status: 400 })
 
   const updates: Record<string, ApiValue> = {}
   if ('title' in body) updates.title = String(body.title).trim()
   if ('tagline' in body) updates.tagline = body.tagline ? String(body.tagline).trim() : null
   if ('body' in body) updates.body = body.body ? String(body.body).trim() : null
-  if ('media' in body) {
-    updates.media = body.media === null || body.media === undefined ? null : parseMediaAssetRefs(body.media)
-  }
   try {
     if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
     if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)

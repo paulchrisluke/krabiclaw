@@ -35,6 +35,20 @@ export const MCP_TOOL_SECURITY_SCHEMES: McpToolSecurityScheme[] = [
   { type: 'oauth2', scopes: ['tenant'] },
 ]
 
+export const paginationInputSchema = {
+  limit: { type: 'number', minimum: 1, maximum: 100, description: 'Page size. Defaults to 50; maximum 100.' },
+  cursor: { type: 'string', description: 'Opaque next_cursor from the previous page.' },
+}
+
+export const pageInfoObject = {
+  type: 'object',
+  properties: {
+    has_more: { type: 'boolean' },
+    next_cursor: { type: ['string', 'null'] },
+  },
+  required: ['has_more', 'next_cursor'],
+}
+
 // --- reusable schema fragments ---
 
 export const ROBOTS_DIRECTIVE_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
@@ -111,6 +125,21 @@ export const locationObject = {
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
+    media: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          asset_id: { type: 'string' },
+          kind: { type: 'string', enum: ['image', 'video'] },
+          public_url: { type: 'string' },
+          thumbnail_url: { type: ['string', 'null'] },
+          alt_text: { type: ['string', 'null'] },
+          sort_order: { type: 'number' },
+        },
+        required: ['asset_id', 'kind', 'public_url', 'sort_order'],
+      },
+    },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
@@ -208,18 +237,12 @@ export const menuObject = {
     description: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
     is_visible: { type: 'boolean' },
-    sort_order: { type: 'number' },
-    sections: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          items: { type: 'array', items: menuItemObject },
-        },
-      },
-    },
+    section_order: { type: ['array', 'null'], items: { type: 'string' } },
+    items: { type: 'array', items: menuItemObject },
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
   },
+  required: ['id', 'name', 'is_visible', 'items', 'created_at', 'updated_at'],
 }
 
 const faqItemSchema = {
@@ -1100,6 +1123,8 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'update_media_asset',
   'update_experience_booking',
   'update_notification_settings',
+  'attach_media',
+  'reorder_media',
 ] as const
 
 export const OPEN_WORLD_WRITE_TOOL_NAMES = [
@@ -1154,7 +1179,7 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'sync_domain',
 ] as const
 
-export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [] as const
+export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = ['remove_media'] as const
 
 export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_media_asset',

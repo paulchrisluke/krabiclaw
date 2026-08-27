@@ -4,9 +4,11 @@
     @click="open"
     @keydown.enter.prevent="open"
     @keydown.space.prevent="open"
-    class="w-full text-left cursor-pointer"
+    class="w-full text-left"
+    :class="disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
     role="button"
-    tabindex="0"
+    :aria-disabled="disabled"
+    :tabindex="disabled ? -1 : 0"
   >
     <slot>
       <div
@@ -136,6 +138,7 @@ const props = defineProps<{
   title?: string
   initialPrompt?: string
   context?: string
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -245,6 +248,7 @@ onUnmounted(() => {
 })
 
 function open() {
+  if (props.disabled) return
   pendingAsset.value = null
   panel.value = 'library'
   isOpen.value = true

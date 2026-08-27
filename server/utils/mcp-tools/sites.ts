@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, siteListItem, siteTool, withToolAnnotations } from './shared'
+import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, siteListItem, siteTool, withToolAnnotations } from './shared'
 import { ALL_VERTICALS } from '~/utils/vertical-copy'
 
 const SITE_MEDIA_ITEM_SCHEMA = {
@@ -21,7 +21,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { type: 'object', properties: {}, additionalProperties: true },
+      inputSchema: { type: 'object', properties: { ...paginationInputSchema }, additionalProperties: true },
       outputSchema: {
         type: 'object',
         properties: {
@@ -30,8 +30,9 @@ export const SITES_TOOLS: McpToolDefinition[] = [
             items: siteListItem,
           },
           currentUser: currentUserObject,
+          page_info: pageInfoObject,
         },
-        required: ['sites', 'currentUser'],
+        required: ['sites', 'currentUser', 'page_info'],
       },
     })),
   globalTool(withToolAnnotations({

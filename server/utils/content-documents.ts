@@ -1,6 +1,7 @@
 import { HTTPError } from 'nitro';
 
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../db/index.ts'
+import { d1JsonStringSet } from '../db/d1-limits.ts'
 import { assertNoEmbeddedMediaFields } from '../../utils/tenant-page-blocks.ts'
 
 export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog' | 'tenant_page'
@@ -314,9 +315,9 @@ function buildDocumentWriteBatch(
   const stalePlacementQuery = retainedIds.length
     ? {
         query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (
-          SELECT id FROM content_blocks WHERE document_id = ? AND id NOT IN (${retainedIds.map(() => '?').join(', ')})
+          SELECT id FROM content_blocks WHERE document_id = ? AND id NOT IN (SELECT value FROM json_each(?))
         )`,
-        params: [document.id, ...retainedIds],
+        params: [document.id, d1JsonStringSet(retainedIds)],
       }
     : {
         query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (SELECT id FROM content_blocks WHERE document_id = ?)`,

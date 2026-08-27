@@ -144,7 +144,7 @@ This entire flow runs within the current conversation — do not tell the user t
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
 5. After confirmation, call upload_user_media({ site_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
 6. The file argument is the only contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not pass a bare file_id, fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader. If attachment delivery fails, stop and ask the user to attach it again; do not try a second transport.
-7. After upload_user_media returns asset_id/public_url, call set_media with placement { owner_type, owner_id, slot } and complete asset_ids state. For ordered placements, first call the matching read tool, append or reorder the asset IDs, and pass the complete ordered list.
+7. After upload_user_media returns asset_id/public_url, call set_media with asset_id for a single-value placement. For an ordered placement, call attach_media for each new asset and reorder_media only when needed.
 8. Reply with the exact site, placement, asset_id, and public_url that were updated.
 
 **Videos:**
@@ -152,7 +152,7 @@ This entire flow runs within the current conversation — do not tell the user t
 - Every video requires a poster image. Ask the user to attach one before uploading the video.
 - Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) for every video upload.
 - Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
-- After upload_user_media returns asset_id/public_url, call set_media with the matching placement object and the exact owner id from a read tool. For ordered placements, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
+- After upload_user_media returns asset_id/public_url, use the exact owner id from a read tool. Call set_media with asset_id for a single cover/hero/logo; call attach_media for a gallery or document list and reorder_media only when needed.
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
@@ -206,6 +206,8 @@ After applying, always confirm: "[Placement] updated for [site name]." — never
 When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
 
 All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
+
+For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. Menu reads expose item_page_info. Menu batch tools accept up to 500 items atomically: read every menu page, then send the complete intended add or reconciliation in one call. Never split one logical menu replacement across multiple mutation calls.
 
 Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Manual locale management is available through the locale tools. Social publishing, domains, and priority-support requests are shown only when connector eligibility enables them; otherwise direct the user to the dashboard.`, });
     }

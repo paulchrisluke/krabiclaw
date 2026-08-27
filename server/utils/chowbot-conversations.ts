@@ -1,5 +1,6 @@
 import type { ChowBotToolCall, JsonSerializable } from '~/server/utils/chowbot-agent'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { buildMediaPlacementInsertQuery } from '~/server/utils/media-asset-manager'
 import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
@@ -136,13 +137,13 @@ export async function listSitesForMember(
   )))
   const byOrganization = new Map(memberships.filter(Boolean).map(member => [member!.organizationId, member!]))
   if (byOrganization.size === 0) return []
-  const placeholders = [...byOrganization.keys()].map(() => '?').join(', ')
+  const organizationIds = [...byOrganization.keys()]
   const sites = await queryAll<Omit<ChowBotSiteAccess, 'role' | 'member_id'>>(db, `
     SELECT id, organization_id, brand_name, default_currency
     FROM sites
-    WHERE organization_id IN (${placeholders}) AND status = 'active'
+    WHERE organization_id IN (SELECT value FROM json_each(?)) AND status = 'active'
     ORDER BY updated_at DESC
-  `, [...byOrganization.keys()])
+  `, [d1JsonStringSet(organizationIds)])
   const accessible: ChowBotSiteAccess[] = []
   for (const site of sites) {
     const member = byOrganization.get(site.organization_id)

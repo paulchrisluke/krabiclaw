@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, siteTool } from './shared'
+import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, pageInfoObject, paginationInputSchema, siteTool } from './shared'
 
 const blogContentBlockSchema = {
   type: 'object',
@@ -30,11 +30,11 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { status: { type: 'string', enum: ['published', 'scheduled'] } },
+      inputSchema: { status: { type: 'string', enum: ['published', 'scheduled'] }, ...paginationInputSchema },
       outputSchema: {
         type: 'object',
-        properties: { posts: { type: 'array', items: blogPostSummaryObject } },
-        required: ['posts'],
+        properties: { posts: { type: 'array', items: blogPostSummaryObject }, page_info: pageInfoObject },
+        required: ['posts', 'page_info'],
         additionalProperties: false,
       },
     }),

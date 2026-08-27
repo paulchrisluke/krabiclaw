@@ -9,6 +9,7 @@ import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
 import { parseMediaPlacementKey } from '../../server/utils/media-placement.ts'
+import { MAX_MENU_BATCH_ITEMS } from '../../server/utils/menu-batch-limits.ts'
 
 type ToolContract = {
   name: string
@@ -167,6 +168,52 @@ test('validateArguments rejects unknown fields in nested menu items and media re
   )
 })
 
+test('validateArguments enforces recursive array bounds and uniqueness', () => {
+  const batch = tool(MENUS_TOOLS, 'add_menu_items_batch')
+  assert.throws(
+    () => validateArguments(batch.inputSchema, { site_id: 'site-1', menu_id: 'menu-1', items: [] }),
+    isInvalidParamsErrorContaining('items must contain at least 1 item'),
+  )
+  assert.throws(
+    () => validateArguments(batch.inputSchema, {
+      site_id: 'site-1',
+      menu_id: 'menu-1',
+      items: Array.from({ length: MAX_MENU_BATCH_ITEMS + 1 }, (_, index) => ({ section: 'Mains', name: `Item ${index}` })),
+    }),
+    isInvalidParamsErrorContaining(`items must contain at most ${MAX_MENU_BATCH_ITEMS} items`),
+  )
+  assert.doesNotThrow(() => validateArguments(batch.inputSchema, {
+    site_id: 'site-1',
+    menu_id: 'menu-1',
+    items: Array.from({ length: MAX_MENU_BATCH_ITEMS }, (_, index) => ({ section: 'Mains', name: `Item ${index}` })),
+  }))
+
+  const nestedArraySchema = {
+    type: 'object',
+    properties: {
+      groups: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { ids: { type: 'array', minItems: 1, maxItems: 2, uniqueItems: true, items: { type: 'string' } } },
+        },
+      },
+    },
+  }
+  assert.throws(
+    () => validateArguments(nestedArraySchema, { groups: [{ ids: [] }] }),
+    isInvalidParamsErrorContaining('groups[0].ids must contain at least 1 item'),
+  )
+  assert.throws(
+    () => validateArguments(nestedArraySchema, { groups: [{ ids: ['asset-1', 'asset-2', 'asset-3'] }] }),
+    isInvalidParamsErrorContaining('groups[0].ids must contain at most 2 items'),
+  )
+  assert.throws(
+    () => validateArguments(nestedArraySchema, { groups: [{ ids: ['asset-1', 'asset-1'] }] }),
+    isInvalidParamsErrorContaining('groups[0].ids must contain unique items'),
+  )
+})
+
 test('the tenant update_blog_post/create_blog_post schemas are strict (regression: siteTool() defaulted to additionalProperties: true, making tenant validation a no-op)', () => {
   for (const name of ['create_blog_post', 'update_blog_post', 'update_blog_metadata', 'replace_blog_content']) {
     const definition = tool(BLOG_TOOLS, name)
@@ -206,6 +253,17 @@ test('tenant set_media cannot target platform control-plane documents', () => {
   assert.throws(
     () => parseMediaPlacementKey({ owner_type: 'platform_doc', owner_id: 'doc-1', slot: 'featured' }),
     (error: unknown) => error instanceof Error && error.message.includes('placement.owner_type is invalid'),
+  )
+})
+
+test('tenant set_media accepts one scalar asset or null and rejects the legacy array input', () => {
+  const setMedia = tool(MEDIA_TOOLS, 'set_media')
+  const placement = { owner_type: 'post', owner_id: 'post-1', slot: 'cover' }
+  assert.doesNotThrow(() => validateArguments(setMedia.inputSchema, { site_id: 'site-1', placement, asset_id: 'asset-1' }))
+  assert.doesNotThrow(() => validateArguments(setMedia.inputSchema, { site_id: 'site-1', placement, asset_id: null }))
+  assert.throws(
+    () => validateArguments(setMedia.inputSchema, { site_id: 'site-1', placement, asset_ids: ['asset-1'] }),
+    isInvalidParamsErrorContaining('asset_ids'),
   )
 })
 

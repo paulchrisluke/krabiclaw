@@ -2,13 +2,18 @@ import type { McpExecutorContext } from './shared'
 import { listLocationReviews } from '~/server/utils/mcp-workflows'
 import { replyToReview } from '~/server/utils/review-management'
 import { createOwnerEnteredSiteReview, deleteOwnerEnteredSiteReview, listSiteReviews, updateOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, requiredString } from './shared'
 
 export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_site_reviews":
-      return { reviews: await listSiteReviews(site.db, site.siteId) };
+      {
+        const reviews = await listSiteReviews(site.db, site.siteId);
+        const page = paginateMcpCollection(reviews, args, { resource: `site-reviews:${site.siteId}` });
+        return { reviews: page.items, page_info: page.page_info };
+      }
     case "create_owner_entered_site_review": {
       const result = await createOwnerEnteredSiteReview(site.db, {
         organizationId: site.organizationId,
@@ -33,13 +38,16 @@ export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unkno
       return { ...result, context: await mutationContextPayload(site) };
     }
     case "list_location_reviews":
-      return {
-        reviews: await listLocationReviews(
+      {
+        const locationId = requiredString(args, "location_id");
+        const reviews = await listLocationReviews(
           site.db,
           site.siteId,
-          requiredString(args, "location_id"),
-        ),
-      };
+          locationId,
+        );
+        const page = paginateMcpCollection(reviews, args, { resource: `location-reviews:${site.siteId}:${locationId}` });
+        return { reviews: page.items, page_info: page.page_info };
+      }
     case "reply_to_review": {
       const reply =
         args.reply === null ? null : requiredString(args, "reply");

@@ -18,6 +18,7 @@ import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { assertResourceAccess, assertSiteWideAccess } from '~/server/utils/member-access'
 import { execute, queryFirst } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
 const EXTRACT_SYSTEM = `You are a restaurant menu data extractor. The user will provide a photo or scan of a restaurant menu (including AI-generated food photography with text overlays). Extract ONLY text you can actually see — do not infer or hallucinate dishes.
@@ -216,9 +217,8 @@ export default defineHandler(async (event) => {
     // Roll back only the items created in this request, preserving pre-existing items
     console.error('[menu/extract] Failed to create menu items, rolling back:', error)
     if (createdItemIds.length > 0) {
-      const placeholders = createdItemIds.map(() => '?').join(', ')
       try {
-        await execute(db, `DELETE FROM menu_items WHERE id IN (${placeholders})`, createdItemIds)
+        await execute(db, `DELETE FROM menu_items WHERE id IN (SELECT value FROM json_each(?))`, [d1JsonStringSet(createdItemIds)])
       } catch (rollbackErr) {
         console.error('[menu/extract] Rollback of menu_items failed — orphaned rows may remain:', rollbackErr)
       }

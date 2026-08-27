@@ -11,6 +11,7 @@ import {
 } from '~/server/utils/tenant-pages'
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
 
 function nullableStringArg(args: Record<string, unknown>, key: string, fallback: string | null): string | null {
@@ -94,7 +95,9 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
   switch (toolName) {
     case "list_tenant_pages":
       try {
-        return { pages: await listTenantPages(site.db, site.siteId, { locale: optionalString(args, "locale") }) };
+        const pages = await listTenantPages(site.db, site.siteId, { locale: optionalString(args, "locale") });
+        const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${site.siteId}:${optionalString(args, 'locale') ?? ''}` });
+        return { pages: page.items, page_info: page.page_info };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }

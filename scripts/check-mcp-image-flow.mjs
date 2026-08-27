@@ -246,7 +246,7 @@ async function main() {
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
     placement: { owner_type: 'site', owner_id: siteId, slot: 'logo' },
-    asset_ids: [assetId],
+    asset_id: assetId,
   }, (payload) => {
     expectValue('set_media site_logo returns asset id', payload?.asset_ids?.[0] === assetId, payload)
     expectValue('set_media site_logo returns context', payload?.context?.site_id === siteId, payload)
@@ -255,37 +255,45 @@ async function main() {
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
     placement: { owner_type: 'business_location', owner_id: locationId, slot: 'hero' },
-    asset_ids: [assetId],
+    asset_id: assetId,
   }, (payload) => {
     expectValue('set_media location_hero returns location id', payload?.id === locationId, payload)
     expectValue('set_media location_hero returns location context', payload?.context?.location_id === locationId, payload)
   })
 
-  await assertImageAssignmentTool(headers, 'set_media', {
+  await assertImageAssignmentTool(headers, 'attach_media', {
     site_id: siteId,
     placement: { owner_type: 'menu_item', owner_id: itemId, slot: 'gallery' },
-    asset_ids: [assetId, secondAssetId],
+    asset_id: assetId,
   }, (payload) => {
-    expectValue('set_media menu item gallery returns item id', payload?.id === itemId, payload)
-    expectValue('set_media menu item gallery returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('attach_media menu item gallery returns item id', payload?.id === itemId, payload)
+    expectValue('attach_media menu item gallery returns site context', payload?.context?.site_id === siteId, payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'attach_media', {
+    site_id: siteId,
+    placement: { owner_type: 'menu_item', owner_id: itemId, slot: 'gallery' },
+    asset_id: secondAssetId,
+  }, (payload) => {
+    expectValue('attach_media second menu item gallery asset appends', JSON.stringify(payload?.asset_ids) === JSON.stringify([assetId, secondAssetId]), payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
     placement: { owner_type: 'post', owner_id: postId, slot: 'cover' },
-    asset_ids: [assetId],
+    asset_id: assetId,
   }, (payload) => {
     expectValue('set_media post_image returns post id', payload?.id === postId, payload)
     expectValue('set_media post_image returns site context', payload?.context?.site_id === siteId, payload)
   })
 
-  await assertImageAssignmentTool(headers, 'set_media', {
+  await assertImageAssignmentTool(headers, 'attach_media', {
     site_id: siteId,
     placement: { owner_type: 'experience', owner_id: experienceId, slot: 'gallery' },
-    asset_ids: [assetId],
+    asset_id: assetId,
   }, (payload) => {
-    expectValue('set_media experience gallery returns experience id', payload?.id === experienceId, payload)
-    expectValue('set_media experience gallery returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('attach_media experience gallery returns experience id', payload?.id === experienceId, payload)
+    expectValue('attach_media experience gallery returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   const locationRead = await mcp(headers, 'get_location', {
@@ -303,7 +311,7 @@ async function main() {
   const menuItem = menuReadPayload?.items?.find((item) => item.id === itemId)
   expectStatus('get_menu for image verification succeeds', menuRead)
   expectValue(
-    'set_media updates ordered menu item media',
+    'attach_media updates ordered menu item media',
     JSON.stringify(menuItem?.media?.map((media) => media.asset_id)) === JSON.stringify([assetId, secondAssetId]),
     menuItem,
   )
@@ -320,7 +328,7 @@ async function main() {
     experience_id: experienceId,
   })
   expectStatus('get_experience succeeds', experienceRead)
-  expectValue('set_media updates experience media', data(experienceRead.body)?.experience?.media?.[0]?.asset_id === assetId, data(experienceRead.body))
+  expectValue('attach_media updates experience media', data(experienceRead.body)?.experience?.media?.[0]?.asset_id === assetId, data(experienceRead.body))
 
   process.exit(failed ? 1 : 0)
 }

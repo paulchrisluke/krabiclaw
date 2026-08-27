@@ -600,6 +600,8 @@ async function handleManagerChowBotMessage(
         userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
       return
     } catch (err) {
+      await upsertChannelState(db, {
+        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
       await reply(db, env, toPhone, 'Failed to process the media file. Please try again.', { conversation, userId: user.id, status: 'failed', error: String(err) })
       return
     }

@@ -98,7 +98,6 @@ export interface UpdateMenuItemRequest {
   compare_at_price_amount?: string | number | null
   sale_starts_at?: string | null
   sale_ends_at?: string | null
-  media?: Array<{ asset_id: string }> | null
   available?: boolean
   featured?: boolean
   featured_sort_order?: number

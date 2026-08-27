@@ -4,6 +4,7 @@ import { getAuthSession } from '../utils/auth'
 import { DEMO_ORG_ID } from '../utils/demo'
 import { defineHandler } from 'nitro';
 import { queryAll } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { listUserOrganizations } from '~/server/utils/member-access'
 
@@ -47,15 +48,14 @@ export default defineHandler(async (event) => {
     }
 
     // Build WHERE clause for multiple organization IDs
-    const placeholders = orgIds.map(() => '?').join(',')
     const sites = await queryAll(db, `
       SELECT id, organization_id, theme_id, brand_name, slug, subdomain,
              custom_domain, status, plan, created_at, updated_at,
              onboarding_status
       FROM sites
-      WHERE organization_id IN (${placeholders})
+      WHERE organization_id IN (SELECT value FROM json_each(?))
       ORDER BY created_at DESC
-    `, orgIds)
+    `, [d1JsonStringSet(orgIds)])
 
     const results = (sites || []).map((site: ApiValue) => ({
       ...site as object,

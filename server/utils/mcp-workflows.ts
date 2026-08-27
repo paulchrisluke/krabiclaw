@@ -7,6 +7,7 @@ import {
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst, type DbClient } from "~/server/db";
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
 import { reorderQa, updateQa } from "~/server/utils/location-qa";
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
@@ -19,14 +20,13 @@ export async function listSitesForUser(
   const orgIds = (await listUserOrganizations(env, userId)).map(organization => organization.id)
   if (!orgIds.length) return [];
 
-  const placeholders = orgIds.map(() => "?").join(", ");
   return await queryAll<Record<string, unknown>>(db, `
     SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
            s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
     FROM sites s
-    WHERE s.organization_id IN (${placeholders})
+    WHERE s.organization_id IN (SELECT value FROM json_each(?))
     ORDER BY s.created_at DESC
-  `, orgIds);
+  `, [d1JsonStringSet(orgIds)]);
 }
 
 export async function getSiteForMcp(
@@ -79,7 +79,7 @@ export async function getLocationForMcp(
     opening_hours: safeJson(row.opening_hours),
     categories: safeJson(row.categories),
     is_primary: Boolean(row.is_primary),
-    media: (placements.get(String(row.id)) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
+    media: (placements.get(String(row.id)) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind, sort_order: item.sort_order })),
   };
 }
 
@@ -157,8 +157,8 @@ export async function listContactSubmissions(
   let locationClause = ''
   if (opts.locationIds) {
     if (opts.locationIds.length === 0) return []
-    locationClause = `AND location_id IN (${opts.locationIds.map(() => '?').join(', ')})`
-    params.push(...opts.locationIds)
+    locationClause = `AND location_id IN (SELECT value FROM json_each(?))`
+    params.push(d1JsonStringSet(opts.locationIds))
   }
   return await queryAll<Record<string, unknown>>(db, `
     SELECT * FROM contact_submissions

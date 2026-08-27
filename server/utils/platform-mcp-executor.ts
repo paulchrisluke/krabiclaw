@@ -12,6 +12,7 @@ import { getRecentChanges, validateChangelogLimit } from '~/server/utils/changel
 import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset, deleteMediaAsset, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
 import {
   appendContentBlock,
@@ -769,13 +770,16 @@ export async function executePlatformMcpToolCall(
         period: { start_date: startDate, end_date: endDate },
       }
     }
-    case 'list_platform_media_assets':
-      return {
-        media: await listPlatformMediaAssets(user.db, {
+    case 'list_platform_media_assets': {
+      const kind = optionalString(rawArguments, 'kind') as 'image' | 'video' | 'file' | undefined
+      const id = optionalString(rawArguments, 'id')
+      const media = await listPlatformMediaAssets(user.db, {
           id: optionalString(rawArguments, 'id'),
-          kind: optionalString(rawArguments, 'kind') as 'image' | 'video' | 'file' | undefined,
-          limit: optionalNumber(rawArguments, 'limit'),
-        }),
+          kind,
+          limit: 100,
+        })
+      const page = paginateMcpCollection(media, rawArguments, { resource: `platform-media:${id ?? ''}:${kind ?? ''}` })
+      return { media: page.items, page_info: page.page_info }
       }
     case 'upload_platform_image': {
       if (!hasCloudflareImagesConfig(user.env)) {
@@ -878,8 +882,13 @@ export async function executePlatformMcpToolCall(
       const document = await resolveContentDocument(user.db, rawArguments)
       return await renderContentPreview(user.db, document.id)
     }
-    case 'list_platform_blog_posts':
-      return { posts: await listPlatformBlogPosts(user.db, optionalString(rawArguments, 'status'), optionalString(rawArguments, 'site_id'), user.env) }
+    case 'list_platform_blog_posts': {
+      const status = optionalString(rawArguments, 'status')
+      const siteId = optionalString(rawArguments, 'site_id')
+      const posts = await listPlatformBlogPosts(user.db, status, siteId, user.env)
+      const page = paginateMcpCollection(posts, rawArguments, { resource: `platform-blog-posts:${siteId ?? ''}:${status ?? ''}` })
+      return { posts: page.items, page_info: page.page_info }
+    }
     case 'get_platform_blog_post':
       return { post: projectPlatformBlogPostForMcp(await getPlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'), user.env)) }
     case 'create_platform_blog_post': {
@@ -952,8 +961,11 @@ export async function executePlatformMcpToolCall(
       return await reorderPlatformBlogPosts(user.db, reorderItems(rawArguments, 'post_id') as Array<{ post_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; hide_from_nav?: boolean | null }>, optionalString(rawArguments, 'site_id'), user.env)
     case 'delete_platform_blog_post':
       return await deletePlatformBlogPost(user.db, requiredString(rawArguments, 'post_id'), optionalString(rawArguments, 'site_id'))
-    case 'list_platform_docs':
-      return { docs: await listPlatformDocs(user.db) }
+    case 'list_platform_docs': {
+      const docs = await listPlatformDocs(user.db)
+      const page = paginateMcpCollection(docs, rawArguments, { resource: 'platform-docs' })
+      return { docs: page.items, page_info: page.page_info }
+    }
     case 'get_platform_doc':
       return { doc: await getPlatformDoc(user.db, requiredString(rawArguments, 'doc_id')) }
     case 'create_platform_doc':

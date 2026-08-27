@@ -1,4 +1,5 @@
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { cleanString } from '~/server/utils/api-response'
 import { resolvePublicTemplate, type PublicTemplateSlug } from '~/utils/template-registry'
 import { getMediaPlacements } from '~/server/utils/media-placement'
@@ -286,9 +287,9 @@ export async function upsertLinksPage(db: DbClient, input: {
   const foreignIds = itemIds.length
     ? await queryAll<{ id: string }>(db, `
       SELECT id FROM site_link_items
-       WHERE id IN (${itemIds.map(() => '?').join(',')})
+       WHERE id IN (SELECT value FROM json_each(?))
          AND (organization_id <> ? OR site_id <> ? OR link_page_id <> ?)
-    `, [...itemIds, input.organizationId, input.siteId, pageId])
+    `, [d1JsonStringSet(itemIds), input.organizationId, input.siteId, pageId])
     : []
   if (foreignIds.length) throw new SiteLinksValidationError('Link item IDs must belong to the current site.')
 
@@ -326,9 +327,9 @@ export async function upsertLinksPage(db: DbClient, input: {
       query: `
         DELETE FROM site_link_items
          WHERE organization_id = ? AND site_id = ? AND link_page_id = ?
-           AND id NOT IN (${itemIds.map(() => '?').join(',')})
+           AND id NOT IN (SELECT value FROM json_each(?))
       `,
-      params: [input.organizationId, input.siteId, pageId, ...itemIds],
+      params: [input.organizationId, input.siteId, pageId, d1JsonStringSet(itemIds)],
     })
   } else {
     statements.push({

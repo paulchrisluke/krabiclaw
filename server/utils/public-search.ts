@@ -1,6 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { queryAll, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   PLATFORM_DASHBOARD_ROUTE_ENTRIES,
@@ -99,14 +100,13 @@ interface TenantBlogDocRow {
 }
 
 async function loadContentBodies(db: DbClient, ownerTypes: Array<'platform_doc' | 'platform_blog' | 'tenant_blog'>) {
-  const placeholders = ownerTypes.map(() => '?').join(', ')
   const rows = await queryAll<{ owner_type: string; owner_id: string; type: string; position: number; level: number | null; data_json: string }>(db, `
     SELECT cd.owner_type, cd.owner_id, cb.type, cb.position, cb.level, cb.data_json
     FROM content_documents cd
     JOIN content_blocks cb ON cb.document_id = cd.id
-    WHERE cd.owner_type IN (${placeholders})
+    WHERE cd.owner_type IN (SELECT value FROM json_each(?))
     ORDER BY cd.owner_type, cd.owner_id, cb.position
-  `, ownerTypes)
+  `, [d1JsonStringSet(ownerTypes)])
   const blocks = new Map<string, Array<{ type: string; position: number; level: number | null; data: Record<string, unknown>; media: [] }>>()
   for (const row of rows ?? []) {
     const key = `${row.owner_type}:${row.owner_id}`

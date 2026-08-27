@@ -12,6 +12,7 @@ import {
   checkAdminFetchUsage,
   checkSsrRequestEventCapture,
   checkDeleteBodyUsage,
+  checkDynamicSqlListBindings,
 } from './lib/data-loading-guardrails.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -84,6 +85,11 @@ for (const file of await filesUnder('server/api')) {
   if (!file.endsWith('.delete.ts')) continue
   const source = await readFile(join(root, file), 'utf8')
   violations.push(...checkDeleteBodyUsage(file, source))
+}
+
+for (const file of await filesUnder('server')) {
+  const source = await readFile(join(root, file), 'utf8')
+  violations.push(...checkDynamicSqlListBindings(file, source))
 }
 
 for (const path of PROHIBITED_LEGACY_PATHS) {

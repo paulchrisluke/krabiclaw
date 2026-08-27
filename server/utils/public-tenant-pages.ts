@@ -1,5 +1,6 @@
 import { HTTPError } from 'nitro';
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { listPageQa, type LocationQaRow } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/tenant-pages'
@@ -53,9 +54,9 @@ export async function listPublicTenantPageOfferingRows(
            o.canonical_path, o.sort_order, o.featured
       FROM offerings o
      WHERE o.site_id = ?
-       ${offeringIds ? `AND o.id IN (${offeringIds.map(() => '?').join(',')})` : ''}
+       ${offeringIds ? `AND o.id IN (SELECT value FROM json_each(?))` : ''}
      ORDER BY o.sort_order ASC, o.name ASC
-  `, [siteId, ...(offeringIds ?? [])])
+  `, [siteId, ...(offeringIds ? [d1JsonStringSet(offeringIds)] : [])])
   const placements = await getMediaPlacements(db, { siteId, ownerType: 'offering', ownerIds: rows.map(row => row.id) })
   return rows.map(row => ({ ...row, media: placements.get(row.id) ?? [] }))
 }
@@ -97,8 +98,8 @@ async function hydrateBlocks(
           FROM business_locations bl
           LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
           LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-         WHERE bl.site_id = ? AND bl.status = 'active' AND bl.id IN (${Array.from(locationIds).map(() => '?').join(',')})
-      `, [siteId, ...locationIds])
+         WHERE bl.site_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
+      `, [siteId, d1JsonStringSet([...locationIds])])
     : []
   const distinctLocationIds = new Set(locations.map(l => l.id))
   if (distinctLocationIds.size !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })

@@ -522,7 +522,7 @@ const featuredReviews = computed(() =>
 // rather than falling back to the generic /posts index.
 const recentPosts = computed(() => {
   const posts = (googlePosts.value || [])
-    .filter(p => p.media?.[0]?.public_url && p.public_path)
+    .filter(p => p.public_path)
   return posts.slice(0, 4).map((post, i) => ({
     id: post.slug || String(i),
     path: post.public_path,

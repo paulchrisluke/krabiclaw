@@ -2,6 +2,7 @@ import type { McpExecutorContext } from './shared'
 import { createPlatformBlogPost, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, reorderPlatformBlogPosts, updatePlatformBlogLifecycle, updatePlatformBlogPost } from '~/server/utils/platform-content'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
+import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, objectArray, omit, optionalString, requiredString } from './shared'
 
 const UPDATE_BLOG_MUTATION_FIELDS = [
@@ -206,14 +207,16 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "list_blog_posts":
-      return {
-        posts: (await listPlatformBlogPosts(
+      {
+        const posts = (await listPlatformBlogPosts(
           site.db,
           optionalString(args, "status"),
           site.siteId,
           site.env,
-        )).map((post) => toBlogPostSummary(attachViewUrlToRecord(post, site, {}, site.env))),
-      };
+        )).map((post) => toBlogPostSummary(attachViewUrlToRecord(post, site, {}, site.env)));
+        const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${site.siteId}` });
+        return { posts: items, page_info };
+      }
     case "get_blog_post":
       {
         const post = await getPlatformBlogPost(

@@ -17,6 +17,7 @@ import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TY
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
 import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
 import { parseMediaPlacementKey } from '~/server/utils/media-placement'
+import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { findOrganizationById, listUserOrganizations } from '~/server/utils/member-access'
 
 /**
@@ -252,13 +253,16 @@ export function pickerConfigFromShowGeneratedImages(
   const placement = parseMediaPlacementKey(rawArguments.placement)
   const siteId = requiredString(rawArguments, 'site_id')
   const forSite = siteName ? ` for ${siteName}` : ''
+  const single = isSingleMediaPlacement(placement)
   return {
     title: title ?? 'Generated Images',
     subtitle,
     useLabel: useLabel ?? `Use this image${forSite}`,
     regenerateLabel,
-    assignTool: 'set_media',
-    assignArgs: { site_id: siteId, placement, asset_ids: [] },
+    assignTool: single ? 'set_media' : 'attach_media',
+    assignArgs: single
+      ? { site_id: siteId, placement, asset_id: null }
+      : { site_id: siteId, placement, asset_id: '' },
     regenerateTool: null,
     regenerateArgs: null,
     successMessage: successMessage ?? `Media updated${forSite}.`,

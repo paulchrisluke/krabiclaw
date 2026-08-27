@@ -897,7 +897,10 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
     }
 
-    case "set_media": {
+    case "set_media":
+    case "attach_media":
+    case "remove_media":
+    case "reorder_media": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
@@ -1020,7 +1023,7 @@ ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. To place it on an existing site surface, call set_media with placement {owner_type, owner_id, slot} built from the target entity's type and id and the complete asset_ids state for that placement. For a post cover use {owner_type:"post", owner_id:<post.id>, slot:"cover"}. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Build placement {owner_type, owner_id, slot} from the exact target entity. Use set_media with asset_id for a single cover/hero/logo, or attach_media with asset_id for a gallery/document list. For a post cover use {owner_type:"post", owner_id:<post.id>, slot:"cover"}. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped
@@ -1037,7 +1040,9 @@ ${managedServiceGuidance}${localeGuidance}- Site: rename (updates subdomain), se
 
 Guidelines:
 - Use tools immediately — never say "I'll do that" without calling a tool
-- For existing menu edits, replacements, revised prices/descriptions, renamed dishes, or mixed create/update work, inspect the menu with get_menu and then use sync_menu_items or update_menu_item
+- Follow every paginated read until its has_more field is false; pass next_cursor back to the same tool for each subsequent page. For get_menu, use item_page_info.next_cursor.
+- For existing menu edits, replacements, revised prices/descriptions, renamed dishes, or mixed create/update work, inspect every get_menu page and then use sync_menu_items or update_menu_item.
+- Menu batch tools accept up to 500 items atomically. Read every menu page, then send the complete intended add or reconciliation in one call; never split one logical menu replacement across multiple mutation calls.
 - For menu category changes like renaming Appetizers to Starters or Drinks to Beverages, use rename_menu_section
 - For deleting one dish use delete_menu_item; for deleting a whole category and all dishes inside it use delete_menu_section
 - Store menu prices as price_amount only. Use the site default currency for display unless the user asks to change the currency, then call set_default_currency.

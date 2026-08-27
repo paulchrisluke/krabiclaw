@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { execute, queryAll, queryFirst } from '~/server/db'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { deleteOrganization, listOrganizationMembers, listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 
 const ACTIVE_STATUSES = ['active', 'trialing', 'past_due']
@@ -34,14 +35,12 @@ export default defineHandler(async (event) => {
 
   // Single query: block deletion if any org has an active subscription
   if (allOrgIds.length > 0) {
-    const placeholders = allOrgIds.map(() => '?').join(', ')
-    const statusPlaceholders = ACTIVE_STATUSES.map(() => '?').join(', ')
     const activeSubscription = await queryFirst(db, `
       SELECT organization_id FROM organization_billing
-      WHERE organization_id IN (${placeholders})
-      AND status IN (${statusPlaceholders})
+      WHERE organization_id IN (SELECT value FROM json_each(?))
+      AND status IN (SELECT value FROM json_each(?))
       LIMIT 1
-    `, [...allOrgIds, ...ACTIVE_STATUSES])
+    `, [d1JsonStringSet(allOrgIds), d1JsonStringSet(ACTIVE_STATUSES)])
 
     if (activeSubscription) {
       return jsonResponse(

@@ -7,8 +7,7 @@ import { updateLocation } from '~/server/utils/location-management'
 import { getDraftMedia, parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
-import { createMediaAsset } from '~/server/utils/media-asset-manager'
-import { setMediaPlacement } from '~/server/utils/media-placement'
+import { createMediaAsset, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { resolveUserOrganization } from '~/server/utils/member-access'
 import { applyOnboardingTenantPages } from '~/server/utils/tenant-pages'
 import type { SiteVertical } from '~/utils/vertical-copy'
@@ -139,13 +138,13 @@ export default defineHandler(async (event) => {
     if (logoDraftImage) {
       await createMediaAsset(db, {
         id: logoDraftImage.draftAssetId, organization_id: organizationId, site_id: siteId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: logoDraftImage.cloudflareImageId, public_url: logoDraftImage.publicUrl, thumbnail_url: logoDraftImage.thumbnailUrl, mime_type: logoDraftImage.mimeType, file_name: logoDraftImage.fileName, file_size: logoDraftImage.fileSize, status: 'active', created_by_user_id: session.user.id, })
-      await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'site', owner_id: siteId, slot: 'logo' }, assetIds: [logoDraftImage.draftAssetId] })
+      await executeBatch(db, insertInitialMediaPlacements({ organizationId, siteId, placement: { owner_type: 'site', owner_id: siteId, slot: 'logo' }, media: [{ asset_id: logoDraftImage.draftAssetId }] }))
     }
 
     if (heroDraftImage) {
       await createMediaAsset(db, {
         id: heroDraftImage.draftAssetId, organization_id: organizationId, site_id: siteId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: heroDraftImage.cloudflareImageId, public_url: heroDraftImage.publicUrl, thumbnail_url: heroDraftImage.thumbnailUrl, mime_type: heroDraftImage.mimeType, file_name: heroDraftImage.fileName, file_size: heroDraftImage.fileSize, category: 'other', status: 'active', created_by_user_id: session.user.id, })
-      await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'business_location', owner_id: locationRow.id, slot: 'hero' }, assetIds: [heroDraftImage.draftAssetId] })
+      await executeBatch(db, insertInitialMediaPlacements({ organizationId, siteId, placement: { owner_type: 'business_location', owner_id: locationRow.id, slot: 'hero' }, media: [{ asset_id: heroDraftImage.draftAssetId }] }))
     }
 
     const primaryLocation = payload.preview.locations[0]
@@ -190,7 +189,7 @@ export default defineHandler(async (event) => {
         `, [siteId, onboardingPagePath(pageName), row.field, row.field])
         if (block) {
           const slot = row.field === 'hero' ? 'media' : row.field.endsWith('.image') ? row.field : 'gallery'
-          await setMediaPlacement(db, { organizationId, siteId, placement: { owner_type: 'content_block', owner_id: block.id, slot }, assetIds: [assetId] })
+          await executeBatch(db, insertInitialMediaPlacements({ organizationId, siteId, placement: { owner_type: 'content_block', owner_id: block.id, slot }, media: [{ asset_id: assetId }] }))
         }
       }
     }
