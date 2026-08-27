@@ -12988,29 +12988,7 @@ export const nclsFixture = {
           "owner_type": "offering",
           "owner_id": "offering_ncls_small-business-and-nonprofits",
           "slot": "features.11.image",
-          "asset_id": "asset_ncls_media_child-support-modification_01c27cdc",
-          "sort_order": 0,
-          "status": "active"
-        },
-        {
-          "id": "placement-ncls-offering-offering_ncls_small-business-and-nonprofits-feature-12",
-          "organization_id": "org-ncls-blawby",
-          "site_id": "site-ncls-blawby",
-          "owner_type": "offering",
-          "owner_id": "offering_ncls_small-business-and-nonprofits",
-          "slot": "features.12.image",
           "asset_id": "asset_ncls_media_taxation_3a5d259d",
-          "sort_order": 0,
-          "status": "active"
-        },
-        {
-          "id": "placement-ncls-offering-offering_ncls_small-business-and-nonprofits-feature-13",
-          "organization_id": "org-ncls-blawby",
-          "site_id": "site-ncls-blawby",
-          "owner_type": "offering",
-          "owner_id": "offering_ncls_small-business-and-nonprofits",
-          "slot": "features.13.image",
-          "asset_id": "asset_ncls_media_enforcementofcourtorders_ad5133df",
           "sort_order": 0,
           "status": "active"
         },

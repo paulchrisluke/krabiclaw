@@ -741,20 +741,31 @@ function queryD1Count(table, siteId, remote) {
 
 // ── D1 single-row lookup (best-effort, for pre-apply ownership checks) ────────
 
+// Throws on any query execution or parsing failure — this is used for
+// tenant-boundary safety gates, where a failed lookup must abort the import,
+// never be silently treated the same as "no matching row exists."
 function queryD1Row(query, remote) {
   const flag = remote ? "--remote" : "--local";
-  try {
-    const result = spawnSync(
-      "yarn",
-      ["wrangler", "d1", "execute", "DB", flag, "--command", query, "--json"],
-      { encoding: "utf8", cwd: process.cwd() },
-    );
-    if (result.status !== 0) return null;
-    const arr = extractD1JsonArray(result.stdout + (result.stderr ?? ""));
-    return arr?.[0]?.results?.[0] ?? null;
-  } catch {
-    return null;
+  const result = spawnSync(
+    "yarn",
+    ["wrangler", "d1", "execute", "DB", flag, "--command", query, "--json"],
+    { encoding: "utf8", cwd: process.cwd() },
+  );
+  if (result.error) {
+    throw new Error(`D1 query failed to execute: ${result.error.message}`);
   }
+  if (result.status !== 0) {
+    throw new Error(
+      `D1 query exited with status ${result.status}: ${result.stderr || result.stdout}`,
+    );
+  }
+  const arr = extractD1JsonArray(result.stdout + (result.stderr ?? ""));
+  if (!arr) {
+    throw new Error(
+      `D1 query returned unparseable output: ${result.stdout.slice(0, 500)}`,
+    );
+  }
+  return arr[0]?.results?.[0] ?? null;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

@@ -62,8 +62,10 @@ export function compileCuratedSiteFixture(
   uniqueStrings((fixture.menuItemTranslations ?? []).map((entry) => entry.id), 'menu item translation id')
   uniqueStrings(fixture.publicRoutes.map((r) => r.path), 'public route path')
 
-  validateMedia(fixture.site.media, mediaIds, 'Site')
-  for (const location of fixture.locations) validateMedia(location.media, mediaIds, `Location "${location.id}"`)
+  const validatedSiteMedia = validateMedia(fixture.site.media, mediaIds, 'Site')
+  const validatedLocationMediaById = new Map(
+    fixture.locations.map((location) => [location.id, validateMedia(location.media, mediaIds, `Location "${location.id}"`)]),
+  )
 
   const sourceLocales = fixture.siteLocales.filter((locale) => locale.isSource)
   if (sourceLocales.length !== 1) {
@@ -383,11 +385,11 @@ export function compileCuratedSiteFixture(
       organizationId: fixture.organizationId,
       siteId: fixture.siteId,
     },
-    site: fixture.site,
+    site: { ...fixture.site, media: validatedSiteMedia },
     siteConfig: fixture.siteConfig.map((entry) => ({ ...entry })),
     siteLocales: fixture.siteLocales.map((entry) => ({ ...entry })),
     siteDomains: fixture.siteDomains.map((entry) => ({ ...entry })),
-    locations: fixture.locations.map((location) => ({ ...location })),
+    locations: fixture.locations.map((location) => ({ ...location, media: validatedLocationMediaById.get(location.id)! })),
     mediaAssets,
     tenantPageContent,
     experiences,

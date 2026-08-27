@@ -1039,10 +1039,10 @@ INSERT OR REPLACE INTO media_assets
 VALUES
 ${mediaRows};
 
-INSERT OR REPLACE INTO media_placements
+${mediaPlacementRows ? `INSERT OR REPLACE INTO media_placements
   (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
 VALUES
-${mediaPlacementRows};
+${mediaPlacementRows};` : ''}
 
 UPDATE sites SET primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.primaryLocationId)} WHERE id = ${sqlValue(compiledPotteryHouseSeed.identity.siteId)};
 -- END GENERATED: pottery_media`

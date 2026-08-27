@@ -20,15 +20,15 @@ function sqlJson(value: unknown): string {
 
 const CDN = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg'
 
-function cfImg(cloudflareImageId: string, slug: string) {
+function cfImg(cloudflareImageId: string, slug: string, mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg') {
   return {
     provider: 'cloudflare_images' as const,
     source: 'uploaded' as const,
     cloudflareImageId,
     publicUrl: `${CDN}/${cloudflareImageId}/public`,
     thumbnailUrl: `${CDN}/${cloudflareImageId}/thumbnail`,
-    mimeType: 'image/jpeg',
-    fileName: `${slug}.jpg`,
+    mimeType,
+    fileName: `${slug}.${mimeType === 'image/png' ? 'png' : 'jpg'}`,
     category: 'food' as const,
   }
 }
@@ -296,8 +296,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     // Logo
     {
       id: 'media-kiku-logo',
-      ...cfImg('f2eb4d12-f586-455f-217f-3f3de95f3700', 'kikuzuki-logo'),
-      mimeType: 'image/png',
+      ...cfImg('f2eb4d12-f586-455f-217f-3f3de95f3700', 'kikuzuki-logo', 'image/png'),
       altText: 'Kikuzuki logo',
       category: 'other',
     },
@@ -334,8 +333,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     // About story image
     {
       id: 'media-kiku-about',
-      ...cfImg('f65505ac-e3a6-4030-aa33-65e8ac58bf00', 'kikuzuki-about'),
-      mimeType: 'image/png',
+      ...cfImg('f65505ac-e3a6-4030-aa33-65e8ac58bf00', 'kikuzuki-about', 'image/png'),
       altText: 'Kikuzuki restaurant interior',
       category: 'interior',
     },
@@ -344,7 +342,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-kiku-salmon-sushi', ...cfImg('a8e212b4-633b-4714-4604-9937378ab500', 'salmon-sushi'), altText: 'Salmon sushi' },
     { id: 'media-kiku-chutoro-sushi', ...cfImg('4401b0c3-a02b-4426-cdd7-0a2973f6e900', 'chutoro-sushi'), altText: 'Chutoro sushi' },
     { id: 'media-kiku-ama-ebi-sushi', ...cfImg('524c4c04-e622-4ad2-b2fa-966d41454600', 'ama-ebi-sushi'), altText: 'Ama ebi sushi' },
-    { id: 'media-kiku-a4-beef-sushi-tamago', ...cfImg('25951096-2e1e-4ee5-154a-1adad511d700', 'a4-beef-sushi-tamago'), mimeType: 'image/png', altText: 'A4 beef sushi tamago' },
+    { id: 'media-kiku-a4-beef-sushi-tamago', ...cfImg('25951096-2e1e-4ee5-154a-1adad511d700', 'a4-beef-sushi-tamago', 'image/png'), altText: 'A4 beef sushi tamago' },
     { id: 'media-kiku-uni-nigiri', ...cfImg('e711d0c7-e052-4dbb-2dae-92f63998fd00', 'uni-nigiri'), altText: 'Uni nigiri' },
     { id: 'media-kiku-ebi-sushi', ...cfImg('b363f614-3008-4a7e-11c6-029e9252b700', 'ebi-sushi'), altText: 'Ebi sushi' },
     { id: 'media-kiku-katsuo-sushi', ...cfImg('c58a5944-0247-474f-71e2-85d2d68aff00', 'katsuo-sushi'), altText: 'Katsuo sushi' },
@@ -352,7 +350,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-kiku-tamago-nigiri', ...cfImg('ece5c7f5-1e28-4131-2130-e8ddc70c6e00', 'tamago-nigiri'), altText: 'Tamago nigiri' },
     { id: 'media-kiku-herring-nigiri', ...cfImg('71aa4193-3992-45be-3e03-7073fbb6d000', 'herring-nigiri'), altText: 'Herring nigiri' },
     { id: 'media-kiku-toro-salmon', ...cfImg('fd5bcda9-a5b0-40e8-1a8b-0b774128af00', 'toro-salmon'), altText: 'Toro salmon sushi' },
-    { id: 'media-kiku-omakase-sushi-3', ...cfImg('a25738e8-2848-43d2-b830-94cf40a2e100', 'omakase-sushi-3-kinds'), mimeType: 'image/png', altText: 'Omakase sushi 3 kinds' },
+    { id: 'media-kiku-omakase-sushi-3', ...cfImg('a25738e8-2848-43d2-b830-94cf40a2e100', 'omakase-sushi-3-kinds', 'image/png'), altText: 'Omakase sushi 3 kinds' },
     { id: 'media-kiku-negi-toro-nigiri', ...cfImg('ddde97b2-0920-487e-04b4-a866e4ac6e00', 'negi-toro-nigiri'), altText: 'Negi toro nigiri' },
     { id: 'media-kiku-hotate-sushi', ...cfImg('5d9e2971-4ac7-4c9c-3d69-46179ebf6c00', 'hotate-sushi'), altText: 'Hotate sushi' },
     { id: 'media-kiku-unagi-sushi', ...cfImg('c44c4e93-f20a-4e19-62af-87564396cf00', 'unagi-sushi'), altText: 'Unagi sushi' },
@@ -370,7 +368,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-kiku-kinki-nigiri', ...cfImg('05329a99-3b0c-4520-9361-4be07f046700', 'kinki-nigiri'), altText: 'Kinki nigiri' },
     { id: 'media-kiku-otoro-sushi', ...cfImg('01eed81d-64aa-4283-50b6-c9664285dd00', 'otoro-sushi'), altText: 'Otoro sushi' },
     { id: 'media-kiku-shime-saba-sushi', ...cfImg('20597472-d97e-4280-8f5a-0c5902ca9e00', 'shime-saba-sushi'), altText: 'Shime saba sushi' },
-    { id: 'media-kiku-tobiko-nigiri', ...cfImg('54354754-4a69-4d0c-3542-3d66c44c8300', 'tobiko-nigiri'), mimeType: 'image/png', altText: 'Tobiko nigiri' },
+    { id: 'media-kiku-tobiko-nigiri', ...cfImg('54354754-4a69-4d0c-3542-3d66c44c8300', 'tobiko-nigiri', 'image/png'), altText: 'Tobiko nigiri' },
     { id: 'media-kiku-omakase-sushi-10', ...cfImg('f0a4c2e2-cac8-4f94-b8b2-83b465246700', 'omakase-sushi-10-kinds'), altText: 'Omakase sushi 10 kinds' },
     // Sashimi section images
     { id: 'media-kiku-chutoro-sashimi', ...cfImg('17f4e5a2-b4b1-4149-d045-9f5d85129300', 'chutoro-sashimi'), altText: 'Chutoro sashimi' },
@@ -381,30 +379,30 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-kiku-toro-salmon-sashimi', ...cfImg('c1817783-2256-426a-9720-973f0afcfa00', 'toro-salmon-sashimi'), altText: 'Toro salmon sashimi' },
     { id: 'media-kiku-kinki-sashimi', ...cfImg('e736eeb8-fe39-4333-1a5b-047ef67c6a00', 'kinki-sashimi'), altText: 'Kinki sashimi' },
     { id: 'media-kiku-hotate-sashimi', ...cfImg('e2345e24-05ab-40fd-9a40-5d31ae575c00', 'hotate-sashimi'), altText: 'Hotate sashimi' },
-    { id: 'media-kiku-herring-sashimi', ...cfImg('322cb96a-a505-4aa6-d501-9921424c9400', 'herring-sashimi'), mimeType: 'image/png', altText: 'Herring sashimi' },
+    { id: 'media-kiku-herring-sashimi', ...cfImg('322cb96a-a505-4aa6-d501-9921424c9400', 'herring-sashimi', 'image/png'), altText: 'Herring sashimi' },
     { id: 'media-kiku-akami-sashimi', ...cfImg('81ddc733-e1e8-47ab-74dd-6975c95f4c00', 'akami-sashimi'), altText: 'Akami sashimi' },
     { id: 'media-kiku-ama-ebi-sashimi', ...cfImg('91163b15-3755-4db9-7435-30c524d8c500', 'ama-ebi-sashimi'), altText: 'Ama ebi sashimi' },
     { id: 'media-kiku-salmon-sashimi', ...cfImg('27e32ad9-8a12-462f-be30-98c3de980500', 'salmon-sashimi'), altText: 'Salmon sashimi' },
     { id: 'media-kiku-seabass-sashimi', ...cfImg('e63eb2d0-f23c-46f7-aa57-80f900c12600', 'seabass-sashimi'), altText: 'Seabass sashimi' },
     { id: 'media-kiku-ankimo-sashimi', ...cfImg('449752a3-974a-4900-e81c-96df4e456900', 'ankimo-sashimi'), altText: 'Ankimo sashimi' },
-    { id: 'media-kiku-ika-sashimi', ...cfImg('2639587a-f0ef-44f6-5074-414b42236900', 'ika-sashimi'), mimeType: 'image/png', altText: 'Ika sashimi' },
-    { id: 'media-kiku-ikura-sashimi', ...cfImg('98c4cd3c-c9b2-45b9-a5a0-0a021ded7400', 'ikura-sashimi'), mimeType: 'image/png', altText: 'Ikura sashimi' },
-    { id: 'media-kiku-katsuo-sashimi', ...cfImg('36da0f3e-b16f-4b12-3973-5078b6a02700', 'katsuo-sashimi'), mimeType: 'image/png', altText: 'Katsuo sashimi' },
-    { id: 'media-kiku-otoro-sashimi', ...cfImg('1a2987d0-7bc2-4796-a2c4-758573c68100', 'otoro-sashimi'), mimeType: 'image/png', altText: 'Otoro sashimi' },
+    { id: 'media-kiku-ika-sashimi', ...cfImg('2639587a-f0ef-44f6-5074-414b42236900', 'ika-sashimi', 'image/png'), altText: 'Ika sashimi' },
+    { id: 'media-kiku-ikura-sashimi', ...cfImg('98c4cd3c-c9b2-45b9-a5a0-0a021ded7400', 'ikura-sashimi', 'image/png'), altText: 'Ikura sashimi' },
+    { id: 'media-kiku-katsuo-sashimi', ...cfImg('36da0f3e-b16f-4b12-3973-5078b6a02700', 'katsuo-sashimi', 'image/png'), altText: 'Katsuo sashimi' },
+    { id: 'media-kiku-otoro-sashimi', ...cfImg('1a2987d0-7bc2-4796-a2c4-758573c68100', 'otoro-sashimi', 'image/png'), altText: 'Otoro sashimi' },
     { id: 'media-kiku-madai-sashimi', ...cfImg('6acf31df-51e1-4e63-1786-7e0e8eb2b100', 'madai-sashimi'), altText: 'Madai sashimi' },
     { id: 'media-kiku-hamachi-sashimi', ...cfImg('fbe779da-1d17-4f53-0848-9a070165ea00', 'hamachi-sashimi'), altText: 'Hamachi sashimi' },
     { id: 'media-kiku-shime-saba-sashimi', ...cfImg('d084169c-5c3b-446c-390b-3a1f6d80f600', 'shime-saba-sashimi'), altText: 'Shime saba sashimi' },
     { id: 'media-kiku-tako-sashimi', ...cfImg('4824f01f-836f-4af6-da00-9ac335caad00', 'tako-sashimi'), altText: 'Tako sashimi' },
     { id: 'media-kiku-tobiko-sashimi', ...cfImg('71bf407c-402f-4a96-d65c-d75e5c86e800', 'tobiko-sashimi'), altText: 'Tobiko sashimi' },
     { id: 'media-kiku-tamagoyaki-sashimi', ...cfImg('ae1fad37-11c8-4e8b-1b73-4ae4fdd25200', 'tamagoyaki-sashimi'), altText: 'Tamagoyaki sashimi' },
-    { id: 'media-kiku-omakase-sashimi-3', ...cfImg('0f980b90-9d87-4ac4-8396-37a2716fe300', 'omakase-sashimi-3-kinds'), mimeType: 'image/png', altText: "Omakase sashimi 3 kinds, chef's selection" },
-    { id: 'media-kiku-omakase-sashimi-5', ...cfImg('867de62d-faa9-48d1-57dc-1638702f2a00', 'omakase-sashimi-5-kinds'), mimeType: 'image/png', altText: "Omakase sashimi 5 kinds, chef's selection" },
-    { id: 'media-kiku-omakase-sashimi-7', ...cfImg('d74a24dc-a1f8-44a1-dee9-307de9f7b200', 'omakase-sashimi-7-kinds'), mimeType: 'image/png', altText: "Omakase sashimi 7 kinds, chef's selection" },
-    { id: 'media-kiku-omakase-sashimi-9', ...cfImg('3cccc906-b49b-4adf-d71e-c65569a36b00', 'omakase-sashimi-9-kinds'), mimeType: 'image/png', altText: "Omakase sashimi 9 kinds, chef's selection" },
+    { id: 'media-kiku-omakase-sashimi-3', ...cfImg('0f980b90-9d87-4ac4-8396-37a2716fe300', 'omakase-sashimi-3-kinds', 'image/png'), altText: "Omakase sashimi 3 kinds, chef's selection" },
+    { id: 'media-kiku-omakase-sashimi-5', ...cfImg('867de62d-faa9-48d1-57dc-1638702f2a00', 'omakase-sashimi-5-kinds', 'image/png'), altText: "Omakase sashimi 5 kinds, chef's selection" },
+    { id: 'media-kiku-omakase-sashimi-7', ...cfImg('d74a24dc-a1f8-44a1-dee9-307de9f7b200', 'omakase-sashimi-7-kinds', 'image/png'), altText: "Omakase sashimi 7 kinds, chef's selection" },
+    { id: 'media-kiku-omakase-sashimi-9', ...cfImg('3cccc906-b49b-4adf-d71e-c65569a36b00', 'omakase-sashimi-9-kinds', 'image/png'), altText: "Omakase sashimi 9 kinds, chef's selection" },
     // Carpaccio / Usuzukuri
     { id: 'media-kiku-hamachi-usuzukuri', ...cfImg('f6fddad9-3eb0-4781-dc4a-dceb1194fd00', 'hamachi-usuzukuri'), altText: 'Hamachi usuzukuri carpaccio' },
     { id: 'media-kiku-salmon-usuzukuri', ...cfImg('81f2061a-6630-4394-902e-8d0c1e24d700', 'salmon-usuzukuri'), altText: 'Salmon usuzukuri carpaccio' },
-    { id: 'media-kiku-salmon-tuna-hamachi-usuzukuri', ...cfImg('75e6d9de-00c8-459d-0857-520d3d4b6f00', 'salmon-tuna-hamachi-usuzukuri'), mimeType: 'image/png', altText: 'Salmon tuna hamachi usuzukuri' },
+    { id: 'media-kiku-salmon-tuna-hamachi-usuzukuri', ...cfImg('75e6d9de-00c8-459d-0857-520d3d4b6f00', 'salmon-tuna-hamachi-usuzukuri', 'image/png'), altText: 'Salmon tuna hamachi usuzukuri' },
     // Oishii
     { id: 'media-kiku-ebi-roll', ...cfImg('75a34e30-d42f-422e-971f-5037ed485400', 'ebi-vegetables-roll'), altText: 'Ebi vegetables roll' },
     { id: 'media-kiku-ebi-yaki', ...cfImg('01f92650-3b71-4874-aa11-85917310d100', 'ebi-yaki'), altText: 'Ebi yaki grilled shrimp' },
@@ -416,10 +414,10 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-kiku-tuna-tataki', ...cfImg('6f08b180-c855-44ba-6dcf-d3eefc1d9400', 'tuna-tataki'), altText: 'Tuna tataki' },
     { id: 'media-kiku-wagyu-tataki', ...cfImg('5bce4d8b-4ca1-4abd-22fd-8a7678901200', 'wagyu-rump-beef-tataki'), altText: 'Wagyu rump beef tataki' },
     // Dessert
-    { id: 'media-kiku-mango-sticky-rice-roll', ...cfImg('c51e1e69-cb3b-4f36-6b6e-58dfb3b44400', 'mango-sticky-rice-roll'), mimeType: 'image/png', altText: 'Mango sticky rice roll' },
-    { id: 'media-kiku-chocolate-lava', ...cfImg('18934da6-254f-4150-a45c-d671c81b9600', 'mini-chocolate-lava-vanilla-ice-cream'), mimeType: 'image/png', altText: 'Mini chocolate lava vanilla ice cream' },
-    { id: 'media-kiku-rum-raisin-ice-cream', ...cfImg('0873c414-074c-4b21-78d6-fbfbc8606900', 'rum-raisin-ice-cream'), mimeType: 'image/png', altText: 'Rum and raisin ice cream' },
-    { id: 'media-kiku-vanilla-ice-cream', ...cfImg('449c4abf-a28e-43a8-905d-bf8967aa4000', 'vanilla-ice-cream'), mimeType: 'image/png', altText: 'Vanilla ice cream' },
+    { id: 'media-kiku-mango-sticky-rice-roll', ...cfImg('c51e1e69-cb3b-4f36-6b6e-58dfb3b44400', 'mango-sticky-rice-roll', 'image/png'), altText: 'Mango sticky rice roll' },
+    { id: 'media-kiku-chocolate-lava', ...cfImg('18934da6-254f-4150-a45c-d671c81b9600', 'mini-chocolate-lava-vanilla-ice-cream', 'image/png'), altText: 'Mini chocolate lava vanilla ice cream' },
+    { id: 'media-kiku-rum-raisin-ice-cream', ...cfImg('0873c414-074c-4b21-78d6-fbfbc8606900', 'rum-raisin-ice-cream', 'image/png'), altText: 'Rum and raisin ice cream' },
+    { id: 'media-kiku-vanilla-ice-cream', ...cfImg('449c4abf-a28e-43a8-905d-bf8967aa4000', 'vanilla-ice-cream', 'image/png'), altText: 'Vanilla ice cream' },
     // Take Me Away by KIKUZUKI (loc-kikuzuki-tkma) — real photos from Google Places
     { id: 'media-tkma-hero', ...cfImg('fa7aa50b-46c7-4170-9466-dfb501733100', 'tkma-hero'), altText: 'Take Me Away by KIKUZUKI', category: 'exterior' },
     { id: 'media-tkma-interior-1', ...cfImg('e529e128-e90d-450c-8546-5a70f1d6f900', 'tkma-interior-1'), altText: 'Take Me Away by KIKUZUKI interior', category: 'interior' },

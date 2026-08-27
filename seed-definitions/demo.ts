@@ -1444,7 +1444,7 @@ export function renderCompiledDemoMediaBlock(): string {
       sqlValue(location.facebookUrl),
       sqlValue(location.isPrimary),
       sqlValue(location.status),
-      sqlValue('Asia/Bangkok'),
+      sqlValue('America/New_York'),
     ].join(', ')})`)
     .join(',\n')
 

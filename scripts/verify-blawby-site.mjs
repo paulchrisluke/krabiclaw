@@ -156,7 +156,7 @@ function collectArtifactMediaUrls(value, urls = new Set()) {
   }
   for (const [key, nested] of Object.entries(value)) {
     if (typeof nested === 'string') {
-      const isMediaField = ['public_url', 'thumbnail_url', 'source_path'].includes(key)
+      const isMediaField = ['public_url', 'thumbnail_url', 'source_path', 'hero_image_url'].includes(key)
       const hasMediaExtension = /\.(?:avif|gif|jpe?g|pdf|png|svg|webp)(?:[?#].*)?$/i.test(nested)
       if (/^(https?:)?\/\//.test(nested) && (isMediaField || hasMediaExtension)) {
         urls.add(nested)
