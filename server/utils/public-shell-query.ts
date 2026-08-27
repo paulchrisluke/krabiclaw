@@ -7,6 +7,13 @@ import { isCurrencyCode } from '~/shared/currencies'
 
 type BatchResult = { results?: unknown[] }
 
+const requireLocationString = (value: unknown, field: string): string => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`Public location ${field} is unavailable`)
+  }
+  return value
+}
+
 export interface PublicShellQueryIndexes {
   locations: number
   config: number
@@ -71,9 +78,9 @@ export function buildPublicShellPayload(
   const locations = rawLocations.map(location => {
     const publicUrl = location.media_public_url as string | null
     return {
-      id: location.id,
-      slug: location.slug,
-      title: location.title,
+      id: requireLocationString(location.id, 'id'),
+      slug: requireLocationString(location.slug, 'slug'),
+      title: requireLocationString(location.title, 'title'),
       address: location.address ? JSON.parse(String(location.address)) : null,
       phone: location.phone,
       email: location.email ?? null,

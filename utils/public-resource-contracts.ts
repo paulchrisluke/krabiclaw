@@ -11,9 +11,12 @@ export interface PublicShellSite {
 }
 
 export interface PublicShellLocation {
+  [key: string]: ApiValue
   id: string
   slug: string
   title: string
+  address?: ApiValue
+  city?: ApiValue
 }
 
 export interface PublicShellPayload {

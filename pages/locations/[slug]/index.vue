@@ -375,7 +375,7 @@ const secondaryCtaPath = computed(() => {
 })
 
 const secondaryCtaLabel = computed(() => {
-  if (locationProducts.value.length > 0) return productPresentation.value?.collectionLabel === 'Menu' ? 'View menu' : 'View products'
+  if (locationProducts.value.length > 0) return productPresentation.value?.locationCollectionSegment === 'menu' ? 'View menu' : 'View products'
   if (!isExperienceTenant.value && locationExperienceHref.value) return 'View experiences'
   return null
 })
@@ -428,11 +428,9 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-const productCurrency = computed(() => {
-  const currency = pageConfig.value?.default_currency
-  if (!isCurrencyCode(currency)) throw new Error(`Unsupported site currency: ${currency}`)
-  return currency
-})
+const rawCurrency = pageConfig.value?.default_currency
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+const productCurrency = rawCurrency
 
 const featuredProductItems = computed(() => {
   const presentation = productPresentation.value
@@ -443,9 +441,9 @@ const featuredProductItems = computed(() => {
     .slice(0, 4)
     .map(product => ({
       name: product.name,
-      price: formatProductMoney(product.price_amount, productCurrency.value),
+      price: formatProductMoney(product.price_amount, productCurrency),
       compareAtPrice: isSaleActive(product) && product.compare_at_price_amount
-        ? formatProductMoney(product.compare_at_price_amount, productCurrency.value)
+        ? formatProductMoney(product.compare_at_price_amount, productCurrency)
         : '',
       image: product.image?.public_url || null,
       imageKind: 'image',
@@ -461,7 +459,7 @@ const featuredExperienceItems = computed(() => {
     .sort((a, b) => Number(a.featured_sort_order) - Number(b.featured_sort_order) || Number(a.sort_order) - Number(b.sort_order) || String(a.id).localeCompare(String(b.id)))
   return featured.slice(0, 4).map(experience => ({
     name: experience.title,
-    ...resolveOverridePriceDisplay(experience, productCurrency.value),
+    ...resolveOverridePriceDisplay(experience, productCurrency),
     image: experienceCoverImage(experience),
     imageKind: 'image',
     alt: experience.title ? `${experience.title} experience` : 'Featured experience image',

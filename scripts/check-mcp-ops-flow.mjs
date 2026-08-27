@@ -35,7 +35,7 @@ async function getAuthHeaders() {
   if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
     throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
   }
-  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-mcp-owner-c' })
+  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-demo-owner' })
 }
 
 async function mcp(headers, name, args = {}) {
@@ -102,7 +102,7 @@ async function getOrCreateSite(headers) {
   const suffix = Date.now()
   const create = await mcp(headers, 'create_site', {
     name: `MCP Ops Check ${suffix}`,
-    subdomain: `mcp-ops-check-${suffix}`,
+    subdomain: `e2e-mcp-ops-check-${suffix}`,
     vertical: 'restaurant',
   })
   expectStatus('create_site succeeds', create)
