@@ -16,7 +16,14 @@
             {{ text(block.data.subtitle) || text(block.data.description) || page.summary }}
           </p>
           <TenantPageButton v-if="text(block.data.cta_label) && text(block.data.cta_url)" class="mt-8" :label="text(block.data.cta_label)" :url="text(block.data.cta_url)" />
-          <img v-if="blockMedia(block, 'media')" :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl">
+          <video
+            v-if="blockMedia(block, 'media')?.kind === 'video'"
+            :src="blockMedia(block, 'media')!.public_url!"
+            :poster="blockMedia(block, 'media')!.thumbnail_url ?? undefined"
+            autoplay muted loop playsinline
+            class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl"
+          />
+          <img v-else-if="blockMedia(block, 'media')" :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl">
         </div>
       </template>
 
