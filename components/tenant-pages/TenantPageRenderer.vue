@@ -31,7 +31,14 @@
 
       <template v-else-if="block.type === 'image'">
         <figure v-if="blockMedia(block, 'media')" class="my-12">
-          <img :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="w-full rounded-2xl object-cover shadow-lg">
+          <video
+            v-if="blockMedia(block, 'media')?.kind === 'video'"
+            :src="blockMedia(block, 'media')!.public_url!"
+            :poster="blockMedia(block, 'media')!.thumbnail_url ?? undefined"
+            autoplay muted loop playsinline
+            class="w-full rounded-2xl object-cover shadow-lg"
+          />
+          <img v-else :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="w-full rounded-2xl object-cover shadow-lg">
           <figcaption v-if="text(block.data.caption)" class="mt-3 text-center text-sm text-muted">{{ text(block.data.caption) }}</figcaption>
         </figure>
       </template>
@@ -39,7 +46,14 @@
       <template v-else-if="block.type === 'gallery'">
         <div v-if="galleryImages(block).length" class="my-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <figure v-for="image in galleryImages(block)" :key="image.id || image.url">
-            <img :src="image.url" :alt="image.alt || page.title" class="aspect-[4/3] w-full rounded-2xl object-cover">
+            <video
+              v-if="image.kind === 'video'"
+              :src="image.url"
+              :poster="image.thumbnailUrl ?? undefined"
+              autoplay muted loop playsinline
+              class="aspect-[4/3] w-full rounded-2xl object-cover"
+            />
+            <img v-else :src="image.url" :alt="image.alt || page.title" class="aspect-[4/3] w-full rounded-2xl object-cover">
             <figcaption v-if="image.caption" class="mt-2 text-sm text-muted">{{ image.caption }}</figcaption>
           </figure>
         </div>
@@ -154,10 +168,10 @@ function sectionKey(block: TenantPageBlock): string | undefined {
   return text(block.data.section) || undefined
 }
 
-function galleryImages(block: TenantPageBlock): Array<{ id?: string; url: string; alt?: string; caption?: string }> {
+function galleryImages(block: TenantPageBlock): Array<{ id?: string; url: string; alt?: string; caption?: string; kind?: string | null; thumbnailUrl?: string | null }> {
   return block.media
     .filter(item => item.slot === 'gallery' && item.public_url)
-    .map(item => ({ id: item.asset_id, url: item.public_url!, alt: item.alt_text ?? undefined }))
+    .map(item => ({ id: item.asset_id, url: item.public_url!, alt: item.alt_text ?? undefined, kind: item.kind, thumbnailUrl: item.thumbnail_url }))
 }
 
 function blockMedia(block: TenantPageBlock, slot: string) {

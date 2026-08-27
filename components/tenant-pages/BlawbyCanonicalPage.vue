@@ -73,8 +73,15 @@ function block(type: string, predicate?: (_data: RecordValue) => boolean) {
   return props.page.blocks.find(candidate => candidate.type === type && (!predicate || predicate(candidate.data))) ?? null
 }
 
+// Every caller of mediaUrl() renders the result into a plain <img>, and these
+// slots accept either image or video assets — so a video match returns its
+// poster (thumbnail_url) instead of the raw video URL, which an <img> can't
+// display. Callers that actually want video playback should read block.media
+// directly rather than going through this helper.
 function mediaUrl(block: PublicTenantPage['blocks'][number] | null | undefined, slot: string): string | null {
-  return block?.media.find(item => item.slot === slot)?.public_url || null
+  const item = block?.media.find(candidate => candidate.slot === slot)
+  if (!item) return null
+  return (item.kind === 'video' ? item.thumbnail_url : item.public_url) || null
 }
 
 const heroBlock = computed(() => block('hero'))
