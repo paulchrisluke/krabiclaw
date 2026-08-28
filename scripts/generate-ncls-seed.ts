@@ -12,6 +12,7 @@ const wranglerCli = resolve('node_modules/wrangler/bin/wrangler.js')
 function sqlValue(value: NclsSeedValue): string {
   if (value === null) return 'NULL'
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
+  if (typeof value === 'string' && value.startsWith('strftime(')) return value
   return `'${value.replace(/'/g, "''")}'`
 }
 
@@ -86,8 +87,6 @@ INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES ('member-ncls-blawby', ${sqlValue(nclsFixture.organizationId)}, ${sqlValue(nclsFixture.user.id)}, 'owner', unixepoch());
 
 ${renderRows(table('sites'), initialSite)}
-
-UPDATE sites SET analytics_data_start_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ${sqlValue(nclsFixture.siteId)};
 
   ${renderRows(table('business_locations'))}
 

@@ -50,6 +50,7 @@ export const nclsFixture = {
           "vertical": "service",
           "settings": "{}",
           "last_published_at": null,
+          "analytics_data_start_at": "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
           "created_at": "2026-07-14 02:32:27",
           "updated_at": "2026-08-15T04:17:15.078Z",
           "updated_by": null,

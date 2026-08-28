@@ -2,7 +2,6 @@ import type { PublicConsultationSettings } from '~/types/blawby'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
-import { $fetch } from 'ofetch'
 
 interface ConversionPayload {
   event_name: SiteConversionEventName
@@ -20,7 +19,12 @@ interface ConversionPayload {
 
 function nativeConversion(siteId: string, payload: ConversionPayload) {
   if (!import.meta.client) return
-  void $fetch(`/api/public/sites/${siteId}/conversion-events`, { method: 'POST', body: payload, retry: 0 }).catch(() => {})
+  void fetch(`/api/public/sites/${siteId}/conversion-events`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).catch(() => {})
 }
 
 function mirrorConversion(payload: ConversionPayload) {

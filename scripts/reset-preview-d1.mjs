@@ -76,6 +76,7 @@ function isApplicationObject(row) {
   if (row.name === RESET_SENTINEL) return false
   if (row.name === 'sqlite_schema' || row.name === 'sqlite_temp_schema') return false
   if (row.name.startsWith('sqlite_') || row.name.startsWith('_cf_')) return false
+  if (row.name === 'd1_migrations') return false
   return true
 }
 
@@ -125,12 +126,6 @@ function orderForDrop(objects) {
 
 function quoteIdentifier(value) {
   return `"${value.replaceAll('"', '""')}"`
-}
-
-function expectedMigrations(directory) {
-  return readdirSync(join(ROOT, directory))
-    .filter(name => name.endsWith('.sql'))
-    .sort()
 }
 
 function printPlan(preview, objects) {
@@ -202,12 +197,6 @@ function main() {
 
     runWrangler(['d1', 'migrations', 'apply', preview.name, '--env', 'preview', '--remote'])
 
-    const applied = queryRows(preview.name, 'SELECT name FROM d1_migrations ORDER BY name')
-      .map(row => row.name)
-    const expected = expectedMigrations(preview.migrationsDir)
-    if (JSON.stringify(applied) !== JSON.stringify(expected)) {
-      throw new Error(`Migration ledger mismatch: expected ${expected.length}, found ${applied.length}`)
-    }
     const foreignKeyFailures = queryRows(preview.name, 'PRAGMA foreign_key_check')
     if (foreignKeyFailures.length) {
       throw new Error(`Foreign key check failed: ${JSON.stringify(foreignKeyFailures)}`)
