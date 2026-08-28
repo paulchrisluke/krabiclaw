@@ -397,6 +397,7 @@ export async function hydrateSeededLocationForOnboarding(
     location.id,
     updates,
     userId,
+    env,
   );
 
   if (result.status >= 400) {

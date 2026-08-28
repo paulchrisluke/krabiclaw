@@ -7,6 +7,8 @@ import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
 import { ensureLocationTeam } from "~/server/utils/member-access";
 import type { CloudflareEnv } from "~/server/utils/auth";
+import { syncSocialImageForOwner } from "~/server/utils/social-image/sync";
+import { SocialImageResolutionError } from "~/server/utils/social-image-resolver";
 
 // Require format-valid E.164 at the shared location write boundary (issue
 // #293 Section D/I) — this is the one place createLocation/updateLocation
@@ -680,6 +682,18 @@ export async function createLocation(
           is_primary: isPrimary,
         },
       })
+      await syncSocialImageForOwner(db, env, {
+        siteId,
+        ownerType: 'business_location',
+        ownerId: id,
+        title,
+      }).catch((error) => {
+        if (!(error instanceof SocialImageResolutionError)) throw error
+        // A brand-new location commonly has no photo yet and no site default either — don't
+        // block location creation on that; the location just won't have a public OG card until
+        // a real photo is uploaded (site defaults get backfilled for existing sites; new ones
+        // are expected to upload real photos during onboarding before going public).
+      });
       return { status: 201, data: { success: true, location } };
     } catch (error) {
       if (isUniqueConstraintError(error)) continue;
@@ -705,6 +719,7 @@ export async function updateLocation(
   locationIdOrSlug: string,
   input: UpdateLocationInput,
   userId: string,
+  env?: SetupEnv,
 ) {
   const existing = await loadLocation(db, organizationId, siteId, locationIdOrSlug);
   if (!existing) {
@@ -998,6 +1013,16 @@ export async function updateLocation(
             title: location?.title ?? null,
           },
         })
+        if (env && location?.title) {
+          await syncSocialImageForOwner(db, env, {
+            siteId,
+            ownerType: 'business_location',
+            ownerId: locationId,
+            title: location.title,
+          }).catch((error) => {
+            if (!(error instanceof SocialImageResolutionError)) throw error
+          })
+        }
         return { status: 200, data: { success: true, location } };
       } catch (error) {
         if (isUniqueConstraintError(error)) continue;
