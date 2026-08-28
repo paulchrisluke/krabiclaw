@@ -4,7 +4,7 @@ import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 interface ZarazReconciliationEnv extends ApiRecord {
   DB?: D1Database
   CF_ZONE_ID?: string
-  CF_ZARAZ_API_TOKEN?: string
+  CLOUDFLARE_API_TOKEN?: string
 }
 
 export default defineScheduledTask({
@@ -23,7 +23,7 @@ export default defineScheduledTask({
 
     const missingKeys = [
       !env?.CF_ZONE_ID ? 'CF_ZONE_ID' : null,
-      !env?.CF_ZARAZ_API_TOKEN ? 'CF_ZARAZ_API_TOKEN' : null,
+      !env?.CLOUDFLARE_API_TOKEN ? 'CLOUDFLARE_API_TOKEN' : null,
     ].filter((key): key is string => Boolean(key))
     if (missingKeys.length) {
       return {
