@@ -1714,7 +1714,7 @@ export const site_conversion_events = sqliteTable("site_conversion_events", {
 	index("site_conversion_events_session_idx").on(table.site_id, table.session_id),
 	index("site_conversion_events_entity_idx").on(table.site_id, table.entity_type, table.entity_id),
 	index("site_conversion_events_source_medium_created_idx").on(table.site_id, table.source, table.medium, table.created_at),
-	uniqueIndex("site_conversion_events_entity_unique").on(table.site_id, table.event_name, table.entity_type, table.entity_id).where(sql`${table.entity_type} IS NOT NULL AND ${table.entity_id} IS NOT NULL`),
+	uniqueIndex("site_conversion_events_entity_unique").on(table.site_id, table.event_name, table.entity_type, table.entity_id).where(sql`${table.entity_type} IS NOT NULL AND ${table.entity_id} IS NOT NULL AND ${table.event_name} IN ('contact_submit', 'reservation_submit', 'experience_booking_submit')`),
 	check("site_conversion_events_name_check", sql`(event_name GLOB '[a-z]' OR event_name GLOB '[a-z][a-z0-9_]*') AND length(event_name) <= 64`),
 	check("site_conversion_events_stage_check", sql`${table.stage} IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')`),
 	index("site_conversion_events_organization_id_idx").on(table.organization_id),
