@@ -10,7 +10,7 @@ export interface DomainEnv {
   GA4_MEASUREMENT_ID?: string
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
-  CF_ZARAZ_API_TOKEN?: string
+  CLOUDFLARE_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   CF_ACCOUNT_ID?: string
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
