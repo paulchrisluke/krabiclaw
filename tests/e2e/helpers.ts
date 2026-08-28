@@ -42,8 +42,8 @@ interface ZarazConsentApi {
 // cross-origin resources (R2 media CDN, analytics beacon) that don't allow
 // x-preview-tenant — causing ERR_BLOCKED_BY_ORB and CORS failures.
 export async function openTenantPage(page: Page, url: string, headers: Record<string, string>) {
-  const { origin } = new URL(url)
-  const usesZarazConsent = new URL(url).hostname.endsWith('.krabiclaw.com')
+  const { origin, hostname } = new URL(url)
+  const usesZarazConsent = !['localhost', '127.0.0.1', '::1', '[::1]'].includes(hostname)
   if (Object.keys(headers).length) {
     await page.route(`${origin}/**`, async (route) => {
       await route.continue({ headers: { ...route.request().headers(), ...headers } })
