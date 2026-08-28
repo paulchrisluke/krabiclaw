@@ -77,17 +77,18 @@ SET `created_by` = 'migration:menu-to-products',
     `updated_by` = CASE WHEN `updated_by` IS NULL OR trim(`updated_by`) = '' THEN 'migration:menu-to-products' ELSE `updated_by` END
 WHERE `created_by` IS NULL OR trim(`created_by`) = '';--> statement-breakpoint
 
--- Two menus have a name that doesn't match their owning location's title -
+-- Three menus have a name that doesn't match their owning location's title -
 -- Products have no separate "menu name" concept, so this must be true
--- before conversion. menu-demo-2 also carries a menu-level description,
--- which Products have no field for; its content is redundant with
--- business_locations.description for the same location and was never
--- rendered anywhere (menu_items/menus already have zero live code
--- references), so it's safe to clear rather than silently drop mid-INSERT.
+-- before conversion. menu-demo and menu-demo-2 also carry a menu-level
+-- description, which Products have no field for; their content is
+-- redundant with business_locations.description for the same location and
+-- was never rendered anywhere (menu_items/menus already have zero live
+-- code references), so it's safe to clear rather than silently drop
+-- mid-INSERT.
 UPDATE `menus`
 SET `name` = (SELECT l.`title` FROM `business_locations` l WHERE l.`id` = `menus`.`location_id`)
-WHERE `id` IN ('menu-demo-2', 'menu-kiku-ao-nang');--> statement-breakpoint
-UPDATE `menus` SET `description` = NULL WHERE `id` = 'menu-demo-2';--> statement-breakpoint
+WHERE `id` IN ('menu-demo', 'menu-demo-2', 'menu-kiku-ao-nang');--> statement-breakpoint
+UPDATE `menus` SET `description` = NULL WHERE `id` IN ('menu-demo', 'menu-demo-2');--> statement-breakpoint
 
 INSERT INTO `products` (`id`,`organization_id`,`site_id`,`location_id`,`category`,`name`,`slug`,`description`,`price_amount`,`compare_at_price_amount`,`sale_starts_at`,`sale_ends_at`,`order_url`,`is_visible`,`available`,`featured`,`featured_sort_order`,`sort_order`,`tags_json`,`details_json`,`seo_title`,`seo_description`,`canonical_url`,`robots`,`source`,`created_at`,`updated_at`,`created_by`,`updated_by`)
 SELECT
