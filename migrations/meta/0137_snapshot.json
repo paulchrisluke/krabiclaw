@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "78ec2f91-13a7-462f-8452-a45c1c553d0e",
-  "prevId": "b37e49fe-5b79-4277-97e9-60903d5d9bc0",
+  "id": "87b51725-3dd2-48de-893b-8e0898e806c7",
+  "prevId": "78ec2f91-13a7-462f-8452-a45c1c553d0e",
   "tables": {
     "account": {
       "name": "account",
@@ -6616,6 +6616,13 @@
           "autoincrement": false,
           "default": "'active'"
         },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -6725,11 +6732,11 @@
       "checkConstraints": {
         "media_placements_owner_type_check": {
           "name": "media_placements_owner_type_check",
-          "value": "owner_type IN ('site','business_location','product','post','blog_post','experience','offering','content_block','platform_doc','review','review_request','tenant_compliance','chowbot_message')"
+          "value": "owner_type IN ('site','business_location','product','post','blog_post','experience','offering','content_block','platform_doc','review','review_request','tenant_compliance','chowbot_message','platform','tenant_page')"
         },
         "media_placements_slot_check": {
           "name": "media_placements_slot_check",
-          "value": "(owner_type = 'site' AND (slot IN ('logo','logo_dark','favicon'))) OR (owner_type = 'business_location' AND (slot IN ('hero','gallery'))) OR (owner_type = 'product' AND (slot IN ('image','gallery'))) OR (owner_type = 'post' AND (slot IN ('cover','gallery'))) OR (owner_type = 'blog_post' AND (slot = 'featured')) OR (owner_type = 'experience' AND (slot = 'gallery')) OR (owner_type = 'offering' AND (slot IN ('thumbnail','hero','gallery') OR slot GLOB 'features.[0-9]*.image')) OR (owner_type = 'content_block' AND (slot IN ('media','gallery','background','featured','decoration') OR slot GLOB 'items.[0-9]*.image' OR slot GLOB 'images.[0-9]*' OR slot GLOB 'features.[0-9]*.icon' OR slot GLOB 'people.[0-9]*.image')) OR (owner_type = 'platform_doc' AND (slot = 'featured')) OR (owner_type = 'review' AND (slot IN ('portrait','gallery'))) OR (owner_type = 'review_request' AND (slot = 'gallery')) OR (owner_type = 'tenant_compliance' AND (slot = 'document')) OR (owner_type = 'chowbot_message' AND (slot = 'attachment'))"
+          "value": "(owner_type = 'site' AND (slot IN ('logo','logo_dark','favicon','og_default','og_generated'))) OR (owner_type = 'business_location' AND (slot IN ('hero','gallery','og_generated'))) OR (owner_type = 'product' AND (slot IN ('image','gallery','og_generated'))) OR (owner_type = 'post' AND (slot IN ('cover','gallery','og_generated'))) OR (owner_type = 'blog_post' AND (slot IN ('featured','og_generated'))) OR (owner_type = 'experience' AND (slot IN ('gallery','og_generated'))) OR (owner_type = 'offering' AND (slot IN ('thumbnail','hero','gallery','og_generated') OR slot GLOB 'features.[0-9]*.image')) OR (owner_type = 'content_block' AND (slot IN ('media','gallery','background','featured','decoration') OR slot GLOB 'items.[0-9]*.image' OR slot GLOB 'images.[0-9]*' OR slot GLOB 'features.[0-9]*.icon' OR slot GLOB 'people.[0-9]*.image')) OR (owner_type = 'platform_doc' AND (slot IN ('featured','og_generated'))) OR (owner_type = 'review' AND (slot IN ('portrait','gallery','og_generated'))) OR (owner_type = 'review_request' AND (slot IN ('gallery','og_generated'))) OR (owner_type = 'tenant_compliance' AND (slot = 'document')) OR (owner_type = 'chowbot_message' AND (slot = 'attachment')) OR (owner_type = 'platform' AND (slot = 'og_generated')) OR (owner_type = 'tenant_page' AND (slot = 'og_generated'))"
         },
         "media_placements_status_check": {
           "name": "media_placements_status_check",
@@ -12278,6 +12285,524 @@
         "site_analytics_daily_site_id_sites_id_fk": {
           "name": "site_analytics_daily_site_id_sites_id_fk",
           "tableFrom": "site_analytics_daily",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "site_analytics_dimension_daily": {
+      "name": "site_analytics_dimension_daily",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date": {
+          "name": "date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dimension": {
+          "name": "dimension",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "subvalue": {
+          "name": "subvalue",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "page_views": {
+          "name": "page_views",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "site_analytics_dimension_daily_organization_id_idx": {
+          "name": "site_analytics_dimension_daily_organization_id_idx",
+          "columns": [
+            "organization_id"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_dimension_daily_site_date_idx": {
+          "name": "site_analytics_dimension_daily_site_date_idx",
+          "columns": [
+            "site_id",
+            "date"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_dimension_daily_site_date_value_unique": {
+          "name": "site_analytics_dimension_daily_site_date_value_unique",
+          "columns": [
+            "site_id",
+            "date",
+            "dimension",
+            "value",
+            "subvalue"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "site_analytics_dimension_daily_organization_id_organization_id_fk": {
+          "name": "site_analytics_dimension_daily_organization_id_organization_id_fk",
+          "tableFrom": "site_analytics_dimension_daily",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "site_analytics_dimension_daily_site_id_sites_id_fk": {
+          "name": "site_analytics_dimension_daily_site_id_sites_id_fk",
+          "tableFrom": "site_analytics_dimension_daily",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "site_analytics_dimension_daily_dimension_check": {
+          "name": "site_analytics_dimension_daily_dimension_check",
+          "value": "\"site_analytics_dimension_daily\".\"dimension\" IN ('country', 'city', 'device', 'referrer')"
+        }
+      }
+    },
+    "site_analytics_page_daily": {
+      "name": "site_analytics_page_daily",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date": {
+          "name": "date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "page_path": {
+          "name": "page_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "page_views": {
+          "name": "page_views",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "site_analytics_page_daily_organization_id_idx": {
+          "name": "site_analytics_page_daily_organization_id_idx",
+          "columns": [
+            "organization_id"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_page_daily_site_date_idx": {
+          "name": "site_analytics_page_daily_site_date_idx",
+          "columns": [
+            "site_id",
+            "date"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_page_daily_site_date_path_unique": {
+          "name": "site_analytics_page_daily_site_date_path_unique",
+          "columns": [
+            "site_id",
+            "date",
+            "page_path"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "site_analytics_page_daily_organization_id_organization_id_fk": {
+          "name": "site_analytics_page_daily_organization_id_organization_id_fk",
+          "tableFrom": "site_analytics_page_daily",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "site_analytics_page_daily_site_id_sites_id_fk": {
+          "name": "site_analytics_page_daily_site_id_sites_id_fk",
+          "tableFrom": "site_analytics_page_daily",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "site_analytics_sessions": {
+      "name": "site_analytics_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "visitor_id": {
+          "name": "visitor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "landing_path": {
+          "name": "landing_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_touch_source": {
+          "name": "last_touch_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'Direct'"
+        },
+        "last_touch_medium": {
+          "name": "last_touch_medium",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'(none)'"
+        },
+        "last_touch_campaign": {
+          "name": "last_touch_campaign",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_term": {
+          "name": "last_touch_term",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_content": {
+          "name": "last_touch_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_referrer_host": {
+          "name": "last_touch_referrer_host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_gclid": {
+          "name": "last_touch_gclid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_gbraid": {
+          "name": "last_touch_gbraid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_wbraid": {
+          "name": "last_touch_wbraid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_fbclid": {
+          "name": "last_touch_fbclid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_msclkid": {
+          "name": "last_touch_msclkid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_touch_at": {
+          "name": "last_touch_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "site_analytics_sessions_organization_id_idx": {
+          "name": "site_analytics_sessions_organization_id_idx",
+          "columns": [
+            "organization_id"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_sessions_site_started_idx": {
+          "name": "site_analytics_sessions_site_started_idx",
+          "columns": [
+            "site_id",
+            "started_at"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_sessions_site_last_seen_idx": {
+          "name": "site_analytics_sessions_site_last_seen_idx",
+          "columns": [
+            "site_id",
+            "last_seen_at"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_sessions_site_visitor_started_idx": {
+          "name": "site_analytics_sessions_site_visitor_started_idx",
+          "columns": [
+            "site_id",
+            "visitor_id",
+            "started_at"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_sessions_site_touch_started_idx": {
+          "name": "site_analytics_sessions_site_touch_started_idx",
+          "columns": [
+            "site_id",
+            "last_touch_source",
+            "last_touch_medium",
+            "started_at"
+          ],
+          "isUnique": false
+        },
+        "site_analytics_sessions_site_session_unique": {
+          "name": "site_analytics_sessions_site_session_unique",
+          "columns": [
+            "site_id",
+            "session_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "site_analytics_sessions_organization_id_organization_id_fk": {
+          "name": "site_analytics_sessions_organization_id_organization_id_fk",
+          "tableFrom": "site_analytics_sessions",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "site_analytics_sessions_site_id_sites_id_fk": {
+          "name": "site_analytics_sessions_site_id_sites_id_fk",
+          "tableFrom": "site_analytics_sessions",
           "tableTo": "sites",
           "columnsFrom": [
             "site_id"
@@ -17860,530 +18385,24 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "site_analytics_dimension_daily": {
-      "name": "site_analytics_dimension_daily",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "date": {
-          "name": "date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "dimension": {
-          "name": "dimension",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "value": {
-          "name": "value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "subvalue": {
-          "name": "subvalue",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "page_views": {
-          "name": "page_views",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "site_analytics_dimension_daily_organization_id_idx": {
-          "name": "site_analytics_dimension_daily_organization_id_idx",
-          "columns": [
-            "organization_id"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_dimension_daily_site_date_idx": {
-          "name": "site_analytics_dimension_daily_site_date_idx",
-          "columns": [
-            "site_id",
-            "date"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_dimension_daily_site_date_value_unique": {
-          "name": "site_analytics_dimension_daily_site_date_value_unique",
-          "columns": [
-            "site_id",
-            "date",
-            "dimension",
-            "value",
-            "subvalue"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "site_analytics_dimension_daily_organization_id_organization_id_fk": {
-          "name": "site_analytics_dimension_daily_organization_id_organization_id_fk",
-          "tableFrom": "site_analytics_dimension_daily",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "site_analytics_dimension_daily_site_id_sites_id_fk": {
-          "name": "site_analytics_dimension_daily_site_id_sites_id_fk",
-          "tableFrom": "site_analytics_dimension_daily",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "site_analytics_dimension_daily_dimension_check": {
-          "name": "site_analytics_dimension_daily_dimension_check",
-          "value": "\"site_analytics_dimension_daily\".\"dimension\" IN ('country', 'city', 'device', 'referrer')"
-        }
-      }
-    },
-    "site_analytics_page_daily": {
-      "name": "site_analytics_page_daily",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "date": {
-          "name": "date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "page_path": {
-          "name": "page_path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "page_views": {
-          "name": "page_views",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "site_analytics_page_daily_organization_id_idx": {
-          "name": "site_analytics_page_daily_organization_id_idx",
-          "columns": [
-            "organization_id"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_page_daily_site_date_idx": {
-          "name": "site_analytics_page_daily_site_date_idx",
-          "columns": [
-            "site_id",
-            "date"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_page_daily_site_date_path_unique": {
-          "name": "site_analytics_page_daily_site_date_path_unique",
-          "columns": [
-            "site_id",
-            "date",
-            "page_path"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "site_analytics_page_daily_organization_id_organization_id_fk": {
-          "name": "site_analytics_page_daily_organization_id_organization_id_fk",
-          "tableFrom": "site_analytics_page_daily",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "site_analytics_page_daily_site_id_sites_id_fk": {
-          "name": "site_analytics_page_daily_site_id_sites_id_fk",
-          "tableFrom": "site_analytics_page_daily",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "site_analytics_sessions": {
-      "name": "site_analytics_sessions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "session_id": {
-          "name": "session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "visitor_id": {
-          "name": "visitor_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "landing_path": {
-          "name": "landing_path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "duration_seconds": {
-          "name": "duration_seconds",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "last_touch_source": {
-          "name": "last_touch_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'Direct'"
-        },
-        "last_touch_medium": {
-          "name": "last_touch_medium",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'(none)'"
-        },
-        "last_touch_campaign": {
-          "name": "last_touch_campaign",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_term": {
-          "name": "last_touch_term",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_content": {
-          "name": "last_touch_content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_referrer_host": {
-          "name": "last_touch_referrer_host",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_gclid": {
-          "name": "last_touch_gclid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_gbraid": {
-          "name": "last_touch_gbraid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_wbraid": {
-          "name": "last_touch_wbraid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_fbclid": {
-          "name": "last_touch_fbclid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_msclkid": {
-          "name": "last_touch_msclkid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_touch_at": {
-          "name": "last_touch_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "site_analytics_sessions_organization_id_idx": {
-          "name": "site_analytics_sessions_organization_id_idx",
-          "columns": [
-            "organization_id"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_sessions_site_started_idx": {
-          "name": "site_analytics_sessions_site_started_idx",
-          "columns": [
-            "site_id",
-            "started_at"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_sessions_site_last_seen_idx": {
-          "name": "site_analytics_sessions_site_last_seen_idx",
-          "columns": [
-            "site_id",
-            "last_seen_at"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_sessions_site_visitor_started_idx": {
-          "name": "site_analytics_sessions_site_visitor_started_idx",
-          "columns": [
-            "site_id",
-            "visitor_id",
-            "started_at"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_sessions_site_touch_started_idx": {
-          "name": "site_analytics_sessions_site_touch_started_idx",
-          "columns": [
-            "site_id",
-            "last_touch_source",
-            "last_touch_medium",
-            "started_at"
-          ],
-          "isUnique": false
-        },
-        "site_analytics_sessions_site_session_unique": {
-          "name": "site_analytics_sessions_site_session_unique",
-          "columns": [
-            "site_id",
-            "session_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "site_analytics_sessions_organization_id_organization_id_fk": {
-          "name": "site_analytics_sessions_organization_id_organization_id_fk",
-          "tableFrom": "site_analytics_sessions",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "site_analytics_sessions_site_id_sites_id_fk": {
-          "name": "site_analytics_sessions_site_id_sites_id_fk",
-          "tableFrom": "site_analytics_sessions",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     }
   },
+  "views": {},
   "enums": {},
   "_meta": {
     "schemas": {},
     "tables": {},
     "columns": {}
+  },
+  "internal": {
+    "indexes": {
+      "idx_invitation_org_email_pending_unique": {
+        "columns": {
+          "lower(\"email\")": {
+            "isExpression": true
+          }
+        }
+      }
+    }
   }
 }
