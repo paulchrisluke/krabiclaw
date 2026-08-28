@@ -890,6 +890,13 @@
       "when": 1787889600000,
       "tag": "0133_backfill_content_block_media_and_strip_component_placeholders",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "6",
+      "when": 1787893800000,
+      "tag": "0134_strip_component_placeholders_fix",
+      "breakpoints": true
     }
   ]
 }
