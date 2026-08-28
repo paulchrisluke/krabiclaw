@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   blawbyBaseURL, blawbyExtraHeaders, collectPageErrors,
-  potteryHouseBaseURL, potteryHouseExtraHeaders, setupTenantHeaders,
+  openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders,
 } from './helpers'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
 
@@ -14,9 +14,8 @@ async function clientJourney(page: Page, options: {
   detailText: RegExp
   forbidden: RegExp[]
 }) {
-  await setupTenantHeaders(page, options.baseURL, options.headers)
   const errors = collectPageErrors(page, { failOnAllWarnings: true })
-  await page.goto(`${options.baseURL}/`, { waitUntil: 'load' })
+  await openTenantPage(page, `${options.baseURL}/`, options.headers)
   await expect(page.locator('body')).toContainText(options.identity)
   await expect(page.locator('[data-hydrated]')).toHaveAttribute('data-hydrated', 'true')
   await page.locator(`a[href="${options.listPath}"]`).first().click()

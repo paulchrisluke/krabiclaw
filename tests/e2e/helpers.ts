@@ -35,6 +35,12 @@ const THIRD_PARTY_CONSOLE_PATTERNS = [
   'Permissions policy violation: compute-pressure is not allowed',
 ]
 
+interface ZarazConsentApi {
+  APIReady: boolean
+  modal: boolean
+  getAll: () => Record<string, boolean>
+}
+
 // Inject extra headers ONLY into requests targeting the tenant's base hostname.
 // page.setExtraHTTPHeaders sends to ALL origins, triggering CORS preflights on
 // cross-origin resources (R2 media CDN, analytics beacon) that don't allow
@@ -45,6 +51,51 @@ export async function setupTenantHeaders(page: Page, baseURL: string, headers: R
   await page.route(`${origin}/**`, async (route) => {
     await route.continue({ headers: { ...route.request().headers(), ...headers } })
   })
+}
+
+export async function openTenantPage(page: Page, url: string, headers: Record<string, string>) {
+  const { origin } = new URL(url)
+  const usesZarazConsent = new URL(url).hostname.endsWith('.krabiclaw.com')
+  if (Object.keys(headers).length) {
+    await page.route(`${origin}/**`, async (route) => {
+      await route.continue({ headers: { ...route.request().headers(), ...headers } })
+    })
+  }
+
+  if (usesZarazConsent) {
+    await page.addInitScript(() => {
+      const showConsent = () => {
+        const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
+        if (!consent?.APIReady) return
+        const choices = Object.values(consent.getAll())
+        if (!choices.length || !choices.every(Boolean)) consent.modal = true
+      }
+      const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
+      if (consent?.APIReady) showConsent()
+      else document.addEventListener('zarazConsentAPIReady', showConsent, { once: true })
+    })
+  }
+
+  const response = await page.goto(url, { waitUntil: 'load' })
+  if (usesZarazConsent) {
+    await page.waitForFunction(() => {
+      const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
+      return consent?.APIReady === true
+    })
+    const alreadyAccepted = await page.evaluate(() => {
+      const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
+      if (!consent?.APIReady) return false
+      const choices = Object.values(consent.getAll())
+      return choices.length > 0 && choices.every(Boolean)
+    })
+    if (!alreadyAccepted) {
+      const consentModal = page.getByRole('dialog', { name: 'Cookie Settings' })
+      await consentModal.getByRole('button', { name: 'Accept All' }).click()
+      await expect(consentModal).toBeHidden()
+    }
+  }
+
+  return response
 }
 
 export function collectPageErrors(page: Page, options: { failOnAllWarnings?: boolean } = {}) {

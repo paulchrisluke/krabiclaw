@@ -10,7 +10,7 @@ import { asMcpError, MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
 
 describe('conversational tool surface policy', () => {
   test('keeps manual locale tools visible while hiding gated groups', () => {
-    assert.equal(isConversationalToolEnabled('list_locales'), true)
+    assert.equal(isConversationalToolEnabled('list_site_locales'), true)
     assert.equal(isConversationalToolEnabled('get_site_domains'), false)
     assert.equal(isConversationalToolEnabled('create_work_request'), false)
     assert.equal(isConversationalToolEnabled('publish_to_facebook'), false)
@@ -27,11 +27,11 @@ describe('conversational tool surface policy', () => {
   test('filters mixed tool lists consistently', () => {
     const tools = [
       { name: 'update_product' },
-      { name: 'list_locales' },
+      { name: 'list_site_locales' },
       { name: 'get_site_domains' },
     ]
 
-    assert.deepEqual(filterConversationalTools(tools).map((tool) => tool.name), ['update_product', 'list_locales'])
+    assert.deepEqual(filterConversationalTools(tools).map((tool) => tool.name), ['update_product', 'list_site_locales'])
   })
 
   test('blocks stale calls to hidden tools', () => {
