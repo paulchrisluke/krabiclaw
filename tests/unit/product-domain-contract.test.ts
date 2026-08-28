@@ -78,12 +78,16 @@ test('site preview collection routes use index files beside Product detail route
 
 test('external Product ordering renders only the canonical link and records hostname-only analytics', () => {
   const detail = readFileSync(new URL('../../components/products/ProductDetailPage.vue', import.meta.url), 'utf8')
+  const sayaButton = readFileSync(new URL('../../components/saya/SayaButton.vue', import.meta.url), 'utf8')
   const analytics = readFileSync(new URL('../../server/api/public/sites/[siteId]/conversion-events.post.ts', import.meta.url), 'utf8')
 
   assert.match(detail, /v-if="product\.available && product\.order_url"/)
+  assert.match(detail, /<SayaButton/)
   assert.match(detail, /target="_blank"/)
   assert.match(detail, /rel="noopener noreferrer"/)
-  assert.match(detail, />Order Now<\/a>/)
+  assert.match(detail, />Order Now<\/SayaButton>/)
+  assert.match(sayaButton, /:target="target"/)
+  assert.match(sayaButton, /:rel="rel"/)
   assert.doesNotMatch(detail, /\/order|Grab|Uber Eats|Foodpanda/)
   assert.match(analytics, /destinationHostname = new URL\(product\.order_url\)\.hostname/)
   assert.match(analytics, /ctaDestination = destinationHostname/)

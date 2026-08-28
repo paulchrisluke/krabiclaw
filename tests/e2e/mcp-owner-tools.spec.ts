@@ -408,7 +408,14 @@ test.describe('stateless MCP server', () => {
       const product = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_product',
-        args: { site_id: siteId, location_id: locationId, category: 'Mains', name: 'MCP Curry', price_amount: '12.5' },
+        args: {
+          site_id: siteId,
+          location_id: locationId,
+          category: 'Mains',
+          name: 'MCP Curry',
+          price_amount: '12.5',
+          order_url: 'https://orders.example.com/mcp-curry',
+        },
       })
       expect(product.status()).toBe(200)
       const productId = mcpData<{ product: { id: string } }>(await product.json()).product.id
@@ -437,7 +444,23 @@ test.describe('stateless MCP server', () => {
         args: { site_id: siteId, product_id: productId },
       })
       expect(productRead.status()).toBe(200)
-      expect(mcpData<{ product: { name: string } }>(await productRead.json()).product.name).toBe('MCP Curry')
+      expect(mcpData<{ product: { name: string; order_url: string } }>(await productRead.json()).product).toMatchObject({
+        name: 'MCP Curry',
+        order_url: 'https://orders.example.com/mcp-curry',
+      })
+
+      const cmsUpdate = await request.patch(`/api/editor/sites/${siteId}/locations/${locationId}/products/${productId}`, {
+        data: { order_url: 'https://orders.example.com/cms-curry' },
+      })
+      expect(cmsUpdate.status(), await cmsUpdate.text()).toBe(200)
+
+      const cmsUpdatedProduct = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'get_product',
+        args: { site_id: siteId, product_id: productId },
+      })
+      expect(cmsUpdatedProduct.status()).toBe(200)
+      expect(mcpData<{ product: { order_url: string } }>(await cmsUpdatedProduct.json()).product.order_url).toBe('https://orders.example.com/cms-curry')
 
       const productsList = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
@@ -449,9 +472,20 @@ test.describe('stateless MCP server', () => {
       const productUpdate = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'update_product',
-        args: { site_id: siteId, product_id: productId, name: 'MCP Green Curry', price_amount: '13' },
+        args: {
+          site_id: siteId,
+          product_id: productId,
+          name: 'MCP Green Curry',
+          price_amount: '13',
+          order_url: 'https://orders.example.com/green-curry',
+        },
       })
       expect(productUpdate.status()).toBe(200)
+
+      const cmsRead = await request.get(`/api/editor/sites/${siteId}/locations/${locationId}/products`)
+      expect(cmsRead.status(), await cmsRead.text()).toBe(200)
+      const cmsProducts = (await cmsRead.json()) as { products: Array<{ id: string; order_url: string | null }> }
+      expect(cmsProducts.products.find(item => item.id === productId)?.order_url).toBe('https://orders.example.com/green-curry')
 
       const renameCategory = await mcpRequest(request, baseURL!, {
         method: 'tools/call',

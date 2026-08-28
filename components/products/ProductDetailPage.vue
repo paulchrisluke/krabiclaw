@@ -21,14 +21,14 @@
           </div>
           <p v-if="product.description" class="mt-8 leading-7 text-muted">{{ product.description }}</p>
           <p v-if="!product.available" class="mt-8 font-semibold text-muted">Currently unavailable</p>
-          <a
+          <SayaButton
             v-if="product.available && product.order_url"
             :href="product.order_url"
             target="_blank"
             rel="noopener noreferrer"
-            class="mt-8 inline-flex rounded-full bg-black px-6 py-3 font-semibold text-white no-underline"
+            class="mt-8"
             @click="recordExternalOrderClick"
-          >Order Now</a>
+          >Order Now</SayaButton>
           <dl v-if="product.details.length" class="mt-10 divide-y divide-default border-y border-default">
             <div v-for="detail in product.details" :key="detail.key" class="py-4">
               <dt class="font-medium">{{ detail.label }}</dt>
