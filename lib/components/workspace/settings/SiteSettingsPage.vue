@@ -110,15 +110,10 @@
                   </div>
                 </div>
               </div>
-              <form class="flex flex-wrap items-end gap-3" @submit.prevent="enableLanguage">
-                <UFormField label="Available language" class="min-w-56">
-                  <USelect v-model="newLocale" :items="enableableCatalogOptions" placeholder="Select a language" size="xl" class="w-full" />
-                </UFormField>
-                <UButton type="submit" size="xl" :loading="localizationBusy" :disabled="!newLocale || localizationSettings.effective_plan !== 'growth'">
-                  {{ localizationSettings.billing_enabled ? `Enable for ${formattedLanguagePrice}` : 'Enable' }}
-                </UButton>
-              </form>
-              <p v-if="localizationSettings.effective_plan !== 'growth'" class="text-sm text-warning">A Growth subscription is required.</p>
+              <p v-if="!enableableCatalogOptions.length" class="text-sm text-muted">No additional languages are available to enable right now.</p>
+              <UFormField v-else label="Available language">
+                <USelect v-model="newLocale" :items="enableableCatalogOptions" :placeholder="localizationSettings.billing_enabled ? `Select a language to enable for ${formattedLanguagePrice}` : 'Select a language to enable'" size="xl" class="w-full" />
+              </UFormField>
             </template>
           </div>
 
@@ -329,7 +324,7 @@ const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.valu
 const navbarTitle = computed(() => detailTitle.value ?? (surface.value === 'brand' ? 'Brand' : 'Site Settings'))
 const navbarActionIcon = computed(() => hasDetail.value && !secondSegment.value ? 'i-lucide-x' : 'i-lucide-arrow-left')
 const navbarActionLabel = computed(() => hasDetail.value && !secondSegment.value ? 'Close editor' : 'Go back')
-const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing', 'localization'].includes(detailKey.value)))
+const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing'].includes(detailKey.value)))
 
 function navigateFromNavbar() {
   if (hasDetail.value) {
@@ -352,6 +347,7 @@ function editorSignature(key: string | null) {
     case 'analytics': return JSON.stringify(form.google_analytics_measurement_id)
     case 'verification': return JSON.stringify(form.google_site_verification)
     case 'visibility': return JSON.stringify(searchIndexed.value)
+    case 'localization': return JSON.stringify(newLocale.value)
     default: return ''
   }
 }
@@ -369,6 +365,7 @@ const validationMessage = computed(() => {
     case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
     case 'notifications': return !notificationChannels.value.length ? 'Select at least one notification channel.' : notificationChannels.value.includes('whatsapp') && !whatsappPhone.value.trim() ? 'Enter the WhatsApp number used for notifications.' : null
     case 'analytics': return !form.google_analytics_measurement_id.trim() || /^G-[A-Z0-9]+$/i.test(form.google_analytics_measurement_id.trim()) ? null : 'Enter a valid Google Analytics measurement ID.'
+    case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
   }
 })
@@ -397,6 +394,7 @@ function fillNotifications(notifications: { whatsapp_phone: string | null; chann
 function resetDraft() {
   if (loadedSettings.value) fillForm(loadedSettings.value)
   if (loadedNotifications.value) fillNotifications(loadedNotifications.value)
+  newLocale.value = ''
   originalSignature.value = editorSignature(detailKey.value)
 }
 function errorMessage(error: unknown, fallback: string) {
@@ -463,6 +461,11 @@ async function saveCurrentEditor() {
         fillNotifications(response.notifications)
         originalSignature.value = editorSignature(detailKey.value)
         toast.add({ description: 'Notifications saved', color: 'success' })
+        break
+      }
+      case 'localization': {
+        await enableLanguage()
+        originalSignature.value = editorSignature(detailKey.value)
         break
       }
     }
