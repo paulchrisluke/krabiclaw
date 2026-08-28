@@ -26,12 +26,6 @@ import { join, relative } from 'node:path'
 const ROOT = process.cwd()
 const MIGRATIONS_DIR = join(ROOT, 'migrations')
 const LAST_AUDITED_DUPLICATE_NUMBER = 99
-const AUDITED_IMMUTABLE_DUPLICATES = new Set([
-  [
-    '0134_sleepy_bug.sql',
-    '0134_strip_component_placeholders_fix.sql',
-  ].sort().join('|'),
-])
 
 const REQUIRED_HISTORICAL_FILES = [
   '0001_initial.sql',
@@ -104,8 +98,7 @@ function lintDuplicateMigrationNumbers(presentFiles) {
   }
 
   return [...byNumber.entries()]
-    .filter(([, names]) => names.length > 1
-      && !AUDITED_IMMUTABLE_DUPLICATES.has([...names].sort().join('|')))
+    .filter(([, names]) => names.length > 1)
     .map(([number, names]) => ({
       file: `migrations/${String(number).padStart(4, '0')}_*.sql`,
       message: `Duplicate migration number: ${names.join(', ')}. Regenerate the later migration on the current target branch.`,
