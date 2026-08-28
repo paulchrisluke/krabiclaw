@@ -46,15 +46,17 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   const now = new Date().toISOString()
   const sessionId = getOrCreateSessionId(event)
   const visitorId = getOrCreateVisitorId(event)
-  await execute(db, `INSERT INTO site_analytics_sessions (
+  const session = await queryFirst<Record<string, unknown>>(db, `INSERT INTO site_analytics_sessions (
     id, organization_id, site_id, session_id, visitor_id, started_at, last_seen_at, landing_path,
     last_touch_source, last_touch_medium, created_at, updated_at
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Direct', '(none)', ?, ?)
-  ON CONFLICT(site_id, session_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, updated_at = excluded.updated_at`, [
+  ON CONFLICT(site_id, session_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, updated_at = excluded.updated_at
+  RETURNING last_touch_source, last_touch_medium, last_touch_campaign, last_touch_term,
+    last_touch_content, last_touch_referrer_host, last_touch_gclid, last_touch_gbraid,
+    last_touch_wbraid, last_touch_fbclid, last_touch_msclkid`, [
     crypto.randomUUID(), input.organizationId, input.siteId, sessionId, visitorId, now, now,
     input.pagePath?.startsWith('/') ? input.pagePath : '/', now, now,
   ])
-  const session = await queryFirst<Record<string, unknown>>(db, `SELECT * FROM site_analytics_sessions WHERE site_id = ? AND session_id = ? LIMIT 1`, [input.siteId, sessionId])
   if (!session) throw new Error('Analytics session unavailable')
 
   const id = crypto.randomUUID()

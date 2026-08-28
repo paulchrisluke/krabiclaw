@@ -10,7 +10,7 @@ import { parsePhone } from '~/utils/phone'
 import { queryFirst } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
-import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
+import { buildOwnerThreadInboxUrl, getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
@@ -157,43 +157,52 @@ export default defineHandler(async (event) => {
   }
   await recordCustomerBooking(db, customer.id, customerInput)
 
-  await fireSiteEventSafe({
-    db, organizationId: site.organization_id, siteId, locationId: experience.location_id, eventType: 'experience.booking_received', entityType: 'experience_booking', entityId: booking.id, metadata: {
-      experience_id: experience.id, booking_date: bookingDate, time_slot: timeSlot, party_size: partySize, }, })
-
-  await ensureGuestThread(db, experienceBookingAdapter, booking.id, { publishEnv: env })
+  const [, thread] = await Promise.all([
+    fireSiteEventSafe({
+      db, organizationId: site.organization_id, siteId, locationId: experience.location_id, eventType: 'experience.booking_received', entityType: 'experience_booking', entityId: booking.id, metadata: {
+        experience_id: experience.id, booking_date: bookingDate, time_slot: timeSlot, party_size: partySize, }, }),
+    ensureGuestThread(db, experienceBookingAdapter, booking.id, { publishEnv: env }),
+  ])
 
   try {
-    const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, experience.location_id)
+    const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
+      resolveLocationContact(db, siteId, experience.location_id),
+      buildOwnerThreadInboxUrl(env, db, {
+        organizationId: site.organization_id,
+        siteId,
+        locationId: experience.location_id,
+        threadId: thread.id,
+      }),
+    ])
     const platformDomain = getPlatformDomain(env)
     const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.${platformDomain}` : null)
     const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/experiences/cancel?id=${booking.id}#${cancellation.token}` : null
     await notifyExperienceBookingCreated(env, db, {
-      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: experience.location_id, bookingId: booking.id, guestName, email: guestEmail, guestPhone: normalizedGuestPhone, experienceTitle: experience.title, bookingDate, timeSlot, partySize, notes: notes || null, cancelUrl, contactPhone, contactEmail, })
+      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: experience.location_id, bookingId: booking.id, guestName, email: guestEmail, guestPhone: normalizedGuestPhone, experienceTitle: experience.title, bookingDate, timeSlot, partySize, notes: notes || null, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
   } catch (error) {
     console.error('experience_booking_notification_failed', {
       organizationId: site.organization_id, siteId, bookingId: booking.id, error: error instanceof Error ? error.message : String(error), })
   }
 
-  const policy = await resolveBookingPolicy(db, {
-    siteId, policyType: 'experience', locationId: experience.location_id, experienceId: experience.id, })
-
   const requestedLocale = cleanString(body.locale, 10)
-  const locale = requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
-    ? requestedLocale
-    : await getSourceLocale(db, site.organization_id, siteId)
-
-  await recordSubmissionConversionSafe(db, event, {
-    organizationId: site.organization_id,
-    siteId,
-    eventName: 'experience_booking_submit',
-    stage: 'submitted',
-    locationId: experience.location_id,
-    entityType: 'experience_booking',
-    entityId: booking.id,
-    pageType: 'experience',
-    pagePath: `/experiences/${slug}`,
-  })
+  const [policy, locale] = await Promise.all([
+    resolveBookingPolicy(db, {
+      siteId, policyType: 'experience', locationId: experience.location_id, experienceId: experience.id, }),
+    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
+      ? requestedLocale
+      : getSourceLocale(db, site.organization_id, siteId),
+    recordSubmissionConversionSafe(db, event, {
+      organizationId: site.organization_id,
+      siteId,
+      eventName: 'experience_booking_submit',
+      stage: 'submitted',
+      locationId: experience.location_id,
+      entityType: 'experience_booking',
+      entityId: booking.id,
+      pageType: 'experience',
+      pagePath: `/experiences/${slug}`,
+    }),
+  ])
 
   return jsonResponse({
     success: true, booking_id: booking.id, cancellation_token: cancellation.token, message: `Your booking request for ${experience.title} on ${bookingDate} at ${fmt12Hour(timeSlot)} has been received. We'll confirm shortly.`, policy_summary: renderBookingPolicySummary(policy, locale), }, { status: 201 })

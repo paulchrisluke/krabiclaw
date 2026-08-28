@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getReservationSlotAvailability } from '~/server/utils/reservations'
+import { getReservationSlotAvailabilityRange } from '~/server/utils/reservations'
 import { resolveLocationTimezone } from '~/server/utils/site-config'
 import { queryFirst } from '~/server/db'
 
@@ -41,17 +41,23 @@ export default defineHandler(async (event) => {
 
   const timezone = await resolveLocationTimezone(db, site.organization_id, siteId, locationId)
 
-  const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getReservationSlotAvailability>> }> = []
+  const dateStrings: string[] = []
   const cursor = new Date(`${date}T00:00:00Z`)
   if (isNaN(cursor.getTime())) {
     return jsonResponse({ error: 'Invalid calendar date' }, { status: 400 })
   }
   for (let i = 0; i < days; i++) {
-    const dateStr = cursor.toISOString().slice(0, 10)
-    const slots = await getReservationSlotAvailability(db, siteId, { id: location.id, max_capacity: location.max_capacity, opening_hours: parsedHours }, dateStr, timezone)
-    dates.push({ date: dateStr, slots })
+    dateStrings.push(cursor.toISOString().slice(0, 10))
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
+  const availability = await getReservationSlotAvailabilityRange(
+    db,
+    siteId,
+    { id: location.id, max_capacity: location.max_capacity, opening_hours: parsedHours },
+    dateStrings,
+    timezone,
+  )
+  const dates = dateStrings.map(dateStr => ({ date: dateStr, slots: availability[dateStr] ?? [] }))
 
   return jsonResponse({ timezone, dates })
 })
