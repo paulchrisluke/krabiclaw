@@ -15,6 +15,7 @@
 <script setup lang="ts">
 import type { LocalizedPublicRoute } from '~/server/utils/localization'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import { splitLocalePrefix } from '~/utils/tenant-locale-path'
 
 definePageMeta({ layout: false })
 
@@ -29,24 +30,9 @@ const pagePath = computed(() => {
   return '/' + values.filter(Boolean).join('/')
 })
 
-const localeSegment = computed(() => {
-  const first = pagePath.value.split('/')[1]
-  if (!first || !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(first)) return null
-  try {
-    const canonical = Intl.getCanonicalLocales(first)
-    return canonical.length === 1 && canonical[0] === first ? first : null
-  } catch {
-    return null
-  }
-})
-// tenant_page_variants.path is stored locale-bare regardless of locale (the
-// CMS writes the same '/', '/about', etc. for every translation) - strip the
-// locale segment back off before it reaches TenantPublicPage's content lookup.
-const tenantPagePath = computed(() => {
-  if (!localeSegment.value) return pagePath.value
-  const rest = pagePath.value.slice(localeSegment.value.length + 1)
-  return rest || '/'
-})
+const localePrefix = computed(() => splitLocalePrefix(pagePath.value))
+const localeSegment = computed(() => localePrefix.value.localeSegment)
+const tenantPagePath = computed(() => localePrefix.value.tenantPagePath)
 const requestEvent = useRequestEvent()
 const isLocalizedRouteResponse = (value: unknown): value is { route: LocalizedPublicRoute } =>
   isRecord(value) && isRecord(value.route) && typeof value.route.locale === 'string'

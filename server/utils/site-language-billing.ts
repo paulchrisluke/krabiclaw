@@ -1,7 +1,7 @@
 import type Stripe from 'stripe'
 import { HTTPError } from 'nitro'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { canonicalizeLocale, englishManifestHash, LANGUAGE_LICENSE_CHARGES_ENABLED } from '~/server/utils/localization'
 import { localizationError } from '~/server/utils/localization-errors'
@@ -21,16 +21,6 @@ interface LanguageLicenseRow {
   stripe_subscription_id: string | null
   stripe_subscription_item_id: string | null
   last_provider_quantity: number | null
-}
-
-interface BillingProjectionRow {
-  plan: string | null
-  status: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-  current_period_end: string | null
-  stripe_subscription_id: string | null
 }
 
 export interface SiteLanguageBillingEnv {
@@ -99,24 +89,11 @@ function languageItem(subscription: Stripe.Subscription): Stripe.SubscriptionIte
 }
 
 async function requireGrowthBilling(db: DbClient, organizationId: string): Promise<string> {
-  const billing = await queryFirst<BillingProjectionRow>(db, `
-    SELECT plan, status, payment_status, paid_through, past_due_since, current_period_end, stripe_subscription_id
-      FROM organization_billing
-     WHERE organization_id = ?
-     LIMIT 1
-  `, [organizationId])
-  const effectivePlan = billing ? getEffectiveAccessPlan({
-    plan: billing.plan,
-    status: billing.status,
-    paymentStatus: billing.payment_status,
-    paidThrough: billing.paid_through,
-    pastDueSince: billing.past_due_since,
-    periodEnd: billing.current_period_end,
-  }) : 'free'
-  if (effectivePlan !== 'growth' || !billing?.stripe_subscription_id) {
+  const projection = await getOrganizationBillingProjection(db, organizationId)
+  if (projection.effectivePlan !== 'growth' || !projection.stripeSubscriptionId) {
     localizationError(402, 'LANGUAGE_LICENSE_REQUIRED', 'An active Growth subscription is required to enable a language')
   }
-  return billing.stripe_subscription_id
+  return projection.stripeSubscriptionId
 }
 
 async function requireAvailableCatalog(db: DbClient, locale: string): Promise<void> {
@@ -432,23 +409,13 @@ export async function getSiteLanguageSettings(
   env: SiteLanguageBillingEnv,
   input: { organizationId: string; siteId: string },
 ) {
-  const billing = await queryFirst<BillingProjectionRow>(db, `
-    SELECT plan, status, payment_status, paid_through, past_due_since, current_period_end, stripe_subscription_id
-      FROM organization_billing WHERE organization_id = ? LIMIT 1
-  `, [input.organizationId])
-  const effectivePlan = billing ? getEffectiveAccessPlan({
-    plan: billing.plan,
-    status: billing.status,
-    paymentStatus: billing.payment_status,
-    paidThrough: billing.paid_through,
-    pastDueSince: billing.past_due_since,
-    periodEnd: billing.current_period_end,
-  }) : 'free'
+  const projection = await getOrganizationBillingProjection(db, input.organizationId)
+  const effectivePlan = projection.effectivePlan
   let interval: BillingInterval | null = null
-  if (effectivePlan === 'growth' && billing?.stripe_subscription_id && env.STRIPE_SECRET_KEY) {
+  if (LANGUAGE_LICENSE_CHARGES_ENABLED && effectivePlan === 'growth' && projection.stripeSubscriptionId && env.STRIPE_SECRET_KEY) {
     try {
       const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
-      const subscription = await stripe.subscriptions.retrieve(billing.stripe_subscription_id, { expand: ['items.data.price.product'] })
+      const subscription = await stripe.subscriptions.retrieve(projection.stripeSubscriptionId, { expand: ['items.data.price.product'] })
       interval = resolveSubscriptionInterval(subscription)
     } catch {
       // interval is display-only (the settings UI already shows a

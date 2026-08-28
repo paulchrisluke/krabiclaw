@@ -86,6 +86,42 @@
             <USelect v-model="form.default_currency" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
           </div>
 
+          <div v-else-if="detailKey === 'localization'" class="space-y-6">
+            <p class="text-base text-muted">
+              English is the permanent source language. {{ localizationSettings?.billing_enabled ? 'Each secondary language is billed on this site’s Growth subscription.' : 'Growth includes one secondary language at no extra cost.' }}
+            </p>
+            <div v-if="localizationLoading" class="space-y-3">
+              <USkeleton class="h-16 rounded-lg" />
+              <USkeleton class="h-16 rounded-lg" />
+            </div>
+            <UAlert v-else-if="localizationError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="localizationError" />
+            <template v-else-if="localizationSettings">
+              <div class="space-y-3">
+                <div v-for="language in localizationSettings.languages" :key="language.locale" class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default p-4">
+                  <div>
+                    <p class="font-medium">{{ language.label || language.locale }} <span class="text-sm text-muted">({{ language.locale }})</span></p>
+                    <UBadge :color="language.is_source || language.license_status === 'active' ? 'success' : 'neutral'" variant="subtle" size="sm" class="mt-1">
+                      {{ language.is_source ? 'Source · published' : `${language.license_status || 'disabled'} · ${language.locale_status}` }}
+                    </UBadge>
+                  </div>
+                  <div v-if="!language.is_source" class="flex gap-2">
+                    <UButton v-if="language.license_status === 'active'" color="neutral" variant="outline" :loading="localizationBusy" @click="disableLanguage(language.locale)">Disable</UButton>
+                    <UButton v-if="language.license_status === 'disabled'" color="error" variant="outline" :loading="localizationBusy" @click="deleteLanguage(language.locale)">Delete content</UButton>
+                  </div>
+                </div>
+              </div>
+              <form class="flex flex-wrap items-end gap-3" @submit.prevent="enableLanguage">
+                <UFormField label="Available language" class="min-w-56">
+                  <USelect v-model="newLocale" :items="enableableCatalogOptions" placeholder="Select a language" size="xl" class="w-full" />
+                </UFormField>
+                <UButton type="submit" size="xl" :loading="localizationBusy" :disabled="!newLocale || localizationSettings.effective_plan !== 'growth'">
+                  {{ localizationSettings.billing_enabled ? `Enable for ${formattedLanguagePrice}` : 'Enable' }}
+                </UButton>
+              </form>
+              <p v-if="localizationSettings.effective_plan !== 'growth'" class="text-sm text-warning">A Growth subscription is required.</p>
+            </template>
+          </div>
+
           <div v-else-if="detailKey === 'notifications'" class="space-y-8">
             <p class="text-base text-muted">Choose the default channels used when a location has no notification override.</p>
             <UFormField label="Alert channels">
@@ -170,6 +206,9 @@ interface SiteSettingsResponse {
 }
 
 interface FacebookConnectionStatus { connected: boolean; facebook_page_name?: string }
+interface LocalizationLanguageRow { locale: string; label: string | null; is_source: number | boolean; locale_status: string; license_status: string | null }
+interface LocalizationCatalogRow { locale: string; label: string; direction: string }
+interface LocalizationSettings { effective_plan: string; billing_enabled: boolean; interval: 'month' | 'year' | null; unit_amount_cents: number | null; languages: LocalizationLanguageRow[]; available_catalogs: LocalizationCatalogRow[] }
 interface SettingsPageResource {
   settings: { success: boolean; settings: SiteSettingsResponse }
   notifications: { success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }
@@ -200,7 +239,7 @@ const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
 const validBrandKeys = new Set(['name', 'logo', 'description', 'color', 'contact', 'social'])
-const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing'])
+const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization'])
 const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
 const routeIsCanonical = computed(() => {
   const segments = routeSegments.value
@@ -221,6 +260,11 @@ const notificationChannels = ref<string[]>([])
 const whatsappPhone = ref('')
 const searchIndexed = ref(true)
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
+const localizationSettings = ref<LocalizationSettings | null>(null)
+const localizationLoading = ref(false)
+const localizationBusy = ref(false)
+const localizationError = ref<string | null>(null)
+const newLocale = ref('')
 const loadedSettings = ref<SiteSettingsResponse | null>(null)
 const loadedNotifications = ref<{ whatsapp_phone: string | null; channels: string[] } | null>(null)
 const originalSignature = ref('')
@@ -231,6 +275,10 @@ const form = reactive({
 })
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
 const hasFacebookAccess = computed(() => dashboard.site.value?.plan === 'growth')
+const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
+  .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.license_status !== 'disabled'))
+  .map(catalog => ({ label: `${catalog.label} (${catalog.locale})`, value: catalog.locale })))
+const formattedLanguagePrice = computed(() => localizationSettings.value?.unit_amount_cents == null ? '$5/month or $60/year' : `$${(localizationSettings.value.unit_amount_cents / 100).toFixed(0)}/${localizationSettings.value.interval}`)
 const nameCharactersRemaining = computed(() => 50 - form.brand_name.length)
 const descriptionCharactersRemaining = computed(() => 500 - form.brand_description.length)
 
@@ -276,12 +324,12 @@ const navigationGroups = computed(() => {
 })
 const activeNavigationId = computed(() => surface.value === 'brand' ? detailKey.value : firstSegment.value === 'search' && secondSegment.value ? detailKey.value : firstSegment.value)
 const hasDetail = computed(() => detailKey.value !== null)
-const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing' }
+const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
 const navbarTitle = computed(() => detailTitle.value ?? (surface.value === 'brand' ? 'Brand' : 'Site Settings'))
 const navbarActionIcon = computed(() => hasDetail.value && !secondSegment.value ? 'i-lucide-x' : 'i-lucide-arrow-left')
 const navbarActionLabel = computed(() => hasDetail.value && !secondSegment.value ? 'Close editor' : 'Go back')
-const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing'].includes(detailKey.value)))
+const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing', 'localization'].includes(detailKey.value)))
 
 function navigateFromNavbar() {
   if (hasDetail.value) {
@@ -428,4 +476,24 @@ async function startFacebookConnect() {
     await navigateTo(response.authUrl, { external: true })
   } catch (error) { toast.add({ description: errorMessage(error, 'Failed to connect Facebook'), color: 'error' }); connectingFacebook.value = false }
 }
+const isLocalizationSettings = (value: unknown): value is LocalizationSettings =>
+  isRecord(value) && Array.isArray(value.languages) && Array.isArray(value.available_catalogs)
+async function loadLocalizationSettings() {
+  localizationLoading.value = true
+  try {
+    localizationSettings.value = await dashboardApi<LocalizationSettings>(`/api/editor/sites/${siteId}/locales`, { validate: isLocalizationSettings })
+    localizationError.value = null
+  } catch (error) { localizationError.value = errorMessage(error, 'Failed to load localization settings') }
+  finally { localizationLoading.value = false }
+}
+async function mutateLocalization(path: string, method: 'POST' | 'DELETE') {
+  localizationBusy.value = true
+  try { await dashboardApi(path, { method, validate: (value): value is Record<string, unknown> => isRecord(value) }); await loadLocalizationSettings() }
+  catch (error) { toast.add({ description: errorMessage(error, 'Localization request failed'), color: 'error' }) }
+  finally { localizationBusy.value = false }
+}
+async function enableLanguage() { if (newLocale.value) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST'); newLocale.value = '' } }
+async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
+async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
+watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })
 </script>
