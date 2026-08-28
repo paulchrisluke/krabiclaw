@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
 
   try {
     const result = await upsertProfessionalServiceContent(db, {
-      organizationId: site.organization_id, siteId, data: body, updatedBy: session.user.id, })
+      organizationId: site.organization_id, siteId, data: body, updatedBy: session.user.id, }, env)
     return jsonResponse(result)
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid professional-service content' }, { status: 400 })

@@ -6,6 +6,8 @@ import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
 import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { assertNoEmbeddedMediaFields } from '~/utils/tenant-page-blocks'
+import { syncSocialImageForOwnerAfterCommit } from '~/server/utils/social-image/sync'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 export class ProfessionalServiceValidationError extends Error {
   constructor(message: string) {
@@ -237,6 +239,7 @@ export async function upsertProfessionalServiceContent(
     data: ApiRecord
     updatedBy?: string | null
   },
+  env?: CloudflareEnv,
 ) {
   validateProfessionalServicePayload(input.data)
   const { organizationId, siteId, data, updatedBy = null } = input
@@ -257,6 +260,7 @@ export async function upsertProfessionalServiceContent(
 
 
   const incomingOfferingSlugs = new Set<string>()
+  const offeringsToSync: Array<{ id: string; name: string }> = []
   for (const item of recordArray(data.offerings, 'offerings')) {
     const name = cleanString(item.name, 200)
     const slug = cleanString(item.slug, 180)
@@ -265,6 +269,7 @@ export async function upsertProfessionalServiceContent(
     incomingOfferingSlugs.add(slug)
     const existingOfferingId = offeringIdBySlug.get(slug)
     const id = existingOfferingId ?? cleanString(item.id, 80) ?? idWith('offering')
+    offeringsToSync.push({ id, name })
     validateOfferingContent(item, slug)
     const offeringMedia = strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
     statements.push({
@@ -502,6 +507,12 @@ export async function upsertProfessionalServiceContent(
 
   if (statements.length) {
     await executeBatch(db, statements)
+  }
+
+  if (env) {
+    for (const offering of offeringsToSync) {
+      await syncSocialImageForOwnerAfterCommit(db, env, { siteId, ownerType: 'offering', ownerId: offering.id, title: offering.name })
+    }
   }
 
   return { success: true, written }

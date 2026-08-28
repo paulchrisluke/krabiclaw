@@ -211,7 +211,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             ...(Object.hasOwn(args, 'themeTokens') ? { themeTokens: args.themeTokens } : {}),
           },
           updatedBy: site.userId,
-        });
+        }, site.env);
         const context = await mutationContextPayload(site);
         return renderStructuredResponse(
           {
