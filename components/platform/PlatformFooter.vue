@@ -66,17 +66,13 @@
       <!-- Bottom bar -->
       <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-inverted/10 pt-6 text-center text-[12px] text-inverted/50">
         <span>&copy; {{ new Date().getFullYear() }} KrabiClaw. All rights reserved. Built for independent businesses globally.</span>
-        <button type="button" class="underline transition hover:text-inverted" @click="showZarazConsentModal">
-          Cookie preferences
-        </button>
+        <ZarazConsentButton />
       </div>
     </div>
   </footer>
 </template>
 
 <script setup>
-import { showZarazConsentModal } from '~/utils/zaraz-consent'
-
 const productLinks = [
   { label: 'Features', to: '/features' },
   { label: 'Pricing', to: '/pricing' },
