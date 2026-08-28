@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { PUBLIC_BOOKING_WINDOW_DAYS, getExperienceBySlug, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { PUBLIC_BOOKING_WINDOW_DAYS, getExperienceBySlug, getSlotAvailabilityRange, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { queryFirst } from '~/server/db'
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -36,17 +36,17 @@ export default defineHandler(async (event) => {
 
   const timezone = await resolveExperienceTimezone(db, site.organization_id, siteId, experience)
 
-  const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = []
+  const dateStrings: string[] = []
   const cursor = new Date(`${date}T00:00:00Z`)
   if (isNaN(cursor.getTime())) {
     return jsonResponse({ error: 'Invalid calendar date' }, { status: 400 })
   }
   for (let i = 0; i < days; i++) {
-    const dateStr = cursor.toISOString().slice(0, 10)
-    const slots = await getSlotAvailability(db, siteId, experience, dateStr, timezone)
-    dates.push({ date: dateStr, slots })
+    dateStrings.push(cursor.toISOString().slice(0, 10))
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
+  const availability = await getSlotAvailabilityRange(db, siteId, experience, dateStrings, timezone)
+  const dates = dateStrings.map(dateStr => ({ date: dateStr, slots: availability[dateStr] ?? [] }))
 
   return jsonResponse({ timezone, dates })
 })

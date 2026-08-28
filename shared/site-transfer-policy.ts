@@ -1,5 +1,5 @@
 /**
- * Ownership policy for the 63 schema tables that carry both organization_id
+ * Ownership policy for the 67 schema tables that carry both organization_id
  * and site_id.  Every table belongs to exactly one category; the product
  * model guard parses schema.ts and verifies that this union stays exhaustive.
  *
@@ -38,6 +38,10 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'site_theme_tokens',
   'site_redirects',
   'resource_localizations',
+  'site_analytics_daily',
+  'site_analytics_page_daily',
+  'site_analytics_dimension_daily',
+  'site_analytics_sessions',
   'site_conversion_events',
   'site_domain_events',
   'site_domains',

@@ -35,12 +35,10 @@
       :has-products="shell.hasProducts.value"
       :has-experiences="showExperiences"
     />
-    <ConsentBanner v-if="!isDemoHost" />
   </div>
 </template>
 
 <script setup lang="ts">
-import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 import { getPreviewSubpath } from '~/composables/usePublicPageRequest'
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
@@ -102,10 +100,6 @@ const experiencesList = computed(() =>
 )
 const showExperiences = computed(() => hasExperiences.value || experiencesList.value.length > 0)
 const resolvedSite = computed(() => shellSite.value || site)
-// Called for its side effect: keeps the consent ref in sync and lets the
-// head markup emit the default signal ahead of any analytics config.
-useCookieConsent()
-
 const brandColor = computed(
   () => config.value?.brand_color || null
 )

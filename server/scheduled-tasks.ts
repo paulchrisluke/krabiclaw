@@ -10,6 +10,7 @@ export type ScheduledTaskName =
   | 'blog-scheduled-publish'
   | 'public-resource-cache-invalidation'
   | 'domain-reconciliation'
+  | 'zaraz-analytics-reconciliation'
   | 'domain-reconciliation-daily'
   | 'analytics-aggregate-daily'
   | 'site-transfer-reminders'
@@ -24,7 +25,7 @@ type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName[]>> = {
   '*/5 * * * *': ['blog-scheduled-publish'],
   '*/2 * * * *': ['public-resource-cache-invalidation'],
-  '*/10 * * * *': ['domain-reconciliation'],
+  '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
   '0 4 * * *': ['site-transfer-reminders'],
   '0 0 * * SUN': ['google-places-sync'],
@@ -35,6 +36,7 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'blog-scheduled-publish': async () => import('./tasks/blog-scheduled-publish'),
   'public-resource-cache-invalidation': async () => import('./tasks/public-resource-cache-invalidation'),
   'domain-reconciliation': async () => import('./tasks/domain-reconciliation'),
+  'zaraz-analytics-reconciliation': async () => import('./tasks/zaraz-analytics-reconciliation'),
   'domain-reconciliation-daily': async () => import('./tasks/domain-reconciliation-daily'),
   'analytics-aggregate-daily': async () => import('./tasks/analytics-aggregate-daily'),
   'site-transfer-reminders': async () => import('./tasks/site-transfer-reminders'),

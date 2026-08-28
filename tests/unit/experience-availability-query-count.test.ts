@@ -58,7 +58,8 @@ mock.module('../../server/db/index.ts', {
   },
 })
 
-const { attachAvailabilitySummaries } = await import('../../server/utils/experiences.ts')
+const { attachAvailabilitySummaries, getSlotAvailabilityRange } = await import('../../server/utils/experiences.ts')
+const { getReservationSlotAvailabilityRange } = await import('../../server/utils/reservations.ts')
 
 function fakeExperience(index: number): Experience {
   return {
@@ -125,4 +126,28 @@ test('attachAvailabilitySummaries uses one JSON-array bind beyond the former par
   const list = Array.from({ length: 150 }, (_, index) => fakeExperience(index))
   await attachAvailabilitySummaries({} as never, 'org-1', 'site-1', list, context)
   assert.equal(queryAllCallCount, 1, 'expected one bulk query for 150 experiences')
+})
+
+const dateWindow = Array.from({ length: 14 }, (_, index) => {
+  const date = new Date('2026-09-01T00:00:00Z')
+  date.setUTCDate(date.getUTCDate() + index)
+  return date.toISOString().slice(0, 10)
+})
+
+test('experience calendar loads a 14-day window with one query', async () => {
+  queryAllCallCount = 0
+  await getSlotAvailabilityRange({} as never, 'site-1', fakeExperience(1), dateWindow, 'Asia/Bangkok')
+  assert.equal(queryAllCallCount, 1)
+})
+
+test('reservation calendar loads a 14-day window with one query', async () => {
+  queryAllCallCount = 0
+  await getReservationSlotAvailabilityRange(
+    {} as never,
+    'site-1',
+    { id: 'loc-1', max_capacity: 10, opening_hours: null },
+    dateWindow,
+    'Asia/Bangkok',
+  )
+  assert.equal(queryAllCallCount, 1)
 })

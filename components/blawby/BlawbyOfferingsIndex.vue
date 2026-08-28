@@ -53,7 +53,7 @@ const servicesBlock = computed(() => block('services_intro') ?? {})
 const ctaBlock = computed(() => block('consultation_cta'))
 const qaBlock = computed(() => block('qa'))
 const servicesDecoration = computed(() => mediaUrl(servicesBlock.value, 'decoration'))
-const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
+const { trackConsultationClick } = useSiteConversionTracking(consultation)
 
 function trackConsultation() {
   trackConsultationClick('services_list', '/services', optionalString(ctaBlock.value?.url) || consultation.value.schedule_path)

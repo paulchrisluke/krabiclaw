@@ -1,6 +1,8 @@
 # External Consultation CTA Now, Native Consultations Later
 
-NCLS currently uses an external booking link and does not need a Calendly integration or native KrabiClaw consultation booking for cutover. KrabiClaw will support consultation CTA settings that can link to an arbitrary external URL now, while keeping the model open for a future native consultation flow rather than overloading restaurant reservations or experience bookings as the public concept.
+NCLS currently uses an external booking link and does not need a provider-specific integration or native KrabiClaw consultation booking for cutover. KrabiClaw supports consultation CTA settings that can link to a validated external URL now, while keeping the model open for a future native consultation flow rather than overloading restaurant reservations or experience bookings as the public concept.
+
+The native conversion event measures only the external consultation handoff. A confirmed booking is unavailable without a provider callback and must never be inferred from the click or redirect.
 
 ## Considered Options
 

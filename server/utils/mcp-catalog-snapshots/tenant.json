@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:8c97a5bf49bda6992ad1eb6591b38eae97d28a9dd024062fe4a3f948cb3d3709",
+  "fingerprint": "sha256:ad811a20d146199beb6d2b4bde5dbcaac9a27b385a6491bf2bac30db04bb8906",
   "tools": [
     {
       "name": "analyze_document",
@@ -5726,7 +5726,7 @@
         "additionalProperties": true,
         "properties": {
           "end_date": {
-            "description": "End of period in YYYY-MM-DD format. Defaults to today.",
+            "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
             "type": "string"
           },
           "site_id": {
@@ -5734,7 +5734,7 @@
             "type": "string"
           },
           "start_date": {
-            "description": "Start of period in YYYY-MM-DD format. Defaults to 30 days ago.",
+            "description": "Inclusive local start date in YYYY-MM-DD format. Defaults to 29 days before end_date.",
             "type": "string"
           }
         },
@@ -5743,39 +5743,257 @@
       },
       "outputSchema": {
         "properties": {
+          "attribution": {
+            "items": {
+              "properties": {
+                "campaign": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conversionRate": {
+                  "type": "number"
+                },
+                "conversions": {
+                  "type": "number"
+                },
+                "medium": {
+                  "type": "string"
+                },
+                "sessions": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "medium",
+                "campaign",
+                "sessions",
+                "conversions",
+                "conversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "cities": {
+            "items": {
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "countryCode": {
+                  "type": "string"
+                },
+                "region": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "city",
+                "region",
+                "countryCode",
+                "views"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "conversions": {
+            "items": {
+              "properties": {
+                "conversionRate": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "eventName",
+                "stage",
+                "count",
+                "conversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "countries": {
+            "items": {
+              "properties": {
+                "country": {
+                  "type": "string"
+                },
+                "countryCode": {
+                  "type": "string"
+                },
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "country",
+                "countryCode",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "dailyData": {
+            "items": {
+              "properties": {
+                "avgDuration": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "pageViews": {
+                  "type": "number"
+                },
+                "sessions": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "date",
+                "pageViews",
+                "sessions",
+                "avgDuration"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "devices": {
+            "items": {
+              "properties": {
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "type",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "metrics": {
             "properties": {
               "avgSessionDuration": {
-                "description": "Average session duration in seconds.",
                 "type": "number"
               },
               "changePercent": {
-                "description": "Percent change versus the previous equivalent period.",
-                "type": "number"
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "pageViews": {
                 "type": "number"
               },
+              "pagesPerSession": {
+                "type": "number"
+              },
+              "returningVisitors": {
+                "type": "number"
+              },
               "uniqueSessions": {
+                "type": "number"
+              },
+              "uniqueVisitors": {
                 "type": "number"
               }
             },
             "required": [
               "pageViews",
-              "uniqueSessions"
+              "uniqueSessions",
+              "uniqueVisitors",
+              "returningVisitors",
+              "avgSessionDuration",
+              "pagesPerSession",
+              "changePercent"
             ],
             "type": "object"
           },
           "period": {
             "properties": {
+              "analyticsDataStartAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "endDate": {
                 "type": "string"
               },
               "startDate": {
                 "type": "string"
+              },
+              "timezone": {
+                "type": "string"
               }
             },
+            "required": [
+              "startDate",
+              "endDate",
+              "timezone",
+              "analyticsDataStartAt"
+            ],
             "type": "object"
+          },
+          "referrers": {
+            "items": {
+              "properties": {
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "topPages": {
             "items": {
@@ -5790,14 +6008,27 @@
                   "type": "number"
                 }
               },
+              "required": [
+                "path",
+                "views",
+                "percentOfTotal"
+              ],
               "type": "object"
             },
             "type": "array"
           }
         },
         "required": [
+          "period",
           "metrics",
-          "period"
+          "dailyData",
+          "topPages",
+          "attribution",
+          "conversions",
+          "countries",
+          "cities",
+          "referrers",
+          "devices"
         ],
         "type": "object"
       }

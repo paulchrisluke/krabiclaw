@@ -1,7 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { deleteConfig } from '~/server/utils/site-config'
 import { execute } from '~/server/db'
-import { removeTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
+import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
@@ -23,9 +23,9 @@ export default defineHandler(async (event) => {
   await deleteConfig(db, site.organization_id, site.id, 'search_console_site_url')
 
   try {
-    await removeTenantZarazAnalytics(env, db, site.id)
+    await reconcileZarazAnalytics(env, db)
   } catch (error) {
-    console.error('zaraz_sync_failed', { siteId: site.id, error })
+    console.error('zaraz_reconciliation_failed', { siteId: site.id, error })
   }
 
   return jsonResponse({ success: true })

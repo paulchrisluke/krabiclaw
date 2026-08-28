@@ -1,6 +1,6 @@
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
-import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
+import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
@@ -224,20 +224,14 @@ async function syncAnalyticsSettingToZaraz(
   db: D1Database,
   env: SetupEnv,
   siteId: string,
-  organizationId: string,
   measurementId: unknown
 ) {
   if (measurementId === undefined) return
 
   try {
-    const normalizedMeasurementId = typeof measurementId === 'string' ? measurementId.trim() : ''
-    if (normalizedMeasurementId) {
-      await syncTenantZarazAnalytics(env, db, { siteId, organizationId, measurementId: normalizedMeasurementId })
-    } else {
-      await removeTenantZarazAnalytics(env, db, siteId)
-    }
+    await reconcileZarazAnalytics(env, db)
   } catch (error) {
-    console.error('zaraz_sync_failed', { siteId, error })
+    console.error('zaraz_reconciliation_failed', { siteId, error })
   }
 }
 
@@ -521,7 +515,6 @@ export async function updateSiteSettingsFields(
     db,
     env,
     siteId,
-    organizationId,
     updates.google_analytics_measurement_id,
   )
 

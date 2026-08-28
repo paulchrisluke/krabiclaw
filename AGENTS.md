@@ -90,9 +90,9 @@ Better Auth owns identity, sessions, OAuth provider state, organizations, member
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical and hand-authored. From `0008` onward, migrations are generated from `schema.ts` via `drizzle-kit generate` and applied via Wrangler D1 migrations. Any migration applied to any shared environment is immutable by filename and content; never rename, edit, renumber, or re-squash it.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical and hand-authored. From `0008` onward, migrations are generated from `schema.ts` via `drizzle-kit generate` and applied via Wrangler D1 migrations. Any migration applied to staging or production is immutable by filename and content; never rename, edit, renumber, or re-squash it. Local databases are disposable. The isolated preview database is also schema-disposable and does not make a PR migration immutable, but changing a migration already applied to preview requires wiping that preview database in place and replaying the complete migration chain. Never create replacement preview resources, edit `d1_migrations`, or hand-patch preview schema.
 
-**Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
+**Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming or squashing a migration while reusing populated schema makes Wrangler treat the new file as unapplied and try to run it again, commonly failing with `table X already exists`. Staging and production are never reset, so their applied filenames are permanent. Preview may discard its schema and ledger together because it is an isolated disposable database.
 
 `migrations/meta/0007_snapshot.json` + `migrations/meta/_journal.json` are drizzle-kit's own bookkeeping — a snapshot of what `schema.ts` looks like as of migration `0007`, established once so `drizzle-kit generate` has something to diff against. **There is no `0007_snapshot.sql` file and there shouldn't be one** — the snapshot exists purely so future generates produce a small incremental diff instead of a full from-scratch recreation. Never hand-edit `migrations/meta/*` except when deliberately re-establishing this baseline.
 
@@ -307,7 +307,27 @@ only local and preview data. For it to catch what a spec creates:
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
 
-Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAll` for this — teardown hooks don't run on crashed or cancelled CI jobs. The sweep runs unconditionally at the start of the next seed step regardless of how the previous run ended.
+Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAll` for this — teardown hooks don't run on crashed or cancelled CI jobs. Local test setup uses the sweep. The required PR lane resets the entire disposable preview schema before seeding, so a separate preview sweep would be redundant.
+
+Preview is disposable at both the row and schema levels. The required PR lane
+always resets it in place and replays the checked-out branch's complete migration
+chain before seeding. This prevents migration filenames from concurrent feature
+branches from accumulating in the shared preview ledger. To perform the same
+reset manually:
+
+1. Verify read-only that the affected filename is absent from the staging and
+   production `d1_migrations` ledgers.
+2. Run `yarn db:reset:preview` and review its target and drop plan.
+3. Run `yarn db:reset:preview --apply --confirm <preview-database-id>` to drop
+   every application view/table, including `d1_migrations`, from the configured
+   preview D1 database and replay the complete migration chain in place.
+4. Seed the fixed preview fixtures, deploy the preview Worker, and run the
+   required E2E and browser verification.
+
+The reset command must refuse any target whose configured name is not preview,
+or whose database ID matches staging or production. Never reset staging or
+production, create replacement D1 resources, edit a remote `d1_migrations` row,
+or patch remote schema to accommodate rewritten migration history.
 
 ---
 

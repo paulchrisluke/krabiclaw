@@ -3,9 +3,10 @@
 // shape (lowercase snake_case, bounded length), not this specific list, so a
 // future vertical can add its own event name here without a schema migration.
 export const SITE_CONVERSION_EVENT_NAMES = [
-  'page_view',
-  'book_consultation_click',
+  'consultation_cta_click',
   'contact_submit',
+  'reservation_submit',
+  'experience_booking_submit',
   'donation_click',
   'link_click',
   'product_order_external_click',

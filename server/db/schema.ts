@@ -1380,12 +1380,12 @@ export const session = sqliteTable("session", {
 
 export const site_analytics_daily = sqliteTable("site_analytics_daily", {
 	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	date: text().notNull(),
 	page_views: integer().default(0),
 	unique_sessions: integer().default(0),
 	avg_session_duration: integer().default(0),
-	top_pages: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	unique_visitors: integer().default(0),
@@ -1393,6 +1393,73 @@ export const site_analytics_daily = sqliteTable("site_analytics_daily", {
 	returning_visitors: integer().default(0),
 }, (table) => [
 	unique("site_analytics_daily_site_id_date_unique").on(table.site_id, table.date),
+	index("site_analytics_daily_organization_id_idx").on(table.organization_id),
+]);
+
+export const site_analytics_page_daily = sqliteTable("site_analytics_page_daily", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	date: text().notNull(),
+	page_path: text().notNull(),
+	page_views: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("site_analytics_page_daily_site_date_path_unique").on(table.site_id, table.date, table.page_path),
+	index("site_analytics_page_daily_organization_id_idx").on(table.organization_id),
+	index("site_analytics_page_daily_site_date_idx").on(table.site_id, table.date),
+]);
+
+export const site_analytics_dimension_daily = sqliteTable("site_analytics_dimension_daily", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	date: text().notNull(),
+	dimension: text().notNull(),
+	value: text().notNull(),
+	subvalue: text().default("").notNull(),
+	page_views: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("site_analytics_dimension_daily_site_date_value_unique").on(table.site_id, table.date, table.dimension, table.value, table.subvalue),
+	check("site_analytics_dimension_daily_dimension_check", sql`${table.dimension} IN ('country', 'city', 'device', 'referrer')`),
+	index("site_analytics_dimension_daily_organization_id_idx").on(table.organization_id),
+	index("site_analytics_dimension_daily_site_date_idx").on(table.site_id, table.date),
+]);
+
+export const site_analytics_sessions = sqliteTable("site_analytics_sessions", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	session_id: text().notNull(),
+	visitor_id: text().notNull(),
+	started_at: text().notNull(),
+	last_seen_at: text().notNull(),
+	landing_path: text().notNull(),
+	duration_seconds: integer().default(0).notNull(),
+	last_touch_source: text().default("Direct").notNull(),
+	last_touch_medium: text().default("(none)").notNull(),
+	last_touch_campaign: text(),
+	last_touch_term: text(),
+	last_touch_content: text(),
+	last_touch_referrer_host: text(),
+	last_touch_gclid: text(),
+	last_touch_gbraid: text(),
+	last_touch_wbraid: text(),
+	last_touch_fbclid: text(),
+	last_touch_msclkid: text(),
+	last_touch_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("site_analytics_sessions_site_session_unique").on(table.site_id, table.session_id),
+	index("site_analytics_sessions_organization_id_idx").on(table.organization_id),
+	index("site_analytics_sessions_site_started_idx").on(table.site_id, table.started_at),
+	index("site_analytics_sessions_site_last_seen_idx").on(table.site_id, table.last_seen_at),
+	index("site_analytics_sessions_site_visitor_started_idx").on(table.site_id, table.visitor_id, table.started_at),
+	index("site_analytics_sessions_site_touch_started_idx").on(table.site_id, table.last_touch_source, table.last_touch_medium, table.started_at),
 ]);
 
 export const site_billing = sqliteTable("site_billing", {
@@ -1617,11 +1684,27 @@ export const site_conversion_events = sqliteTable("site_conversion_events", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	event_name: text().notNull(),
+	stage: text().notNull(),
+	session_id: text().notNull(),
+	visitor_id: text().notNull(),
+	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	entity_type: text(),
+	entity_id: text(),
 	page_type: text(),
 	page_path: text(),
-	page_location: text(),
 	cta_destination: text(),
-	tenant: text(),
+	source: text().default("Direct").notNull(),
+	medium: text().default("(none)").notNull(),
+	campaign: text(),
+	term: text(),
+	content: text(),
+	referrer_host: text(),
+	gclid: text(),
+	gbraid: text(),
+	wbraid: text(),
+	fbclid: text(),
+	msclkid: text(),
+	attributed_at: text().notNull(),
 	metadata_json: text(),
 	ip_hash: text(),
 	user_agent: text(),
@@ -1629,7 +1712,12 @@ export const site_conversion_events = sqliteTable("site_conversion_events", {
 }, (table) => [
 	index("site_conversion_events_site_created_idx").on(table.site_id, table.created_at),
 	index("site_conversion_events_name_created_idx").on(table.event_name, table.created_at),
+	index("site_conversion_events_session_idx").on(table.site_id, table.session_id),
+	index("site_conversion_events_entity_idx").on(table.site_id, table.entity_type, table.entity_id),
+	index("site_conversion_events_source_medium_created_idx").on(table.site_id, table.source, table.medium, table.created_at),
+	uniqueIndex("site_conversion_events_entity_unique").on(table.site_id, table.event_name, table.entity_type, table.entity_id).where(sql`${table.entity_type} IS NOT NULL AND ${table.entity_id} IS NOT NULL AND ${table.event_name} IN ('contact_submit', 'reservation_submit', 'experience_booking_submit')`),
 	check("site_conversion_events_name_check", sql`(event_name GLOB '[a-z]' OR event_name GLOB '[a-z][a-z0-9_]*') AND length(event_name) <= 64`),
+	check("site_conversion_events_stage_check", sql`${table.stage} IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')`),
 	index("site_conversion_events_organization_id_idx").on(table.organization_id),
 ]);
 
@@ -1837,20 +1925,6 @@ export const platform_pageview_events = sqliteTable("platform_pageview_events", 
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
-export const platform_analytics_daily = sqliteTable("platform_analytics_daily", {
-	id: text().primaryKey(),
-	date: text().notNull().unique(),
-	page_views: integer().default(0),
-	unique_sessions: integer().default(0),
-	avg_session_duration: integer().default(0),
-	unique_visitors: integer().default(0),
-	pages_per_session: real(),
-	returning_visitors: integer().default(0),
-	top_pages: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-});
-
 export const site_pageview_events = sqliteTable("site_pageview_events", {
 	id: text().primaryKey(),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
@@ -1991,6 +2065,7 @@ export const sites = sqliteTable("sites", {
 	// experiences/services) are ever stored here; content managers (blog/qa/reviews/posts/photos/
 	// media) are always-on and never appear in this column.
 	feature_overrides: text(),
+	analytics_data_start_at: text(),
 }, (table) => [
 	check("sites_status_check", sql`${table.status} IN ('active', 'inactive', 'suspended')`),
 	check("sites_plan_check", sql`${table.plan} IN ('free', 'growth', 'managed', 'seo_accelerator')`),

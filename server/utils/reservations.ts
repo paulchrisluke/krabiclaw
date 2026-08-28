@@ -174,39 +174,74 @@ export async function getReservationSlotAvailability(
   dateStr: string,
   timezone: string,
 ): Promise<ReservationSlotAvailability[]> {
-  assertDateStr(dateStr, 'date')
-  const effectiveSlots = (isStructuredOpeningHours(location.opening_hours)
-    ? generateReservationTimes(location.opening_hours, dateStr)
-    : []
-  ).filter((slot) => !isTimeSlotInPast(dateStr, slot, timezone))
-  if (effectiveSlots.length === 0) return []
+  return (await getReservationSlotAvailabilityRange(db, siteId, location, [dateStr], timezone))[dateStr] ?? []
+}
 
-  const bookingRows = await queryAll<{ time: string; booked: number }>(
-    db,
-    `SELECT time, SUM(CAST(REPLACE(guests, '+', '') AS INTEGER)) AS booked
-       FROM reservation_submissions
-       WHERE site_id = ? AND location_id = ? AND date = ? AND status != 'cancelled'
-       GROUP BY time`,
-    [siteId, location.id, dateStr],
-  )
-  const bookedMap = Object.fromEntries((bookingRows ?? []).map((r) => [r.time, r.booked]))
+type ReservationAvailabilityDataRow = {
+  kind: 'booking' | 'override'
+  date: string
+  time_slot: string
+  status: 'closed' | 'open' | null
+  capacity_override: number | null
+  booked: number | null
+}
 
-  const overrideRows = await queryAll<{ time_slot: string; status: 'closed' | 'open'; capacity_override: number | null }>(
-    db,
-    `SELECT time_slot, status, capacity_override
-       FROM reservation_slot_overrides
-       WHERE site_id = ? AND location_id = ? AND override_date = ?`,
-    [siteId, location.id, dateStr],
-  )
-  const overrideMap = Object.fromEntries((overrideRows ?? []).map((r) => [r.time_slot, r]))
+export async function getReservationSlotAvailabilityRange(
+  db: DbClient,
+  siteId: string,
+  location: { id: string; max_capacity: number | null; opening_hours: unknown },
+  dateStrs: string[],
+  timezone: string,
+): Promise<Record<string, ReservationSlotAvailability[]>> {
+  const dates = [...new Set(dateStrs)]
+  dates.forEach(date => assertDateStr(date, 'date'))
+  if (dates.length === 0) return {}
 
-  return effectiveSlots.map((slot) => {
-    const override = overrideMap[slot]
-    const capacity = override?.capacity_override ?? location.max_capacity ?? null
-    const booked = bookedMap[slot] ?? 0
-    const remaining = capacity == null ? null : capacity - booked
-    const is_closed = override?.status === 'closed'
-    const is_full = remaining !== null && remaining <= 0
-    return { time_slot: slot, capacity, booked, remaining, is_closed, is_full }
-  })
+  const rows = await queryAll<ReservationAvailabilityDataRow>(db, `
+    WITH requested_dates(date) AS (SELECT value FROM json_each(?))
+    SELECT 'override' AS kind, override_date AS date, time_slot, status, capacity_override, NULL AS booked
+    FROM reservation_slot_overrides
+    WHERE site_id = ? AND location_id = ? AND override_date IN (SELECT date FROM requested_dates)
+    UNION ALL
+    SELECT 'booking' AS kind, date, time AS time_slot, NULL AS status, NULL AS capacity_override,
+      SUM(CAST(REPLACE(guests, '+', '') AS INTEGER)) AS booked
+    FROM reservation_submissions
+    WHERE site_id = ? AND location_id = ?
+      AND date IN (SELECT date FROM requested_dates)
+      AND status != 'cancelled'
+    GROUP BY date, time
+  `, [JSON.stringify(dates), siteId, location.id, siteId, location.id])
+
+  const overridesByDate = new Map<string, Map<string, ReservationAvailabilityDataRow>>()
+  const bookingsByDate = new Map<string, Map<string, number>>()
+  for (const row of rows ?? []) {
+    if (row.kind === 'override') {
+      const overrides = overridesByDate.get(row.date) ?? new Map<string, ReservationAvailabilityDataRow>()
+      overrides.set(row.time_slot, row)
+      overridesByDate.set(row.date, overrides)
+      continue
+    }
+    const bookings = bookingsByDate.get(row.date) ?? new Map<string, number>()
+    bookings.set(row.time_slot, row.booked ?? 0)
+    bookingsByDate.set(row.date, bookings)
+  }
+
+  return Object.fromEntries(dates.map((dateStr) => {
+    const effectiveSlots = (isStructuredOpeningHours(location.opening_hours)
+      ? generateReservationTimes(location.opening_hours, dateStr)
+      : []
+    ).filter(slot => !isTimeSlotInPast(dateStr, slot, timezone))
+    const overrideMap = overridesByDate.get(dateStr) ?? new Map<string, ReservationAvailabilityDataRow>()
+    const bookedMap = bookingsByDate.get(dateStr) ?? new Map<string, number>()
+
+    return [dateStr, effectiveSlots.map((slot) => {
+      const override = overrideMap.get(slot)
+      const capacity = override?.capacity_override ?? location.max_capacity ?? null
+      const booked = bookedMap.get(slot) ?? 0
+      const remaining = capacity == null ? null : capacity - booked
+      const is_closed = override?.status === 'closed'
+      const is_full = remaining !== null && remaining <= 0
+      return { time_slot: slot, capacity, booked, remaining, is_closed, is_full }
+    })]
+  }))
 }

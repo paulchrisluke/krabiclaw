@@ -1,5 +1,5 @@
 <template>
-  <UDashboardPanel id="location-analytics">
+  <UDashboardPanel id="site-analytics">
     <template #header>
       <UDashboardNavbar title="Analytics">
         <template #leading>
@@ -22,7 +22,14 @@
           title="Analytics could not be loaded"
           :description="loadError"
         />
-        <p class="text-sm text-muted">{{ rangeLabel }}</p>
+        <p class="text-sm text-muted">{{ rangeLabel }} · {{ analytics?.period.timezone || 'UTC' }} reporting time</p>
+        <UAlert
+          v-if="analytics?.period.analyticsDataStartAt"
+          color="neutral"
+          variant="soft"
+          title="Canonical analytics history"
+          :description="`Reliable analytics data begins ${formatDate(analytics.period.analyticsDataStartAt.slice(0, 10))}.`"
+        />
 
         <UCard variant="soft">
           <div class="grid gap-4 lg:grid-cols-[13rem_1fr]">
@@ -51,6 +58,35 @@
             </div>
           </div>
         </UCard>
+
+        <div class="grid gap-4 xl:grid-cols-2">
+          <UCard variant="soft">
+            <template #header><h2 class="font-semibold text-highlighted">Attribution</h2></template>
+            <div class="space-y-3">
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.attribution || []"
+                :key="`${row.source}-${row.medium}-${row.campaign || ''}`"
+                :label="`${row.source} / ${row.medium}${row.campaign ? ` · ${row.campaign}` : ''}`"
+                :value="`${formatCount(row.sessions)} sessions · ${formatCount(row.conversions)} conversions`"
+                :percent="row.conversionRate"
+              />
+              <p v-if="!loading && !(analytics?.attribution || []).length" class="text-sm text-muted">No attribution data yet.</p>
+            </div>
+          </UCard>
+          <UCard variant="soft">
+            <template #header><h2 class="font-semibold text-highlighted">Conversions</h2></template>
+            <div class="space-y-3">
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.conversions || []"
+                :key="`${row.eventName}-${row.stage}`"
+                :label="`${row.eventName.replaceAll('_', ' ')} · ${row.stage.replaceAll('_', ' ')}`"
+                :value="formatCount(row.count)"
+                :percent="row.conversionRate"
+              />
+              <p v-if="!loading && !(analytics?.conversions || []).length" class="text-sm text-muted">No conversions yet.</p>
+            </div>
+          </UCard>
+        </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <UCard v-for="metric in metricCards" :key="metric.label" variant="soft">
@@ -184,6 +220,7 @@ const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
+import { getLocalTimezone } from '~/utils/timezone'
 
 type PresetKey = 'last_52_weeks' | 'last_30_days' | 'last_7_days' | 'current_month' | 'custom'
 
@@ -195,15 +232,17 @@ interface AnalyticsResponse {
     avgSessionDuration: number
     pagesPerSession: number
     returningVisitors: number
-    changePercent: number
+    changePercent: number | null
   }
   dailyData: Array<{ date: string; pageViews: number; sessions: number; avgDuration: number }>
   topPages: Array<{ path: string; views: number; percentOfTotal: number }>
-  countries: Array<{ country: string; countryCode: string; views: number; visitors: number; percentOfTotal: number }>
+  countries: Array<{ country: string; countryCode: string; views: number; percentOfTotal: number }>
   cities: Array<{ city: string; region: string | null; countryCode: string; views: number }>
   referrers: Array<{ source: string; views: number; percentOfTotal: number }>
   devices: Array<{ type: string; views: number; percentOfTotal: number }>
-  period: { startDate: string; endDate: string }
+  attribution: Array<{ source: string; medium: string; campaign: string | null; sessions: number; conversions: number; conversionRate: number }>
+  conversions: Array<{ eventName: string; stage: string; count: number; conversionRate: number }>
+  period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
 }
 
 const toast = useToast()
@@ -220,7 +259,7 @@ const activePreset = ref<PresetKey>('last_30_days')
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const analytics = ref<AnalyticsResponse | null>(null)
-const range = reactive(presetRange('last_30_days'))
+const range = reactive(presetRange('last_30_days', getLocalTimezone()))
 const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
   isRecord(value)
   && isRecord(value.metrics)
@@ -240,12 +279,15 @@ const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
   && Array.isArray(value.cities)
   && Array.isArray(value.referrers)
   && Array.isArray(value.devices)
+  && Array.isArray(value.attribution)
+  && Array.isArray(value.conversions)
   && isRecord(value.period)
   && typeof value.period.startDate === 'string'
   && typeof value.period.endDate === 'string'
 
 const requestEvent = useRequestEvent()
 const initialRange = { ...range }
+let latestManualRequestId = 0
 const { data: analyticsResource, pending: analyticsPending, error: analyticsResourceError } =
   await useAsyncData(
     `dashboard-site-analytics:${siteId}:${initialRange.startDate}:${initialRange.endDate}`,
@@ -264,6 +306,7 @@ const { data: analyticsResource, pending: analyticsPending, error: analyticsReso
   )
 
 watch([analyticsResource, analyticsPending, analyticsResourceError], ([resource, pending, error]) => {
+  if (latestManualRequestId !== 0) return
   loading.value = pending
   if (error) {
     loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
@@ -285,32 +328,45 @@ const rangeLabel = computed(() => `${formatDate(range.startDate)} to ${formatDat
 const metricCards = computed(() => {
   const metrics = analytics.value?.metrics
   return [
-    { label: 'Pageviews', value: formatCount(metrics?.pageViews || 0), detail: `${formatSigned(metrics?.changePercent || 0)} vs previous period`, icon: 'i-lucide-chart-bar' },
+    { label: 'Pageviews', value: formatCount(metrics?.pageViews || 0), detail: metrics?.changePercent == null ? 'Not enough prior data' : `${formatSigned(metrics.changePercent)} vs previous period`, icon: 'i-lucide-chart-bar' },
     { label: 'Unique visitors', value: formatCount(metrics?.uniqueVisitors || 0), detail: `${formatCount(metrics?.returningVisitors || 0)} returning`, icon: 'i-lucide-users' },
     { label: 'Sessions', value: formatCount(metrics?.uniqueSessions || 0), detail: `${formatNumber(metrics?.pagesPerSession || 0)} pages per session`, icon: 'i-lucide-mouse-pointer-click' },
     { label: 'Avg. duration', value: formatDuration(metrics?.avgSessionDuration || 0), detail: 'Average session time', icon: 'i-lucide-clock' }
   ]
 })
 
-function getDateString(date: Date): string {
-  const [day] = date.toISOString().split('T')
-  return day || ''
+function todayInTimeZone(timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
-function presetRange(key: PresetKey): { startDate: string; endDate: string } {
-  const now = new Date()
-  const endDate = getDateString(now)
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-  if (key === 'last_52_weeks') start.setUTCDate(start.getUTCDate() - 363)
-  if (key === 'last_30_days') start.setUTCDate(start.getUTCDate() - 29)
-  if (key === 'last_7_days') start.setUTCDate(start.getUTCDate() - 6)
-  if (key === 'current_month') start.setUTCDate(1)
-  return { startDate: getDateString(start), endDate }
+function addCalendarDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number)
+  const shifted = new Date(Date.UTC(year!, month! - 1, day!))
+  shifted.setUTCDate(shifted.getUTCDate() + days)
+  return shifted.toISOString().slice(0, 10)
+}
+
+function presetRange(key: PresetKey, timeZone: string): { startDate: string; endDate: string } {
+  const endDate = todayInTimeZone(timeZone)
+  let startDate = endDate
+  if (key === 'last_52_weeks') startDate = addCalendarDays(endDate, -363)
+  if (key === 'last_30_days') startDate = addCalendarDays(endDate, -29)
+  if (key === 'last_7_days') startDate = addCalendarDays(endDate, -6)
+  if (key === 'current_month') startDate = `${endDate.slice(0, 8)}01`
+  return { startDate, endDate }
+}
+
+function currentTimeZone(): string {
+  return analytics.value?.period.timezone || getLocalTimezone()
 }
 
 function applyPreset(key: PresetKey) {
   activePreset.value = key
-  Object.assign(range, presetRange(key))
+  Object.assign(range, presetRange(key, currentTimeZone()))
   loadAnalytics()
 }
 
@@ -320,18 +376,22 @@ function markCustomAndLoad() {
 }
 
 async function loadAnalytics() {
+  const requestId = ++latestManualRequestId
   loading.value = true
   loadError.value = null
   try {
-    analytics.value = await dashboardApi<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
+    const response = await dashboardApi<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
       query: { startDate: range.startDate, endDate: range.endDate },
       validate: isAnalyticsResponse,
     })
+    if (requestId !== latestManualRequestId) return
+    analytics.value = response
   } catch (error) {
+    if (requestId !== latestManualRequestId) return
     loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load analytics', color: 'error' })
   } finally {
-    loading.value = false
+    if (requestId === latestManualRequestId) loading.value = false
   }
 }
 

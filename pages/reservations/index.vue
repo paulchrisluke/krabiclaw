@@ -374,6 +374,7 @@ watch(() => reservationForm.value.location_id, (id) => {
 
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
+const { mirrorSubmission } = useSiteConversionTracking()
 const submitError = ref<string | null>(null)
 
 async function handleContactSubmit(contactState: { name: string, email: string, phone?: string, notes?: string }) {
@@ -416,6 +417,7 @@ async function handleReservation() {
       locationAddress: formatLocationAddress(selectedLocation.value?.address),
       locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
     })
+    mirrorSubmission('reservation_submit', selectedLocation.value?.id ? String(selectedLocation.value.id) : null)
     await navigateTo('/reservations/confirmed')
   } catch (err) {
     const error = err as { data?: { error?: string }; status?: number }

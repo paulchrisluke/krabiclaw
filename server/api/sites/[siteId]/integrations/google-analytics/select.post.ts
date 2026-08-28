@@ -4,7 +4,7 @@ import {
 } from '~/server/utils/google-analytics'
 import { deleteConfig, setConfig } from '~/server/utils/site-config'
 import { execute } from '~/server/db'
-import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
+import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
 interface SelectBody {
@@ -65,14 +65,9 @@ export default defineHandler(async (event) => {
     }
 
     try {
-      if (measurementId) {
-        await syncTenantZarazAnalytics(env, db, {
-          siteId: site.id, organizationId: site.organization_id, measurementId, })
-      } else {
-        await removeTenantZarazAnalytics(env, db, site.id)
-      }
+      await reconcileZarazAnalytics(env, db)
     } catch (error) {
-      console.error('zaraz_sync_failed', { siteId: site.id, error })
+      console.error('zaraz_reconciliation_failed', { siteId: site.id, error })
     }
 
     return jsonResponse({ success: true, ga4_measurement_id: measurementId })

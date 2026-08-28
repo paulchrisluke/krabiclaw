@@ -1,4 +1,4 @@
-import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { cleanString } from '~/server/utils/api-response'
 import { resolvePublicTemplate, type PublicTemplateSlug } from '~/utils/template-registry'
@@ -415,36 +415,4 @@ export async function deleteLinkItem(db: DbClient, input: {
     items: current.items.filter(item => item.id !== input.itemId),
     updatedBy: input.updatedBy,
   })
-}
-
-export async function recordLinkClick(db: DbClient, input: {
-  organizationId: string
-  siteId: string
-  pagePath: string
-  item: SiteLinkItem
-  position: number
-  ipHash?: string | null
-  userAgent?: string | null
-}) {
-  const metadata = {
-    link_item_id: input.item.id,
-    link_label: input.item.label,
-    position: input.position,
-  }
-  const id = idWith('conv')
-  await execute(db, `
-    INSERT INTO site_conversion_events
-      (id, organization_id, site_id, event_name, page_type, page_path, cta_destination, metadata_json, ip_hash, user_agent)
-    VALUES (?, ?, ?, 'link_click', 'links', ?, ?, ?, ?, ?)
-  `, [
-    id,
-    input.organizationId,
-    input.siteId,
-    input.pagePath,
-    input.item.destination,
-    JSON.stringify(metadata),
-    input.ipHash ?? null,
-    input.userAgent ?? null,
-  ])
-  return { id }
 }
