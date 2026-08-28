@@ -53,7 +53,15 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
 
   if (localized) {
     const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? LIMIT 1', [siteId])
-    const resolved = site ? await resolveLocalizedRedirect(db, site.organization_id, siteId, path) : null
+    if (!site) return null
+    // A page miss under a locale prefix is not an entitlement check - if the
+    // language license lapsed or the catalog went unavailable after this
+    // locale was published, fall through to a normal 404 instead of leaking
+    // the billing/catalog error to every visitor hitting a stale link.
+    const resolved = await resolveLocalizedRedirect(db, site.organization_id, siteId, path).catch(error => {
+      if (error instanceof HTTPError) return null
+      throw error
+    })
     return resolved ? { toPath: resolved.to_path, statusCode: resolved.status_code, behavior: resolved.behavior } : null
   }
 

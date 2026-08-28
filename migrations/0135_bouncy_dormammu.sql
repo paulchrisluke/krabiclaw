@@ -104,10 +104,12 @@ CREATE TABLE `__new_platform_blog_redirects` (
 INSERT INTO `site_redirects`
   (`id`, `organization_id`, `site_id`, `locale`, `owner_id`, `from_path`, `to_path`, `status_code`, `behavior`, `reason`, `source`, `created_at`, `updated_at`)
 SELECT lower(hex(randomblob(16))), p.organization_id, p.site_id, 'en', p.id,
-       '/article/' || r.old_slug, '/article/' || p.slug, 301, 'redirect',
-       'tenant_blog_slug_change', 'tenant-blog', r.created_at, r.created_at
+       (CASE WHEN lower(trim(s.theme)) = 'blawby' OR lower(trim(s.theme_id)) = 'blawby-theme-v1' OR lower(trim(s.theme_id)) LIKE 'blawby-%' THEN '/article/' ELSE '/blog/' END) || r.old_slug,
+       (CASE WHEN lower(trim(s.theme)) = 'blawby' OR lower(trim(s.theme_id)) = 'blawby-theme-v1' OR lower(trim(s.theme_id)) LIKE 'blawby-%' THEN '/article/' ELSE '/blog/' END) || p.slug,
+       301, 'redirect', 'tenant_blog_slug_change', 'tenant-blog', r.created_at, r.created_at
   FROM `platform_blog_redirects` r
   JOIN `blog_posts` p ON p.id = r.post_id
+  JOIN `sites` s ON s.id = p.site_id
  WHERE r.site_id IS NOT NULL
 ON CONFLICT (`site_id`, `locale`, `from_path`) DO UPDATE SET
   `to_path` = excluded.`to_path`, `updated_at` = excluded.`updated_at`;--> statement-breakpoint

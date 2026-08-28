@@ -6,7 +6,7 @@
     />
     <TenantPublicPage
       v-else
-      :path="pagePath"
+      :path="tenantPagePath"
       :locale="localizedRoute?.locale"
     />
   </NuxtLayout>
@@ -38,6 +38,14 @@ const localeSegment = computed(() => {
   } catch {
     return null
   }
+})
+// tenant_page_variants.path is stored locale-bare regardless of locale (the
+// CMS writes the same '/', '/about', etc. for every translation) - strip the
+// locale segment back off before it reaches TenantPublicPage's content lookup.
+const tenantPagePath = computed(() => {
+  if (!localeSegment.value) return pagePath.value
+  const rest = pagePath.value.slice(localeSegment.value.length + 1)
+  return rest || '/'
 })
 const requestEvent = useRequestEvent()
 const isLocalizedRouteResponse = (value: unknown): value is { route: LocalizedPublicRoute } =>

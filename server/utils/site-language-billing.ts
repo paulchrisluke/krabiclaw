@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 import { createStripeClient } from '~/server/utils/stripe-client'
-import { canonicalizeLocale, englishManifestHash } from '~/server/utils/localization'
+import { canonicalizeLocale, englishManifestHash, LANGUAGE_LICENSE_CHARGES_ENABLED } from '~/server/utils/localization'
 import { localizationError } from '~/server/utils/localization-errors'
 
 export const SITE_LANGUAGE_MONTHLY_AMOUNT_CENTS = 500
@@ -145,6 +145,21 @@ async function activeLicenseQuantity(db: DbClient, organizationId: string, exclu
   return Number(row?.count ?? 0)
 }
 
+// Growth includes English plus one secondary language at no extra charge -
+// not a per-language add-on. Enforced per site, not per organization.
+const MAX_ACTIVE_SECONDARY_LANGUAGES_PER_SITE = 1
+
+async function assertSiteSecondaryLanguageCapacity(db: DbClient, organizationId: string, siteId: string, excludeId?: string): Promise<void> {
+  const row = await queryFirst<{ count: number }>(db, `
+    SELECT COUNT(*) AS count
+      FROM site_language_licenses
+     WHERE organization_id = ? AND site_id = ? AND status = 'active' ${excludeId ? 'AND id != ?' : ''}
+  `, excludeId ? [organizationId, siteId, excludeId] : [organizationId, siteId])
+  if (Number(row?.count ?? 0) >= MAX_ACTIVE_SECONDARY_LANGUAGES_PER_SITE) {
+    localizationError(409, 'LANGUAGE_LICENSE_REQUIRED', `Growth includes ${MAX_ACTIVE_SECONDARY_LANGUAGES_PER_SITE} secondary language per site - disable the current one before enabling another`)
+  }
+}
+
 function providerErrorCode(error: unknown): string {
   if (error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string') {
     return (error as { code: string }).code.slice(0, 120)
@@ -160,11 +175,38 @@ export async function enableSiteLanguageLicense(
   const locale = canonicalizeLocale(input.locale)
   if (locale === 'en') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English is the immutable source language')
   await requireAvailableCatalog(db, locale)
-  const subscriptionId = await requireGrowthBilling(db, input.organizationId)
   let license = await loadLicense(db, input.organizationId, input.siteId, locale)
   if (license?.status === 'active') return license
   if (license?.status === 'disabling') localizationError(409, 'LANGUAGE_LICENSE_SYNCING', 'Language disable is still synchronizing', { locale })
 
+  if (!LANGUAGE_LICENSE_CHARGES_ENABLED) {
+    await requireGrowthBilling(db, input.organizationId)
+    await assertSiteSecondaryLanguageCapacity(db, input.organizationId, input.siteId, license?.id)
+    const id = license?.id ?? crypto.randomUUID()
+    const now = Math.floor(Date.now() / 1000)
+    const nowIso = new Date().toISOString()
+    await executeBatch(db, [
+      {
+        query: `INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 0, 'published', ?, ?)
+          ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET label = excluded.label, status = 'published', updated_at = excluded.updated_at`,
+        params: [`locale::${input.organizationId}::${input.siteId}::${locale}`, input.organizationId, input.siteId, locale, input.label.trim() || locale, nowIso, nowIso],
+      },
+      {
+        query: `INSERT INTO site_language_licenses
+          (id, organization_id, site_id, locale, status, activated_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
+          ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET status = 'active', last_error_code = NULL,
+            activated_at = excluded.activated_at, disabled_at = NULL, updated_at = excluded.updated_at`,
+        params: [id, input.organizationId, input.siteId, locale, now, now, now],
+      },
+    ], { operation: 'enable language license (billing disabled)' })
+    license = await loadLicense(db, input.organizationId, input.siteId, locale)
+    if (!license) throw new Error('Language license activation failed')
+    return license
+  }
+
+  const subscriptionId = await requireGrowthBilling(db, input.organizationId)
   const id = license?.id ?? crypto.randomUUID()
   const operationId = license?.status === 'enabling' && license.operation_id ? license.operation_id : crypto.randomUUID()
   const idempotencyKey = license?.status === 'enabling' && license.provider_idempotency_key
@@ -233,6 +275,23 @@ export async function disableSiteLanguageLicense(
   const license = await loadLicense(db, input.organizationId, input.siteId, locale)
   if (!license || license.status === 'disabled') return license
   if (license.status === 'enabling') localizationError(409, 'LANGUAGE_LICENSE_SYNCING', 'Language enable is still synchronizing', { locale })
+
+  if (!LANGUAGE_LICENSE_CHARGES_ENABLED) {
+    const now = Math.floor(Date.now() / 1000)
+    const nowIso = new Date().toISOString()
+    await executeBatch(db, [
+      {
+        query: `UPDATE site_language_licenses SET status = 'disabled', last_error_code = NULL, disabled_at = ?, updated_at = ? WHERE id = ?`,
+        params: [now, now, license.id],
+      },
+      {
+        query: `UPDATE site_locales SET status = 'disabled', updated_at = ? WHERE organization_id = ? AND site_id = ? AND locale = ? AND is_source = 0`,
+        params: [nowIso, input.organizationId, input.siteId, locale],
+      },
+    ], { operation: 'disable language license (billing disabled)' })
+    return await loadLicense(db, input.organizationId, input.siteId, locale)
+  }
+
   const subscriptionId = license.stripe_subscription_id ?? await requireGrowthBilling(db, input.organizationId)
   const operationId = license.status === 'disabling' && license.operation_id ? license.operation_id : crypto.randomUUID()
   const idempotencyKey = license.status === 'disabling' && license.provider_idempotency_key
@@ -275,6 +334,10 @@ export async function reconcileSiteLanguageSubscription(
   stripe: Stripe,
   event: Stripe.Event,
 ): Promise<void> {
+  // Licenses granted while billing is disabled were never backed by a Stripe
+  // item, so reconciling against Stripe's (now absent) language quantity
+  // would incorrectly disable them on the next subscription webhook.
+  if (!LANGUAGE_LICENSE_CHARGES_ENABLED) return
   if (!event.type.startsWith('customer.subscription.')) return
   const eventSubscription = event.data.object as Stripe.Subscription
   const billing = await queryFirst<{ organization_id: string }>(db, `
@@ -292,7 +355,7 @@ export async function reconcileSiteLanguageSubscription(
       FROM site_language_licenses
      WHERE organization_id = ?
      ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'enabling' THEN 1 WHEN 'disabling' THEN 2 ELSE 3 END,
-              site_id, locale
+              created_at, site_id, locale
   `, [billing.organization_id])
   if (!rows.length) return
 
@@ -382,9 +445,16 @@ export async function getSiteLanguageSettings(
   }) : 'free'
   let interval: BillingInterval | null = null
   if (effectivePlan === 'growth' && billing?.stripe_subscription_id && env.STRIPE_SECRET_KEY) {
-    const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
-    const subscription = await stripe.subscriptions.retrieve(billing.stripe_subscription_id, { expand: ['items.data.price.product'] })
-    interval = resolveSubscriptionInterval(subscription)
+    try {
+      const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
+      const subscription = await stripe.subscriptions.retrieve(billing.stripe_subscription_id, { expand: ['items.data.price.product'] })
+      interval = resolveSubscriptionInterval(subscription)
+    } catch {
+      // interval is display-only (the settings UI already shows a
+      // "$5/month or $60/year" range when it's unknown) - a Stripe lookup
+      // failure here must not take down the whole settings read.
+      interval = null
+    }
   }
   const currentHash = await englishManifestHash()
   const languages = await queryFirst<{ json: string }>(db, `
@@ -412,6 +482,7 @@ export async function getSiteLanguageSettings(
   `, [currentHash])
   return {
     effective_plan: effectivePlan,
+    billing_enabled: LANGUAGE_LICENSE_CHARGES_ENABLED,
     interval,
     unit_amount_cents: interval ? expectedAmount(interval) : null,
     languages: languages?.json ? JSON.parse(languages.json) : [],

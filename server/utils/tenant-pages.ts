@@ -328,7 +328,7 @@ async function resolveLocale(db: DbClient, siteId: string, locale?: string | nul
     const exactLocale = assertExactCanonicalLocale(locale)
     const row = await queryFirst<{ locale: string } | null>(
       db,
-      'SELECT locale FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1',
+      'SELECT locale FROM site_locales WHERE site_id = ? AND locale = ? AND status = \'published\' LIMIT 1',
       [siteId, exactLocale],
     )
     if (!row) notFound('Locale is not configured for this site')

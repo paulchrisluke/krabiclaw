@@ -1096,12 +1096,14 @@ function assertOperationPrecondition(snapshot, plan, operation, context, entry) 
     return { alreadyApplied: false }
   }
   if (operation.type === 'create_product') {
+    // create_product's own params never carry metadata (a later update_product
+    // sets it once the product/price IDs exist), so identity must resolve
+    // through productCatalogId's plan_id/product_family reader against the
+    // operation's planId, not operation.params.metadata.
     const duplicate = snapshot.products.find(candidate =>
       candidate.active !== false
-      && (
-        candidate.metadata?.plan_id === operation.params?.metadata?.plan_id
-        || candidate.metadata?.product_family === operation.params?.metadata?.product_family
-      ),
+      && productCatalogId(candidate) !== ''
+      && productCatalogId(candidate) === operation.planId,
     )
     if (duplicate) throw new Error(`Provider precondition failed: active canonical product ${duplicate.id} does not match the signed create operation.`)
     return { alreadyApplied: false }

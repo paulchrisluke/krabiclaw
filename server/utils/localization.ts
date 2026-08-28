@@ -340,6 +340,12 @@ export async function deletePlatformLocaleCatalog(db: DbClient, localeInput: unk
   return { deleted: true, locale }
 }
 
+// Manual localization is included free with Growth (up to one secondary
+// language) rather than a paid $5/mo add-on - Growth plan is still required
+// to enable a language, but enabling one never charges through Stripe.
+// Flip back to true to re-enable the per-language Stripe charge.
+export const LANGUAGE_LICENSE_CHARGES_ENABLED = false
+
 function billingUrl(organizationSlug: string | null, siteSlug: string | null): string | null {
   if (!organizationSlug || !siteSlug) return null
   return `/dashboard/${encodeURIComponent(organizationSlug)}/sites/${encodeURIComponent(siteSlug)}/settings/localization`
@@ -363,11 +369,11 @@ export async function assertSiteLanguageEntitlement(
       JOIN organization o ON o.id = s.organization_id
       LEFT JOIN organization_billing ob ON ob.organization_id = s.organization_id
       LEFT JOIN site_locales sl ON sl.organization_id = s.organization_id AND sl.site_id = s.id AND sl.locale = ?
-      LEFT JOIN site_language_licenses l ON l.organization_id = s.organization_id AND l.site_id = s.id AND l.locale = sl.locale
-      LEFT JOIN platform_locale_catalogs c ON c.locale = sl.locale
+      LEFT JOIN site_language_licenses l ON l.organization_id = s.organization_id AND l.site_id = s.id AND l.locale = ?
+      LEFT JOIN platform_locale_catalogs c ON c.locale = ?
      WHERE s.organization_id = ? AND s.id = ?
      LIMIT 1
-  `, [locale, organizationId, siteId])
+  `, [locale, locale, locale, organizationId, siteId])
   if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Site was not found', { site_id: siteId })
   if (row.license_status === 'enabling' || row.license_status === 'disabling') {
     localizationError(409, 'LANGUAGE_LICENSE_SYNCING', 'Language license synchronization is still in progress', { site_id: siteId, locale })
@@ -488,13 +494,18 @@ export async function resolveLocalizedPublicRoute(
       },
     }
   }
+  // tenant_page_variants.path is stored locale-bare (the CMS writes the same
+  // '/', '/about', etc. for every locale) - unlike resource_localizations,
+  // whose route_path column stores the full '/locale/...' path. Strip the
+  // locale segment back off before matching.
+  const tenantPagePath = routePath.slice(locale.length + 1) || '/'
   const page = await queryFirst<{ id: string }>(db, `
     SELECT v.id
       FROM tenant_page_variants v
       JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
      WHERE v.organization_id = ? AND v.site_id = ? AND v.locale = ? AND v.path = ?
      LIMIT 1
-  `, [organizationId, siteId, locale, routePath])
+  `, [organizationId, siteId, locale, tenantPagePath])
   if (!page) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized route was not found', { locale, route_path: routePath })
   return {
     locale,

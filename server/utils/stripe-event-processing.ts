@@ -21,8 +21,11 @@ export async function processStripeEvent(
 ): Promise<boolean> {
   return recordStripeEvent(db, event, async () => {
     await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter, loadStripePlans)
-    await reconcileSiteLanguageSubscription(db, stripe, event)
     await handleApplicationStripeEvent(env, db as D1Database, event, adapter, stripe, loadStripePlans)
     await handleStripeGa4Event(env, db, stripe, event)
+    // Runs last: a site-language quantity mismatch can persistently fail
+    // (see reconcileSiteLanguageSubscription) and must not block the core
+    // subscription/GA4 handling above from completing on this delivery.
+    await reconcileSiteLanguageSubscription(db, stripe, event)
   })
 }

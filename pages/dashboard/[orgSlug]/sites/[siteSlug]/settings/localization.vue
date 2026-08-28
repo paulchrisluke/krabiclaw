@@ -13,7 +13,7 @@
           <section class="rounded-xl border border-default p-5">
             <h2 class="text-lg font-semibold">Site languages</h2>
             <p class="mt-1 text-sm text-muted">
-              English is the permanent source language. Each secondary language is billed on this site’s Growth subscription.
+              English is the permanent source language. {{ settings.billing_enabled ? 'Each secondary language is billed on this site’s Growth subscription.' : 'Growth includes one secondary language at no extra cost.' }}
             </p>
             <div class="mt-5 space-y-3">
               <div v-for="language in settings.languages" :key="language.locale" class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default p-4">
@@ -36,7 +36,7 @@
                 </select>
               </label>
               <button class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-inverted disabled:opacity-50" :disabled="busy || !newLocale || settings.effective_plan !== 'growth'">
-                Enable for {{ formattedPrice }}
+                {{ settings.billing_enabled ? `Enable for ${formattedPrice}` : 'Enable' }}
               </button>
             </form>
             <p v-if="settings.effective_plan !== 'growth'" class="mt-3 text-sm text-warning">A Growth subscription is required.</p>
@@ -72,7 +72,7 @@ useSeoMeta({ title: 'Localization | Site Settings', robots: 'noindex, nofollow' 
 
 interface LanguageRow { locale: string; label: string | null; is_source: number | boolean; locale_status: string; license_status: string | null }
 interface CatalogRow { locale: string; label: string; direction: string }
-interface Settings { effective_plan: string; interval: 'month' | 'year' | null; unit_amount_cents: number | null; languages: LanguageRow[]; available_catalogs: CatalogRow[] }
+interface Settings { effective_plan: string; billing_enabled: boolean; interval: 'month' | 'year' | null; unit_amount_cents: number | null; languages: LanguageRow[]; available_catalogs: CatalogRow[] }
 const dashboardApi = useDashboardApi()
 const toast = useToast()
 const siteId = await useDashboardSiteId()
