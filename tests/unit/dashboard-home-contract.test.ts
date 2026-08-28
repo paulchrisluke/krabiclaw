@@ -47,7 +47,7 @@ test('site overview does not invent publication badges or read the legacy site p
 test('site overview routes collection managers and page documents to their actual editors', () => {
   const page = readFileSync(pagePath, 'utf8')
 
-  assert.match(page, /if \(path === '\/menu'\) return `\$\{primaryLocationPath\.value\}\/menu`/)
+  assert.match(page, /if \(path === '\/menu' \|\| path === '\/products'\) return `\$\{primaryLocationPath\.value\}\/products`/)
   assert.match(page, /if \(path === '\/order'\) return `\$\{siteDashboardPath\.value\}\/orders`/)
   assert.match(page, /to: `\$\{siteDashboardPath\.value\}\/pages\/\$\{page\.id\}`/)
   assert.doesNotMatch(page, /query: \{ page: path \}/)

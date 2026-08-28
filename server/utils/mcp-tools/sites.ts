@@ -183,7 +183,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_default_currency',
-      description: 'Set the default currency for this site. Affects how prices are displayed on menus and experiences.',
+      description: 'Set the default currency for this site. Affects how Product and experience prices are displayed.',
       domain: 'sites',
       minimumRole: 'admin',
       confirmRequired: false,

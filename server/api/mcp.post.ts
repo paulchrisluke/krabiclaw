@@ -122,7 +122,7 @@ export default defineHandler(async (event) => {
         protocolVersion, capabilities: { tools: {}, resources: {}, prompts: {} }, serverInfo: { name: "krabiclaw-mcp", version: "phase-5" }, _meta: catalogMeta(MCP_PUBLIC_TOOLS), instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
 ## Image work — applies at any point in the conversation
-Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience cover, story image, or any content section):
+Whenever an image is needed (hero, logo, post thumbnail, Product photo, experience cover, story image, or any content section):
 
 **AI-generated (user asks you to generate or create an image):**
 1. Call resolve_agent_guidance({ site_id, task: "image.generate" }) and use every returned skill document separately.
@@ -133,7 +133,7 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 6. After the user approves, assign with set_media using placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
 7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
-For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For menu items, each show_generated_images and set_media call must include that item's exact menu_item_id; finish every requested item before reporting completion.
+For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For Products, each show_generated_images and set_media call must include that Product's exact id; use slot image for the explicit primary and gallery for the ordered detail gallery. Finish every requested item before reporting completion.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 
@@ -170,7 +170,7 @@ Start every conversation by calling get_workspace_context. If no active site is 
   2. Call import_from_maps.
   3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one. Follow the Image work rules above.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
-  5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
+  5. DO NOT ask for Products, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
 - If they have exactly one site, treat it as confirmed automatically. Say "Working with [site name]." in your first reply before doing anything else, then call set_workspace_context so later tool calls can omit the site_id.
 - If they have multiple sites, present them clearly and wait for the user to select one — do not assume or guess.
@@ -207,9 +207,9 @@ When a public-facing tool result includes \`view_url\` or \`public_url\`, includ
 
 All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
 
-For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. Menu reads expose item_page_info. Menu batch tools accept up to 500 items atomically: read every menu page, then send the complete intended add or reconciliation in one call. Never split one logical menu replacement across multiple mutation calls.
+For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. Product batch and sync tools are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls.
 
-Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Manual locale management is available through the locale tools. Social publishing, domains, and priority-support requests are shown only when connector eligibility enables them; otherwise direct the user to the dashboard.`, });
+Common workflows: manage location-scoped Products, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Manual locale management is available through the locale tools. Social publishing, domains, and priority-support requests are shown only when connector eligibility enables them; otherwise direct the user to the dashboard.`, });
     }
 
     const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {

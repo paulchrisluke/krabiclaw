@@ -281,13 +281,14 @@ if (OUT_DIR) {
   }
 }
 
-// ── Phase 2: Experience / menu slug routing ───────────────────────────────────
+// ── Phase 2: Experience / Product slug routing ────────────────────────────────
 
 if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
   info("── Slug route checks");
 
-  const contentType = VERTICAL === "experience" ? "experiences" : "menu";
-  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${contentType}&datasets=${contentType}`;
+  const pageKind = VERTICAL === "experience" ? "experiences" : "menu";
+  const dataset = VERTICAL === "experience" ? "experiences" : "products";
+  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${pageKind}&datasets=${dataset}`;
   const res = await get(apiPath);
 
   if (res.ok) {
@@ -295,14 +296,21 @@ if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
     const items =
       VERTICAL === "experience"
         ? (data.experiencesList ?? [])
-        : (data.menu?.items ?? []);
+        : (data.products ?? []);
 
     if (items.length === 0) {
-      fail(`Bootstrap returned 0 ${contentType} items — nothing to slug-check`);
+      fail(`Bootstrap returned 0 ${dataset} items — nothing to slug-check`);
     } else {
+      const locationsById = new Map((data.shell?.locations ?? []).map((location) => [location.id, location]));
       for (const item of items.slice(0, 5)) {
         if (!item.slug) continue;
-        const route = `/${contentType}/${item.slug}`;
+        const route = VERTICAL === "experience"
+          ? `/experiences/${item.slug}`
+          : `/locations/${locationsById.get(item.location_id)?.slug}/menu/${item.slug}`;
+        if (route.includes('/undefined/')) {
+          fail(`Product ${item.id ?? item.slug} has no resolvable owning location`);
+          continue;
+        }
         const r = await get(route);
         if (r.ok) {
           pass(`GET ${route} → ${r.status}`);

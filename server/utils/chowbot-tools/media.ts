@@ -17,26 +17,9 @@ const MEDIA_DOMAIN_TOOL_NAMES = new Set([
 
 export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
   ...MEDIA_TOOLS.filter((tool) => MEDIA_DOMAIN_TOOL_NAMES.has(tool.name)).map(chowbotToolFromMcp),
-  // import_menu_from_media: MCP requires asset_id directly (ChatGPT already
-  // resolved one via upload_user_media); ChowBot instead resolves it from
-  // WhatsApp's pending-media state, so asset_id isn't a real argument here —
-  // deriving MCP's schema verbatim would mislead the model into thinking it
-  // must supply one.
-    {
-      name: "import_menu_from_media",
-      description:
-        "Import menu items from the currently pending WhatsApp image or document. A menu name is required. Use only when the user asks to import, extract, or read menu items from the pending file.",
-      input_schema: {
-        type: "object",
-        properties: {
-          menu_name: { type: "string", description: "Required name for the new menu." },
-        },
-        required: ["menu_name"],
-      },
-    },
   // analyze_document: MCP requires asset_id directly (ChatGPT already
   // resolved one via upload_user_media). ChowBot instead resolves it from
-  // WhatsApp's pending-media state, matching import_menu_from_media above.
+  // WhatsApp's pending-media state.
     {
       name: "analyze_document",
       description:
@@ -52,7 +35,7 @@ export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
     {
       name: "resolve_pending_media",
       description:
-        "Clear the pending WhatsApp media state. Call with action=save_media after assigning the asset to any tool (menu item, hero, post, etc.) or when the user just wants it saved to the library. Call with action=cancel to discard.",
+        "Clear the pending WhatsApp media state. Call with action=save_media after assigning the asset to any Product, hero, post, or other owner, or when the user just wants it saved to the library. Call with action=cancel to discard.",
       input_schema: {
         type: "object",
         properties: {
@@ -65,7 +48,7 @@ export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
     {
       name: "generate_image",
       description:
-        "Generate an AI image from a text prompt using the configured OpenAI image model. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.",
+        "Generate an AI image from a text prompt using the configured OpenAI image model. The image is automatically saved to the media library. Use for Product photos, hero images, or social posts.",
       input_schema: {
         type: "object",
         properties: {

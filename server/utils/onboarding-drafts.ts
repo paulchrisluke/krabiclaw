@@ -43,22 +43,26 @@ export interface DraftLocationRecord {
   status: 'active'
 }
 
-export interface DraftMenuItemRecord {
+export interface DraftProductRecord {
   id: string
-  section: string
+  location_id: string
+  category: string
   name: string
   slug: string
   description: string
-  price_amount: number
+  price_amount: string
+  compare_at_price_amount: string | null
+  sale_starts_at: string | null
+  sale_ends_at: string | null
+  order_url: string | null
+  is_visible: boolean
   available: boolean
+  featured: boolean
+  featured_sort_order: number
   sort_order: number
-}
-
-export interface DraftMenuRecord {
-  id: string
-  name: string
-  status: 'published'
-  items: DraftMenuItemRecord[]
+  tags: string[]
+  details: Array<{ key: string; label: string; values: string[] }>
+  source: 'import'
 }
 
 export interface DraftReviewRecord {
@@ -121,7 +125,7 @@ export interface OnboardingDraftPayload {
     config: Record<string, string | null>
     media: Array<{ slot: 'logo' | 'hero'; asset: DraftUploadedImage }>
     locations: DraftLocationRecord[]
-    menu: DraftMenuRecord | null
+    products: DraftProductRecord[]
     reviews: DraftReviewRecord[]
     qa: DraftQaRecord[]
     posts: DraftPostRecord[]
@@ -244,7 +248,7 @@ export function buildOnboardingDraftPayload(input: {
   const locationId = 'draft-location-main'
 
   const description = null
-  const menu: DraftMenuRecord | null = null
+  const products: DraftProductRecord[] = []
 
   const reviews = (placeSnapshot?.reviews ?? [])
     .filter(review => typeof review.rating === 'number' && review.rating > 0)
@@ -306,7 +310,7 @@ export function buildOnboardingDraftPayload(input: {
         is_primary: true,
         status: 'active',
       }],
-      menu,
+      products,
       reviews,
       qa,
       posts,
@@ -319,7 +323,7 @@ export function buildOnboardingDraftPayload(input: {
 
 export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload {
   const parsed = JSON.parse(raw) as OnboardingDraftPayload
-  if (!parsed || parsed.version !== 1 || !parsed.preview || !Array.isArray(parsed.preview.media)) {
+  if (!parsed || parsed.version !== 1 || !parsed.preview || !Array.isArray(parsed.preview.media) || !Array.isArray(parsed.preview.products)) {
     throw new Error('Unsupported onboarding draft payload')
   }
   return parsed

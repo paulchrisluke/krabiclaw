@@ -83,7 +83,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'copy_location_batch',
-      description: 'Copy menus, media, content, reviews, Q&A, and/or experiences from one location to another. Use this to duplicate a fully-built location as a starting point for a new one, instead of recreating content by hand. Provide target_location_id to copy into an existing location, or new_location_title to create a fresh one first. External identifiers are omitted where the copied record is not the same external record.',
+      description: 'Copy Products, media, reviews, Q&A, and/or experiences from one location to another. Use this to duplicate a fully-built location as a starting point for a new one, instead of recreating content by hand. Provide target_location_id to copy into an existing location, or new_location_title to create a fresh one first. External identifiers are omitted where the copied record is not the same external record.',
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: true,
@@ -93,11 +93,10 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         new_location_title: { type: 'string', description: 'Title for a brand-new location to create and copy content into. Omit if using target_location_id instead.' },
         entities: {
           type: 'array',
-          items: { type: 'string', enum: ['menus', 'menu_items', 'media_assets', 'reviews', 'location_qa', 'experiences'] },
+          items: { type: 'string', enum: ['products', 'media_assets', 'reviews', 'location_qa', 'experiences'] },
           minItems: 1,
-          description: 'Which kinds of content to copy. menu_items requires menus to also be listed, since copied items attach to newly copied menus.',
+          description: 'Which kinds of content to copy. Product-linked reviews require products to be included so ownership is preserved.',
         },
-        include_translations: { type: 'boolean', description: 'Copy existing translations for menus and menu items along with the source-locale content. Defaults to true.' },
         oneOf: [
           { required: ['target_location_id'] },
           { required: ['new_location_title'] },

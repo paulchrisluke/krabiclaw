@@ -15,11 +15,11 @@
         <!-- Desktop nav -->
         <nav data-saya-critical-nav class="hidden items-center gap-1 lg:flex" :aria-label="t('saya.header.nav_aria')">
           <NuxtLink
-            v-if="hasMenu"
-            to="/menu"
+            v-if="showProducts"
+            :to="productPresentation!.collectionPath"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
-            {{ t('saya.header.menu') }}
+            {{ productPresentation!.collectionLabel }}
           </NuxtLink>
 
           <NuxtLink
@@ -68,8 +68,8 @@
             </summary>
             <div class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden">
               <nav class="grid gap-1" :aria-label="t('saya.header.mobile_nav_aria')">
-                <NuxtLink v-if="hasMenu" to="/menu" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ t('saya.header.menu') }}
+                <NuxtLink v-if="showProducts" :to="productPresentation!.collectionPath" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ productPresentation!.collectionLabel }}
                 </NuxtLink>
                 <NuxtLink v-if="locations.length > 1" to="/locations" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.locations') }}
@@ -115,14 +115,14 @@ interface I18nComposable {
 
 
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import { resolveProductPresentation } from '~/utils/product-presentation'
 
 // Data comes from layouts/saya.vue, which already owns the single shared
 // bootstrap/tenant-site fetch — header is presentation-only, not a fetcher.
 const props = defineProps<{
   site: Site | null
   locations: ApiRecord[]
-  menu: ApiRecord | null
-  hasMenu?: boolean
+  hasProducts: boolean
   hasExperiences: boolean
   experienceCtaPath?: string | null
 }>()
@@ -168,7 +168,8 @@ const logoUrl = computed(() => Array.isArray(props.site?.media)
   : null)
 const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
-const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
+const productPresentation = computed(() => resolveProductPresentation(props.site?.vertical))
+const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
 const hasOrderLinks = computed(() =>
   props.locations.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )

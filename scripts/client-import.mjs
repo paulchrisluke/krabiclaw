@@ -113,7 +113,7 @@ function _uid(prefix = "") {
 
 // ── Route parity check ────────────────────────────────────────────────────────
 
-const CONTENT_TYPES = ["experiences", "posts", "menu", "locations", "reviews"];
+const CONTENT_TYPES = ["experiences", "posts", "menu", "products", "locations", "reviews"];
 
 function checkRouteParity() {
   const issues = [];
@@ -149,7 +149,7 @@ function checkRouteParity() {
       });
     }
     // Warn: has directory index but no slug page for detail-capable content types
-    if (hasIndex && !hasSlug && ["experiences", "menu", "posts"].includes(ct)) {
+    if (hasIndex && !hasSlug && ["experiences", "posts"].includes(ct)) {
       issues.push({
         type: "WARN",
         message: `pages/${ct}/[slug].vue does not exist — detail pages will 404`,

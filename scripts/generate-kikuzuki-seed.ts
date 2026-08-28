@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import {
   renderKikuzukiCoreSeedBlock,
   renderKikuzukiMediaBlock,
-  renderKikuzukiMenuBlock,
+  renderKikuzukiProductsBlock,
   renderKikuzukiContentBlock,
   renderKikuzukiExperienceBlock,
   renderKikuzukiReviewsBlock,
@@ -94,7 +94,7 @@ VALUES
   },
   { label: 'core', sql: `${SQL_HEADER}\n${renderKikuzukiCoreSeedBlock()}\n` },
   { label: 'media', sql: `${SQL_HEADER}\n${renderKikuzukiMediaBlock()}\n` },
-  { label: 'menu', sql: `${SQL_HEADER}\n${renderKikuzukiMenuBlock()}\n` },
+  { label: 'products', sql: `${SQL_HEADER}\n${renderKikuzukiProductsBlock()}\n` },
   { label: 'content', sql: `${SQL_HEADER}\n${renderKikuzukiContentBlock()}\n` },
   { label: 'experience', sql: `${SQL_HEADER}\n${renderKikuzukiExperienceBlock()}\n` },
   { label: 'reviews', sql: `${SQL_HEADER}\n${renderKikuzukiReviewsBlock()}\n` },

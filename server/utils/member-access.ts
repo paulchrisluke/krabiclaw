@@ -528,7 +528,7 @@ export async function resolveDashboardSiteAccess(db: DbClient, input: MemberAcce
   return site?.team_id && access.teamIds.has(site.team_id) ? 'site' : 'location'
 }
 
-/** Site-wide management access: site settings, blog, localized content, professional-services, analytics, domains, contact-submissions inbox, and any menu/review/QA row whose own location_id is null. */
+/** Site-wide management access: site settings, blog, localized content, professional-services, analytics, domains, contact-submissions inbox, and any review/QA row whose own location_id is null. */
 export async function assertSiteWideAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   const access = await canonicalMemberAccess(input)
   if (isOrganizationWideRole(access.role)) return
@@ -559,7 +559,7 @@ export async function assertLocationAccess(db: DbClient, input: MemberAccessPrin
   }
 }
 
-/** A resource that may or may not belong to one location (e.g. a menu or review row) — dispatches to assertSiteWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the target row's location_id, never a caller-supplied param. Media authorization uses its placement owner instead. */
+/** A resource that may or may not belong to one location (e.g. a review row) — dispatches to assertSiteWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the target row's location_id, never a caller-supplied param. Media authorization uses its placement owner instead. */
 export async function assertResourceAccess(db: DbClient, input: MemberAccessPrincipal & { resourceLocationId: string | null }): Promise<void> {
   if (input.resourceLocationId === null) {
     return assertSiteWideAccess(db, input)

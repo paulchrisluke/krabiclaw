@@ -2,13 +2,23 @@ import type { BatchQuery } from '~/server/db'
 import type { PublicBase } from '~/server/utils/public-base'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
+import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { isCurrencyCode } from '~/shared/currencies'
 
 type BatchResult = { results?: unknown[] }
+
+const requireLocationString = (value: unknown, field: string): string => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`Public location ${field} is unavailable`)
+  }
+  return value
+}
 
 export interface PublicShellQueryIndexes {
   locations: number
   config: number
   locales: number
+  productLocations: number
 }
 
 export function appendPublicShellQueries(
@@ -30,7 +40,7 @@ export function appendPublicShellQueries(
                      bl.neighborhood, bl.grab_url, bl.uber_eats_url,
                      bl.foodpanda_url, bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
-                     bl.canonical_url, bl.robots, mp.asset_id AS asset_id,
+                     bl.canonical_url, bl.robots, bl.feature_overrides, mp.asset_id AS asset_id,
                      ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind
                 FROM business_locations bl
                 LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
@@ -46,17 +56,16 @@ export function appendPublicShellQueries(
               UNION ALL
               SELECT '__experience_count',
                      CAST((SELECT COUNT(*) FROM experiences WHERE site_id = ? AND status != 'inactive') AS TEXT)
-              UNION ALL
-              SELECT '__has_menu',
-                     CAST(EXISTS(
-                       SELECT 1 FROM menus
-                        WHERE organization_id = ? AND site_id = ? AND is_visible = 1
-                     ) AS TEXT)`, [organizationId, siteId, siteId, organizationId, siteId]),
+              `, [organizationId, siteId, siteId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM site_locales
                WHERE organization_id = ? AND site_id = ?
                  AND (is_source = 1 OR status = 'published')
                ORDER BY is_source DESC, locale ASC`, [organizationId, siteId]),
+    productLocations: push(`SELECT DISTINCT location_id
+                              FROM products
+                             WHERE organization_id = ? AND site_id = ? AND is_visible = 1
+                             ORDER BY location_id`, [organizationId, siteId]),
   }
 }
 
@@ -69,9 +78,9 @@ export function buildPublicShellPayload(
   const locations = rawLocations.map(location => {
     const publicUrl = location.media_public_url as string | null
     return {
-      id: location.id,
-      slug: location.slug,
-      title: location.title,
+      id: requireLocationString(location.id, 'id'),
+      slug: requireLocationString(location.slug, 'slug'),
+      title: requireLocationString(location.title, 'title'),
       address: location.address ? JSON.parse(String(location.address)) : null,
       phone: location.phone,
       email: location.email ?? null,
@@ -112,7 +121,8 @@ export function buildPublicShellPayload(
   const config: Record<string, string> = Object.fromEntries(
     configRows.filter(({ key }) => !key.startsWith('__')).map(({ key, value }) => [key, value]),
   )
-  config.default_currency = site.default_currency || 'THB'
+  if (!isCurrencyCode(site.default_currency)) throw new Error(`Unsupported site currency: ${site.default_currency}`)
+  config.default_currency = site.default_currency
   if (site.contact_email) config.contact_email = site.contact_email
   if (site.contact_phone) config.contact_phone = site.contact_phone
   if (site.brand_name) config.brand_name = site.brand_name
@@ -183,6 +193,16 @@ export function buildPublicShellPayload(
       is_source: Boolean(locale.is_source),
     })),
     hasExperiences: Number(configRows.find(({ key }) => key === '__experience_count')?.value ?? 0) > 0,
-    hasMenu: configRows.find(({ key }) => key === '__has_menu')?.value === '1',
+    hasProducts: (() => {
+      const productLocationIds = new Set(((results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string }>).map(row => row.location_id))
+      return rawLocations.some((location) => {
+        if (!productLocationIds.has(String(location.id))) return false
+        const { capabilities } = resolveSiteCmsCapabilities(String(site.vertical), site.theme_id, {
+          siteEnabledFeatures: site.feature_overrides,
+          locationEnabledFeatures: location.feature_overrides as string | null,
+        })
+        return capabilities.managers.some(manager => manager.key === 'location.products')
+      })
+    })(),
   }
 }

@@ -1054,311 +1054,278 @@
       "source": "google"
     }
   ],
-  "menus": [
+  "products": [
     {
-      "id": "menu-demo",
+      "id": "mi-1",
       "organizationId": "org-demo",
       "siteId": "site-demo",
       "locationId": "loc-demo",
-      "name": "Menu",
-      "description": "Wood-fired pizza, antipasti, salads, and drinks from the Ember & Slice oven.",
-      "sectionOrder": [
-        "Wood-Fired Pizza",
-        "Antipasti",
-        "Pasta & Salads",
-        "Drinks"
-      ],
-      "status": "published",
-      "items": [
+      "category": "Wood-Fired Pizza",
+      "name": "Margherita",
+      "slug": "margherita",
+      "description": "San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt",
+      "priceAmount": 18,
+      "media": [
         {
-          "id": "mi-1",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Wood-Fired Pizza",
-          "name": "Margherita",
-          "slug": "margherita",
-          "description": "San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt",
-          "priceAmount": 18,
-          "media": [
-            {
-              "asset_id": "media-demo-margherita",
-              "slot": "gallery"
-            },
-            {
-              "asset_id": "media-demo-margherita-video",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": "[\"Vegetarian\"]",
-          "available": true,
-          "sortOrder": 1
+          "asset_id": "media-demo-margherita",
+          "slot": "gallery"
         },
         {
-          "id": "mi-2",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Wood-Fired Pizza",
-          "name": "Pepperoni Calabrese",
-          "slug": "pepperoni-calabrese",
-          "description": "Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano",
-          "priceAmount": 21,
-          "media": [
-            {
-              "asset_id": "media-demo-pepperoni",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": null,
-          "available": true,
-          "sortOrder": 2
-        },
-        {
-          "id": "mi-3",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Wood-Fired Pizza",
-          "name": "Funghi Bianco",
-          "slug": "funghi-bianco",
-          "description": "Roasted mushrooms, ricotta crema, garlic, thyme, mozzarella, pecorino",
-          "priceAmount": 22,
-          "media": [
-            {
-              "asset_id": "media-demo-funghi",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": "[\"Vegetarian\"]",
-          "available": true,
-          "sortOrder": 3
-        },
-        {
-          "id": "mi-4",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Wood-Fired Pizza",
-          "name": "Soppressata Hot Honey",
-          "slug": "soppressata-hot-honey",
-          "description": "Spicy soppressata, tomato, mozzarella, pickled Fresno chile, Brooklyn hot honey",
-          "priceAmount": 23,
-          "media": [],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": null,
-          "available": true,
-          "sortOrder": 4
-        },
-        {
-          "id": "mi-5",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Antipasti",
-          "name": "Burrata",
-          "slug": "burrata",
-          "description": "Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough",
-          "priceAmount": 16,
-          "media": [
-            {
-              "asset_id": "media-demo-burrata",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": "[\"Vegetarian\"]",
-          "available": true,
-          "sortOrder": 1
-        },
-        {
-          "id": "mi-6",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Antipasti",
-          "name": "Garlic Knots",
-          "slug": "garlic-knots",
-          "description": "Wood-fired knots, parsley, roasted garlic butter, marinara",
-          "priceAmount": 9,
-          "media": [
-            {
-              "asset_id": "media-demo-knots",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": "[\"Vegetarian\"]",
-          "available": true,
-          "sortOrder": 2
-        },
-        {
-          "id": "mi-7",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Pasta & Salads",
-          "name": "Little Gem Caesar",
-          "slug": "little-gem-caesar",
-          "description": "Little gem lettuce, anchovy dressing, sourdough crumbs, shaved pecorino",
-          "priceAmount": 14,
-          "media": [],
-          "allergens": "[\"Gluten\", \"Dairy\", \"Fish\"]",
-          "dietaryNotes": null,
-          "available": true,
-          "sortOrder": 1
-        },
-        {
-          "id": "mi-8",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Pasta & Salads",
-          "name": "Rigatoni Pomodoro",
-          "slug": "rigatoni-pomodoro",
-          "description": "Rigatoni, slow tomato sauce, basil, parmesan",
-          "priceAmount": 19,
-          "media": [],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": "[\"Vegetarian\"]",
-          "available": true,
-          "sortOrder": 2
-        },
-        {
-          "id": "mi-9",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Drinks",
-          "name": "Sparkling Lemonade",
-          "slug": "sparkling-lemonade",
-          "description": "House lemon cordial, soda, rosemary",
-          "priceAmount": 6,
-          "media": [],
-          "allergens": null,
-          "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
-          "available": true,
-          "sortOrder": 1
-        },
-        {
-          "id": "mi-10",
-          "menuId": "menu-demo",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Drinks",
-          "name": "Italian Soda",
-          "slug": "italian-soda",
-          "description": "Blood orange, grapefruit, or limonata",
-          "priceAmount": 5,
-          "media": [],
-          "allergens": null,
-          "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
-          "available": true,
-          "sortOrder": 2
+          "asset_id": "media-demo-margherita-video",
+          "slot": "gallery"
         }
-      ]
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": "[\"Vegetarian\"]",
+      "available": true,
+      "sortOrder": 0
     },
     {
-      "id": "menu-demo-2",
+      "id": "mi-2",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Wood-Fired Pizza",
+      "name": "Pepperoni Calabrese",
+      "slug": "pepperoni-calabrese",
+      "description": "Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano",
+      "priceAmount": 21,
+      "media": [
+        {
+          "asset_id": "media-demo-pepperoni",
+          "slot": "gallery"
+        }
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": null,
+      "available": true,
+      "sortOrder": 1
+    },
+    {
+      "id": "mi-3",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Wood-Fired Pizza",
+      "name": "Funghi Bianco",
+      "slug": "funghi-bianco",
+      "description": "Roasted mushrooms, ricotta crema, garlic, thyme, mozzarella, pecorino",
+      "priceAmount": 22,
+      "media": [
+        {
+          "asset_id": "media-demo-funghi",
+          "slot": "gallery"
+        }
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": "[\"Vegetarian\"]",
+      "available": true,
+      "sortOrder": 2
+    },
+    {
+      "id": "mi-4",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Wood-Fired Pizza",
+      "name": "Soppressata Hot Honey",
+      "slug": "soppressata-hot-honey",
+      "description": "Spicy soppressata, tomato, mozzarella, pickled Fresno chile, Brooklyn hot honey",
+      "priceAmount": 23,
+      "media": [],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": null,
+      "available": true,
+      "sortOrder": 3
+    },
+    {
+      "id": "mi-5",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Antipasti",
+      "name": "Burrata",
+      "slug": "burrata",
+      "description": "Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough",
+      "priceAmount": 16,
+      "media": [
+        {
+          "asset_id": "media-demo-burrata",
+          "slot": "gallery"
+        }
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": "[\"Vegetarian\"]",
+      "available": true,
+      "sortOrder": 4
+    },
+    {
+      "id": "mi-6",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Antipasti",
+      "name": "Garlic Knots",
+      "slug": "garlic-knots",
+      "description": "Wood-fired knots, parsley, roasted garlic butter, marinara",
+      "priceAmount": 9,
+      "media": [
+        {
+          "asset_id": "media-demo-knots",
+          "slot": "gallery"
+        }
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": "[\"Vegetarian\"]",
+      "available": true,
+      "sortOrder": 5
+    },
+    {
+      "id": "mi-7",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Pasta & Salads",
+      "name": "Little Gem Caesar",
+      "slug": "little-gem-caesar",
+      "description": "Little gem lettuce, anchovy dressing, sourdough crumbs, shaved pecorino",
+      "priceAmount": 14,
+      "media": [],
+      "allergens": "[\"Gluten\", \"Dairy\", \"Fish\"]",
+      "dietaryNotes": null,
+      "available": true,
+      "sortOrder": 6
+    },
+    {
+      "id": "mi-8",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Pasta & Salads",
+      "name": "Rigatoni Pomodoro",
+      "slug": "rigatoni-pomodoro",
+      "description": "Rigatoni, slow tomato sauce, basil, parmesan",
+      "priceAmount": 19,
+      "media": [],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": "[\"Vegetarian\"]",
+      "available": true,
+      "sortOrder": 7
+    },
+    {
+      "id": "mi-9",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Drinks",
+      "name": "Sparkling Lemonade",
+      "slug": "sparkling-lemonade",
+      "description": "House lemon cordial, soda, rosemary",
+      "priceAmount": 6,
+      "media": [],
+      "allergens": null,
+      "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
+      "available": true,
+      "sortOrder": 8
+    },
+    {
+      "id": "mi-10",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "category": "Drinks",
+      "name": "Italian Soda",
+      "slug": "italian-soda",
+      "description": "Blood orange, grapefruit, or limonata",
+      "priceAmount": 5,
+      "media": [],
+      "allergens": null,
+      "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
+      "available": true,
+      "sortOrder": 9
+    },
+    {
+      "id": "mi-demo2-1",
       "organizationId": "org-demo",
       "siteId": "site-demo",
       "locationId": "loc-demo-2",
-      "name": "Menu",
-      "description": "Wood-fired pizza, fresh local antipasti, and craft drinks in the West Village.",
-      "sectionOrder": [
-        "Wood-Fired Pizza",
-        "Antipasti",
-        "Drinks"
-      ],
-      "status": "published",
-      "items": [
+      "category": "Wood-Fired Pizza",
+      "name": "Margherita",
+      "slug": "margherita",
+      "description": "San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt",
+      "priceAmount": 18,
+      "media": [
         {
-          "id": "mi-demo2-1",
-          "menuId": "menu-demo-2",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Wood-Fired Pizza",
-          "name": "Margherita",
-          "slug": "margherita",
-          "description": "San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt",
-          "priceAmount": 18,
-          "media": [
-            {
-              "asset_id": "media-demo-margherita",
-              "slot": "gallery"
-            },
-            {
-              "asset_id": "media-demo-margherita-video",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": "[\"Vegetarian\"]",
-          "available": true,
-          "sortOrder": 1
+          "asset_id": "media-demo-margherita",
+          "slot": "gallery"
         },
         {
-          "id": "mi-demo2-2",
-          "menuId": "menu-demo-2",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Wood-Fired Pizza",
-          "name": "Pepperoni Calabrese",
-          "slug": "pepperoni-calabrese",
-          "description": "Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano",
-          "priceAmount": 21,
-          "media": [
-            {
-              "asset_id": "media-demo-pepperoni",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": null,
-          "available": true,
-          "sortOrder": 2
-        },
-        {
-          "id": "mi-demo2-3",
-          "menuId": "menu-demo-2",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Antipasti",
-          "name": "Burrata",
-          "slug": "burrata",
-          "description": "Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough",
-          "priceAmount": 16,
-          "media": [
-            {
-              "asset_id": "media-demo-burrata",
-              "slot": "gallery"
-            }
-          ],
-          "allergens": "[\"Gluten\", \"Dairy\"]",
-          "dietaryNotes": "[\"Vegetarian\"]",
-          "available": true,
-          "sortOrder": 1
-        },
-        {
-          "id": "mi-demo2-4",
-          "menuId": "menu-demo-2",
-          "organizationId": "org-demo",
-          "siteId": "site-demo",
-          "section": "Drinks",
-          "name": "Sparkling Lemonade",
-          "slug": "sparkling-lemonade",
-          "description": "House lemon cordial, soda, rosemary",
-          "priceAmount": 6,
-          "media": [],
-          "allergens": null,
-          "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
-          "available": true,
-          "sortOrder": 1
+          "asset_id": "media-demo-margherita-video",
+          "slot": "gallery"
         }
-      ]
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": "[\"Vegetarian\"]",
+      "available": true,
+      "sortOrder": 0
+    },
+    {
+      "id": "mi-demo2-2",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo-2",
+      "category": "Wood-Fired Pizza",
+      "name": "Pepperoni Calabrese",
+      "slug": "pepperoni-calabrese",
+      "description": "Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano",
+      "priceAmount": 21,
+      "media": [
+        {
+          "asset_id": "media-demo-pepperoni",
+          "slot": "gallery"
+        }
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": null,
+      "available": true,
+      "sortOrder": 1
+    },
+    {
+      "id": "mi-demo2-3",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo-2",
+      "category": "Antipasti",
+      "name": "Burrata",
+      "slug": "burrata",
+      "description": "Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough",
+      "priceAmount": 16,
+      "media": [
+        {
+          "asset_id": "media-demo-burrata",
+          "slot": "gallery"
+        }
+      ],
+      "allergens": "[\"Gluten\", \"Dairy\"]",
+      "dietaryNotes": "[\"Vegetarian\"]",
+      "available": true,
+      "sortOrder": 2
+    },
+    {
+      "id": "mi-demo2-4",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo-2",
+      "category": "Drinks",
+      "name": "Sparkling Lemonade",
+      "slug": "sparkling-lemonade",
+      "description": "House lemon cordial, soda, rosemary",
+      "priceAmount": 6,
+      "media": [],
+      "allergens": null,
+      "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
+      "available": true,
+      "sortOrder": 3
     }
   ],
   "locationQa": [
@@ -1642,109 +1609,6 @@
       "shortDescription": "พิซซ่าเตาฟืน แอนติพาสติตามฤดูกาล และการต้อนรับแบบเพื่อนบ้านในบรูคลิน",
       "status": "published",
       "sourceHash": "demo-pizza-location-v1",
-      "translatedAt": "2026-05-01T00:00:00.000Z",
-      "reviewedAt": "2026-05-01T00:00:00.000Z"
-    }
-  ],
-  "menuTranslations": [
-    {
-      "id": "mt-demo-th-menu",
-      "organizationId": "org-demo",
-      "siteId": "site-demo",
-      "menuId": "menu-demo",
-      "locale": "th",
-      "name": "เมนู",
-      "description": "พิซซ่าเตาฟืน แอนติพาสตี สลัด และเครื่องดื่มจาก Ember & Slice",
-      "sectionOrder": [
-        "พิซซ่าเตาฟืน",
-        "แอนติพาสตี",
-        "พาสต้าและสลัด",
-        "เครื่องดื่ม"
-      ],
-      "status": "published",
-      "sourceHash": "demo-pizza-menu-v1",
-      "translatedAt": "2026-05-01T00:00:00.000Z",
-      "reviewedAt": "2026-05-01T00:00:00.000Z"
-    }
-  ],
-  "menuItemTranslations": [
-    {
-      "id": "mit-demo-th-mi-1",
-      "organizationId": "org-demo",
-      "siteId": "site-demo",
-      "menuItemId": "mi-1",
-      "locale": "th",
-      "section": "พิซซ่าเตาฟืน",
-      "name": "มาร์เกริตา",
-      "description": "มะเขือเทศซานมาร์ซาโน ฟิออร์ดิลาเต้ ใบโหระพา น้ำมันมะกอกเอ็กซ์ตร้าเวอร์จิน และเกลือทะเล",
-      "allergens": "[\"กลูเตน\", \"นม\"]",
-      "dietaryNotes": "[\"มังสวิรัติ\"]",
-      "status": "published",
-      "sourceHash": "demo-pizza-mi-1-v1",
-      "translatedAt": "2026-05-01T00:00:00.000Z",
-      "reviewedAt": "2026-05-01T00:00:00.000Z"
-    },
-    {
-      "id": "mit-demo-th-mi-2",
-      "organizationId": "org-demo",
-      "siteId": "site-demo",
-      "menuItemId": "mi-2",
-      "locale": "th",
-      "section": "พิซซ่าเตาฟืน",
-      "name": "เปปเปอโรนีคาลาเบรเซ",
-      "description": "ซอสมะเขือเทศ มอซซาเรลลา เปปเปอโรนี พริกคาลาเบรีย และออริกาโน",
-      "allergens": "[\"กลูเตน\", \"นม\"]",
-      "dietaryNotes": null,
-      "status": "published",
-      "sourceHash": "demo-pizza-mi-2-v1",
-      "translatedAt": "2026-05-01T00:00:00.000Z",
-      "reviewedAt": "2026-05-01T00:00:00.000Z"
-    },
-    {
-      "id": "mit-demo-th-mi-3",
-      "organizationId": "org-demo",
-      "siteId": "site-demo",
-      "menuItemId": "mi-3",
-      "locale": "th",
-      "section": "พิซซ่าเตาฟืน",
-      "name": "ฟุงกีบิอังโก",
-      "description": "เห็ดย่าง ครีมริคอตตา กระเทียม ไทม์ มอซซาเรลลา และเปโคริโน",
-      "allergens": "[\"กลูเตน\", \"นม\"]",
-      "dietaryNotes": "[\"มังสวิรัติ\"]",
-      "status": "published",
-      "sourceHash": "demo-pizza-mi-3-v1",
-      "translatedAt": "2026-05-01T00:00:00.000Z",
-      "reviewedAt": "2026-05-01T00:00:00.000Z"
-    },
-    {
-      "id": "mit-demo-th-mi-5",
-      "organizationId": "org-demo",
-      "siteId": "site-demo",
-      "menuItemId": "mi-5",
-      "locale": "th",
-      "section": "แอนติพาสตี",
-      "name": "บูราตา",
-      "description": "บูราตาครีมมี่ มะเขือเทศเชอร์รีย่าง น้ำมันโหระพา และซาวโดว์ย่าง",
-      "allergens": "[\"กลูเตน\", \"นม\"]",
-      "dietaryNotes": "[\"มังสวิรัติ\"]",
-      "status": "published",
-      "sourceHash": "demo-pizza-mi-5-v1",
-      "translatedAt": "2026-05-01T00:00:00.000Z",
-      "reviewedAt": "2026-05-01T00:00:00.000Z"
-    },
-    {
-      "id": "mit-demo-th-mi-6",
-      "organizationId": "org-demo",
-      "siteId": "site-demo",
-      "menuItemId": "mi-6",
-      "locale": "th",
-      "section": "แอนติพาสตี",
-      "name": "การ์ลิกนอตส์",
-      "description": "ขนมปังนอตส์อบเตาฟืน คลุกพาร์สลีย์ เนยกระเทียมย่าง และมารินารา",
-      "allergens": "[\"กลูเตน\", \"นม\"]",
-      "dietaryNotes": "[\"มังสวิรัติ\"]",
-      "status": "published",
-      "sourceHash": "demo-pizza-mi-6-v1",
       "translatedAt": "2026-05-01T00:00:00.000Z",
       "reviewedAt": "2026-05-01T00:00:00.000Z"
     }

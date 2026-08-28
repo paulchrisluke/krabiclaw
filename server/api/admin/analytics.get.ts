@@ -18,15 +18,15 @@ export default defineHandler(async (event) => {
   try {
     const authApi = authAdminApi(env)
     const headers = adminHeadersForEvent(event)
-    const [totalUsers, organizationCount, totalSites, totalPosts, totalMenus, totalLocations] = await Promise.all([
-      countPlatformUsers(authApi, headers), countPlatformOrganizations(env), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM sites`), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM posts`), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM menus`), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM business_locations`), ])
+    const [totalUsers, organizationCount, totalSites, totalPosts, totalProducts, totalLocations] = await Promise.all([
+      countPlatformUsers(authApi, headers), countPlatformOrganizations(env), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM sites`), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM posts`), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM products`), queryFirst<{ count: number }>(db, `SELECT COUNT(*) as count FROM business_locations`), ])
 
     const recentSites = await queryAll<{ id: string; brand_name: string | null; subdomain: string; created_at: string }>(
       db, `SELECT id, brand_name, subdomain, created_at FROM sites ORDER BY created_at DESC LIMIT 10`, )
 
     return jsonResponse({
       metrics: {
-        users: totalUsers, organizations: organizationCount, sites: totalSites?.count ?? 0, posts: totalPosts?.count ?? 0, menus: totalMenus?.count ?? 0, locations: totalLocations?.count ?? 0
+        users: totalUsers, organizations: organizationCount, sites: totalSites?.count ?? 0, posts: totalPosts?.count ?? 0, products: totalProducts?.count ?? 0, locations: totalLocations?.count ?? 0
       }, recentSites: recentSites ?? []
     })
   } catch (err) {

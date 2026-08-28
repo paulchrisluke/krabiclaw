@@ -20,7 +20,7 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'location_qa',
   'media_assets',
   'media_placements',
-  'menus',
+  'products',
   'blog_posts',
   'posts',
   'reservation_slot_overrides',

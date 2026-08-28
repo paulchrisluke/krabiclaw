@@ -7,7 +7,7 @@ import { LOCALES_CHOWBOT_TOOLS } from './locales'
 import { LOCATIONS_CHOWBOT_TOOLS } from './locations'
 import { MANAGED_SERVICE_CHOWBOT_TOOLS } from './managed-service'
 import { MEDIA_CHOWBOT_TOOLS } from './media'
-import { MENUS_CHOWBOT_TOOLS } from './menus'
+import { PRODUCTS_CHOWBOT_TOOLS } from './products'
 import { NOTIFICATIONS_CHOWBOT_TOOLS } from './notifications'
 import { POSTS_CHOWBOT_TOOLS } from './posts'
 import { QA_CHOWBOT_TOOLS } from './qa'
@@ -25,7 +25,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   ...LOCATIONS_CHOWBOT_TOOLS,
   ...MANAGED_SERVICE_CHOWBOT_TOOLS,
   ...MEDIA_CHOWBOT_TOOLS,
-  ...MENUS_CHOWBOT_TOOLS,
+  ...PRODUCTS_CHOWBOT_TOOLS,
   ...NOTIFICATIONS_CHOWBOT_TOOLS,
   ...POSTS_CHOWBOT_TOOLS,
   ...QA_CHOWBOT_TOOLS,
@@ -36,15 +36,13 @@ export const CHOWBOT_TOOLS: AiTool[] = [
 ]
 
 export const CHOWBOT_CONFIRM_REQUIRED = new Set([
-  "import_menu_from_media",
+  "import_products_from_media",
   "create_post",
   "publish_post",
   "delete_post",
   "delete_blog_post",
-  "publish_menu",
-  "delete_menu",
-  "delete_menu_item",
-  "delete_menu_section",
+  "delete_product",
+  "delete_product_category",
   "delete_location",
   "delete_media_asset",
   "delete_location_qa",

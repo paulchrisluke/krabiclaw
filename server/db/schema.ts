@@ -168,6 +168,7 @@ export const business_locations = sqliteTable("business_locations", {
 	feature_overrides: text(),
 }, (table) => [
 	unique("business_locations_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
+	unique("business_locations_organization_id_site_id_id_unique").on(table.organization_id, table.site_id, table.id),
 ]);
 
 export const canary_runs = sqliteTable("canary_runs", {
@@ -691,62 +692,61 @@ export const teamMember = sqliteTable("teamMember", {
 	index("teamMember_userId_idx").on(table.userId),
 ]);
 
-export const menu_items = sqliteTable("menu_items", {
+export const products = sqliteTable("products", {
 	id: text().primaryKey(),
-	menu_id: text().notNull().references(() => menus.id, { onDelete: "cascade" } ),
-	section: text().notNull(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	category: text().notNull(),
 	name: text().notNull(),
-	slug: text().default("").notNull(),
-	description: text(),
-	price_amount: numeric(),
-	compare_at_price_amount: numeric(),
+	slug: text().notNull(),
+	description: text().default("").notNull(),
+	price_amount: text().notNull(),
+	compare_at_price_amount: text(),
 	sale_starts_at: text(),
 	sale_ends_at: text(),
-	available: numeric().default(sql`1`).notNull(),
-	featured: numeric().default(sql`false`).notNull(),
+	order_url: text(),
+	is_visible: integer({ mode: "boolean" }).default(true).notNull(),
+	available: integer({ mode: "boolean" }).default(true).notNull(),
+	featured: integer({ mode: "boolean" }).default(false).notNull(),
 	featured_sort_order: integer().default(0).notNull(),
-	sort_order: integer().default(0).notNull(),
-	allergens: text(),
-	ingredients: text(),
-	dietary_notes: text(),
-	preparation: text(),
-	serving_note: text(),
+	sort_order: integer().notNull(),
+	tags_json: text().default("[]").notNull(),
+	details_json: text().default("[]").notNull(),
+	seo_title: text(),
+	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
 	source: text().default("manual").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text(),
-	updated_by: text(),
-	seo_title: text(),
-	seo_description: text(),
-	canonical_url: text(),
-	robots: text(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
 }, (table) => [
-	check("menu_items_source_check", sql`source IN ('manual', 'template')`),
-	index("menu_items_menu_id_idx").on(table.menu_id),
-]);
-
-export const menus = sqliteTable("menus", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
-	name: text().notNull(),
-	description: text(),
-	is_visible: integer().default(1).notNull(),
-	section_order: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text(),
-	updated_by: text(),
-	seo_title: text(),
-	seo_description: text(),
-	canonical_url: text(),
-	robots: text(),
-}, (table) => [
-	// getMenus() filters WHERE organization_id = ? AND site_id = ? on every editor menu-page
-	// load. Confirmed via wrangler d1 insights as a top rows-read query (9.8M rows / 4,355
-	// executions) - without an index this table is fully scanned per call.
-	index("menus_organization_id_site_id_idx").on(table.organization_id, table.site_id),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id],
+		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
+		name: "products_location_scope_fk",
+	}).onDelete("cascade"),
+	unique("products_site_location_slug_unique").on(table.site_id, table.location_id, table.slug),
+	unique("products_site_location_sort_order_unique").on(table.site_id, table.location_id, table.sort_order),
+	index("products_site_location_visible_sort_idx").on(table.site_id, table.location_id, table.is_visible, table.sort_order),
+	index("products_site_location_featured_sort_idx").on(table.site_id, table.location_id, table.featured, table.featured_sort_order),
+	index("products_organization_site_idx").on(table.organization_id, table.site_id),
+	check("products_category_not_blank_check", sql`trim(${table.category}) <> ''`),
+	check("products_name_not_blank_check", sql`trim(${table.name}) <> ''`),
+	check("products_slug_check", sql`${table.slug} <> '' AND ${table.slug} = lower(${table.slug}) AND ${table.slug} NOT GLOB '*[^a-z0-9-]*' AND ${table.slug} NOT LIKE '-%' AND ${table.slug} NOT LIKE '%-' AND ${table.slug} NOT LIKE '%--%'`),
+	check("products_sort_order_check", sql`${table.sort_order} >= 0`),
+	check("products_featured_sort_order_check", sql`${table.featured_sort_order} >= 0`),
+	check("products_boolean_check", sql`${table.is_visible} IN (0, 1) AND ${table.available} IN (0, 1) AND ${table.featured} IN (0, 1)`),
+	check("products_price_amount_check", sql`${table.price_amount} <> '' AND ${table.price_amount} NOT GLOB '*[^0-9.]*' AND ${table.price_amount} NOT LIKE '%.0' AND (${table.price_amount} = '0' OR (${table.price_amount} NOT LIKE '0%' AND instr(${table.price_amount}, '.') = 0) OR (${table.price_amount} LIKE '0.%' AND length(${table.price_amount}) > 2 AND instr(substr(${table.price_amount}, 3), '.') = 0 AND substr(${table.price_amount}, -1) <> '0') OR (${table.price_amount} NOT LIKE '0%' AND instr(${table.price_amount}, '.') > 1 AND instr(substr(${table.price_amount}, instr(${table.price_amount}, '.') + 1), '.') = 0 AND substr(${table.price_amount}, -1) <> '0'))`),
+	check("products_compare_at_price_check", sql`${table.compare_at_price_amount} IS NULL OR (${table.compare_at_price_amount} <> '' AND ${table.compare_at_price_amount} NOT GLOB '*[^0-9.]*' AND ${table.compare_at_price_amount} NOT LIKE '%.0' AND (${table.compare_at_price_amount} = '0' OR (${table.compare_at_price_amount} NOT LIKE '0%' AND instr(${table.compare_at_price_amount}, '.') = 0) OR (${table.compare_at_price_amount} LIKE '0.%' AND length(${table.compare_at_price_amount}) > 2 AND instr(substr(${table.compare_at_price_amount}, 3), '.') = 0 AND substr(${table.compare_at_price_amount}, -1) <> '0') OR (${table.compare_at_price_amount} NOT LIKE '0%' AND instr(${table.compare_at_price_amount}, '.') > 1 AND instr(substr(${table.compare_at_price_amount}, instr(${table.compare_at_price_amount}, '.') + 1), '.') = 0 AND substr(${table.compare_at_price_amount}, -1) <> '0')) AND CAST(${table.compare_at_price_amount} AS REAL) > CAST(${table.price_amount} AS REAL))`),
+	check("products_sale_dates_check", sql`(${table.compare_at_price_amount} IS NOT NULL OR (${table.sale_starts_at} IS NULL AND ${table.sale_ends_at} IS NULL)) AND (${table.sale_starts_at} IS NULL OR (length(${table.sale_starts_at}) = 10 AND ${table.sale_starts_at} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND strftime('%Y-%m-%d', ${table.sale_starts_at}) = ${table.sale_starts_at})) AND (${table.sale_ends_at} IS NULL OR (length(${table.sale_ends_at}) = 10 AND ${table.sale_ends_at} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND strftime('%Y-%m-%d', ${table.sale_ends_at}) = ${table.sale_ends_at})) AND (${table.sale_starts_at} IS NULL OR ${table.sale_ends_at} IS NULL OR ${table.sale_ends_at} >= ${table.sale_starts_at})`),
+	check("products_tags_json_check", sql`json_valid(${table.tags_json}) AND json_type(${table.tags_json}) = 'array'`),
+	check("products_details_json_check", sql`json_valid(${table.details_json}) AND json_type(${table.details_json}) = 'array'`),
+	check("products_source_check", sql`${table.source} IN ('manual', 'template', 'ai', 'import', 'copy')`),
+	check("products_order_url_check", sql`${table.order_url} IS NULL OR (${table.order_url} LIKE 'https://_%' AND instr(${table.order_url}, '@') = 0 AND instr(${table.order_url}, char(10)) = 0 AND instr(${table.order_url}, char(13)) = 0)`),
+	check("products_robots_check", sql`${table.robots} IS NULL OR ${table.robots} IN ('index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow')`),
 ]);
 
 export const notifications = sqliteTable("notifications", {
@@ -1330,7 +1330,7 @@ export const reviews = sqliteTable("reviews", {
 	booking_type: text(),
 	review_request_id: text().references(() => review_requests.id, { onDelete: "set null" } ),
 	user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	menu_item_slug: text(),
+	product_id: text(),
 	author_name: text(),
 	rating: integer().notNull(),
 	title: text(),
@@ -1355,6 +1355,7 @@ export const reviews = sqliteTable("reviews", {
 	index("idx_reviews_customer_id").on(table.customer_id),
 	index("idx_reviews_location_status").on(table.location_id, table.status, table.created_at),
 	index("idx_reviews_site_status").on(table.site_id, table.status, table.created_at).where(sql`location_id IS NULL`),
+	index("idx_reviews_product_status_created").on(table.product_id, table.status, table.created_at),
 	check("reviews_booking_type_check", sql`booking_type IS NULL OR booking_type IN ('reservation', 'experience_booking')`),
 	check("reviews_rating_check", sql`rating BETWEEN 1 AND 5`),
 	check("reviews_publication_authorized_check", sql`publication_authorized IN (0, 1)`),
@@ -1931,7 +1932,7 @@ export const sites = sqliteTable("sites", {
 	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
 	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
-	// "use vertical defaults as-is." Only real business modules (menu/ordering/reservations/
+	// "use vertical defaults as-is." Only real business modules (products/ordering/reservations/
 	// experiences/services) are ever stored here; content managers (blog/qa/reviews/posts/photos/
 	// media) are always-on and never appear in this column.
 	feature_overrides: text(),

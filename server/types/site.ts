@@ -105,8 +105,7 @@ export interface LaunchReadiness {
       ready: boolean
       items: {
         homepage_hero: boolean
-        menu_exists: boolean
-        menu_items_exist: boolean
+        products_exist: boolean
         contact_details: boolean
         locations_exist: boolean
         seo_metadata: boolean

@@ -174,14 +174,14 @@ const managedServiceEnabled = dashboard.managedServiceEnabled
 const { open: openUpsell } = useServiceUpsell()
 
 const TYPE_LABELS: Record<string, string> = {
-  content_update: 'Content update', menu_update: 'Menu update',
+  content_update: 'Content update', product_update: 'Product update',
   seo: 'SEO',
   google_places: 'Google Places', seasonal: 'Seasonal campaign',
   photo_update: 'Photos', social_media: 'Social media',
   technical: 'Technical', other: 'Other',
 }
 const TYPE_ICONS: Record<string, string> = {
-  content_update: 'i-lucide-file-text', menu_update: 'i-lucide-utensils',
+  content_update: 'i-lucide-file-text', product_update: 'i-lucide-package',
   seo: 'i-lucide-trending-up',
   google_places: 'i-lucide-map-pin', seasonal: 'i-lucide-sparkles',
   photo_update: 'i-lucide-image', social_media: 'i-lucide-share-2',
@@ -189,7 +189,7 @@ const TYPE_ICONS: Record<string, string> = {
 }
 const TYPE_COLORS: Record<string, string> = {
   content_update: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600',
-  menu_update: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600',
+  product_update: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600',
   seo: 'bg-green-50 dark:bg-green-950/40 text-green-600',
   google_places: 'bg-red-50 dark:bg-red-950/40 text-red-500',
   seasonal: 'bg-orange-50 dark:bg-orange-950/40 text-orange-500',

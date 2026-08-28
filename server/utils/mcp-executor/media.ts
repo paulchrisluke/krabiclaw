@@ -227,20 +227,6 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       );
       return { deleted: true, context };
     }
-    case "import_menu_from_media": {
-      const assetId = requiredString(args, "asset_id");
-      const menuName = requiredString(args, "menu_name");
-      const { extractMenuFromMediaAsset } =
-        await import("~/server/utils/chowbot-media");
-      return await extractMenuFromMediaAsset(site.db, site.env as never, {
-        organizationId: site.organizationId,
-        siteId: site.siteId,
-        userId: site.userId,
-        assetId,
-        sessionId: site.sessionId,
-        menuName,
-      });
-    }
     case "analyze_document": {
       const { analyzeDocumentAsset } =
         await import("~/server/utils/chowbot-media");

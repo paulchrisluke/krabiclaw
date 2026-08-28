@@ -194,41 +194,37 @@ export default defineHandler(async (event) => {
       }
     }
 
-    // The full rebuild (menu/qa/posts/reviews delete+insert) plus the final
+    // The full rebuild (Products/qa/posts/reviews delete+insert) plus the final
     // draft status flip runs as a single atomic D1 batch, so a failure partway through
     // never leaves the site with half-cleared content — see incident notes for why
     // sequential execute() calls here are unsafe.
     const now = new Date().toISOString()
     const batchQueries: BatchQuery[] = []
 
-    // media_placements has no owner FK, so its rows for the menu items being
-    // wiped below must be deleted explicitly while those items still exist.
     batchQueries.push({
-      query: `DELETE FROM media_placements WHERE owner_type = 'menu_item' AND owner_id IN (SELECT id FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE site_id = ?))`,
+      query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id IN (SELECT id FROM products WHERE site_id = ?)`,
       params: [siteId],
     })
-    batchQueries.push({ query: `DELETE FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE site_id = ?)`, params: [siteId] })
-    batchQueries.push({ query: `DELETE FROM menus WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
-    if (payload.preview.menu) {
+    batchQueries.push({ query: `DELETE FROM reviews WHERE product_id IN (SELECT id FROM products WHERE site_id = ?)`, params: [siteId] })
+    batchQueries.push({ query: `DELETE FROM products WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
+    for (const product of payload.preview.products) {
       batchQueries.push({
         query: `
-          INSERT INTO menus
-            (id, organization_id, site_id, location_id, name, is_visible, created_at, updated_at, created_by, updated_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO products
+            (id, organization_id, site_id, location_id, category, name, slug, description,
+             price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, order_url,
+             is_visible, available, featured, featured_sort_order, sort_order, tags_json,
+             details_json, source, created_at, updated_at, created_by, updated_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, params: [
-          payload.preview.menu.id, organizationId, siteId, locationRow.id, payload.preview.menu.name, payload.preview.menu.status === 'published' ? 1 : 0, now, now, session.user.id, session.user.id, ], })
-
-      for (const item of payload.preview.menu.items) {
-        // Draft menu items are template boilerplate (e.g. "Sample Starter") the owner
-        // hasn't edited — mark 'template' so the checklist doesn't treat them as real.
-        batchQueries.push({
-          query: `
-            INSERT INTO menu_items
-              (id, menu_id, section, name, slug, description, price_amount, available, sort_order, source, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?)
-          `, params: [
-            item.id, payload.preview.menu.id, item.section, item.name, item.slug, item.description, item.price_amount, item.available ? 1 : 0, item.sort_order, now, now, ], })
-      }
+          product.id, organizationId, siteId, locationRow.id, product.category, product.name,
+          product.slug, product.description, product.price_amount, product.compare_at_price_amount,
+          product.sale_starts_at, product.sale_ends_at, product.order_url,
+          product.is_visible ? 1 : 0, product.available ? 1 : 0, product.featured ? 1 : 0,
+          product.featured_sort_order, product.sort_order, JSON.stringify(product.tags),
+          JSON.stringify(product.details), product.source, now, now, session.user.id, session.user.id,
+        ],
+      })
     }
 
     batchQueries.push({ query: `DELETE FROM location_qa WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
@@ -282,7 +278,7 @@ export default defineHandler(async (event) => {
       await executeBatch(db, batchQueries)
     } catch (batchError) {
       console.error('commit_post_batch_failed', {
-        draftId, siteId, organizationId, batchSize: batchQueries.length, contentRows: payload.preview.content.length, menuItems: payload.preview.menu?.items.length ?? 0, qaRows: payload.preview.qa.length, posts: payload.preview.posts.length, reviews: payload.preview.reviews.length, queries: summarizeBatchQueries(batchQueries), error: batchError instanceof Error ? {
+        draftId, siteId, organizationId, batchSize: batchQueries.length, contentRows: payload.preview.content.length, products: payload.preview.products.length, qaRows: payload.preview.qa.length, posts: payload.preview.posts.length, reviews: payload.preview.reviews.length, queries: summarizeBatchQueries(batchQueries), error: batchError instanceof Error ? {
           name: batchError.name, message: batchError.message, stack: batchError.stack, } : String(batchError), })
       throw batchError
     }

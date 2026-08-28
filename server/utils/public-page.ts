@@ -1,7 +1,7 @@
 // Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...
 //   ?location=slug          scope content to a location
-//   ?datasets=content,menu   include only the named route capabilities
+//   ?datasets=content,products   include only the named route capabilities
 // All inline D1 queries run in a single executeBatch() call.
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { HTTPError, type H3Event } from 'nitro';
@@ -13,20 +13,16 @@ import {
   normalizePublicReviewAggregateRows,
 } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
-import {
-  mapMenu,
-  mapMenuItem,
-  sortMenuItems,
-} from "~/server/utils/menu-management";
+import { mapProduct } from '~/server/utils/product-management'
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
 import {
   toResolvedMediaAsset,
   type MediaAsset,
-  type ResolvedMediaAsset,
 } from "~/server/utils/media-asset-manager";
 import { getMediaPlacements } from '~/server/utils/media-placement'
-import type { MenuWithItems } from "~/server/types/menu";
+import type { Product } from '~/server/types/products'
+import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { attachFeaturedMediaFromBareJoin } from "~/server/utils/platform-content";
 import { getContentBlocksForOwner } from '~/server/utils/content-documents'
 import {
@@ -106,7 +102,7 @@ interface ReviewRow {
 
 
 
-type MenuItemMediaRow = MediaAsset & { menu_item_id: string; sort_order: number };
+type ProductMediaRow = MediaAsset & { product_id: string; slot: 'image' | 'gallery'; sort_order: number };
 
 const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 
@@ -122,7 +118,7 @@ function canonicalTenantPagePath(page: string | null): string | null {
   // and their route datasets. They are not tenant-page variants, so do not
   // require a CMS page record for a valid location.
   if (page === 'locations') return '/locations'
-  if (['about', 'contact', 'reservations', 'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog'].includes(page)) return `/${page}`
+  if (['about', 'contact', 'reservations', 'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'products', 'blog'].includes(page)) return `/${page}`
   return null
 }
 
@@ -263,14 +259,14 @@ async function loadPublicPageSource(
       ? query.datasets.split(",")
       : [],
   );
-  const includeMenu = requestedDatasets.has("menu");
+  const includeProducts = requestedDatasets.has('products');
   const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
 
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
   const VALID_DATASETS = new Set([
-    'content', 'location', 'menu', 'reviews', 'photos', 'qa', 'posts',
+    'content', 'location', 'products', 'reviews', 'photos', 'qa', 'posts',
     'blog', 'blogPost', 'experiences', 'experienceDetail',
     'reservationPolicies', 'experiencePolicies',
   ]);
@@ -280,7 +276,7 @@ async function loadPublicPageSource(
   // the page value; allowlisting against the real route set bounds that space.
   const VALID_PAGES = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
+    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'products', 'blog',
   ]);
   const areDatasetsValid = [...requestedDatasets].every(dataset => VALID_DATASETS.has(dataset));
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
@@ -380,7 +376,7 @@ async function loadPublicPageSource(
   const needsLocations =
     requestedDatasets.has("reviews") ||
     requestedDatasets.has("location") ||
-    requestedDatasets.has("menu") ||
+    requestedDatasets.has('products') ||
     requestedDatasets.has("experiences") ||
     requestedDatasets.has("reservationPolicies") ||
     requestedDatasets.has("experiencePolicies");
@@ -394,7 +390,7 @@ async function loadPublicPageSource(
     idxReviewAggregate = -1,
     idxPhotos = -1,
     idxQa = -1;
-  let idxMenus = -1, idxMenuItems = -1, idxMenuItemMedia = -1;
+  let idxProducts = -1, idxProductMedia = -1;
     
   let idxExperiencesList = -1,
     idxExperienceDetail = -1;
@@ -410,47 +406,38 @@ async function loadPublicPageSource(
   const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId);
   if (needsLocations) idxLoc = shellIndexes.locations;
 
-  // Menu data for the requested scope.
-  if (includeMenu) {
-    idxMenus = push(
-      `SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
+  if (includeProducts) {
+    const locationClause = locationSlug ? 'AND location_id = ?' : ''
+    const productParams = locationSlug
+      ? [orgId, siteId, locationId ?? '__missing-location__']
+      : [orgId, siteId]
+    idxProducts = push(
+      `SELECT id, organization_id, site_id, location_id, category, name, slug, description,
+              price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, order_url,
+              is_visible, available, featured, featured_sort_order, sort_order, tags_json,
+              details_json, seo_title, seo_description, canonical_url, robots, source,
               created_at, updated_at, created_by, updated_by
-       FROM menus
-       WHERE organization_id = ? AND site_id = ? AND is_visible = 1`,
-      [orgId, siteId],
-    );
+         FROM products
+        WHERE organization_id = ? AND site_id = ? AND is_visible = 1 ${locationClause}
+        ORDER BY location_id, sort_order, id`,
+      productParams,
+    )
 
-    idxMenuItems = push(
-      `SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
-              mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-              mi.available, mi.featured,
-              mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
-              mi.preparation, mi.serving_note,
-              mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots,
-              mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
-       FROM menu_items mi
-       JOIN menus m ON m.id = mi.menu_id
-       WHERE m.organization_id = ? AND m.site_id = ? AND m.is_visible = 1
-       ORDER BY mi.sort_order, mi.name`,
-      [orgId, siteId],
-    );
-
-    idxMenuItemMedia = push(
-      `SELECT ma.*, mp.owner_id AS menu_item_id, mp.sort_order
-       FROM media_placements mp
-       JOIN menu_items mi ON mi.id = mp.owner_id
-       JOIN menus m ON m.id = mi.menu_id
-       JOIN media_assets ma ON ma.id = mp.asset_id
-         AND ma.organization_id = mp.organization_id
-         AND ma.site_id = mp.site_id
-         AND ma.status = 'active'
-       WHERE m.organization_id = ? AND m.site_id = ? AND m.is_visible = 1
-         AND mp.owner_type = 'menu_item' AND mp.slot = 'gallery' AND mp.status = 'active'
-       ORDER BY mp.owner_id ASC, mp.sort_order ASC`,
-      [orgId, siteId],
-    );
-
-      }
+    idxProductMedia = push(
+      `SELECT ma.*, mp.owner_id AS product_id, mp.slot, mp.sort_order
+         FROM media_placements mp
+         JOIN products p ON p.id = mp.owner_id
+         JOIN media_assets ma ON ma.id = mp.asset_id
+          AND ma.organization_id = mp.organization_id
+          AND ma.site_id = mp.site_id
+          AND ma.status = 'active'
+        WHERE p.organization_id = ? AND p.site_id = ? AND p.is_visible = 1
+          ${locationSlug ? 'AND p.location_id = ?' : ''}
+          AND mp.owner_type = 'product' AND mp.slot IN ('image', 'gallery') AND mp.status = 'active'
+        ORDER BY mp.owner_id, mp.slot, mp.sort_order, mp.id`,
+      productParams,
+    )
+  }
 
   // Experiences remain route data. The page response also carries the shared
   // shell so the layout and route components consume one canonical resource.
@@ -641,64 +628,34 @@ async function loadPublicPageSource(
     : null
   const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
 
-  // Build active menu
-  let menuData: MenuWithItems | null = null;
-  if (includeMenu) {
-    const menuRows =
-      (batchResults[idxMenus] as { results: Record<string, unknown>[] })?.results ?? [];
-    const menuItemRows =
-      (batchResults[idxMenuItems] as { results: Record<string, unknown>[] })?.results ?? [];
-    const menuItemMediaRows =
-      (batchResults[idxMenuItemMedia] as { results: MenuItemMediaRow[] })?.results ?? [];
-    
-    
-
-    let selectedMenuRow: Record<string, unknown> | null = null;
-
-    const menuLocationId = locationId ?? site.primary_location_id;
-    if (menuLocationId) {
-      selectedMenuRow =
-        menuRows.find((m) => m.location_id === menuLocationId) ?? null;
-    } else {
-      selectedMenuRow =
-        menuRows.find(
-          (m) => m.location_id === null || m.location_id === undefined,
-        ) ?? null;
+  let products: Product[] = []
+  if (includeProducts) {
+    const locationCapabilityRows = (batchResults[shellIndexes.locations] as { results: Record<string, unknown>[] })?.results ?? []
+    const enabledLocationIds = new Set(locationCapabilityRows.filter((location) => {
+      const { capabilities } = resolveSiteCmsCapabilities(String(site.vertical), site.theme_id, {
+        siteEnabledFeatures: site.feature_overrides,
+        locationEnabledFeatures: location.feature_overrides as string | null,
+      })
+      return capabilities.managers.some(manager => manager.key === 'location.products')
+    }).map(location => String(location.id)))
+    const productRows = ((batchResults[idxProducts] as { results: Record<string, unknown>[] })?.results ?? [])
+      .filter(row => enabledLocationIds.has(String(row.location_id)))
+    const productMediaRows = (batchResults[idxProductMedia] as { results: ProductMediaRow[] })?.results ?? []
+    const mediaByProduct = new Map<string, ProductMediaRow[]>()
+    for (const row of productMediaRows) {
+      const rows = mediaByProduct.get(row.product_id) ?? []
+      rows.push(row)
+      mediaByProduct.set(row.product_id, rows)
     }
-
-    if (selectedMenuRow) {
-      const menuId = selectedMenuRow.id as string;
-      const mappedMenu = mapMenu(selectedMenuRow);
-      const sectionOrder = mappedMenu.section_order ?? [];
-
-      
-      const mediaByMenuItem = new Map<string, ResolvedMediaAsset[]>();
-      for (const row of menuItemMediaRows) {
-        const list = mediaByMenuItem.get(row.menu_item_id) ?? [];
-        list.push(toResolvedMediaAsset(row));
-        mediaByMenuItem.set(row.menu_item_id, list);
+    products = productRows.map((row) => {
+      const product = mapProduct(row)
+      const media = mediaByProduct.get(product.id) ?? []
+      return {
+        ...product,
+        image: media.find(item => item.slot === 'image') ? toResolvedMediaAsset(media.find(item => item.slot === 'image')!) : null,
+        gallery: media.filter(item => item.slot === 'gallery').map(toResolvedMediaAsset),
       }
-      const items = sortMenuItems(
-        menuItemRows
-          .filter((raw) => raw.menu_id === menuId)
-          .map((raw) => {
-            const mapped = mapMenuItem(raw);
-            const media = mediaByMenuItem.get(mapped.id) ?? [];
-            const item = {
-              ...mapped,
-              media,
-            };
-            return item;
-          }),
-        sectionOrder,
-      );
-
-      menuData = {
-        ...mappedMenu,
-        section_order: sectionOrder,
-        items,
-      };
-    }
+    })
   }
 
   // Build experiences
@@ -941,7 +898,7 @@ async function loadPublicPageSource(
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
     tenant_page: tenantPage,
-    menu: menuData,
+    products,
     locationReviews: locationReviewRows?.results ?? [],
     globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
     reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,

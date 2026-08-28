@@ -1,217 +1,7 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1d809601458820dfd269c4723a7f87f5a3548eeea3c88b29a519924ab0c3a0bb",
+  "fingerprint": "sha256:cb468d96f3b5fd1a1f87ad69c174eb101842a24b94eb404ed8f4ffbab06d25f6",
   "tools": [
-    {
-      "name": "add_menu_items_batch",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "items": {
-            "description": "The complete set of new items to add atomically. Up to 500.",
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "allergens": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "available": {
-                  "type": "boolean"
-                },
-                "compare_at_price_amount": {
-                  "description": "Regular/pre-sale price. Set alongside price_amount to run a sale.",
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
-                  ]
-                },
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "dietary_notes": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "featured": {
-                  "type": "boolean"
-                },
-                "featured_sort_order": {
-                  "type": "number"
-                },
-                "ingredients": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "media": {
-                  "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
-                  "items": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "asset_id": {
-                        "description": "Active image or video asset id from get_site_media_assets.",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "asset_id"
-                    ],
-                    "type": "object"
-                  },
-                  "maxItems": 20,
-                  "type": "array",
-                  "uniqueItems": true
-                },
-                "name": {
-                  "type": "string"
-                },
-                "preparation": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "price_amount": {
-                  "description": "Canonical price field for menu items.",
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
-                  ]
-                },
-                "sale_ends_at": {
-                  "description": "ISO 8601 date/time the sale ends. Optional.",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
-                  "description": "ISO 8601 date/time the sale becomes active. Optional.",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "section": {
-                  "description": "Required menu section name, for example Cocktails, Mains, or Desserts.",
-                  "type": "string"
-                },
-                "serving_note": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sort_order": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "section",
-                "name"
-              ],
-              "type": "object"
-            },
-            "maxItems": 500,
-            "minItems": 1,
-            "type": "array"
-          },
-          "menu_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "menu_id",
-          "items"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "added": {
-            "type": "number"
-          },
-          "created": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "price_amount": {
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
-                  ]
-                },
-                "section": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "name",
-                "section"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "menu_id": {
-            "type": "string"
-          },
-          "skipped": {
-            "items": {
-              "properties": {
-                "existing_item_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "name": {
-                  "type": "string"
-                },
-                "reason": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name",
-                "reason"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "added",
-          "created",
-          "skipped",
-          "menu_id"
-        ],
-        "type": "object"
-      }
-    },
     {
       "name": "analyze_document",
       "inputSchema": {
@@ -297,7 +87,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -437,7 +227,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -469,6 +259,473 @@
           "asset_ids",
           "media",
           "cleared"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "batch_create_products",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "canonical_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "compare_at_price_amount": {
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                },
+                "details": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "featured": {
+                  "type": "boolean"
+                },
+                "featured_sort_order": {
+                  "type": "number"
+                },
+                "is_visible": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "order_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "price_amount": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "robots": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_ends_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_starts_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "category",
+                "name",
+                "price_amount"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "products"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "products": {
+            "items": {
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "canonical_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "compare_at_price_amount": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "details": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "featured": {
+                  "type": "boolean"
+                },
+                "featured_sort_order": {
+                  "type": "number"
+                },
+                "gallery": {
+                  "items": {
+                    "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_id": {
+                        "type": "string"
+                      },
+                      "duration": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "enum": [
+                          "image",
+                          "video",
+                          "file"
+                        ],
+                        "type": "string"
+                      },
+                      "mime_type": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "public_url": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "active"
+                        ],
+                        "type": "string"
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "asset_id",
+                      "kind",
+                      "public_url",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "image": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "height": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video",
+                        "file"
+                      ],
+                      "type": "string"
+                    },
+                    "mime_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "status"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "is_visible": {
+                  "type": "boolean"
+                },
+                "location_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "order_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "price_amount": {
+                  "type": "string"
+                },
+                "robots": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_ends_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_starts_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "manual",
+                    "template",
+                    "ai",
+                    "import",
+                    "copy"
+                  ],
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "updated_by": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "location_id",
+                "category",
+                "name",
+                "slug",
+                "description",
+                "price_amount",
+                "is_visible",
+                "available",
+                "featured",
+                "featured_sort_order",
+                "sort_order",
+                "tags",
+                "details",
+                "image",
+                "gallery",
+                "source",
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "products"
         ],
         "type": "object"
       }
@@ -529,11 +786,10 @@
         ],
         "properties": {
           "entities": {
-            "description": "Which kinds of content to copy. menu_items requires menus to also be listed, since copied items attach to newly copied menus.",
+            "description": "Which kinds of content to copy. Product-linked reviews require products to be included so ownership is preserved.",
             "items": {
               "enum": [
-                "menus",
-                "menu_items",
+                "products",
                 "media_assets",
                 "reviews",
                 "location_qa",
@@ -543,10 +799,6 @@
             },
             "minItems": 1,
             "type": "array"
-          },
-          "include_translations": {
-            "description": "Copy existing translations for menus and menu items along with the source-locale content. Defaults to true.",
-            "type": "boolean"
           },
           "new_location_title": {
             "description": "Title for a brand-new location to create and copy content into. Omit if using target_location_id instead.",
@@ -1689,262 +1941,6 @@
       }
     },
     {
-      "name": "create_menu",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "location_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "menu"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "create_menu_item",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "allergens": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "available": {
-            "type": "boolean"
-          },
-          "canonical_url": {
-            "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "compare_at_price_amount": {
-            "description": "Regular/pre-sale price. Set alongside price_amount to run a sale.",
-            "type": [
-              "string",
-              "number",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "dietary_notes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "featured": {
-            "type": "boolean"
-          },
-          "featured_sort_order": {
-            "type": "number"
-          },
-          "ingredients": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "media": {
-            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "asset_id": {
-                  "description": "Active image or video asset id from get_site_media_assets.",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id"
-              ],
-              "type": "object"
-            },
-            "maxItems": 20,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "menu_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "preparation": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "price_amount": {
-            "description": "Canonical price field for menu items.",
-            "type": [
-              "string",
-              "number",
-              "null"
-            ]
-          },
-          "robots": {
-            "description": "Search engine indexing directive. Leave unset for the default index,follow.",
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_ends_at": {
-            "description": "ISO 8601 date/time the sale ends. Optional.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_starts_at": {
-            "description": "ISO 8601 date/time the sale becomes active. Optional.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "section": {
-            "description": "Required menu section name, for example Cocktails, Mains, or Desserts.",
-            "type": "string"
-          },
-          "seo_description": {
-            "description": "Optional SEO meta description override. Falls back to the computed default if unset.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_title": {
-            "description": "Optional SEO title override. Falls back to the computed default if unset.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "serving_note": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "sort_order": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "menu_id",
-          "section",
-          "name"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "menu_item"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "create_owner_entered_site_review",
       "inputSchema": {
         "additionalProperties": true,
@@ -2153,6 +2149,456 @@
           "ok",
           "entity",
           "id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_product",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "canonical_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "compare_at_price_amount": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "details": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "values": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "values"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "featured_sort_order": {
+            "type": "number"
+          },
+          "is_visible": {
+            "type": "boolean"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price_amount": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "robots": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sale_ends_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sale_starts_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seo_description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seo_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "location_id",
+          "category",
+          "name",
+          "price_amount"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "product": {
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "canonical_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "category": {
+                "type": "string"
+              },
+              "compare_at_price_amount": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "values"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "featured": {
+                "type": "boolean"
+              },
+              "featured_sort_order": {
+                "type": "number"
+              },
+              "gallery": {
+                "items": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "height": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video",
+                        "file"
+                      ],
+                      "type": "string"
+                    },
+                    "mime_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "image": {
+                "properties": {
+                  "alt_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "duration": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "height": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "kind": {
+                    "enum": [
+                      "image",
+                      "video",
+                      "file"
+                    ],
+                    "type": "string"
+                  },
+                  "mime_type": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "public_url": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "active"
+                    ],
+                    "type": "string"
+                  },
+                  "thumbnail_url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "asset_id",
+                  "kind",
+                  "public_url",
+                  "status"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "is_visible": {
+                "type": "boolean"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "order_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "price_amount": {
+                "type": "string"
+              },
+              "robots": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sale_ends_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sale_starts_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "number"
+              },
+              "source": {
+                "enum": [
+                  "manual",
+                  "template",
+                  "ai",
+                  "import",
+                  "copy"
+                ],
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "updated_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "location_id",
+              "category",
+              "name",
+              "slug",
+              "description",
+              "price_amount",
+              "is_visible",
+              "available",
+              "featured",
+              "featured_sort_order",
+              "sort_order",
+              "tags",
+              "details",
+              "image",
+              "gallery",
+              "source",
+              "created_at",
+              "updated_at",
+              "created_by",
+              "updated_by"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "product"
         ],
         "type": "object"
       }
@@ -2440,7 +2886,7 @@
             "description": "Category of work needed.",
             "enum": [
               "content_update",
-              "menu_update",
+              "product_update",
               "seo",
               "google_places",
               "seasonal",
@@ -2749,101 +3195,6 @@
       }
     },
     {
-      "name": "delete_menu",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "menu_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "menu_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "deleted"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "delete_menu_item",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "menu_item_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "menu_item_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "deleted"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "delete_menu_section",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "menu_id": {
-            "type": "string"
-          },
-          "section_name": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "menu_id",
-          "section_name"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "description": "Number of items deleted.",
-            "type": "number"
-          }
-        },
-        "required": [
-          "deleted"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "delete_owner_entered_site_review",
       "inputSchema": {
         "additionalProperties": true,
@@ -2907,6 +3258,70 @@
             "type": "string"
           }
         },
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_product",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_product_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "category"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
         "type": "object"
       }
     },
@@ -4231,272 +4646,6 @@
       }
     },
     {
-      "name": "get_menu",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          },
-          "menu_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "menu_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "item_page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          },
-          "menu": {
-            "properties": {
-              "created_at": {
-                "type": "string"
-              },
-              "description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "is_visible": {
-                "type": "boolean"
-              },
-              "items": {
-                "items": {
-                  "properties": {
-                    "allergens": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": [
-                        "array",
-                        "null"
-                      ]
-                    },
-                    "available": {
-                      "type": "boolean"
-                    },
-                    "canonical_url": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "compare_at_price_amount": {
-                      "type": [
-                        "string",
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "created_by": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "description": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "dietary_notes": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": [
-                        "array",
-                        "null"
-                      ]
-                    },
-                    "featured": {
-                      "type": "boolean"
-                    },
-                    "featured_sort_order": {
-                      "type": "number"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "ingredients": {
-                      "items": {
-                        "type": "string"
-                      },
-                      "type": [
-                        "array",
-                        "null"
-                      ]
-                    },
-                    "menu_id": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "preparation": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "price_amount": {
-                      "type": [
-                        "string",
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "robots": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "sale_ends_at": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "sale_starts_at": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "section": {
-                      "type": "string"
-                    },
-                    "seo_description": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "seo_title": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "serving_note": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "slug": {
-                      "type": "string"
-                    },
-                    "sort_order": {
-                      "type": "number"
-                    },
-                    "updated_at": {
-                      "type": "string"
-                    },
-                    "updated_by": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "menu_id",
-                    "section",
-                    "name",
-                    "slug",
-                    "available",
-                    "featured",
-                    "featured_sort_order",
-                    "sort_order",
-                    "created_at",
-                    "updated_at"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "location_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "name": {
-                "type": "string"
-              },
-              "section_order": {
-                "items": {
-                  "type": "string"
-                },
-                "type": [
-                  "array",
-                  "null"
-                ]
-              },
-              "updated_at": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "is_visible",
-              "items",
-              "created_at",
-              "updated_at"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "menu",
-          "item_page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_notification_settings",
       "inputSchema": {
         "additionalProperties": true,
@@ -4812,6 +4961,345 @@
         },
         "required": [
           "post"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_product",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "product": {
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "canonical_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "category": {
+                "type": "string"
+              },
+              "compare_at_price_amount": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "values"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "featured": {
+                "type": "boolean"
+              },
+              "featured_sort_order": {
+                "type": "number"
+              },
+              "gallery": {
+                "items": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "height": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video",
+                        "file"
+                      ],
+                      "type": "string"
+                    },
+                    "mime_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "image": {
+                "properties": {
+                  "alt_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "duration": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "height": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "kind": {
+                    "enum": [
+                      "image",
+                      "video",
+                      "file"
+                    ],
+                    "type": "string"
+                  },
+                  "mime_type": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "public_url": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "active"
+                    ],
+                    "type": "string"
+                  },
+                  "thumbnail_url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "asset_id",
+                  "kind",
+                  "public_url",
+                  "status"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "is_visible": {
+                "type": "boolean"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "order_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "price_amount": {
+                "type": "string"
+              },
+              "robots": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sale_ends_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sale_starts_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "number"
+              },
+              "source": {
+                "enum": [
+                  "manual",
+                  "template",
+                  "ai",
+                  "import",
+                  "copy"
+                ],
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "updated_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "location_id",
+              "category",
+              "name",
+              "slug",
+              "description",
+              "price_amount",
+              "is_visible",
+              "available",
+              "featured",
+              "featured_sort_order",
+              "sort_order",
+              "tags",
+              "details",
+              "image",
+              "gallery",
+              "source",
+              "created_at",
+              "updated_at",
+              "created_by",
+              "updated_by"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "product"
         ],
         "type": "object"
       }
@@ -5882,14 +6370,14 @@
       }
     },
     {
-      "name": "import_menu_from_media",
+      "name": "import_products_from_media",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "asset_id": {
             "type": "string"
           },
-          "menu_name": {
+          "location_id": {
             "type": "string"
           },
           "site_id": {
@@ -5898,39 +6386,338 @@
           }
         },
         "required": [
-          "asset_id",
-          "menu_name"
+          "location_id",
+          "asset_id"
         ],
         "type": "object"
       },
       "outputSchema": {
         "properties": {
-          "count": {
-            "description": "Number of menu items extracted and created.",
-            "type": "number"
+          "products": {
+            "items": {
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "canonical_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "compare_at_price_amount": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "details": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "featured": {
+                  "type": "boolean"
+                },
+                "featured_sort_order": {
+                  "type": "number"
+                },
+                "gallery": {
+                  "items": {
+                    "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_id": {
+                        "type": "string"
+                      },
+                      "duration": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "enum": [
+                          "image",
+                          "video",
+                          "file"
+                        ],
+                        "type": "string"
+                      },
+                      "mime_type": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "public_url": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "active"
+                        ],
+                        "type": "string"
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "asset_id",
+                      "kind",
+                      "public_url",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "image": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "height": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video",
+                        "file"
+                      ],
+                      "type": "string"
+                    },
+                    "mime_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "status"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "is_visible": {
+                  "type": "boolean"
+                },
+                "location_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "order_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "price_amount": {
+                  "type": "string"
+                },
+                "robots": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_ends_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_starts_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "manual",
+                    "template",
+                    "ai",
+                    "import",
+                    "copy"
+                  ],
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "updated_by": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "location_id",
+                "category",
+                "name",
+                "slug",
+                "description",
+                "price_amount",
+                "is_visible",
+                "available",
+                "featured",
+                "featured_sort_order",
+                "sort_order",
+                "tags",
+                "details",
+                "image",
+                "gallery",
+                "source",
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
-          "creditsRemaining": {
-            "type": "number"
-          },
-          "menuId": {
-            "description": "Created menu ID, or null when no items were detected.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "warning": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "rejected": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
           }
         },
         "required": [
-          "menuId",
-          "count",
-          "warning",
-          "creditsRemaining"
+          "products",
+          "rejected"
         ],
         "type": "object"
       }
@@ -6943,6 +7730,377 @@
       }
     },
     {
+      "name": "list_location_products",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
+          "products": {
+            "items": {
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "canonical_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "compare_at_price_amount": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "details": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "featured": {
+                  "type": "boolean"
+                },
+                "featured_sort_order": {
+                  "type": "number"
+                },
+                "gallery": {
+                  "items": {
+                    "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_id": {
+                        "type": "string"
+                      },
+                      "duration": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "enum": [
+                          "image",
+                          "video",
+                          "file"
+                        ],
+                        "type": "string"
+                      },
+                      "mime_type": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "public_url": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "active"
+                        ],
+                        "type": "string"
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "asset_id",
+                      "kind",
+                      "public_url",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "image": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "height": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video",
+                        "file"
+                      ],
+                      "type": "string"
+                    },
+                    "mime_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "status"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "is_visible": {
+                  "type": "boolean"
+                },
+                "location_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "order_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "price_amount": {
+                  "type": "string"
+                },
+                "robots": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_ends_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_starts_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "manual",
+                    "template",
+                    "ai",
+                    "import",
+                    "copy"
+                  ],
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "updated_by": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "location_id",
+                "category",
+                "name",
+                "slug",
+                "description",
+                "price_amount",
+                "is_visible",
+                "available",
+                "featured",
+                "featured_sort_order",
+                "sort_order",
+                "tags",
+                "details",
+                "image",
+                "gallery",
+                "source",
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "products",
+          "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_location_qa",
       "inputSchema": {
         "additionalProperties": true,
@@ -7250,104 +8408,6 @@
         },
         "required": [
           "locations",
-          "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "list_menus",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "menus": {
-            "items": {
-              "properties": {
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "is_visible": {
-                  "type": "boolean"
-                },
-                "location_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "name": {
-                  "type": "string"
-                },
-                "section_order": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                },
-                "updated_at": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "name",
-                "is_visible",
-                "updated_at"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "menus",
           "page_info"
         ],
         "type": "object"
@@ -9036,7 +10096,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -9176,7 +10236,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -9213,17 +10273,17 @@
       }
     },
     {
-      "name": "rename_menu_section",
+      "name": "rename_product_category",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
-          "menu_id": {
+          "location_id": {
             "type": "string"
           },
-          "new_name": {
+          "new_category": {
             "type": "string"
           },
-          "old_name": {
+          "old_category": {
             "type": "string"
           },
           "site_id": {
@@ -9232,16 +10292,15 @@
           }
         },
         "required": [
-          "menu_id",
-          "old_name",
-          "new_name"
+          "location_id",
+          "old_category",
+          "new_category"
         ],
         "type": "object"
       },
       "outputSchema": {
         "properties": {
           "updated": {
-            "description": "Number of items renamed.",
             "type": "number"
           }
         },
@@ -9649,7 +10708,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -9789,7 +10848,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -9826,35 +10885,51 @@
       }
     },
     {
-      "name": "reorder_menu_items",
+      "name": "reorder_products",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
-          "menu_id": {
+          "location_id": {
             "type": "string"
+          },
+          "products": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "sort_order"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
-          },
-          "updates": {
-            "type": "array"
           }
         },
         "required": [
-          "menu_id",
-          "updates"
+          "location_id",
+          "products"
         ],
         "type": "object"
       },
       "outputSchema": {
         "properties": {
-          "updated": {
+          "reordered": {
             "type": "boolean"
           }
         },
         "required": [
-          "updated"
+          "reordered"
         ],
         "type": "object"
       }
@@ -11192,7 +12267,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -11332,7 +12407,7 @@
                 "enum": [
                   "site",
                   "business_location",
-                  "menu_item",
+                  "product",
                   "post",
                   "blog_post",
                   "experience",
@@ -11979,23 +13054,28 @@
       }
     },
     {
-      "name": "sync_menu_items",
+      "name": "sync_products",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "items": {
-            "description": "The complete item set to reconcile atomically. Up to 500.",
+          "location_id": {
+            "type": "string"
+          },
+          "products": {
             "items": {
               "additionalProperties": false,
               "properties": {
-                "allergens": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "available": {
                   "type": "boolean"
+                },
+                "canonical_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "category": {
+                  "type": "string"
                 },
                 "compare_at_price_amount": {
                   "type": [
@@ -12005,31 +13085,47 @@
                   ]
                 },
                 "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "dietary_notes": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "ingredients": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "item_id": {
-                  "description": "Existing menu item ID when known.",
                   "type": "string"
+                },
+                "details": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "featured": {
+                  "type": "boolean"
+                },
+                "featured_sort_order": {
+                  "type": "number"
+                },
+                "is_visible": {
+                  "type": "boolean"
                 },
                 "name": {
                   "type": "string"
                 },
-                "preparation": {
+                "order_url": {
                   "type": [
                     "string",
                     "null"
@@ -12038,7 +13134,15 @@
                 "price_amount": {
                   "type": [
                     "string",
-                    "number",
+                    "number"
+                  ]
+                },
+                "product_id": {
+                  "type": "string"
+                },
+                "robots": {
+                  "type": [
+                    "string",
                     "null"
                   ]
                 },
@@ -12054,28 +13158,37 @@
                     "null"
                   ]
                 },
-                "section": {
-                  "description": "Section/category name.",
-                  "type": "string"
-                },
-                "serving_note": {
+                "seo_description": {
                   "type": [
                     "string",
                     "null"
                   ]
+                },
+                "seo_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 }
               },
+              "required": [
+                "category",
+                "name",
+                "price_amount"
+              ],
               "type": "object"
             },
-            "maxItems": 500,
-            "minItems": 1,
+            "maxItems": 100,
             "type": "array"
           },
-          "menu_id": {
-            "type": "string"
-          },
           "set_missing_unavailable": {
-            "description": "Only true when the user explicitly asks to remove, replace, hide, or make omitted items unavailable and this call contains the complete intended menu (up to 500 items).",
+            "description": "When true, mark stored Products omitted from this complete request unavailable. At most 100 intended rows may be supplied.",
             "type": "boolean"
           },
           "site_id": {
@@ -12084,157 +13197,323 @@
           }
         },
         "required": [
-          "menu_id",
-          "items"
+          "location_id",
+          "products"
         ],
         "type": "object"
       },
       "outputSchema": {
         "properties": {
-          "created": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "price_amount": {
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
-                  ]
-                },
-                "section": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "name",
-                "section"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "made_unavailable": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "name"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "menu_id": {
-            "type": "string"
-          },
-          "skipped": {
-            "items": {
-              "properties": {
-                "item_id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "reason": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name",
-                "reason"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "summary": {
-            "properties": {
-              "created": {
-                "type": "number"
-              },
-              "made_unavailable": {
-                "type": "number"
-              },
-              "skipped": {
-                "type": "number"
-              },
-              "unchanged": {
-                "type": "number"
-              },
-              "updated": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "created",
-              "updated",
-              "unchanged",
-              "made_unavailable",
-              "skipped"
-            ],
-            "type": "object"
-          },
-          "unchanged": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "name"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "updated": {
+          "products": {
             "items": {
               "properties": {
                 "available": {
                   "type": "boolean"
                 },
+                "canonical_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "compare_at_price_amount": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "details": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "featured": {
+                  "type": "boolean"
+                },
+                "featured_sort_order": {
+                  "type": "number"
+                },
+                "gallery": {
+                  "items": {
+                    "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "asset_id": {
+                        "type": "string"
+                      },
+                      "duration": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "enum": [
+                          "image",
+                          "video",
+                          "file"
+                        ],
+                        "type": "string"
+                      },
+                      "mime_type": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "public_url": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "active"
+                        ],
+                        "type": "string"
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "asset_id",
+                      "kind",
+                      "public_url",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "id": {
+                  "type": "string"
+                },
+                "image": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "height": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video",
+                        "file"
+                      ],
+                      "type": "string"
+                    },
+                    "mime_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "status"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "is_visible": {
+                  "type": "boolean"
+                },
+                "location_id": {
                   "type": "string"
                 },
                 "name": {
                   "type": "string"
                 },
-                "price_amount": {
+                "order_url": {
                   "type": [
                     "string",
-                    "number",
                     "null"
                   ]
                 },
-                "section": {
+                "price_amount": {
+                  "type": "string"
+                },
+                "robots": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_ends_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sale_starts_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seo_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                },
+                "source": {
+                  "enum": [
+                    "manual",
+                    "template",
+                    "ai",
+                    "import",
+                    "copy"
+                  ],
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "updated_by": {
                   "type": "string"
                 }
               },
               "required": [
                 "id",
+                "location_id",
+                "category",
                 "name",
-                "section",
-                "available"
+                "slug",
+                "description",
+                "price_amount",
+                "is_visible",
+                "available",
+                "featured",
+                "featured_sort_order",
+                "sort_order",
+                "tags",
+                "details",
+                "image",
+                "gallery",
+                "source",
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by"
               ],
               "type": "object"
             },
@@ -12242,13 +13521,7 @@
           }
         },
         "required": [
-          "menu_id",
-          "created",
-          "updated",
-          "unchanged",
-          "made_unavailable",
-          "skipped",
-          "summary"
+          "products"
         ],
         "type": "object"
       }
@@ -14159,250 +15432,6 @@
       }
     },
     {
-      "name": "update_menu",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "is_visible": {
-            "type": "boolean"
-          },
-          "menu_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "section_order": {
-            "description": "Section names in display order.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "menu_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "menu"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "update_menu_item",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "allergens": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "available": {
-            "type": "boolean"
-          },
-          "canonical_url": {
-            "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "compare_at_price_amount": {
-            "description": "Regular/pre-sale price. Set alongside price_amount to run a sale.",
-            "type": [
-              "string",
-              "number",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "dietary_notes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "featured": {
-            "type": "boolean"
-          },
-          "featured_sort_order": {
-            "type": "number"
-          },
-          "ingredients": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "menu_item_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "preparation": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "price_amount": {
-            "description": "Canonical price field for menu items.",
-            "type": [
-              "string",
-              "number",
-              "null"
-            ]
-          },
-          "robots": {
-            "description": "Search engine indexing directive. Leave unset for the default index,follow.",
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_ends_at": {
-            "description": "ISO 8601 date/time the sale ends. Optional.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_starts_at": {
-            "description": "ISO 8601 date/time the sale becomes active. Optional.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "section": {
-            "type": "string"
-          },
-          "seo_description": {
-            "description": "Optional SEO meta description override. Falls back to the computed default if unset.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_title": {
-            "description": "Optional SEO title override. Falls back to the computed default if unset.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "serving_note": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "sort_order": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "menu_item_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "menu_item"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "update_notification_settings",
       "inputSchema": {
         "additionalProperties": true,
@@ -14688,6 +15717,453 @@
           "ok",
           "entity",
           "id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "update_product",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "canonical_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "compare_at_price_amount": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "details": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "values": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "values"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "featured_sort_order": {
+            "type": "number"
+          },
+          "is_visible": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price_amount": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "robots": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sale_ends_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sale_starts_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seo_description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seo_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "product": {
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "canonical_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "category": {
+                "type": "string"
+              },
+              "compare_at_price_amount": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "details": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "values"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "featured": {
+                "type": "boolean"
+              },
+              "featured_sort_order": {
+                "type": "number"
+              },
+              "gallery": {
+                "items": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "duration": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "height": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video",
+                        "file"
+                      ],
+                      "type": "string"
+                    },
+                    "mime_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "active"
+                      ],
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "width": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "image": {
+                "properties": {
+                  "alt_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "asset_id": {
+                    "type": "string"
+                  },
+                  "duration": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "height": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "kind": {
+                    "enum": [
+                      "image",
+                      "video",
+                      "file"
+                    ],
+                    "type": "string"
+                  },
+                  "mime_type": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "public_url": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "active"
+                    ],
+                    "type": "string"
+                  },
+                  "thumbnail_url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "asset_id",
+                  "kind",
+                  "public_url",
+                  "status"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "is_visible": {
+                "type": "boolean"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "order_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "price_amount": {
+                "type": "string"
+              },
+              "robots": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sale_ends_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sale_starts_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "number"
+              },
+              "source": {
+                "enum": [
+                  "manual",
+                  "template",
+                  "ai",
+                  "import",
+                  "copy"
+                ],
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "updated_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "location_id",
+              "category",
+              "name",
+              "slug",
+              "description",
+              "price_amount",
+              "is_visible",
+              "available",
+              "featured",
+              "featured_sort_order",
+              "sort_order",
+              "tags",
+              "details",
+              "image",
+              "gallery",
+              "source",
+              "created_at",
+              "updated_at",
+              "created_by",
+              "updated_by"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "product"
         ],
         "type": "object"
       }

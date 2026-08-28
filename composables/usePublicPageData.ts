@@ -15,6 +15,7 @@ import {
 } from "~/composables/usePublicPageRequest";
 import { useSiteShellState } from "~/composables/useSiteShell";
 import type { Experience } from "~/server/utils/experiences";
+import type { Product } from '~/server/types/products'
 import {
   isPublicPagePayload,
   type PublicPagePayload,
@@ -122,12 +123,10 @@ export const usePublicPageData = async (options: {
     posts: data.value?.globalPosts ?? [],
   }))
   const experiencesList = computed(() => data.value?.experiencesList ?? []);
-  const menuData = computed(() => data.value?.menu ?? null);
-  const menuItemsBySection = computed(() => {
-    const menu = menuData.value as { items?: ApiRecord[] } | null;
-    return (menu?.items ?? []).reduce<Record<string, ApiRecord[]>>((groups, item) => {
-      const section = typeof item.section === "string" ? item.section : "Uncategorized";
-      (groups[section] ??= []).push(item);
+  const products = computed(() => data.value?.products ?? []);
+  const productsByCategory = computed(() => {
+    return products.value.reduce<Record<string, Product[]>>((groups, product) => {
+      (groups[product.category] ??= []).push(product);
       return groups;
     }, {});
   });
@@ -303,8 +302,8 @@ export const usePublicPageData = async (options: {
     getHero,
     contentMap,
     contentBlocks,
-    menu: menuData,
-    menuItemsBySection,
+    products,
+    productsByCategory,
     error,
   };
 };

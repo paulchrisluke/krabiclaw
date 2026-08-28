@@ -9,7 +9,7 @@ import {
   renderCompiledDemoTenantPagesBlock,
   renderCompiledDemoCoreSeedBlock,
   renderCompiledDemoMediaBlock,
-  renderCompiledDemoMenuBlock,
+  renderCompiledDemoProductsBlock,
   renderCompiledDemoPostsBlock,
   renderCompiledDemoBlogBlock,
   renderCompiledDemoQaBlock,
@@ -235,7 +235,7 @@ ${renderCompiledDemoMediaBlock()}
 
 ${renderCompiledDemoReviewsBlock()}
 
-${renderCompiledDemoMenuBlock()}
+${renderCompiledDemoProductsBlock()}
 
 ${renderCompiledDemoQaBlock()}
 

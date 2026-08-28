@@ -72,7 +72,7 @@
         <div>
           <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_experience') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li v-if="hasMenu"><NuxtLink to="/menu" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.menu') }}</NuxtLink></li>
+            <li v-if="showProducts"><NuxtLink :to="productPresentation!.collectionPath" class="text-inverted/60 no-underline transition hover:text-inverted">{{ productPresentation!.collectionLabel }}</NuxtLink></li>
             <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
             <li v-if="!isExperienceSite"><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
             <li v-if="!isExperienceSite"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
@@ -160,6 +160,7 @@
 <script setup lang="ts">
 import { getTodayGoogleHours, getActiveSpecialClosure } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import { resolveProductPresentation } from '~/utils/product-presentation'
 
 interface Site {
   brand_name?: string | null
@@ -207,8 +208,7 @@ const props = defineProps<{
   locales: { code: string; label: string; is_source: boolean }[]
   error: unknown
   config: Record<string, string>
-  menu: ApiRecord | null
-  hasMenu?: boolean
+  hasProducts: boolean
   hasExperiences: boolean
 }>()
 
@@ -247,7 +247,8 @@ const languageItems = computed(() =>
 )
 const locationsError = computed(() => props.error)
 
-const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
+const productPresentation = computed(() => resolveProductPresentation(props.site?.vertical))
+const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
 const year = new Date().getFullYear()
 const logoUrl = computed(() => Array.isArray(props.site?.media)
   ? (props.site.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null

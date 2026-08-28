@@ -13,7 +13,7 @@ const PII_KEY_PATTERN = /email|phone|address/i;
 // though they end in "_name" like the person-name keys below.
 const NON_PERSONAL_NAME_KEYS = new Set([
   "site_name", "business_name", "brand_name", "location_name",
-  "organization_name", "menu_name", "experience_name",
+  "organization_name", "product_name", "experience_name",
 ]);
 
 function isPersonNameKey(key: string): boolean {

@@ -41,7 +41,7 @@ interface ChecklistRow {
   city: string | null
   business_info: number
   hero_source: string | null
-  menu_items: number
+  products: number
   experiences: number
   offerings: number
   story: number
@@ -93,7 +93,7 @@ export async function loadOnboardingChecklist(
         WHERE bl.site_id = s.id AND bl.status = 'active' AND ma.status = 'active'
         ORDER BY bl.is_primary DESC, bl.created_at ASC LIMIT 1
       ) AS hero_source,
-      (SELECT COUNT(*) FROM menu_items mi JOIN menus m ON mi.menu_id = m.id WHERE m.site_id = s.id) AS menu_items,
+      (SELECT COUNT(*) FROM products WHERE site_id = s.id AND is_visible = 1) AS products,
       (SELECT COUNT(*) FROM experiences WHERE site_id = s.id) AS experiences,
       (SELECT COUNT(*) FROM offerings WHERE site_id = s.id) AS offerings,
       (
@@ -129,7 +129,7 @@ export async function loadOnboardingChecklist(
         ? row.experiences > 0
         : vertical === 'professional_service'
           ? row.offerings > 0
-          : row.menu_items > 0,
+          : row.products > 0,
       story: row.story > 0,
       post: row.post > 0,
     },

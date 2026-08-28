@@ -174,25 +174,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       },
     }),
   siteTool({
-      name: 'import_menu_from_media',
-      description: 'Extract and add menu items from a menu photo or PDF.',
-      domain: 'media',
-      minimumRole: 'editor',
-      confirmRequired: true,
-      inputSchema: { asset_id: { type: 'string' }, menu_name: { type: 'string' } },
-      required: ['asset_id', 'menu_name'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          menuId: { type: ['string', 'null'], description: 'Created menu ID, or null when no items were detected.' },
-          count: { type: 'number', description: 'Number of menu items extracted and created.' },
-          warning: { type: ['string', 'null'] },
-          creditsRemaining: { type: 'number' },
-        },
-        required: ['menuId', 'count', 'warning', 'creditsRemaining'],
-      },
-    }),
-  siteTool({
       name: 'analyze_document',
       description: 'Summarize, answer questions about, or extract information from an uploaded Markdown document (.md/.markdown), grounded strictly in that file. Use upload_user_media with the attached Markdown file or get_site_media_assets to obtain its asset_id. Pass a question for grounded Q&A; omit it for a summary.',
       domain: 'media',

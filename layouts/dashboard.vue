@@ -403,7 +403,7 @@ type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing'
 // A NEW VERTICAL never requires touching this layout: add its combination to
 // verticalDefaultFeatures (config/cms-registry.ts) and nav updates automatically
 // via resolveCmsCapabilities. The one exception is a genuinely NEW feature id
-// (not just a new vertical using existing ids like menu/reviews/blog) — that
+// (not just a new vertical using existing ids like products/reviews/blog) — that
 // needs an entry in both maps below. managerNavItems filters on
 // `MANAGER_GROUP[manager.id] !== group`, so a ProductFeature missing from this map
 // matches no group at all and is omitted from every group's nav — not rendered
@@ -416,7 +416,7 @@ const MANAGER_GROUP: Partial<Record<ProductFeature, NavGroupId>> = {
   links: 'Content',
   posts: 'Content',
   photos: 'Content',
-  menu: 'Operate',
+  products: 'Operate',
   ordering: 'Operate',
   reservations: 'Operate',
   experiences: 'Operate',
@@ -432,7 +432,7 @@ const MANAGER_ICON: Partial<Record<ProductFeature, string>> = {
   links: 'i-lucide-link',
   posts: 'i-lucide-megaphone',
   photos: 'i-lucide-image',
-  menu: 'i-lucide-utensils',
+  products: 'i-lucide-package',
   ordering: 'i-lucide-shopping-bag',
   reservations: 'i-lucide-calendar-check',
   experiences: 'i-lucide-ticket',

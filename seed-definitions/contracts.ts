@@ -42,13 +42,11 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   tenantPageContent: CuratedTenantPageContentDefinition[]
   experiences: CuratedExperienceDefinition[]
   reviews: CuratedReviewDefinition[]
-  menus: CuratedMenuDefinition[]
+  products: CuratedProductDefinition[]
   locationQa: CuratedLocationQaDefinition[]
   posts: CuratedPostDefinition[]
   tenantPageLocaleFields?: CuratedTenantPageLocaleFieldDefinition[]
   businessLocationTranslations?: CuratedBusinessLocationTranslationDefinition[]
-  menuTranslations?: CuratedMenuTranslationDefinition[]
-  menuItemTranslations?: CuratedMenuItemTranslationDefinition[]
   publicRoutes: SeedPublicRouteExpectation[]
   aiCredits?: {
     balance: number
@@ -194,28 +192,19 @@ export interface CuratedReviewDefinition {
   source: 'google' | 'manual' | 'tripadvisor'
 }
 
-export interface CuratedMenuItemDefinition {
+export interface CuratedProductDefinition {
   id: string
-  section: string
+  locationId: string
+  category: string
   name: string
   slug: string
   description: string
   priceAmount: number
-  media: CuratedMediaPlacement<'gallery'>[]
+  media: CuratedMediaPlacement<'image' | 'gallery'>[]
   allergens: string | null
   dietaryNotes: string | null
   available: boolean
   sortOrder: number
-}
-
-export interface CuratedMenuDefinition {
-  id: string
-  locationId: string
-  name: string
-  description: string
-  sectionOrder: string[]
-  status: 'published'
-  items: CuratedMenuItemDefinition[]
 }
 
 export interface CuratedLocationQaDefinition {
@@ -278,34 +267,6 @@ export interface CuratedBusinessLocationTranslationDefinition {
   city: string | null
   description: string | null
   shortDescription: string | null
-  status: 'published' | 'stale'
-  sourceHash: string
-  translatedAt: string | null
-  reviewedAt: string | null
-}
-
-export interface CuratedMenuTranslationDefinition {
-  id: string
-  menuId: string
-  locale: string
-  name: string | null
-  description: string | null
-  sectionOrder: string[] | null
-  status: 'published' | 'stale'
-  sourceHash: string
-  translatedAt: string | null
-  reviewedAt: string | null
-}
-
-export interface CuratedMenuItemTranslationDefinition {
-  id: string
-  menuItemId: string
-  locale: string
-  section: string | null
-  name: string | null
-  description: string | null
-  allergens: string | null
-  dietaryNotes: string | null
   status: 'published' | 'stale'
   sourceHash: string
   translatedAt: string | null
@@ -393,33 +354,21 @@ export interface CompiledSeedReview {
   source: CuratedReviewDefinition['source']
 }
 
-export interface CompiledSeedMenuItem {
-  id: string
-  menuId: string
-  organizationId: string
-  siteId: string
-  section: string
-  name: string
-  slug: string
-  description: string
-  priceAmount: number
-  media: CuratedMediaPlacement<'gallery'>[]
-  allergens: string | null
-  dietaryNotes: string | null
-  available: boolean
-  sortOrder: number
-}
-
-export interface CompiledSeedMenu {
+export interface CompiledSeedProduct {
   id: string
   organizationId: string
   siteId: string
   locationId: string
+  category: string
   name: string
+  slug: string
   description: string
-  sectionOrder: string[]
-  status: CuratedMenuDefinition['status']
-  items: CompiledSeedMenuItem[]
+  priceAmount: number
+  media: CuratedMediaPlacement<'image' | 'gallery'>[]
+  allergens: string | null
+  dietaryNotes: string | null
+  available: boolean
+  sortOrder: number
 }
 
 export interface CompiledSeedLocationQa {
@@ -498,38 +447,6 @@ export interface CompiledSeedBusinessLocationTranslation {
   reviewedAt: string | null
 }
 
-export interface CompiledSeedMenuTranslation {
-  id: string
-  organizationId: string
-  siteId: string
-  menuId: string
-  locale: string
-  name: string | null
-  description: string | null
-  sectionOrder: string[] | null
-  status: CuratedMenuTranslationDefinition['status']
-  sourceHash: string
-  translatedAt: string | null
-  reviewedAt: string | null
-}
-
-export interface CompiledSeedMenuItemTranslation {
-  id: string
-  organizationId: string
-  siteId: string
-  menuItemId: string
-  locale: string
-  section: string | null
-  name: string | null
-  description: string | null
-  allergens: string | null
-  dietaryNotes: string | null
-  status: CuratedMenuItemTranslationDefinition['status']
-  sourceHash: string
-  translatedAt: string | null
-  reviewedAt: string | null
-}
-
 export interface CompiledCuratedSiteBundle {
   identity: CuratedSiteIdentity
   site: CuratedSiteDefinition['site']
@@ -541,13 +458,11 @@ export interface CompiledCuratedSiteBundle {
   tenantPageContent: CompiledSeedTenantPageContent[]
   experiences: CompiledSeedExperience[]
   reviews: CompiledSeedReview[]
-  menus: CompiledSeedMenu[]
+  products: CompiledSeedProduct[]
   locationQa: CompiledSeedLocationQa[]
   posts: CompiledSeedPost[]
   tenantPageLocaleFields: CompiledSeedTenantPageLocaleField[]
   businessLocationTranslations: CompiledSeedBusinessLocationTranslation[]
-  menuTranslations: CompiledSeedMenuTranslation[]
-  menuItemTranslations: CompiledSeedMenuItemTranslation[]
   publicRoutes: SeedPublicRouteExpectation[]
   routeManifest: {
     locations: string[]

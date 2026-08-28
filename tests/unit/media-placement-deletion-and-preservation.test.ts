@@ -5,7 +5,7 @@ import { preserveOmittedBlockMedia } from '../../server/utils/tenant-pages.ts'
 import type { TenantPageBlock } from '../../utils/tenant-page-blocks.ts'
 
 // Regression coverage for the media_placements orphan-cleanup fix: post,
-// menu item, experience, and owner-entered review deletion all route through
+// Product, experience, and owner-entered review deletion all route through
 // this one builder, so verifying its query shape verifies all four callers.
 test('buildDeleteOwnerPlacementsQuery scopes strictly by owner_type and owner_id', () => {
   const query = buildDeleteOwnerPlacementsQuery({ ownerType: 'post', ownerId: 'post-1' })

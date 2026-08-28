@@ -7,8 +7,7 @@ import { buildMediaPlacementInsertQuery } from '~/server/utils/media-asset-manag
 type SetupEnv = CloudflareEnv
 
 export type CopyEntityType = 
-  | 'menus' 
-  | 'menu_items' 
+  | 'products'
   | 'media_assets' 
   | 'reviews' 
   | 'location_qa' 
@@ -80,10 +79,18 @@ export async function copyLocationBatch(
   // Validated before any location is created so a bad entities list can't strand
   // an orphaned location.
   const requestedTypes = new Set(entities.map((config) => config.type))
-  if (requestedTypes.has('menu_items') && !requestedTypes.has('menus')) {
-    return { success: false, error: 'Copying menu_items requires also copying menus, since each copied item must attach to a newly copied menu' }
+  if (requestedTypes.has('reviews') && !requestedTypes.has('products')) {
+    const productReview = await queryFirst<{ id: string }>(
+      db,
+      `SELECT id FROM reviews
+       WHERE location_id = ? AND organization_id = ? AND site_id = ? AND product_id IS NOT NULL
+       LIMIT 1`,
+      [source_location_id, organizationId, siteId],
+    )
+    if (productReview) {
+      return { success: false, error: 'Copying Product reviews requires also copying products so every review keeps its Product owner' }
+    }
   }
-
   let targetLocationId: string
   let targetLocationSlug: string
   let createdNewLocation = false
@@ -151,8 +158,7 @@ export async function copyLocationBatch(
     target_location_id: targetLocationId,
     target_location_slug: targetLocationSlug,
     entities: {
-      menus: { copied: 0, new_ids: [] },
-      menu_items: { copied: 0, new_ids: [] },
+      products: { copied: 0, new_ids: [] },
       media_assets: { copied: 0, new_ids: [] },
       reviews: { copied: 0, new_ids: [] },
       location_qa: { copied: 0, new_ids: [] },
@@ -174,7 +180,7 @@ export async function copyLocationBatch(
   }
 
   // Process entities in dependency order so copied owners exist before their placements.
-  const entityOrder: CopyEntityType[] = ['media_assets', 'menus', 'menu_items', 'experiences', 'reviews', 'location_qa']
+  const entityOrder: CopyEntityType[] = ['media_assets', 'products', 'experiences', 'reviews', 'location_qa']
   const requestedConfigs = new Map(entities.map((config) => [config.type, config]))
 
   try {
@@ -184,17 +190,14 @@ export async function copyLocationBatch(
       if (!entityConfig) continue
 
       switch (entityConfig.type) {
-        case 'menus':
-          await copyMenus(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
-          break
-        case 'menu_items':
-          await copyMenuItems(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings)
+        case 'products':
+          await copyProducts(db, source_location_id, targetLocationId, organizationId, siteId, userId, now, statements, manifest, idMappings)
           break
         case 'media_assets':
           await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
           break
         case 'reviews':
-          await copyReviews(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
+          await copyReviews(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings)
           break
         case 'location_qa':
           await copyLocationQa(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
@@ -226,91 +229,53 @@ export async function copyLocationBatch(
   return { success: true, manifest }
 }
 
-async function copyMenus(
+async function copyProducts(
   db: DbClient,
   sourceLocationId: string,
   targetLocationId: string,
   organizationId: string,
   siteId: string,
-  now: string,
-  statements: BatchQuery[],
-  manifest: CopyManifest,
-) {
-  const menus = await queryAll<{ id: string }>(
-    db,
-    'SELECT id FROM menus WHERE location_id = ? AND organization_id = ? AND site_id = ?',
-    [sourceLocationId, organizationId, siteId],
-  )
-
-  for (const menu of menus) {
-    const newId = crypto.randomUUID()
-    manifest.id_mappings[menu.id] = newId
-    manifest.entities.menus.new_ids.push(newId)
-
-    statements.push({
-      query: `
-        INSERT INTO menus (id, organization_id, site_id, location_id, name, description, is_visible, section_order, created_at, updated_at, created_by, updated_by)
-        SELECT ?, organization_id, ?, ?, name, description, is_visible, section_order, ?, updated_at, created_by, updated_by
-        FROM menus WHERE id = ?
-      `,
-      params: [newId, siteId, targetLocationId, now, menu.id],
-    })
-
-    manifest.entities.menus.copied++
-  }
-}
-
-async function copyMenuItems(
-  db: DbClient,
-  sourceLocationId: string,
-  targetLocationId: string,
-  organizationId: string,
-  siteId: string,
+  userId: string,
   now: string,
   statements: BatchQuery[],
   manifest: CopyManifest,
   idMappings: Record<string, string>,
 ) {
-  const menuItems = await queryAll<{ id: string; menu_id: string }>(
-    db,
-    `
-    SELECT id, menu_id
-    FROM menu_items 
-    WHERE menu_id IN (SELECT id FROM menus WHERE location_id = ? AND organization_id = ? AND site_id = ?)
-    `,
+  const products = await queryAll<{ id: string; slug: string }>(
+    db, `SELECT id, slug FROM products WHERE location_id = ? AND organization_id = ? AND site_id = ? ORDER BY sort_order, id`,
     [sourceLocationId, organizationId, siteId],
   )
-
-  for (const item of menuItems) {
+  const targetSlugs = new Set((await queryAll<{ slug: string }>(db, `SELECT slug FROM products WHERE site_id = ? AND location_id = ?`, [siteId, targetLocationId])).map(row => row.slug))
+  const targetCount = Number((await queryFirst<{ count: number }>(db, `SELECT COUNT(*) AS count FROM products WHERE site_id = ? AND location_id = ?`, [siteId, targetLocationId]))?.count ?? 0)
+  for (const [index, product] of products.entries()) {
     const newId = crypto.randomUUID()
-    manifest.id_mappings[item.id] = newId
-    manifest.entities.menu_items.new_ids.push(newId)
-
-    const newMenuId = idMappings[item.menu_id]
-
+    manifest.id_mappings[product.id] = newId
+    manifest.entities.products.new_ids.push(newId)
+    let newSlug = product.slug
+    for (let suffix = 1; targetSlugs.has(newSlug); suffix += 1) {
+      const suffixText = `-${suffix + 1}`
+      newSlug = `${product.slug.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
+      if (suffix > 100) throw new Error(`Unable to create a target-location-safe Product slug for ${product.id}`)
+    }
+    targetSlugs.add(newSlug)
     statements.push({
-      query: `
-        INSERT INTO menu_items (id, menu_id, section, name, slug, description, price_amount, available, featured, featured_sort_order, sort_order, allergens, ingredients, dietary_notes, preparation, serving_note, created_at, updated_at, created_by, updated_by)
-        SELECT ?, ?, section, name, slug, description, price_amount, available, featured, featured_sort_order, sort_order, allergens, ingredients, dietary_notes, preparation, serving_note, ?, updated_at, created_by, updated_by
-        FROM menu_items WHERE id = ?
-      `,
-      params: [newId, newMenuId, now, item.id],
+      query: `INSERT INTO products (id, organization_id, site_id, location_id, category, name, slug, description, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, order_url, is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json, seo_title, seo_description, canonical_url, robots, source, created_at, updated_at, created_by, updated_by)
+        SELECT ?, organization_id, site_id, ?, category, name, ?, description, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, order_url, is_visible, available, featured, featured_sort_order, ?, tags_json, details_json, seo_title, seo_description, canonical_url, robots, 'copy', ?, ?, ?, ? FROM products WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ?`,
+      params: [newId, targetLocationId, newSlug, targetCount + index, now, now, userId, userId, product.id, organizationId, siteId, sourceLocationId],
     })
-
-    const mediaRows = await queryAll<{ asset_id: string; sort_order: number }>(
+    const mediaRows = await queryAll<{ slot: string; asset_id: string; sort_order: number }>(
       db,
-      `SELECT asset_id, sort_order FROM media_placements WHERE site_id = ? AND owner_type = 'menu_item' AND owner_id = ? AND slot = 'gallery' AND status = 'active' ORDER BY sort_order`,
-      [siteId, item.id],
+      `SELECT slot, asset_id, sort_order FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = 'product' AND owner_id = ? AND slot IN ('image','gallery') AND status = 'active' ORDER BY slot, sort_order`,
+      [organizationId, siteId, product.id],
     )
     for (const media of mediaRows) {
       const newAssetId = idMappings[media.asset_id] ?? media.asset_id
       statements.push(buildMediaPlacementInsertQuery({
-        organizationId, siteId, ownerType: 'menu_item', ownerId: newId, slot: 'gallery',
+        organizationId, siteId, ownerType: 'product', ownerId: newId, slot: media.slot,
         assetId: newAssetId, sortOrder: media.sort_order, createdAt: now, updatedAt: now,
       }))
     }
-
-    manifest.entities.menu_items.copied++
+    manifest.entities.products.copied++
   }
 }
 
@@ -406,26 +371,31 @@ async function copyReviews(
   now: string,
   statements: BatchQuery[],
   manifest: CopyManifest,
+  idMappings: Record<string, string>,
 ) {
-  const reviews = await queryAll<{ id: string }>(
+  const reviews = await queryAll<{ id: string; product_id: string | null }>(
     db,
-    'SELECT id FROM reviews WHERE location_id = ? AND organization_id = ? AND site_id = ?',
+    'SELECT id, product_id FROM reviews WHERE location_id = ? AND organization_id = ? AND site_id = ?',
     [sourceLocationId, organizationId, siteId],
   )
 
   for (const review of reviews) {
     const newId = crypto.randomUUID()
+    const newProductId = review.product_id ? idMappings[review.product_id] : null
+    if (review.product_id && !newProductId) {
+      throw new Error(`Review ${review.id} cannot be copied without its Product owner`)
+    }
     manifest.entities.reviews.new_ids.push(newId)
 
     // google_review_id is uniquely indexed (idx_reviews_google_id) and ip_hash/user_agent
     // are visitor PII tied to the original submission — none should carry over to a copy.
     statements.push({
       query: `
-        INSERT INTO reviews (id, organization_id, site_id, location_id, menu_item_slug, author_name, rating, title, content, google_review_id, owner_reply, owner_reply_at, helpful_count, status, source, ip_hash, user_agent, created_at, updated_at)
-        SELECT ?, organization_id, site_id, ?, menu_item_slug, author_name, rating, title, content, NULL, owner_reply, owner_reply_at, helpful_count, status, source, NULL, NULL, ?, ?
+        INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, author_name, rating, title, content, google_review_id, owner_reply, owner_reply_at, helpful_count, status, source, ip_hash, user_agent, created_at, updated_at)
+        SELECT ?, organization_id, site_id, ?, CASE WHEN product_id IS NULL THEN NULL ELSE ? END, author_name, rating, title, content, NULL, owner_reply, owner_reply_at, helpful_count, status, source, NULL, NULL, ?, ?
         FROM reviews WHERE id = ?
       `,
-      params: [newId, targetLocationId, now, now, review.id],
+      params: [newId, targetLocationId, newProductId, now, now, review.id],
     })
 
     const media = await queryAll<{ slot: string; asset_id: string; sort_order: number }>(db, `
