@@ -79,7 +79,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const value = toValue(input)
     return `social-image:${value.ownerType}:${value.ownerId}`
   })
-  const { data: socialImage } = useAsyncData(
+  const { data: socialImage, error: socialImageError } = useAsyncData(
     socialImageKey,
     async (): Promise<SocialImageSource | null> => {
       const value = toValue(input)
@@ -107,6 +107,9 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   )
 
   const normalized = computed(() => {
+    // Surface a real lookup failure (DB unavailable, fetch error) distinctly from "nothing was
+    // resolved" — the generic error below would otherwise mask why the image is missing.
+    if (socialImageError.value) throw socialImageError.value
     const value = toValue(input)
     const template = value.template ?? resolvePublicTemplate({ themeId: tenant.themeId }).slug
     const origin = template === 'platform'

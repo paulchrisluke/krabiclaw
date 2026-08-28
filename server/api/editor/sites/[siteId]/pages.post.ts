@@ -2,7 +2,7 @@ import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { createTenantPage } from '~/server/utils/tenant-pages'
 import type { TenantPageEditorInput } from '~/server/utils/tenant-pages'
-import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
+import { syncSocialImageForOwnerAfterCommit } from '~/server/utils/social-image/sync'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
     const body = await readRequiredBody<TenantPageEditorInput>(event)
     const created = await createTenantPage(db, {
       organizationId: site.organization_id, siteId, userId, data: body, })
-    await syncSocialImageForOwner(db, env, {
+    await syncSocialImageForOwnerAfterCommit(db, env, {
       siteId,
       ownerType: 'tenant_page',
       ownerId: created.page.id,

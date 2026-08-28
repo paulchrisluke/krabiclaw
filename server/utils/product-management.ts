@@ -11,8 +11,7 @@ import type {
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireSiteEventSafe, type SiteEventType } from '~/server/utils/site-events'
-import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
-import { SocialImageResolutionError } from '~/server/utils/social-image-resolver'
+import { syncSocialImageForOwnerAfterCommit } from '~/server/utils/social-image/sync'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   PRODUCT_LIMITS,
@@ -318,9 +317,7 @@ export async function createProduct(
   const created = await getProduct(db, organizationId, siteId, locationId, id)
   if (!created) throw new Error('Product not found after create')
   if (env) {
-    await syncSocialImageForOwner(db, env, { siteId, ownerType: 'product', ownerId: id, title: name, description }).catch((error) => {
-      if (!(error instanceof SocialImageResolutionError)) throw error
-    })
+    await syncSocialImageForOwnerAfterCommit(db, env, { siteId, ownerType: 'product', ownerId: id, title: name, description })
   }
   return created
 }
@@ -519,9 +516,7 @@ export async function updateProduct(
   const updated = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!updated) throw new Error('Product not found after update')
   if (env) {
-    await syncSocialImageForOwner(db, env, { siteId, ownerType: 'product', ownerId: productId, title: updated.name, description: updated.description }).catch((error) => {
-      if (!(error instanceof SocialImageResolutionError)) throw error
-    })
+    await syncSocialImageForOwnerAfterCommit(db, env, { siteId, ownerType: 'product', ownerId: productId, title: updated.name, description: updated.description })
   }
   return updated
 }

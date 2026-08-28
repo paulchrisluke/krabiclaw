@@ -3,7 +3,7 @@ import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { updateTenantPage } from '~/server/utils/tenant-pages'
 import type { TenantPageEditorInput } from '~/server/utils/tenant-pages'
-import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
+import { syncSocialImageForOwnerAfterCommit } from '~/server/utils/social-image/sync'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   try {
     const payload = await updateTenantPage(db, variantId, {
       userId, scope: { siteId, organizationId: site.organization_id }, data: await readRequiredBody<TenantPageEditorInput>(event), })
-    await syncSocialImageForOwner(db, env, {
+    await syncSocialImageForOwnerAfterCommit(db, env, {
       siteId,
       ownerType: 'tenant_page',
       ownerId: payload.page.id,

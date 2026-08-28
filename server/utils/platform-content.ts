@@ -26,7 +26,7 @@ import { getMediaPlacements } from '~/server/utils/media-placement'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
-import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
+import { syncSocialImageForOwnerAfterCommit } from '~/server/utils/social-image/sync'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
@@ -946,7 +946,7 @@ export async function createPlatformBlogPost(
         ],
       })
       const post = await getPlatformBlogPost(db, id, siteId, env)
-      await syncSocialImageForOwner(db, env, {
+      await syncSocialImageForOwnerAfterCommit(db, env, {
         siteId: placementScope.siteId,
         ownerType: 'blog_post',
         ownerId: id,
@@ -1259,7 +1259,7 @@ export async function updatePlatformBlogPost(
     }
 
     const updatedPost = await getPlatformBlogPost(db, postId, siteId, env)
-    await syncSocialImageForOwner(db, env, {
+    await syncSocialImageForOwnerAfterCommit(db, env, {
       siteId: siteId ?? PLATFORM_MEDIA_SITE_ID,
       ownerType: 'blog_post',
       ownerId: postId,
@@ -1467,7 +1467,7 @@ export async function createPlatformDoc(
       })
 
       const doc = await getPlatformDoc(db, id)
-      await syncSocialImageForOwner(db, env, {
+      await syncSocialImageForOwnerAfterCommit(db, env, {
         siteId: placementScope.siteId,
         ownerType: 'platform_doc',
         ownerId: id,
@@ -1581,7 +1581,7 @@ export async function updatePlatformDoc(
 
     const updatedDoc = await getPlatformDoc(db, docId)
     const scope = placementScope ?? await mediaPlacementScope(db, null, null)
-    await syncSocialImageForOwner(db, env, {
+    await syncSocialImageForOwnerAfterCommit(db, env, {
       siteId: scope.siteId,
       ownerType: 'platform_doc',
       ownerId: docId,

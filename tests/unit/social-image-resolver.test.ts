@@ -135,6 +135,23 @@ test('a tenant_page resolves its background by scanning content blocks, not a de
   assert.equal(result.assetId, 'block-asset-1')
 })
 
+test('a block-scan candidate missing the URL its own kind needs does not stop the scan (regression)', async () => {
+  // A video item matching the slot but with no thumbnail_url must not short-circuit the search —
+  // the next block's real image should still be found instead of falling through to site/platform
+  // defaults.
+  const result = await resolveSocialImageBackground(db, {
+    siteId: 'site-3',
+    ownerType: 'tenant_page',
+    ownerId: 'page-2',
+    blocks: [
+      { id: 'b1', type: 'hero', position: 0, data: {}, media: [{ asset_id: 'video-no-poster', slot: 'featured', public_url: 'https://images.example/video.mp4', thumbnail_url: null, kind: 'video' }] },
+      { id: 'b2', type: 'image', position: 1, data: {}, media: [{ asset_id: 'real-image', slot: 'media', public_url: 'https://images.example/real-image', kind: 'image' }] },
+    ] as never,
+  })
+  assert.equal(result.tier, 'page')
+  assert.equal(result.assetId, 'real-image')
+})
+
 test('a tenant site with nothing resolvable throws SocialImageResolutionError, never a gradient/null', async () => {
   await assert.rejects(
     () => resolveSocialImageBackground(db, { siteId: 'site-empty', ownerType: 'business_location', ownerId: 'loc-empty' }),

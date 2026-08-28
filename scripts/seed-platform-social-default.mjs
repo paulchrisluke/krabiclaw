@@ -21,12 +21,19 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import { extname } from 'node:path'
+import sharp from 'sharp'
 
 const IMAGE_PATH = process.argv[2]
 const REMOTE = process.argv.includes('--remote')
 
 if (!IMAGE_PATH || !existsSync(IMAGE_PATH)) {
   console.error('Usage: node scripts/seed-platform-social-default.mjs <path-to-1200x630-image> [--remote]')
+  process.exit(1)
+}
+
+const { width: sourceWidth, height: sourceHeight } = await sharp(IMAGE_PATH).metadata()
+if (sourceWidth !== 1200 || sourceHeight !== 630) {
+  console.error(`Image must be exactly 1200x630 — got ${sourceWidth}x${sourceHeight}. This script does not resize.`)
   process.exit(1)
 }
 
@@ -87,7 +94,7 @@ async function main() {
   // wrangler d1 execute --command runs one statement at a time; three separate calls rather
   // than a semicolon-joined string.
   runD1(`INSERT INTO media_assets (id, organization_id, site_id, kind, provider, source, cloudflare_image_id, public_url, mime_type, width, height, alt_text, status, created_by_user_id, created_at, updated_at)
-    SELECT ${sqlString(assetId)}, organization_id, id, 'image', 'cloudflare_images', 'uploaded', ${sqlString(imageId)}, ${sqlString(publicUrl)}, ${sqlString(mimeType)}, 1200, 630, 'KrabiClaw', 'active', NULL, ${sqlString(now)}, ${sqlString(now)}
+    SELECT ${sqlString(assetId)}, organization_id, id, 'image', 'cloudflare_images', 'uploaded', ${sqlString(imageId)}, ${sqlString(publicUrl)}, ${sqlString(mimeType)}, ${sourceWidth}, ${sourceHeight}, 'KrabiClaw', 'active', NULL, ${sqlString(now)}, ${sqlString(now)}
     FROM sites WHERE id = 'platform'`)
   runD1(`DELETE FROM media_placements WHERE owner_type = 'site' AND owner_id = 'platform' AND slot = 'og_default' AND asset_id != ${sqlString(assetId)}`)
   runD1(`INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)

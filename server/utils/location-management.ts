@@ -7,8 +7,7 @@ import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
 import { ensureLocationTeam } from "~/server/utils/member-access";
 import type { CloudflareEnv } from "~/server/utils/auth";
-import { syncSocialImageForOwner } from "~/server/utils/social-image/sync";
-import { SocialImageResolutionError } from "~/server/utils/social-image-resolver";
+import { syncSocialImageForOwnerAfterCommit } from "~/server/utils/social-image/sync";
 
 // Require format-valid E.164 at the shared location write boundary (issue
 // #293 Section D/I) — this is the one place createLocation/updateLocation
@@ -682,17 +681,14 @@ export async function createLocation(
           is_primary: isPrimary,
         },
       })
-      await syncSocialImageForOwner(db, env, {
+      // A brand-new location commonly has no photo yet and no site default either, and this
+      // runs after the location row already committed — never fail location creation over it
+      // (syncSocialImageForOwnerAfterCommit logs and swallows every failure, including that).
+      await syncSocialImageForOwnerAfterCommit(db, env, {
         siteId,
         ownerType: 'business_location',
         ownerId: id,
         title,
-      }).catch((error) => {
-        if (!(error instanceof SocialImageResolutionError)) throw error
-        // A brand-new location commonly has no photo yet and no site default either — don't
-        // block location creation on that; the location just won't have a public OG card until
-        // a real photo is uploaded (site defaults get backfilled for existing sites; new ones
-        // are expected to upload real photos during onboarding before going public).
       });
       return { status: 201, data: { success: true, location } };
     } catch (error) {
@@ -1014,13 +1010,11 @@ export async function updateLocation(
           },
         })
         if (env && location?.title) {
-          await syncSocialImageForOwner(db, env, {
+          await syncSocialImageForOwnerAfterCommit(db, env, {
             siteId,
             ownerType: 'business_location',
             ownerId: locationId,
             title: location.title,
-          }).catch((error) => {
-            if (!(error instanceof SocialImageResolutionError)) throw error
           })
         }
         return { status: 200, data: { success: true, location } };

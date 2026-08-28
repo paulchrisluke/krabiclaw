@@ -130,3 +130,31 @@ export async function syncSocialImageForOwner(
     platformDomain: input.platformDomain,
   })
 }
+
+/**
+ * Every mutation call site invokes this, not syncSocialImageForOwner directly. By the time it
+ * runs, the actual content/entity write has already committed — D1 has no cross-request
+ * transaction to roll it back into, so letting ANY sync failure (a transient Cloudflare Images
+ * upload error, a network blip, or a genuine SocialImageResolutionError) propagate as the
+ * mutation's own error would misreport a row that really did save as a failed request, which is
+ * worse than a page temporarily missing its card. Every failure is logged with full context;
+ * generateSocialImage's content-hash idempotency means the very next edit (or a future
+ * preflight/backfill pass) retries for free — nothing here is a silent, permanent gap.
+ */
+export async function syncSocialImageForOwnerAfterCommit(
+  db: DbClient,
+  env: CloudflareImagesEnv,
+  input: SyncSocialImageInput,
+): Promise<GeneratedSocialImage | null> {
+  try {
+    return await syncSocialImageForOwner(db, env, input)
+  } catch (error) {
+    console.error('social_image_sync_failed', {
+      siteId: input.siteId,
+      ownerType: input.ownerType,
+      ownerId: input.ownerId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}

@@ -45,11 +45,15 @@ function backgroundUrlForKind(asset: { kind: string; public_url: string; thumbna
 
 function resolveTenantPageBlockBackground(blocks: TenantPageBlock[]): ResolvedBackgroundAsset | null {
   for (const block of blocks) {
-    const media = block.media.find(item => TENANT_PAGE_BACKGROUND_SLOTS.has(item.slot) && (item.public_url || item.thumbnail_url))
-    if (!media) continue
-    const url = media.kind === 'video' ? media.thumbnail_url : media.public_url
-    if (!url) continue
-    return { assetId: media.asset_id, url, tier: 'page' }
+    for (const media of block.media) {
+      if (!TENANT_PAGE_BACKGROUND_SLOTS.has(media.slot)) continue
+      // A candidate matching the slot but missing the URL its own kind needs (e.g. a video with
+      // no thumbnail_url) must not stop the scan — keep looking at later media in this block
+      // instead of falling through to the next block.
+      const url = media.kind === 'video' ? media.thumbnail_url : media.public_url
+      if (!url) continue
+      return { assetId: media.asset_id, url, tier: 'page' }
+    }
   }
   return null
 }

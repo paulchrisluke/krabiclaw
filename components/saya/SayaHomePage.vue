@@ -431,14 +431,10 @@ if (siteId) {
       siteName: site?.brand_name || restaurantName.value,
       logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
       faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-      primaryColor: pageConfig.value?.brand_color || null,
     },
-    heroImage: hero.value.video
-      ? { url: hero.value.video, kind: 'video', thumbnailUrl: hero.value.thumbnail_url }
-      : hero.value.image
-        ? { url: hero.value.image, kind: 'image' }
-        : null,
     robots: pageConfig.value?.robots || null,
+    ownerType: 'site',
+    ownerId: siteId || '',
   }))
 }
 

@@ -12,7 +12,7 @@ import {
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
-import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
+import { syncSocialImageForOwnerAfterCommit } from '~/server/utils/social-image/sync'
 import type { TenantPageDto } from '~/server/utils/tenant-pages'
 import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
 
@@ -20,7 +20,7 @@ import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, re
 // create/update/path-change request — this IS the publish-time trigger; a crawler never causes
 // anything to render, it only ever reads what this already persisted.
 async function syncTenantPageSocialImage(ctx: McpExecutorContext, page: TenantPageDto): Promise<void> {
-  await syncSocialImageForOwner(ctx.site.db, ctx.site.env, {
+  await syncSocialImageForOwnerAfterCommit(ctx.site.db, ctx.site.env, {
     siteId: page.site_id,
     ownerType: 'tenant_page',
     ownerId: page.id,

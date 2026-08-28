@@ -32,8 +32,10 @@ export const OG_IMAGE_DRIFT_PATTERNS = [
   /\bparseOgImageQuery\s*\(/,
   // heroImage/primaryColor/secondaryColor as inputs to useSocialMetadata — removed everywhere
   // in favor of ownerType/ownerId + a resolved socialImage; reintroducing them signals a
-  // regression back toward the old contract.
-  /useSocialMetadata\([^)]{0,400}heroImage\s*:/s,
+  // regression back toward the old contract. Non-greedy across the whole call (not just up to
+  // the first `)`, which the near-universal `useSocialMetadata(() => ({...}))` arrow-callback
+  // shape hits almost immediately) — bounded so it can't runaway-match across unrelated code.
+  /useSocialMetadata\([\s\S]{0,600}?heroImage\s*:/,
 ]
 
 function walk(directory) {
