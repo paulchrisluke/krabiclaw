@@ -21,6 +21,7 @@
     "lint:product-model": "node scripts/check-product-model-guard.mjs",
     "lint:product-domain": "node scripts/check-product-domain-guard.mjs",
     "lint:og-image": "node scripts/check-og-image-guard.mjs",
+    "seed:platform-social-default": "node scripts/seed-platform-social-default.mjs",
     "lint:fix": "eslint . --fix --ignore-pattern '.agents/**' --ignore-pattern '.tmp/**' --ignore-pattern '**/.tmp/**'",
     "mcp:catalog": "node --experimental-strip-types scripts/check-mcp-tool-catalog.mjs",
     "mcp:catalog:write": "node --experimental-strip-types scripts/check-mcp-tool-catalog.mjs --write",

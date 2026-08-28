@@ -22,7 +22,13 @@ export const IMPACT_GROUPS = [
     patterns: [
       'components/saya/**', 'components/blawby/**', 'components/blog/**',
       'components/content/**', 'components/menu/**', 'components/tenant-pages/**',
+      'components/localization/**', 'components/platform/PlatformHomePage.vue',
+      'components/platform/PlatformPricingPage.vue', 'components/products/**',
       'composables/loadPublicResourcePayload.ts', 'composables/usePublic*.ts',
+      'composables/useSocialMetadata.ts', 'utils/social-metadata.ts',
+      'utils/template-registry.ts', 'server/utils/social-image-resolver.ts',
+      'server/utils/social-image/**', 'server/utils/og-image/**',
+      'server/api/public/social-image.get.ts',
       'layouts/saya.vue', 'layouts/blawby.vue', 'pages/[...tenantPath].vue',
       'pages/about.vue', 'pages/article/**', 'pages/blog/**', 'pages/contact/**',
       'pages/donate.vue', 'pages/experiences/**', 'pages/locations/**',
