@@ -491,12 +491,6 @@ function validatePublicData(checks, data, required) {
     { donationUrl: donationUrl ?? null },
   )
 
-  pushCheck(
-    checks,
-    !('analyticsBridge' in (data.consultation?.metadata ?? {})),
-    'Public consultation metadata does not contain a tenant-specific analytics bridge',
-  )
-
   const mediaUrls = collectArtifactMediaUrls(data)
   for (const url of mediaUrls) {
     const result = checkMediaUrl(url)

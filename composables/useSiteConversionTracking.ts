@@ -13,7 +13,7 @@ interface ConversionPayload {
   location_id?: string | null
   product_id?: string | null
   link_item_id?: string | null
-  tenant_page_id?: string | null
+  tenant_page_variant_id?: string | null
   tier_label?: string | null
   tier_amount?: number | null
 }
@@ -45,23 +45,24 @@ export function useSiteConversionTracking(consultationSource?: MaybeRefOrGetter<
 
   function trackConsultationClick(pageType: string, pagePath: string, destination?: string | null, pageId?: string | null) {
     if (toValue(consultationSource)?.tracking_enabled === false) return
-    const external = /^https?:\/\//i.test(destination || '')
-      || /^\/api\/public\/sites\/[^/]+\/consultation-handoff(?:\?|$)/.test(destination || '')
+    const directExternal = /^https?:\/\//i.test(destination || '')
+    const internalHandoff = /^\/api\/public\/sites\/[^/]+\/consultation-handoff(?:\?|$)/.test(destination || '')
+    const external = directExternal || internalHandoff
     track({
       event_name: 'consultation_cta_click',
       stage: external ? 'external_booking_handoff' : 'schedule_navigation',
       page_type: pageType,
       page_path: pagePath,
       page_id: pageId,
-    }, !external)
+    }, !internalHandoff)
   }
 
   function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'experience_booking_submit', locationId?: string | null) {
     mirrorConversion({ event_name: eventName, stage: 'submitted', location_id: locationId })
   }
 
-  function trackDonationClick(tenantPageId: string, pagePath: string, tierLabel: string, tierAmount: number | null) {
-    track({ event_name: 'donation_click', stage: 'external_handoff', tenant_page_id: tenantPageId, page_path: pagePath, page_type: 'donate', tier_label: tierLabel, tier_amount: tierAmount })
+  function trackDonationClick(tenantPageVariantId: string, pagePath: string, tierLabel: string, tierAmount: number | null) {
+    track({ event_name: 'donation_click', stage: 'external_handoff', tenant_page_variant_id: tenantPageVariantId, page_path: pagePath, page_type: 'donate', tier_label: tierLabel, tier_amount: tierAmount })
   }
 
   function trackLinkClick(linkItemId: string) {

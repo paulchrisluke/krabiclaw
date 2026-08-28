@@ -38,21 +38,13 @@ const isDev = import.meta.dev
 const errorStatusCode = computed(() => props.error?.statusCode ?? props.error?.status ?? 500)
 const isNotFound = computed(() => errorStatusCode.value === 404)
 
-// Tenant-resolution middleware still runs before app.vue throws, so `site` is
-// populated whenever the host resolved to a real tenant (e.g. a 500 on a known
-// site, or an unauthorized draft preview). It's only ever null for a genuine
-// TENANT_404 (host never matched any site_domains row). Reusing the same
-// buildTenantHeadLinks() as app.vue means a resolved tenant's error page keeps
-// its direct canonical favicon links. Platform and unresolved tenant hosts use
-// the platform's static favicon assets.
 const { isPlatform, site } = useTenantSite()
 const route = useRoute()
-const tenantFaviconUrl = computed(() => site?.media?.find(item => item.slot === 'favicon')?.public_url ?? null)
 
 useHead(() => ({
   link: buildTenantHeadLinks({
     isPlatform,
-    tenantFaviconUrl: tenantFaviconUrl.value,
+    siteMedia: site?.media,
     isSitePreview: route.path.startsWith('/preview/site/'),
   })
 }))

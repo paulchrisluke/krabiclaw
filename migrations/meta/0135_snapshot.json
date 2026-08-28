@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fdd4286f-a298-4718-b179-f9addc208661",
+  "id": "c73de9fb-563a-4daa-86a8-2bd00575f807",
   "prevId": "b0da4419-1b46-44fc-812b-8493d2e716c5",
   "tables": {
     "account": {
@@ -13193,7 +13193,7 @@
             "entity_id"
           ],
           "isUnique": true,
-          "where": "\"site_conversion_events\".\"entity_type\" IS NOT NULL AND \"site_conversion_events\".\"entity_id\" IS NOT NULL"
+          "where": "\"site_conversion_events\".\"entity_type\" IS NOT NULL AND \"site_conversion_events\".\"entity_id\" IS NOT NULL AND \"site_conversion_events\".\"event_name\" IN ('contact_submit', 'reservation_submit', 'experience_booking_submit')"
         },
         "site_conversion_events_organization_id_idx": {
           "name": "site_conversion_events_organization_id_idx",

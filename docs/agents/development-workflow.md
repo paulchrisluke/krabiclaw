@@ -113,6 +113,14 @@ also run `wrangler deploy --dry-run` for every affected environment
 (`--env preview`, `--env staging`, and the top-level production config) after a
 production build exists.
 
+The preview D1 database is disposable. When an in-flight PR rewrites a
+migration applied only to preview, follow the reset contract in `AGENTS.md`:
+confirm the migration is absent from staging and production, inspect
+`yarn db:reset:preview`, then run its explicitly confirmed `--apply` form to
+wipe and replay the configured preview database in place. Reapply fixtures and
+verify the deployed preview. Do not preserve preview-only migration debris,
+create replacement D1 resources, or edit the migration ledger by itself.
+
 ## Fresh Worktree Browser Setup
 
 Do this before the first local browser/E2E run in a new worktree. Do not skip to selectors or app-code changes until this baseline is healthy.

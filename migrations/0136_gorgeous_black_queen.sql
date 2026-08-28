@@ -1,2 +1,0 @@
-DROP INDEX `site_conversion_events_entity_unique`;--> statement-breakpoint
-CREATE UNIQUE INDEX `site_conversion_events_entity_unique` ON `site_conversion_events` (`site_id`,`event_name`,`entity_type`,`entity_id`) WHERE "site_conversion_events"."entity_type" IS NOT NULL AND "site_conversion_events"."entity_id" IS NOT NULL AND "site_conversion_events"."event_name" IN ('contact_submit', 'reservation_submit', 'experience_booking_submit');

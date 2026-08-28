@@ -82,11 +82,12 @@ export function parseAnalyticsRange(input: {
 }): { startDate: string; endDate: string; dates: string[]; previousStartDate: string; previousEndDate: string } {
   const today = localDateAt(input.now, input.timeZone)
   const endDate = input.endDate ?? today
+  if (!isValidCalendarDate(endDate)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'endDate must be a valid YYYY-MM-DD date' })
+  }
   const startDate = input.startDate ?? addLocalDays(endDate, -29)
-  for (const [name, value] of [['startDate', startDate], ['endDate', endDate]] as const) {
-    if (!isValidCalendarDate(value)) {
-      throw new HTTPError({ statusCode: 400, statusMessage: `${name} must be a valid YYYY-MM-DD date` })
-    }
+  if (!isValidCalendarDate(startDate)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'startDate must be a valid YYYY-MM-DD date' })
   }
   if (startDate > endDate) throw new HTTPError({ statusCode: 400, statusMessage: 'startDate must not be after endDate' })
   const dates = enumerateLocalDates(startDate, endDate)

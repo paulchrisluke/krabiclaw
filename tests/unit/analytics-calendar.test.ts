@@ -30,6 +30,12 @@ test('report range accepts 365 dates and rejects 366', () => {
   }), /365-day maximum/)
 })
 
+test('invalid end dates fail before deriving a default start date', () => {
+  assert.throws(() => parseAnalyticsRange({
+    endDate: '2026-02-30', timeZone: 'UTC', now: new Date(),
+  }), /endDate must be a valid YYYY-MM-DD date/)
+})
+
 test('DST boundaries produce 23-hour and 25-hour local days', () => {
   assert.deepEqual(localDateBounds('2026-03-08', 'America/Chicago'), {
     start: '2026-03-08T06:00:00.000Z',

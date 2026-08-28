@@ -1,6 +1,5 @@
 import { execute, queryAll } from '~/server/db'
 import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
-import { getSiteDomains } from '~/server/utils/domain-read-model'
 import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
@@ -66,6 +65,11 @@ const CF_API_BASE = 'https://api.cloudflare.com/client/v4'
 const LOCK_ID = 'zone'
 const LOCK_STALE_MS = 30_000
 const LOCK_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000]
+const ANALYTICS_KEY_PREFIX = 'ga-'
+const TENANT_KEY_PREFIX = 'ga-tenant-'
+const PLATFORM_KEY = 'ga-platform'
+const GOOGLE_VENDOR_NAME = 'Google Analytics'
+const GOOGLE_VENDOR_POLICY_URL = 'https://policies.google.com/privacy'
 
 function requireZarazEnv(env: ZarazEnv) {
   if (!env.CF_ZONE_ID) throw new Error('CF_ZONE_ID is required')
@@ -119,13 +123,8 @@ async function releaseLock(db: D1Database, lockedAt: string): Promise<void> {
 }
 
 function tenantKey(siteId: string): string {
-  return `ga-tenant-${siteId}`
+  return `${TENANT_KEY_PREFIX}${siteId}`
 }
-
-const PLATFORM_KEY = 'ga-platform'
-const CONSENT_BLOCK_TRIGGER = 'ga-consent-not-accepted'
-const GOOGLE_VENDOR_NAME = 'Google Analytics'
-const GOOGLE_VENDOR_POLICY_URL = 'https://policies.google.com/privacy'
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -158,19 +157,6 @@ function configureZarazConsentManagement(config: ZarazConfig) {
   }
   config.consent.purposes ||= {}
   config.consent.purposes[ZARAZ_ANALYTICS_PURPOSE_ID] = ZARAZ_ANALYTICS_PURPOSE
-
-  Reflect.deleteProperty(config.triggers, CONSENT_BLOCK_TRIGGER)
-  for (const tool of Object.values(config.tools ?? {})) {
-    if (isGa4Tool(tool)) {
-      tool.defaultPurpose = ZARAZ_ANALYTICS_PURPOSE_ID
-      tool.vendorName = GOOGLE_VENDOR_NAME
-      tool.vendorPolicyUrl = GOOGLE_VENDOR_POLICY_URL
-    }
-    for (const action of Object.values(tool.actions ?? {})) {
-      action.blockingTriggers = (action.blockingTriggers ?? [])
-        .filter(trigger => trigger !== CONSENT_BLOCK_TRIGGER)
-    }
-  }
 }
 
 function makeHostBlockTrigger(name: string, hostnames: string[]): ZarazTrigger {
@@ -261,15 +247,11 @@ export function upsertPlatformZarazAnalytics(
   config.historyChange = false
   config.triggers[PLATFORM_KEY] = makeHostBlockTrigger('Block non-platform hosts', input.hostnames)
 
-  const existingEntry = Object.entries(config.tools).find(([, tool]) =>
-    isGa4Tool(tool) && tool.settings?.tid === input.measurementId
-  )
-  const key = existingEntry?.[0] ?? PLATFORM_KEY
-  upsertGa4Tool(config, key, {
+  upsertGa4Tool(config, PLATFORM_KEY, {
     name: 'Platform GA4',
     measurementId: input.measurementId,
     triggerKey: PLATFORM_KEY,
-    existing: existingEntry?.[1],
+    existing: config.tools[PLATFORM_KEY],
   })
 }
 
@@ -292,48 +274,20 @@ export function upsertTenantZarazAnalytics(
   })
 }
 
-export function removeStaleTenantZarazAnalytics(config: ZarazConfig, activeSiteIds: string[]) {
-  const activeKeys = new Set(activeSiteIds.map(tenantKey))
+function removeUndesiredAnalyticsConfig(config: ZarazConfig, desiredKeys: Set<string>): number {
+  let removedTools = 0
   for (const key of Object.keys(config.tools ?? {})) {
-    if (key.startsWith('ga-tenant-') && !activeKeys.has(key)) Reflect.deleteProperty(config.tools, key)
+    if (isGa4Tool(config.tools[key]) && !desiredKeys.has(key)) {
+      Reflect.deleteProperty(config.tools, key)
+      removedTools += 1
+    }
   }
   for (const key of Object.keys(config.triggers ?? {})) {
-    if (key.startsWith('ga-tenant-') && !activeKeys.has(key)) Reflect.deleteProperty(config.triggers, key)
+    if (key.startsWith(ANALYTICS_KEY_PREFIX) && !desiredKeys.has(key)) {
+      Reflect.deleteProperty(config.triggers, key)
+    }
   }
-}
-
-export async function syncTenantZarazAnalytics(
-  env: ZarazEnv,
-  db: D1Database,
-  input: { siteId: string; organizationId: string; measurementId: string | null | undefined },
-): Promise<void> {
-  if (!input.measurementId) {
-    console.info('zaraz_sync_skipped', { siteId: input.siteId, reason: 'missing_measurement_id' })
-    return
-  }
-  const hostnames = (await getSiteDomains(db, input.siteId))
-    .filter(domain => domain.status === 'active')
-    .map(domain => domain.domain.toLowerCase())
-    .sort()
-  if (hostnames.length === 0) {
-    console.info('zaraz_sync_skipped', { siteId: input.siteId, reason: 'no_active_hostnames' })
-    return
-  }
-
-  const lockedAt = await acquireLock(db)
-  try {
-    const config = await getZarazConfig(env)
-    config.triggers ||= {}
-    config.tools ||= {}
-    upsertPlatformZarazAnalytics(config, {
-      measurementId: env.GA4_MEASUREMENT_ID,
-      hostnames: platformAnalyticsHostnames(env),
-    })
-    upsertTenantZarazAnalytics(config, { ...input, measurementId: input.measurementId, hostnames })
-    await putZarazConfig(env, config)
-  } finally {
-    await releaseLock(db, lockedAt)
-  }
+  return removedTools
 }
 
 interface ActiveTenantAnalyticsRow {
@@ -344,7 +298,7 @@ interface ActiveTenantAnalyticsRow {
 
 export interface ZarazAnalyticsReconciliationResult {
   configuredTenants: number
-  removedTenantTools: number
+  removedAnalyticsTools: number
   updated: boolean
 }
 
@@ -365,9 +319,8 @@ export function reconcileZarazAnalyticsConfig(
   config.triggers ||= {}
   config.tools ||= {}
   const before = JSON.stringify(config)
-  const activeTenantKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.siteId)))
-  const removedTenantTools = Object.keys(config.tools)
-    .filter(key => key.startsWith('ga-tenant-') && !activeTenantKeys.has(key)).length
+  const desiredKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.siteId)))
+  if (input.platformMeasurementId && input.platformHostnames.length) desiredKeys.add(PLATFORM_KEY)
 
   upsertPlatformZarazAnalytics(config, {
     measurementId: input.platformMeasurementId,
@@ -376,11 +329,11 @@ export function reconcileZarazAnalyticsConfig(
   for (const tenant of input.tenants) {
     upsertTenantZarazAnalytics(config, tenant)
   }
-  removeStaleTenantZarazAnalytics(config, input.tenants.map(tenant => tenant.siteId))
+  const removedAnalyticsTools = removeUndesiredAnalyticsConfig(config, desiredKeys)
 
   return {
     configuredTenants: input.tenants.length,
-    removedTenantTools,
+    removedAnalyticsTools,
     updated: JSON.stringify(config) !== before,
   }
 }
@@ -390,23 +343,27 @@ export async function reconcileZarazAnalytics(
   db: D1Database,
 ): Promise<ZarazAnalyticsReconciliationResult> {
   const rows = await queryAll<ActiveTenantAnalyticsRow>(db, `
-    SELECT connection.site_id,
-           connection.ga4_measurement_id,
+    SELECT site.id AS site_id,
+           COALESCE(connection.ga4_measurement_id, setting.value) AS ga4_measurement_id,
            domain.domain
-      FROM google_analytics_connections connection
-      JOIN sites site
-        ON site.id = connection.site_id
-       AND site.organization_id = connection.organization_id
+      FROM sites site
+      LEFT JOIN google_analytics_connections connection
+        ON connection.site_id = site.id
+       AND connection.organization_id = site.organization_id
+       AND connection.status = 'active'
+      LEFT JOIN site_config setting
+        ON setting.site_id = site.id
+       AND setting.organization_id = site.organization_id
+       AND setting.key = 'google_analytics_measurement_id'
       JOIN site_domains domain
-        ON domain.site_id = connection.site_id
-       AND domain.organization_id = connection.organization_id
-     WHERE connection.status = 'active'
-       AND connection.ga4_measurement_id IS NOT NULL
-       AND connection.ga4_measurement_id <> ''
-       AND site.status = 'active'
+        ON domain.site_id = site.id
+       AND domain.organization_id = site.organization_id
+     WHERE site.status = 'active'
        AND site.onboarding_status = 'active'
        AND domain.status = 'active'
-     ORDER BY connection.site_id, domain.domain
+       AND COALESCE(connection.ga4_measurement_id, setting.value) IS NOT NULL
+       AND COALESCE(connection.ga4_measurement_id, setting.value) <> ''
+     ORDER BY site.id, domain.domain
   `)
 
   const tenants = new Map<string, {
@@ -439,24 +396,6 @@ export async function reconcileZarazAnalytics(
     })
     if (result.updated) await putZarazConfig(env, config)
     return result
-  } finally {
-    await releaseLock(db, lockedAt)
-  }
-}
-
-export async function removeTenantZarazAnalytics(
-  env: ZarazEnv,
-  db: D1Database,
-  siteId: string,
-): Promise<void> {
-  const lockedAt = await acquireLock(db)
-  try {
-    const config = await getZarazConfig(env)
-    const key = tenantKey(siteId)
-    if (!config.tools?.[key] && !config.triggers?.[key]) return
-    Reflect.deleteProperty(config.tools, key)
-    Reflect.deleteProperty(config.triggers, key)
-    await putZarazConfig(env, config)
   } finally {
     await releaseLock(db, lockedAt)
   }

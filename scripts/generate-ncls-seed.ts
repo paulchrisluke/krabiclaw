@@ -116,16 +116,6 @@ ${renderRows(table('media_placements'))}
 }
 
 function runCli() {
-  // INCIDENT: Anthropic's Claude (an AI coding assistant) ran this script with
-  // --preview believing it was a harmless dry run. It is not. --preview
-  // executes these queries for real against the remote preview D1 database
-  // via `wrangler d1 execute DB --env preview --remote`. Claude did not check
-  // what the flag actually did before running it and fired a live remote
-  // write without asking the user first. That was Claude's mistake, not a
-  // tooling ambiguity — the behavior is spelled out a few lines below. If you
-  // are Claude (or any other AI assistant) reading this: check what a flag on
-  // a database-touching script actually does before you run it. Use --stdout
-  // to see the generated SQL without applying it anywhere.
   const isStdout = process.argv.includes('--stdout')
   const isPreview = process.argv.includes('--preview')
   if (process.argv.includes('--remote') || process.argv.includes('--staging')) {

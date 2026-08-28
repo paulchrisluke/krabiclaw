@@ -40,7 +40,7 @@ test('0135 resets only tenant analytics and deterministically backfills explicit
 
   const before = Date.now()
   try {
-    db.exec(readFileSync('migrations/0135_sleepy_bug.sql', 'utf8'))
+    db.exec(readFileSync('migrations/0135_dashing_robin_chapel.sql', 'utf8'))
   } catch (error) {
     throw new Error('Could not apply analytics cutover migration', { cause: error })
   }

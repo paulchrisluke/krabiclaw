@@ -17,7 +17,7 @@ export default defineScheduledTask({
     const env = taskContext?.cloudflare?.env
     const db = env?.DB
     if (!db && import.meta.dev) {
-      return { result: { configuredTenants: 0, removedTenantTools: 0, updated: false, skipped: 'DB unavailable in local scheduled task context' } }
+      return { result: { configuredTenants: 0, removedAnalyticsTools: 0, updated: false, skipped: 'DB unavailable in local scheduled task context' } }
     }
     if (!db) throw new Error('DB is required')
 
@@ -29,7 +29,7 @@ export default defineScheduledTask({
       return {
         result: {
           configuredTenants: 0,
-          removedTenantTools: 0,
+          removedAnalyticsTools: 0,
           updated: false,
           skipped: `Missing required env: ${missingKeys.join(', ')}`,
         },

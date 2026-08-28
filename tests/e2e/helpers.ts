@@ -18,8 +18,6 @@ const THIRD_PARTY_REQUEST_DOMAINS = [
   'maps.googleapis.com',
   'maps.gstatic.com',
   'google.internal.maps',
-  'googletagmanager.com',
-  'google-analytics.com',
   'doubleclick.net',
   'media.krabiclaw.com',
   'gen_204',

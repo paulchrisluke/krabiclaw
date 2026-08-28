@@ -134,7 +134,7 @@ CREATE INDEX `site_conversion_events_name_created_idx` ON `site_conversion_event
 CREATE INDEX `site_conversion_events_session_idx` ON `site_conversion_events` (`site_id`,`session_id`);--> statement-breakpoint
 CREATE INDEX `site_conversion_events_entity_idx` ON `site_conversion_events` (`site_id`,`entity_type`,`entity_id`);--> statement-breakpoint
 CREATE INDEX `site_conversion_events_source_medium_created_idx` ON `site_conversion_events` (`site_id`,`source`,`medium`,`created_at`);--> statement-breakpoint
-CREATE UNIQUE INDEX `site_conversion_events_entity_unique` ON `site_conversion_events` (`site_id`,`event_name`,`entity_type`,`entity_id`) WHERE "site_conversion_events"."entity_type" IS NOT NULL AND "site_conversion_events"."entity_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `site_conversion_events_entity_unique` ON `site_conversion_events` (`site_id`,`event_name`,`entity_type`,`entity_id`) WHERE "site_conversion_events"."entity_type" IS NOT NULL AND "site_conversion_events"."entity_id" IS NOT NULL AND "site_conversion_events"."event_name" IN ('contact_submit', 'reservation_submit', 'experience_booking_submit');--> statement-breakpoint
 CREATE INDEX `site_conversion_events_organization_id_idx` ON `site_conversion_events` (`organization_id`);--> statement-breakpoint
 ALTER TABLE `sites` ADD `analytics_data_start_at` text;--> statement-breakpoint
 DELETE FROM `media_placements`

@@ -287,6 +287,7 @@ const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
 
 const requestEvent = useRequestEvent()
 const initialRange = { ...range }
+let latestManualRequestId = 0
 const { data: analyticsResource, pending: analyticsPending, error: analyticsResourceError } =
   await useAsyncData(
     `dashboard-site-analytics:${siteId}:${initialRange.startDate}:${initialRange.endDate}`,
@@ -305,6 +306,7 @@ const { data: analyticsResource, pending: analyticsPending, error: analyticsReso
   )
 
 watch([analyticsResource, analyticsPending, analyticsResourceError], ([resource, pending, error]) => {
+  if (latestManualRequestId !== 0) return
   loading.value = pending
   if (error) {
     loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
@@ -374,18 +376,22 @@ function markCustomAndLoad() {
 }
 
 async function loadAnalytics() {
+  const requestId = ++latestManualRequestId
   loading.value = true
   loadError.value = null
   try {
-    analytics.value = await dashboardApi<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
+    const response = await dashboardApi<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
       query: { startDate: range.startDate, endDate: range.endDate },
       validate: isAnalyticsResponse,
     })
+    if (requestId !== latestManualRequestId) return
+    analytics.value = response
   } catch (error) {
+    if (requestId !== latestManualRequestId) return
     loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load analytics', color: 'error' })
   } finally {
-    loading.value = false
+    if (requestId === latestManualRequestId) loading.value = false
   }
 }
 

@@ -84,13 +84,19 @@ export default defineHandler(async (event) => {
     metadata = { link_label: link.label, position: Number(link.sort_order) + 1, destination_hostname: host }
   } else if (eventName === 'donation_click') {
     stage = 'external_handoff'
-    entityId = cleanString(body.tenant_page_id, 120) || null
+    const variantId = cleanString(body.tenant_page_variant_id, 120)
     const tierLabel = cleanString(body.tier_label, 100)
     const tierAmount = body.tier_amount == null ? null : Number(body.tier_amount)
-    if (!entityId || !tierLabel || (tierAmount !== null && (!Number.isFinite(tierAmount) || tierAmount <= 0))) return jsonResponse({ error: 'Valid tenant_page_id and donation choice are required' }, { status: 400 })
-    const page = await queryFirst<{ id: string; slug: string | null }>(db, `SELECT id, slug FROM tenant_pages WHERE id = ? AND site_id = ? AND recipe = 'donate' LIMIT 1`, [entityId, siteId])
+    if (!variantId || !tierLabel || (tierAmount !== null && (!Number.isFinite(tierAmount) || tierAmount <= 0))) return jsonResponse({ error: 'Valid tenant_page_variant_id and donation choice are required' }, { status: 400 })
+    const page = await queryFirst<{ id: string; page_id: string; path: string }>(db, `
+      SELECT v.id, v.page_id, v.path
+        FROM tenant_pages p
+        JOIN tenant_page_variants v ON v.page_id = p.id
+       WHERE v.id = ? AND v.site_id = ? AND p.recipe = 'donate'
+       LIMIT 1
+    `, [variantId, siteId])
     if (!page) return jsonResponse({ error: 'Donation page not found' }, { status: 404 })
-    const blocks = await queryAll<{ data_json: string }>(db, `SELECT cb.data_json FROM content_documents cd JOIN content_blocks cb ON cb.document_id = cd.id WHERE cd.owner_type = 'tenant_page' AND cd.owner_id = ? AND cb.type = 'donation_choices'`, [entityId])
+    const blocks = await queryAll<{ data_json: string }>(db, `SELECT cb.data_json FROM content_documents cd JOIN content_blocks cb ON cb.document_id = cd.id WHERE cd.owner_type = 'tenant_page' AND cd.owner_id = ? AND cb.type = 'donation_choices'`, [variantId])
     const choices = blocks.flatMap((row) => {
       try {
         const data = JSON.parse(row.data_json) as ApiRecord
@@ -109,7 +115,7 @@ export default defineHandler(async (event) => {
           return tier.title === tierLabel && Number(tier.amount) === tierAmount
         }))
     if (!choice) return jsonResponse({ error: 'Donation choice is not published' }, { status: 400 })
-    entityType = 'tenant_page'; pageType = 'donate'; pagePath = page.slug ? `/${page.slug}` : '/donate'; ctaDestination = choice.host
+    entityType = 'tenant_page'; entityId = page.page_id; pageType = 'donate'; pagePath = page.path; ctaDestination = choice.host
     metadata = { tier_label: tierLabel, ...(tierAmount === null ? {} : { tier_amount: tierAmount }), destination_hostname: choice.host }
   } else {
     return jsonResponse({ error: 'Submission conversions are server-produced' }, { status: 400 })

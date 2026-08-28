@@ -1,11 +1,5 @@
-// Analytics event tracking composable
-// Product analytics is sent straight to Cloudflare Zaraz's `zaraz.track()`
-// API. Zaraz is edge-injected (auto-inject script, see the "Web tag
-// management" Cloudflare dashboard config for krabiclaw.com) and queues
-// calls made before its own snippet has loaded, the same guarantee GTM's
-// dataLayer makes — so there is no app-owned queue/bridge to maintain here.
-// The GA4 tool inside Zaraz has an "All Tracks" trigger that fires on every
-// `zaraz.track()` call and forwards it to GA4.
+// Product analytics is sent through the edge-injected Cloudflare Zaraz API.
+// The configured GA4 tool mirrors `zaraz.track()` events after consent.
 
 declare global {
   interface Window {
@@ -112,9 +106,8 @@ export interface AnalyticsEventInput extends AnalyticsEventProperties {
   location_id?: string
 }
 
-// Reads the GA4 client_id out of the `_ga` cookie Zaraz's GA4 tool sets
-// client-side (same cookie/format gtag.js itself would set:
-// `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
+// Reads the GA4 client_id out of the `_ga` cookie Zaraz's GA4 tool sets.
+// The client_id is the last two segments of `GA1.1.<random>.<timestamp>`.
 // Used to stitch server-side Stripe webhook events back to the browsing
 // session that started checkout — see server/utils/ga4-measurement-protocol.ts.
 function decodeCookieValue(value: string): string {
