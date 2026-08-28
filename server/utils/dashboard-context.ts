@@ -58,7 +58,6 @@ export interface DashboardSiteRow {
   plan: string | null
   primary_location_id: string | null
   default_currency: string | null
-  source_locale: string | null
   // JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts),
   // or null for pure vertical defaults — see resolveSiteCmsCapabilities
   // (server/utils/cms-capabilities.ts), the one place this is parsed.
@@ -215,7 +214,7 @@ export async function resolveRequestedOrganization(
 async function resolveRecentlyTransferredSite(db: DbClient, organizationId: string, userId: string): Promise<DashboardSiteRow | null> {
   return await queryFirst<DashboardSiteRow>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
+           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency,
            s.feature_overrides, s.theme_id
     FROM site_transfer_requests t
     JOIN sites s ON s.id = t.site_id
@@ -323,7 +322,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   const site = siteId
     ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
+               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency,
                s.feature_overrides, s.theme_id
         FROM sites s
         WHERE s.organization_id = ? AND s.id = ?
@@ -332,7 +331,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     : siteSlug
       ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency, s.source_locale,
+               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency,
                s.feature_overrides, s.theme_id
         FROM sites s
         WHERE s.organization_id = ? AND s.subdomain = ?

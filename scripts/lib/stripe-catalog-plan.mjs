@@ -8,11 +8,11 @@ import {
 } from 'node:fs'
 import { basename, dirname } from 'node:path'
 
-export const CATALOG_PLAN_SCHEMA_VERSION = 9
+export const CATALOG_PLAN_SCHEMA_VERSION = 10
 export const CATALOG_APPLY_JOURNAL_SCHEMA_VERSION = 1
 export const CATALOG_APPLY_JOURNAL_KIND = 'stripe-catalog-apply-journal'
 export const CATALOG_PLAN_KIND = 'stripe-catalog-plan'
-export const OFFERED_PLAN_IDS = Object.freeze(['growth'])
+export const OFFERED_PLAN_IDS = Object.freeze(['growth', 'site_language'])
 export const RETIRED_PLAN_IDS = Object.freeze(['managed', 'seo_accelerator'])
 export const RETIRED_ADDON_TYPES = Object.freeze(['translation', 'seasonal', 'gbp_setup'])
 export const CATALOG_PLAN_SCOPES = Object.freeze(['full', 'retirement-only'])
@@ -30,6 +30,7 @@ const SUPPORTED_OPERATION_TYPES = new Set([
 const DESTRUCTIVE_OPERATION_TYPES = new Set(['archive_product', 'clear_product_default_price', 'deactivate_price'])
 const CANONICAL_PRODUCT_METADATA_KEYS = Object.freeze([
   'plan_id',
+  'product_family',
   'highlighted',
   'badge',
   'monthly_price_id',
@@ -57,6 +58,16 @@ export const PLAN_DEFINITIONS = Object.freeze([
       'Auto-sync from Facebook & Instagram',
       'Google Places imports',
     ],
+  },
+  {
+    name: 'Site Language',
+    description: 'One manually localized language for one Growth site.',
+    planId: 'site_language',
+    productFamily: 'site_language',
+    amountCents: 500,
+    annualAmountCents: 6000,
+    highlighted: false,
+    features: [],
   },
 ])
 
@@ -217,11 +228,12 @@ export async function createCatalogPlan({
 
 function canonicalProductMetadata(definition, priceRef, annualPriceRef, imageSha256, existingMetadata = {}) {
   const metadata = {
-    plan_id: definition.planId,
     highlighted: definition.highlighted ? 'true' : 'false',
     monthly_price_id: priceRef,
     currency: 'usd',
   }
+  if (definition.productFamily) metadata.product_family = definition.productFamily
+  else metadata.plan_id = definition.planId
   if (definition.badge) metadata.badge = definition.badge
   if (annualPriceRef) metadata.annual_price_id = annualPriceRef
   if (existingMetadata.seat_price_id) metadata.seat_price_id = String(existingMetadata.seat_price_id)
@@ -373,6 +385,15 @@ function productPlanId(product) {
   return typeof product?.metadata?.plan_id === 'string' ? product.metadata.plan_id.trim() : ''
 }
 
+function productCatalogId(product) {
+  const planId = productPlanId(product)
+  if (planId) return planId
+  const family = typeof product?.metadata?.product_family === 'string'
+    ? product.metadata.product_family.trim().toLowerCase()
+    : ''
+  return family === 'site_language' ? family : ''
+}
+
 function retiredCatalogFamily(product) {
   const planId = productPlanId(product)
   if (RETIRED_PLAN_IDS.includes(planId)) return `plan:${planId}`
@@ -399,7 +420,7 @@ function resolveCanonicalProducts(snapshot, canonicalProductIds) {
   const productsByPlan = new Map()
 
   for (const product of activeProducts) {
-    const planId = productPlanId(product)
+    const planId = productCatalogId(product)
     if (!OFFERED_PLAN_IDS.includes(planId)) continue
     const products = productsByPlan.get(planId) ?? []
     products.push(product)
@@ -412,8 +433,8 @@ function resolveCanonicalProducts(snapshot, canonicalProductIds) {
       throw new Error(`Canonical product override has unsupported plan ID ${planId}.`)
     }
     const product = activeProducts.find(candidate => candidate.id === productId)
-    if (!product || productPlanId(product) !== planId) {
-      throw new Error(`Canonical product override ${planId}=${productId} must reference an active product with metadata.plan_id=${planId}.`)
+    if (!product || productCatalogId(product) !== planId) {
+      throw new Error(`Canonical product override ${planId}=${productId} must reference the active ${planId} catalog product.`)
     }
   }
 
@@ -512,9 +533,17 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
     const annual = existing ? resolveCanonicalPrice(existing, prices, 'year', seatPriceId) : null
     assertAnnualCurrency(existing ?? { id: definition.planId }, canonical, annual)
     if (definition.planId === 'growth') assertFixedGrowthAnnualAmount(annual)
+    if (definition.annualAmountCents && annual && (annual.currency?.toLowerCase() !== 'usd' || annual.unit_amount !== definition.annualAmountCents)) {
+      throw new Error(`Stripe product ${existing?.id ?? definition.planId} canonical annual price ${annual.id} must be usd ${definition.annualAmountCents} cents`)
+    }
     const priceRef = canonical
       ? canonical.id
       : { ref: { kind: 'price', planId: definition.planId } }
+    const annualPriceRef = annual
+      ? annual.id
+      : definition.annualAmountCents
+        ? { ref: { kind: 'price', planId: `${definition.planId}_annual` } }
+        : null
 
     if (!existing) {
       canonicalOperations.push({
@@ -525,7 +554,9 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
           description: definition.description,
           marketing_features: definition.features.map(name => ({ name })),
           metadata: {
-            plan_id: definition.planId,
+            ...(definition.productFamily
+              ? { product_family: definition.productFamily }
+              : { plan_id: definition.planId }),
             highlighted: definition.highlighted ? 'true' : 'false',
             ...(definition.badge ? { badge: definition.badge } : {}),
           },
@@ -542,6 +573,21 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
           currency: 'usd',
           unit_amount: definition.amountCents,
           recurring: { interval: 'month', interval_count: 1 },
+        },
+      })
+    }
+
+
+    if (!annual && definition.annualAmountCents) {
+      canonicalOperations.push({
+        type: 'create_price',
+        planId: `${definition.planId}_annual`,
+        catalogProductId: definition.planId,
+        product: productRef,
+        params: {
+          currency: 'usd',
+          unit_amount: definition.annualAmountCents,
+          recurring: { interval: 'year', interval_count: 1 },
         },
       })
     }
@@ -563,12 +609,12 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
     const updateParams = productPatch(
       definition,
       priceRef,
-      annual?.id ?? null,
+      annualPriceRef,
       image ? { ref: { kind: 'file', planId: definition.planId } } : null,
       desiredImageSha256,
       existing?.metadata,
     )
-    if (!existing || image || existingProductNeedsUpdate(existing, definition, priceRef, annual?.id ?? null, desiredImageSha256)) {
+    if (!existing || image || existingProductNeedsUpdate(existing, definition, priceRef, annualPriceRef, desiredImageSha256)) {
       canonicalOperations.push({
         type: 'update_product',
         product: productRef,
@@ -596,7 +642,7 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
   }
 
   for (const product of [...snapshot.products].sort((a, b) => a.id.localeCompare(b.id))) {
-    const planId = productPlanId(product)
+    const planId = productCatalogId(product)
     const retiredProduct = retiredCatalogFamily(product) !== null
     const inactiveOfferedProduct = OFFERED_PLAN_IDS.includes(planId) && product.active === false
     if (!retiredProduct && !inactiveOfferedProduct) continue
@@ -710,6 +756,7 @@ function operationIdentity(operation) {
   return {
     type: operation?.type ?? null,
     planId: operation?.planId ?? null,
+    catalogProductId: operation?.catalogProductId ?? null,
     productId: operation?.productId ?? null,
     priceId: operation?.priceId ?? null,
     defaultPriceId: operation?.defaultPriceId ?? null,
@@ -940,7 +987,10 @@ function operationAlreadyApplied(snapshot, operation, context, entry) {
       ? findCurrentProduct(snapshot, knownId)
       : snapshot.products.find(candidate =>
           candidate.active !== false
-          && candidate.metadata?.plan_id === operation.params?.metadata?.plan_id,
+          && (
+            candidate.metadata?.plan_id === operation.params?.metadata?.plan_id
+            || candidate.metadata?.product_family === operation.params?.metadata?.product_family
+          ),
         )
     return Boolean(product && product.active !== false && matchesProductPatch(product, operation.params))
   }
@@ -976,7 +1026,10 @@ function inferredAppliedEvidence(snapshot, operation, context, entry) {
       ? findCurrentProduct(snapshot, knownId)
       : snapshot.products.find(candidate =>
           candidate.active !== false
-          && candidate.metadata?.plan_id === operation.params?.metadata?.plan_id
+          && (
+            candidate.metadata?.plan_id === operation.params?.metadata?.plan_id
+            || candidate.metadata?.product_family === operation.params?.metadata?.product_family
+          )
           && matchesProductPatch(candidate, operation.params),
         )
     return product?.id ? { id: product.id } : {}
@@ -1043,9 +1096,14 @@ function assertOperationPrecondition(snapshot, plan, operation, context, entry) 
     return { alreadyApplied: false }
   }
   if (operation.type === 'create_product') {
+    // create_product's own params never carry metadata (a later update_product
+    // sets it once the product/price IDs exist), so identity must resolve
+    // through productCatalogId's plan_id/product_family reader against the
+    // operation's planId, not operation.params.metadata.
     const duplicate = snapshot.products.find(candidate =>
       candidate.active !== false
-      && candidate.metadata?.plan_id === operation.params?.metadata?.plan_id,
+      && productCatalogId(candidate) !== ''
+      && productCatalogId(candidate) === operation.planId,
     )
     if (duplicate) throw new Error(`Provider precondition failed: active canonical product ${duplicate.id} does not match the signed create operation.`)
     return { alreadyApplied: false }
@@ -1053,7 +1111,7 @@ function assertOperationPrecondition(snapshot, plan, operation, context, entry) 
   if (operation.type === 'create_price') {
     const productId = resolveProductId(operation, context)
     if (!productId) throw new Error(`Unable to resolve product for ${operation.planId} price creation.`)
-    assertSignedProductPrecondition(snapshot, plan, productId, operation.planId)
+    assertSignedProductPrecondition(snapshot, plan, productId, operation.catalogProductId ?? operation.planId)
     return { alreadyApplied: false }
   }
   if (operation.type === 'update_product') {

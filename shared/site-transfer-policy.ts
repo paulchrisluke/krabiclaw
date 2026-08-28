@@ -36,7 +36,8 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'tenant_compliance',
   'site_consultation_settings',
   'site_theme_tokens',
-  'tenant_redirects',
+  'site_redirects',
+  'resource_localizations',
   'site_conversion_events',
   'site_domain_events',
   'site_domains',
@@ -64,6 +65,7 @@ export const SITE_TRANSFER_REVOKE_TABLES = [
   'facebook_pages_connections',
   'google_analytics_connections',
   'mcp_workspace_preferences',
+  'site_language_licenses',
 ] as const
 
 export const SITE_TRANSFER_REBUILD_TABLES = [

@@ -3,7 +3,7 @@
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { getOrganizationBillingStatus, setSiteEntitlementsFromPlan, type BillingEnv } from '~/server/utils/billing'
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { ensureSiteTeam, organizationAdapter } from '~/server/utils/member-access'
@@ -119,11 +119,25 @@ export async function runSiteCreation(
 
     siteId = crypto.randomUUID()
     try {
-      await execute(db, `
-        INSERT INTO sites
-          (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, status, plan, onboarding_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'free', 'pending', ?, ?)
-      `, [siteId, organizationId, themeId, storedVertical, normalizedSubdomain, normalizedSubdomain, name, new Date().toISOString(), new Date().toISOString()])
+      const now = new Date().toISOString()
+      await executeBatch(db, [
+        {
+          query: `
+            INSERT INTO sites
+              (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, default_currency, status, plan, onboarding_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'USD', 'active', 'free', 'pending', ?, ?)
+          `,
+          params: [siteId, organizationId, themeId, storedVertical, normalizedSubdomain, normalizedSubdomain, name, now, now],
+        },
+        {
+          query: `
+            INSERT INTO site_locales
+              (id, organization_id, site_id, locale, label, is_source, status, created_at, updated_at)
+            VALUES (?, ?, ?, 'en', 'English', 1, 'published', ?, ?)
+          `,
+          params: [`locale::${organizationId}::${siteId}::en`, organizationId, siteId, now, now],
+        },
+      ], { operation: 'create site and source locale' })
     } catch (siteError) {
       const msg = siteError instanceof Error ? siteError.message : ''
       if (msg.includes('UNIQUE constraint failed')) {

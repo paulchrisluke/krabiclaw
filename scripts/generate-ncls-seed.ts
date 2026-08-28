@@ -103,7 +103,7 @@ ${renderRows(table('content_blocks'))}
 
 ${renderRows(table('tenant_page_variants'))}
 
-${renderRows(table('blog_post_redirects'))}
+${renderRows(table('site_redirects'))}
 
 ${afterCore}
 

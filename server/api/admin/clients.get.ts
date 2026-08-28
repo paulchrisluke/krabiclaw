@@ -15,7 +15,6 @@ interface ClientRow {
   brand_name: string | null
   subdomain: string | null
   custom_domain: string | null
-  source_locale: string | null
   subscription_status: string | null
   current_period_end: string | null
   stripe_customer_id: string | null
@@ -144,7 +143,7 @@ export default defineHandler(async (event) => {
       WHERE status = 'pending'
     )
     SELECT
-      ob.organization_id AS org_id, NULL AS org_name, NULL AS org_slug, COALESCE(ob.plan, 'free') AS plan, s.id AS site_id, s.brand_name, s.subdomain, s.custom_domain, s.source_locale, ob.status AS subscription_status, ob.current_period_end, ob.stripe_customer_id, ob.stripe_subscription_id, pt.to_email AS pending_transfer_email, NULL AS impersonation_user_id, NULL AS created_at
+      ob.organization_id AS org_id, NULL AS org_name, NULL AS org_slug, COALESCE(ob.plan, 'free') AS plan, s.id AS site_id, s.brand_name, s.subdomain, s.custom_domain, ob.status AS subscription_status, ob.current_period_end, ob.stripe_customer_id, ob.stripe_subscription_id, pt.to_email AS pending_transfer_email, NULL AS impersonation_user_id, NULL AS created_at
     FROM organization_billing ob
     LEFT JOIN single_site s ON s.organization_id = ob.organization_id AND s.rn = 1
     LEFT JOIN pending_transfer pt ON pt.from_organization_id = ob.organization_id AND pt.rn = 1

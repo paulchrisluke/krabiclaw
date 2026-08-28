@@ -11,14 +11,12 @@ const props = defineProps<{ path: string; previewToken?: string | null; locale?:
 const { siteId, isTenant, site } = useTenantSite()
 const { site: publicSite } = useSiteShellState()
 const { isBlawby } = usePublicTemplate()
-const route = useRoute()
 const { locale: i18nLocale } = useI18n()
 if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Tenant site context is unavailable' })
 
 const preview = Boolean(props.previewToken)
 const activeLocale = computed(() => {
   if (props.locale?.trim()) return props.locale.trim()
-  if (preview && typeof route.query.locale === 'string' && route.query.locale.trim()) return route.query.locale.trim()
   return i18nLocale.value
 })
 const pagePath = props.path === '/' ? '/' : props.path.replace(/\/+$/, '')
@@ -45,12 +43,15 @@ const { data, error } = await useAsyncData(key, async () => {
     if (!page) throw createError({ statusCode: 404, statusMessage: 'Tenant page not found' })
     return { success: true as const, page }
   }
-  const query: Record<string, string> = { path: pagePath, locale: activeLocale.value }
+  const query: Record<string, string> = { path: pagePath }
   if (preview && props.previewToken) {
     query.preview = 'true'
     query.token = props.previewToken
   }
-  return await publicApiRequest<{ success: true; page: PublicTenantPage }>(`/api/public/sites/${encodeURIComponent(siteId)}/pages`, {
+  const endpoint = activeLocale.value === 'en'
+    ? `/api/public/sites/${encodeURIComponent(siteId)}/pages`
+    : `/api/public/sites/${encodeURIComponent(siteId)}/localized-pages/${encodeURIComponent(activeLocale.value)}`
+  return await publicApiRequest<{ success: true; page: PublicTenantPage }>(endpoint, {
     query,
     validate: isPageResponse,
     coalesceKey: key.value,

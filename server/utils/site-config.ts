@@ -13,7 +13,6 @@ export interface SiteConfig {
   partnerships_email?: string
   catering_email?: string
   careers_email?: string
-  source_locale?: string
   google_analytics_measurement_id?: string
   google_site_verification?: string
   default_timezone?: string

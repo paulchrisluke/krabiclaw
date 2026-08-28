@@ -41,7 +41,6 @@ export const nclsFixture = {
           "brand_description": "Access to Justice for All. North Carolina's affordable legal services. We believe that access to the Justice System is a fundamental right. At North Carolina Legal Services we are committed to removing financial barriers that prevent many in our community from obtaining high-quality legal assistance.",
           "contact_email": "contact@northcarolinalegalservices.org",
           "contact_phone": "(984) 777-8288",
-          "source_locale": "en",
           "default_currency": "USD",
           "status": "active",
           "plan": "growth",
@@ -5587,35 +5586,71 @@ export const nclsFixture = {
       ]
     },
     {
-      "table": "blog_post_redirects",
+      "table": "site_redirects",
       "rows": [
         {
           "id": "redirect-divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare",
-          "post_id": "blog_ncls_divorce-and-children-in-north-carolina",
+          "organization_id": "org-ncls-blawby",
           "site_id": "site-ncls-blawby",
-          "old_slug": "divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare",
-          "created_at": "2024-03-08T00:00:00.000Z"
+          "locale": "en",
+          "owner_type": "tenant_blog_post",
+          "owner_id": "blog_ncls_divorce-and-children-in-north-carolina",
+          "from_path": "/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare",
+          "to_path": "/article/divorce-and-children-in-north-carolina",
+          "status_code": 301,
+          "behavior": "redirect",
+          "reason": "tenant_blog_slug_change",
+          "source": "tenant-blog",
+          "created_at": "2024-03-08T00:00:00.000Z",
+          "updated_at": "2024-03-08T00:00:00.000Z"
         },
         {
           "id": "redirect-preparing-for-your-consultation",
-          "post_id": "blog_ncls_preparing-for-your-consultation-with-north-carolina-legal-services",
+          "organization_id": "org-ncls-blawby",
           "site_id": "site-ncls-blawby",
-          "old_slug": "preparing-for-your-consultation",
-          "created_at": "2025-04-09T00:00:00.000Z"
+          "locale": "en",
+          "owner_type": "tenant_blog_post",
+          "owner_id": "blog_ncls_preparing-for-your-consultation-with-north-carolina-legal-services",
+          "from_path": "/article/preparing-for-your-consultation",
+          "to_path": "/article/preparing-for-your-consultation-with-north-carolina-legal-services",
+          "status_code": 301,
+          "behavior": "redirect",
+          "reason": "tenant_blog_slug_change",
+          "source": "tenant-blog",
+          "created_at": "2025-04-09T00:00:00.000Z",
+          "updated_at": "2025-04-09T00:00:00.000Z"
         },
         {
           "id": "redirect-property-division-in-north-carolina-divorce",
-          "post_id": "blog_ncls_property-division-in-north-carolina-divorce-protecting-whats-yours",
+          "organization_id": "org-ncls-blawby",
           "site_id": "site-ncls-blawby",
-          "old_slug": "property-division-in-north-carolina-divorce",
-          "created_at": "2024-12-21T00:00:00.000Z"
+          "locale": "en",
+          "owner_type": "tenant_blog_post",
+          "owner_id": "blog_ncls_property-division-in-north-carolina-divorce-protecting-whats-yours",
+          "from_path": "/article/property-division-in-north-carolina-divorce",
+          "to_path": "/article/property-division-in-north-carolina-divorce-protecting-whats-yours",
+          "status_code": 301,
+          "behavior": "redirect",
+          "reason": "tenant_blog_slug_change",
+          "source": "tenant-blog",
+          "created_at": "2024-12-21T00:00:00.000Z",
+          "updated_at": "2024-12-21T00:00:00.000Z"
         },
         {
           "id": "redirect-writing-your-own-will-how-it-works-in-north-carolina",
-          "post_id": "blog_ncls_writing-your-own-will-how-it-works",
+          "organization_id": "org-ncls-blawby",
           "site_id": "site-ncls-blawby",
-          "old_slug": "writing-your-own-will-how-it-works-in-north-carolina",
-          "created_at": "2024-02-07T00:00:00.000Z"
+          "locale": "en",
+          "owner_type": "tenant_blog_post",
+          "owner_id": "blog_ncls_writing-your-own-will-how-it-works",
+          "from_path": "/article/writing-your-own-will-how-it-works-in-north-carolina",
+          "to_path": "/article/writing-your-own-will-how-it-works",
+          "status_code": 301,
+          "behavior": "redirect",
+          "reason": "tenant_blog_slug_change",
+          "source": "tenant-blog",
+          "created_at": "2024-02-07T00:00:00.000Z",
+          "updated_at": "2024-02-07T00:00:00.000Z"
         }
       ]
     },

@@ -284,7 +284,6 @@ export function buildOnboardingDraftPayload(input: {
       vertical: input.vertical,
       subdomainCandidate,
       config: {
-        source_locale: 'en',
         brand_color: brandColor,
         draft_logo_note: input.brandDraft?.logoNote?.trim() || null,
         draft_hero_photo_note: input.brandDraft?.heroPhotoNote?.trim() || null,

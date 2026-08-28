@@ -9,6 +9,7 @@ import { categoryToSlug } from '~/utils/docs-categories'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { resolveProductPresentation } from '~/utils/product-presentation'
+import { assertSiteLanguageEntitlement } from '~/server/utils/localization'
 
 interface SitemapEntry {
   loc: string
@@ -128,6 +129,38 @@ export default definePlugin((nitroApp) => {
     }
 
     const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical })
+
+    const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
+      SELECT l.locale, l.organization_id
+        FROM site_language_licenses l
+       WHERE l.site_id = ? AND l.status = 'active'
+       ORDER BY l.locale
+    `, [siteId])
+    for (const candidate of localizedLocales) {
+      try {
+        await assertSiteLanguageEntitlement(db, candidate.organization_id, siteId, candidate.locale)
+      } catch {
+        continue
+      }
+      const [resources, pages] = await Promise.all([
+        queryAll<{ route_path: string; updated_at: number }>(db, `
+          SELECT route_path, updated_at FROM resource_localizations
+           WHERE site_id = ? AND locale = ? AND route_path IS NOT NULL
+           ORDER BY route_path
+        `, [siteId, candidate.locale]),
+        queryAll<{ path: string; updated_at: string; robots: string | null }>(db, `
+          SELECT path, updated_at, robots FROM tenant_page_variants
+           WHERE site_id = ? AND locale = ?
+           ORDER BY path
+        `, [siteId, candidate.locale]),
+      ])
+      for (const resource of resources) entries.push({ loc: resource.route_path, lastmod: new Date(resource.updated_at * 1000).toISOString() })
+      for (const page of pages) {
+        if (/noindex/i.test(page.robots || '')) continue
+        const localizedPath = page.path === '/' ? `/${candidate.locale}` : `/${candidate.locale}${page.path}`
+        entries.push({ loc: localizedPath, lastmod: page.updated_at })
+      }
+    }
 
     // Blawby/professional-services sites have a different route surface
     // (offerings, tenant CMS pages, /article/ instead of /blog/) than the

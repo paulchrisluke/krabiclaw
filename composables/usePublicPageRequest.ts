@@ -1,4 +1,3 @@
-import { normalizeAppLocale } from '~/utils/app-i18n'
 
 // Maps each public route to the exact page datasets it may request.
 //
@@ -247,14 +246,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
 
 export const usePublicPageRequest = () => {
   const route = useRoute();
-  const { locale } = useI18n();
-  const requestedLocale = normalizeAppLocale(route.query.locale)
-  if (requestedLocale && requestedLocale !== locale.value) locale.value = requestedLocale
-
-  watch(() => route.query.locale, (value) => {
-    const nextLocale = normalizeAppLocale(value)
-    if (nextLocale && nextLocale !== locale.value) locale.value = nextLocale
-  })
+  const locale = useState<string>('public-locale', () => 'en')
 
   return computed<PublicPageRequest>(() => {
     const previewSubpath = getPreviewSubpath(route.path)
@@ -312,7 +304,6 @@ export const buildPublicPageUrl = (
   if (params.experience) qs.set("experience", params.experience);
   if (params.datasets.length) qs.set("datasets", [...params.datasets].sort().join(','));
   if (params.blogSlug) qs.set("blogSlug", params.blogSlug);
-  if (params.locale) qs.set("locale", params.locale);
   if (params.token) {
     qs.set("preview", "true");
     qs.set("token", params.token);
@@ -325,5 +316,8 @@ export const buildPublicPageUrl = (
     const draftQuery = qs.toString()
     return `/api/public/drafts/${draftId}/${resourceKind}${draftQuery ? `?${draftQuery}` : ""}`
   }
-  return `/api/public/sites/${siteId}/${resourceKind}${q ? `?${q}` : ""}`;
+  const localizedResource = params.locale && params.locale !== 'en'
+    ? `localized-${resourceKind}/${encodeURIComponent(params.locale)}`
+    : resourceKind
+  return `/api/public/sites/${siteId}/${localizedResource}${q ? `?${q}` : ""}`;
 };

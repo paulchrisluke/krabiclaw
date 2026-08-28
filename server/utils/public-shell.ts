@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';
 import {  setHeader } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { executeBatch, type BatchQuery } from '~/server/db'
+import { executeBatch, queryAll, type BatchQuery } from '~/server/db'
 import { buildPublicResourceCacheKey, getPublicResourceCache, putPublicResourceCache } from '~/server/utils/public-resource-cache'
 import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { loadPublicBase } from '~/server/utils/public-base'
@@ -12,6 +12,7 @@ import { verifyPreviewToken } from '~/server/utils/preview-token'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPublicShellPayload } from '~/utils/public-resource-contracts'
+import { assertExactCanonicalLocale, assertSiteLanguageEntitlement, getResourceLocalization } from '~/server/utils/localization'
 
 export interface PublicShellLoadOptions {
   mutateResponseHeaders?: boolean
@@ -34,9 +35,7 @@ export async function loadPublicShellSource(
 
   const token = typeof query.token === 'string' ? query.token : null
   const locale = typeof query.locale === 'string' ? query.locale : undefined
-  if (locale !== undefined && !/^[a-z]{2}(-[A-Z]{2})?$/.test(locale)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid public shell locale' })
-  }
+  if (locale !== undefined) assertExactCanonicalLocale(locale)
   const previewAuthorized = Boolean(
     token && env.PREVIEW_SECRET
       ? await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, token)
@@ -99,6 +98,43 @@ export async function loadPublicShellSource(
     success: true,
     ...buildPublicShellPayload(site, shellResults, shellIndexes),
     count: shellResults[shellIndexes.locations]?.results?.length ?? 0,
+  }
+  if (locale && locale !== 'en') {
+    const entitlement = await assertSiteLanguageEntitlement(db, site.organization_id, siteId, locale)
+    if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
+    const siteLocalization = await getResourceLocalization(db, site.organization_id, siteId, 'site', siteId, locale)
+    const localizedLocations = await queryAll<{ resource_id: string; values_json: string; route_path: string }>(db, `
+      SELECT resource_id, values_json, route_path
+        FROM resource_localizations
+       WHERE organization_id = ? AND site_id = ? AND locale = ?
+         AND resource_type = 'business_location' AND route_path IS NOT NULL
+    `, [site.organization_id, siteId, locale])
+    const locationById = new Map(localizedLocations.map(row => [row.resource_id, row]))
+    payload.locations = payload.locations.flatMap((location) => {
+      const localized = locationById.get(location.id)
+      if (!localized) return []
+      const values = JSON.parse(localized.values_json) as Record<string, unknown>
+      const segment = localized.route_path.split('/').filter(Boolean).at(-1)
+      if (!segment) throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized location route is invalid' })
+      return [{ ...location, ...values, slug: segment }]
+    }) as typeof payload.locations
+    const siteValues = siteLocalization.values
+    payload.site = { ...payload.site, ...siteValues }
+    const {
+      brand_name: _sourceBrandName,
+      brand_description: _sourceBrandDescription,
+      seo_title: _sourceSeoTitle,
+      seo_description: _sourceSeoDescription,
+      ...nonLocalizedConfig
+    } = payload.config
+    payload.config = {
+      ...nonLocalizedConfig,
+      ...(typeof siteValues.brand_name === 'string' ? { brand_name: siteValues.brand_name } : {}),
+      ...(typeof siteValues.brand_description === 'string' ? { brand_description: siteValues.brand_description } : {}),
+      ...(typeof siteValues.seo_title === 'string' ? { seo_title: siteValues.seo_title } : {}),
+      ...(typeof siteValues.seo_description === 'string' ? { seo_description: siteValues.seo_description } : {}),
+    }
+    payload.count = payload.locations.length
   }
   if (useCache && cache) {
     const write = putPublicResourceCache(cache, cacheKey, JSON.stringify(payload))

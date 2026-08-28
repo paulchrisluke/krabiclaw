@@ -67,7 +67,7 @@ test.describe('stateless MCP server', () => {
     expect(toolsList.status()).toBe(200)
     const toolsBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(t => t.name)
-    expect(toolNames).toContain('list_locales')
+    expect(toolNames).toContain('list_site_locales')
     expect(toolNames).not.toContain('list_work_requests')
     expect(toolNames).not.toContain('create_work_request')
 
