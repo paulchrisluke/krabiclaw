@@ -6,8 +6,6 @@ export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
 export const blawbyBaseURL = blawbyTestBaseUrl()
 // Extra headers for tenant tests against local or raw *.workers.dev hosts.
 // Deployed preview and staging tenant tests use direct environment aliases.
-// Apply via test.use({ extraHTTPHeaders: tenantExtraHeaders }) in each describe
-// block that navigates to a tenant URL (not the platform/dashboard describes).
 export const tenantExtraHeaders = tenantTestExtraHeaders()
 export const potteryHouseExtraHeaders = potteryHouseTestExtraHeaders()
 export const blawbyExtraHeaders = blawbyTestExtraHeaders()
@@ -37,12 +35,26 @@ const THIRD_PARTY_CONSOLE_PATTERNS = [
 // page.setExtraHTTPHeaders sends to ALL origins, triggering CORS preflights on
 // cross-origin resources (R2 media CDN, analytics beacon) that don't allow
 // x-preview-tenant — causing ERR_BLOCKED_BY_ORB and CORS failures.
-export async function setupTenantHeaders(page: Page, baseURL: string, headers: Record<string, string>) {
-  if (!Object.keys(headers).length) return
-  const { origin } = new URL(baseURL)
-  await page.route(`${origin}/**`, async (route) => {
-    await route.continue({ headers: { ...route.request().headers(), ...headers } })
-  })
+export async function openTenantPage(page: Page, url: string, headers: Record<string, string>) {
+  const { origin } = new URL(url)
+  if (Object.keys(headers).length) {
+    await page.route(`${origin}/**`, async (route) => {
+      await route.continue({ headers: { ...route.request().headers(), ...headers } })
+    })
+  }
+
+  const response = await page.goto(url, { waitUntil: 'load' })
+  const consentModal = page.getByRole('dialog', { name: 'Cookie Settings' })
+  const consentTimeout = new URL(url).hostname.endsWith('.krabiclaw.com') ? 10_000 : 500
+  const consentVisible = await consentModal
+    .waitFor({ state: 'visible', timeout: consentTimeout })
+    .then(() => true, () => false)
+  if (consentVisible) {
+    await consentModal.getByRole('button', { name: /accept all/i }).click()
+    await expect(consentModal).toBeHidden()
+  }
+
+  return response
 }
 
 export function collectPageErrors(page: Page, options: { failOnAllWarnings?: boolean } = {}) {
