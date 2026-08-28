@@ -743,6 +743,10 @@ export async function executePlatformMcpToolCall(
       if (startDate > endDate) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'start_date must be before or equal to end_date.')
       }
+      const daySpan = Math.round((new Date(`${endDate}T00:00:00.000Z`).getTime() - new Date(`${startDate}T00:00:00.000Z`).getTime()) / (24 * 60 * 60 * 1000))
+      if (daySpan > 365) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'Date range exceeds the 365-day maximum.')
+      }
 
       const summary = await getPlatformAnalyticsSummary(user.db, startDate, endDate)
       return {

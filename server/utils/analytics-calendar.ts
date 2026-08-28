@@ -12,6 +12,13 @@ export function isValidTimeZone(value: string | null | undefined): value is stri
   }
 }
 
+export function isValidCalendarDate(value: string): boolean {
+  if (!DATE_PATTERN.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year!, month! - 1, day!))
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month! - 1 && parsed.getUTCDate() === day
+}
+
 export function addLocalDays(date: string, days: number): string {
   const parsed = new Date(`${date}T00:00:00.000Z`)
   parsed.setUTCDate(parsed.getUTCDate() + days)
@@ -77,7 +84,7 @@ export function parseAnalyticsRange(input: {
   const endDate = input.endDate ?? today
   const startDate = input.startDate ?? addLocalDays(endDate, -29)
   for (const [name, value] of [['startDate', startDate], ['endDate', endDate]] as const) {
-    if (!DATE_PATTERN.test(value) || addLocalDays(value, 0) !== value) {
+    if (!isValidCalendarDate(value)) {
       throw new HTTPError({ statusCode: 400, statusMessage: `${name} must be a valid YYYY-MM-DD date` })
     }
   }

@@ -1,4 +1,4 @@
-import { execute } from '~/server/db'
+import { execute, queryAll } from '~/server/db'
 import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
 import { getSiteDomains } from '~/server/utils/domain-read-model'
 import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
@@ -331,6 +331,114 @@ export async function syncTenantZarazAnalytics(
     })
     upsertTenantZarazAnalytics(config, { ...input, measurementId: input.measurementId, hostnames })
     await putZarazConfig(env, config)
+  } finally {
+    await releaseLock(db, lockedAt)
+  }
+}
+
+interface ActiveTenantAnalyticsRow {
+  site_id: string
+  ga4_measurement_id: string
+  domain: string
+}
+
+export interface ZarazAnalyticsReconciliationResult {
+  configuredTenants: number
+  removedTenantTools: number
+  updated: boolean
+}
+
+export interface ZarazAnalyticsTenant {
+  siteId: string
+  measurementId: string
+  hostnames: string[]
+}
+
+export function reconcileZarazAnalyticsConfig(
+  config: ZarazConfig,
+  input: {
+    platformMeasurementId?: string | null
+    platformHostnames: string[]
+    tenants: ZarazAnalyticsTenant[]
+  },
+): ZarazAnalyticsReconciliationResult {
+  config.triggers ||= {}
+  config.tools ||= {}
+  const before = JSON.stringify(config)
+  const activeTenantKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.siteId)))
+  const removedTenantTools = Object.keys(config.tools)
+    .filter(key => key.startsWith('ga-tenant-') && !activeTenantKeys.has(key)).length
+
+  upsertPlatformZarazAnalytics(config, {
+    measurementId: input.platformMeasurementId,
+    hostnames: input.platformHostnames,
+  })
+  for (const tenant of input.tenants) {
+    upsertTenantZarazAnalytics(config, tenant)
+  }
+  removeStaleTenantZarazAnalytics(config, input.tenants.map(tenant => tenant.siteId))
+
+  return {
+    configuredTenants: input.tenants.length,
+    removedTenantTools,
+    updated: JSON.stringify(config) !== before,
+  }
+}
+
+export async function reconcileZarazAnalytics(
+  env: ZarazEnv,
+  db: D1Database,
+): Promise<ZarazAnalyticsReconciliationResult> {
+  const rows = await queryAll<ActiveTenantAnalyticsRow>(db, `
+    SELECT connection.site_id,
+           connection.ga4_measurement_id,
+           domain.domain
+      FROM google_analytics_connections connection
+      JOIN sites site
+        ON site.id = connection.site_id
+       AND site.organization_id = connection.organization_id
+      JOIN site_domains domain
+        ON domain.site_id = connection.site_id
+       AND domain.organization_id = connection.organization_id
+     WHERE connection.status = 'active'
+       AND connection.ga4_measurement_id IS NOT NULL
+       AND connection.ga4_measurement_id <> ''
+       AND site.status = 'active'
+       AND site.onboarding_status = 'active'
+       AND domain.status = 'active'
+     ORDER BY connection.site_id, domain.domain
+  `)
+
+  const tenants = new Map<string, {
+    measurementId: string
+    hostnames: string[]
+  }>()
+  for (const row of rows) {
+    const existing = tenants.get(row.site_id)
+    if (existing) {
+      existing.hostnames.push(row.domain.toLowerCase())
+      continue
+    }
+    tenants.set(row.site_id, {
+      measurementId: row.ga4_measurement_id,
+      hostnames: [row.domain.toLowerCase()],
+    })
+  }
+
+  const lockedAt = await acquireLock(db)
+  try {
+    const config = await getZarazConfig(env)
+    const result = reconcileZarazAnalyticsConfig(config, {
+      platformMeasurementId: env.GA4_MEASUREMENT_ID,
+      platformHostnames: platformAnalyticsHostnames(env),
+      tenants: [...tenants.entries()].map(([siteId, tenant]) => ({
+        siteId,
+        measurementId: tenant.measurementId,
+        hostnames: [...new Set(tenant.hostnames)].sort(),
+      })),
+    })
+    if (result.updated) await putZarazConfig(env, config)
+    return result
   } finally {
     await releaseLock(db, lockedAt)
   }

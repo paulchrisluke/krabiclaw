@@ -220,6 +220,7 @@ const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
+import { getLocalTimezone } from '~/utils/timezone'
 
 type PresetKey = 'last_52_weeks' | 'last_30_days' | 'last_7_days' | 'current_month' | 'custom'
 
@@ -258,7 +259,7 @@ const activePreset = ref<PresetKey>('last_30_days')
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const analytics = ref<AnalyticsResponse | null>(null)
-const range = reactive(presetRange('last_30_days'))
+const range = reactive(presetRange('last_30_days', getLocalTimezone()))
 const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
   isRecord(value)
   && isRecord(value.metrics)
@@ -332,25 +333,38 @@ const metricCards = computed(() => {
   ]
 })
 
-function getDateString(date: Date): string {
-  const [day] = date.toISOString().split('T')
-  return day || ''
+function todayInTimeZone(timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
-function presetRange(key: PresetKey): { startDate: string; endDate: string } {
-  const now = new Date()
-  const endDate = getDateString(now)
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-  if (key === 'last_52_weeks') start.setUTCDate(start.getUTCDate() - 363)
-  if (key === 'last_30_days') start.setUTCDate(start.getUTCDate() - 29)
-  if (key === 'last_7_days') start.setUTCDate(start.getUTCDate() - 6)
-  if (key === 'current_month') start.setUTCDate(1)
-  return { startDate: getDateString(start), endDate }
+function addCalendarDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number)
+  const shifted = new Date(Date.UTC(year!, month! - 1, day!))
+  shifted.setUTCDate(shifted.getUTCDate() + days)
+  return shifted.toISOString().slice(0, 10)
+}
+
+function presetRange(key: PresetKey, timeZone: string): { startDate: string; endDate: string } {
+  const endDate = todayInTimeZone(timeZone)
+  let startDate = endDate
+  if (key === 'last_52_weeks') startDate = addCalendarDays(endDate, -363)
+  if (key === 'last_30_days') startDate = addCalendarDays(endDate, -29)
+  if (key === 'last_7_days') startDate = addCalendarDays(endDate, -6)
+  if (key === 'current_month') startDate = `${endDate.slice(0, 8)}01`
+  return { startDate, endDate }
+}
+
+function currentTimeZone(): string {
+  return analytics.value?.period.timezone || getLocalTimezone()
 }
 
 function applyPreset(key: PresetKey) {
   activePreset.value = key
-  Object.assign(range, presetRange(key))
+  Object.assign(range, presetRange(key, currentTimeZone()))
   loadAnalytics()
 }
 

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   type ZarazConfig,
+  reconcileZarazAnalyticsConfig,
   upsertPlatformZarazAnalytics,
   upsertTenantZarazAnalytics,
 } from '../../server/utils/zaraz-analytics.ts'
@@ -88,4 +89,36 @@ test('platform Zaraz sync uses the same CMP purpose and disables automatic histo
   assert.equal(tool?.defaultPurpose, 'kc_analytics')
   assert.deepEqual(tool?.actions.AllPageviews?.blockingTriggers, ['ga-platform'])
   assert.equal(config.triggers['ga-consent-not-accepted'], undefined)
+})
+
+test('scheduled reconciliation upgrades existing tenants, removes stale tools, and becomes a no-op', () => {
+  const config = configWithLegacyConsentBlocker()
+  config.tools['ga-tenant-stale'] = {
+    component: 'google-analytics_v4', name: 'Stale tenant', enabled: true,
+    settings: { tid: 'G-STALE' }, actions: {},
+  }
+  config.triggers['ga-tenant-stale'] = { name: 'Stale tenant host', loadRules: [] }
+
+  const input = {
+    platformMeasurementId: 'G-PLATFORM',
+    platformHostnames: ['krabiclaw.com'],
+    tenants: [{
+      siteId: 'site-ncls',
+      measurementId: 'G-NCLS',
+      hostnames: ['northcarolinalegalservices.org', 'www.northcarolinalegalservices.org'],
+    }],
+  }
+  const first = reconcileZarazAnalyticsConfig(config, input)
+
+  assert.deepEqual(first, { configuredTenants: 1, removedTenantTools: 1, updated: true })
+  assert.equal(config.tools['ga-tenant-stale'], undefined)
+  assert.equal(config.triggers['ga-tenant-stale'], undefined)
+  assert.equal(config.tools['ga-tenant-site-ncls']?.settings.tid, 'G-NCLS')
+  assert.deepEqual(
+    config.tools['ga-tenant-site-ncls']?.actions.AllPageviews?.blockingTriggers,
+    ['ga-tenant-site-ncls'],
+  )
+
+  const second = reconcileZarazAnalyticsConfig(config, input)
+  assert.deepEqual(second, { configuredTenants: 1, removedTenantTools: 0, updated: false })
 })

@@ -1,5 +1,6 @@
 import type { H3Event } from 'nitro'
 import { sendRedirect } from 'nitro/h3'
+import { sanitizeUrl } from '~/utils/sanitize'
 import { TENANT_TYPES, type TenantType } from '~/utils/tenant-routing'
 
 interface TenantFaviconSite {
@@ -12,7 +13,9 @@ export function resolveTenantFaviconRedirect(
   platformAssetPath: string,
 ): string {
   if (tenantType !== TENANT_TYPES.TENANT) return platformAssetPath
-  return site?.media?.find(item => item.slot === 'favicon')?.public_url || platformAssetPath
+  const faviconUrl = site?.media?.find(item => item.slot === 'favicon')?.public_url
+  const sanitized = sanitizeUrl(faviconUrl, new Set(['http:', 'https:']))
+  return sanitized || platformAssetPath
 }
 
 export function redirectTenantFavicon(event: H3Event, platformAssetPath: string) {

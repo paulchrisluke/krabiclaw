@@ -1,6 +1,7 @@
 import type { PublicConsultationSettings } from '~/types/blawby'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
+import { toValue } from 'vue'
 import { $fetch } from 'ofetch'
 
 interface ConversionPayload {
@@ -33,7 +34,7 @@ function mirrorConversion(payload: ConversionPayload) {
   window.zaraz?.track(payload.event_name, params)
 }
 
-export function useSiteConversionTracking(_consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
+export function useSiteConversionTracking(consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
   const { siteId } = useTenantSite()
 
   function track(payload: ConversionPayload, native = true) {
@@ -43,6 +44,7 @@ export function useSiteConversionTracking(_consultationSource?: MaybeRefOrGetter
   }
 
   function trackConsultationClick(pageType: string, pagePath: string, destination?: string | null, pageId?: string | null) {
+    if (toValue(consultationSource)?.tracking_enabled === false) return
     const external = /^https?:\/\//i.test(destination || '')
       || /^\/api\/public\/sites\/[^/]+\/consultation-handoff(?:\?|$)/.test(destination || '')
     track({
