@@ -1,6 +1,6 @@
 <template>
   <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
-    <TenantPublicPage :path="tenantPagePath" :locale="localeSegment" :preview-token="previewToken" />
+    <TenantPublicPage :path="tenantPagePath" :locale="activeLocale" :preview-token="previewToken" />
   </NuxtLayout>
 </template>
 
@@ -12,6 +12,7 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const { isBlawby } = usePublicTemplate()
 const previewToken = computed(() => typeof route.query.token === 'string' ? route.query.token : null)
+const queryLocale = computed(() => typeof route.query.locale === 'string' ? route.query.locale : null)
 const rawSegments = route.params.tenantPath
 const pagePath = computed(() => {
   const values = Array.isArray(rawSegments) ? rawSegments : [String(rawSegments || '')]
@@ -20,4 +21,5 @@ const pagePath = computed(() => {
 const localePrefix = computed(() => splitLocalePrefix(pagePath.value))
 const localeSegment = computed(() => localePrefix.value.localeSegment)
 const tenantPagePath = computed(() => localePrefix.value.tenantPagePath)
+const activeLocale = computed(() => queryLocale.value || localeSegment.value)
 </script>

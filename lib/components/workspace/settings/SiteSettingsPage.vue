@@ -464,8 +464,8 @@ async function saveCurrentEditor() {
         break
       }
       case 'localization': {
-        await enableLanguage()
-        originalSignature.value = editorSignature(detailKey.value)
+        const success = await enableLanguage()
+        if (success) originalSignature.value = editorSignature(detailKey.value)
         break
       }
     }
@@ -491,11 +491,25 @@ async function loadLocalizationSettings() {
 }
 async function mutateLocalization(path: string, method: 'POST' | 'DELETE') {
   localizationBusy.value = true
-  try { await dashboardApi(path, { method, validate: (value): value is Record<string, unknown> => isRecord(value) }); await loadLocalizationSettings() }
-  catch (error) { toast.add({ description: errorMessage(error, 'Localization request failed'), color: 'error' }) }
-  finally { localizationBusy.value = false }
+  try {
+    await dashboardApi(path, { method, validate: (value): value is Record<string, unknown> => isRecord(value) })
+    await loadLocalizationSettings()
+    return true
+  } catch (error) {
+    toast.add({ description: errorMessage(error, 'Localization request failed'), color: 'error' })
+    return false
+  } finally {
+    localizationBusy.value = false
+  }
 }
-async function enableLanguage() { if (newLocale.value) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST'); newLocale.value = '' } }
+async function enableLanguage(): Promise<boolean> {
+  if (newLocale.value) {
+    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST')
+    if (success) newLocale.value = ''
+    return success
+  }
+  return false
+}
 async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
 async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
 watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })

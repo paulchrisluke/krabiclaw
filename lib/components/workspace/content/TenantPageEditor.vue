@@ -167,7 +167,7 @@ const blockErrors = computed(() => selected.value?.blocks.map(block => validateT
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
   const path = selected.value.path === '/' ? '' : selected.value.path
-  return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&token=${encodeURIComponent(previewToken.value)}`
+  return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&token=${encodeURIComponent(previewToken.value)}&locale=${encodeURIComponent(locale.value)}`
 })
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
 

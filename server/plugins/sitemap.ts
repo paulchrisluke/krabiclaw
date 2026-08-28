@@ -156,7 +156,9 @@ export default definePlugin((nitroApp) => {
       ])
       for (const resource of resources) entries.push({ loc: resource.route_path, lastmod: new Date(resource.updated_at * 1000).toISOString() })
       for (const page of pages) {
-        if (!/noindex/i.test(page.robots || '')) entries.push({ loc: page.path, lastmod: page.updated_at })
+        if (/noindex/i.test(page.robots || '')) continue
+        const localizedPath = page.path === '/' ? `/${candidate.locale}` : `/${candidate.locale}${page.path}`
+        entries.push({ loc: localizedPath, lastmod: page.updated_at })
       }
     }
 

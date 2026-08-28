@@ -185,6 +185,7 @@ export async function enableSiteLanguageLicense(
 
   const subscriptionId = await requireGrowthBilling(db, input.organizationId)
   await assertSiteSecondaryLanguageCapacity(db, input.organizationId, input.siteId, license?.id)
+  if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe not configured' })
   const id = license?.id ?? crypto.randomUUID()
   const operationId = license?.status === 'enabling' && license.operation_id ? license.operation_id : crypto.randomUUID()
   const idempotencyKey = license?.status === 'enabling' && license.provider_idempotency_key
@@ -208,8 +209,6 @@ export async function enableSiteLanguageLicense(
       params: [id, input.organizationId, input.siteId, locale, subscriptionId, operationId, idempotencyKey, now, now],
     },
   ], { operation: 'begin language license enable' })
-
-  if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe not configured' })
   const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
   try {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price.product'] })
@@ -276,8 +275,8 @@ export async function disableSiteLanguageLicense(
     ? license.provider_idempotency_key
     : `site-language:disable:${license.id}:${operationId}`
   const now = Math.floor(Date.now() / 1000)
-  await execute(db, `UPDATE site_language_licenses SET status = 'disabling', operation_id = ?, provider_idempotency_key = ?, last_error_code = NULL, updated_at = ? WHERE id = ? AND status IN ('active', 'disabling')`, [operationId, idempotencyKey, now, license.id])
   if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe not configured' })
+  await execute(db, `UPDATE site_language_licenses SET status = 'disabling', operation_id = ?, provider_idempotency_key = ?, last_error_code = NULL, updated_at = ? WHERE id = ? AND status IN ('active', 'disabling')`, [operationId, idempotencyKey, now, license.id])
   const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
   try {
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price.product'] })
@@ -444,9 +443,12 @@ export async function getSiteLanguageSettings(
   `, [currentHash, input.organizationId, input.siteId])
   const availableCatalogs = await queryFirst<{ json: string }>(db, `
     SELECT json_group_array(json_object('locale', locale, 'label', label, 'direction', direction)) AS json
-      FROM platform_locale_catalogs
-     WHERE status = 'available' AND source_manifest_hash = ?
-     ORDER BY locale
+      FROM (
+        SELECT locale, label, direction
+          FROM platform_locale_catalogs
+         WHERE status = 'available' AND source_manifest_hash = ?
+         ORDER BY locale
+      )
   `, [currentHash])
   return {
     effective_plan: effectivePlan,
