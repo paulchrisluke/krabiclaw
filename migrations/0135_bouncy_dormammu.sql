@@ -165,9 +165,6 @@ BEGIN SELECT RAISE(ABORT, 'English source locale cannot have a paid language lic
 CREATE TRIGGER `site_language_licenses_reject_english_update`
 BEFORE UPDATE OF `locale` ON `site_language_licenses` WHEN NEW.`locale` = 'en'
 BEGIN SELECT RAISE(ABORT, 'English source locale cannot have a paid language license'); END;--> statement-breakpoint
-CREATE TRIGGER `site_locales_preserve_english_source_delete`
-BEFORE DELETE ON `site_locales` WHEN OLD.`locale` = 'en' AND OLD.`is_source` = 1
-BEGIN SELECT RAISE(ABORT, 'English source locale cannot be deleted'); END;--> statement-breakpoint
 CREATE TRIGGER `site_locales_preserve_english_source_update`
 BEFORE UPDATE OF `locale`, `is_source`, `status` ON `site_locales`
 WHEN OLD.`locale` = 'en' AND OLD.`is_source` = 1
