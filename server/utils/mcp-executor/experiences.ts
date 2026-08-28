@@ -77,6 +77,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
             compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null,
           },
           site.userId,
+          site.env,
         );
       const hydrated = attachExperienceViewUrl(experience, site);
       const context = await mutationContextPayload(site, { locationId });
@@ -117,6 +118,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
               ? { compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null }
               : {}),
           },
+          site.env,
         );
       if (!experience) {
         return renderStructuredResponse(

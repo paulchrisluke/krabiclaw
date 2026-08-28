@@ -93,7 +93,7 @@ export default defineHandler(async (event) => {
   if ('seo_title' in body) updates.seo_title = body.seo_title ? String(body.seo_title).trim() : null
   if ('seo_description' in body) updates.seo_description = body.seo_description ? String(body.seo_description).trim() : null
 
-  const experience = await updateExperience(db, siteId, experienceId, updates as ApiValue)
+  const experience = await updateExperience(db, siteId, experienceId, updates as ApiValue, env)
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
 
   return jsonResponse({ experience })

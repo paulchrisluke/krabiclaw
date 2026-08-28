@@ -14,6 +14,8 @@ import {
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements } from '~/server/utils/media-placement'
+import { syncSocialImageForOwnerAfterCommit } from '~/server/utils/social-image/sync'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -376,6 +378,7 @@ export async function createExperience(
   siteId: string,
   input: CreateExperienceInput,
   userId: string,
+  env?: CloudflareEnv,
 ): Promise<Experience> {
   if (!input.location_id) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'location_id is required' })
@@ -480,6 +483,9 @@ export async function createExperience(
       status: created.status,
     },
   })
+  if (env) {
+    await syncSocialImageForOwnerAfterCommit(db, env, { siteId, ownerType: 'experience', ownerId: id, title: created.title })
+  }
   return created
 }
 
@@ -489,6 +495,7 @@ export async function updateExperience(
   siteId: string,
   idOrSlug: string,
   input: UpdateExperienceInput,
+  env?: CloudflareEnv,
 ): Promise<Experience | null> {
   const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
   assertFiniteNonNegative(input.price_amount, 'price_amount')
@@ -568,7 +575,11 @@ export async function updateExperience(
   const result = await execute(db, updateQuery.query, updateQuery.params)
   if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
 
-  return getExperienceById(db, siteId, id)
+  const updated = await getExperienceById(db, siteId, id)
+  if (env && updated?.title) {
+    await syncSocialImageForOwnerAfterCommit(db, env, { siteId, ownerType: 'experience', ownerId: id, title: updated.title })
+  }
+  return updated
 }
 
 export async function deleteExperience(
