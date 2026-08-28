@@ -26,6 +26,7 @@ import { getMediaPlacements } from '~/server/utils/media-placement'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
+import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
@@ -864,7 +865,7 @@ export async function createPlatformBlogPost(
   authorId: string,
   input: PlatformBlogCreateInput,
   scope: BlogScope = {},
-  env?: CloudflareEnv,
+  env: CloudflareEnv,
 ) {
   rejectLegacyBlogContentFields(input)
   if (!input.title?.trim()) badRequest('title is required')
@@ -945,6 +946,14 @@ export async function createPlatformBlogPost(
         ],
       })
       const post = await getPlatformBlogPost(db, id, siteId, env)
+      await syncSocialImageForOwner(db, env, {
+        siteId: placementScope.siteId,
+        ownerType: 'blog_post',
+        ownerId: id,
+        title: input.title,
+        description: input.excerpt ?? null,
+        platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN,
+      })
       return {
         success: true,
         id,
@@ -1097,7 +1106,7 @@ export async function updatePlatformBlogPost(
   postIdOrSlug: string,
   input: PlatformBlogUpdateInput,
   siteId: string | null = null,
-  env?: CloudflareEnv,
+  env: CloudflareEnv,
 ) {
   rejectLegacyBlogContentFields(input)
   rejectBlogUpdateLifecycleFields(input)
@@ -1250,6 +1259,14 @@ export async function updatePlatformBlogPost(
     }
 
     const updatedPost = await getPlatformBlogPost(db, postId, siteId, env)
+    await syncSocialImageForOwner(db, env, {
+      siteId: siteId ?? PLATFORM_MEDIA_SITE_ID,
+      ownerType: 'blog_post',
+      ownerId: postId,
+      title: updatedPost.title,
+      description: updatedPost.excerpt ?? null,
+      platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN,
+    })
     return {
       success: true,
       admin_edit_url: updatedPost.admin_edit_url,
@@ -1397,6 +1414,7 @@ export async function createPlatformDoc(
   db: D1Database,
   authorId: string,
   input: PlatformDocCreateInput,
+  env: CloudflareEnv,
 ) {
   if (!input.title || !input.content_blocks?.length) badRequest('title and content_blocks are required')
   validateDocCommon(input)
@@ -1449,6 +1467,14 @@ export async function createPlatformDoc(
       })
 
       const doc = await getPlatformDoc(db, id)
+      await syncSocialImageForOwner(db, env, {
+        siteId: placementScope.siteId,
+        ownerType: 'platform_doc',
+        ownerId: id,
+        title: input.title,
+        description: input.excerpt ?? null,
+        platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN,
+      })
       return {
         success: true,
         id,
@@ -1470,6 +1496,7 @@ export async function updatePlatformDoc(
   db: D1Database,
   docIdOrSlug: string,
   input: PlatformDocUpdateInput,
+  env: CloudflareEnv,
 ) {
   const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
   validateDocCommon(input)
@@ -1553,6 +1580,15 @@ export async function updatePlatformDoc(
     }
 
     const updatedDoc = await getPlatformDoc(db, docId)
+    const scope = placementScope ?? await mediaPlacementScope(db, null, null)
+    await syncSocialImageForOwner(db, env, {
+      siteId: scope.siteId,
+      ownerType: 'platform_doc',
+      ownerId: docId,
+      title: updatedDoc.title,
+      description: updatedDoc.excerpt ?? null,
+      platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN,
+    })
     return {
       success: true,
       admin_edit_url: updatedDoc.admin_edit_url,
