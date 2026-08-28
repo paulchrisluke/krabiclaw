@@ -23,9 +23,11 @@ test('tenant analytics uses the built-in CMP and host-scoped GA4 tool', () => {
   assert.equal(config.historyChange, false)
   assert.equal(config.consent?.enabled, true)
   assert.equal(config.consent?.hideModal, false)
-  assert.equal(config.consent?.tcfCompliant, true)
+  assert.equal(config.consent?.tcfCompliant, false)
   assert.equal(config.consent?.defaultLanguage, 'en')
   assert.match(config.consent?.consentModalIntroHTML ?? '', /https:\/\/krabiclaw\.com\/privacy/)
+  assert.match(config.consent?.customCSS ?? '', /max-width: 26rem/)
+  assert.match(config.consent?.customCSS ?? '', /dialog::backdrop/)
   assert.deepEqual(config.consent?.purposes?.kc_analytics, {
     name: 'Analytics',
     description: 'Measure site usage and advertising effectiveness so we can improve our services.',

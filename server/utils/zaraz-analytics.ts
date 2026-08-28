@@ -3,7 +3,7 @@ import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domai
 import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
-  CF_ZARAZ_API_TOKEN?: string
+  CLOUDFLARE_API_TOKEN?: string
 }
 
 interface ZarazAction {
@@ -73,7 +73,7 @@ const GOOGLE_VENDOR_POLICY_URL = 'https://policies.google.com/privacy'
 
 function requireZarazEnv(env: ZarazEnv) {
   if (!env.CF_ZONE_ID) throw new Error('CF_ZONE_ID is required')
-  if (!env.CF_ZARAZ_API_TOKEN) throw new Error('CF_ZARAZ_API_TOKEN is required')
+  if (!env.CLOUDFLARE_API_TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is required')
 }
 
 async function zarazRequest<T>(env: ZarazEnv, init: RequestInit = {}): Promise<T> {
@@ -81,7 +81,7 @@ async function zarazRequest<T>(env: ZarazEnv, init: RequestInit = {}): Promise<T
   const response = await fetch(`${CF_API_BASE}/zones/${env.CF_ZONE_ID}/settings/zaraz/config`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${env.CF_ZARAZ_API_TOKEN}`,
+      Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
       'Content-Type': 'application/json',
       ...init.headers,
     },
@@ -143,12 +143,54 @@ function configureZarazConsentManagement(config: ZarazConfig) {
   config.consent.enabled = true
   config.consent.hideModal = false
   config.consent.defaultLanguage = 'en'
-  config.consent.tcfCompliant = true
+  config.consent.tcfCompliant = false
   config.consent.consentModalIntroHTML = 'We use optional analytics to understand site usage and improve our services. Read our <a href="https://krabiclaw.com/privacy">privacy policy</a>.'
   config.consent.customCSS = `
-.cf_modal_container { color: #1c1917; font-family: ui-sans-serif, system-ui, sans-serif; }
-.cf_modal { background: #fff; border-radius: 0.75rem; color: #1c1917; }
-.cf_button { border-radius: 0.375rem; }
+.cf_modal_container {
+  color: #1c1917;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+dialog::backdrop {
+  backdrop-filter: none;
+  background: rgba(15, 23, 42, 0.2);
+}
+.cf_modal {
+  inset: auto 1rem 1rem auto;
+  margin: 0;
+  max-height: min(70vh, 32rem);
+  max-width: 26rem;
+  padding: 1.25rem;
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 0.75rem;
+  color: #1c1917;
+}
+.title_container {
+  margin-bottom: 0.75rem;
+}
+.cf_consent-intro,
+.cf_consent-element {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.cf_consent-buttons {
+  gap: 0.5rem;
+  margin: 1rem -1.25rem -1.25rem;
+  padding: 0.75rem 1.25rem;
+  background: #fafaf9;
+}
+.cf_button {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.375rem;
+}
+@media (max-width: 32rem) {
+  .cf_modal {
+    inset: auto 0.75rem 0.75rem;
+    width: auto;
+    max-height: 75vh;
+  }
+}
 `.trim()
   config.consent.buttonTextTranslations = {
     accept_all: { en: 'Accept all' },
