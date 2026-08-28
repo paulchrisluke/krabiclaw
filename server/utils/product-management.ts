@@ -11,6 +11,9 @@ import type {
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireSiteEventSafe, type SiteEventType } from '~/server/utils/site-events'
+import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
+import { SocialImageResolutionError } from '~/server/utils/social-image-resolver'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   PRODUCT_LIMITS,
   normalizeOptionalProductString,
@@ -253,6 +256,7 @@ export async function createProduct(
   locationId: string,
   input: CreateProductInput,
   actor: string,
+  env?: CloudflareEnv,
 ): Promise<Product> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const category = requireTrimmedProductString(input.category, 'category', PRODUCT_LIMITS.category)
@@ -313,6 +317,11 @@ export async function createProduct(
   await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, productId: id, metadata: { category, name } })
   const created = await getProduct(db, organizationId, siteId, locationId, id)
   if (!created) throw new Error('Product not found after create')
+  if (env) {
+    await syncSocialImageForOwner(db, env, { siteId, ownerType: 'product', ownerId: id, title: name, description }).catch((error) => {
+      if (!(error instanceof SocialImageResolutionError)) throw error
+    })
+  }
   return created
 }
 
@@ -453,6 +462,7 @@ export async function updateProduct(
   productId: string,
   input: UpdateProductInput,
   actor: string,
+  env?: CloudflareEnv,
 ): Promise<Product> {
   const existing = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!existing) notFound()
@@ -508,6 +518,11 @@ export async function updateProduct(
   await productEvent(db, 'product.updated', { organizationId, siteId, locationId, actor, productId })
   const updated = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!updated) throw new Error('Product not found after update')
+  if (env) {
+    await syncSocialImageForOwner(db, env, { siteId, ownerType: 'product', ownerId: productId, title: updated.name, description: updated.description }).catch((error) => {
+      if (!(error instanceof SocialImageResolutionError)) throw error
+    })
+  }
   return updated
 }
 

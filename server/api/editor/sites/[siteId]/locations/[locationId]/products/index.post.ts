@@ -11,9 +11,9 @@ export default defineHandler(async (event) => {
   if (!siteId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
 
   try {
-    const { db, session, site } = await requireLocationAccess(event, siteId, locationId)
+    const { db, env, session, site } = await requireLocationAccess(event, siteId, locationId)
     const body = await readRequiredBody<CreateProductInput>(event)
-    const product = await createProduct(db, site.organization_id, siteId, locationId, body, session.user.id)
+    const product = await createProduct(db, site.organization_id, siteId, locationId, body, session.user.id, env)
     return jsonResponse({ success: true, product, site_id: siteId, location_id: locationId }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)
