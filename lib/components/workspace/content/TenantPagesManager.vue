@@ -68,7 +68,7 @@ if (!siteId) throw createError({ statusCode: 503, statusMessage: 'Dashboard site
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const pagesPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/pages`)
-const locale = ref(String(dashboard.site.value?.source_locale || 'en'))
+const locale = ref('en')
 const locales = ref<string[]>([locale.value])
 const pages = ref<PageSummary[]>([])
 const loading = ref(true)
@@ -87,8 +87,8 @@ function validateList(value: unknown): value is { pages: PageSummary[] } {
     && value.pages.every(page => isRecord(page) && typeof page.id === 'string' && typeof page.title === 'string' && typeof page.path === 'string')
 }
 
-function validateLocales(value: unknown): value is { source_locale: string, locales: Array<{ locale: string, status: string }> } {
-  return isRecord(value) && typeof value.source_locale === 'string' && Array.isArray(value.locales)
+function validateLocales(value: unknown): value is { languages: Array<{ locale: string, locale_status: string }> } {
+  return isRecord(value) && Array.isArray(value.languages)
 }
 
 async function loadPages() {
@@ -96,10 +96,10 @@ async function loadPages() {
   loading.value = true
   loadError.value = null
   try {
-    const localeResponse = await dashboardApi<{ source_locale: string, locales: Array<{ locale: string, status: string }> }>(`/api/editor/sites/${siteId}/locales`, { validate: validateLocales })
+    const localeResponse = await dashboardApi<{ languages: Array<{ locale: string, locale_status: string }> }>(`/api/editor/sites/${siteId}/locales`, { validate: validateLocales })
     if (!requestGate.isCurrent(requestToken)) return
-    const availableLocales = localeResponse.locales.filter(item => item.status !== 'disabled').map(item => item.locale)
-    const effectiveLocale = availableLocales.includes(locale.value) ? locale.value : localeResponse.source_locale
+    const availableLocales = localeResponse.languages.filter(item => item.locale_status === 'published').map(item => item.locale)
+    const effectiveLocale = availableLocales.includes(locale.value) ? locale.value : 'en'
     if (effectiveLocale !== locale.value) {
       applyingFallbackLocale = true
       locale.value = effectiveLocale

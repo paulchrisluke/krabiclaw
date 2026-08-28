@@ -388,7 +388,7 @@ async function executeTool(
       const result = await runMcpExecutorToolForChowbot(executorSite, name, {
         ...input,
         asset_id: assetId,
-      }) as { error?: string; products?: unknown[]; rejected?: unknown[] };
+      }) as { error?: string; products?: unknown[] };
       if (result.error) return result;
       if (pendingAssetId && ctx.channel === "whatsapp") {
         await upsertChannelState(db, {
@@ -648,11 +648,12 @@ async function executeTool(
       return { updated };
     }
 
-    // Locale management stays available for owners who maintain localized
-    // content themselves.
-    case "list_locales":
-    case "upsert_locale":
-    case "delete_locale": {
+    case "list_site_locales":
+    case "get_resource_localization":
+    case "put_resource_localization":
+    case "delete_resource_localization":
+    case "get_product_catalog_localization":
+    case "sync_product_catalog_localization": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
@@ -972,7 +973,7 @@ Rules in setup mode:
   const managedServiceGuidance = isConversationalToolGroupEnabled(env, "managed_service")
     ? "- Priority-support requests: submit work to the KrabiClaw support queue (content, SEO, Google Places, seasonal, photos, social media)\n"
     : "";
-  const localeGuidance = "- Locale-specific content: use list_locales, upsert_locale, and delete_locale to manage locale versions, then edit each locale's page content manually in the dashboard page manager\n";
+  const localeGuidance = "- Localized content: use list_site_locales and the exact resource-localization tools. These tools never initiate billing, use AI credits, or return English fallback content.\n";
 
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Krabiclaw.
 Help manage all site content with concise, action-oriented responses.

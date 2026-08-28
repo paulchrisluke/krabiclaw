@@ -6,7 +6,7 @@ import test from 'node:test'
 function priorDatabase() {
   const db = new Database(':memory:')
   db.pragma('foreign_keys = OFF')
-  for (const file of readdirSync('migrations').filter(file => /^\d{4}_.+\.sql$/.test(file) && Number(file.slice(0, 4)) < 135).sort()) {
+  for (const file of readdirSync('migrations').filter(file => /^\d{4}_.+\.sql$/.test(file) && Number(file.slice(0, 4)) < 136).sort()) {
     try {
       db.exec(readFileSync(`migrations/${file}`, 'utf8'))
     } catch (error) {
@@ -17,7 +17,7 @@ function priorDatabase() {
   return db
 }
 
-test('0135 resets only tenant analytics and deterministically backfills explicit favicons', () => {
+test('0136 resets only tenant analytics and deterministically backfills explicit favicons', () => {
   const db = priorDatabase()
   const run = (label: string, sql: string, ...params: unknown[]) => {
     try {
@@ -40,7 +40,7 @@ test('0135 resets only tenant analytics and deterministically backfills explicit
 
   const before = Date.now()
   try {
-    db.exec(readFileSync('migrations/0135_dashing_robin_chapel.sql', 'utf8'))
+    db.exec(readFileSync('migrations/0136_dashing_robin_chapel.sql', 'utf8'))
   } catch (error) {
     throw new Error('Could not apply analytics cutover migration', { cause: error })
   }

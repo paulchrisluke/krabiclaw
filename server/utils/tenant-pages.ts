@@ -24,7 +24,7 @@ import {
 } from '~/utils/tenant-page-blocks'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { normalizeDomain } from '~/server/utils/domain-shared'
-import { normalizeLocale } from '~/server/utils/site-i18n'
+import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
@@ -324,21 +324,20 @@ async function getVariantRow(db: DbClient, variantId: string, scope?: TenantPage
 }
 
 async function resolveLocale(db: DbClient, siteId: string, locale?: string | null): Promise<string> {
-  const normalizedLocale = normalizeLocale(locale)
   if (locale?.trim()) {
-    if (!normalizedLocale) notFound('Locale is not configured for this site')
+    const exactLocale = assertExactCanonicalLocale(locale)
     const row = await queryFirst<{ locale: string } | null>(
       db,
-      "SELECT locale FROM site_locales WHERE site_id = ? AND locale = ? AND status IN ('active', 'published') LIMIT 1",
-      [siteId, normalizedLocale],
+      'SELECT locale FROM site_locales WHERE site_id = ? AND locale = ? AND status = \'published\' LIMIT 1',
+      [siteId, exactLocale],
     )
     if (!row) notFound('Locale is not configured for this site')
     return row.locale
   }
   const row = await queryFirst<{ locale: string | null }>(
     db,
-    'SELECT COALESCE((SELECT locale FROM site_locales WHERE site_id = ? AND is_source = 1 LIMIT 1), source_locale) AS locale FROM sites WHERE id = ? LIMIT 1',
-    [siteId, siteId],
+    'SELECT locale FROM site_locales WHERE site_id = ? AND locale = \'en\' AND is_source = 1 AND status = \'published\' LIMIT 1',
+    [siteId],
   )
   if (!row?.locale) throw new HTTPError({ statusCode: 500, statusMessage: 'Source locale is not configured for this site' })
   return row.locale
@@ -357,9 +356,9 @@ export async function assertTenantPagePathAvailable(
   ].join('\n'), [input.siteId, input.locale, path, input.excludeVariantId ?? null, input.excludeVariantId ?? null])
   if (row) conflict('A tenant page already uses this path for the selected locale')
   const redirect = await queryFirst<{ id: string } | null>(db, `
-    SELECT id FROM tenant_redirects
+    SELECT id FROM site_redirects
      WHERE site_id = ? AND locale = ? AND from_path = ?
-       AND (? IS NULL OR owner_variant_id IS NULL OR owner_variant_id <> ?)
+       AND (? IS NULL OR owner_id IS NULL OR owner_id <> ?)
      LIMIT 1
   `, [input.siteId, input.locale, path, input.allowOwnedRedirectVariantId ?? null, input.allowOwnedRedirectVariantId ?? null])
   if (redirect) conflict('A tenant redirect already owns this path')
@@ -370,13 +369,13 @@ async function assertTenantPageRedirectWritable(
   db: DbClient,
   input: { siteId: string; organizationId: string; locale: string; fromPath: string; variantId: string },
 ) {
-  const existing = await queryFirst<{ owner_variant_id: string | null; source: string } | null>(db, `
-    SELECT owner_variant_id, source
-      FROM tenant_redirects
+  const existing = await queryFirst<{ owner_id: string | null; source: string } | null>(db, `
+    SELECT owner_id, source
+      FROM site_redirects
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND from_path = ?
      LIMIT 1
   `, [input.siteId, input.organizationId, input.locale, input.fromPath])
-  if (existing && (existing.owner_variant_id !== input.variantId || existing.source !== 'tenant-pages')) {
+  if (existing && (existing.owner_id !== input.variantId || existing.source !== 'tenant-pages')) {
     conflict('A manual tenant redirect already owns this path')
   }
 }
@@ -408,7 +407,7 @@ async function prepareTenantPageRedirectFlatten(
 ): Promise<BatchQuery[]> {
   const incoming = await queryAll<{ from_path: string; source: string; behavior: string }>(db, `
     SELECT from_path, source, behavior
-      FROM tenant_redirects
+      FROM site_redirects
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ?
        AND behavior = 'redirect'
   `, [input.siteId, input.organizationId, input.locale, input.fromPath])
@@ -424,7 +423,7 @@ async function prepareTenantPageRedirectFlatten(
   }
   if (!incoming.length) return []
   return [{
-    query: `UPDATE tenant_redirects
+    query: `UPDATE site_redirects
        SET to_path = ?, updated_at = ?
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ? AND behavior = 'redirect'`,
     params: [input.toPath, now, input.siteId, input.organizationId, input.locale, input.fromPath],
@@ -517,12 +516,7 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
     " WHERE v.site_id = ? AND v.locale = ? AND v.path = ? LIMIT 1",
   ].join('\n'), [siteId, candidateLocale, normalizedPath])
   const row = await selectPublished(resolvedLocale)
-  if (!row) {
-    if (locale && locale !== resolvedLocale) return null
-    const fallback = await selectPublished('en')
-    if (!fallback) return null
-    return fallback ? await getPublishedTenantPage(db, siteId, path, 'en') : null
-  }
+  if (!row) return null
   if (!row.document_id) return null
   const document = await getContentDocumentByOwner(db, 'tenant_page', row.variant_id)
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
@@ -585,7 +579,7 @@ export async function createTenantPagesBatch(
   }
   const existingRedirects = await queryAll<{ from_path: string }>(db, `
     SELECT from_path
-      FROM tenant_redirects
+      FROM site_redirects
      WHERE site_id = ? AND organization_id = ? AND locale = ?
   `, [input.siteId, input.organizationId, locale])
   const redirectPaths = new Set(existingRedirects.map(row => normalizeTenantPagePath(row.from_path)))
@@ -945,7 +939,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
           toPath: path,
         }, now),
         {
-          query: "INSERT INTO tenant_redirects (id, organization_id, site_id, locale, owner_variant_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 301, 'redirect', 'tenant_page_path_change', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_variant_id = excluded.owner_variant_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at",
+          query: "INSERT INTO site_redirects (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, 'tenant_page', ?, ?, ?, 301, 'redirect', 'tenant_page_path_change', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at",
           params: [crypto.randomUUID(), row.organization_id, row.site_id, row.locale, variantId, row.path, path, now, now],
         },
       ]

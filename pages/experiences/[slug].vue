@@ -363,7 +363,7 @@ const { experienceDetail: experience, config: siteConfig, pending, locations, ex
 
 const experienceIsOnSale = computed(() => isSaleActive((experience.value as ApiValue) ?? {}))
 const experienceCompareAtPrice = computed(() =>
-  formatMoneyAmount((experience.value as ApiValue)?.compare_at_price_amount, siteConfig.value?.default_currency || 'THB')
+  formatMoneyAmount((experience.value as ApiValue)?.compare_at_price_amount, siteConfig.value?.default_currency || 'USD')
 )
 
 const experienceLocation = computed(() => {
@@ -645,7 +645,7 @@ useHead({
         const experienceUrl = resolvedCanonicalUrl.value
         const orgId = `${siteUrl}/#organization`
         const experienceId = `${experienceUrl}#experience`
-        const currency = siteConfig.value?.default_currency || 'THB'
+        const currency = siteConfig.value?.default_currency || 'USD'
 
         // Preserve the canonical media order used by the page.
         const images = [

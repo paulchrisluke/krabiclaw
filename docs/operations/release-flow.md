@@ -20,8 +20,10 @@ reseeds customers, provisions E2E identities, or performs guest/MCP writes.
 Production is never seeded, reset, or mutated by test automation.
 
 Production deployment and verification are separate jobs in the same workflow.
-The deploy job builds once, performs the single Wrangler deployment, applies
-migrations, and refreshes search. The verification job waits until all three
+The deploy job builds once, performs the single Wrangler deployment, then
+applies forward-compatible migrations and refreshes search. Deploying the
+dual-schema-compatible Worker before mutating shared D1 prevents the previous
+Worker from observing a schema it cannot read. The verification job waits until all three
 custom domains expose that exact Nuxt build and its referenced assets, then runs
 read-only browser coverage. Retrying a failed verification job never redeploys
 production.

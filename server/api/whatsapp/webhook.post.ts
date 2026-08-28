@@ -165,7 +165,7 @@ async function runChowBotAndReply(
   const messages = await getRecentAgentMessages(db, opts.conversation.id, opts.siteId, opts.userId)
   let assistantText = ''
   const result = await runChowBot({
-    db, env, orgId: opts.organizationId, siteId: opts.siteId, userId: opts.userId, memberId: opts.memberId, userRole: opts.userRole, siteName: opts.siteName, defaultCurrency: site?.default_currency || 'THB', messages, currentPage: 'whatsapp', channel: 'whatsapp', sessionId: opts.conversation.id, pendingMedia: opts.pendingMedia ?? undefined, onEvent: (ev) => {
+    db, env, orgId: opts.organizationId, siteId: opts.siteId, userId: opts.userId, memberId: opts.memberId, userRole: opts.userRole, siteName: opts.siteName, defaultCurrency: site?.default_currency || 'USD', messages, currentPage: 'whatsapp', channel: 'whatsapp', sessionId: opts.conversation.id, pendingMedia: opts.pendingMedia ?? undefined, onEvent: (ev) => {
       if (ev.type === 'text') assistantText = ev.content ?? ''
     }, })
 

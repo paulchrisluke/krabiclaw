@@ -33,23 +33,6 @@ export async function seedNewSite(
 
   const statements: BatchQuery[] = [];
 
-  // Canonical language setup for new Saya sites.
-  statements.push({
-    query: `
-    INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)
-    VALUES (?, ?, 'source_locale', 'en')
-  `,
-    params: [organizationId, siteId],
-  });
-  statements.push({
-    query: `
-    INSERT OR REPLACE INTO site_locales
-      (id, organization_id, site_id, locale, label, is_source, status)
-    VALUES (?, ?, ?, 'en', 'English', 1, 'published')
-  `,
-    params: [`locale::${organizationId}::${siteId}::en`, organizationId, siteId],
-  });
-
   // ── Empty primary location ────────────────────────────────────────────────
   statements.push({
     query: `

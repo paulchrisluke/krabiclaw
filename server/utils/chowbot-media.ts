@@ -6,6 +6,7 @@ import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
 import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils/media-asset-manager'
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
+import { localizationError } from '~/server/utils/localization-errors'
 import {
   MARKDOWN_MIME_TYPES,
   assertMarkdownSize,
@@ -14,17 +15,101 @@ import {
   resolveMarkdownMimeType,
 } from '~/server/utils/markdown-document'
 
-const EXTRACT_SYSTEM = `You extract location-owned Products from business media. Extract ONLY text visibly present in the source and never infer descriptions, prices, or order URLs.
+const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
+const EXTRACT_SYSTEM = `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, or order URLs. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
 
-Return a JSON object with a single key "items" containing an array. Each item must have:
-  - category: string
-  - name: string
-  - description: string or null
-  - price_amount: required normalized non-negative decimal string without currency symbols or codes
-  - order_url: an HTTPS URL only when visibly present, otherwise null
+const PRODUCT_EXTRACTION_TOOL = {
+  name: PRODUCT_EXTRACTION_TOOL_NAME,
+  description: 'Return every Product visibly present in the supplied business media.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      items: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          type: 'object',
+          properties: {
+            category: { type: 'string' },
+            name: { type: 'string' },
+            description: { type: ['string', 'null'] },
+            price_amount: { type: 'string' },
+            order_url: { type: ['string', 'null'] },
+          },
+          required: ['category', 'name', 'description', 'price_amount', 'order_url'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['items'],
+    additionalProperties: false,
+  },
+}
 
-If you cannot read the menu clearly, return {"items": [], "warning": "reason"}.
-Return ONLY valid JSON. No markdown, no explanation.`
+function parseProductExtraction(input: unknown): CreateProductInput[] {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
+  }
+  const payload = input as Record<string, unknown>
+  const payloadKeys = Object.keys(payload)
+  if (payloadKeys.length !== 1 || payloadKeys[0] !== 'items' || !Array.isArray(payload.items)) {
+    localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must contain exactly one items array')
+  }
+  if (payload.items.length === 0) {
+    localizationError(422, 'NO_PRODUCTS_EXTRACTED', 'No Products were extracted from the source')
+  }
+  if (payload.items.length > 100) {
+    localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction exceeds the 100 item batch limit')
+  }
+  const errors: Array<{ index: number; fields: string[]; message: string }> = []
+  const products: CreateProductInput[] = []
+  const duplicateKeys = new Set<string>()
+  for (const [index, value] of payload.items.entries()) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      errors.push({ index, fields: [], message: 'item must be an object' })
+      continue
+    }
+    const item = value as Record<string, unknown>
+    const allowed = ['category', 'name', 'description', 'price_amount', 'order_url']
+    const unknown = Object.keys(item).filter(key => !allowed.includes(key)).sort()
+    const missing = allowed.filter(key => !Object.hasOwn(item, key))
+    const category = typeof item.category === 'string' ? item.category.trim() : ''
+    const name = typeof item.name === 'string' ? item.name.trim() : ''
+    const priceAmount = typeof item.price_amount === 'string' ? item.price_amount.trim() : ''
+    const descriptionValid = item.description === null || typeof item.description === 'string'
+    const orderUrlValid = item.order_url === null || typeof item.order_url === 'string'
+    const invalidFields = [
+      ...unknown,
+      ...missing,
+      ...(!category ? ['category'] : []),
+      ...(!name ? ['name'] : []),
+      ...(!priceAmount ? ['price_amount'] : []),
+      ...(!descriptionValid ? ['description'] : []),
+      ...(!orderUrlValid ? ['order_url'] : []),
+    ]
+    const duplicateKey = `${category.toLocaleLowerCase()}\0${name.toLocaleLowerCase()}`
+    if (category && name && duplicateKeys.has(duplicateKey)) invalidFields.push('duplicate')
+    duplicateKeys.add(duplicateKey)
+    if (invalidFields.length) {
+      errors.push({ index, fields: [...new Set(invalidFields)].sort(), message: 'invalid Product candidate' })
+      continue
+    }
+    products.push({
+      category,
+      name,
+      description: item.description === null ? '' : item.description as string,
+      price_amount: priceAmount,
+      order_url: item.order_url as string | null,
+      tags: [],
+      details: [],
+      source: 'ai',
+    })
+  }
+  if (errors.length) {
+    localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'The complete Product import batch was rejected', { errors })
+  }
+  return products
+}
 
 const IMAGE_TYPES: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'image/avif'> = {
   'image/jpeg': 'image/jpeg',
@@ -138,7 +223,7 @@ export async function extractProductsFromMediaAsset(
     sessionId?: string | null
     locationId: string
   }
-): Promise<{ products: Product[]; rejected: Array<{ index: number; reason: string }>; warning: string | null; creditsRemaining: number }> {
+): Promise<{ products: Product[]; creditsRemaining: number }> {
   if (!opts.locationId.trim()) throw new Error('location_id is required when importing Products')
 
   const asset = await getMediaAsset(db, opts.assetId, opts.siteId)
@@ -162,6 +247,8 @@ export async function extractProductsFromMediaAsset(
     {
       system: EXTRACT_SYSTEM,
       maxTokens: 4096,
+      tools: [PRODUCT_EXTRACTION_TOOL],
+      toolChoice: { type: 'tool', name: PRODUCT_EXTRACTION_TOOL_NAME },
       metadata: { org_id: opts.organizationId, site_id: opts.siteId, action: 'product_extract' },
     }
   )
@@ -176,50 +263,27 @@ export async function extractProductsFromMediaAsset(
     cfGatewayLogId: aiResponse.cfLogId,
   })
 
-  const rawText = aiResponse.content.find((b) => b.type === 'text')?.text ?? ''
-  const jsonText = (() => {
-    const fenced = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (fenced) return (fenced[1] ?? '').trim()
-    const firstBrace = rawText.indexOf('{')
-    const lastBrace = rawText.lastIndexOf('}')
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
-      return rawText.slice(firstBrace, lastBrace + 1)
-    }
-    return rawText.trim()
-  })()
-  let parsed: { items: ApiRecord[]; warning?: string }
+  const toolBlocks = aiResponse.content.filter(block => block.type === 'tool_use')
+  if (
+    aiResponse.stop_reason !== 'tool_use'
+    || aiResponse.content.length !== 1
+    || toolBlocks.length !== 1
+    || toolBlocks[0]?.name !== PRODUCT_EXTRACTION_TOOL_NAME
+  ) {
+    localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must return exactly one structured tool call')
+  }
+  const accepted = parseProductExtraction(toolBlocks[0].input)
   try {
-    parsed = JSON.parse(jsonText)
-  } catch {
-    throw new Error('Could not read Products from that file. Try a higher-resolution source.')
+    const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, `ai:${opts.userId}`)
+    return { products, creditsRemaining: charged.newBalance }
+  } catch (error) {
+    if (error && typeof error === 'object' && 'statusCode' in error) {
+      localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'The complete Product import batch was rejected', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    throw error
   }
-
-  const extractedItems = Array.isArray(parsed.items) ? parsed.items : []
-  const warning = typeof parsed.warning === 'string' ? parsed.warning : null
-  if (!extractedItems.length) {
-    return { products: [], rejected: [], warning: warning ?? 'No Products detected in the source.', creditsRemaining: charged.newBalance }
-  }
-  const rejected: Array<{ index: number; reason: string }> = []
-  const accepted: CreateProductInput[] = []
-  extractedItems.forEach((item, index) => {
-    const category = typeof item.category === 'string' ? item.category.trim() : ''
-    const name = typeof item.name === 'string' ? item.name.trim() : ''
-    const price = typeof item.price_amount === 'string' || typeof item.price_amount === 'number' ? item.price_amount : null
-    if (!category || !name || price === null) { rejected.push({ index, reason: 'category, name, and price_amount are required' }); return }
-    accepted.push({
-      category,
-      name,
-      description: typeof item.description === 'string' ? item.description : '',
-      price_amount: price,
-      order_url: typeof item.order_url === 'string' ? item.order_url : null,
-      tags: Array.isArray(item.tags) ? item.tags.filter((tag: unknown): tag is string => typeof tag === 'string') : [],
-      details: [],
-      source: 'ai',
-    })
-  })
-  if (rejected.length) return { products: [], rejected, warning, creditsRemaining: charged.newBalance }
-  const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, `ai:${opts.userId}`)
-  return { products, rejected: [], warning, creditsRemaining: charged.newBalance }
 }
 
 const DOCUMENT_ANALYSIS_SYSTEM = `You are a document analysis assistant for a small-business owner's ChowBot assistant. The user has uploaded a Markdown document. You are given its content tagged with structural markers:

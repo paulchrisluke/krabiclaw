@@ -1084,16 +1084,14 @@ export const blog_posts = sqliteTable("blog_posts", {
 	index("blog_posts_org_site_idx").on(table.organization_id, table.site_id),
 ]);
 
-export const blog_post_redirects = sqliteTable("blog_post_redirects", {
+export const platform_blog_redirects = sqliteTable("platform_blog_redirects", {
 	id: text().primaryKey(),
 	post_id: text().notNull().references(() => blog_posts.id, { onDelete: "cascade" }),
-	site_id: text().references(() => sites.id, { onDelete: "cascade" }),
 	old_slug: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	uniqueIndex("blog_post_redirects_platform_slug_idx").on(table.old_slug).where(sql`site_id IS NULL`),
-	uniqueIndex("blog_post_redirects_site_slug_idx").on(table.site_id, table.old_slug).where(sql`site_id IS NOT NULL`),
-	index("blog_post_redirects_post_idx").on(table.post_id),
+	uniqueIndex("platform_blog_redirects_slug_idx").on(table.old_slug),
+	index("platform_blog_redirects_post_idx").on(table.post_id),
 ]);
 
 export const platform_contact_submissions = sqliteTable("platform_contact_submissions", {
@@ -1655,12 +1653,13 @@ export const site_theme_tokens = sqliteTable("site_theme_tokens", {
 
 
 
-export const tenant_redirects = sqliteTable("tenant_redirects", {
+export const site_redirects = sqliteTable("site_redirects", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	locale: text().notNull(),
-	owner_variant_id: text(),
+	owner_type: text(),
+	owner_id: text(),
 	from_path: text().notNull(),
 	to_path: text(),
 	status_code: integer().default(301).notNull(),
@@ -1670,12 +1669,14 @@ export const tenant_redirects = sqliteTable("tenant_redirects", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	unique("tenant_redirects_site_locale_from_path_unique").on(table.site_id, table.locale, table.from_path),
-	check("tenant_redirects_from_path_check", sql`from_path LIKE '/%'`),
-	check("tenant_redirects_behavior_check", sql`behavior IN ('redirect', 'gone', 'noindex')`),
-	check("tenant_redirects_redirect_to_path_check", sql`behavior != 'redirect' OR to_path IS NOT NULL`),
-	index("tenant_redirects_organization_id_idx").on(table.organization_id),
-	index("tenant_redirects_site_locale_path_idx").on(table.site_id, table.locale, table.from_path),
+	unique("site_redirects_site_locale_from_path_unique").on(table.site_id, table.locale, table.from_path),
+	check("site_redirects_from_path_check", sql`from_path LIKE '/%'`),
+	check("site_redirects_behavior_check", sql`behavior IN ('redirect', 'gone', 'noindex')`),
+	check("site_redirects_redirect_to_path_check", sql`behavior != 'redirect' OR to_path IS NOT NULL`),
+	check("site_redirects_owner_check", sql`(owner_type IS NULL AND owner_id IS NULL) OR (owner_type IS NOT NULL AND owner_id IS NOT NULL)`),
+	index("site_redirects_organization_id_idx").on(table.organization_id),
+	index("site_redirects_site_locale_path_idx").on(table.site_id, table.locale, table.from_path),
+	index("site_redirects_owner_idx").on(table.owner_type, table.owner_id),
 ]);
 
 export const site_conversion_events = sqliteTable("site_conversion_events", {
@@ -1854,6 +1855,61 @@ export const site_locales = sqliteTable("site_locales", {
 	check("site_locales_status_check", sql`status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')`),
 ]);
 
+export const platform_locale_catalogs = sqliteTable("platform_locale_catalogs", {
+	locale: text().primaryKey(),
+	label: text().notNull(),
+	direction: text().notNull(),
+	status: text().default("unavailable").notNull(),
+	source_manifest_hash: text(),
+	available_at: integer(),
+	available_by_user_id: text(),
+	created_at: integer().default(sql`(unixepoch())`).notNull(),
+	created_by_user_id: text().notNull(),
+	updated_at: integer().default(sql`(unixepoch())`).notNull(),
+	updated_by_user_id: text().notNull(),
+}, (table) => [
+	check("platform_locale_catalogs_direction_check", sql`${table.direction} IN ('ltr', 'rtl')`),
+	check("platform_locale_catalogs_status_check", sql`${table.status} IN ('unavailable', 'available')`),
+]);
+
+export const platform_locale_messages = sqliteTable("platform_locale_messages", {
+	locale: text().notNull().references(() => platform_locale_catalogs.locale, { onDelete: "cascade" }),
+	message_key: text().notNull(),
+	message_value: text().notNull(),
+	updated_at: integer().default(sql`(unixepoch())`).notNull(),
+	updated_by_user_id: text().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.locale, table.message_key] }),
+]);
+
+export const site_language_licenses = sqliteTable("site_language_licenses", {
+	id: text().primaryKey(),
+	organization_id: text().notNull(),
+	site_id: text().notNull(),
+	locale: text().notNull(),
+	stripe_subscription_id: text(),
+	stripe_subscription_item_id: text(),
+	status: text().default("disabled").notNull(),
+	operation_id: text(),
+	provider_idempotency_key: text(),
+	last_provider_quantity: integer(),
+	last_error_code: text(),
+	activated_at: integer(),
+	disabled_at: integer(),
+	created_at: integer().default(sql`(unixepoch())`).notNull(),
+	updated_at: integer().default(sql`(unixepoch())`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.locale],
+		foreignColumns: [site_locales.organization_id, site_locales.site_id, site_locales.locale],
+		name: "site_language_licenses_site_locale_fk",
+	}).onDelete("cascade"),
+	unique("site_language_licenses_org_site_locale_unique").on(table.organization_id, table.site_id, table.locale),
+	check("site_language_licenses_status_check", sql`${table.status} IN ('enabling', 'active', 'disabling', 'disabled')`),
+	index("site_language_licenses_organization_status_idx").on(table.organization_id, table.status),
+	index("site_language_licenses_subscription_item_idx").on(table.stripe_subscription_item_id),
+]);
+
 export const platform_pageview_events = sqliteTable("platform_pageview_events", {
 	id: text().primaryKey(),
 	page_path: text().notNull(),
@@ -1979,7 +2035,6 @@ export const sites = sqliteTable("sites", {
 	brand_description: text(),
 	contact_email: text(),
 	contact_phone: text(),
-	source_locale: text().default("en").notNull(),
 	default_currency: text().default("THB").notNull(),
 	status: text().default("active"),
 	plan: text().default("free"),
@@ -2310,6 +2365,43 @@ export const content_documents = sqliteTable("content_documents", {
 	check("content_documents_owner_type_check", sql`owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog', 'tenant_page')`),
 	unique("content_documents_owner_unique").on(table.owner_type, table.owner_id),
 	index("content_documents_owner_idx").on(table.owner_type, table.owner_id),
+]);
+
+export const resource_localizations = sqliteTable("resource_localizations", {
+	id: text().primaryKey(),
+	organization_id: text().notNull(),
+	site_id: text().notNull(),
+	resource_type: text().notNull(),
+	resource_id: text().notNull(),
+	locale: text().notNull(),
+	values_json: text().notNull(),
+	route_path: text(),
+	document_id: text().references(() => content_documents.id),
+	created_at: integer().default(sql`(unixepoch())`).notNull(),
+	created_by_user_id: text().notNull(),
+	updated_at: integer().default(sql`(unixepoch())`).notNull(),
+	updated_by_user_id: text().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.locale],
+		foreignColumns: [site_locales.organization_id, site_locales.site_id, site_locales.locale],
+		name: "resource_localizations_site_locale_fk",
+	}).onDelete("cascade"),
+	unique("resource_localizations_org_site_resource_locale_unique").on(
+		table.organization_id,
+		table.site_id,
+		table.resource_type,
+		table.resource_id,
+		table.locale,
+	),
+	uniqueIndex("resource_localizations_site_locale_route_unique")
+		.on(table.site_id, table.locale, table.route_path)
+		.where(sql`route_path IS NOT NULL`),
+	check("resource_localizations_values_json_check", sql`json_valid(${table.values_json}) AND json_type(${table.values_json}) = 'object'`),
+	check("resource_localizations_resource_type_check", sql`${table.resource_type} IN ('site', 'business_location', 'product', 'experience', 'offering', 'site_post', 'tenant_blog_post', 'location_qa', 'media_asset', 'booking_policy', 'site_link_page', 'site_link_item', 'tenant_compliance', 'site_consultation_settings')`),
+	check("resource_localizations_route_path_check", sql`${table.route_path} IS NULL OR (${table.route_path} LIKE '/' || ${table.locale} || '/%' AND ${table.route_path} NOT LIKE '%?%' AND ${table.route_path} NOT LIKE '%#%' AND ${table.route_path} NOT LIKE '%//%')`),
+	index("resource_localizations_site_locale_type_idx").on(table.site_id, table.locale, table.resource_type),
+	index("resource_localizations_resource_idx").on(table.resource_type, table.resource_id),
 ]);
 
 export const content_blocks = sqliteTable("content_blocks", {
