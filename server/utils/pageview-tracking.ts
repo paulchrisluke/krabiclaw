@@ -77,6 +77,7 @@ export function isKnownTenantPublicPath(
     : Object.values(publicTemplateRegistry)
   return templates.some(template =>
     template.sitemap.exactPaths.includes(pathname)
+    || template.nonIndexableExactPaths.includes(pathname)
     || template.sitemap.dynamicPrefixes.some(prefix => pathname.startsWith(prefix)),
   )
 }

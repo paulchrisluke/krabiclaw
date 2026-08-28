@@ -1,4 +1,5 @@
 import { TENANT_TYPES, type TenantType } from '../../utils/tenant-routing.ts'
+import { TENANT_NON_INDEXABLE_EXACT_PATHS } from '../../utils/template-registry.ts'
 import { isEnvironmentTenantAliasHost } from './tenant-hosts.ts'
 
 export const PLATFORM_SITEMAP_ROUTES = [
@@ -29,13 +30,10 @@ export const PRIVATE_ROUTE_PREFIXES = [
 ] as const
 
 export const PRIVATE_EXACT_ROUTES = new Set([
+  ...TENANT_NON_INDEXABLE_EXACT_PATHS,
   '/accept-invitation',
-  '/contact/confirmed',
-  '/experiences/confirmed',
   '/forgot-password',
   '/login',
-  '/reservations/cancel',
-  '/reservations/confirmed',
   '/reset-password',
   '/signup',
   '/tenant-404',
