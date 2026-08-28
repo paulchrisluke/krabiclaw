@@ -20,7 +20,7 @@ test('tenant analytics uses the built-in CMP and host-scoped GA4 tool', () => {
     hostnames: ['www.northcarolinalegalservices.org'],
   })
 
-  assert.equal(config.historyChange, false)
+  assert.equal(config.historyChange, true)
   assert.equal(config.consent?.enabled, true)
   assert.equal(config.consent?.hideModal, false)
   assert.equal(config.consent?.tcfCompliant, false)
@@ -31,6 +31,11 @@ test('tenant analytics uses the built-in CMP and host-scoped GA4 tool', () => {
   assert.deepEqual(config.consent?.purposes?.kc_analytics, {
     name: 'Analytics',
     description: 'Measure site usage and advertising effectiveness so we can improve our services.',
+  })
+  assert.deepEqual(config.consent?.purposesWithTranslations?.kc_analytics, {
+    name: { en: 'Analytics' },
+    description: { en: 'Measure site usage and advertising effectiveness so we can improve our services.' },
+    order: 0,
   })
   assert.deepEqual(config.consent?.buttonTextTranslations, {
     accept_all: { en: 'Accept all' },
@@ -54,7 +59,7 @@ test('platform analytics uses the same consent purpose', () => {
   })
 
   const tool = config.tools['ga-platform']
-  assert.equal(config.historyChange, false)
+  assert.equal(config.historyChange, true)
   assert.equal(config.consent?.enabled, true)
   assert.equal(config.consent?.hideModal, false)
   assert.equal(tool?.defaultPurpose, 'kc_analytics')

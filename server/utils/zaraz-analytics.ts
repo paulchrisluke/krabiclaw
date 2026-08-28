@@ -39,6 +39,11 @@ export interface ZarazConfig {
     enabled?: boolean
     hideModal?: boolean
     purposes?: Record<string, { name: string; description: string }>
+    purposesWithTranslations?: Record<string, {
+      name: Record<string, string>
+      description: Record<string, string>
+      order: number
+    }>
     defaultLanguage?: string
     tcfCompliant?: boolean
     consentModalIntroHTML?: string
@@ -199,6 +204,13 @@ dialog::backdrop {
   }
   config.consent.purposes ||= {}
   config.consent.purposes[ZARAZ_ANALYTICS_PURPOSE_ID] = ZARAZ_ANALYTICS_PURPOSE
+  config.consent.purposesWithTranslations = {
+    [ZARAZ_ANALYTICS_PURPOSE_ID]: {
+      name: { en: ZARAZ_ANALYTICS_PURPOSE.name },
+      description: { en: ZARAZ_ANALYTICS_PURPOSE.description },
+      order: 0,
+    },
+  }
 }
 
 function makeHostBlockTrigger(name: string, hostnames: string[]): ZarazTrigger {
@@ -286,7 +298,7 @@ export function upsertPlatformZarazAnalytics(
   config.triggers ||= {}
   config.tools ||= {}
   configureZarazConsentManagement(config)
-  config.historyChange = false
+  config.historyChange = true
   config.triggers[PLATFORM_KEY] = makeHostBlockTrigger('Block non-platform hosts', input.hostnames)
 
   upsertGa4Tool(config, PLATFORM_KEY, {
@@ -305,7 +317,7 @@ export function upsertTenantZarazAnalytics(
   config.triggers ||= {}
   config.tools ||= {}
   configureZarazConsentManagement(config)
-  config.historyChange = false
+  config.historyChange = true
   const key = tenantKey(input.siteId)
   config.triggers[key] = makeHostBlockTrigger(`Block non-tenant hosts (${input.siteId})`, input.hostnames)
   upsertGa4Tool(config, key, {
