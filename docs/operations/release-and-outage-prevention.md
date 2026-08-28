@@ -100,8 +100,14 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
-Applied migration files are immutable. `server/db/schema.ts` remains the source
-of truth, and staging and production use native `wrangler d1 migrations apply`.
+Migration files applied to staging or production are immutable.
+`server/db/schema.ts` remains the source of truth, and staging and production
+use native `wrangler d1 migrations apply`. A migration applied only to the
+isolated preview database may still be regenerated while its PR is in flight,
+but the preview database must then be wiped in place and the final migration
+chain replayed from zero with the guarded preview reset command. Never create a
+replacement D1 resource or edit only the migration ledger/schema to make
+rewritten history appear applied.
 
 Before dropping or retiring a legacy table or writer:
 

@@ -242,7 +242,6 @@ async function main() {
   await run('yarn', ['test:e2e:mcp', '--workers=1'], gateEnv)
   console.log('# Running priority tenant browser gates through the tunnel')
   await run('yarn', ['test:e2e:public-rendering', '--workers=1'], gateEnv)
-  await run('yarn', ['playwright', 'test', 'tests/e2e/tenant-favicons.spec.ts', '--project=chromium', '--workers=1'], gateEnv)
 
   if (runChatGPTGate) {
     console.log('# Running the automated ChatGPT Chrome and telemetry gate')

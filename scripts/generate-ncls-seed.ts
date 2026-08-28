@@ -7,9 +7,12 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nclsFixture, type NclsSeedTable, type NclsSeedValue } from '../seed-definitions/ncls.ts'
 
+const wranglerCli = resolve('node_modules/wrangler/bin/wrangler.js')
+
 function sqlValue(value: NclsSeedValue): string {
   if (value === null) return 'NULL'
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
+  if (typeof value === 'string' && value.startsWith('strftime(')) return value
   return `'${value.replace(/'/g, "''")}'`
 }
 
@@ -85,7 +88,7 @@ VALUES ('member-ncls-blawby', ${sqlValue(nclsFixture.organizationId)}, ${sqlValu
 
 ${renderRows(table('sites'), initialSite)}
 
-${renderRows(table('business_locations'))}
+  ${renderRows(table('business_locations'))}
 
 ${renderRows(table('media_assets'))}
 
@@ -103,7 +106,7 @@ ${renderRows(table('content_blocks'))}
 
 ${renderRows(table('tenant_page_variants'))}
 
-${renderRows(table('blog_post_redirects'))}
+${renderRows(table('site_redirects'))}
 
 ${afterCore}
 
@@ -112,16 +115,6 @@ ${renderRows(table('media_placements'))}
 }
 
 function runCli() {
-  // INCIDENT: Anthropic's Claude (an AI coding assistant) ran this script with
-  // --preview believing it was a harmless dry run. It is not. --preview
-  // executes these queries for real against the remote preview D1 database
-  // via `wrangler d1 execute DB --env preview --remote`. Claude did not check
-  // what the flag actually did before running it and fired a live remote
-  // write without asking the user first. That was Claude's mistake, not a
-  // tooling ambiguity — the behavior is spelled out a few lines below. If you
-  // are Claude (or any other AI assistant) reading this: check what a flag on
-  // a database-touching script actually does before you run it. Use --stdout
-  // to see the generated SQL without applying it anywhere.
   const isStdout = process.argv.includes('--stdout')
   const isPreview = process.argv.includes('--preview')
   if (process.argv.includes('--remote') || process.argv.includes('--staging')) {
@@ -138,8 +131,7 @@ function runCli() {
   const sqlPath = join(directory, 'ncls.sql')
   try {
     writeFileSync(sqlPath, sql, 'utf8')
-    execFileSync('npx', [
-      'wrangler', 'd1', 'execute', 'DB',
+    execFileSync(process.execPath, [wranglerCli, 'd1', 'execute', 'DB',
       ...(isPreview ? ['--env', 'preview', '--remote'] : ['--local']),
       '--file', sqlPath,
     ], { stdio: 'inherit' })

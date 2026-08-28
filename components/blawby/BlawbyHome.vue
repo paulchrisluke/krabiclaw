@@ -170,7 +170,7 @@ const videoImages = computed(() => (Array.isArray(videoFeature.value?.media) ? v
   .filter((item: { url: string }) => item.url))
 const reviewsDescription = computed(() => String(reviewsBlock.value?.description || ''))
 
-const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
+const { trackConsultationClick } = useSiteConversionTracking(consultation)
 function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/', destination)
 }

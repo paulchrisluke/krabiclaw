@@ -66,6 +66,7 @@ interface ReservationNotificationInput extends SiteContext {
   cancelUrl?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
+  ownerInboxUrl?: string | null
 }
 
 interface ContactNotificationInput extends SiteContext {
@@ -120,6 +121,7 @@ interface ExperienceBookingNotificationInput extends SiteContext {
   cancelUrl?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
+  ownerInboxUrl?: string | null
 }
 
 interface ReviewNotificationInput extends SiteContext {
@@ -485,11 +487,12 @@ async function notifyOwner(
     submissionId?: string | null
   }
 ) {
-  await insertDashboardNotification(db, opts)
-
-  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
-  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
-  const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
+  const [, sitePhone, locationPhone, ownerEmail] = await Promise.all([
+    insertDashboardNotification(db, opts),
+    getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId),
+    opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null,
+    getOrganizationOwnerEmail(env, opts.organizationId),
+  ])
 
   const configuredTargets = [
     locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
@@ -732,14 +735,18 @@ export async function notifyReservationCreated(
   const prettyDate = formatDateHuman(opts.date)
   const prettyTime = formatTimeHuman(opts.time)
   const platformDomain = getPlatformDomain(env)
-  const replyTo = await buildReplyToAddress(env, 'reservation', opts.reservationId)
-  const inboxUrl = await buildOwnerInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: opts.locationId,
-    tab: 'reservations',
-    submissionId: opts.reservationId,
-  })
+  const [replyTo, inboxUrl] = await Promise.all([
+    buildReplyToAddress(env, 'reservation', opts.reservationId),
+    opts.ownerInboxUrl !== undefined
+      ? opts.ownerInboxUrl
+      : buildOwnerInboxUrl(env, db, {
+          organizationId: opts.organizationId,
+          siteId: opts.siteId,
+          locationId: opts.locationId,
+          tab: 'reservations',
+          submissionId: opts.reservationId,
+        }),
+  ])
 
   const payload = {
     reservation_id: opts.reservationId,
@@ -1205,14 +1212,18 @@ export async function notifyExperienceBookingCreated(
   const prettyDate = formatDateHuman(opts.bookingDate)
   const prettyTime = formatTimeHuman(opts.timeSlot)
   const platformDomain = getPlatformDomain(env)
-  const replyTo = await buildReplyToAddress(env, 'experience_booking', opts.bookingId)
-  const inboxUrl = await buildOwnerInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: opts.locationId,
-    tab: 'bookings',
-    submissionId: opts.bookingId,
-  })
+  const [replyTo, inboxUrl] = await Promise.all([
+    buildReplyToAddress(env, 'experience_booking', opts.bookingId),
+    opts.ownerInboxUrl !== undefined
+      ? opts.ownerInboxUrl
+      : buildOwnerInboxUrl(env, db, {
+          organizationId: opts.organizationId,
+          siteId: opts.siteId,
+          locationId: opts.locationId,
+          tab: 'bookings',
+          submissionId: opts.bookingId,
+        }),
+  ])
 
   const payload = {
     booking_id: opts.bookingId,

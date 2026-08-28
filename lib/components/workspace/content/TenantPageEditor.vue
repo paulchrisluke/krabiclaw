@@ -138,7 +138,7 @@ const platformOrigin = useRequestURL().origin
 const pagesPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/pages`)
 const isNew = computed(() => !props.pageId)
 const selected = ref<PageDetail | null>(null)
-const locale = ref(String(dashboard.site.value?.source_locale || 'en'))
+const locale = ref('en')
 const locales = ref<string[]>([locale.value])
 const loading = ref(true)
 const pageLoadError = ref<string | null>(null)
@@ -167,7 +167,7 @@ const blockErrors = computed(() => selected.value?.blocks.map(block => validateT
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
   const path = selected.value.path === '/' ? '' : selected.value.path
-  return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&locale=${encodeURIComponent(selected.value.locale)}&token=${encodeURIComponent(previewToken.value)}`
+  return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&token=${encodeURIComponent(previewToken.value)}&locale=${encodeURIComponent(locale.value)}`
 })
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
 
@@ -187,8 +187,8 @@ function validateContext(value: unknown): value is { context: { previewToken: st
   return isRecord(value) && isRecord(value.context) && typeof value.context.previewToken === 'string'
 }
 
-function validateLocales(value: unknown): value is { source_locale: string, locales: Array<{ locale: string, status: string }> } {
-  return isRecord(value) && typeof value.source_locale === 'string' && Array.isArray(value.locales)
+function validateLocales(value: unknown): value is { languages: Array<{ locale: string, locale_status: string }> } {
+  return isRecord(value) && Array.isArray(value.languages)
 }
 
 function toEditorPage(page: PageDetailResponse): PageDetail {
@@ -215,19 +215,19 @@ async function loadEditor() {
   try {
     const [contextResponse, localeResponse, pageResponse, pagesResponse] = await Promise.all([
       dashboardApi<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId}/context`, { validate: validateContext }),
-      dashboardApi<{ source_locale: string, locales: Array<{ locale: string, status: string }> }>(`/api/editor/sites/${siteId}/locales`, { validate: validateLocales }),
+      dashboardApi<{ languages: Array<{ locale: string, locale_status: string }> }>(`/api/editor/sites/${siteId}/locales`, { validate: validateLocales }),
       props.pageId ? dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${props.pageId}`, { validate: validatePage }) : Promise.resolve(null),
       props.pageId ? Promise.resolve(null) : dashboardApi<{ pages: PageSummary[] }>(`/api/editor/sites/${siteId}/pages?locale=${encodeURIComponent(locale.value)}`, { validate: validateList }),
     ])
     if (!requestGate.isCurrent(requestToken)) return
     previewToken.value = contextResponse.context.previewToken
-    locales.value = localeResponse.locales.filter(item => item.status !== 'disabled').map(item => item.locale)
+    locales.value = localeResponse.languages.filter(item => item.locale_status === 'published').map(item => item.locale)
     if (pageResponse) {
       selected.value = toEditorPage(pageResponse.page)
       locale.value = pageResponse.page.locale
       savedBlockIds.value = new Set(pageResponse.page.blocks.map(block => block.id))
     } else {
-      locale.value = localeResponse.source_locale
+      locale.value = 'en'
       savedBlockIds.value = new Set()
       selected.value = {
         id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '', title: '', page_type: 'custom', recipe: '', sort_order: pagesResponse?.pages.length ?? 0, updated_at: '',

@@ -13,7 +13,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   renderKikuzukiCoreSeedBlock,
@@ -24,6 +24,8 @@ import {
   renderKikuzukiReviewsBlock,
   renderKikuzukiBillingBlock,
 } from '../seed-definitions/kikuzuki.ts'
+
+const wranglerCli = resolve('node_modules/wrangler/bin/wrangler.js')
 
 // INCIDENT: Anthropic's Claude (an AI coding assistant) ran this script with
 // --preview believing it was a harmless dry run. It is not. --preview
@@ -44,7 +46,6 @@ if (process.argv.includes('--remote') || process.argv.includes('--staging')) {
 }
 
 const wranglerArgs = [
-  'wrangler',
   'd1',
   'execute',
   'DB',
@@ -109,7 +110,7 @@ if (isStdout) {
 }
 
 if (isPreview) {
-  const checkOutput = execFileSync('npx', [
+  const checkOutput = execFileSync(process.execPath, [wranglerCli,
     ...wranglerArgs,
     '--command', "SELECT organization_id FROM sites WHERE id = 'site-kikuzuki'",
     '--json',
@@ -134,9 +135,9 @@ try {
     const sqlPath = join(dir, `kikuzuki-${chunk.label}.sql`)
     writeFileSync(sqlPath, chunk.sql, 'utf8')
 
-    const cmd = ['npx', ...wranglerArgs, '--file', sqlPath]
+    const cmd = ['wrangler', ...wranglerArgs, '--file', sqlPath]
     console.log(`[seed:kikuzuki:${chunk.label}] Applying: ${cmd.join(' ')}`)
-    execFileSync('npx', [...wranglerArgs, '--file', sqlPath], { stdio: 'inherit' })
+    execFileSync(process.execPath, [wranglerCli, ...wranglerArgs, '--file', sqlPath], { stdio: 'inherit' })
   }
   console.log('[seed:kikuzuki] Done.')
 } finally {

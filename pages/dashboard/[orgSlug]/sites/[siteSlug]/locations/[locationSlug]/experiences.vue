@@ -385,7 +385,7 @@ const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 
 const dashboard = useDashboardSite()
-const defaultCurrency = computed(() => dashboard.site.value?.default_currency || 'THB')
+const defaultCurrency = computed(() => dashboard.site.value?.default_currency || 'USD')
 
 // ── List ──────────────────────────────────────────────────
 const loading = ref(true)

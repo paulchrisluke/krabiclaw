@@ -6,6 +6,9 @@ import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
 import { contactAdapter } from '~/server/domain/guest-threads/adapters/contact'
 import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
+import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { defineHandler } from 'nitro'
+import { getRouterParam, readBody } from 'nitro/h3'
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
 
@@ -90,9 +93,18 @@ export default defineHandler(async (event) => {
     })
   }
 
+  await recordSubmissionConversionSafe(db, event, {
+    organizationId: site.organization_id,
+    siteId,
+    eventName: 'contact_submit',
+    stage: 'submitted',
+    locationId: assignedLocationId,
+    entityType: 'contact_submission',
+    entityId: id,
+    pageType: 'contact',
+    pagePath: '/contact',
+  })
+
   return jsonResponse({
     success: true, message: 'Your message has been sent. We will be in touch soon.', }, { status: 201 })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';
-import { readBody } from 'nitro/h3';

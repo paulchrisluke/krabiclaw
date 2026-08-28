@@ -88,25 +88,47 @@ export async function publishDueBlogPosts(db: D1Database, now = new Date()) {
 }
 
 export async function resolveBlogRedirect(db: DbClient, siteId: string | null, slug: string) {
-  const row = await queryFirst<{ slug: string; theme: string | null; theme_id: string | null } | null>(db, `
-    SELECT p.slug, s.theme, s.theme_id
-      FROM blog_post_redirects r
-      JOIN blog_posts p ON p.id = r.post_id
-     LEFT JOIN sites s ON s.id = p.site_id
-     WHERE r.old_slug = ? AND ${siteId ? 'r.site_id = ? AND p.site_id = ?' : 'r.site_id IS NULL AND p.site_id IS NULL'}
-       AND p.status = 'published'
-     LIMIT 1
-  `, siteId ? [slug, siteId, siteId] : [slug])
-  if (!row) return null
-  return siteId ? tenantBlogPostPath(row, row.slug) : row.slug
+  if (siteId) {
+    const row = await queryFirst<{ to_path: string | null } | null>(db, `
+      SELECT to_path FROM site_redirects
+       WHERE site_id = ? AND locale = 'en' AND owner_type = 'tenant_blog_post'
+         AND from_path IN (?, ?) AND behavior = 'redirect'
+       LIMIT 1
+    `, [siteId, `/blog/${slug}`, `/article/${slug}`])
+    return row?.to_path ?? null
+  }
+  const row = await queryFirst<{ slug: string } | null>(db, `
+    SELECT p.slug FROM platform_blog_redirects r JOIN blog_posts p ON p.id = r.post_id
+     WHERE r.old_slug = ? AND p.site_id IS NULL AND p.status = 'published' LIMIT 1
+  `, [slug])
+  return row?.slug ?? null
 }
 
 export async function createBlogRedirect(db: D1Database, postId: string, siteId: string | null, oldSlug: string) {
-  const result = await execute(db, `INSERT INTO blog_post_redirects (id, post_id, site_id, old_slug, created_at)
-    SELECT ?, p.id, p.site_id, ?, ?
-      FROM blog_posts p
-     WHERE p.id = ? AND ((? IS NULL AND p.site_id IS NULL) OR p.site_id = ?)`,
-  [crypto.randomUUID(), oldSlug, new Date().toISOString(), postId, siteId, siteId])
+  const now = new Date().toISOString()
+  if (!siteId) {
+    const result = await execute(db, `INSERT INTO platform_blog_redirects (id, post_id, old_slug, created_at)
+      SELECT ?, p.id, ?, ? FROM blog_posts p WHERE p.id = ? AND p.site_id IS NULL`,
+    [crypto.randomUUID(), oldSlug, now, postId])
+    if (Number(result.meta.changes ?? 0) === 0) {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
+    }
+    return
+  }
+  const post = await queryFirst<{ id: string; organization_id: string; slug: string; theme: string | null; theme_id: string | null }>(db, `
+    SELECT p.id, p.organization_id, p.slug, s.theme, s.theme_id
+      FROM blog_posts p JOIN sites s ON s.id = p.site_id
+     WHERE p.id = ? AND p.site_id = ? LIMIT 1
+  `, [postId, siteId])
+  if (!post) throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
+  const oldPath = tenantBlogPostPath(post, oldSlug)
+  const newPath = tenantBlogPostPath(post, post.slug)
+  const result = await execute(db, `INSERT INTO site_redirects
+    (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
+    VALUES (?, ?, ?, 'en', 'tenant_blog_post', ?, ?, ?, 301, 'redirect', 'tenant_blog_slug_change', 'tenant-blog', ?, ?)
+    ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
+      to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
+  [crypto.randomUUID(), post.organization_id, siteId, postId, oldPath, newPath, now, now])
   if (Number(result.meta.changes ?? 0) === 0) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
   }

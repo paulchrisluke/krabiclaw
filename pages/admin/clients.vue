@@ -47,7 +47,6 @@
                 <p class="text-sm text-muted">
                   <span v-if="client.subdomain">{{ client.subdomain }}</span>
                   <span v-else class="italic opacity-50">No subdomain</span>
-                  <template v-if="client.source_locale"> · {{ client.source_locale }}</template>
                 </p>
               </div>
             </div>
@@ -327,7 +326,6 @@ interface Client {
   site_id: string | null
   brand_name: string | null
   subdomain: string | null
-  source_locale: string | null
   subscription_status: string | null
   stripe_customer_id: string | null
   stripe_subscription_id: string | null

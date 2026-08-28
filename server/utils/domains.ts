@@ -10,7 +10,7 @@ export interface DomainEnv {
   GA4_MEASUREMENT_ID?: string
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
-  CF_ZARAZ_API_TOKEN?: string
+  CLOUDFLARE_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   CF_ACCOUNT_ID?: string
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
@@ -104,29 +104,12 @@ const MAX_RETRY_COUNT = 12
 const STUCK_AFTER_MS = 48 * 60 * 60 * 1000
 const DNS_QUERY_TIMEOUT_MS = 5_000
 
-async function syncZarazForActiveConnection(
-  env: DomainEnv,
-  db: D1Database,
-  siteId: string,
-  organizationId: string,
-): Promise<void> {
-  const connection = await queryFirst<{ ga4_measurement_id: string | null }>(db, `
-    SELECT ga4_measurement_id
-    FROM google_analytics_connections
-    WHERE site_id = ? AND organization_id = ? AND status = 'active'
-    LIMIT 1
-  `, [siteId, organizationId])
-  if (!connection?.ga4_measurement_id) return
-
+async function reconcileZarazForDomainChange(env: DomainEnv, db: D1Database, siteId: string): Promise<void> {
   try {
-    const { syncTenantZarazAnalytics } = await import('~/server/utils/zaraz-analytics')
-    await syncTenantZarazAnalytics(env, db, {
-      siteId,
-      organizationId,
-      measurementId: connection.ga4_measurement_id,
-    })
+    const { reconcileZarazAnalytics } = await import('~/server/utils/zaraz-analytics')
+    await reconcileZarazAnalytics(env, db)
   } catch (error) {
-    console.error('zaraz_sync_failed', { siteId, error })
+    console.error('zaraz_reconciliation_failed', { siteId, error })
   }
 }
 
@@ -682,7 +665,7 @@ async function persistCloudflareState(
   const after = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId]) as DomainRecord
 
   if (before.status !== after.status && (before.status === 'active' || after.status === 'active')) {
-    await syncZarazForActiveConnection(env, db, after.site_id, after.organization_id)
+    await reconcileZarazForDomainChange(env, db, after.site_id)
   }
 
   if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
@@ -975,7 +958,7 @@ export async function deleteCustomDomain(
   `, [now, domainId])
 
   if (domain.status === 'active') {
-    await syncZarazForActiveConnection(env, db, domain.site_id, domain.organization_id)
+    await reconcileZarazForDomainChange(env, db, domain.site_id)
   }
   await execute(db, `DELETE FROM domain_reconciliation_jobs WHERE domain_id = ?`, [domainId])
   await logDomainEvent(db, {

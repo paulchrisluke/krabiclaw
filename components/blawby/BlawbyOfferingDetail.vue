@@ -180,7 +180,7 @@ function onTabKeydown(event: KeyboardEvent) {
   nextTick(() => tabRefs.value[activeFeature.value]?.focus())
 }
 
-const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
+const { trackConsultationClick } = useSiteConversionTracking(consultation)
 const homeUrl = useSeoUrl(() => '/')
 const servicesUrl = useSeoUrl(() => '/services')
 function trackConsultation(destination: string) {

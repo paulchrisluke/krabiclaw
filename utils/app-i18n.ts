@@ -1,24 +1,24 @@
 export const APP_DEFAULT_LOCALE = 'en' as const
+export type AppLocale = string
 
-export const APP_LOCALES = [
-  { code: 'en', name: 'English', language: 'en-US', dir: 'ltr' },
-  { code: 'th', name: 'ไทย', language: 'th-TH', dir: 'ltr' },
-] as const
-
-export type AppLocale = typeof APP_LOCALES[number]['code']
-
-const APP_LOCALE_CODES = new Set<string>(APP_LOCALES.map(locale => locale.code))
-
-export function normalizeAppLocale(value: unknown): AppLocale | null {
-  if (typeof value !== 'string') return null
-  const locale = value.trim()
-  return APP_LOCALE_CODES.has(locale) ? locale as AppLocale : null
+export function normalizeAppLocale(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    const canonical = Intl.getCanonicalLocales(value.trim())
+    return canonical.length === 1 ? canonical[0] ?? null : null
+  } catch {
+    return null
+  }
 }
-
-export function resolveAppLocale(value: unknown): AppLocale {
+export function resolveAppLocale(value: unknown): string {
   return normalizeAppLocale(value) ?? APP_DEFAULT_LOCALE
 }
 
-export function switchAppLocalePath(path: string, locale: unknown): string | null {
-  return normalizeAppLocale(locale) ? path : null
+export function switchAppLocalePath(
+  representations: ReadonlyArray<{ locale: string; route_path: string }>,
+  locale: unknown,
+): string | null {
+  const normalized = normalizeAppLocale(locale)
+  if (!normalized) return null
+  return representations.find(item => item.locale === normalized)?.route_path ?? null
 }

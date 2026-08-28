@@ -38,26 +38,13 @@ const isDev = import.meta.dev
 const errorStatusCode = computed(() => props.error?.statusCode ?? props.error?.status ?? 500)
 const isNotFound = computed(() => errorStatusCode.value === 404)
 
-// Tenant-resolution middleware still runs before app.vue throws, so `site` is
-// populated whenever the host resolved to a real tenant (e.g. a 500 on a known
-// site, or an unauthorized draft preview). It's only ever null for a genuine
-// TENANT_404 (host never matched any site_domains row). Reusing the same
-// buildTenantHeadLinks() as app.vue means a resolved tenant's error page keeps
-// showing its own favicon, and an unresolved custom domain gets the generic
-// branded-letter fallback instead of silently inheriting KrabiClaw's own
-// favicon.ico via the browser's implicit lookup.
 const { isPlatform, site } = useTenantSite()
 const route = useRoute()
-const tenantLogoUrl = computed(() => site?.media?.find(item => item.slot === 'logo')?.public_url ?? null)
-const tenantFaviconUrl = computed(() => site?.media?.find(item => item.slot === 'favicon')?.public_url ?? null)
 
 useHead(() => ({
   link: buildTenantHeadLinks({
     isPlatform,
-    tenantLogoUrl: tenantLogoUrl.value,
-    tenantFaviconUrl: tenantFaviconUrl.value,
-    tenantBrandName: site?.brand_name || '',
-    isDraftPreview: route.path.startsWith('/preview/draft/'),
+    siteMedia: site?.media,
     isSitePreview: route.path.startsWith('/preview/site/'),
   })
 }))

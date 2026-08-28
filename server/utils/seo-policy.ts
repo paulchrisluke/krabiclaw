@@ -1,4 +1,5 @@
 import { TENANT_TYPES, type TenantType } from '../../utils/tenant-routing.ts'
+import { TENANT_NON_INDEXABLE_EXACT_PATHS } from '../../utils/template-registry.ts'
 import { isEnvironmentTenantAliasHost } from './tenant-hosts.ts'
 
 export const PLATFORM_SITEMAP_ROUTES = [
@@ -29,13 +30,10 @@ export const PRIVATE_ROUTE_PREFIXES = [
 ] as const
 
 export const PRIVATE_EXACT_ROUTES = new Set([
+  ...TENANT_NON_INDEXABLE_EXACT_PATHS,
   '/accept-invitation',
-  '/contact/confirmed',
-  '/experiences/confirmed',
   '/forgot-password',
   '/login',
-  '/reservations/cancel',
-  '/reservations/confirmed',
   '/reset-password',
   '/signup',
   '/tenant-404',
@@ -69,11 +67,6 @@ export const TENANT_ONLY_ROUTE_PREFIXES = [
   '/reviews/',
 ] as const
 
-export const TECHNICAL_ASSET_EXACT_ROUTES = new Set([
-  '/site.webmanifest',
-  '/tenant.webmanifest',
-])
-
 export const TECHNICAL_ASSET_ROUTE_PREFIXES = [
   '/_next',
 ] as const
@@ -95,8 +88,7 @@ export function isTenantOnlySeoPath(pathname: string): boolean {
 }
 
 export function isTechnicalAssetSeoPath(pathname: string): boolean {
-  return TECHNICAL_ASSET_EXACT_ROUTES.has(pathname)
-    || TECHNICAL_ASSET_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  return TECHNICAL_ASSET_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
 export function isNonIndexableHost(hostname: string): boolean {

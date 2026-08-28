@@ -1,6 +1,5 @@
 @source "../../pages/index.vue";
 @source "../../layouts/saya.vue";
-@source "../../components/ConsentBanner.vue";
 @source "../../components/saya/SayaHeader.vue";
 @source "../../components/saya/SayaFooter.vue";
 @source "../../components/saya/SayaHomePage.vue";

@@ -95,7 +95,7 @@ const contactCards = computed(() => Array.isArray(contactBlock.value?.cardsConte
 const submitting = ref(false)
 const submitMessage = ref('')
 const form = reactive({ name: '', email: '', subject: 'general', message: '', consent: false })
-const { trackConsultationClick, trackContactSubmit } = useBlawbyConversionTracking(consultation)
+const { trackConsultationClick, mirrorSubmission } = useSiteConversionTracking(consultation)
 
 async function submitContact() {
   if (!siteId || submitting.value) return
@@ -107,7 +107,7 @@ async function submitContact() {
       body: form,
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
-    trackContactSubmit()
+    mirrorSubmission('contact_submit')
     setContactConfirmation({
       siteId,
       siteName: identity.value.brand_name,

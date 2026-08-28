@@ -1,11 +1,10 @@
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
-import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import {
   getPublicTenantPageForPath,
@@ -298,7 +297,9 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
   return {
     mode: row.mode,
     cta_label: ctaLabel,
-    external_url: typeof row.external_url === 'string' ? row.external_url : null,
+    external_url: typeof row.external_url === 'string' && row.external_url
+      ? `/api/public/sites/${encodeURIComponent(siteId)}/consultation-handoff`
+      : null,
     schedule_path: schedulePath,
     confirmation_path: confirmationPath,
     tracking_enabled: row.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),
@@ -635,40 +636,4 @@ export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise
     getPublicThemeTokens(db, siteId),
   ])
   return { offerings, tenantPages, compliance, consultation, themeTokens }
-}
-
-export async function recordSiteConversionEvent(db: DbClient, input: {
-  organizationId: string
-  siteId: string
-  eventName: SiteConversionEventName
-  pageType?: string | null
-  pagePath?: string | null
-  pageLocation?: string | null
-  ctaDestination?: string | null
-  tenant?: string | null
-  metadata?: ApiRecord | null
-  ipHash?: string | null
-  userAgent?: string | null
-}) {
-  const id = `conv_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
-  await execute(db, `
-    INSERT INTO site_conversion_events
-      (id, organization_id, site_id, event_name, page_type, page_path, page_location,
-       cta_destination, tenant, metadata_json, ip_hash, user_agent)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    id,
-    input.organizationId,
-    input.siteId,
-    input.eventName,
-    input.pageType ?? null,
-    input.pagePath ?? null,
-    input.pageLocation ?? null,
-    input.ctaDestination ?? null,
-    input.tenant ?? null,
-    input.metadata ? JSON.stringify(input.metadata) : null,
-    input.ipHash ?? null,
-    input.userAgent ?? null,
-  ])
-  return { id }
 }

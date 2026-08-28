@@ -125,7 +125,7 @@ const resolvedSeo = computed(() => resolveBlogSeo({
   baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.brand_name,
   robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots,
 }))
-const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
+const { trackConsultationClick } = useSiteConversionTracking(consultation)
 
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null

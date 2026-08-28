@@ -1,6 +1,5 @@
 @source "../../pages/index.vue";
 @source "../../layouts/blawby.vue";
-@source "../../components/ConsentBanner.vue";
 @source "../../components/blawby/BlawbyHeader.vue";
 @source "../../components/blawby/BlawbyFooter.vue";
 @source "../../components/blawby/BlawbyHome.vue";

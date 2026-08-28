@@ -26,7 +26,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     slug: 'pottery-house-krabi',
     subdomain: 'pottery-house',
     brandName: 'Pottery House Krabi',
-    media: [{ asset_id: 'media-ph-logo', slot: 'logo' }],
+    media: [{ asset_id: 'media-ph-logo', slot: 'logo' }, { asset_id: 'media-ph-logo', slot: 'favicon' }],
     themeId: 'saya-theme-v1',
     theme: 'saya',
     brandDescription:
@@ -917,7 +917,7 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   public_url, brand_name, brand_description,
   status, plan, onboarding_status, primary_location_id,
-  contact_email, contact_phone, default_currency, vertical
+  contact_email, contact_phone, default_currency, vertical, analytics_data_start_at
 ) VALUES (
   ${sqlValue(identity.siteId)},
   ${sqlValue(identity.organizationId)},
@@ -935,7 +935,8 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.contactEmail)},
   ${sqlValue(site.contactPhone ?? null)},
   ${sqlValue(site.defaultCurrency)},
-  ${sqlValue(site.vertical)}
+  ${sqlValue(site.vertical)},
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)

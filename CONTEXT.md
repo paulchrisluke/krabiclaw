@@ -103,8 +103,8 @@ A reviewable import artifact that maps legacy tenant URLs to their intended Krab
 _Avoid_: ad-hoc redirects, implicit route compatibility
 
 **Conversion event**:
-A tenant-owned visitor action that indicates commercial or operational intent, such as clicking a consultation CTA. Conversion events are first-party KrabiClaw analytics concepts and may be bridged to configured external analytics destinations.
-_Avoid_: raw dataLayer push, custom script snippet
+A tenant-owned visitor action that indicates commercial or operational intent, such as clicking a consultation CTA. Conversion events are first-party KrabiClaw analytics concepts and may be mirrored to configured external analytics destinations.
+_Avoid_: tenant-specific tracking hook, custom script snippet
 
 **Site-level review**:
 Approved customer feedback about a tenant as a whole rather than one location. A site-level review has no location association but still requires a 1-5 rating.

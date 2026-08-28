@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   blawbyBaseURL, blawbyExtraHeaders, collectPageErrors,
-  potteryHouseBaseURL, potteryHouseExtraHeaders, setupTenantHeaders,
+  openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders,
 } from './helpers'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
 
@@ -90,10 +90,9 @@ for (const tenant of tenants) {
   ]) {
     test(`${tenant.name} renders and navigates on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport)
-      await setupTenantHeaders(page, tenant.baseURL, tenant.headers)
       const failures = collectFirstPartyFailures(page, tenant.baseURL)
       const manifestResponse = page.waitForResponse(response => response.url().includes('/_nuxt/builds/meta/'))
-      const response = await page.goto(`${tenant.baseURL}/`, { waitUntil: 'load' })
+      const response = await openTenantPage(page, `${tenant.baseURL}/`, tenant.headers)
       expect(response?.status()).toBeLessThan(400)
       expect((await manifestResponse).status()).toBe(200)
       expect(new URL(page.url()).origin).toBe(new URL(tenant.baseURL).origin)
@@ -120,8 +119,7 @@ for (const tenant of tenants) {
 }
 
 test('Pottery House preserves dark-theme hydration and booking context', async ({ page }) => {
-  await setupTenantHeaders(page, potteryHouseBaseURL, potteryHouseExtraHeaders)
-  await page.goto(`${potteryHouseBaseURL}/experiences/pottery-wheel-class`, { waitUntil: 'load' })
+  await openTenantPage(page, `${potteryHouseBaseURL}/experiences/pottery-wheel-class`, potteryHouseExtraHeaders)
   await expect(page.locator('.tenant-layout')).not.toHaveCSS('--saya-bg', '')
   await expect(page.locator('main')).toContainText(/Pottery Wheel Class/i)
   await expect(page.locator('#experience-booking-toggle').first()).toBeVisible()
@@ -131,8 +129,7 @@ test('Pottery House preserves dark-theme hydration and booking context', async (
 
 test('Kikuzuki keeps customer identity, locations, and reservation entry point', async ({ page }) => {
   const baseURL = kikuzukiTestBaseUrl()
-  await setupTenantHeaders(page, baseURL, kikuzukiTestExtraHeaders())
-  await page.goto(`${baseURL}/menu`, { waitUntil: 'load' })
+  await openTenantPage(page, `${baseURL}/menu`, kikuzukiTestExtraHeaders())
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await expect(page.locator('main')).toContainText(/Tuna Sushi|ซูชิ/i)
   await page.goto(`${baseURL}/locations`, { waitUntil: 'load' })
@@ -142,8 +139,7 @@ test('Kikuzuki keeps customer identity, locations, and reservation entry point',
 })
 
 test('NCLS exposes header, footer, pricing, article, contact, taxonomy, and donation journeys', async ({ page, context }) => {
-  await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)
-  await page.goto(`${blawbyBaseURL}/`, { waitUntil: 'load' })
+  await openTenantPage(page, `${blawbyBaseURL}/`, blawbyExtraHeaders)
   for (const label of ['Services', 'Pricing', 'About', 'Contact', 'Blog', 'Donate'])
     await expect(page.locator('header').getByRole('link', { name: label, exact: true })).toBeVisible()
   for (const label of ['Family law', 'Request a Consultation', 'About', 'Privacy'])
@@ -158,9 +154,8 @@ test('NCLS exposes header, footer, pricing, article, contact, taxonomy, and dona
   ].map(async (journey) => {
     const routePage = await context.newPage()
     try {
-      await setupTenantHeaders(routePage, blawbyBaseURL, blawbyExtraHeaders)
       const errors = collectPageErrors(routePage, { failOnAllWarnings: true })
-      const response = await routePage.goto(`${blawbyBaseURL}${journey.path}`, { waitUntil: 'load' })
+      const response = await openTenantPage(routePage, `${blawbyBaseURL}${journey.path}`, blawbyExtraHeaders)
       expect(response?.status(), journey.path).toBeLessThan(400)
       await routePage.waitForTimeout(250)
       expect(errors, journey.path).toEqual([])

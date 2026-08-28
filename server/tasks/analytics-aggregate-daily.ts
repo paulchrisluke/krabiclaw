@@ -1,4 +1,4 @@
-import { aggregateAnalyticsForAllSites, cleanupOldPageviewEvents } from '~/server/utils/analytics'
+import { aggregatePreviousLocalDateForAllSites, cleanupTenantAnalytics } from '~/server/utils/site-analytics-report'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 export default defineScheduledTask({
@@ -26,17 +26,12 @@ export default defineScheduledTask({
     if (!db) throw new Error('DB is required')
 
     try {
-      // Aggregate analytics for yesterday (previous day)
-      const [yesterday] = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')
-      const targetDate = yesterday || new Date().toISOString().slice(0, 10)
-      await aggregateAnalyticsForAllSites(db, targetDate)
-
-      // Clean up pageview events older than 90 days (keep daily aggregates)
-      const cleaned = await cleanupOldPageviewEvents(db, 90)
+      const aggregated = await aggregatePreviousLocalDateForAllSites(db)
+      const cleaned = await cleanupTenantAnalytics(db)
 
       return {
         result: {
-          aggregated: targetDate,
+          aggregated: aggregated.join(','),
           cleaned,
           skipped: '',
           message: 'Analytics aggregation completed successfully',

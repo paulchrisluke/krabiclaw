@@ -15,6 +15,7 @@ export interface PublicTemplateDefinition {
     exactPaths: string[]
     dynamicPrefixes: string[]
   }
+  nonIndexableExactPaths: string[]
 }
 
 export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDefinition> = {
@@ -33,6 +34,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       exactPaths: ['/', '/menu', '/contact', '/blog', '/experiences', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
       dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
     },
+    nonIndexableExactPaths: ['/contact/confirmed', '/experiences/cancel', '/experiences/confirmed', '/reservations/cancel', '/reservations/confirmed'],
   },
   blawby: {
     slug: 'blawby',
@@ -49,8 +51,13 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/policies/privacy', '/policies/terms', '/third-party-notices'],
       dynamicPrefixes: ['/services/', '/article/'],
     },
+    nonIndexableExactPaths: ['/contact/confirmed'],
   },
 }
+
+export const TENANT_NON_INDEXABLE_EXACT_PATHS = new Set(
+  Object.values(publicTemplateRegistry).flatMap(template => template.nonIndexableExactPaths),
+)
 
 export function resolvePublicTemplate(input: {
   theme?: string | null

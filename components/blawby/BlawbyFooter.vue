@@ -42,10 +42,13 @@
         </div>
       </div>
 
-      <div class="mt-16 border-t border-white/10 pt-8 sm:mt-20 lg:mt-24">
+      <div class="mt-16 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-8 sm:mt-20 lg:mt-24">
         <p class="text-xs leading-5 text-gray-400">
           Copyright &copy; {{ year }} {{ compliance?.entity_name || brandName }}. All rights reserved.
         </p>
+        <button type="button" class="blawby-footer-link text-xs underline" @click="showZarazConsentModal">
+          Cookie preferences
+        </button>
       </div>
     </div>
   </footer>
@@ -53,6 +56,7 @@
 
 <script setup lang="ts">
 import type { PublicBlawbyIdentity, PublicBlawbyPageLink, PublicCompliance, PublicOfferingLink } from '~/types/blawby'
+import { showZarazConsentModal } from '~/utils/zaraz-consent'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity

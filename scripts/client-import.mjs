@@ -622,7 +622,7 @@ INSERT INTO sites (
   '${siteId}', '${orgId}', 'saya-theme-v1', 'saya', '${SLUG}', '${SLUG}',
   '${brandName.replace(/'/g, "''")}', NULL,
   'active', 'free', 'active',
-  'THB', '${VERTICAL}'
+  'USD', '${VERTICAL}'
 ) ON CONFLICT(id) DO UPDATE SET
   brand_name = excluded.brand_name,
   vertical = excluded.vertical,

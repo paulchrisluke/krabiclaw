@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:cb468d96f3b5fd1a1f87ad69c174eb101842a24b94eb404ed8f4ffbab06d25f6",
+  "fingerprint": "sha256:ad811a20d146199beb6d2b4bde5dbcaac9a27b385a6491bf2bac30db04bb8906",
   "tools": [
     {
       "name": "analyze_document",
@@ -3067,39 +3067,6 @@
       }
     },
     {
-      "name": "delete_locale",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "locale": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "locale"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          },
-          "locale": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "deleted"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "delete_location",
       "inputSchema": {
         "additionalProperties": true,
@@ -3321,6 +3288,57 @@
         },
         "required": [
           "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_resource_localization",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_type": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id",
+          "locale"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "deleted",
+          "resource_type",
+          "resource_id",
+          "locale"
         ],
         "type": "object"
       }
@@ -5305,6 +5323,45 @@
       }
     },
     {
+      "name": "get_product_catalog_localization",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locale"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "locale",
+          "products"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "get_professional_service_content",
       "inputSchema": {
         "additionalProperties": true,
@@ -5471,6 +5528,86 @@
       }
     },
     {
+      "name": "get_resource_localization",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_type": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id",
+          "locale"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "localization": {
+            "additionalProperties": false,
+            "properties": {
+              "document_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "resource_type": {
+                "type": "string"
+              },
+              "route_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "values": {
+                "additionalProperties": true,
+                "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "resource_type",
+              "resource_id",
+              "locale",
+              "values",
+              "route_path",
+              "document_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "localization"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "get_site",
       "inputSchema": {
         "additionalProperties": true,
@@ -5589,7 +5726,7 @@
         "additionalProperties": true,
         "properties": {
           "end_date": {
-            "description": "End of period in YYYY-MM-DD format. Defaults to today.",
+            "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
             "type": "string"
           },
           "site_id": {
@@ -5597,7 +5734,7 @@
             "type": "string"
           },
           "start_date": {
-            "description": "Start of period in YYYY-MM-DD format. Defaults to 30 days ago.",
+            "description": "Inclusive local start date in YYYY-MM-DD format. Defaults to 29 days before end_date.",
             "type": "string"
           }
         },
@@ -5606,39 +5743,257 @@
       },
       "outputSchema": {
         "properties": {
+          "attribution": {
+            "items": {
+              "properties": {
+                "campaign": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conversionRate": {
+                  "type": "number"
+                },
+                "conversions": {
+                  "type": "number"
+                },
+                "medium": {
+                  "type": "string"
+                },
+                "sessions": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "medium",
+                "campaign",
+                "sessions",
+                "conversions",
+                "conversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "cities": {
+            "items": {
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "countryCode": {
+                  "type": "string"
+                },
+                "region": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "city",
+                "region",
+                "countryCode",
+                "views"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "conversions": {
+            "items": {
+              "properties": {
+                "conversionRate": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "eventName",
+                "stage",
+                "count",
+                "conversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "countries": {
+            "items": {
+              "properties": {
+                "country": {
+                  "type": "string"
+                },
+                "countryCode": {
+                  "type": "string"
+                },
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "country",
+                "countryCode",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "dailyData": {
+            "items": {
+              "properties": {
+                "avgDuration": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "pageViews": {
+                  "type": "number"
+                },
+                "sessions": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "date",
+                "pageViews",
+                "sessions",
+                "avgDuration"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "devices": {
+            "items": {
+              "properties": {
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "type",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "metrics": {
             "properties": {
               "avgSessionDuration": {
-                "description": "Average session duration in seconds.",
                 "type": "number"
               },
               "changePercent": {
-                "description": "Percent change versus the previous equivalent period.",
-                "type": "number"
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "pageViews": {
                 "type": "number"
               },
+              "pagesPerSession": {
+                "type": "number"
+              },
+              "returningVisitors": {
+                "type": "number"
+              },
               "uniqueSessions": {
+                "type": "number"
+              },
+              "uniqueVisitors": {
                 "type": "number"
               }
             },
             "required": [
               "pageViews",
-              "uniqueSessions"
+              "uniqueSessions",
+              "uniqueVisitors",
+              "returningVisitors",
+              "avgSessionDuration",
+              "pagesPerSession",
+              "changePercent"
             ],
             "type": "object"
           },
           "period": {
             "properties": {
+              "analyticsDataStartAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "endDate": {
                 "type": "string"
               },
               "startDate": {
                 "type": "string"
+              },
+              "timezone": {
+                "type": "string"
               }
             },
+            "required": [
+              "startDate",
+              "endDate",
+              "timezone",
+              "analyticsDataStartAt"
+            ],
             "type": "object"
+          },
+          "referrers": {
+            "items": {
+              "properties": {
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "topPages": {
             "items": {
@@ -5653,14 +6008,27 @@
                   "type": "number"
                 }
               },
+              "required": [
+                "path",
+                "views",
+                "percentOfTotal"
+              ],
               "type": "object"
             },
             "type": "array"
           }
         },
         "required": [
+          "period",
           "metrics",
-          "period"
+          "dailyData",
+          "topPages",
+          "attribution",
+          "conversions",
+          "countries",
+          "cities",
+          "referrers",
+          "devices"
         ],
         "type": "object"
       }
@@ -6393,6 +6761,9 @@
       },
       "outputSchema": {
         "properties": {
+          "creditsRemaining": {
+            "type": "number"
+          },
           "products": {
             "items": {
               "properties": {
@@ -6707,17 +7078,11 @@
               "type": "object"
             },
             "type": "array"
-          },
-          "rejected": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
           }
         },
         "required": [
           "products",
-          "rejected"
+          "creditsRemaining"
         ],
         "type": "object"
       }
@@ -7652,78 +8017,6 @@
         },
         "required": [
           "experiences",
-          "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "list_locales",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "locales": {
-            "items": {
-              "properties": {
-                "created_at": {
-                  "type": "string"
-                },
-                "is_enabled": {
-                  "type": "number"
-                },
-                "locale": {
-                  "description": "BCP-47 locale code, e.g. \"th\", \"zh\".",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "locale"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "locales",
           "page_info"
         ],
         "type": "object"
@@ -8720,6 +9013,36 @@
         "required": [
           "posts",
           "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_site_locales",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locales": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "locales"
         ],
         "type": "object"
       }
@@ -10073,6 +10396,98 @@
         "required": [
           "success",
           "post_id"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "put_resource_localization",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_type": {
+            "type": "string"
+          },
+          "route_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id",
+          "locale",
+          "values"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "localization": {
+            "additionalProperties": false,
+            "properties": {
+              "document_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "resource_type": {
+                "type": "string"
+              },
+              "route_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "values": {
+                "additionalProperties": true,
+                "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "resource_type",
+              "resource_id",
+              "locale",
+              "values",
+              "route_path",
+              "document_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "localization"
         ],
         "type": "object"
       }
@@ -13049,6 +13464,72 @@
           "success",
           "synced_to_location",
           "page"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "sync_product_catalog_localization",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "product_id": {
+                  "type": "string"
+                },
+                "route_path": {
+                  "type": "string"
+                },
+                "values": {
+                  "additionalProperties": true,
+                  "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                  "type": "object"
+                }
+              },
+              "required": [
+                "product_id",
+                "values",
+                "route_path"
+              ],
+              "type": "object"
+            },
+            "maxItems": 250,
+            "minItems": 1,
+            "type": "array"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locale",
+          "items"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "updated_product_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "locale",
+          "updated_product_ids"
         ],
         "type": "object"
       }
@@ -16848,64 +17329,6 @@
           "status",
           "public_url",
           "kind"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "upsert_locale",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "is_source": {
-            "description": "Mark this as the site's source locale. Forces status to published.",
-            "type": "boolean"
-          },
-          "label": {
-            "description": "Optional display label.",
-            "type": "string"
-          },
-          "locale": {
-            "description": "BCP-47 locale code, e.g. \"th\", \"zh\".",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "status": {
-            "description": "Published exposes the locale publicly; disabled hides it. New non-source locales default to disabled.",
-            "enum": [
-              "published",
-              "disabled"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "locale"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "locale": {
-            "properties": {
-              "is_enabled": {
-                "type": "number"
-              },
-              "locale": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "locale"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "locale"
         ],
         "type": "object"
       }
