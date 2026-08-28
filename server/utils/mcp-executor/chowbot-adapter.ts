@@ -44,7 +44,7 @@ export interface ChowbotExecutorSite {
 // safe if its contents are themselves safe for the model to see. Verified:
 // every renderStructuredResponse(...) call across mcp-executor/*.ts as of
 // this migration passes only the plain domain entity as privateMeta
-// (menu/item/post/location/experience/settings/policy/manifest) — no
+// (Product/post/location/experience/settings/policy/manifest) — no
 // tokens, no host-only widget wiring, no internal-only fields. Re-check
 // this if a future domain's privateMeta ever carries something host-only.
 function unwrapMcpExecutorResult(result: unknown): ApiValue {
@@ -69,8 +69,8 @@ function unwrapMcpExecutorResult(result: unknown): ApiValue {
  * model instead of crashing the chat turn.
  *
  * toolName must be a real MCP tool name (looked up via getMcpTool) — ChowBot
- * -only convenience tools (e.g. publish_menu) are translated to their MCP
- * equivalent by the caller in chowbot-agent.ts before reaching here.
+ * -only convenience tools are translated to their MCP equivalent by the
+ * caller in chowbot-agent.ts before reaching here.
  */
 export async function runMcpExecutorToolForChowbot(
   site: ChowbotExecutorSite,

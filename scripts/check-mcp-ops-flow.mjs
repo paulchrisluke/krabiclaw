@@ -35,7 +35,7 @@ async function getAuthHeaders() {
   if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
     throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
   }
-  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-mcp-owner-c' })
+  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-demo-owner' })
 }
 
 async function mcp(headers, name, args = {}) {
@@ -102,7 +102,7 @@ async function getOrCreateSite(headers) {
   const suffix = Date.now()
   const create = await mcp(headers, 'create_site', {
     name: `MCP Ops Check ${suffix}`,
-    subdomain: `mcp-ops-check-${suffix}`,
+    subdomain: `e2e-mcp-ops-check-${suffix}`,
     vertical: 'restaurant',
   })
   expectStatus('create_site succeeds', create)
@@ -125,66 +125,48 @@ async function main() {
   const locationId = data(location.body)?.id
   expectValue('create_location returns location id', Boolean(locationId), location.body)
 
-  const menu = await mcp(headers, 'create_menu', {
+  const product = await mcp(headers, 'create_product', {
     site_id: siteId,
-    name: `MCP Ops Menu ${Date.now()}`,
-    description: 'Menu created by MCP ops checker',
     location_id: locationId,
-  })
-  expectStatus('create_menu succeeds', menu)
-  const menuId = data(menu.body)?.id
-  expectValue('create_menu returns menu id', Boolean(menuId), menu.body)
-
-  const menuItem = await mcp(headers, 'create_menu_item', {
-    site_id: siteId,
-    menu_id: menuId,
-    section: 'Mains',
+    category: 'Mains',
     name: 'MCP Ops Curry',
-    price_amount: '12.50',
+    price_amount: '12.5',
   })
-  expectStatus('create_menu_item with price succeeds', menuItem)
-  const menuItemId = data(menuItem.body)?.id
-  expectValue('create_menu_item returns item id', Boolean(menuItemId), menuItem.body)
+  expectStatus('create_product with price succeeds', product)
+  const productId = data(product.body)?.product?.id
+  expectValue('create_product returns Product id', Boolean(productId), product.body)
 
-  const initialMenuRead = await mcp(headers, 'get_menu', { site_id: siteId, menu_id: menuId })
-  expectStatus('get_menu succeeds after create', initialMenuRead)
-  const initialReadItems = data(initialMenuRead.body)?.menu?.items ?? []
-  const initialPricedItem = initialReadItems.find(item => item.id === menuItemId)
-  expectValue('created menu item has initial price amount', moneyEquals(initialPricedItem?.price_amount, 12.50), initialPricedItem)
+  const initialRead = await mcp(headers, 'get_product', { site_id: siteId, product_id: productId })
+  expectStatus('get_product succeeds after create', initialRead)
+  expectValue('created Product has initial price amount', moneyEquals(data(initialRead.body)?.product?.price_amount, 12.5), initialRead.body)
 
-  const batchedMenuItems = await mcp(headers, 'add_menu_items_batch', {
+  const batch = await mcp(headers, 'batch_create_products', {
     site_id: siteId,
-    menu_id: menuId,
-    items: [
-      { section: 'Shots', name: 'B-52', price_amount: '7' },
-      { section: 'Shots', name: 'Lemon Drop', price_amount: '8' },
-      { section: 'Shots', name: 'B-52', price_amount: '7' },
+    location_id: locationId,
+    products: [
+      { category: 'Shots', name: 'B-52', price_amount: '7' },
+      { category: 'Shots', name: 'Lemon Drop', price_amount: '8' },
     ],
   })
-  expectStatus('add_menu_items_batch succeeds', batchedMenuItems)
-  const batchPayload = data(batchedMenuItems.body)
-  expectValue('add_menu_items_batch adds two items', batchPayload?.added === 2, batchPayload)
-  expectValue('add_menu_items_batch reports one duplicate skip', Array.isArray(batchPayload?.skipped) && batchPayload.skipped.length === 1 && batchPayload.skipped[0].reason.includes('already_exists'), batchPayload)
+  expectStatus('batch_create_products succeeds', batch)
+  expectValue('batch_create_products adds two Products atomically', data(batch.body)?.products?.length === 2, batch.body)
 
-  const itemUpdate = await mcp(headers, 'update_menu_item', {
+  const productUpdate = await mcp(headers, 'update_product', {
     site_id: siteId,
-    menu_item_id: menuItemId,
+    product_id: productId,
     name: 'MCP Ops Green Curry',
-    price_amount: '13.00',
+    price_amount: '13',
   })
-  expectStatus('update_menu_item price succeeds', itemUpdate)
-  expectValue('update_menu_item returns changed_fields', Array.isArray(data(itemUpdate.body)?.changed_fields), itemUpdate.body)
+  expectStatus('update_product price succeeds', productUpdate)
 
-  const menuRead = await mcp(headers, 'get_menu', { site_id: siteId, menu_id: menuId })
-  expectStatus('get_menu succeeds', menuRead)
-  const readItems = data(menuRead.body)?.menu?.items ?? []
-  expectValue('get_menu includes updated item', readItems.some(item => item.id === menuItemId && item.name === 'MCP Ops Green Curry'), readItems)
-  expectValue('get_menu preserves location_id', data(menuRead.body)?.menu?.location_id === locationId, data(menuRead.body))
-  const pricedItem = readItems.find(item => item.id === menuItemId)
-  expectValue('updated menu item has new price amount', moneyEquals(pricedItem?.price_amount, 13), pricedItem)
-  const menuDelete = await mcp(headers, 'delete_menu', { site_id: siteId, menu_id: menuId })
-  expectStatus('delete_menu succeeds', menuDelete)
-  expectValue('delete_menu returns deleted true', data(menuDelete.body)?.deleted === true, menuDelete.body)
+  const productRead = await mcp(headers, 'get_product', { site_id: siteId, product_id: productId })
+  expectStatus('get_product succeeds', productRead)
+  expectValue('get_product includes updated Product', data(productRead.body)?.product?.name === 'MCP Ops Green Curry', productRead.body)
+  expectValue('get_product preserves location_id', data(productRead.body)?.product?.location_id === locationId, productRead.body)
+  expectValue('updated Product has new price amount', moneyEquals(data(productRead.body)?.product?.price_amount, 13), productRead.body)
+  const productDelete = await mcp(headers, 'delete_product', { site_id: siteId, product_id: productId })
+  expectStatus('delete_product succeeds', productDelete)
+  expectValue('delete_product returns deleted true', data(productDelete.body)?.deleted === true, productDelete.body)
 
   const post = await mcp(headers, 'create_post', {
     site_id: siteId,

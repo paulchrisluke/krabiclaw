@@ -4,7 +4,7 @@
     <slot v-else name="leading" />
     <slot />
   </NuxtLink>
-  <a v-else-if="href" :href="href" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" :aria-disabled="disabled || loading || undefined" :tabindex="disabled || loading ? -1 : undefined" @click="handleClick">
+  <a v-else-if="href" :href="href" :target="target" :rel="rel" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" :aria-disabled="disabled || loading || undefined" :tabindex="disabled || loading ? -1 : undefined" @click="handleClick">
     <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
     <slot v-else name="leading" />
     <slot />
@@ -38,6 +38,8 @@ const props = withDefaults(defineProps<{
   type?: 'button' | 'submit'
   to?: string
   href?: string
+  target?: '_blank' | '_self' | '_parent' | '_top'
+  rel?: string
   controlId?: string
 }>(), {
   variant: 'solid',

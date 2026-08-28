@@ -1,5 +1,5 @@
 import { compileCuratedSiteFixture } from './compile.ts'
-import type { CuratedSiteDefinition } from './contracts.ts'
+import type { CuratedProductDefinition, CuratedSiteDefinition } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -16,6 +16,13 @@ function sqlValue(value: string | number | boolean | null): string {
 
 function sqlJson(value: unknown): string {
   return sqlValue(JSON.stringify(value))
+}
+
+function productsAtLocation(
+  locationId: string,
+  products: Array<Omit<CuratedProductDefinition, 'locationId'>>,
+): CuratedProductDefinition[] {
+  return products.map((product, sortOrder) => ({ ...product, locationId, sortOrder }))
 }
 
 export const demoFixture: CuratedSiteDefinition = {
@@ -774,18 +781,11 @@ export const demoFixture: CuratedSiteDefinition = {
       source: 'google',
     },
   ],
-  menus: [
-    {
-      id: 'menu-demo',
-      locationId: 'loc-demo',
-      name: 'Menu',
-      description: 'Wood-fired pizza, antipasti, salads, and drinks from the Ember & Slice oven.',
-      sectionOrder: ['Wood-Fired Pizza', 'Antipasti', 'Pasta & Salads', 'Drinks'],
-      status: 'published',
-      items: [
+  products: [
+    ...productsAtLocation('loc-demo', [
         {
           id: 'mi-1',
-          section: 'Wood-Fired Pizza',
+          category: 'Wood-Fired Pizza',
           name: 'Margherita',
           slug: 'margherita',
           description: 'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
@@ -801,7 +801,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-2',
-          section: 'Wood-Fired Pizza',
+          category: 'Wood-Fired Pizza',
           name: 'Pepperoni Calabrese',
           slug: 'pepperoni-calabrese',
           description: 'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
@@ -814,7 +814,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-3',
-          section: 'Wood-Fired Pizza',
+          category: 'Wood-Fired Pizza',
           name: 'Funghi Bianco',
           slug: 'funghi-bianco',
           description: 'Roasted mushrooms, ricotta crema, garlic, thyme, mozzarella, pecorino',
@@ -827,7 +827,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-4',
-          section: 'Wood-Fired Pizza',
+          category: 'Wood-Fired Pizza',
           name: 'Soppressata Hot Honey',
           slug: 'soppressata-hot-honey',
           description: 'Spicy soppressata, tomato, mozzarella, pickled Fresno chile, Brooklyn hot honey',
@@ -840,7 +840,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-5',
-          section: 'Antipasti',
+          category: 'Antipasti',
           name: 'Burrata',
           slug: 'burrata',
           description: 'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
@@ -853,7 +853,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-6',
-          section: 'Antipasti',
+          category: 'Antipasti',
           name: 'Garlic Knots',
           slug: 'garlic-knots',
           description: 'Wood-fired knots, parsley, roasted garlic butter, marinara',
@@ -866,7 +866,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-7',
-          section: 'Pasta & Salads',
+          category: 'Pasta & Salads',
           name: 'Little Gem Caesar',
           slug: 'little-gem-caesar',
           description: 'Little gem lettuce, anchovy dressing, sourdough crumbs, shaved pecorino',
@@ -879,7 +879,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-8',
-          section: 'Pasta & Salads',
+          category: 'Pasta & Salads',
           name: 'Rigatoni Pomodoro',
           slug: 'rigatoni-pomodoro',
           description: 'Rigatoni, slow tomato sauce, basil, parmesan',
@@ -892,7 +892,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-9',
-          section: 'Drinks',
+          category: 'Drinks',
           name: 'Sparkling Lemonade',
           slug: 'sparkling-lemonade',
           description: 'House lemon cordial, soda, rosemary',
@@ -905,7 +905,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-10',
-          section: 'Drinks',
+          category: 'Drinks',
           name: 'Italian Soda',
           slug: 'italian-soda',
           description: 'Blood orange, grapefruit, or limonata',
@@ -916,19 +916,11 @@ export const demoFixture: CuratedSiteDefinition = {
           available: true,
           sortOrder: 2,
         },
-      ],
-    },
-    {
-      id: 'menu-demo-2',
-      locationId: 'loc-demo-2',
-      name: 'Menu',
-      description: 'Wood-fired pizza, fresh local antipasti, and craft drinks in the West Village.',
-      sectionOrder: ['Wood-Fired Pizza', 'Antipasti', 'Drinks'],
-      status: 'published',
-      items: [
+    ]),
+    ...productsAtLocation('loc-demo-2', [
         {
           id: 'mi-demo2-1',
-          section: 'Wood-Fired Pizza',
+          category: 'Wood-Fired Pizza',
           name: 'Margherita',
           slug: 'margherita',
           description: 'San Marzano tomato, fior di latte, basil, extra virgin olive oil, sea salt',
@@ -944,7 +936,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-demo2-2',
-          section: 'Wood-Fired Pizza',
+          category: 'Wood-Fired Pizza',
           name: 'Pepperoni Calabrese',
           slug: 'pepperoni-calabrese',
           description: 'Tomato, mozzarella, cupping pepperoni, Calabrian chile, oregano',
@@ -957,7 +949,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-demo2-3',
-          section: 'Antipasti',
+          category: 'Antipasti',
           name: 'Burrata',
           slug: 'burrata',
           description: 'Creamy burrata, roasted cherry tomatoes, basil oil, grilled sourdough',
@@ -970,7 +962,7 @@ export const demoFixture: CuratedSiteDefinition = {
         },
         {
           id: 'mi-demo2-4',
-          section: 'Drinks',
+          category: 'Drinks',
           name: 'Sparkling Lemonade',
           slug: 'sparkling-lemonade',
           description: 'House lemon cordial, soda, rosemary',
@@ -981,8 +973,7 @@ export const demoFixture: CuratedSiteDefinition = {
           available: true,
           sortOrder: 1,
         },
-      ],
-    },
+    ]),
   ],
   locationQa: [
     {
@@ -1199,92 +1190,6 @@ export const demoFixture: CuratedSiteDefinition = {
       shortDescription: 'พิซซ่าเตาฟืน แอนติพาสติตามฤดูกาล และการต้อนรับแบบเพื่อนบ้านในบรูคลิน',
       status: 'published',
       sourceHash: 'demo-pizza-location-v1',
-      translatedAt: '2026-05-01T00:00:00.000Z',
-      reviewedAt: '2026-05-01T00:00:00.000Z',
-    },
-  ],
-  menuTranslations: [
-    {
-      id: 'mt-demo-th-menu',
-      menuId: 'menu-demo',
-      locale: 'th',
-      name: 'เมนู',
-      description: 'พิซซ่าเตาฟืน แอนติพาสตี สลัด และเครื่องดื่มจาก Ember & Slice',
-      sectionOrder: ['พิซซ่าเตาฟืน', 'แอนติพาสตี', 'พาสต้าและสลัด', 'เครื่องดื่ม'],
-      status: 'published',
-      sourceHash: 'demo-pizza-menu-v1',
-      translatedAt: '2026-05-01T00:00:00.000Z',
-      reviewedAt: '2026-05-01T00:00:00.000Z',
-    },
-  ],
-  menuItemTranslations: [
-    {
-      id: 'mit-demo-th-mi-1',
-      menuItemId: 'mi-1',
-      locale: 'th',
-      section: 'พิซซ่าเตาฟืน',
-      name: 'มาร์เกริตา',
-      description: 'มะเขือเทศซานมาร์ซาโน ฟิออร์ดิลาเต้ ใบโหระพา น้ำมันมะกอกเอ็กซ์ตร้าเวอร์จิน และเกลือทะเล',
-      allergens: '["กลูเตน", "นม"]',
-      dietaryNotes: '["มังสวิรัติ"]',
-      status: 'published',
-      sourceHash: 'demo-pizza-mi-1-v1',
-      translatedAt: '2026-05-01T00:00:00.000Z',
-      reviewedAt: '2026-05-01T00:00:00.000Z',
-    },
-    {
-      id: 'mit-demo-th-mi-2',
-      menuItemId: 'mi-2',
-      locale: 'th',
-      section: 'พิซซ่าเตาฟืน',
-      name: 'เปปเปอโรนีคาลาเบรเซ',
-      description: 'ซอสมะเขือเทศ มอซซาเรลลา เปปเปอโรนี พริกคาลาเบรีย และออริกาโน',
-      allergens: '["กลูเตน", "นม"]',
-      dietaryNotes: null,
-      status: 'published',
-      sourceHash: 'demo-pizza-mi-2-v1',
-      translatedAt: '2026-05-01T00:00:00.000Z',
-      reviewedAt: '2026-05-01T00:00:00.000Z',
-    },
-    {
-      id: 'mit-demo-th-mi-3',
-      menuItemId: 'mi-3',
-      locale: 'th',
-      section: 'พิซซ่าเตาฟืน',
-      name: 'ฟุงกีบิอังโก',
-      description: 'เห็ดย่าง ครีมริคอตตา กระเทียม ไทม์ มอซซาเรลลา และเปโคริโน',
-      allergens: '["กลูเตน", "นม"]',
-      dietaryNotes: '["มังสวิรัติ"]',
-      status: 'published',
-      sourceHash: 'demo-pizza-mi-3-v1',
-      translatedAt: '2026-05-01T00:00:00.000Z',
-      reviewedAt: '2026-05-01T00:00:00.000Z',
-    },
-    {
-      id: 'mit-demo-th-mi-5',
-      menuItemId: 'mi-5',
-      locale: 'th',
-      section: 'แอนติพาสตี',
-      name: 'บูราตา',
-      description: 'บูราตาครีมมี่ มะเขือเทศเชอร์รีย่าง น้ำมันโหระพา และซาวโดว์ย่าง',
-      allergens: '["กลูเตน", "นม"]',
-      dietaryNotes: '["มังสวิรัติ"]',
-      status: 'published',
-      sourceHash: 'demo-pizza-mi-5-v1',
-      translatedAt: '2026-05-01T00:00:00.000Z',
-      reviewedAt: '2026-05-01T00:00:00.000Z',
-    },
-    {
-      id: 'mit-demo-th-mi-6',
-      menuItemId: 'mi-6',
-      locale: 'th',
-      section: 'แอนติพาสตี',
-      name: 'การ์ลิกนอตส์',
-      description: 'ขนมปังนอตส์อบเตาฟืน คลุกพาร์สลีย์ เนยกระเทียมย่าง และมารินารา',
-      allergens: '["กลูเตน", "นม"]',
-      dietaryNotes: '["มังสวิรัติ"]',
-      status: 'published',
-      sourceHash: 'demo-pizza-mi-6-v1',
       translatedAt: '2026-05-01T00:00:00.000Z',
       reviewedAt: '2026-05-01T00:00:00.000Z',
     },
@@ -1509,68 +1414,61 @@ ${reviewRows};
 -- END GENERATED: demo_reviews`
 }
 
-export function renderCompiledDemoMenuBlock(): string {
-  const menuRows = compiledDemoSeed.menus
-    .map((menu) => `  (${[
-      sqlValue(menu.id),
-      sqlValue(menu.organizationId),
-      sqlValue(menu.siteId),
-      sqlValue(menu.locationId),
-      sqlValue(menu.name),
-      sqlValue(menu.description),
-      sqlJson(menu.sectionOrder),
-      sqlValue(menu.status === 'published'),
+export function renderCompiledDemoProductsBlock(): string {
+  const productRows = compiledDemoSeed.products
+    .map((product) => `  (${[
+      sqlValue(product.id),
+      sqlValue(product.organizationId),
+      sqlValue(product.siteId),
+      sqlValue(product.locationId),
+      sqlValue(product.category),
+      sqlValue(product.name),
+      sqlValue(product.slug),
+      sqlValue(product.description),
+      sqlValue(product.priceAmount),
+      sqlValue(true),
+      sqlValue(product.available),
+      sqlValue(false),
+      sqlValue(0),
+      sqlValue(product.sortOrder),
+      sqlJson([]),
+      sqlJson([
+        ...(product.allergens ? [{ key: 'allergens', label: 'Allergens', values: JSON.parse(product.allergens) }] : []),
+        ...(product.dietaryNotes ? [{ key: 'dietary-notes', label: 'Dietary notes', values: JSON.parse(product.dietaryNotes) }] : []),
+      ]),
+      sqlValue('template'),
+      sqlValue('seed:demo'),
+      sqlValue('seed:demo'),
     ].join(', ')})`)
     .join(',\n')
-
-  const allItems = compiledDemoSeed.menus.flatMap((menu) => menu.items)
-  const menuItemRows = allItems
-    .map((item) => `  (${[
-      sqlValue(item.id),
-      sqlValue(item.menuId),
-      sqlValue(item.section),
-      sqlValue(item.name),
-      sqlValue(item.slug),
-      sqlValue(item.description),
-      sqlValue(item.priceAmount),
-      sqlValue(item.allergens),
-      sqlValue(item.dietaryNotes),
-      sqlValue(item.available),
-      sqlValue(item.sortOrder),
+  const productMediaRows = compiledDemoSeed.products.flatMap(product => {
+    const gallery = product.media.map((media, index) => ({ ...media, slot: 'gallery', index }))
+    const primary = product.media[0] ? [{ ...product.media[0], slot: 'image', index: 0 }] : []
+    return [...primary, ...gallery].map(media => `  (${[
+      sqlValue(`${product.id}-${media.slot}-${media.index}`),
+      sqlValue(product.organizationId), sqlValue(product.siteId),
+      sqlValue('product'), sqlValue(product.id), sqlValue(media.slot),
+      sqlValue(media.asset_id), media.index, sqlValue('active'),
     ].join(', ')})`)
+  })
     .join(',\n')
-  const menuItemMediaRows = allItems
-    .flatMap(item => item.media.map((media, index) => `  (${[
-      sqlValue(`${item.id}-${media.slot}-${index}`),
-      sqlValue(item.organizationId), sqlValue(item.siteId),
-      sqlValue('menu_item'),
-      sqlValue(item.id),
-      sqlValue(media.slot),
-      sqlValue(media.asset_id),
-      index, sqlValue('active'),
-    ].join(', ')})`))
-    .join(',\n')
-  const menuItemMediaSql = menuItemMediaRows
+  const productMediaSql = productMediaRows
     ? `
 
 INSERT OR REPLACE INTO media_placements
   (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
 VALUES
-${menuItemMediaRows};`
+${productMediaRows};`
     : ''
 
-  return `-- BEGIN GENERATED: demo_menu
--- Menus and menu items for the demo tenant.
-INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, description, section_order, is_visible)
+  return `-- BEGIN GENERATED: demo_products
+INSERT OR REPLACE INTO products
+  (id, organization_id, site_id, location_id, category, name, slug, description,
+   price_amount, is_visible, available, featured, featured_sort_order, sort_order,
+   tags_json, details_json, source, created_by, updated_by)
 VALUES
-${menuRows};
-
-INSERT OR IGNORE INTO menu_items
-  (id, menu_id, section, name, slug, description, price_amount,
-   allergens, dietary_notes, available, sort_order)
-VALUES
-${menuItemRows};${menuItemMediaSql}
--- END GENERATED: demo_menu`
+${productRows};${productMediaSql}
+-- END GENERATED: demo_products`
 }
 
 export function renderCompiledDemoQaBlock(): string {

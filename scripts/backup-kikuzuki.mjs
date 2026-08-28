@@ -88,16 +88,9 @@ console.log('Fetching media_placements...')
 out.push('-- media_placements')
 out.push(inserts('media_placements', query(`SELECT * FROM media_placements WHERE organization_id = '${ORG}'`)))
 
-// --- Menus ---
-console.log('Fetching menus...')
-out.push('-- menus')
-out.push(inserts('menus', query(`SELECT * FROM menus WHERE organization_id = '${ORG}'`)))
-
-console.log('Fetching menu_items...')
-out.push('-- menu_items')
-out.push(inserts('menu_items', query(
-  `SELECT * FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE organization_id = '${ORG}')`
-)))
+console.log('Fetching products...')
+out.push('-- products')
+out.push(inserts('products', query(`SELECT * FROM products WHERE organization_id = '${ORG}'`)))
 
 // --- Canonical tenant pages ---
 console.log('Fetching tenant pages...')
@@ -123,7 +116,7 @@ out.push(`SELECT 'sites'      , COUNT(*) FROM sites              WHERE organizat
 out.push(`SELECT 'locations'  , COUNT(*) FROM business_locations WHERE organization_id = '${ORG}';`)
 out.push(`SELECT 'media'      , COUNT(*) FROM media_assets       WHERE organization_id = '${ORG}';`)
 out.push(`SELECT 'tenant_pages', COUNT(*) FROM tenant_pages      WHERE organization_id = '${ORG}';`)
-out.push(`SELECT 'menu_items' , COUNT(*) FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE organization_id = '${ORG}');`)
+out.push(`SELECT 'products'    , COUNT(*) FROM products           WHERE organization_id = '${ORG}';`)
 
 const filename = `prod-backup-kikuzuki-${new Date().toISOString().slice(0, 10)}.sql`
 writeFileSync(filename, out.join('\n'))

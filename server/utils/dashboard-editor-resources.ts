@@ -20,7 +20,7 @@ import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
-import { getMenus, getMenuWithItems } from '~/server/utils/menu-management'
+import { getProduct, listLocationProducts } from '~/server/utils/product-management'
 import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { getPlatformBlogPost, listPlatformBlogPosts } from '~/server/utils/platform-content'
@@ -220,7 +220,7 @@ export async function loadDashboardLocationOverview(
   event: H3Event,
   siteId: string,
   locationId: string,
-  options: { includeMenus: boolean },
+  options: { includeProducts: boolean },
 ) {
   const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
@@ -234,15 +234,15 @@ export async function loadDashboardLocationOverview(
     siteId,
     locationId,
   })
-  const [capabilities, menus, threads] = await Promise.all([
+  const [capabilities, products, threads] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
       siteId,
       location.feature_overrides as string | null ?? null,
     ),
-    options.includeMenus
-      ? getMenus(db, organization.id, siteId, locationId)
+    options.includeProducts
+      ? listLocationProducts(db, organization.id, siteId, locationId)
       : Promise.resolve([]),
     loadDashboardGuestThreads(event, siteId, { locationId }),
   ])
@@ -252,7 +252,7 @@ export async function loadDashboardLocationOverview(
       location: parseLocationPayload(location)!,
       ...capabilities,
     },
-    menus: { success: true as const, menus },
+    products: { success: true as const, products },
     threads: { summary: threads.summary },
   }
 }
@@ -309,39 +309,27 @@ export async function loadDashboardBlogPost(
   return { post }
 }
 
-export async function loadDashboardMenu(
+export async function loadDashboardProduct(
   event: H3Event,
   siteId: string,
-  menuId: string,
+  locationId: string,
+  productId: string,
 ) {
-  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
-  const menu = await getMenuWithItems(db, site.organization_id, siteId, menuId)
-  if (!menu) throw new HTTPError({ statusCode: 404, statusMessage: 'Menu not found' })
-  await assertResourceAccess(db, {
-    env,
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: menu.location_id ?? null,
-  })
-  return { success: true as const, menu }
+  const { db, site } = await requireLocationAccess(event, siteId, locationId)
+  const product = await getProduct(db, site.organization_id, siteId, locationId, productId)
+  if (!product) throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found' })
+  return { success: true as const, product }
 }
 
-// Mirrors GET /api/editor/sites/[siteId]/menus?locationId=... (menus.get.ts) —
-// list menus for a location, plus the first menu's own items so the editor's
-// initial SSR render has real menu data instead of a client-only fetch.
-export async function loadDashboardLocationMenus(
+// Loads the location-owned Product collection directly for the editor's SSR render.
+export async function loadDashboardLocationProducts(
   event: H3Event,
   siteId: string,
   locationId: string,
 ) {
   const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const menus = await getMenus(db, site.organization_id, siteId, locationId)
-  const menu = menus.length > 0
-    ? await getMenuWithItems(db, site.organization_id, siteId, menus[0]!.id)
-    : null
-  return { success: true as const, menus, menu }
+  const products = await listLocationProducts(db, site.organization_id, siteId, locationId)
+  return { success: true as const, products }
 }
 
 export async function loadDashboardLocationPosts(

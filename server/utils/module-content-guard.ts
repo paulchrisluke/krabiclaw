@@ -11,11 +11,10 @@ export interface ModuleContentGuardResult {
   reason?: string
 }
 
-async function menuHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
+async function productsHaveLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT mi.id FROM menu_items mi
-    JOIN menus m ON m.id = mi.menu_id
-    WHERE m.site_id = ? ${scope.locationId ? 'AND m.location_id = ?' : ''} AND mi.available = 1
+    SELECT id FROM products
+    WHERE site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''} AND is_visible = 1
     LIMIT 1
   `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
   return Boolean(row)
@@ -59,7 +58,7 @@ async function servicesHasLiveData(db: DbClient, scope: ModuleContentGuardScope)
 }
 
 const MODULE_LABELS: Partial<Record<ProductFeature, string>> = {
-  menu: 'menu items',
+  products: 'visible Products',
   experiences: 'active experiences',
   reservations: 'upcoming reservations',
   ordering: 'active delivery links',
@@ -67,7 +66,7 @@ const MODULE_LABELS: Partial<Record<ProductFeature, string>> = {
 }
 
 const MODULE_CHECKS: Partial<Record<ProductFeature, (_db: DbClient, _scope: ModuleContentGuardScope) => Promise<boolean>>> = {
-  menu: menuHasLiveData,
+  products: productsHaveLiveData,
   experiences: experiencesHasLiveData,
   reservations: reservationsHasLiveData,
   ordering: orderingHasLiveData,

@@ -41,8 +41,8 @@ export type AnalyticsEventName =
   | 'subscription_cancelled'
   | 'subscription_checkout_success'
   // Content Creation
-  | 'menu_item_created'
-  | 'menu_imported'
+  | 'product_created'
+  | 'product_imported'
   | 'post_created'
   | 'post_published'
   // Media Management
@@ -77,7 +77,7 @@ export interface AnalyticsEventProperties {
   currency?: string
 
   // Content
-  content_type?: string // 'page', 'menu_item', 'post'
+  content_type?: string // 'page', 'product', 'post'
   content_id?: string
   import_method?: string // 'ai', 'manual', 'csv'
 
@@ -262,12 +262,12 @@ export const useAnalytics = () => {
   }
 
   // Content Creation
-  const trackMenuItemCreated = (contentId: string, siteId: string) => {
-    trackEvent('menu_item_created', { content_id: contentId, site_id: siteId, content_type: 'menu_item' })
+  const trackProductCreated = (contentId: string, siteId: string) => {
+    trackEvent('product_created', { content_id: contentId, site_id: siteId, content_type: 'product' })
   }
 
-  const trackMenuImported = (siteId: string, importMethod: string) => {
-    trackEvent('menu_imported', { site_id: siteId, import_method: importMethod })
+  const trackProductsImported = (siteId: string, importMethod: string) => {
+    trackEvent('product_imported', { site_id: siteId, import_method: importMethod })
   }
 
   const trackPostCreated = (contentId: string, siteId: string) => {
@@ -344,8 +344,8 @@ export const useAnalytics = () => {
     trackSubscriptionCheckoutSuccess,
     setUserId,
     getBillingAnalyticsContext,
-    trackMenuItemCreated,
-    trackMenuImported,
+    trackProductCreated,
+    trackProductsImported,
     trackPostCreated,
     trackPostPublished,
     trackImageUploaded,

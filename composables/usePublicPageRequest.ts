@@ -5,7 +5,7 @@ import { normalizeAppLocale } from '~/utils/app-i18n'
 // Page type → SSR call mapping:
 //   /locations/[slug]/reviews  → type A  (reviews data included)
 //   /locations                 → type B
-//   /locations/[slug]          → type C  (menu, reviews, and posts previews included)
+//   /locations/[slug]          → type C  (Products, reviews, and posts previews included)
 //   regular pages (/, /about…) → type D
 //   /locations/[slug]/photos   → type E  (photos data included)
 //   /locations/[slug]/qa       → type F  (qa data included)
@@ -13,7 +13,7 @@ import { normalizeAppLocale } from '~/utils/app-i18n'
 export type PublicPageDataset =
   | 'content'
   | 'location'
-  | 'menu'
+  | 'products'
   | 'reviews'
   | 'photos'
   | 'qa'
@@ -74,8 +74,8 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       datasets: [
         'content',
         'location',
-        ...(page === "location" || page === "menu" ? ['menu'] as const : []),
-        ...(page === "location" || page === "menu" || page === "experiences"
+        ...(page === 'location' || page === 'menu' || page === 'products' ? ['products'] as const : []),
+        ...(page === "location" || page === "menu" || page === 'products' || page === "experiences"
           ? ['experiences', 'experiencePolicies'] as const
           : []),
         ...(page === "location" ? ['reviews', 'posts'] as const : []),
@@ -128,7 +128,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "home",
       location: null,
       experience: null,
-      datasets: ['content', 'location', 'menu', 'experiences'],
+      datasets: ['content', 'location', 'products', 'experiences'],
       blogSlug: null,
     };
   if (path.startsWith("/locations"))
@@ -216,7 +216,15 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "menu",
       location: null,
       experience: null,
-      datasets: ['content', 'menu'],
+      datasets: ['content', 'products'],
+      blogSlug: null,
+    };
+  if (path === '/products' || path.startsWith('/products/'))
+    return {
+      page: 'products',
+      location: null,
+      experience: null,
+      datasets: ['content', 'products'],
       blogSlug: null,
     };
   if (path === "/blog" || path === "/blog/")

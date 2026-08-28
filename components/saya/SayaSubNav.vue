@@ -27,26 +27,29 @@
 
 <script setup lang="ts">
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+import { resolveProductPresentation, productLocationCollectionPath } from '~/utils/product-presentation'
 
 const props = defineProps<{
   locationSlug: string
-  active: 'overview' | 'menu' | 'experiences' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
+  active: 'overview' | 'menu' | 'products' | 'experiences' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
 }>()
 
-const { menu, experiencesList } = await usePublicPageData({ lazy: false })
+const { products, experiencesList, location } = await usePublicPageData({ lazy: false })
+const { site } = useTenantSite()
 const { t } = useI18n()
 
-const hasMenu = computed(() => {
-  const m = menu.value as { items?: unknown[] } | null
-  return !!(m && m.items && m.items.length > 0)
-})
+const productPresentation = computed(() => resolveProductPresentation((site as ApiRecord | null)?.vertical as string | null | undefined))
 
 const items = computed(() => {
   const list = [
     { key: 'overview', label: t('saya.subnav.overview'), href: `/locations/${props.locationSlug}` }
   ]
-  if (hasMenu.value) {
-    list.push({ key: 'menu', label: t('saya.subnav.menu'), href: `/locations/${props.locationSlug}/menu` })
+  if (location.value && products.value.some(product => product.location_id === location.value?.id) && productPresentation.value) {
+    list.push({
+      key: productPresentation.value.locationCollectionSegment,
+      label: productPresentation.value.collectionLabel,
+      href: productLocationCollectionPath((site as ApiRecord | null)?.vertical as string | null | undefined, props.locationSlug),
+    })
   }
   const experiencesHref = resolveLocationExperienceHref(props.locationSlug, experiencesList.value)
   if (experiencesHref) {

@@ -28,8 +28,13 @@ test('global reviews and posts routes request their route datasets', () => {
   assert.deepEqual(getPublicPageRequest('/posts').datasets, ['content', 'posts'])
 })
 
+test('product collection and detail routes request Product data', () => {
+  assert.deepEqual(getPublicPageRequest('/products').datasets, ['content', 'products'])
+  assert.deepEqual(getPublicPageRequest('/products/handmade-mug').datasets, ['content', 'products'])
+})
+
 test('home requests only critical datasets for the initial document', () => {
-  assert.deepEqual(getPublicPageRequest('/').datasets, ['content', 'location', 'menu', 'experiences'])
+  assert.deepEqual(getPublicPageRequest('/').datasets, ['content', 'location', 'products', 'experiences'])
 })
 
 test('public resource URLs are built from an explicit route snapshot', () => {

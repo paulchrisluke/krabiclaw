@@ -188,7 +188,7 @@ export function insertInitialMediaPlacements(input: {
 }
 
 // media_placements.owner_id is polymorphic with no owner foreign key, so every
-// path that deletes an owning row (a post, a menu item, a review, ...) must
+// path that deletes an owning row (a post, a Product, a review, ...) must
 // explicitly clear its placements first or they orphan permanently. Route
 // every such deletion through this builder instead of hand-writing the DELETE
 // each time.

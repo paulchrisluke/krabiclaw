@@ -26,7 +26,7 @@ export const contentRegistry: Record<string, { path: string }> = {
   about: { path: '/about' },
   contact: { path: '/contact' },
   location: { path: '/locations/:location' },
-  menu: { path: '/menu' },
+  products: { path: '/products' },
   order: { path: '/order' },
   experiences: { path: '/experiences' },
   reservations: { path: '/reservations' },

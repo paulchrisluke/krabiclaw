@@ -6,7 +6,7 @@
     </p>
     <div class="dev-perf-shell-frame saya-theme">
       <UTheme :ui="{}">
-        <LazySayaHeader :site="null" :locations="[]" :menu="null" :has-experiences="false" />
+        <LazySayaHeader :site="null" :locations="[]" :has-products="false" :has-experiences="false" />
         <main class="dev-perf-shell-body">
           <h3>Static body</h3>
           <p>The Saya header is the variable.</p>

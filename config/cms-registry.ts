@@ -1,5 +1,6 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
+import { resolveProductPresentation } from '~/utils/product-presentation'
 
 export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'site'
 
@@ -12,7 +13,7 @@ export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'si
 // scope. Wire distinct manager entries only when their routes provide distinct customer-facing UX.
 export type ProductFeature =
   | 'contact' | 'locations' | 'settings'
-  | 'menu' | 'reservations' | 'ordering'
+  | 'products' | 'reservations' | 'ordering'
   | 'experiences' | 'experience_bookings'
   | 'services' | 'consultations' | 'appointments'
   | 'blog' | 'qa' | 'testimonials' | 'reviews' | 'media' | 'posts' | 'photos' | 'links'
@@ -102,14 +103,14 @@ const sayaCoreManagers: readonly CmsManagerCapability[] = [
 const sayaTemplateCatalog: CmsTemplateCatalog = {
   pages: [
     ...sayaCorePages,
-    { id: 'menu', feature: 'menu', label: 'Menu', route: '/menu', scope: 'site', editor: 'tenant_pages' },
+    { id: 'products', feature: 'products', label: 'Products', route: '/products', scope: 'site', editor: 'tenant_pages' },
     { id: 'order', feature: 'ordering', label: 'Order online', route: '/order', scope: 'site', editor: 'tenant_pages' },
     { id: 'experiences', feature: 'experiences', label: 'Experiences', route: '/experiences', scope: 'site', editor: 'tenant_pages' },
     { id: 'reservations', feature: 'reservations', label: 'Reservations', route: '/reservations', scope: 'site', editor: 'tenant_pages' },
   ],
   managers: [
     ...sayaCoreManagers,
-    { key: 'location.menu', id: 'menu', label: 'Menus', section: 'collections', route: ':location/menu', scope: 'location' },
+    { key: 'location.products', id: 'products', label: 'Products', section: 'collections', route: ':location/products', scope: 'location' },
     { key: 'site.ordering', id: 'ordering', label: 'Orders', section: 'collections', route: 'orders', scope: 'site' },
     { key: 'location.experiences', id: 'experiences', label: 'Experiences', section: 'collections', route: ':location/experiences', scope: 'location' },
     { key: 'location.reservations', id: 'reservations', label: 'Reservations', section: 'collections', route: ':location/reservations', scope: 'location' },
@@ -165,7 +166,7 @@ export interface ProductModuleDefinition {
 }
 
 const sayaModules: readonly ProductModuleDefinition[] = [
-  { feature: 'menu', configurableAt: ['site', 'location'] },
+  { feature: 'products', configurableAt: ['site', 'location'] },
   { feature: 'ordering', configurableAt: ['site', 'location'] },
   { feature: 'reservations', configurableAt: ['site', 'location'] },
   { feature: 'experiences', configurableAt: ['site', 'location'] },
@@ -209,7 +210,7 @@ export const ALWAYS_ON_FEATURES: readonly ProductFeature[] = [
 // Real business-module defaults only — content managers are handled uniformly via
 // ALWAYS_ON_FEATURES above, not per-vertical here.
 const verticalDefaultFeatures: Record<SiteVertical, readonly ProductFeature[]> = {
-  restaurant: ['menu', 'reservations', 'ordering'],
+  restaurant: ['products', 'reservations', 'ordering'],
   experience: ['experiences', 'reservations'],
   professional_service: ['services'],
 }
@@ -263,13 +264,18 @@ export function resolveCmsCapabilities(
     locationFeatures = siteFeatures
   }
 
+  const productPresentation = resolveProductPresentation(vertical)
   const pages = catalog.pages
     .filter(page => (page.scope === 'site' ? siteFeatures : locationFeatures).has(page.feature))
-    .map(page => ({ ...page, label: effectiveLabel(vertical, page.feature, page.label) }))
+    .map(page => page.feature === 'products' && productPresentation
+      ? { ...page, label: productPresentation.collectionLabel, route: productPresentation.collectionPath }
+      : { ...page, label: effectiveLabel(vertical, page.feature, page.label) })
 
   const managers = catalog.managers
     .filter(manager => (manager.scope === 'site' ? siteFeatures : locationFeatures).has(manager.id))
-    .map(manager => ({ ...manager, label: effectiveLabel(vertical, manager.id, manager.label) }))
+    .map(manager => manager.id === 'products' && productPresentation
+      ? { ...manager, label: productPresentation.collectionLabel }
+      : { ...manager, label: effectiveLabel(vertical, manager.id, manager.label) })
 
   return {
     vertical,

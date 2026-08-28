@@ -225,14 +225,14 @@ const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 const siteType = computed(() => `${vertical.value.replaceAll('_', ' ')} · ${template.value} theme`)
 const mediaSummary = computed(() => media.value.length ? `${media.value.length}${media.value.length === 6 ? '+' : ''} photos` : 'No media yet')
 const pageIcons: Record<string, string> = { '/': 'i-lucide-house', '/about': 'i-lucide-info', '/contact': 'i-lucide-mail', '/menu': 'i-lucide-utensils', '/order': 'i-lucide-shopping-bag', '/reservations': 'i-lucide-calendar-check', '/experiences': 'i-lucide-ticket', '/services': 'i-lucide-briefcase', '/pricing': 'i-lucide-badge-dollar-sign', '/donate': 'i-lucide-heart-handshake', '/schedule': 'i-lucide-calendar-days', '/blog': 'i-lucide-newspaper' }
-const featureByRoute: Record<string, ProductFeature> = { '/menu': 'menu', '/order': 'ordering', '/reservations': 'reservations', '/experiences': 'experiences', '/services': 'services', '/pricing': 'services', '/donate': 'services', '/schedule': 'services' }
+const featureByRoute: Record<string, ProductFeature> = { '/menu': 'products', '/products': 'products', '/order': 'ordering', '/reservations': 'reservations', '/experiences': 'experiences', '/services': 'services', '/pricing': 'services', '/donate': 'services', '/schedule': 'services' }
 const primaryLocationPath = computed(() => {
   const location = locations.value.find(item => item.is_primary) ?? locations.value[0]
   return location ? `${locationsPath.value}/${location.slug}` : locationsPath.value
 })
 function pageDestination(path: string) {
   if (path === '/blog') return `${siteDashboardPath.value}/blog`
-  if (path === '/menu') return `${primaryLocationPath.value}/menu`
+  if (path === '/menu' || path === '/products') return `${primaryLocationPath.value}/products`
   if (path === '/order') return `${siteDashboardPath.value}/orders`
   if (path === '/reservations') return `${primaryLocationPath.value}/reservations`
   if (path === '/experiences') return `${primaryLocationPath.value}/experiences`

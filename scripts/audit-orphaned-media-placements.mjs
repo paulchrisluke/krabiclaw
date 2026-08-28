@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 const OWNER_TABLES = {
   site: 'sites',
   business_location: 'business_locations',
-  menu_item: 'menu_items',
+  product: 'products',
   post: 'posts',
   blog_post: 'blog_posts',
   experience: 'experiences',

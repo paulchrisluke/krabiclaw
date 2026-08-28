@@ -233,40 +233,17 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, "publish_post", { ...input, channels: ["site"] });
     }
 
-    // Menu tools below all delegate to the same mcp-executor/menus.ts handlers
-    // MCP uses, via runMcpExecutorToolForChowbot — see mcp-executor/chowbot-adapter.ts.
-    case "get_menu":
-    case "add_menu_items_batch":
-    case "sync_menu_items":
-    case "create_menu_item":
-    case "update_menu_item":
-    case "reorder_menu_items": {
+    case "list_location_products":
+    case "get_product":
+    case "create_product":
+    case "update_product":
+    case "delete_product":
+    case "reorder_products":
+    case "rename_product_category":
+    case "delete_product_category":
+    case "batch_create_products":
+    case "sync_products": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "create_menu": {
-      // ChowBot-only convenience: fall back to the dashboard's current page
-      // location when the model omits location_id (MCP always requires it explicit).
-      return runMcpExecutorToolForChowbot(executorSite, "create_menu", {
-        ...input,
-        location_id: input.location_id ?? ctx.locationId,
-      });
-    }
-
-    case "update_menu":
-    case "rename_menu_section":
-    case "delete_menu_section":
-    case "delete_menu_item":
-    case "delete_menu": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "publish_menu": {
-      // ChowBot-only ergonomic name for making a hidden menu visible again.
-      return runMcpExecutorToolForChowbot(executorSite, "update_menu", {
-        menu_id: input.menu_id,
-        is_visible: true,
-      });
     }
 
     // Regression note: create_location/update_location's rating/review_count/
@@ -404,23 +381,16 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "import_menu_from_media": {
-      // ChowBot's variant resolves asset_id from WhatsApp's pending-media
-      // state rather than taking it as a direct argument (MCP's ChatGPT
-      // callers already have a resolved assetId from upload_user_media).
-      if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
-        return { error: "No pending WhatsApp media is available to import." };
-      }
-      const menuName = toSqlText(input.menu_name)?.trim();
-      if (!menuName) {
-        return { error: "menu_name is required." };
-      }
-      const result = await runMcpExecutorToolForChowbot(executorSite, "import_menu_from_media", {
-        asset_id: ctx.pendingMedia.assetId,
-        menu_name: menuName,
-      }) as { error?: string; menuId?: string; count?: number; warning?: unknown; creditsRemaining?: unknown };
+    case "import_products_from_media": {
+      const pendingAssetId = ctx.pendingMedia?.siteId === siteId ? ctx.pendingMedia.assetId : undefined;
+      const assetId = toSqlText(input.asset_id)?.trim() || pendingAssetId;
+      if (!assetId) return { error: "asset_id is required." };
+      const result = await runMcpExecutorToolForChowbot(executorSite, name, {
+        ...input,
+        asset_id: assetId,
+      }) as { error?: string; products?: unknown[]; rejected?: unknown[] };
       if (result.error) return result;
-      if (ctx.channel === "whatsapp") {
+      if (pendingAssetId && ctx.channel === "whatsapp") {
         await upsertChannelState(db, {
           userId,
           channel: "whatsapp",
@@ -430,16 +400,13 @@ async function executeTool(
         });
       }
       return {
-        asset_id: ctx.pendingMedia.assetId,
-        menu_id: result.menuId,
-        imported_items: result.count,
-        warning: result.warning,
-        credits_remaining: result.creditsRemaining,
+        ...result,
+        asset_id: assetId,
       };
     }
 
     case "analyze_document": {
-      // Unlike import_menu_from_media, analysis is read-only — the pending
+      // Document analysis is read-only — the pending
       // document stays available afterward so the user can ask follow-up
       // questions about the same file without re-uploading it.
       if (!ctx.pendingMedia?.assetId || ctx.pendingMedia.siteId !== siteId) {
@@ -561,7 +528,7 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
 
     case "get_site_stats": {
-      const [postStats, menuCount, itemCount, locationCount, reviewCount] =
+      const [postStats, productCount, locationCount, reviewCount] =
         await Promise.all([
           queryAll(
             db,
@@ -570,12 +537,7 @@ async function executeTool(
           ),
           queryFirst<{ count: number }>(
             db,
-            `SELECT COUNT(*) as count FROM menus WHERE organization_id = ? AND site_id = ?`,
-            [orgId, siteId],
-          ),
-          queryFirst<{ count: number }>(
-            db,
-            `SELECT COUNT(*) as count FROM menu_items mi JOIN menus m ON mi.menu_id = m.id WHERE m.organization_id = ? AND m.site_id = ?`,
+            `SELECT COUNT(*) as count FROM products WHERE organization_id = ? AND site_id = ?`,
             [orgId, siteId],
           ),
           queryFirst<{ count: number }>(
@@ -600,8 +562,7 @@ async function executeTool(
           published: byStatus.published ?? 0,
           scheduled: byStatus.scheduled ?? 0,
         },
-        menus: menuCount?.count ?? 0,
-        menu_items: itemCount?.count ?? 0,
+        products: productCount?.count ?? 0,
         locations: locationCount?.count ?? 0,
         reviews: reviewCount?.count ?? 0,
       };
@@ -881,10 +842,6 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "list_menus": {
-      return runMcpExecutorToolForChowbot(executorSite, "list_menus", input);
-    }
-
     case "get_location": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
@@ -997,7 +954,7 @@ Setup order (ask one topic at a time, save each answer immediately using tools b
 1. Greet the owner warmly. Confirm the restaurant name — if they want to change it call rename_site.
 2. Ask for the primary location — accept a Google Maps URL (use import_from_maps), or typed address. Use create_location to save immediately.
 3. Ask for opening hours if not captured from Google Maps. Use update_location to save.
-4. Ask for the first menu: "What dishes do you serve? List a few items with prices or paste your menu." Use create_menu then add_menu_items_batch then publish_menu.
+4. Ask for the first Products: "What dishes or Products do you offer? List a few with categories and prices." Use batch_create_products with the location_id.
 5. Ask for a one-line brand description (for SEO and the homepage hero). Use save_brand_description to save immediately.
 6. Summarise what was set up and tell them they can publish from the Overview page when ready.
 
@@ -1006,7 +963,7 @@ Rules in setup mode:
 - Save answers IMMEDIATELY with tools before asking the next question. Never batch questions.
 - Be warm, concise, and encouraging. First impressions matter.
 - If the owner pastes a Google Maps link, call import_from_maps immediately then create_location.
-- If they paste a menu list, call create_menu then add_menu_items_batch then publish_menu immediately.
+- If they paste a Product list, call batch_create_products immediately with the explicit location_id.
 - Never ask for information already visible from the site context above.
 - If the owner skips a step, acknowledge it and move forward.
 `
@@ -1021,13 +978,13 @@ Rules in setup mode:
 Help manage all site content with concise, action-oriented responses.
 ${SETUP_PREAMBLE}
 Site: ${siteName}
-Default menu currency: ${opts.defaultCurrency}
+Default Product currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Build placement {owner_type, owner_id, slot} from the exact target entity. Use set_media with asset_id for a single cover/hero/logo, or attach_media with asset_id for a gallery/document list. For a post cover use {owner_type:"post", owner_id:<post.id>, slot:"cover"}. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Build placement {owner_type, owner_id, slot} from the exact target entity. Use set_media with asset_id for a single cover/hero/logo, or attach_media with asset_id for a gallery/document list. For a Product primary use {owner_type:"product", owner_id:<product.id>, slot:"image"}; for its detail gallery use slot:"gallery". If the user wants to extract Products from it, call import_products_from_media with the explicit location_id and this asset_id. If it is a Markdown document (.md/.markdown) and the user wants a summary or grounded answer, call analyze_document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped
-- Menus: create, rename, view, rename/delete sections/categories, add brand-new items, reconcile/update item lists, update/delete individual items, publish, delete
+- Products: list by explicit location, create, update, reconcile, reorder, rename/delete categories, import from media, and delete
 - Locations: list, create, update, delete (title syncs slug, plus manual address, hours, maps URL, Place ID, rating, review count, description, email, website, socials, price level, hero media), lookup from Google Maps URL
 - Reviews: list location reviews and reply as owner
 - Media: list per location, delete, generate AI images with the configured OpenAI image model (auto-saved, returns asset_id)
@@ -1035,27 +992,23 @@ Capabilities (always use tools — never say you can't do something the tools su
 - Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read
 - Public help: search platform docs, blog posts, FAQs, and route guidance for direct links
-${managedServiceGuidance}${localeGuidance}- Site: rename (updates subdomain), set default menu currency, read/write site page content (including reservation policies via reservations page)
-- Stats: posts, menus, locations, reviews
+${managedServiceGuidance}${localeGuidance}- Site: rename (updates subdomain), set default Product currency, read/write site page content (including reservation policies via reservations page)
+- Stats: posts, Products, locations, reviews
 
 Guidelines:
 - Use tools immediately — never say "I'll do that" without calling a tool
-- Follow every paginated read until its has_more field is false; pass next_cursor back to the same tool for each subsequent page. For get_menu, use item_page_info.next_cursor.
-- For existing menu edits, replacements, revised prices/descriptions, renamed dishes, or mixed create/update work, inspect every get_menu page and then use sync_menu_items or update_menu_item.
-- Menu batch tools accept up to 500 items atomically. Read every menu page, then send the complete intended add or reconciliation in one call; never split one logical menu replacement across multiple mutation calls.
-- For menu category changes like renaming Appetizers to Starters or Drinks to Beverages, use rename_menu_section
-- For deleting one dish use delete_menu_item; for deleting a whole category and all dishes inside it use delete_menu_section
-- Store menu prices as price_amount only. Use the site default currency for display unless the user asks to change the currency, then call set_default_currency.
+- Follow every paginated read until its page_info.has_more field is false; pass page_info.next_cursor back to the same tool.
+- For existing Product edits, replacements, revised prices/descriptions, renamed Products, or mixed create/update work, inspect every list_location_products page and then use sync_products or update_product.
+- Product batch tools are atomic. Send one complete intended create or reconciliation call; never split one logical replacement across multiple mutations.
+- For Product category changes use rename_product_category; to remove a category and all its Products use delete_product_category.
+- Store Product prices as price_amount only. Use the site default currency for display unless the user asks to change it, then call set_default_currency.
 - Store experience prices as price_amount (numeric). Use price (string) only for non-numeric display like "Ask us". If a user sets an experience price, always set price_amount; never store it only as a price string.
-- compare_at_price_amount/sale_starts_at/sale_ends_at are the canonical sale fields for both menu items and experiences: keep price_amount as the current selling price, set compare_at_price_amount to the regular/pre-sale price, and optionally set sale_starts_at/sale_ends_at (ISO 8601) to schedule when it auto-expires. Only set these when the user explicitly asks to run, change, or end a sale — never fabricate a discount they didn't ask for.
-- Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
-- Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
-- When creating menus, omit location_id — the server links it to the current location automatically
+- compare_at_price_amount/sale_starts_at/sale_ends_at are the canonical sale fields for both Products and experiences: keep price_amount as the current selling price, set compare_at_price_amount to the regular/pre-sale price, and optionally set sale_starts_at/sale_ends_at (ISO 8601) to schedule when it auto-expires. Only set these when the user explicitly asks to run, change, or end a sale.
+- Every Product collection mutation requires an explicit location_id. Never infer or omit it.
 - Reservation rules, hold times, cancellation windows, deposits, and experience cancellation terms are structured booking policy fields specifically — not editable through any tool available here. Tell the user to edit those specific fields in the dashboard instead of attempting it. The reservations page's own copy (title, intro text, images) is regular page content and stays editable like any other page — see the next line
 - Use search_public_resources for docs/help/product questions, support routing, and when the user asks where something lives in public docs or on the platform site
 - Use list_tenant_pages to resolve a page variant, get_tenant_page to inspect its complete canonical block state, and update_tenant_page with that complete block array.
-- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, or delete_location_qa — confirm first
-- Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
+- Before publish_post, delete_post, delete_product, delete_product_category, delete_location, delete_media_asset, or delete_location_qa — confirm first
 - Keep responses short — this is a chat panel`;
 
   const MAX_MSG_CHARS = 20000;

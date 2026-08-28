@@ -6,7 +6,7 @@ import { MCP_PUBLIC_TOOLS } from '../../server/utils/mcp-tools/index.ts'
 import { EDITABLE_MEDIA_PLACEMENT_OWNERS } from '../../shared/media-placement-contract.ts'
 import { renderMcpPrompt } from '../../server/utils/mcp-prompts.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
-import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
+import { PRODUCTS_TOOLS } from '../../server/utils/mcp-tools/products.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
 import { ONBOARDING_TOOLS } from '../../server/utils/mcp-tools/onboarding.ts'
 import { SITES_TOOLS } from '../../server/utils/mcp-tools/sites.ts'
@@ -14,10 +14,8 @@ import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
 import { CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/index.ts'
 import { MEDIA_CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/media.ts'
 import { PostValidationError, validatePostInput } from '../../server/utils/post-management.ts'
-import { normalizeMenuItemArgs } from '../../server/utils/mcp-executor/shared.ts'
 import { INTEGRATIONS_TOOLS } from '../../server/utils/mcp-tools/integrations.ts'
 import { publishToPage } from '../../server/utils/facebook-pages.ts'
-import { handleMediaTools } from '../../server/utils/mcp-executor/media.ts'
 
 type ToolContract = {
   name: string
@@ -47,24 +45,20 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.equal(publishPost.inputSchema.properties?.targets, undefined)
   assert.equal(publishPost.inputSchema.additionalProperties, false)
 
-  for (const name of ['create_menu_item', 'update_menu_item']) {
-    const menuItem = tool(MENUS_TOOLS, name)
-    assert.ok(menuItem.inputSchema.properties?.price_amount)
-    assert.equal(menuItem.inputSchema.properties?.price, undefined)
+  for (const name of ['create_product', 'update_product']) {
+    const product = tool(PRODUCTS_TOOLS, name)
+    assert.ok(product.inputSchema.properties?.price_amount)
+    assert.equal(product.inputSchema.properties?.price, undefined)
   }
-  for (const name of ['add_menu_items_batch', 'sync_menu_items']) {
-    const menuItems = tool(MENUS_TOOLS, name)
-    const items = menuItems.inputSchema.properties?.items as {
+  for (const name of ['batch_create_products', 'sync_products']) {
+    const productBatch = tool(PRODUCTS_TOOLS, name)
+    const products = productBatch.inputSchema.properties?.products as {
       items?: { properties?: Record<string, unknown>, additionalProperties?: boolean }
     }
-    assert.ok(items.items?.properties?.price_amount)
-    assert.equal(items.items?.properties?.price, undefined)
-    assert.equal(items.items?.additionalProperties, false)
+    assert.ok(products.items?.properties?.price_amount)
+    assert.equal(products.items?.properties?.price, undefined)
+    assert.equal(products.items?.additionalProperties, false)
   }
-  assert.throws(
-    () => normalizeMenuItemArgs({ section: 'Mains', name: 'Curry', price: '12' }, { requireSection: true }),
-    /Unknown argument: price/,
-  )
 
   const upload = tool(MEDIA_TOOLS, 'upload_user_media')
   assert.deepEqual(upload.inputSchema.required, ['file'])
@@ -116,21 +110,9 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
     ['exterior', 'interior', 'food', 'menu', 'team', 'other'],
   )
 
-  const importMenu = tool(MEDIA_TOOLS, 'import_menu_from_media')
-  assert.equal(importMenu.confirmRequired, true)
-  assert.deepEqual(importMenu.inputSchema.required, ['asset_id', 'menu_name'])
-  assert.deepEqual(Object.keys(importMenu.outputSchema?.properties ?? {}), [
-    'menuId',
-    'count',
-    'warning',
-    'creditsRemaining',
-  ])
-  assert.deepEqual(importMenu.outputSchema?.required, [
-    'menuId',
-    'count',
-    'warning',
-    'creditsRemaining',
-  ])
+  const importProducts = tool(PRODUCTS_TOOLS, 'import_products_from_media')
+  assert.equal(importProducts.confirmRequired, true)
+  assert.deepEqual(importProducts.inputSchema.required, ['location_id', 'asset_id'])
 
   assert.equal(tool(SITES_TOOLS, 'create_site').confirmRequired, true)
 
@@ -161,35 +143,6 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.match(upload.description, /native ChatGPT file argument/i)
   assert.match(upload.description, /never pass a bare file_id/i)
   assert.match(upload.description, /one download attempt/i)
-})
-
-test('menu import rejects a missing menu name before any external work', async (t) => {
-  let fetchCalls = 0
-  t.mock.method(globalThis, 'fetch', async () => {
-    fetchCalls += 1
-    throw new Error('fetch must not run')
-  })
-  const db = new Proxy({}, {
-    get() {
-      throw new Error('database must not be touched')
-    },
-  })
-
-  await assert.rejects(
-    () => handleMediaTools({
-      toolName: 'import_menu_from_media',
-      args: { asset_id: 'asset-1' },
-      site: {
-        db,
-        env: {},
-        organizationId: 'org-1',
-        siteId: 'site-1',
-        userId: 'user-1',
-      },
-    } as Parameters<typeof handleMediaTools>[0]),
-    /Invalid menu_name/,
-  )
-  assert.equal(fetchCalls, 0)
 })
 
 test('Facebook publication is immediate and has no persisted-draft argument', async (t) => {

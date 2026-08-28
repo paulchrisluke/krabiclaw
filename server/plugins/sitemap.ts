@@ -8,6 +8,7 @@ import { blogCategoryToSlug } from '~/utils/blog-categories'
 import { categoryToSlug } from '~/utils/docs-categories'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
+import { resolveProductPresentation } from '~/utils/product-presentation'
 
 interface SitemapEntry {
   loc: string
@@ -178,7 +179,8 @@ export default definePlugin((nitroApp) => {
       return
     }
 
-    const [locations, menuItems, posts, experiences, tenantPages] = await Promise.all([
+    const productPresentation = resolveProductPresentation(site.vertical)
+    const [locations, products, posts, experiences, tenantPages] = await Promise.all([
       queryAll<ApiRecord>(
         db,
         `SELECT id, slug, updated_at, grab_url, uber_eats_url, foodpanda_url
@@ -190,12 +192,17 @@ export default definePlugin((nitroApp) => {
       ),
       queryAll<ApiRecord>(
         db,
-        `SELECT mi.slug, mi.updated_at
-         FROM menu_items mi
-         JOIN menus m ON m.id = mi.menu_id
-         WHERE m.site_id = ?
-           AND m.is_visible = 1
-           AND (mi.robots IS NULL OR mi.robots NOT LIKE '%noindex%')`,
+        `SELECT p.slug, p.location_id, bl.slug AS location_slug, p.updated_at
+         FROM products p
+         JOIN business_locations bl
+           ON bl.id = p.location_id
+          AND bl.organization_id = p.organization_id
+          AND bl.site_id = p.site_id
+          AND bl.status = 'active'
+         WHERE p.site_id = ?
+           AND p.is_visible = 1
+           AND (p.robots IS NULL OR p.robots NOT LIKE '%noindex%')
+         ORDER BY p.location_id, p.sort_order, p.id`,
         [siteId],
       ),
       queryAll<ApiRecord>(
@@ -226,7 +233,7 @@ export default definePlugin((nitroApp) => {
       entries.push({ loc: '/locations' })
       if (site.vertical !== 'experience') entries.push({ loc: '/reservations' })
     }
-    if (menuItems.length > 0) entries.push({ loc: '/menu' })
+    if (productPresentation && products.length > 0) entries.push({ loc: productPresentation.collectionPath })
     if (posts.length > 0) entries.push({ loc: '/blog' })
     if (experiences.length > 0) entries.push({ loc: '/experiences' })
     if (locations.some(location => location.grab_url || location.uber_eats_url || location.foodpanda_url)) {
@@ -243,6 +250,13 @@ export default definePlugin((nitroApp) => {
       )
     }
 
+    const visibleProductCountsByLocation = new Map<string, number>()
+    for (const product of products ?? []) {
+      const locationId = typeof product.location_id === 'string' ? product.location_id : ''
+      if (!locationId) continue
+      visibleProductCountsByLocation.set(locationId, (visibleProductCountsByLocation.get(locationId) ?? 0) + 1)
+    }
+
     entries.push(
       ...locations
         .filter(location => location.slug)
@@ -257,9 +271,22 @@ export default definePlugin((nitroApp) => {
           loc: `/locations/${location.slug}/experiences`,
           lastmod: location.updated_at as string | undefined,
         })),
-      ...menuItems
-        .filter(item => item.slug)
-        .map(item => ({ loc: `/menu/${item.slug}`, lastmod: item.updated_at as string | undefined })),
+      ...(productPresentation
+        ? locations
+            .filter(location => location.slug && typeof location.id === 'string' && (visibleProductCountsByLocation.get(location.id) ?? 0) > 0)
+            .map(location => ({
+              loc: `/locations/${location.slug}/${productPresentation.locationCollectionSegment}`,
+              lastmod: location.updated_at as string | undefined,
+            }))
+        : []),
+      ...(productPresentation
+        ? products
+            .filter(product => product.slug && product.location_slug)
+            .map(product => ({
+              loc: productPresentation.productPath(String(product.location_slug), String(product.slug)),
+              lastmod: product.updated_at as string | undefined,
+            }))
+        : []),
       ...posts
         .filter(post => post.slug)
         .map(post => ({ loc: `/blog/${post.slug}`, lastmod: post.updated_at as string | undefined })),

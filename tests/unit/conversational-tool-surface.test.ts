@@ -14,7 +14,7 @@ describe('conversational tool surface policy', () => {
     assert.equal(isConversationalToolEnabled('get_site_domains'), false)
     assert.equal(isConversationalToolEnabled('create_work_request'), false)
     assert.equal(isConversationalToolEnabled('publish_to_facebook'), false)
-    assert.equal(isConversationalToolEnabled('update_menu_item'), true)
+    assert.equal(isConversationalToolEnabled('update_product'), true)
   })
 
   test('enables a group only through its explicit env flag', () => {
@@ -26,12 +26,12 @@ describe('conversational tool surface policy', () => {
 
   test('filters mixed tool lists consistently', () => {
     const tools = [
-      { name: 'update_menu_item' },
+      { name: 'update_product' },
       { name: 'list_locales' },
       { name: 'get_site_domains' },
     ]
 
-    assert.deepEqual(filterConversationalTools(tools).map((tool) => tool.name), ['update_menu_item', 'list_locales'])
+    assert.deepEqual(filterConversationalTools(tools).map((tool) => tool.name), ['update_product', 'list_locales'])
   })
 
   test('blocks stale calls to hidden tools', () => {

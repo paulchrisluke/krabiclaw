@@ -1,3 +1,5 @@
+import { defineHandler } from 'nitro'
+import { getRouterParam, readBody } from 'nitro/h3'
 import { queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
@@ -38,7 +40,7 @@ export default defineHandler(async (event) => {
      LIMIT 1
   `, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  if (eventName !== 'link_click' && (site.vertical !== 'service' || site.theme_id !== 'blawby-theme-v1')) {
+  if (eventName !== 'link_click' && eventName !== 'product_order_external_click' && (site.vertical !== 'service' || site.theme_id !== 'blawby-theme-v1')) {
     return jsonResponse({ error: 'Tracking is not enabled for this site' }, { status: 404 })
   }
 
@@ -71,6 +73,38 @@ export default defineHandler(async (event) => {
     body.page_path = link.page_path
   }
 
+  if (eventName === 'product_order_external_click') {
+    const locationId = cleanString(body.location_id, 120)
+    const productId = cleanString(body.product_id, 120)
+    if (!locationId || !productId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
+    if (site.vertical !== 'restaurant' && site.vertical !== 'experience') {
+      return jsonResponse({ error: 'Product tracking is not enabled for this site' }, { status: 404 })
+    }
+    const product = await queryFirst<{ id: string; location_id: string; order_url: string }>(db, `
+      SELECT id, location_id, order_url
+        FROM products
+       WHERE id = ? AND site_id = ? AND location_id = ?
+         AND is_visible = 1 AND available = 1 AND order_url IS NOT NULL
+       LIMIT 1
+    `, [productId, siteId, locationId])
+    if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
+    let destinationHostname: string
+    try {
+      destinationHostname = new URL(product.order_url).hostname
+    } catch {
+      return jsonResponse({ error: 'Product order destination is invalid' }, { status: 500 })
+    }
+    ctaDestination = destinationHostname
+    metadata = {
+      site_id: siteId,
+      location_id: product.location_id,
+      product_id: product.id,
+      site_vertical: site.vertical,
+      product_presentation: site.vertical === 'restaurant' ? 'menu' : 'products',
+      destination_hostname: destinationHostname,
+    }
+  }
+
   const clientIp = getClientIp(event)
   const ipHash = clientIp ? await hashClientIp(clientIp) : null
   const hourWindow = new Date().toISOString().slice(0, 13)
@@ -83,7 +117,3 @@ export default defineHandler(async (event) => {
 
   return jsonResponse({ success: true, id: result.id }, { status: 201 })
 })
-import { defineHandler } from 'nitro';
-import { getHeader } from 'nitro/h3';
-import { getRouterParam } from 'nitro/h3';
-import { readBody } from 'nitro/h3';

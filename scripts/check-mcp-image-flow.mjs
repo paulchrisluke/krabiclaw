@@ -47,7 +47,7 @@ async function getAuthHeaders() {
   if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
     throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
   }
-  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-mcp-owner-b' })
+  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-demo-owner' })
 }
 
 async function mcp(headers, name, args = {}) {
@@ -100,7 +100,7 @@ async function getOrCreateSite(headers) {
   const suffix = Date.now()
   const create = await mcp(headers, 'create_site', {
     name: `MCP Image Check ${suffix}`,
-    subdomain: `mcp-image-check-${suffix}`,
+    subdomain: `e2e-mcp-image-check-${suffix}`,
     vertical: 'restaurant',
   })
   expectStatus('create_site succeeds', create)
@@ -162,27 +162,19 @@ async function createLocation(headers, siteId) {
   return locationId
 }
 
-async function createMenuAndItem(headers, siteId) {
-  const menu = await mcp(headers, 'create_menu', {
+async function createProduct(headers, siteId, locationId) {
+  const product = await mcp(headers, 'create_product', {
     site_id: siteId,
-    name: `MCP Image Menu ${Date.now()}`,
-  })
-  expectStatus('create_menu succeeds', menu)
-  const menuId = data(menu.body)?.id
-  expectValue('create_menu returns menu id', Boolean(menuId), menu.body)
-
-  const item = await mcp(headers, 'create_menu_item', {
-    site_id: siteId,
-    menu_id: menuId,
+    location_id: locationId,
     name: 'MCP Image Dish',
     description: 'Used for image tool coverage',
-    section: 'Main',
-    price_amount: '12.00',
+    category: 'Main',
+    price_amount: '12',
   })
-  expectStatus('create_menu_item succeeds', item)
-  const itemId = data(item.body)?.id
-  expectValue('create_menu_item returns item id', Boolean(itemId), item.body)
-  return { menuId, itemId }
+  expectStatus('create_product succeeds', product)
+  const productId = data(product.body)?.product?.id
+  expectValue('create_product returns Product id', Boolean(productId), product.body)
+  return productId
 }
 
 async function createPost(headers, siteId) {
@@ -239,7 +231,7 @@ async function main() {
   expectStatus('set_workspace_context with location succeeds', workspaceSet)
   const workspacePayload = data(workspaceSet.body)
   expectValue('workspace context stores active location', workspacePayload?.context?.location_id === locationId, workspacePayload)
-  const { menuId, itemId } = await createMenuAndItem(headers, siteId)
+  const productId = await createProduct(headers, siteId, locationId)
   const postId = await createPost(headers, siteId)
   const experienceId = await createExperience(headers, siteId)
 
@@ -263,19 +255,27 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'attach_media', {
     site_id: siteId,
-    placement: { owner_type: 'menu_item', owner_id: itemId, slot: 'gallery' },
+    placement: { owner_type: 'product', owner_id: productId, slot: 'gallery' },
     asset_id: assetId,
   }, (payload) => {
-    expectValue('attach_media menu item gallery returns item id', payload?.id === itemId, payload)
-    expectValue('attach_media menu item gallery returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('attach_media Product gallery returns Product id', payload?.id === productId, payload)
+    expectValue('attach_media Product gallery returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'attach_media', {
     site_id: siteId,
-    placement: { owner_type: 'menu_item', owner_id: itemId, slot: 'gallery' },
+    placement: { owner_type: 'product', owner_id: productId, slot: 'gallery' },
     asset_id: secondAssetId,
   }, (payload) => {
-    expectValue('attach_media second menu item gallery asset appends', JSON.stringify(payload?.asset_ids) === JSON.stringify([assetId, secondAssetId]), payload)
+    expectValue('attach_media second Product gallery asset appends', JSON.stringify(payload?.asset_ids) === JSON.stringify([assetId, secondAssetId]), payload)
+  })
+
+  await assertImageAssignmentTool(headers, 'set_media', {
+    site_id: siteId,
+    placement: { owner_type: 'product', owner_id: productId, slot: 'image' },
+    asset_id: assetId,
+  }, (payload) => {
+    expectValue('set_media Product primary returns Product id', payload?.id === productId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
@@ -303,18 +303,18 @@ async function main() {
   expectStatus('get_location succeeds', locationRead)
   expectValue('set_media updates location hero', data(locationRead.body)?.location?.media?.some(media => media.slot === 'hero' && media.asset_id === assetId), data(locationRead.body))
 
-  const menuRead = await mcp(headers, 'get_menu', {
+  const productRead = await mcp(headers, 'get_product', {
     site_id: siteId,
-    menu_id: menuId,
+    product_id: productId,
   })
-  const menuReadPayload = data(menuRead.body)?.menu
-  const menuItem = menuReadPayload?.items?.find((item) => item.id === itemId)
-  expectStatus('get_menu for image verification succeeds', menuRead)
+  const readProduct = data(productRead.body)?.product
+  expectStatus('get_product for image verification succeeds', productRead)
   expectValue(
-    'attach_media updates ordered menu item media',
-    JSON.stringify(menuItem?.media?.map((media) => media.asset_id)) === JSON.stringify([assetId, secondAssetId]),
-    menuItem,
+    'attach_media updates ordered Product gallery',
+    JSON.stringify(readProduct?.gallery?.map((media) => media.asset_id)) === JSON.stringify([assetId, secondAssetId]),
+    readProduct,
   )
+  expectValue('set_media updates explicit Product primary', readProduct?.image?.asset_id === assetId, readProduct)
 
   const postRead = await mcp(headers, 'get_post', {
     site_id: siteId,

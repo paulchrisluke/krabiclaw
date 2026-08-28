@@ -41,6 +41,7 @@ interface PlacementAuthInput {
 
 const OWNER_TABLES: Partial<Record<MediaPlacementOwnerType, string>> = {
   business_location: 'business_locations',
+  product: 'products',
   post: 'posts',
   blog_post: 'blog_posts',
   experience: 'experiences',
@@ -425,8 +426,8 @@ async function requirePlacementOwner(db: DbClient, input: {
   if (placement.owner_type === 'site') {
     const row = await queryFirst(db, 'SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1', [placement.owner_id, input.organizationId])
     if (row && placement.owner_id === input.siteId) return null
-  } else if (placement.owner_type === 'menu_item') {
-    const row = await queryFirst<{ location_id: string | null }>(db, 'SELECT m.location_id FROM menu_items mi JOIN menus m ON m.id = mi.menu_id WHERE mi.id = ? AND m.organization_id = ? AND m.site_id = ? LIMIT 1', [placement.owner_id, input.organizationId, input.siteId])
+  } else if (placement.owner_type === 'product') {
+    const row = await queryFirst<{ location_id: string }>(db, 'SELECT location_id FROM products WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1', [placement.owner_id, input.organizationId, input.siteId])
     if (row) return row.location_id
   } else if (placement.owner_type === 'content_block') {
     const row = await queryFirst(db, `SELECT cb.id FROM content_blocks cb JOIN content_documents d ON d.id = cb.document_id LEFT JOIN tenant_page_variants v ON d.owner_type = 'tenant_page' AND v.id = d.owner_id LEFT JOIN blog_posts bp ON d.owner_type = 'tenant_blog' AND bp.id = d.owner_id WHERE cb.id = ? AND COALESCE(v.site_id, bp.site_id) = ? LIMIT 1`, [placement.owner_id, input.siteId])

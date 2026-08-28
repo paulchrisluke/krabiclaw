@@ -21,11 +21,10 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
     ],
   },
   {
-    name: "set_up_menu",
-    description: "Build out a menu from a free-text description of dishes, sections, and prices.",
+    name: "set_up_products",
+    description: "Build out Products from a free-text description of names, categories, and prices.",
     arguments: [
-      { name: "items_description", description: "Free text describing the dishes, sections, and prices to add.", required: true },
-      { name: "menu_name", description: "Name for the menu, if creating a new one.", required: false },
+      { name: "items_description", description: "Free text describing the Products, categories, and prices to add.", required: true },
     ],
   },
   {
@@ -56,7 +55,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   },
   {
     name: "add_photos_to_site",
-    description: "Add the user's own photos to the right places on the site (homepage, location, menu items, experiences, or posts).",
+    description: "Add the user's own photos to the right places on the site (homepage, location, Products, experiences, or posts).",
     arguments: [],
   },
   {
@@ -99,25 +98,22 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           `Call import_from_maps with maps_url "${mapsUrl}" to pull in the business details.`,
           "Ask for the required missing context: what the main CTA button should say (e.g. \"Book Now\"), and whether they want to upload a hero image or have AI generate one — follow the existing image-work rules for whichever they choose.",
           "Ask the optional questions too (short business story, logo upload), but let the user skip either.",
-          "Do not ask about menus, detailed services, or social links yet — those come later, after the site is live.",
+          "Do not ask about Products, detailed services, or social links yet — those come later, after the site is live.",
           "Once the required context is in hand, call create_site, then create_location, then show_site_preview, then call set_workspace_context so the new site becomes the active context for the rest of the conversation.",
           "Say \"Working with [site name].\" once the site is confirmed.",
         ].join(" "),
       };
     }
-    case "set_up_menu": {
+    case "set_up_products": {
       const itemsDescription = requireArg(args, "items_description");
-      const menuName = args.menu_name?.trim();
       return {
-        description: "Build out a menu from a description",
+        description: "Build out Products from a description",
         text: [
-          "Call list_menus first to see if a menu already exists for the active site/location.",
-          menuName
-            ? `If none exists, call create_menu with name "${menuName}".`
-            : "If none exists, call create_menu with a sensible name based on the business.",
-          `Parse the following into individual menu items (name, section, price, and description where given), then call add_menu_items_batch with all of them in one call rather than creating items one at a time: ${itemsDescription}`,
-          "If the user has photos or videos for any dish, offer to attach them after the items are created, then place them with set_media using placement { owner_type: 'menu_item', owner_id: <exact menu item id>, slot: 'gallery' } — do not block creating the menu on having media.",
-          "Report back the menu name and the items that were added.",
+          "Call get_workspace_context and list_locations, then use the explicit location_id selected by the user.",
+          "Call every list_location_products page before deciding whether this is a create or reconciliation.",
+          `Parse the following into individual Products (name, category, price_amount, and description where given), then call batch_create_products for entirely new Products or sync_products for mixed create/update work: ${itemsDescription}`,
+          "If the user has photos or videos, offer to attach them after creation. Use set_media with { owner_type: 'product', owner_id: <exact Product id>, slot: 'image' } for the explicit primary and attach_media with slot 'gallery' for detail-gallery assets.",
+          "Report the Products that were created or updated.",
         ].join(" "),
       };
     }
@@ -179,7 +175,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Add the user's own photos to the right places on the site",
         text: [
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
-          "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
+          "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a Product, an experience, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
           "After confirmation, call upload_user_media exactly once for each confirmed attachment with file set to its resolved ChatGPT file reference. Upload every confirmed photo before reporting any of them as placed. Use set_media with asset_id for a single cover/hero/logo placement; use attach_media once per new asset for a gallery or document list, and reorder_media only when needed. Always use the exact owner id returned by a read tool. Never switch to a bare file_id or invent a download URL.",
           "Reply confirming exactly where each photo was placed.",
@@ -191,8 +187,8 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Check what's missing and guide the user through finishing setup",
         text: [
           "Call get_workspace_context first. If there is no active site yet, call list_sites and help the user pick or create one before continuing.",
-          "Check what's in place: call get_site_media_assets (kind=\"image\") to see available photos, call list_tenant_pages and get_tenant_page for the variants whose paths are \"/\" and \"/about\" to inspect their text and media placements, and list_menus or list_experiences (whichever fits the business) to see if there's a menu or experiences listed yet.",
-          "Identify the single most important missing piece — a main photo, a menu or experiences list, the about/story text, or a first post — and ask the user if they want to work on that now.",
+          "Check what's in place: call get_site_media_assets (kind=\"image\") to see available photos, call list_tenant_pages and get_tenant_page for the variants whose paths are \"/\" and \"/about\", call list_locations, then call every list_location_products page for each relevant location or list_experiences as appropriate.",
+          "Identify the single most important missing piece — a main photo, Products or experiences, the about/story text, or a first post — and ask the user if they want to work on that now.",
           "Guide them through completing just that one thing at a time. Don't ask for everything up front.",
         ].join(" "),
       };
@@ -202,8 +198,8 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Review CTAs, contact info, and booking setup, and suggest changes to get more bookings",
         text: [
           "Call get_workspace_context, then call list_tenant_pages and get_tenant_page for the variant whose path is \"/\" to check the call-to-action button text, and list_locations to check whether contact info and hours are filled in.",
-          "If the business takes reservations or bookings, check list_menus/list_experiences to make sure there's something bookable listed with a clear price and description.",
-          "Suggest concrete changes that make it easier for a visitor to take action — a clearer call-to-action, visible contact info, or a more complete experience/menu listing. Explain suggestions in plain language.",
+          "If the business takes reservations or bookings, check list_location_products for the explicit location and list_experiences to make sure offerings have clear prices and descriptions.",
+          "Suggest concrete changes that make it easier for a visitor to take action — a clearer call-to-action, visible contact info, or more complete Product/experience listings. Explain suggestions in plain language.",
           "Apply changes only after the user approves each one.",
         ].join(" "),
       };
@@ -213,7 +209,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "General visual and content review with concrete suggestions",
         text: [
           "Call get_workspace_context, then call list_tenant_pages and get_tenant_page for the variant whose path is \"/\", plus get_site_media_assets, to see current photos and text.",
-          "Review the main photo, headline, story section, and overall completeness. Note anything that looks unfinished, generic, or low-quality (e.g. a missing or blurry main photo, thin story text, no menu or experiences).",
+          "Review the main photo, headline, story section, and overall completeness. Note anything that looks unfinished, generic, or low-quality (e.g. a missing or blurry main photo, thin story text, no Products or experiences).",
           "Suggest specific, actionable improvements in plain language — avoid internal field names. Offer to act on one at a time, starting with whichever has the biggest visual impact (usually the main photo).",
           "Only make changes the user has explicitly approved.",
         ].join(" "),
@@ -224,10 +220,10 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Combine traffic, listing completeness, and booking demand into one concrete next move",
         text: [
           "Call get_workspace_context, then get_site_analytics for the last 30 days to see traffic, top pages, and whether traffic is up or down versus the prior period.",
-          "Call list_menus or list_experiences (whichever fits the business) and list_locations to check whether what's actually bookable is complete — clear pricing, description, and availability. Call list_all_experience_bookings and get_reservation_inquiries to see current demand and whether anything is sitting unconfirmed or unanswered.",
+          "Call list_locations and every relevant list_location_products page, or list_experiences when appropriate, to check whether offerings have clear pricing, descriptions, and availability. Call list_all_experience_bookings and get_reservation_inquiries to see current demand and whether anything is sitting unconfirmed or unanswered.",
           "Cross-reference the three: if traffic is healthy but the listing is thin or bookings are stalling unconfirmed, say so explicitly — don't treat these as separate topics.",
           "Suggest exactly one highest-impact next move, not a list — for example confirming stalled bookings, completing a thin listing, or publishing a post about a specific under-booked experience. Explain it in plain language tied to what you actually found in the data.",
-          "Ask the user to confirm before doing anything. If they approve a post, use create_post; if they approve a listing fix, use update_menu_item/update_experience/set_*_image as appropriate. Do not claim to change pricing or availability automatically — surface it as something to review and decide, then apply only the specific field the user approves.",
+          "Ask the user to confirm before doing anything. If they approve a post, use create_post; if they approve a listing fix, use update_product, update_experience, or set_media as appropriate. Do not change pricing or availability without explicit approval.",
         ].join(" "),
       };
     }

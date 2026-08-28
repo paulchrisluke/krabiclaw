@@ -12,7 +12,7 @@ import { LOCALES_TOOLS } from './locales'
 import { LOCATIONS_TOOLS } from './locations'
 import { MANAGED_SERVICE_TOOLS } from './managed-service'
 import { MEDIA_TOOLS } from './media'
-import { MENUS_TOOLS } from './menus'
+import { PRODUCTS_TOOLS } from './products'
 import { NOTIFICATIONS_TOOLS } from './notifications'
 import { ONBOARDING_TOOLS } from './onboarding'
 import { POSTS_TOOLS } from './posts'
@@ -35,7 +35,7 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...LOCATIONS_TOOLS,
   ...MANAGED_SERVICE_TOOLS,
   ...MEDIA_TOOLS,
-  ...MENUS_TOOLS,
+  ...PRODUCTS_TOOLS,
   ...NOTIFICATIONS_TOOLS,
   ...ONBOARDING_TOOLS,
   ...POSTS_TOOLS,

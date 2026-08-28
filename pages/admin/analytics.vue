@@ -50,7 +50,7 @@ useSeoMeta({ title: 'Analytics | KrabiClaw Admin', robots: 'noindex, nofollow' }
 const toast = useToast()
 
 interface Analytics {
-  metrics: { users: number; organizations: number; sites: number; posts: number; menus: number; locations: number }
+  metrics: { users: number; organizations: number; sites: number; posts: number; products: number; locations: number }
   recentSites: { id: string; brand_name: string | null; subdomain: string | null; created_at: string }[]
 }
 
@@ -62,7 +62,7 @@ const analyticsStats = computed(() => [
   { label: 'Organizations', value: analytics.value?.metrics.organizations ?? '—' },
   { label: 'Sites',         value: analytics.value?.metrics.sites ?? '—' },
   { label: 'Locations',     value: analytics.value?.metrics.locations ?? '—' },
-  { label: 'Menus',         value: analytics.value?.metrics.menus ?? '—' },
+  { label: 'Products',      value: analytics.value?.metrics.products ?? '—' },
   { label: 'Posts',         value: analytics.value?.metrics.posts ?? '—' },
 ])
 
@@ -76,7 +76,7 @@ async function loadAnalytics() {
           organizations: 'number',
           sites: 'number',
           posts: 'number',
-          menus: 'number',
+          products: 'number',
           locations: 'number',
         },
         recentSites: {

@@ -154,7 +154,7 @@ interface InboxSummary {
 
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
-  menus: { success: boolean; menus: ApiRecord[] }
+  products: { success: boolean; products: ApiRecord[] }
   threads: { summary: InboxSummary }
 }
 
@@ -168,7 +168,7 @@ const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/site
 const locationPath = computed(() => `${sitePath.value}/locations/${String(route.params.locationSlug)}`)
 const settingsPath = computed(() => `${locationPath.value}/settings`)
 const location = ref<LocationOverview | null>(null)
-const menus = ref<ApiRecord[]>([])
+const products = ref<ApiRecord[]>([])
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -205,7 +205,7 @@ const featureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
 ]))
 const hasFeature = (feature: ProductFeature) => featureSet.value.has(feature)
-const includeMenus = computed(() => hasFeature('menu'))
+const includeProducts = computed(() => hasFeature('products'))
 
 const currentOpeningState = computed(() => {
   const hours = location.value?.opening_hours
@@ -239,11 +239,11 @@ const contentGroups = computed(() => {
       visible: hasFeature('photos'),
     },
     {
-      id: 'menu',
-      label: 'Menu',
-      summary: `${menus.value.length} ${menus.value.length === 1 ? 'menu' : 'menus'}`,
-      to: `${locationPath.value}/menu`,
-      visible: hasFeature('menu'),
+      id: 'products',
+      label: dashboard.site.value?.vertical === 'restaurant' ? 'Menu' : 'Products',
+      summary: `${products.value.length} ${products.value.length === 1 ? 'product' : 'products'}`,
+      to: `${locationPath.value}/products`,
+      visible: hasFeature('products'),
     },
     {
       id: 'services',
@@ -305,11 +305,11 @@ const isLocationResponse = (value: unknown): value is { success: boolean; locati
   && typeof value.location.title === 'string'
   && typeof value.location.status === 'string'
 
-const isMenusResponse = (value: unknown): value is { success: boolean; menus: ApiRecord[] } =>
+const isProductsResponse = (value: unknown): value is { success: boolean; products: ApiRecord[] } =>
   isRecord(value)
   && typeof value.success === 'boolean'
-  && Array.isArray(value.menus)
-  && value.menus.every(menu => isRecord(menu) && typeof menu.id === 'string')
+  && Array.isArray(value.products)
+  && value.products.every(product => isRecord(product) && typeof product.id === 'string')
 
 const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSummary } =>
   isRecord(value)
@@ -318,15 +318,15 @@ const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSumm
   && typeof value.summary.unreadThreads === 'number'
 
 const requestEvent = useRequestEvent()
-const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeMenus.value ? 'menus' : 'no-menus'}`)
+const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeProducts.value ? 'products' : 'no-products'}`)
 const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-  const shouldIncludeMenus = includeMenus.value
+  const shouldIncludeProducts = includeProducts.value
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const { loadDashboardLocationOverview } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardLocationOverview(requestEvent, siteId, locationId.value, {
-      includeMenus: shouldIncludeMenus,
+      includeProducts: shouldIncludeProducts,
     }) as LocationOverviewResource
   }
 
@@ -335,12 +335,12 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
       `/api/dashboard/locations/${locationId.value}`,
       { validate: isLocationResponse },
     ),
-    shouldIncludeMenus
-      ? dashboardApi<{ success: boolean; menus: ApiRecord[] }>(
-          `/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`,
-          { validate: isMenusResponse },
+    shouldIncludeProducts
+      ? dashboardApi<{ success: boolean; products: ApiRecord[] }>(
+          `/api/editor/sites/${siteId}/locations/${locationId.value}/products`,
+          { validate: isProductsResponse },
         )
-      : Promise.resolve({ success: true, menus: [] }),
+      : Promise.resolve({ success: true, products: [] }),
     dashboardApi<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
       query: { location_id: locationId.value },
       validate: isThreadsSummaryResponse,
@@ -348,7 +348,7 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
   ])
   return {
     location: locationResponse,
-    menus: menuResponse,
+    products: menuResponse,
     threads: threadsResponse,
   }
 }, { lazy: import.meta.client })
@@ -361,7 +361,7 @@ watch([overview, overviewPending, overviewError], ([resource, pending, cause]) =
   }
   if (!resource) return
   location.value = resource.location.location
-  menus.value = resource.menus.menus
+  products.value = resource.products.products
   inboxSummary.value = resource.threads.summary
   error.value = null
 }, { immediate: true })
