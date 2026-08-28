@@ -77,6 +77,12 @@ function runD1(sql) {
   return execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', REMOTE ? '--remote' : '--local', '--command', sql], { stdio: 'inherit' })
 }
 
+function queryD1(sql) {
+  const output = execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', REMOTE ? '--remote' : '--local', '--command', sql, '--json'], { encoding: 'utf8' })
+  const parsed = JSON.parse(output)
+  return parsed?.[0]?.results ?? []
+}
+
 function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`
 }
@@ -90,16 +96,36 @@ async function main() {
   const placementId = crypto.randomUUID()
   const now = new Date().toISOString()
 
+  const existing = queryD1(`SELECT asset_id FROM media_placements WHERE owner_type = 'site' AND owner_id = 'platform' AND slot = 'og_default' LIMIT 1`)
+  const oldAssetId = existing[0]?.asset_id ?? null
+
   console.log(`Writing to ${REMOTE ? 'remote (production)' : 'local'} D1...`)
-  // wrangler d1 execute --command runs one statement at a time; three separate calls rather
-  // than a semicolon-joined string.
+  // wrangler d1 execute --command runs one statement at a time; separate calls rather than a
+  // semicolon-joined string. Order matters: insert the new asset+placement first so the
+  // platform default is never briefly absent, only then remove the superseded row(s) — the
+  // media_placements unique constraint on (owner_type, owner_id, slot, sort_order) means the old
+  // placement must go before the new one can take sort_order 0, so that one delete is
+  // unavoidable mid-sequence; the old *asset* (and its Cloudflare Images object) is only removed
+  // at the very end, after the new placement already exists.
   runD1(`INSERT INTO media_assets (id, organization_id, site_id, kind, provider, source, cloudflare_image_id, public_url, mime_type, width, height, alt_text, status, created_by_user_id, created_at, updated_at)
     SELECT ${sqlString(assetId)}, organization_id, id, 'image', 'cloudflare_images', 'uploaded', ${sqlString(imageId)}, ${sqlString(publicUrl)}, ${sqlString(mimeType)}, ${sourceWidth}, ${sourceHeight}, 'KrabiClaw', 'active', NULL, ${sqlString(now)}, ${sqlString(now)}
     FROM sites WHERE id = 'platform'`)
-  runD1(`DELETE FROM media_placements WHERE owner_type = 'site' AND owner_id = 'platform' AND slot = 'og_default' AND asset_id != ${sqlString(assetId)}`)
+  runD1(`DELETE FROM media_placements WHERE owner_type = 'site' AND owner_id = 'platform' AND slot = 'og_default'`)
   runD1(`INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
     SELECT ${sqlString(placementId)}, organization_id, 'platform', 'site', 'platform', 'og_default', ${sqlString(assetId)}, 0, 'active', ${sqlString(now)}, ${sqlString(now)}
     FROM sites WHERE id = 'platform'`)
+  if (oldAssetId) {
+    const oldImage = queryD1(`SELECT cloudflare_image_id FROM media_assets WHERE id = ${sqlString(oldAssetId)} LIMIT 1`)
+    const oldImageId = oldImage[0]?.cloudflare_image_id
+    runD1(`DELETE FROM media_assets WHERE id = ${sqlString(oldAssetId)}`)
+    if (oldImageId) {
+      console.log(`Deleting superseded Cloudflare Images object ${oldImageId}...`)
+      await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/images/v1/${oldImageId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${CLOUDFLARE_IMAGES_API_TOKEN}` },
+      }).catch((error) => console.error(`Failed to delete superseded image ${oldImageId} (non-fatal):`, error))
+    }
+  }
   console.log('Done. Platform default social image seeded.')
 }
 
