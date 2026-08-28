@@ -17,7 +17,7 @@ function priorDatabase() {
   return db
 }
 
-test('0134 resets only tenant analytics and deterministically backfills explicit favicons', () => {
+test('0135 resets only tenant analytics and deterministically backfills explicit favicons', () => {
   const db = priorDatabase()
   const run = (label: string, sql: string, ...params: unknown[]) => {
     try {
@@ -40,7 +40,7 @@ test('0134 resets only tenant analytics and deterministically backfills explicit
 
   const before = Date.now()
   try {
-    db.exec(readFileSync('migrations/0134_sleepy_bug.sql', 'utf8'))
+    db.exec(readFileSync('migrations/0135_sleepy_bug.sql', 'utf8'))
   } catch (error) {
     throw new Error('Could not apply analytics cutover migration', { cause: error })
   }
