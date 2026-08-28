@@ -236,7 +236,7 @@ export const nclsFixture = {
           "schedule_path": "/schedule",
           "confirmation_path": "/contact/confirmed",
           "tracking_enabled": 1,
-          "metadata_json": "{\"header_cta_label\":\"Get Started\",\"contact_form_enabled\":false,\"source\":\"react-next-marketing-site-template/northcarolinalegalservices\",\"analyticsBridge\":{\"provider\":\"gtm\",\"container_id\":\"GTM-MDHRQP5\",\"allowed_events\":[\"page_view\",\"book_consultation_click\",\"contact_submit\",\"donation_click\"],\"allowed_properties\":[\"event\",\"page_type\",\"page_path\",\"cta_destination\",\"tenant\"],\"custom_head_code_ignored\":true},\"legacy_source_calendly_url_ignored\":\"https://calendly.com/rgittings-bcls/consultation?embed_domain=www.northcarolinalegalservices.org&embed_type=Inline&hide_gdpr_banner=1&invitee_uuid=8a35897f-89c1-4ed7-b707-948a7c0e219d\"}",
+          "metadata_json": "{\"header_cta_label\":\"Get Started\",\"contact_form_enabled\":false,\"source\":\"react-next-marketing-site-template/northcarolinalegalservices\"}",
           "created_at": "2026-07-14 02:32:27",
           "updated_at": "2026-07-14 02:32:27",
           "updated_by": null

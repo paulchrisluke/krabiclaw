@@ -56,7 +56,6 @@ export type AnalyticsEventName =
   | 'editor_session_started'
   // Engagement
   | 'session_start'
-  | 'page_view'
   | 'time_on_page'
   // Error & Technical
   | 'error_encountered'
@@ -313,10 +312,6 @@ export const useAnalytics = () => {
     trackEvent('session_start', {})
   }
 
-  const trackPageView = (path: string, title: string) => {
-    trackEvent('page_view', { page_path: path, page_title: title })
-  }
-
   const trackTimeOnPage = (path: string, durationSeconds: number) => {
     trackEvent('time_on_page', { page_path: path, duration_seconds: durationSeconds })
   }
@@ -356,7 +351,6 @@ export const useAnalytics = () => {
     trackChowbotInteraction,
     trackEditorSessionStarted,
     trackSessionStart,
-    trackPageView,
     trackTimeOnPage,
     trackError,
     trackApiError,

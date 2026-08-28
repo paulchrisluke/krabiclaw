@@ -491,16 +491,11 @@ function validatePublicData(checks, data, required) {
     { donationUrl: donationUrl ?? null },
   )
 
-  const bridge = data.consultation?.metadata?.analyticsBridge
-  if (bridge) {
-    const allowedEvents = Array.isArray(bridge.allowed_events) ? bridge.allowed_events : []
-    const allowedProperties = Array.isArray(bridge.allowed_properties) ? bridge.allowed_properties : []
-    pushCheck(checks, bridge.provider === 'gtm', 'Analytics bridge uses sanctioned GTM provider')
-    pushCheck(checks, /^GTM-[A-Z0-9]+$/.test(String(bridge.container_id || '')), 'Analytics bridge has a valid GTM container id')
-    pushCheck(checks, allowedEvents.includes('book_consultation_click'), 'Analytics bridge allowlists consultation clicks')
-    pushCheck(checks, ['event', 'page_type', 'page_path', 'cta_destination', 'tenant'].every(property => allowedProperties.includes(property)), 'Analytics bridge allowlists only expected conversion properties')
-    pushCheck(checks, bridge.custom_head_code_ignored === true, 'Analytics bridge does not rely on custom head code')
-  }
+  pushCheck(
+    checks,
+    !('analyticsBridge' in (data.consultation?.metadata ?? {})),
+    'Public consultation metadata does not contain a tenant-specific analytics bridge',
+  )
 
   const mediaUrls = collectArtifactMediaUrls(data)
   for (const url of mediaUrls) {

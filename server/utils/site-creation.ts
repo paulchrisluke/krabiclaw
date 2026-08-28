@@ -121,9 +121,9 @@ export async function runSiteCreation(
     try {
       await execute(db, `
         INSERT INTO sites
-          (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, status, plan, onboarding_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'free', 'pending', ?, ?)
-      `, [siteId, organizationId, themeId, storedVertical, normalizedSubdomain, normalizedSubdomain, name, new Date().toISOString(), new Date().toISOString()])
+          (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, status, plan, onboarding_status, analytics_data_start_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'free', 'pending', ?, ?, ?)
+      `, [siteId, organizationId, themeId, storedVertical, normalizedSubdomain, normalizedSubdomain, name, new Date().toISOString(), new Date().toISOString(), new Date().toISOString()])
     } catch (siteError) {
       const msg = siteError instanceof Error ? siteError.message : ''
       if (msg.includes('UNIQUE constraint failed')) {

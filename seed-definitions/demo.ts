@@ -1253,7 +1253,7 @@ INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   public_url, brand_name, brand_description,
   status, plan, onboarding_status, primary_location_id,
-  contact_email, default_currency, vertical
+  contact_email, default_currency, vertical, analytics_data_start_at
 ) VALUES (
   ${sqlValue(compiledDemoSeed.identity.siteId)},
   ${sqlValue(compiledDemoSeed.identity.organizationId)},
@@ -1270,7 +1270,8 @@ INSERT OR REPLACE INTO sites (
   NULL,
   ${sqlValue(compiledDemoSeed.site.contactEmail)},
   ${sqlValue(compiledDemoSeed.site.defaultCurrency)},
-  ${sqlValue(compiledDemoSeed.site.vertical)}
+  ${sqlValue(compiledDemoSeed.site.vertical)},
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 );
 
 INSERT OR REPLACE INTO site_config (organization_id, site_id, key, value)

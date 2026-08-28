@@ -1,6 +1,7 @@
 import { execute } from '~/server/db'
 import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
 import { getSiteDomains } from '~/server/utils/domain-read-model'
+import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
   CF_ZARAZ_API_TOKEN?: string
@@ -19,6 +20,9 @@ interface ZarazTool {
   enabled: boolean
   settings: Record<string, unknown>
   defaultFields?: Record<string, string | boolean>
+  defaultPurpose?: string
+  vendorName?: string
+  vendorPolicyUrl?: string
   actions: Record<string, ZarazAction>
   [key: string]: unknown
 }
@@ -36,6 +40,15 @@ export interface ZarazConfig {
     enabled?: boolean
     hideModal?: boolean
     purposes?: Record<string, { name: string; description: string }>
+    defaultLanguage?: string
+    tcfCompliant?: boolean
+    consentModalIntroHTML?: string
+    customCSS?: string
+    buttonTextTranslations?: {
+      accept_all?: Record<string, string>
+      confirm_my_choices?: Record<string, string>
+      reject_all?: Record<string, string>
+    }
     [key: string]: unknown
   }
   historyChange?: boolean
@@ -111,6 +124,8 @@ function tenantKey(siteId: string): string {
 
 const PLATFORM_KEY = 'ga-platform'
 const CONSENT_BLOCK_TRIGGER = 'ga-consent-not-accepted'
+const GOOGLE_VENDOR_NAME = 'Google Analytics'
+const GOOGLE_VENDOR_POLICY_URL = 'https://policies.google.com/privacy'
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -124,9 +139,38 @@ export function platformPageLocationRegex(hostnames: string[]): string {
   return tenantPageLocationRegex(hostnames)
 }
 
-function disableZarazConsentManagement(config: ZarazConfig) {
+function configureZarazConsentManagement(config: ZarazConfig) {
   config.consent ||= {}
-  config.consent.enabled = false
+  config.consent.enabled = true
+  config.consent.hideModal = false
+  config.consent.defaultLanguage = 'en'
+  config.consent.tcfCompliant = true
+  config.consent.consentModalIntroHTML = 'We use optional analytics to understand site usage and improve our services. Read our <a href="https://krabiclaw.com/privacy">privacy policy</a>.'
+  config.consent.customCSS = `
+.cf_modal_container { color: #1c1917; font-family: ui-sans-serif, system-ui, sans-serif; }
+.cf_modal { background: #fff; border-radius: 0.75rem; color: #1c1917; }
+.cf_button { border-radius: 0.375rem; }
+`.trim()
+  config.consent.buttonTextTranslations = {
+    accept_all: { en: 'Accept all' },
+    confirm_my_choices: { en: 'Confirm my choices' },
+    reject_all: { en: 'Reject all' },
+  }
+  config.consent.purposes ||= {}
+  config.consent.purposes[ZARAZ_ANALYTICS_PURPOSE_ID] = ZARAZ_ANALYTICS_PURPOSE
+
+  Reflect.deleteProperty(config.triggers, CONSENT_BLOCK_TRIGGER)
+  for (const tool of Object.values(config.tools ?? {})) {
+    if (isGa4Tool(tool)) {
+      tool.defaultPurpose = ZARAZ_ANALYTICS_PURPOSE_ID
+      tool.vendorName = GOOGLE_VENDOR_NAME
+      tool.vendorPolicyUrl = GOOGLE_VENDOR_POLICY_URL
+    }
+    for (const action of Object.values(tool.actions ?? {})) {
+      action.blockingTriggers = (action.blockingTriggers ?? [])
+        .filter(trigger => trigger !== CONSENT_BLOCK_TRIGGER)
+    }
+  }
 }
 
 function makeHostBlockTrigger(name: string, hostnames: string[]): ZarazTrigger {
@@ -137,13 +181,6 @@ function makeHostBlockTrigger(name: string, hostnames: string[]): ZarazTrigger {
       op: 'NOT_MATCH_REGEX',
       value: tenantPageLocationRegex(hostnames),
     }],
-  }
-}
-
-function makeConsentBlockTrigger(): ZarazTrigger {
-  return {
-    name: 'Analytics consent not accepted',
-    loadRules: [{ match: '{{ system.cookies.kc_consent }}', op: 'NOT_MATCH_REGEX', value: '^accepted$' }],
   }
 }
 
@@ -206,8 +243,10 @@ function upsertGa4Tool(
       ...zarazFieldMap(existing?.defaultFields),
       user_id: '{{ client.user_id }}',
     },
-    defaultPurpose: undefined,
-    actions: scopeActionsToTrigger(existing?.actions ?? template?.actions, [input.triggerKey, CONSENT_BLOCK_TRIGGER]),
+    defaultPurpose: ZARAZ_ANALYTICS_PURPOSE_ID,
+    vendorName: GOOGLE_VENDOR_NAME,
+    vendorPolicyUrl: GOOGLE_VENDOR_POLICY_URL,
+    actions: scopeActionsToTrigger(existing?.actions ?? template?.actions, [input.triggerKey]),
   }
 }
 
@@ -218,9 +257,8 @@ export function upsertPlatformZarazAnalytics(
   if (!input.measurementId || !input.hostnames.length) return
   config.triggers ||= {}
   config.tools ||= {}
-  disableZarazConsentManagement(config)
-  config.historyChange = true
-  config.triggers[CONSENT_BLOCK_TRIGGER] = makeConsentBlockTrigger()
+  configureZarazConsentManagement(config)
+  config.historyChange = false
   config.triggers[PLATFORM_KEY] = makeHostBlockTrigger('Block non-platform hosts', input.hostnames)
 
   const existingEntry = Object.entries(config.tools).find(([, tool]) =>
@@ -242,10 +280,9 @@ export function upsertTenantZarazAnalytics(
   if (!input.measurementId || !input.hostnames.length) return
   config.triggers ||= {}
   config.tools ||= {}
-  disableZarazConsentManagement(config)
-  config.historyChange = true
+  configureZarazConsentManagement(config)
+  config.historyChange = false
   const key = tenantKey(input.siteId)
-  config.triggers[CONSENT_BLOCK_TRIGGER] = makeConsentBlockTrigger()
   config.triggers[key] = makeHostBlockTrigger(`Block non-tenant hosts (${input.siteId})`, input.hostnames)
   upsertGa4Tool(config, key, {
     name: `Tenant GA4 (${input.siteId})`,

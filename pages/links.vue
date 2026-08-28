@@ -89,6 +89,7 @@ const isBlawby = computed(() => linksPage.value?.site.template === 'blawby')
 const layoutName = computed(() => isBlawby.value ? 'blawby' : 'saya')
 const brandName = computed(() => linksPage.value?.site.brand_name || linksPage.value?.page.title || 'Links')
 const profileImageUrl = computed(() => linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null)
+const { trackLinkClick: recordLinkClick } = useSiteConversionTracking()
 
 const templateClass = computed(() => isBlawby.value
   ? 'min-h-[calc(100vh-8rem)] bg-[color:var(--blawby-token-bg)] px-4 py-10 sm:px-6 sm:py-14'
@@ -125,20 +126,8 @@ function externalRel(destination: string) {
 }
 
 function trackLinkClick(item: PublicLinksItem) {
-  if (!import.meta.client || !siteId) return
-  const payload = {
-    event_name: 'link_click',
-    page_type: 'links',
-    page_path: '/links',
-    cta_destination: item.destination,
-    metadata: { link_item_id: item.id },
-  }
-  fetch(`/api/public/sites/${siteId}/conversion-events`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-    keepalive: true,
-  }).catch(() => {})
+  if (!import.meta.client) return
+  recordLinkClick(item.id)
 }
 
 useSocialMetadata(() => ({

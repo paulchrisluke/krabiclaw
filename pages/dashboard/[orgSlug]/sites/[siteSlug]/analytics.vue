@@ -1,5 +1,5 @@
 <template>
-  <UDashboardPanel id="location-analytics">
+  <UDashboardPanel id="site-analytics">
     <template #header>
       <UDashboardNavbar title="Analytics">
         <template #leading>
@@ -22,7 +22,14 @@
           title="Analytics could not be loaded"
           :description="loadError"
         />
-        <p class="text-sm text-muted">{{ rangeLabel }}</p>
+        <p class="text-sm text-muted">{{ rangeLabel }} · {{ analytics?.period.timezone || 'UTC' }} reporting time</p>
+        <UAlert
+          v-if="analytics?.period.analyticsDataStartAt"
+          color="neutral"
+          variant="soft"
+          title="Canonical analytics history"
+          :description="`Reliable analytics data begins ${formatDate(analytics.period.analyticsDataStartAt.slice(0, 10))}.`"
+        />
 
         <UCard variant="soft">
           <div class="grid gap-4 lg:grid-cols-[13rem_1fr]">
@@ -51,6 +58,35 @@
             </div>
           </div>
         </UCard>
+
+        <div class="grid gap-4 xl:grid-cols-2">
+          <UCard variant="soft">
+            <template #header><h2 class="font-semibold text-highlighted">Attribution</h2></template>
+            <div class="space-y-3">
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.attribution || []"
+                :key="`${row.source}-${row.medium}-${row.campaign || ''}`"
+                :label="`${row.source} / ${row.medium}${row.campaign ? ` · ${row.campaign}` : ''}`"
+                :value="`${formatCount(row.sessions)} sessions · ${formatCount(row.conversions)} conversions`"
+                :percent="row.conversionRate"
+              />
+              <p v-if="!loading && !(analytics?.attribution || []).length" class="text-sm text-muted">No attribution data yet.</p>
+            </div>
+          </UCard>
+          <UCard variant="soft">
+            <template #header><h2 class="font-semibold text-highlighted">Conversions</h2></template>
+            <div class="space-y-3">
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.conversions || []"
+                :key="`${row.eventName}-${row.stage}`"
+                :label="`${row.eventName.replaceAll('_', ' ')} · ${row.stage.replaceAll('_', ' ')}`"
+                :value="formatCount(row.count)"
+                :percent="row.conversionRate"
+              />
+              <p v-if="!loading && !(analytics?.conversions || []).length" class="text-sm text-muted">No conversions yet.</p>
+            </div>
+          </UCard>
+        </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <UCard v-for="metric in metricCards" :key="metric.label" variant="soft">
@@ -195,15 +231,17 @@ interface AnalyticsResponse {
     avgSessionDuration: number
     pagesPerSession: number
     returningVisitors: number
-    changePercent: number
+    changePercent: number | null
   }
   dailyData: Array<{ date: string; pageViews: number; sessions: number; avgDuration: number }>
   topPages: Array<{ path: string; views: number; percentOfTotal: number }>
-  countries: Array<{ country: string; countryCode: string; views: number; visitors: number; percentOfTotal: number }>
+  countries: Array<{ country: string; countryCode: string; views: number; percentOfTotal: number }>
   cities: Array<{ city: string; region: string | null; countryCode: string; views: number }>
   referrers: Array<{ source: string; views: number; percentOfTotal: number }>
   devices: Array<{ type: string; views: number; percentOfTotal: number }>
-  period: { startDate: string; endDate: string }
+  attribution: Array<{ source: string; medium: string; campaign: string | null; sessions: number; conversions: number; conversionRate: number }>
+  conversions: Array<{ eventName: string; stage: string; count: number; conversionRate: number }>
+  period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
 }
 
 const toast = useToast()
@@ -240,6 +278,8 @@ const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
   && Array.isArray(value.cities)
   && Array.isArray(value.referrers)
   && Array.isArray(value.devices)
+  && Array.isArray(value.attribution)
+  && Array.isArray(value.conversions)
   && isRecord(value.period)
   && typeof value.period.startDate === 'string'
   && typeof value.period.endDate === 'string'
@@ -285,7 +325,7 @@ const rangeLabel = computed(() => `${formatDate(range.startDate)} to ${formatDat
 const metricCards = computed(() => {
   const metrics = analytics.value?.metrics
   return [
-    { label: 'Pageviews', value: formatCount(metrics?.pageViews || 0), detail: `${formatSigned(metrics?.changePercent || 0)} vs previous period`, icon: 'i-lucide-chart-bar' },
+    { label: 'Pageviews', value: formatCount(metrics?.pageViews || 0), detail: metrics?.changePercent == null ? 'Not enough prior data' : `${formatSigned(metrics.changePercent)} vs previous period`, icon: 'i-lucide-chart-bar' },
     { label: 'Unique visitors', value: formatCount(metrics?.uniqueVisitors || 0), detail: `${formatCount(metrics?.returningVisitors || 0)} returning`, icon: 'i-lucide-users' },
     { label: 'Sessions', value: formatCount(metrics?.uniqueSessions || 0), detail: `${formatNumber(metrics?.pagesPerSession || 0)} pages per session`, icon: 'i-lucide-mouse-pointer-click' },
     { label: 'Avg. duration', value: formatDuration(metrics?.avgSessionDuration || 0), detail: 'Average session time', icon: 'i-lucide-clock' }

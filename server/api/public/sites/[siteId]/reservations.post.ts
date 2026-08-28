@@ -16,6 +16,9 @@ import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT
 import { parsePhone } from '~/utils/phone'
 import { reservationAdapter } from '~/server/domain/guest-threads/adapters/reservation'
 import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
+import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { defineHandler } from 'nitro'
+import { getRouterParam, readBody } from 'nitro/h3'
 
 const VALID_GUESTS = ['1', '2', '3', '4', '5', '6', '7', '8+']
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -195,6 +198,18 @@ export default defineHandler(async (event) => {
     })
   }
 
+  await recordSubmissionConversionSafe(db, event, {
+    organizationId: site.organization_id,
+    siteId,
+    eventName: 'reservation_submit',
+    stage: 'submitted',
+    locationId: resolvedLocationId,
+    entityType: 'reservation_submission',
+    entityId: id,
+    pageType: 'reservations',
+    pagePath: '/reservations',
+  })
+
   const policy = await resolveBookingPolicy(db, {
     siteId, policyType: 'reservation', locationId: resolvedLocationId, })
 
@@ -206,6 +221,3 @@ export default defineHandler(async (event) => {
   return jsonResponse({
     success: true, id, cancellationToken: cancellation.token, message: 'Your reservation request has been received. We will confirm shortly.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';
-import { readBody } from 'nitro/h3';

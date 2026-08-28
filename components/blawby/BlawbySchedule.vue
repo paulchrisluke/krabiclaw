@@ -119,7 +119,7 @@ function arrayStrings(value: unknown) {
   return Array.isArray(value) ? value.map(String) : []
 }
 
-const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
+const { trackConsultationClick } = useSiteConversionTracking(consultation)
 function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/schedule', destination)
 }

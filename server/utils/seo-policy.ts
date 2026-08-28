@@ -69,11 +69,6 @@ export const TENANT_ONLY_ROUTE_PREFIXES = [
   '/reviews/',
 ] as const
 
-export const TECHNICAL_ASSET_EXACT_ROUTES = new Set([
-  '/site.webmanifest',
-  '/tenant.webmanifest',
-])
-
 export const TECHNICAL_ASSET_ROUTE_PREFIXES = [
   '/_next',
 ] as const
@@ -95,8 +90,7 @@ export function isTenantOnlySeoPath(pathname: string): boolean {
 }
 
 export function isTechnicalAssetSeoPath(pathname: string): boolean {
-  return TECHNICAL_ASSET_EXACT_ROUTES.has(pathname)
-    || TECHNICAL_ASSET_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  return TECHNICAL_ASSET_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
 export function isNonIndexableHost(hostname: string): boolean {

@@ -7,6 +7,8 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nclsFixture, type NclsSeedTable, type NclsSeedValue } from '../seed-definitions/ncls.ts'
 
+const wranglerCli = resolve('node_modules/wrangler/bin/wrangler.js')
+
 function sqlValue(value: NclsSeedValue): string {
   if (value === null) return 'NULL'
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
@@ -85,7 +87,9 @@ VALUES ('member-ncls-blawby', ${sqlValue(nclsFixture.organizationId)}, ${sqlValu
 
 ${renderRows(table('sites'), initialSite)}
 
-${renderRows(table('business_locations'))}
+UPDATE sites SET analytics_data_start_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ${sqlValue(nclsFixture.siteId)};
+
+  ${renderRows(table('business_locations'))}
 
 ${renderRows(table('media_assets'))}
 
@@ -138,8 +142,7 @@ function runCli() {
   const sqlPath = join(directory, 'ncls.sql')
   try {
     writeFileSync(sqlPath, sql, 'utf8')
-    execFileSync('npx', [
-      'wrangler', 'd1', 'execute', 'DB',
+    execFileSync(process.execPath, [wranglerCli, 'd1', 'execute', 'DB',
       ...(isPreview ? ['--env', 'preview', '--remote'] : ['--local']),
       '--file', sqlPath,
     ], { stdio: 'inherit' })

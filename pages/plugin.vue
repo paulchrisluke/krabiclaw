@@ -4,7 +4,7 @@
       <section class="mx-auto max-w-5xl px-4 pt-20 sm:px-6">
         <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div class="flex items-center gap-6">
-            <img src="/platform/web-app-manifest-192x192.png" alt="KrabiClaw app icon" class="size-24 rounded-[28px] border border-default shadow-lg">
+            <img src="/platform/apple-touch-icon.png" alt="KrabiClaw app icon" class="size-24 rounded-[28px] border border-default shadow-lg">
             <div>
               <h1 class="m-0 text-3xl font-extrabold tracking-tight text-default md:text-4xl">KrabiClaw for ChatGPT</h1>
               <p class="mt-2 text-lg text-muted">Manage your website through an authenticated custom MCP app in ChatGPT.</p>

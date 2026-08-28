@@ -116,6 +116,9 @@
       <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/70">
         <div>© {{ year }} {{ restaurantName }}</div>
         <div class="flex items-center gap-6">
+          <button type="button" class="transition hover:text-inverted" @click="showZarazConsentModal">
+            Cookie preferences
+          </button>
           <SayaDropdown :items="languageItems" panel-class="saya-theme" placement="top">
             <template #default="{ open, toggle, triggerKeydown }">
               <button
@@ -161,6 +164,7 @@
 import { getTodayGoogleHours, getActiveSpecialClosure } from '~/utils/formatters'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 import { resolveProductPresentation } from '~/utils/product-presentation'
+import { showZarazConsentModal } from '~/utils/zaraz-consent'
 
 interface Site {
   brand_name?: string | null

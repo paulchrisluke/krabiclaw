@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { hashPassword } from 'better-auth/crypto'
 import { E2E_AUTH_FIXTURES } from '../config/e2e-auth-fixtures.ts'
 
@@ -68,12 +68,12 @@ const sqlPath = join(directory, 'e2e-auth.sql')
 
 try {
   writeFileSync(sqlPath, sql, { encoding: 'utf8', mode: 0o600 })
-  const args = ['wrangler', 'd1', 'execute', 'DB']
+  const args = [resolve('node_modules/wrangler/bin/wrangler.js'), 'd1', 'execute', 'DB']
   if (isPreview) args.push('--env', 'preview', '--remote')
   else if (isStaging) args.push('--env', 'staging', '--remote')
   else args.push('--local')
   args.push('--file', sqlPath)
-  execFileSync('yarn', args, { cwd: process.cwd(), stdio: 'inherit' })
+  execFileSync(process.execPath, args, { cwd: process.cwd(), stdio: 'inherit' })
   console.log(`Provisioned ${E2E_AUTH_FIXTURES.length} verified Better Auth E2E credentials (${isStaging ? 'staging' : isPreview ? 'preview' : 'local'}).`)
 } finally {
   rmSync(directory, { recursive: true, force: true })

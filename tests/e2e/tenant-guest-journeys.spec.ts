@@ -44,11 +44,6 @@ async function chooseFirstAvailableTime(page: Page) {
   await page.getByRole('button', { name: /continue/i }).click()
 }
 
-async function dismissCookieConsent(page: Page) {
-  const reject = page.locator('[data-consent-action="rejected"]')
-  if (await reject.isVisible()) await reject.click()
-}
-
 test.describe('tenant guest journeys (disposable local/preview data only)', () => {
   test.skip(!writableEnvironment, 'guest writes are forbidden outside local and preview')
 
@@ -57,7 +52,6 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const email = `pottery-booking-${Date.now()}@playwright.example`
     await setupTenantHeaders(page, potteryHouseBaseURL, potteryHouseExtraHeaders)
     await page.goto(`${potteryHouseBaseURL}/experiences/pottery-wheel-class`, { waitUntil: 'load' })
-    await dismissCookieConsent(page)
     await page.locator('[data-experience-cta="desktop"]').getByRole('button', { name: /book a class/i }).click()
     await chooseFirstAvailableTime(page)
     await page.getByLabel('Full name').fill('Pottery Journey Test')
@@ -84,7 +78,6 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const email = `kikuzuki-reservation-${Date.now()}@playwright.example`
     await setupTenantHeaders(page, baseURL, kikuzukiTestExtraHeaders())
     await page.goto(`${baseURL}/reservations`, { waitUntil: 'load' })
-    await dismissCookieConsent(page)
     await page.locator('label[for="reservation-booking-toggle"]').first().click()
     await chooseFirstAvailableTime(page)
     await page.getByLabel('Full name').fill('Kikuzuki Journey Test')
@@ -109,7 +102,6 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const email = `pottery-contact-${Date.now()}@playwright.example`
     await setupTenantHeaders(page, potteryHouseBaseURL, potteryHouseExtraHeaders)
     await page.goto(`${potteryHouseBaseURL}/contact`, { waitUntil: 'load' })
-    await dismissCookieConsent(page)
     await page.getByLabel(/your name/i).fill('Pottery Contact Journey')
     await page.getByLabel(/email/i).fill(email)
     await page.getByLabel(/your message/i).fill('Please tell me more about private pottery classes.')

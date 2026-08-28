@@ -91,6 +91,7 @@ const props = defineProps<{
 }>()
 
 const saleActive = computed(() => isSaleActive(props.product))
+const { trackProductOrder } = useSiteConversionTracking()
 const breadcrumbs = computed(() => [
   { to: '/', label: 'Home' },
   { to: props.presentation.collectionPath, label: props.presentation.collectionLabel },
@@ -100,18 +101,11 @@ const breadcrumbs = computed(() => [
 
 function recordExternalOrderClick() {
   if (!import.meta.client || props.analyticsEnabled === false) return
-  fetch(`/api/public/sites/${encodeURIComponent(props.siteId)}/conversion-events`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      event_name: 'product_order_external_click',
-      location_id: props.location.id,
-      product_id: props.product.id,
-      page_type: props.presentation.locationCollectionSegment,
-      page_path: props.presentation.productPath(props.location.slug, props.product.slug),
-    }),
-    keepalive: true,
-  }).catch(() => {})
+  trackProductOrder(
+    props.location.id,
+    props.product.id,
+    props.presentation.productPath(props.location.slug, props.product.slug),
+  )
 }
 
 useSchemaOrg(computed(() => ({

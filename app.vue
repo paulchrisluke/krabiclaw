@@ -23,18 +23,13 @@ const siteShell = isBlawby.value ? null : useSiteShellState()
 const config = siteShell?.config
 const route = useRoute()
 const siteMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
-const tenantLogoUrl = computed(() => siteMedia.value.find(item => item.slot === 'logo')?.public_url ?? null)
 const tenantFaviconUrl = computed(() => siteMedia.value.find(item => item.slot === 'favicon')?.public_url ?? null)
-const tenantBrandName = computed(() => config?.value.brand_name || site?.brand_name || '')
 
 useHead(() => {
   return {
     link: buildTenantHeadLinks({
       isPlatform,
-      tenantLogoUrl: tenantLogoUrl.value,
       tenantFaviconUrl: tenantFaviconUrl.value,
-      tenantBrandName: tenantBrandName.value,
-      isDraftPreview: route.path.startsWith('/preview/draft/'),
       isSitePreview: route.path.startsWith('/preview/site/'),
     })
   }

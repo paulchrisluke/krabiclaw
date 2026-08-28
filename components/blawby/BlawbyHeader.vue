@@ -86,7 +86,7 @@ const props = defineProps<{
   pageLinks: PublicBlawbyPageLink[]
 }>()
 
-const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
+const { trackConsultationClick } = useSiteConversionTracking(() => props.consultation)
 const route = useRoute()
 const brandName = computed(() => props.site.brand_name || '')
 const logoUrl = computed(() => props.site.media.find(item => item.slot === 'logo')?.public_url || null)
