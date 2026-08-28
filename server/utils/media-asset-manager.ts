@@ -97,6 +97,9 @@ export interface MediaPlacementInsertInput {
   assetId: string
   sortOrder: number
   status?: 'pending' | 'active' | 'rejected'
+  /** Only meaningful for 'og_generated' placements — see server/utils/social-image/generate.ts.
+   * NULL for every other slot. */
+  sourceHash?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -107,8 +110,8 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
   }
   const createdAt = input.createdAt ?? new Date().toISOString()
   return {
-    query: 'INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    params: [input.id ?? crypto.randomUUID(), input.organizationId, input.siteId, input.ownerType, input.ownerId, input.slot, input.assetId, input.sortOrder, input.status ?? 'active', createdAt, input.updatedAt ?? createdAt],
+    query: 'INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, source_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    params: [input.id ?? crypto.randomUUID(), input.organizationId, input.siteId, input.ownerType, input.ownerId, input.slot, input.assetId, input.sortOrder, input.status ?? 'active', input.sourceHash ?? null, createdAt, input.updatedAt ?? createdAt],
   }
 }
 
@@ -125,7 +128,7 @@ function buildMediaPlacementReplacementQueries(input: {
   organizationId: string
   siteId: string
   placement: { owner_type: string; owner_id: string; slot: string }
-  media: Array<{ asset_id: string }>
+  media: Array<{ asset_id: string; sourceHash?: string | null }>
   now?: string
 }): BatchQuery[] {
   if (!isSupportedMediaPlacement(input.placement)) {
@@ -145,6 +148,7 @@ function buildMediaPlacementReplacementQueries(input: {
       slot: input.placement.slot,
       assetId: asset.asset_id,
       sortOrder,
+      sourceHash: asset.sourceHash ?? null,
       createdAt: now,
       updatedAt: now,
     })),
@@ -159,7 +163,7 @@ export function buildSingleMediaPlacementQueries(input: {
   organizationId: string
   siteId: string
   placement: { owner_type: string; owner_id: string; slot: string }
-  media: Array<{ asset_id: string }>
+  media: Array<{ asset_id: string; sourceHash?: string | null }>
   now?: string
 }): BatchQuery[] {
   if (!isSingleMediaPlacement(input.placement)) {

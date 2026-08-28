@@ -3,9 +3,6 @@ import { node, type SatoriNode } from '../satori-node.ts'
 import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT } from '~/utils/social-metadata'
 
 export interface OgImageCardVariant {
-  /** Default background gradient stops when there's no hero image to composite. */
-  defaultPrimary: string
-  defaultSecondary: string
   /** Label/badge accent color. */
   accentColor: string
 }
@@ -36,27 +33,21 @@ export interface RenderInputs extends OgImageRenderPayload {
  * (not per-page) rendering approach.
  */
 export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVariant): SatoriNode {
-  const primary = payload.primaryColor || variant.defaultPrimary
-  const secondary = payload.secondaryColor || variant.defaultSecondary
+  // The background is always a real, resolved photo — see server/utils/social-image-resolver.ts,
+  // which throws before this ever runs if no real image can be resolved. No gradient/color-block
+  // fallback exists here; that invariant is what issue #685 requires.
+  if (!payload.backgroundImageDataUri) {
+    throw new Error('buildOgImageCard requires a resolved background image — the caller must resolve one via server/utils/social-image-resolver.ts before rendering')
+  }
 
-  const background: SatoriNode = payload.backgroundImageDataUri
-    ? node('img', {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: OG_IMAGE_WIDTH,
-        height: OG_IMAGE_HEIGHT,
-        objectFit: 'cover',
-      }, undefined, { src: payload.backgroundImageDataUri })
-    : node('div', {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: OG_IMAGE_WIDTH,
-        height: OG_IMAGE_HEIGHT,
-        backgroundImage: `linear-gradient(135deg, ${primary}, ${secondary})`,
-        display: 'flex',
-      })
+  const background: SatoriNode = node('img', {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: OG_IMAGE_WIDTH,
+    height: OG_IMAGE_HEIGHT,
+    objectFit: 'cover',
+  }, undefined, { src: payload.backgroundImageDataUri })
 
   // Legibility overlay: always present so title/description text stays readable whether
   // the background is a photo or a flat gradient.

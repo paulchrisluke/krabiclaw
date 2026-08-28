@@ -641,6 +641,10 @@ export const media_placements = sqliteTable("media_placements", {
 	asset_id: text().notNull(),
 	sort_order: integer().default(0).notNull(),
 	status: text().default("active").notNull(),
+	// Deterministic hash of (background asset id, title, logo asset id) for og_generated
+	// placements only — lets server/utils/social-image/generate.ts skip a re-render/re-upload
+	// when nothing that affects the composited card has changed. NULL for every other slot.
+	source_hash: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [

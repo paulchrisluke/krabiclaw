@@ -1,17 +1,24 @@
 export const MEDIA_PLACEMENT_SLOTS = {
-  site: ['logo', 'logo_dark', 'favicon'],
-  business_location: ['hero', 'gallery'],
-  product: ['image', 'gallery'],
-  post: ['cover', 'gallery'],
-  blog_post: ['featured'],
-  experience: ['gallery'],
-  offering: ['thumbnail', 'hero', 'gallery'],
+  site: ['logo', 'logo_dark', 'favicon', 'og_default', 'og_generated'],
+  business_location: ['hero', 'gallery', 'og_generated'],
+  product: ['image', 'gallery', 'og_generated'],
+  post: ['cover', 'gallery', 'og_generated'],
+  blog_post: ['featured', 'og_generated'],
+  experience: ['gallery', 'og_generated'],
+  offering: ['thumbnail', 'hero', 'gallery', 'og_generated'],
   content_block: ['media', 'gallery', 'background', 'featured', 'decoration'],
-  platform_doc: ['featured'],
-  review: ['portrait', 'gallery'],
-  review_request: ['gallery'],
+  platform_doc: ['featured', 'og_generated'],
+  review: ['portrait', 'gallery', 'og_generated'],
+  review_request: ['gallery', 'og_generated'],
   tenant_compliance: ['document'],
   chowbot_message: ['attachment'],
+  platform: ['og_generated'],
+  // The generic CMS page type (freeform content_block-built pages — most of a tenant site's
+  // actual public routes: home, about, contact, etc.). It has no OTHER slot of its own — its
+  // background photo is resolved by scanning its content blocks (see
+  // server/utils/social-image-resolver.ts) — but still needs somewhere to persist its own
+  // generated OG card.
+  tenant_page: ['og_generated'],
 } as const
 
 export type MediaPlacementOwnerType = keyof typeof MEDIA_PLACEMENT_SLOTS
