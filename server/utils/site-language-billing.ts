@@ -207,6 +207,7 @@ export async function enableSiteLanguageLicense(
   }
 
   const subscriptionId = await requireGrowthBilling(db, input.organizationId)
+  await assertSiteSecondaryLanguageCapacity(db, input.organizationId, input.siteId, license?.id)
   const id = license?.id ?? crypto.randomUUID()
   const operationId = license?.status === 'enabling' && license.operation_id ? license.operation_id : crypto.randomUUID()
   const idempotencyKey = license?.status === 'enabling' && license.provider_idempotency_key

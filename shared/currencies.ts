@@ -17,7 +17,7 @@ export const SUPPORTED_CURRENCIES = [
 
 export type CurrencyCode = typeof SUPPORTED_CURRENCIES[number]
 
-export const DEFAULT_CURRENCY: CurrencyCode = 'THB'
+export const DEFAULT_CURRENCY: CurrencyCode = 'USD'
 
 export const CURRENCY_OPTIONS: Array<{ label: string; value: CurrencyCode }> = [
   { label: 'Thai Baht (THB)', value: 'THB' },

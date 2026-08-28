@@ -155,10 +155,18 @@ function flattenManifest(value: unknown, prefix = '', result: Record<string, str
 
 export const ENGLISH_LOCALE_MESSAGES = Object.freeze(flattenManifest(englishManifest))
 
-export async function englishManifestHash(): Promise<string> {
-  const payload = JSON.stringify(ENGLISH_LOCALE_MESSAGES)
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload))
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+// ENGLISH_LOCALE_MESSAGES is a frozen module-level constant, so its hash
+// never changes within an isolate - compute it once and reuse the Promise.
+let cachedEnglishManifestHash: Promise<string> | null = null
+export function englishManifestHash(): Promise<string> {
+  if (!cachedEnglishManifestHash) {
+    cachedEnglishManifestHash = (async () => {
+      const payload = JSON.stringify(ENGLISH_LOCALE_MESSAGES)
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload))
+      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+    })()
+  }
+  return cachedEnglishManifestHash
 }
 
 function placeholders(value: string): string[] {
@@ -470,7 +478,17 @@ export async function resolveLocalizedPublicRoute(
   if (entitlement.source) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'English source routes are unprefixed', { locale, route_path: routePath })
   }
-  const site = await getResourceLocalization(db, organizationId, siteId, 'site', siteId, locale)
+  // Reuse the entitlement already checked above instead of re-deriving it
+  // via getResourceLocalization - this runs on every localized page request.
+  const siteRow = await queryFirst<ResourceLocalizationRow>(db, `
+    SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
+           document_id, created_at, created_by_user_id, updated_at, updated_by_user_id
+      FROM resource_localizations
+     WHERE organization_id = ? AND site_id = ? AND resource_type = 'site' AND resource_id = ? AND locale = ?
+     LIMIT 1
+  `, [organizationId, siteId, siteId, locale])
+  if (!siteRow) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: 'site', resource_id: siteId, locale })
+  const site = mapLocalization(siteRow)
   const resource = await queryFirst<ResourceLocalizationRow>(db, `
     SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
            document_id, created_at, created_by_user_id, updated_at, updated_by_user_id

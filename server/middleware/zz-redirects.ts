@@ -43,12 +43,15 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
       `, [siteId, firstSegment])
     : null
   const locale = localized?.locale ?? 'en'
+  // tenant_page_variants.path is stored locale-bare regardless of locale -
+  // strip the matched locale segment back off before matching it.
+  const tenantPagePath = localized ? (path.slice(locale.length + 1) || '/') : path
 
   const exactPage = await queryFirst<{ id: string } | null>(db, `
     SELECT id FROM tenant_page_variants
      WHERE site_id = ? AND locale = ? AND path = ?
      LIMIT 1
-  `, [siteId, locale, path])
+  `, [siteId, locale, tenantPagePath])
   if (exactPage) return null
 
   if (localized) {
