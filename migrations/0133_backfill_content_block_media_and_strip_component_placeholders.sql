@@ -31,7 +31,7 @@ FROM `content_blocks` cb
 JOIN `media_assets` a ON a.`id` = json_extract(cb.`data_json`, '$.asset_id')
 WHERE json_extract(cb.`data_json`, '$.asset_id') IS NOT NULL AND json_extract(cb.`data_json`, '$.asset_id') != ''
   AND NOT EXISTS (
-    SELECT 1 FROM `media_placements` mp WHERE mp.`owner_type` = 'content_block' AND mp.`owner_id` = cb.`id` AND mp.`slot` = 'media'
+    SELECT 1 FROM `media_placements` mp WHERE mp.`owner_type` = 'content_block' AND mp.`owner_id` = cb.`id` AND mp.`slot` = 'media' AND mp.`status` = 'active'
   );--> statement-breakpoint
 
 UPDATE `content_blocks`
@@ -39,16 +39,10 @@ SET `data_json` = json_set(
   `data_json`, '$.markdown',
   trim(
     replace(
-      replace(
-        replace(
-          replace(json_extract(`data_json`, '$.markdown'), char(10) || char(10) || '{{component type="faq"}}', ''),
-          char(10) || char(10) || '{{component type="how_to"}}', ''
-        ),
-        '{{component type="faq"}}', ''
-      ),
-      '{{component type="how_to"}}', ''
+      replace(json_extract(`data_json`, '$.markdown'), char(10) || char(10) || '{{component type="faq"}}', ''),
+      char(10) || char(10) || '{{component type="how_to"}}', ''
     )
   )
 )
 WHERE `type` = 'markdown'
-  AND (`data_json` LIKE '%{{component type="faq"}}%' OR `data_json` LIKE '%{{component type="how_to"}}%');--> statement-breakpoint
+  AND (`data_json` LIKE '%' || char(10) || char(10) || '{{component type="faq"}}%' OR `data_json` LIKE '%' || char(10) || char(10) || '{{component type="how_to"}}%');--> statement-breakpoint
