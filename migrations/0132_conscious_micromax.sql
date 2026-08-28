@@ -65,6 +65,30 @@ CREATE TABLE `products` (
   CONSTRAINT `products_robots_check` CHECK(`robots` IS NULL OR `robots` IN ('index,follow','noindex,follow','index,nofollow','noindex,nofollow'))
 );--> statement-breakpoint
 
+-- Pre-cutover data hygiene: menu_items.created_by has never been populated
+-- by any seed script for any tenant since the column was added in
+-- 0017_free_nightshade.sql (confirmed: every row, not just one tenant, has
+-- always been blank). The INSERT below already defensively coalesces this
+-- with 'migration:menu-to-products', but that would silently paper over a
+-- genuine, longstanding audit-trail gap rather than making the cutover
+-- consciously account for it. Backfill explicitly instead.
+UPDATE `menu_items`
+SET `created_by` = 'migration:menu-to-products',
+    `updated_by` = CASE WHEN `updated_by` IS NULL OR trim(`updated_by`) = '' THEN 'migration:menu-to-products' ELSE `updated_by` END
+WHERE `created_by` IS NULL OR trim(`created_by`) = '';--> statement-breakpoint
+
+-- Two menus have a name that doesn't match their owning location's title -
+-- Products have no separate "menu name" concept, so this must be true
+-- before conversion. menu-demo-2 also carries a menu-level description,
+-- which Products have no field for; its content is redundant with
+-- business_locations.description for the same location and was never
+-- rendered anywhere (menu_items/menus already have zero live code
+-- references), so it's safe to clear rather than silently drop mid-INSERT.
+UPDATE `menus`
+SET `name` = (SELECT l.`title` FROM `business_locations` l WHERE l.`id` = `menus`.`location_id`)
+WHERE `id` IN ('menu-demo-2', 'menu-kiku-ao-nang');--> statement-breakpoint
+UPDATE `menus` SET `description` = NULL WHERE `id` = 'menu-demo-2';--> statement-breakpoint
+
 INSERT INTO `products` (`id`,`organization_id`,`site_id`,`location_id`,`category`,`name`,`slug`,`description`,`price_amount`,`compare_at_price_amount`,`sale_starts_at`,`sale_ends_at`,`order_url`,`is_visible`,`available`,`featured`,`featured_sort_order`,`sort_order`,`tags_json`,`details_json`,`seo_title`,`seo_description`,`canonical_url`,`robots`,`source`,`created_at`,`updated_at`,`created_by`,`updated_by`)
 SELECT
   mi.`id`,m.`organization_id`,m.`site_id`,m.`location_id`,trim(mi.`section`),trim(mi.`name`),trim(mi.`slug`),COALESCE(mi.`description`,''),
