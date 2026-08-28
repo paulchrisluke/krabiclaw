@@ -10,10 +10,11 @@
       <textarea v-if="editable" :value="title" rows="1" class="field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-4xl font-bold leading-tight text-inherit outline-none sm:text-5xl" aria-label="Post title" placeholder="Post title" @input="$emit('update:title', ($event.target as HTMLTextAreaElement).value)" @keydown.enter.prevent />
       <h1 v-else class="text-4xl font-bold leading-tight sm:text-5xl">{{ title }}</h1>
       <p v-if="excerpt" class="mt-5 text-xl leading-relaxed opacity-75">{{ excerpt }}</p>
-      <div v-if="showMeta && (authorName || $slots.author || $slots.share)" class="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-current/15 py-4">
+      <div v-if="showMeta && (authorName || authorImage || $slots.author || $slots.share)" class="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-current/15 py-4">
         <slot name="author">
           <div class="flex items-center gap-3">
-            <span class="grid size-11 place-items-center rounded-full bg-current/10 text-sm font-semibold">{{ authorInitials }}</span>
+            <img v-if="authorImage" :src="authorImage" :alt="authorName || 'Author'" class="size-11 shrink-0 rounded-full object-cover">
+            <span v-else class="grid size-11 shrink-0 place-items-center rounded-full bg-current/10 text-sm font-semibold">{{ authorInitials }}</span>
             <div><p class="font-semibold">{{ authorName }}</p><p v-if="siteName" class="text-sm opacity-65">Published from {{ siteName }}</p></div>
           </div>
         </slot>
@@ -55,6 +56,7 @@ const props = withDefaults(defineProps<{
   publishedAt?: string | null
   updatedAt?: string | null
   authorName?: string | null
+  authorImage?: string | null
   siteName?: string | null
   mediaUrl?: string | null
   mediaKind?: string | null
@@ -64,7 +66,7 @@ const props = withDefaults(defineProps<{
   template?: 'saya' | 'blawby' | 'platform' | string
   showHeader?: boolean
   showMeta?: boolean
-}>(), { excerpt: null, category: null, publishedAt: null, updatedAt: null, authorName: null, siteName: null, mediaUrl: null, mediaKind: null, readMinutes: null, blocks: () => [], editable: false, template: 'saya', showHeader: true, showMeta: true })
+}>(), { excerpt: null, category: null, publishedAt: null, updatedAt: null, authorName: null, authorImage: null, siteName: null, mediaUrl: null, mediaKind: null, readMinutes: null, blocks: () => [], editable: false, template: 'saya', showHeader: true, showMeta: true })
 
 defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'move-block': [index: number, delta: -1 | 1]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 

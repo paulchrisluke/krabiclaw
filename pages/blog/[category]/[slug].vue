@@ -13,7 +13,7 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
+      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
@@ -151,6 +151,7 @@ if (!Array.isArray(post.value?.content_blocks) || post.value.content_blocks.leng
   throw createError({ statusCode: 500, statusMessage: 'Published blog content is missing its canonical blocks' })
 }
 const authorName = computed(() => post.value?.author?.name ?? null)
+const authorImage = computed(() => post.value?.author?.image ?? null)
 
 const tocHtml = computed(() => (post.value?.content_blocks ?? [])
   .filter(block => block.type === 'markdown')
