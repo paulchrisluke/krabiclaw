@@ -49,8 +49,9 @@ if (!currencyProbeSource) {
   violations.push('currency enforcement probes require an existing site row')
 } else {
   const quote = value => `'${String(value).replaceAll("'", "''")}'`
-  const nonce = `${Date.now()}-${crypto.randomUUID()}`
+  const nonce = crypto.randomUUID().replaceAll('-', '').slice(0, 12)
   const probeSiteId = `postflight-currency-${nonce}`
+  const invalidProbeIds = []
   const probeSlug = `postflight-currency-${nonce}`.toLowerCase()
   const insertColumns = 'id, organization_id, theme_id, theme, slug, source_locale, default_currency, url_structure, vertical'
   const sourceValues = [
@@ -79,6 +80,7 @@ if (!currencyProbeSource) {
           violations.push(`invalid currency update was not rejected by a database constraint for ${JSON.stringify(value)}: ${updateResult.error ?? 'command succeeded'}`)
         }
         const invalidId = `${probeSiteId}-invalid-${index}`
+        invalidProbeIds.push(invalidId)
         const insertResult = runD1Command(target, insertSql(invalidId, `${probeSlug}-invalid-${index}`, currencySql))
         if (!expectedCurrencyRejection(insertResult)) {
           violations.push(`invalid currency insert was not rejected by a database constraint for ${JSON.stringify(value)}: ${insertResult.error ?? 'command succeeded'}`)
@@ -86,9 +88,14 @@ if (!currencyProbeSource) {
       }
     }
   } finally {
-    const cleanup = runD1Command(target, `DELETE FROM sites WHERE id = ${quote(probeSiteId)} OR id LIKE ${quote(`${probeSiteId}-invalid-%`)}`)
+    // Explicit ID list rather than a LIKE pattern - D1 enforces a tight
+    // LIKE/GLOB pattern-length limit ("LIKE or GLOB pattern too complex"),
+    // and every id this probe could have created is already known here.
+    const probeIds = [probeSiteId, ...invalidProbeIds]
+    const idListSql = probeIds.map(quote).join(', ')
+    const cleanup = runD1Command(target, `DELETE FROM sites WHERE id IN (${idListSql})`)
     if (!cleanup.ok) violations.push(`currency enforcement probe cleanup failed: ${cleanup.error}`)
-    const leftovers = query(`SELECT id FROM sites WHERE id = ${quote(probeSiteId)} OR id LIKE ${quote(`${probeSiteId}-invalid-%`)}`)
+    const leftovers = query(`SELECT id FROM sites WHERE id IN (${idListSql})`)
     if (leftovers.length) violations.push(`currency enforcement probe rows remain: ${leftovers.map(row => row.id).join(', ')}`)
   }
 }
