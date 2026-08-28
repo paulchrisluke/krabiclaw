@@ -12,7 +12,23 @@ import {
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
+import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
+import type { TenantPageDto } from '~/server/utils/tenant-pages'
 import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
+
+// Regenerates this page's persisted OG card (issue #685) synchronously as part of the same
+// create/update/path-change request — this IS the publish-time trigger; a crawler never causes
+// anything to render, it only ever reads what this already persisted.
+async function syncTenantPageSocialImage(ctx: McpExecutorContext, page: TenantPageDto): Promise<void> {
+  await syncSocialImageForOwner(ctx.site.db, ctx.site.env, {
+    siteId: page.site_id,
+    ownerType: 'tenant_page',
+    ownerId: page.id,
+    title: page.title,
+    description: page.summary,
+    blocks: page.blocks,
+  })
+}
 
 function nullableStringArg(args: Record<string, unknown>, key: string, fallback: string | null): string | null {
   if (!Object.prototype.hasOwnProperty.call(args, key)) return fallback
@@ -137,6 +153,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             blocks: args.blocks,
           },
         });
+        await syncTenantPageSocialImage(ctx, created.page);
         return tenantPageLifecycleResponse("Created", created);
       } catch (error) {
         return rethrowAsInvalidParams(error);
@@ -154,6 +171,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           scope: { siteId: site.siteId, organizationId: site.organizationId },
           data: tenantPageDocumentData(args, page),
         });
+        await syncTenantPageSocialImage(ctx, updated.page);
         return tenantPageLifecycleResponse("Updated", updated);
       } catch (error) {
         return rethrowAsInvalidParams(error);
@@ -170,6 +188,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           scope: { siteId: site.siteId, organizationId: site.organizationId },
           data: tenantPageDocumentData({ ...args, path: requiredString(args, "new_path") }, page),
         });
+        await syncTenantPageSocialImage(ctx, updated.page);
         return tenantPageLifecycleResponse("Changed path for", updated);
       } catch (error) {
         return rethrowAsInvalidParams(error);

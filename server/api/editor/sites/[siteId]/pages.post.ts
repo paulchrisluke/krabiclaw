@@ -2,15 +2,25 @@ import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { createTenantPage } from '~/server/utils/tenant-pages'
 import type { TenantPageEditorInput } from '~/server/utils/tenant-pages'
+import { syncSocialImageForOwner } from '~/server/utils/social-image/sync'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-  const { db, site, userId } = await requireTenantPageWriteAccess(event, siteId)
+  const { db, env, site, userId } = await requireTenantPageWriteAccess(event, siteId)
   try {
     const body = await readRequiredBody<TenantPageEditorInput>(event)
-    return jsonResponse(await createTenantPage(db, {
-      organizationId: site.organization_id, siteId, userId, data: body, }), { status: 201 })
+    const created = await createTenantPage(db, {
+      organizationId: site.organization_id, siteId, userId, data: body, })
+    await syncSocialImageForOwner(db, env, {
+      siteId,
+      ownerType: 'tenant_page',
+      ownerId: created.page.id,
+      title: created.page.title,
+      description: created.page.summary,
+      blocks: created.page.blocks,
+    })
+    return jsonResponse(created, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)
     return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid tenant page' }, { status: 400 })
