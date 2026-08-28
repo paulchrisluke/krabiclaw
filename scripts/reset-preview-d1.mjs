@@ -169,7 +169,9 @@ function main() {
     return
   }
   const confirmation = readOption('--confirm')
-  if (confirmation !== preview.id) {
+  const ciConfirmation = process.env.CI === 'true'
+    && process.argv.includes('--confirm-configured-preview')
+  if (confirmation !== preview.id && !ciConfirmation) {
     throw new Error('Refusing reset: --confirm must exactly match the configured preview database ID')
   }
 
@@ -188,12 +190,17 @@ function main() {
       'PRAGMA defer_foreign_keys=OFF;',
     ]
     writeFileSync(resetSqlPath, `${statements.join('\n')}\n`)
-    runWrangler([
-      'd1', 'execute', preview.name,
-      '--env', 'preview',
-      '--remote',
-      '--file', resetSqlPath,
-    ])
+    const resetResult = spawnSync(process.execPath, [
+      '--experimental-strip-types',
+      join(ROOT, 'scripts', 'execute-preview-d1-sql.ts'),
+      resetSqlPath,
+    ], {
+      cwd: ROOT,
+      env: WRANGLER_ENV,
+      stdio: 'inherit',
+    })
+    if (resetResult.error) throw resetResult.error
+    if (resetResult.status !== 0) throw new Error('Preview schema drop failed')
 
     const remaining = queryRows(preview.name, 'PRAGMA table_list').filter(isApplicationObject)
     if (remaining.length) {

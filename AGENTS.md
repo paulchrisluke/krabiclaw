@@ -307,10 +307,13 @@ only local and preview data. For it to catch what a spec creates:
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
 
-Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAll` for this — teardown hooks don't run on crashed or cancelled CI jobs. The sweep runs unconditionally at the start of the next seed step regardless of how the previous run ended.
+Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAll` for this — teardown hooks don't run on crashed or cancelled CI jobs. Local test setup uses the sweep. The required PR lane resets the entire disposable preview schema before seeding, so a separate preview sweep would be redundant.
 
-Preview is disposable at both the row and schema levels. If a PR migration has
-run only on preview and must be regenerated, squashed, renamed, or deleted:
+Preview is disposable at both the row and schema levels. The required PR lane
+always resets it in place and replays the checked-out branch's complete migration
+chain before seeding. This prevents migration filenames from concurrent feature
+branches from accumulating in the shared preview ledger. To perform the same
+reset manually:
 
 1. Verify read-only that the affected filename is absent from the staging and
    production `d1_migrations` ledgers.

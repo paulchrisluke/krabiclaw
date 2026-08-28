@@ -43,12 +43,12 @@ High-impact and unclassified runtime changes run the complete retained eight-fil
 inventory; narrower changes run tenant public coverage plus affected groups.
 
 Preview writes use fixed customer/MCP fixtures and `@playwright.example` guest
-identities. `scripts/reset-e2e-artifacts.ts` supports only local and preview
-disposable data. The sweep resets rows, not schema history. Rewritten
-preview-only migration history requires a guarded in-place schema wipe and full
-migration replay; replacement resources, standalone `d1_migrations` edits, and
-remote schema patches are forbidden. Staging and production verification is
-read-only.
+identities. The required PR lane performs a guarded in-place schema wipe and
+full migration replay before seeding, so the shared preview ledger always
+matches the branch under test. `scripts/reset-e2e-artifacts.ts` remains the
+local row-level cleanup path. Replacement resources, standalone
+`d1_migrations` edits, and remote schema patches are forbidden. Staging and
+production verification is read-only.
 
 Releases enter staging and production through reviewed branch merges. During an
 outage, restore the last known-good Worker from Cloudflare deployment history
