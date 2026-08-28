@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { mock } from 'node:test'
 import Database from 'better-sqlite3'
 import { MEDIA_PLACEMENT_OWNER_CHECK_SQL, MEDIA_PLACEMENT_SLOT_CHECK_SQL } from '../../shared/media-placement-contract.ts'
 
@@ -46,8 +46,6 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 `)
-
-import { mock } from 'node:test'
 
 mock.module('../../server/db/index.ts', {
   namedExports: {
