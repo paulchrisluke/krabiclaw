@@ -1,38 +1,57 @@
 import type { McpExecutorContext } from './shared'
-import { deleteSiteLocale, listSiteLocales, upsertSiteLocale } from '~/server/utils/site-locales'
-import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
+import {
+  deleteResourceLocalization,
+  getProductCatalogLocalization,
+  getResourceLocalization,
+  putResourceLocalization,
+  syncProductCatalogLocalization,
+} from '~/server/utils/localization'
+import { listSiteLocales } from '~/server/utils/site-locales'
 import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
 
 export async function handleLocalesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
-  switch (toolName) {
-    case "list_locales":
-      {
-        const result = await listSiteLocales(site.db, site.organizationId, site.siteId);
-        const page = paginateMcpCollection(result.locales, args, { resource: `locales:${site.siteId}` });
-        return { ...result, locales: page.items, page_info: page.page_info };
-      }
-    case "upsert_locale":
-      {
-        const locale = await upsertSiteLocale(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          args as never,
-        );
-        return { locale, context: await mutationContextPayload(site) };
-      }
-    case "delete_locale":
-      {
-        const result = await deleteSiteLocale(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        requiredString(args, "locale"),
-        );
-        return { ...result, context: await mutationContextPayload(site) };
-      }
-    default:
-      return NOT_HANDLED
+  if (toolName === 'list_site_locales') {
+    return await listSiteLocales(site.db, site.organizationId, site.siteId)
   }
+  if (toolName === 'get_resource_localization') {
+    return { localization: await getResourceLocalization(site.db, site.organizationId, site.siteId, requiredString(args, 'resource_type'), requiredString(args, 'resource_id'), requiredString(args, 'locale')) }
+  }
+  if (toolName === 'put_resource_localization') {
+    const localization = await putResourceLocalization(site.db, {
+      organizationId: site.organizationId,
+      siteId: site.siteId,
+      resourceType: requiredString(args, 'resource_type'),
+      resourceId: requiredString(args, 'resource_id'),
+      locale: requiredString(args, 'locale'),
+      values: args.values,
+      routePath: args.route_path,
+      userId: site.userId,
+    })
+    return { localization, context: await mutationContextPayload(site) }
+  }
+  if (toolName === 'delete_resource_localization') {
+    const result = await deleteResourceLocalization(site.db, {
+      organizationId: site.organizationId,
+      siteId: site.siteId,
+      resourceType: requiredString(args, 'resource_type'),
+      resourceId: requiredString(args, 'resource_id'),
+      locale: requiredString(args, 'locale'),
+    })
+    return { ...result, context: await mutationContextPayload(site) }
+  }
+  if (toolName === 'get_product_catalog_localization') {
+    return await getProductCatalogLocalization(site.db, site.organizationId, site.siteId, requiredString(args, 'locale'))
+  }
+  if (toolName === 'sync_product_catalog_localization') {
+    const result = await syncProductCatalogLocalization(site.db, {
+      organizationId: site.organizationId,
+      siteId: site.siteId,
+      locale: requiredString(args, 'locale'),
+      items: args.items,
+      userId: site.userId,
+    })
+    return { ...result, context: await mutationContextPayload(site) }
+  }
+  return NOT_HANDLED
 }

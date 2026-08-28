@@ -44,7 +44,7 @@ for (const name of ['sites_default_currency_insert_guard', 'sites_default_curren
     violations.push(`${name} does not enforce exact canonical supported currency codes`)
   }
 }
-const currencyProbeSource = query(`SELECT organization_id, theme_id, theme, source_locale, url_structure, vertical FROM sites ORDER BY id LIMIT 1`)[0]
+const currencyProbeSource = query(`SELECT organization_id, theme_id, theme, url_structure, vertical FROM sites ORDER BY id LIMIT 1`)[0]
 if (!currencyProbeSource) {
   violations.push('currency enforcement probes require an existing site row')
 } else {
@@ -52,12 +52,11 @@ if (!currencyProbeSource) {
   const nonce = `${Date.now()}-${crypto.randomUUID()}`
   const probeSiteId = `postflight-currency-${nonce}`
   const probeSlug = `postflight-currency-${nonce}`.toLowerCase()
-  const insertColumns = 'id, organization_id, theme_id, theme, slug, source_locale, default_currency, url_structure, vertical'
+  const insertColumns = 'id, organization_id, theme_id, theme, slug, default_currency, url_structure, vertical'
   const sourceValues = [
     currencyProbeSource.organization_id,
     currencyProbeSource.theme_id,
     currencyProbeSource.theme,
-    currencyProbeSource.source_locale,
   ].map(quote)
   const trailingValues = [currencyProbeSource.url_structure, currencyProbeSource.vertical].map(quote)
   const insertSql = (id, slug, currencySql) => `INSERT INTO sites (${insertColumns}) VALUES (${quote(id)}, ${sourceValues.join(', ')}, ${quote(slug)}, ${currencySql}, ${trailingValues.join(', ')})`

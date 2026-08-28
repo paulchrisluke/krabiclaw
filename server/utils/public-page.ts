@@ -621,7 +621,7 @@ async function loadPublicPageSource(
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const sourceLocale = site.source_locale;
+  const sourceLocale = 'en';
   const canonicalPath = requestedDatasets.has('content') ? canonicalTenantPagePath(page) : null
   const tenantPage = canonicalPath
     ? await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale, preview: isPreviewAuthorized })

@@ -1159,9 +1159,10 @@ export async function updatePlatformBlogPost(
     `, siteId ? [requestedSlug, postId, siteId] : [requestedSlug, postId])
     if (postCollision) badRequest('Slug already in use')
     const redirectCollision = await queryFirst<{ id: string } | null>(db, `
-      SELECT id FROM blog_post_redirects
-       WHERE old_slug = ? AND ${siteId ? 'site_id = ?' : 'site_id IS NULL'} LIMIT 1
-    `, siteId ? [requestedSlug, siteId] : [requestedSlug])
+      ${siteId
+        ? "SELECT id FROM site_redirects WHERE site_id = ? AND locale = 'en' AND from_path IN (?, ?) LIMIT 1"
+        : 'SELECT id FROM platform_blog_redirects WHERE old_slug = ? LIMIT 1'}
+    `, siteId ? [siteId, `/blog/${requestedSlug}`, `/article/${requestedSlug}`] : [requestedSlug])
     if (redirectCollision) badRequest('Slug collides with redirect history')
     updates.push('slug = ?', 'slug_manually_overridden = ?')
     params.push(requestedSlug, slugMutation.manuallyOverridden ? 1 : 0)

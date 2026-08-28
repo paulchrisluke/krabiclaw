@@ -255,6 +255,7 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
 ])
 const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'domains', label: 'Domain', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${siteDashboardPath.value}/domains` },
+  { id: 'localization', label: 'Localization', summary: 'Languages and localized content', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
   { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
   { id: 'search', label: 'Search and analytics', summary: searchSummary.value, icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/search` },

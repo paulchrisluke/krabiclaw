@@ -5,8 +5,8 @@ import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isBlawbyTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
-import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { blogCategoryToSlug } from '~/utils/blog-categories'
+import { resolveLocalizedRedirect } from '~/server/utils/localization'
 
 const redirects: Record<string, string> = {
   '/docs/mcp-setup': '/docs/integrations/mcp-setup',
@@ -34,19 +34,15 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   if (!db) return null
   const url = event.url
   const path = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
-  const requestedLocale = url.searchParams.get('locale')?.trim() || (event.req.headers.get('x-tenant-locale'))?.trim() || null
-  const source = await queryFirst<{ locale: string } | null>(db, `
-    SELECT COALESCE((SELECT locale FROM site_locales WHERE site_id = ? AND is_source = 1 LIMIT 1), source_locale) AS locale
-      FROM sites WHERE id = ? LIMIT 1
-  `, [siteId, siteId])
-  if (!source?.locale) return null
-  const locale = requestedLocale
-    ? (await queryFirst<{ locale: string } | null>(db, `
+  const firstSegment = path.split('/')[1] || ''
+  const localized = firstSegment && firstSegment !== 'en'
+    ? await queryFirst<{ locale: string } | null>(db, `
         SELECT locale FROM site_locales
-         WHERE site_id = ? AND locale = ? AND status IN ('active', 'published')
+         WHERE site_id = ? AND locale = ? AND status = 'published'
          LIMIT 1
-      `, [siteId, requestedLocale]))?.locale ?? requestedLocale
-    : source.locale
+      `, [siteId, firstSegment])
+    : null
+  const locale = localized?.locale ?? 'en'
 
   const exactPage = await queryFirst<{ id: string } | null>(db, `
     SELECT id FROM tenant_page_variants
@@ -55,13 +51,19 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   `, [siteId, locale, path])
   if (exactPage) return null
 
+  if (localized) {
+    const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? LIMIT 1', [siteId])
+    const resolved = site ? await resolveLocalizedRedirect(db, site.organization_id, siteId, path) : null
+    return resolved ? { toPath: resolved.to_path, statusCode: resolved.status_code, behavior: resolved.behavior } : null
+  }
+
   const localeRedirect = await queryFirst<{
     toPath: string | null
     statusCode: number | null
     behavior: string
   } | null>(db, `
     SELECT to_path AS toPath, status_code AS statusCode, behavior
-      FROM tenant_redirects
+      FROM site_redirects
      WHERE site_id = ? AND locale = ? AND from_path = ?
      LIMIT 1
   `, [siteId, locale, path])
@@ -146,27 +148,6 @@ export default defineHandler(async (event) => {
   // are scoped to blog_posts and must work on both Saya (/blog) and Blawby
   // (/article) route surfaces.
   if (event.req.method === 'GET') {
-    const tenantMatch = normalizedPathname.match(/^\/(?:blog|article)\/([^/]+)$/)
-    if (tenantMatch && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
-      const db = cloudflareEnv(event).db
-      const oldSlug = safeDecodePathSegment(tenantMatch[1]!)
-      if (db && oldSlug !== null) {
-        try {
-          const redirected = await queryFirst<{ slug: string } | null>(db, `
-            SELECT p.slug FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
-             WHERE r.site_id = ? AND p.site_id = ? AND r.old_slug = ? AND p.status = 'published' LIMIT 1
-          `, [event.context.siteId, event.context.siteId, oldSlug])
-          if (redirected) {
-            return redirect(`${tenantBlogPostPath({
-              ...(event.context.site ?? {}),
-              themeId: event.context.themeId as string | null | undefined,
-            }, redirected.slug)}${url.search}${url.hash}`, 301)
-          }
-        } catch (error) {
-          console.error('Tenant blog redirect lookup failed', error)
-        }
-      }
-    }
     const platformMatch = normalizedPathname.match(/^\/blog\/[^/]+\/([^/]+)$/)
     if (platformMatch && event.context.tenantType === TENANT_TYPES.PLATFORM) {
       const db = cloudflareEnv(event).db
@@ -174,8 +155,8 @@ export default defineHandler(async (event) => {
       if (db && oldSlug !== null) {
         try {
           const redirected = await queryFirst<{ slug: string; category: string | null } | null>(db, `
-            SELECT p.slug, p.category FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
-             WHERE r.site_id IS NULL AND p.site_id IS NULL AND r.old_slug = ? AND p.status = 'published' LIMIT 1
+            SELECT p.slug, p.category FROM platform_blog_redirects r JOIN blog_posts p ON p.id = r.post_id
+             WHERE p.site_id IS NULL AND r.old_slug = ? AND p.status = 'published' LIMIT 1
           `, [oldSlug])
           const category = blogCategoryToSlug(redirected?.category)
           if (redirected && category) return redirect(`/blog/${category}/${encodeURIComponent(redirected.slug)}${url.search}${url.hash}`, 301)

@@ -1,11 +1,12 @@
-import { jsonResponse } from '~/server/utils/api-response'
-import { loadDashboardSiteLocales } from '~/server/utils/dashboard-editor-resources'
+import { defineHandler } from 'nitro'
+import { getRouterParam } from 'nitro/h3'
+
+import { requireSiteAccess } from '~/server/utils/location-access'
+import { getSiteLanguageSettings } from '~/server/utils/site-language-billing'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-
-  return jsonResponse(await loadDashboardSiteLocales(event, siteId))
+  if (!siteId) throw createError({ statusCode: 400, statusMessage: 'Site ID required' })
+  const { env, db, site } = await requireSiteAccess(event, siteId)
+  return await getSiteLanguageSettings(db, env, { organizationId: site.organization_id, siteId })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';

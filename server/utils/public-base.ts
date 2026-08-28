@@ -24,7 +24,6 @@ export interface PublicBase {
     seo_description: string | null
     canonical_url: string | null
     robots: string | null
-    source_locale: string | null
     default_timezone: string | null
     social_facebook_url: string | null
     social_instagram_url: string | null
@@ -65,12 +64,6 @@ export function loadPublicBase(
                   WHERE mp.site_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active') AS media_json,
                 s.seo_title, s.seo_description, s.canonical_url, s.robots,
                 s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
-                (SELECT sl.locale
-                   FROM site_locales sl
-                  WHERE sl.organization_id = s.organization_id
-                    AND sl.site_id = s.id
-                    AND sl.is_source = 1
-                  LIMIT 1) AS source_locale,
                 (SELECT sc.value
                    FROM site_config sc
                   WHERE sc.organization_id = s.organization_id

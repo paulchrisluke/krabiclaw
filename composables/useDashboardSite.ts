@@ -22,7 +22,6 @@ interface DashboardSite {
   plan: string | null
   primary_location_id: string | null
   default_currency: string | null
-  source_locale: string | null
   feature_overrides: string | null
 }
 

@@ -613,6 +613,7 @@ const adminGroup = computed(() => [
   { label: 'Domains', icon: 'i-lucide-globe', to: '/admin/domains' },
   { label: 'Users', icon: 'i-lucide-users', to: '/admin/users' },
   { label: 'Content', icon: 'i-lucide-file-text', to: '/admin/content' },
+  { label: 'Localization', icon: 'i-lucide-languages', to: '/admin/localization' },
   { label: 'Blog', icon: 'i-lucide-pencil', to: '/admin/blog' },
   { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
 ])
