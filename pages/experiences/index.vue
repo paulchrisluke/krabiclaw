@@ -31,14 +31,14 @@
 <script setup lang="ts">
 import type { Experience } from '~/server/utils/experiences'
 
-const { isPlatform, site } = useTenantSite()
+const { isPlatform, site, siteId } = useTenantSite()
 if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experiencesList, pending: pagePending, getField, config, site: publicSite } = await usePublicPageData()
+const { experiencesList, pending: pagePending, getField, site: publicSite } = await usePublicPageData()
 
 const pending = computed(() => pagePending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
@@ -61,15 +61,8 @@ useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
-  heroImage: experienceSocialImage(experiences.value[0]) ? { url: experienceSocialImage(experiences.value[0])! } : null,
+  ownerType: 'site',
+  ownerId: `${siteId}:experiences`,
 }))
-
-function experienceSocialImage(experience: Experience | undefined): string | null {
-  const cover = experience?.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url || null
-  if (cover?.kind === 'video') return cover.thumbnail_url || null
-  return null
-}
 </script>

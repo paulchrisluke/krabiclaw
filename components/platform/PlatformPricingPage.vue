@@ -78,6 +78,8 @@ useSocialMetadata(() => ({
   title: 'Pricing',
   description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, messaging notifications, and Google Places imports on Growth — or start free. No contracts.',
   breadcrumbs: [{ name: 'Home', url: '/' }, { name: 'Pricing', url: '/pricing' }],
+  ownerType: 'platform',
+  ownerId: 'pricing',
   schemaNodes: [{
     '@type': 'OfferCatalog',
     '@id': `${pricingPageUrl}#offers`,

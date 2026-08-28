@@ -79,7 +79,7 @@ Individual page-level `robots` metadata may be retained for defense in depth, bu
 
 ## Canonicals
 
-Every public page uses `useSocialMetadata()` for its canonical and social metadata.
+Every public page uses `useSocialMetadata()` for its canonical and social metadata. Its `og:image`/`twitter:image` always point at a real, persisted, already-generated 1200×630 asset — resolved (`server/utils/social-image-resolver.ts`) and rendered (`server/utils/social-image/generate.ts`) synchronously at publish time (page save, hero change, site logo change), never at page-view or crawl time. There is no request-time rendering route and no gradient/placeholder fallback: a page cannot be published without a resolvable real image. See "Adding a tenant route" and "Adding a public platform route" below for the `ownerType`/`ownerId` every `useSocialMetadata()` call must pass.
 
 Tenant pages receive a canonical link from `layouts/saya.vue`. The canonical strips query parameters by using `route.path` and resolves against the current request origin.
 
@@ -96,7 +96,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 ## Adding a public platform route
 
 1. Build the page with server-rendered primary content.
-2. Add canonical, title, and description through `useSocialMetadata()`.
+2. Add canonical, title, and description through `useSocialMetadata()`, passing `ownerType: 'platform'` and a stable `ownerId` for the route (e.g. `'home'`, `'about'`, `'templates:saya'`) — this must match the owner used wherever this route's OG card is generated/seeded (see `server/utils/social-image-resolver.ts`).
 3. Add the route to `PLATFORM_SITEMAP_ROUTES` only when it should appear in search results.
 4. Add or update regression tests.
 5. Do not enable automatic Nuxt route discovery for the sitemap.
@@ -104,7 +104,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 ## Adding a tenant route
 
 1. Ensure the route requires a resolved tenant/site.
-2. Add page-specific canonical and social metadata through `useSocialMetadata()`; every social image is rendered by `/og-image-render.png`, with that page's media used only as its background input.
+2. Add page-specific canonical and social metadata through `useSocialMetadata()`, passing the entity's real `ownerType`/`ownerId` (e.g. `business_location`/the location's id, or `tenant_page`/the page's id) — `useSocialMetadata()` reads the already-generated OG card for that owner; it never renders one itself.
 3. Add the platform-host route classification when the path is tenant-only.
 4. Add the route to `server/plugins/sitemap.ts` only when it has durable public search value and can avoid empty/thin output.
 5. Query and filter tenant-owned records explicitly.

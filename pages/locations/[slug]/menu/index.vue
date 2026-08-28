@@ -24,5 +24,5 @@ const currency = rawCurrency
 const locationId = currentLocation.id
 const locationTitle = currentLocation.title
 const productLocations = computed(() => locations.value.map(item => ({ id: item.id, slug: item.slug, title: item.title })))
-useSocialMetadata(() => ({ path: `/locations/${encodeURIComponent(currentLocation.slug)}/menu`, title: `${locationTitle} Menu`, description: `Full menu for ${locationTitle}.`, location: locationTitle, brand: { siteName: brandName } }))
+useSocialMetadata(() => ({ path: `/locations/${encodeURIComponent(currentLocation.slug)}/menu`, title: `${locationTitle} Menu`, description: `Full menu for ${locationTitle}.`, location: locationTitle, brand: { siteName: brandName }, ownerType: 'business_location', ownerId: `${locationId}:menu` }))
 </script>

@@ -17,7 +17,8 @@ function clip(text: string | null | undefined, max: number): string {
 }
 
 export interface RenderInputs extends OgImageRenderPayload {
-  /** Already-resolved data: URIs — fetching/inlining happens in server/utils/og-image/pipeline.ts. */
+  /** Already-resolved data: URIs — fetching/inlining happens in server/utils/og-image/render.ts,
+   * called from server/utils/social-image/generate.ts at publish time (issue #685). */
   backgroundImageDataUri?: string | null
   logoDataUri?: string | null
   /** Square icon, preferred over logoDataUri for the small brand mark below — logoDataUri

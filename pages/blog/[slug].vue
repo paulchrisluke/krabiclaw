@@ -161,7 +161,7 @@ if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_bl
 }
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList, config, site: publicSite } = await usePublicPageData()
+const { blogList, site: publicSite } = await usePublicPageData()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
@@ -218,9 +218,9 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
-  heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
+  ownerType: 'blog_post',
+  ownerId: post.value?.id || String(route.params.slug),
 }))
 
 useHead(() => ({

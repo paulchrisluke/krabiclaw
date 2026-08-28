@@ -69,5 +69,7 @@ useSocialMetadata({
     question: item.title,
     answer: item.answer,
   })),
+  ownerType: 'platform',
+  ownerId: 'help',
 })
 </script>

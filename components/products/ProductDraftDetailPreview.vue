@@ -40,8 +40,9 @@ useSocialMetadata(() => ({
   title: product.seo_title || product.name,
   description: product.seo_description || product.description,
   robots: 'noindex,nofollow',
-  heroImage: product.image?.public_url ? { url: product.image.public_url } : null,
   location: productLocation.title,
   brand: { siteName: String(site.value?.brand_name ?? '') },
+  ownerType: 'product',
+  ownerId: product.id,
 }))
 </script>

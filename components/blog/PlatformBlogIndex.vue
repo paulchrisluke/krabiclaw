@@ -152,5 +152,7 @@ useSocialMetadata({
     { name: 'Home', url: '/' },
     { name: 'Blog', url: '/blog' },
   ],
+  ownerType: 'platform',
+  ownerId: 'blog',
 })
 </script>

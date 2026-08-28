@@ -76,7 +76,6 @@ const {
   location,
   experiencesList,
   pending: pagePending,
-  config,
   site: publicSite,
 } = await usePublicPageData()
 
@@ -124,15 +123,8 @@ useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
-  heroImage: experienceSocialImage(experiences.value[0]) ? { url: experienceSocialImage(experiences.value[0])! } : null,
+  ownerType: 'business_location',
+  ownerId: `${location.value?.id || slug.value}:experiences`,
 }))
-
-function experienceSocialImage(experience: Experience | undefined): string | null {
-  const cover = experience?.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url || null
-  if (cover?.kind === 'video') return cover.thumbnail_url || null
-  return null
-}
 </script>

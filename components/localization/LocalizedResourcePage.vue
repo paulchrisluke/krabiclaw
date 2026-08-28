@@ -51,6 +51,28 @@ const details = computed(() => Object.entries(values.value)
     value: typeof value === 'string' ? value : JSON.stringify(value),
   })))
 
+// Media placement owner types (shared/media-placement-contract.ts) that a LocalizedResourceType
+// maps 1:1 onto. Localized resource kinds with no distinct owned OG card of their own (settings/
+// config-shaped resources — booking policy, consultation settings, link pages/items, compliance
+// docs, individual location Q&A entries) fall back to the site's own default background, scoped
+// per resource so each still gets its own distinct persisted card (title differs).
+const DIRECT_OWNER_TYPES = new Set(['site', 'business_location', 'product', 'experience', 'offering'])
+const OWNER_TYPE_ALIASES: Record<string, string> = {
+  site_post: 'post',
+  tenant_blog_post: 'blog_post',
+}
+const socialImageOwner = computed(() => {
+  const representation = props.route.representation
+  if (representation.kind === 'tenant_page') {
+    return { ownerType: 'tenant_page', ownerId: representation.resource_id }
+  }
+  const { resource_type: resourceType, resource_id: resourceId } = representation
+  if (DIRECT_OWNER_TYPES.has(resourceType)) return { ownerType: resourceType, ownerId: resourceId }
+  const aliased = OWNER_TYPE_ALIASES[resourceType]
+  if (aliased) return { ownerType: aliased, ownerId: resourceId }
+  return { ownerType: 'site', ownerId: `${props.route.site.site_id}:localized:${resourceType}:${resourceId}` }
+})
+
 useSocialMetadata(() => ({
   path: props.route.route_path,
   title: firstString('seo_title') || title.value,
@@ -60,5 +82,7 @@ useSocialMetadata(() => ({
     logoUrl: null,
     faviconUrl: null,
   },
+  ownerType: socialImageOwner.value.ownerType,
+  ownerId: socialImageOwner.value.ownerId,
 }))
 </script>

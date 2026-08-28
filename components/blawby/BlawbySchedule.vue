@@ -124,6 +124,7 @@ function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/schedule', destination)
 }
 
+const { siteId } = useTenantSite()
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/schedule',
   title: page.value.seo_title || `Consultation | ${identity.value.brand_name}`,
@@ -133,6 +134,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
+  ownerType: 'site',
+  ownerId: `${siteId}:schedule`,
 }))
 const homeUrl = useSeoUrl(() => '/')
 

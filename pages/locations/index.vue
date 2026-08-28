@@ -109,7 +109,7 @@ const { isAuthenticated } = useAuth()
 const { locale } = useI18n()
 const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 
-const { locations, pending, config, site: publicSite } = await usePublicPageData()
+const { locations, pending, site: publicSite } = await usePublicPageData()
 const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
   : null
@@ -131,7 +131,8 @@ useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
+  ownerType: 'site',
+  ownerId: `${siteId}:locations`,
 }))
 </script>

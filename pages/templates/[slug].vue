@@ -346,13 +346,11 @@ useSocialMetadata({
   path: `/templates/${template.slug}`,
   title: template.seo.title,
   description: template.seo.description,
-  // No `ogImage` override here — useSocialMetadata's shared #259 composer
-  // (utils/social-metadata.ts's resolveSocialOgImage) generates a real
-  // per-template 1200x630 card from this title/description via the
-  // `platform` renderer whenever no override is supplied, so each template
-  // slug gets its own distinct generated OG image rather than falling back
-  // to the static shared platform image. Same pattern as the isPlatform
-  // branches in pages/index.vue and pages/about.vue.
+  // Each template slug gets its own distinct persisted OG card (title differs even though the
+  // background photo is the shared platform default) — see utils/template-registry.ts's `seo`
+  // field doc comment and server/utils/social-image-resolver.ts.
+  ownerType: 'platform',
+  ownerId: `templates:${template.slug}`,
   schemaPageType: 'ItemPage',
   breadcrumbs: [
     { name: 'Home', url: '/' },

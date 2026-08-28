@@ -4,6 +4,7 @@ import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import {
   composeSocialMetadata,
   type SocialBrand,
+  type SocialImageSource,
   type SocialPageMetadataInput,
   type SocialPageType,
   type SocialTemplate,
@@ -32,6 +33,16 @@ export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' |
   path: string
   template?: SocialTemplate
   brand?: SocialBrand
+  /**
+   * Identifies which already-generated OG card (server/utils/social-image/generate.ts,
+   * issue #685) belongs to this page — must match the owner_type/owner_id the page's
+   * publish-time mutation path used when generating it (see server/utils/social-image-resolver.ts
+   * and shared/media-placement-contract.ts for the supported owner types). For platform
+   * marketing routes with no owning DB row, use `ownerType: 'platform'` and a stable route id
+   * (e.g. 'home', 'about', 'templates:saya').
+   */
+  ownerType: string
+  ownerId: string
   breadcrumbs?: PageBreadcrumb[]
   schemaPageType?: SchemaPageType
   schemaNodes?: ApiRecord[]
@@ -46,6 +57,10 @@ export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' |
   schema?: boolean
 }
 
+interface SocialImageApiResponse {
+  socialImage: SocialImageSource | null
+}
+
 const PLATFORM_NAME = 'KrabiClaw'
 const PLATFORM_DESCRIPTION = 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.'
 
@@ -54,6 +69,42 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   const config = useRuntimeConfig()
   const requestURL = useRequestURL()
   const tenant = useTenantSite()
+  const requestEvent = useRequestEvent()
+
+  // Single-item server-side detail lookup for this page's already-generated OG card — SSR
+  // reads the request's own D1 binding directly (never a nested self-fetch, which loses
+  // Cloudflare bindings — see CLAUDE.md), client-side navigation falls back to the thin
+  // /api/public/social-image route wrapping the same loadPersistedSocialImage() call.
+  const socialImageKey = computed(() => {
+    const value = toValue(input)
+    return `social-image:${value.ownerType}:${value.ownerId}`
+  })
+  const { data: socialImage } = useAsyncData(
+    socialImageKey,
+    async (): Promise<SocialImageSource | null> => {
+      const value = toValue(input)
+      if (import.meta.server) {
+        if (!requestEvent) return null
+        const [{ cloudflareEnv }, { loadPersistedSocialImage }] = await Promise.all([
+          import('~/server/utils/api-response'),
+          import('~/server/utils/social-image-resolver'),
+        ])
+        const db = cloudflareEnv(requestEvent).db
+        if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+        return await loadPersistedSocialImage(db, value.ownerType, value.ownerId)
+      }
+      // Nuxt's typed-fetch route matching against this literal path produces a "Type
+      // instantiation is excessively deep" TS2589 for reasons unrelated to this route's actual
+      // (simple) response shape — bypass its generic route inference entirely; the response
+      // shape is still explicitly and correctly typed via untypedFetch's own generic below.
+      const untypedFetch = $fetch as unknown as (_url: string, _opts?: { query?: Record<string, string> }) => Promise<SocialImageApiResponse>
+      const response = await untypedFetch('/api/public/social-image', {
+        query: { ownerType: value.ownerType, ownerId: value.ownerId },
+      })
+      return response?.socialImage ?? null
+    },
+    { watch: [socialImageKey] },
+  )
 
   const normalized = computed(() => {
     const value = toValue(input)
@@ -69,7 +120,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
         }
       : null)
     if (!brand?.siteName.trim()) throw new Error('Page social metadata requires a site name')
-    if (!value.socialImage?.url) throw new Error('Page social metadata requires a resolved social image — see server/utils/social-image-resolver.ts')
+    if (!socialImage.value?.url) throw new Error(`Page social metadata requires a resolved social image for ${value.ownerType}:${value.ownerId} — see server/utils/social-image-resolver.ts`)
     const socialInput: SocialPageMetadataInput = {
       ...value,
       template,
@@ -77,7 +128,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       pageType: value.socialType || value.pageType || 'website',
       canonicalUrl,
     }
-    return { value, origin, template, tags: composeSocialMetadata(socialInput, value.socialImage) }
+    return { value, origin, template, tags: composeSocialMetadata(socialInput, socialImage.value) }
   })
 
   useHead(() => ({

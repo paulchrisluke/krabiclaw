@@ -185,7 +185,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 
 // Bootstrap: location data + page content (parking/notes) — 1 SSR call
-const { location, getField: getContentField, pending, config, site: publicSite } = await usePublicPageData()
+const { location, getField: getContentField, pending, site: publicSite } = await usePublicPageData()
 
 const formattedAddress = computed(() => {
   const loc = location.value
@@ -244,8 +244,9 @@ useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
+  ownerType: 'business_location',
+  ownerId: `${location.value?.id || slug.value}:contact`,
 }))
 
 useSchemaOrg([

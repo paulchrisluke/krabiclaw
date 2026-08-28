@@ -176,9 +176,9 @@ export interface TemplateMarketingMetadata {
    * Root-relative path to a real screenshot of this template's live demo site,
    * shown as the /templates index card's visual (see pages/templates/index.vue).
    * Null falls back to a letter-avatar placeholder — do not route this through
-   * the OG-image pipeline (server/utils/og-image/pipeline.ts generates
-   * title/description social-share cards, not gallery thumbnails; see the
-   * `seo` field below for that pipeline's actual use on this template).
+   * the publish-time OG card generator (server/utils/social-image/generate.ts
+   * builds title/description social-share cards, not gallery thumbnails; see
+   * the `seo` field below for that generator's actual use on this template).
    */
   previewImageUrl: string | null
   /**
@@ -201,13 +201,13 @@ export interface TemplateMarketingMetadata {
    * adapter over the #259 composeSocialMetadata contract) — this is data,
    * not a new metadata/OG pipeline.
    *
-   * No `ogImage` override is set on the /templates/[slug] page, so each
-   * detail page gets a real per-template 1200x630 card generated on the
-   * fly by the shared `platform` renderer (server/utils/og-image/renderers/
-   * platform.ts) from this title/description through the shared resolveSocialOgImage
-   * composer. This is the same pattern
-   * pages/index.vue and pages/about.vue already use for their platform
-   * branch; do not build a bespoke image pipeline here.
+   * pages/templates/[slug].vue passes `ownerType: 'platform'`,
+   * `ownerId: `templates:${template.slug}`` to useSocialMetadata() — each detail page gets its
+   * own persisted, publish-time-generated 1200x630 card (title/description baked onto the
+   * platform default background via the shared `platform` renderer,
+   * server/utils/og-image/renderers/platform.ts), distinct per template slug even though the
+   * background photo is shared. Same pattern pages/index.vue and pages/about.vue use for their
+   * platform branch; do not build a bespoke image pipeline here.
    */
   seo: TemplateMarketingSeo
 }

@@ -92,7 +92,6 @@ const { data, error } = await useAsyncData(
 if (error.value) throw error.value
 
 const post = computed(() => data.value?.post ?? null)
-const coverMedia = computed(() => post.value?.media.find(item => item.slot === 'cover') || post.value?.media[0] || null)
 const pagePath = computed(() => post.value?.public_path || `/posts/${slug.value}`)
 const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)
 const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${siteName.value}.`)
@@ -102,10 +101,9 @@ const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   description: seoDescription.value,
   pageType: 'article',
   brand: { siteName: siteName.value, logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null },
-  heroImage: coverMedia.value
-    ? { url: coverMedia.value.public_url, kind: coverMedia.value.kind, thumbnailUrl: coverMedia.value.thumbnail_url }
-    : null,
   publishedAt: post.value?.published_at || null,
+  ownerType: 'post',
+  ownerId: post.value?.id || slug.value,
 }))
 
 useSchemaOrg([

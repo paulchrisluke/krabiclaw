@@ -197,7 +197,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
-  heroImage: heroMedia.value ? { url: heroMedia.value.public_url } : null,
+  ownerType: 'offering',
+  ownerId: offering.value.id,
 }))
 
 useProfessionalServiceSchema(() => ({

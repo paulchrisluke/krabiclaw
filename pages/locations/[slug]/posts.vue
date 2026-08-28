@@ -53,7 +53,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, postsList, config: pageConfig, site: publicSite } = await usePublicPageData()
+const { location, postsList, site: publicSite } = await usePublicPageData()
 const posts = postsList
 
 const runtimeConfig = useRuntimeConfig()
@@ -68,8 +68,9 @@ useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
+  ownerType: 'business_location',
+  ownerId: `${location.value?.id || slug.value}:posts`,
 }))
 
 useSchemaOrg([

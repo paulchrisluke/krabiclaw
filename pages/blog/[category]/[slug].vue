@@ -214,13 +214,14 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
   path: resolvedSeo.value.canonicalUrl,
-  brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
+  brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value) },
   label: post.value?.category || null,
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
-  heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
   robots: resolvedSeo.value.robots,
   indexable: post.value?.visibility !== 'unlisted' && (!post.value?.robots || !/noindex/i.test(post.value.robots)),
+  ownerType: 'blog_post',
+  ownerId: post.value?.id || String(route.params.slug),
 }))
 
 useHead(() => ({

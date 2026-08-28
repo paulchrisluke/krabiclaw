@@ -136,6 +136,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
+  ownerType: 'site',
+  ownerId: `${siteId}:contact`,
 }))
 const homeUrl = useSeoUrl(() => '/')
 

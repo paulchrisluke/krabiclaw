@@ -213,6 +213,8 @@ useSocialMetadata({
     { name: 'Features', url: '/features' },
   ],
   faqItems: faqItems.map(faq => ({ question: faq.q, answer: faq.a })),
+  ownerType: 'platform',
+  ownerId: 'features',
 })
 
 const detailedFeatures = [

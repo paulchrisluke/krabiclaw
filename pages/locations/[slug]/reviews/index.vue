@@ -181,7 +181,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, reviewsAggregate, reviewsList, pending, config, site: publicSite } = await usePublicPageData()
+const { location, reviewsAggregate, reviewsList, pending, site: publicSite } = await usePublicPageData()
 const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList
@@ -245,8 +245,9 @@ useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
+  ownerType: 'business_location',
+  ownerId: `${location.value?.id || slug.value}:reviews`,
 }))
 
 useSchemaOrg([

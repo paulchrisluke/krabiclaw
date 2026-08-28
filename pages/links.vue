@@ -136,6 +136,7 @@ useSocialMetadata(() => ({
   description: linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || '',
   robots: linksPage.value?.page.robots || 'noindex,follow',
   brand: { siteName: brandName.value, logoUrl: linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null },
-  heroImage: profileImageUrl.value ? { url: profileImageUrl.value } : null,
+  ownerType: 'site',
+  ownerId: `${siteId}:links`,
 }))
 </script>

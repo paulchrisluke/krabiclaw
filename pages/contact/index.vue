@@ -398,7 +398,8 @@ useSocialMetadata(() => ({
     siteName: businessName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: siteConfig.value?.brand_color || null,
   },
+  ownerType: 'site',
+  ownerId: `${siteId}:contact`,
 }))
 </script>

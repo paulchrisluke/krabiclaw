@@ -98,5 +98,7 @@ useSocialMetadata({
     { name: 'KrabiClaw for ChatGPT', url: '/plugin' },
   ],
   softwareApplication: { applicationCategory: 'BusinessApplication', operatingSystem: 'Web, ChatGPT' },
+  ownerType: 'platform',
+  ownerId: 'plugin',
 })
 </script>

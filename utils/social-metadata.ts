@@ -68,13 +68,6 @@ export interface SocialPageMetadataInput {
   /** Absolute or root-relative path/URL; resolved against the correct origin by the adapter. */
   canonicalUrl: string
   brand: SocialBrand
-  /**
-   * The already-generated, already-persisted OG card for this page — resolved and rendered at
-   * publish time (server/utils/social-image-resolver.ts + server/utils/social-image/generate.ts,
-   * issue #685), never at page-view/crawl time. Required: every public page has one by the time
-   * it can be published; there is no gradient/placeholder fallback here.
-   */
-  socialImage: SocialImageSource
   /** Short eyebrow/category shown on the generated card (e.g. "Service", "Blog"). */
   label?: string | null
   location?: string | null

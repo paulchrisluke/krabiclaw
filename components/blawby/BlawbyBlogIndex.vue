@@ -41,6 +41,7 @@ const disclaimerBlock = computed(() => block('disclaimer'))
 const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || ''))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
 
+const { siteId } = useTenantSite()
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/blog',
   title: page.value?.seo_title || `Articles | ${identity.value.brand_name}`,
@@ -51,6 +52,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
+  ownerType: 'site',
+  ownerId: `${siteId}:blog`,
 }))
 const homeUrl = useSeoUrl(() => '/')
 

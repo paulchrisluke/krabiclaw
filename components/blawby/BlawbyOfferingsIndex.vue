@@ -59,6 +59,7 @@ function trackConsultation() {
   trackConsultationClick('services_list', '/services', optionalString(ctaBlock.value?.url) || consultation.value.schedule_path)
 }
 
+const { siteId } = useTenantSite()
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/services',
   title: page.value?.seo_title || `Services | ${identity.value.brand_name}`,
@@ -68,6 +69,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
+  ownerType: 'site',
+  ownerId: `${siteId}:services`,
 }))
 const homeUrl = useSeoUrl(() => '/')
 

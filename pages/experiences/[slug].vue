@@ -605,24 +605,20 @@ const seoDescription = computed(() =>
   truncateForSeo(experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`, 160)
 )
 
-const { canonicalUrl } = useSocialMetadata(() => {
-  const cover = experience.value?.media?.[0]
-  const heroImageUrl = cover?.kind === 'video' ? cover.thumbnail_url : cover?.public_url
-  return {
-    path: experience.value?.canonical_url || `/experiences/${slug}`,
-    title: seoTitle.value,
-    description: seoDescription.value,
-    label: 'Experience',
-    robots: experience.value?.robots || null,
-    brand: {
-      siteName: siteName.value,
-      logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-      faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-      primaryColor: siteConfig.value?.brand_color || null,
-    },
-    heroImage: heroImageUrl ? { url: heroImageUrl } : null,
-  }
-})
+const { canonicalUrl } = useSocialMetadata(() => ({
+  path: experience.value?.canonical_url || `/experiences/${slug}`,
+  title: seoTitle.value,
+  description: seoDescription.value,
+  label: 'Experience',
+  robots: experience.value?.robots || null,
+  brand: {
+    siteName: siteName.value,
+    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
+  },
+  ownerType: 'experience',
+  ownerId: experience.value?.id || slug,
+}))
 const resolvedCanonicalUrl = computed(() => canonicalUrl.value || `${siteUrl}/experiences/${slug}`)
 
 useBreadcrumbSchema([

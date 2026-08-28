@@ -184,5 +184,7 @@ useSocialMetadata({
   breadcrumbs: [
     { name: 'Home', url: '/' },
   ],
+  ownerType: 'platform',
+  ownerId: 'home',
 })
 </script>

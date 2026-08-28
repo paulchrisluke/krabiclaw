@@ -178,6 +178,7 @@ function trackConsultation(pageType: string, destination: string) {
 const seoTitle = computed(() => criticalPage.value.seo_title || identity.value.brand_name || '')
 const seoDescription = computed(() => criticalPage.value.seo_description || criticalPage.value.summary || identity.value.brand_description || '')
 
+const { siteId } = useTenantSite()
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/',
   title: seoTitle.value,
@@ -187,7 +188,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
-  heroImage: heroBackground.value ? { url: heroBackground.value } : null,
+  ownerType: 'site',
+  ownerId: siteId || '',
 }))
 
 useProfessionalServiceSchema(() => ({

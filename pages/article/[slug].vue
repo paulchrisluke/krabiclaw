@@ -150,14 +150,9 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
-  heroImage: articleSocialImage.value
-    ? {
-        url: articleSocialImage.value,
-        width: articleSocialMedia.value?.width || undefined,
-        height: articleSocialMedia.value?.height || undefined,
-      }
-    : null,
   robots: resolvedSeo.value.robots,
+  ownerType: 'post',
+  ownerId: post.value.id,
 }))
 
 const blogUrl = useSeoUrl(() => '/blog')

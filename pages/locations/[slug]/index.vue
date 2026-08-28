@@ -532,15 +532,9 @@ useSocialMetadata(() => ({
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: heroMedia.value.url
-    ? {
-        url: heroMedia.value.url,
-        kind: heroMedia.value.kind === 'video' ? 'video' : 'image',
-        thumbnailUrl: heroMedia.value.thumb,
-      }
-    : null,
+  ownerType: 'business_location',
+  ownerId: location.value?.id || slug.value,
 }))
 
 useSchemaOrg([

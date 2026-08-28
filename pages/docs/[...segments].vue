@@ -337,11 +337,12 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: seoTitle.value,
   description: seoDescription.value,
   path: resolveSeoUrl(docPath.value, platformOrigin.value),
-  brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
+  brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value) },
   label: doc.value?.category || null,
-  heroImage: docMedia.value.thumb ? { url: docMedia.value.thumb } : null,
   robots: doc.value?.robots?.trim() || null,
   indexable: !doc.value?.robots || !/noindex/i.test(doc.value.robots),
+  ownerType: 'platform_doc',
+  ownerId: doc.value?.id || docPath.value,
 }))
 
 useHead(() => ({
