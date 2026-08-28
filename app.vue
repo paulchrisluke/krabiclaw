@@ -23,29 +23,15 @@ const siteShell = isBlawby.value ? null : useSiteShellState()
 const config = siteShell?.config
 const route = useRoute()
 const siteMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
-const tenantLogoUrl = computed(() => siteMedia.value.find(item => item.slot === 'logo')?.public_url ?? null)
-const tenantFaviconUrl = computed(() => siteMedia.value.find(item => item.slot === 'favicon')?.public_url ?? null)
-const tenantBrandName = computed(() => config?.value.brand_name || site?.brand_name || '')
-
 useHead(() => {
   return {
     link: buildTenantHeadLinks({
       isPlatform,
-      tenantLogoUrl: tenantLogoUrl.value,
-      tenantFaviconUrl: tenantFaviconUrl.value,
-      tenantBrandName: tenantBrandName.value,
-      isDraftPreview: route.path.startsWith('/preview/draft/'),
+      siteMedia: siteMedia.value,
       isSitePreview: route.path.startsWith('/preview/site/'),
     })
   }
 })
-
-// Google Analytics loads via Cloudflare Zaraz (edge-injected, see
-// `useAnalytics.ts`'s `window.zaraz.track()` calls) — there is no
-// client-bundled gtag.js/krabiLayer bootstrap here anymore. That removes the
-// ~1.5s TTI cost the deferred-loading approach used to carry, since Zaraz's
-// own snippet is edge-served and queues calls made before it loads the same
-// way `dataLayer` does.
 
 const loadingColor = computed(() => {
   if (isPlatform) return 'var(--kc-loading-rainbow)'

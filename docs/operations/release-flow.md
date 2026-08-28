@@ -11,13 +11,19 @@ Workers.
 | Push to `main` | `krabiclaw` | Read-only rendering/navigation on all three customer custom domains |
 
 Each environment receives one normal `wrangler deploy`. Preview may apply its
-disposable fixtures and run writes. Staging applies migrations but never sweeps,
+disposable fixtures and run writes. Its isolated D1 database may be wiped in
+place when a PR rewrites migration history that has not reached staging or
+production. The guarded reset drops preview application schema and its ledger,
+replays the full migration chain, and then requires fixture provisioning,
+deployment, and verification. Staging applies migrations but never sweeps, resets,
 reseeds customers, provisions E2E identities, or performs guest/MCP writes.
-Production is never seeded or mutated by test automation.
+Production is never seeded, reset, or mutated by test automation.
 
 Production deployment and verification are separate jobs in the same workflow.
-The deploy job builds once, performs the single Wrangler deployment, applies
-migrations, and refreshes search. The verification job waits until all three
+The deploy job builds once, performs the single Wrangler deployment, then
+applies forward-compatible migrations and refreshes search. Deploying the
+dual-schema-compatible Worker before mutating shared D1 prevents the previous
+Worker from observing a schema it cannot read. The verification job waits until all three
 custom domains expose that exact Nuxt build and its referenced assets, then runs
 read-only browser coverage. Retrying a failed verification job never redeploys
 production.
@@ -39,8 +45,12 @@ High-impact and unclassified runtime changes run the complete retained eight-fil
 inventory; narrower changes run tenant public coverage plus affected groups.
 
 Preview writes use fixed customer/MCP fixtures and `@playwright.example` guest
-identities. `scripts/reset-e2e-artifacts.ts` supports only local and preview
-disposable data. Staging and production verification is read-only.
+identities. The required PR lane performs a guarded in-place schema wipe and
+full migration replay before seeding, so the shared preview ledger always
+matches the branch under test. `scripts/reset-e2e-artifacts.ts` remains the
+local row-level cleanup path. Replacement resources, standalone
+`d1_migrations` edits, and remote schema patches are forbidden. Staging and
+production verification is read-only.
 
 Releases enter staging and production through reviewed branch merges. During an
 outage, restore the last known-good Worker from Cloudflare deployment history

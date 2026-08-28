@@ -16,6 +16,10 @@ import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT
 import { parsePhone } from '~/utils/phone'
 import { reservationAdapter } from '~/server/domain/guest-threads/adapters/reservation'
 import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
+import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
+import { defineHandler } from 'nitro'
+import { getRouterParam, readBody } from 'nitro/h3'
 
 const VALID_GUESTS = ['1', '2', '3', '4', '5', '6', '7', '8+']
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -166,46 +170,56 @@ export default defineHandler(async (event) => {
   }
   await recordCustomerBooking(db, customer.id, customerInput)
 
-  // Update customer fields only after successful reservation to avoid mutating existing
-  // customers on failed reservations (e.g., capacity conflicts).
-  await execute(db, `
-    UPDATE customers
-    SET last_booking_at = ?, updated_at = ?
-    WHERE id = ?
-  `, [`${date}T${time}:00`, new Date().toISOString(), customer.id])
-
-  await fireSiteEventSafe({
-    db, organizationId: site.organization_id, siteId, locationId: resolvedLocationId, eventType: 'reservation.created', entityType: 'reservation_submission', entityId: id, metadata: {
-      date, time, guests, }, })
-
-  await ensureGuestThread(db, reservationAdapter, id, { publishEnv: env })
+  const [, thread] = await Promise.all([
+    fireSiteEventSafe({
+      db, organizationId: site.organization_id, siteId, locationId: resolvedLocationId, eventType: 'reservation.created', entityType: 'reservation_submission', entityId: id, metadata: {
+        date, time, guests, }, }),
+    ensureGuestThread(db, reservationAdapter, id, { publishEnv: env }),
+  ])
 
   // Build absolute cancel URL for the confirmation email
   const cancelUrl = `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}`
 
   // Resolve contact info — location-specific when available, site-level fallback
-  const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, resolvedLocationId)
+  const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
+    resolveLocationContact(db, siteId, resolvedLocationId),
+    buildOwnerThreadInboxUrl(env, db, {
+      organizationId: site.organization_id,
+      siteId,
+      locationId: resolvedLocationId,
+      threadId: thread.id,
+    }),
+  ])
 
   try {
     await notifyReservationCreated(env, db, {
-      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, })
+      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
   } catch (error) {
     console.error('reservation_notification_failed', {
       organizationId: site.organization_id, siteId, reservationId: id, error: error instanceof Error ? error.message : String(error)
     })
   }
 
-  const policy = await resolveBookingPolicy(db, {
-    siteId, policyType: 'reservation', locationId: resolvedLocationId, })
-
   const requestedLocale = cleanString(body.locale, 10)
-  const locale = requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
-    ? requestedLocale
-    : await getSourceLocale(db, site.organization_id, siteId)
+  const [policy, locale] = await Promise.all([
+    resolveBookingPolicy(db, {
+      siteId, policyType: 'reservation', locationId: resolvedLocationId, }),
+    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
+      ? requestedLocale
+      : getSourceLocale(db, site.organization_id, siteId),
+    recordSubmissionConversionSafe(db, event, {
+      organizationId: site.organization_id,
+      siteId,
+      eventName: 'reservation_submit',
+      stage: 'submitted',
+      locationId: resolvedLocationId,
+      entityType: 'reservation_submission',
+      entityId: id,
+      pageType: 'reservations',
+      pagePath: '/reservations',
+    }),
+  ])
 
   return jsonResponse({
     success: true, id, cancellationToken: cancellation.token, message: 'Your reservation request has been received. We will confirm shortly.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';
-import { readBody } from 'nitro/h3';

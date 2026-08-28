@@ -9,6 +9,7 @@ import {
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { handleApplicationStripeEvent } from '~/server/utils/billing-webhook-app-events'
 import { handleStripeGa4Event } from '~/server/utils/stripe-ga4'
+import { reconcileSiteLanguageSubscription } from '~/server/utils/site-language-billing'
 
 export async function processStripeEvent(
   env: CloudflareEnv,
@@ -22,5 +23,9 @@ export async function processStripeEvent(
     await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter, loadStripePlans)
     await handleApplicationStripeEvent(env, db as D1Database, event, adapter, stripe, loadStripePlans)
     await handleStripeGa4Event(env, db, stripe, event)
+    // Runs last: a site-language quantity mismatch can persistently fail
+    // (see reconcileSiteLanguageSubscription) and must not block the core
+    // subscription/GA4 handling above from completing on this delivery.
+    await reconcileSiteLanguageSubscription(db, stripe, event)
   })
 }

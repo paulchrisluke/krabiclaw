@@ -19,12 +19,10 @@
       :offering-links="offeringLinks"
       :page-links="pageLinks"
     />
-    <ConsentBanner variant="blawby" privacy-path="/policies/privacy" />
   </div>
 </template>
 
 <script setup lang="ts">
-import ConsentBanner from '~/components/ConsentBanner.vue'
 import blawbyCriticalCss from '~/assets/css/blawby-critical.css?raw'
 import '~/assets/css/blawby-entry.css'
 

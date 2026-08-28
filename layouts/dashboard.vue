@@ -541,6 +541,7 @@ const _siteOverviewGroup = computed(() => {
   return [
     ...items,
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
+    { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${siteBase.value}/analytics` },
     { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
   ]
@@ -555,7 +556,6 @@ const _locationOverviewGroup = computed(() => {
   return [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
     { label: 'Location settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings` },
-    ...(canManageSite.value ? [{ label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` }] : []),
     ...(siteBase.value && canManageSite.value ? [{ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` }] : []),
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
   ]
@@ -613,6 +613,7 @@ const adminGroup = computed(() => [
   { label: 'Domains', icon: 'i-lucide-globe', to: '/admin/domains' },
   { label: 'Users', icon: 'i-lucide-users', to: '/admin/users' },
   { label: 'Content', icon: 'i-lucide-file-text', to: '/admin/content' },
+  { label: 'Localization', icon: 'i-lucide-languages', to: '/admin/localization' },
   { label: 'Blog', icon: 'i-lucide-pencil', to: '/admin/blog' },
   { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
 ])

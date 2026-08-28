@@ -37,7 +37,7 @@ test('home requests only critical datasets for the initial document', () => {
   assert.deepEqual(getPublicPageRequest('/').datasets, ['content', 'location', 'products', 'experiences'])
 })
 
-test('public resource URLs are built from an explicit route snapshot', () => {
+test('draft public resource URLs never select locale by query parameter', () => {
   const request = {
     ...getPublicPageRequest('/about'),
     locale: 'th',
@@ -48,6 +48,14 @@ test('public resource URLs are built from an explicit route snapshot', () => {
       path: '/preview/draft/draft-1/about',
       params: { draftId: 'draft-1' },
     }),
-    '/api/public/drafts/draft-1/page?page=about&datasets=content&locale=th&preview=true&token=preview-token',
+    '/api/public/drafts/draft-1/page?page=about&datasets=content&preview=true&token=preview-token',
+  )
+})
+
+test('published localized resources use a locale path segment', () => {
+  const request = { ...getPublicPageRequest('/about'), locale: 'th', token: null }
+  assert.equal(
+    buildPublicPageUrl('site-1', request, { path: '/th/about', params: {} }),
+    '/api/public/sites/site-1/localized-page/th?page=about&datasets=content',
   )
 })

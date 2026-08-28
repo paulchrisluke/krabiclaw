@@ -363,7 +363,7 @@ const { experienceDetail: experience, config: siteConfig, pending, locations, ex
 
 const experienceIsOnSale = computed(() => isSaleActive((experience.value as ApiValue) ?? {}))
 const experienceCompareAtPrice = computed(() =>
-  formatMoneyAmount((experience.value as ApiValue)?.compare_at_price_amount, siteConfig.value?.default_currency || 'THB')
+  formatMoneyAmount((experience.value as ApiValue)?.compare_at_price_amount, siteConfig.value?.default_currency || 'USD')
 )
 
 const experienceLocation = computed(() => {
@@ -529,6 +529,7 @@ watch(experience, () => loadAvailability())
 onMounted(loadAvailability)
 
 const submitting = ref(false)
+const { mirrorSubmission } = useSiteConversionTracking()
 const bookingError = ref<string | null>(null)
 
 const canSubmit = computed(() =>
@@ -580,6 +581,7 @@ async function submitBooking() {
       locationSlug: typeof (experienceLocation.value as ApiRecord | null)?.slug === 'string' ? String((experienceLocation.value as ApiRecord | null)?.slug) : null,
       message: res.message,
     })
+    mirrorSubmission('experience_booking_submit', (experienceLocation.value as ApiRecord | null)?.id ? String((experienceLocation.value as ApiRecord).id) : null)
     await navigateTo('/experiences/confirmed')
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
@@ -643,7 +645,7 @@ useHead({
         const experienceUrl = resolvedCanonicalUrl.value
         const orgId = `${siteUrl}/#organization`
         const experienceId = `${experienceUrl}#experience`
-        const currency = siteConfig.value?.default_currency || 'THB'
+        const currency = siteConfig.value?.default_currency || 'USD'
 
         // Preserve the canonical media order used by the page.
         const images = [

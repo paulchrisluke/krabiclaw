@@ -22,7 +22,7 @@
 
     <template v-else-if="page.path === '/donate'">
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="donate">
-        <BlawbyDonationChoices :tiers="donationTiers" :destination="donationDestination" />
+        <BlawbyDonationChoices :tiers="donationTiers" :destination="donationDestination" @click="trackDonation" />
       </BlawbyPageHero>
       <BlawbyShieldDivider variant="donate" />
       <BlawbyImpactSection v-if="impactBlock" v-bind="impactProps" />
@@ -56,6 +56,11 @@ import type { BlawbyShieldVariant, PublicOfferingSummary, PublicSiteQa, PublicSi
 type RecordValue = Record<string, unknown>
 
 const props = defineProps<{ page: PublicTenantPage }>()
+const { trackDonationClick } = useSiteConversionTracking()
+
+function trackDonation(choice: { label: string; amount: number | null }) {
+  trackDonationClick(props.page.id, props.page.path, choice.label, choice.amount)
+}
 
 function recordValue(value: unknown): RecordValue {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as RecordValue : {}

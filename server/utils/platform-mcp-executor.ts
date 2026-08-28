@@ -6,7 +6,7 @@ import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { requireMcpUser } from '~/server/utils/mcp-auth'
 import { queryFirst } from '~/server/db'
 import { resolveAgentGuidance, reviewAgentGuidanceCandidate, type AgentGuidanceCandidateType, type AgentSkillTask } from '~/server/utils/agent-skills/scoped'
-import { aggregatePlatformAnalyticsForDate, getPlatformAnalyticsSummary } from '~/server/utils/analytics'
+import { getPlatformAnalyticsSummary } from '~/server/utils/analytics'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getRecentChanges, validateChangelogLimit } from '~/server/utils/changelog'
 import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
@@ -743,10 +743,9 @@ export async function executePlatformMcpToolCall(
       if (startDate > endDate) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'start_date must be before or equal to end_date.')
       }
-
-      const today = dateString(new Date())
-      if (endDate >= today) {
-        await aggregatePlatformAnalyticsForDate(user.db, today)
+      const daySpan = Math.round((new Date(`${endDate}T00:00:00.000Z`).getTime() - new Date(`${startDate}T00:00:00.000Z`).getTime()) / (24 * 60 * 60 * 1000))
+      if (daySpan > 365) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'Date range exceeds the 365-day maximum.')
       }
 
       const summary = await getPlatformAnalyticsSummary(user.db, startDate, endDate)

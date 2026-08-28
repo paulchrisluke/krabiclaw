@@ -26,14 +26,14 @@ export default defineHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or inactive' }, { status: 404 })
 
-  const { source_locale, locales } = await listSiteLocales(db, site.organization_id, siteId)
+  const { locales } = await listSiteLocales(db, site.organization_id, siteId)
   const publicLocales: PublicLocale[] = locales
     .filter(locale => locale.is_source || locale.status === 'published')
     .map(locale => ({
       code: locale.locale, display_name: locale.label, is_source: locale.is_source, status: locale.status, }))
 
   return jsonResponse({
-    success: true, source_locale, locales: publicLocales, })
+    success: true, locales: publicLocales, })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

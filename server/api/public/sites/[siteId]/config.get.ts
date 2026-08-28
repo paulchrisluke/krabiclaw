@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
     }
 
     const config = {
-      ...await getConfig(db, site.organization_id, site.id), default_currency: site.default_currency || 'THB', }
+      ...await getConfig(db, site.organization_id, site.id), default_currency: site.default_currency || 'USD', }
     return jsonResponse({
       success: true, config
     })

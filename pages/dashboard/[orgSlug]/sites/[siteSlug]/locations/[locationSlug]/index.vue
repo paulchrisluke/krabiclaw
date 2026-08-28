@@ -283,12 +283,6 @@ const contentGroups = computed(() => {
       to: `${locationPath.value}/reservations`,
       visible: hasFeature('reservations'),
     },
-    {
-      id: 'analytics',
-      label: 'Analytics',
-      summary: 'Review this location’s performance',
-      to: `${locationPath.value}/analytics`,
-    },
   ].filter(item => item.visible !== false)
 
   return [

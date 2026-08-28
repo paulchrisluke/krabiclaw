@@ -35,6 +35,7 @@ export interface AiGatewayOptions {
   maxTokens?: number
   system?: string
   tools?: AiTool[]
+  toolChoice?: { type: 'tool'; name: string }
   /** Attached to CF Gateway log entry — must include org_id for credit reconciliation */
   metadata?: Record<string, string>
 }
@@ -89,11 +90,13 @@ export async function callAiGateway(
   if (opts.tools && opts.tools.length > 0) {
     body.tools = opts.tools
   }
+  if (opts.toolChoice) body.tool_choice = opts.toolChoice
 
   const response = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
   })
 
   if (!response.ok) {

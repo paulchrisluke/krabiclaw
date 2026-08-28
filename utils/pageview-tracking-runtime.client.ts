@@ -1,111 +1,125 @@
-// Client-side pageview tracking for SPA route changes on public tenant
-// (Saya) pages and platform pages (krabiclaw.com itself).
-import { isPlatformPath } from '~/utils/platform-routes'
 import type { Ref } from 'vue'
+import { normalizeReferrerHost, readAttributionParams } from '~/utils/analytics-attribution'
+import { isTrackablePath } from '~/utils/pageview-path'
+
+interface ZarazPageviewApi {
+  spaPageview?: () => void
+}
+
+interface TrackedPage {
+  eventId: string
+  path: string
+  fullPath: string
+  enteredAt: number
+  durationSent: boolean
+  pageviewReady: Promise<boolean>
+}
 
 export function registerPageviewTracking() {
   const route = useRoute()
+  if (!isTrackablePath(route.path) || route.path.startsWith('/dev')) return
 
-  if (route.path.startsWith('/auth') || route.path.startsWith('/admin') || route.path.startsWith('/dev')) return
+  const win = window as Window & { __kc_pageview_tracking_registered?: boolean; zaraz?: ZarazPageviewApi }
+  if (win.__kc_pageview_tracking_registered) return
 
-  const pluginKey = '__kc_pageview_tracking_registered'
-  const win = typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : null
-  if (win && win[pluginKey]) return
-  if (win) win[pluginKey] = true
-
-  const { isTenant, isPlatform, siteId } = useTenantSite()
+  const { isTenant, isPlatform } = useTenantSite()
   if (!isTenant && !isPlatform) return
-  if (isTenant && !siteId) return
+  win.__kc_pageview_tracking_registered = true
 
   const { $appLocale } = useNuxtApp() as { $appLocale?: Ref<string> }
-  if (!$appLocale) throw new Error('Application locale provider is unavailable')
-  const trackingIdentity = () => isTenant ? { siteId, locale: $appLocale.value } : { platform: true }
+  if (isTenant && !$appLocale) throw new Error('Application locale provider is unavailable')
+
   const router = useRouter()
-  let pageEnteredAt = Date.now()
-  let currentPath = router.currentRoute.value.path
-  let lastTrackedPath: string | null = currentPath
-  let durationSent = false
-  let trackGa4PageView: ((_path: string, _title: string) => void) | null = null
-  let trackGa4TimeOnPage: ((_path: string, _durationSeconds: number) => void) | null = null
-
-  if (isPlatform) {
-    const { trackSessionStart, trackPageView, trackTimeOnPage } = useAnalytics()
-    trackGa4PageView = trackPageView
-    trackGa4TimeOnPage = trackTimeOnPage
-    let alreadyStartedThisTab = false
+  const send = async (payload: Record<string, unknown>) => {
     try {
-      const SESSION_STARTED_KEY = 'kc_session_started'
-      if (sessionStorage.getItem(SESSION_STARTED_KEY)) {
-        alreadyStartedThisTab = true
-      } else {
-        sessionStorage.setItem(SESSION_STARTED_KEY, '1')
-      }
-    } catch {
-      // sessionStorage unavailable (private mode / disabled) — skip the
-      // once-per-tab dedupe rather than drop session_start entirely.
-    }
-    try {
-      if (!alreadyStartedThisTab) trackSessionStart()
-      trackGa4PageView(currentPath, document.title)
-    } catch {
-      // Analytics must never break the public site.
-    }
-  }
-
-  const sendTrack = (payload: Record<string, unknown>) => {
-    try {
-      fetch('/api/analytics/track', {
+      const response = await fetch('/api/analytics/track', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify(payload),
-        keepalive: true
-      }).catch(() => {})
+        keepalive: true,
+      })
+      return response.ok
     } catch {
-      // Analytics must never break the public site.
+      // First-party analytics never blocks the public experience.
+      return false
     }
   }
 
-  const sendDurationBeacon = () => {
-    const durationSeconds = Math.round((Date.now() - pageEnteredAt) / 1000)
-    if (durationSeconds <= 0 || durationSent) return
-    durationSent = true
-    trackGa4TimeOnPage?.(currentPath, durationSeconds)
+  const pageviewPayload = (page: TrackedPage, initial: boolean) => {
+    const attribution = readAttributionParams(new URLSearchParams(window.location.search))
+    const referrerHost = initial ? normalizeReferrerHost(document.referrer) : null
+    return {
+      eventId: page.eventId,
+      eventType: 'pageview',
+      pagePath: page.path,
+      ...(isTenant && $appLocale ? { locale: $appLocale.value } : {}),
+      ...(referrerHost ? { referrerHost } : {}),
+      ...(Object.keys(attribution).length > 0 ? { attribution } : {}),
+    }
+  }
+
+  const sendDuration = (page: TrackedPage) => {
+    if (page.durationSent || !isTrackablePath(page.path)) return
+    const durationSeconds = Math.round((Date.now() - page.enteredAt) / 1000)
+    if (durationSeconds <= 0) return
+    page.durationSent = true
     const payload = JSON.stringify({
-      ...trackingIdentity(),
-      pagePath: currentPath,
+      eventId: page.eventId,
       eventType: 'duration',
-      durationSeconds
+      pagePath: page.path,
+      durationSeconds,
+      ...(isTenant && $appLocale ? { locale: $appLocale.value } : {}),
     })
-
-    if (typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon('/api/analytics/track', new Blob([payload], { type: 'application/json' }))
-    } else {
-      sendTrack({ ...trackingIdentity(), pagePath: currentPath, eventType: 'duration', durationSeconds })
-    }
+    void page.pageviewReady.then((pageviewRecorded) => {
+      if (!pageviewRecorded) return
+      try {
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/analytics/track', new Blob([payload], { type: 'application/json' }))
+        } else {
+          void send(JSON.parse(payload) as Record<string, unknown>)
+        }
+      } catch {
+        // Duration is best effort and tied to the exact page event UUID.
+      }
+    })
   }
 
-  router.afterEach((to, from) => {
-    if (to.path === from.path || to.path === lastTrackedPath) return
-    if (isTenant && isPlatformPath(to.path)) return
+  let currentPage: TrackedPage = {
+    eventId: crypto.randomUUID(),
+    path: router.currentRoute.value.path,
+    fullPath: router.currentRoute.value.fullPath,
+    enteredAt: Date.now(),
+    durationSent: false,
+    pageviewReady: Promise.resolve(false),
+  }
+  currentPage.pageviewReady = send(pageviewPayload(currentPage, true))
 
-    trackGa4PageView?.(to.path, document.title)
-    sendDurationBeacon()
-    pageEnteredAt = Date.now()
-    currentPath = to.path
-    lastTrackedPath = currentPath
-    durationSent = false
-
-    sendTrack({
-      ...trackingIdentity(),
-      pagePath: currentPath,
-      referrer: from.fullPath ? `${window.location.origin}${from.fullPath}` : document.referrer,
-      userAgent: navigator.userAgent
-    })
+  router.afterEach((to, from, failure) => {
+    if (failure || to.fullPath === from.fullPath || to.fullPath === currentPage.fullPath) return
+    const previousPage = currentPage
+    sendDuration(previousPage)
+    const nextPage: TrackedPage = {
+      eventId: crypto.randomUUID(),
+      path: to.path,
+      fullPath: to.fullPath,
+      enteredAt: Date.now(),
+      durationSent: false,
+      pageviewReady: Promise.resolve(false),
+    }
+    currentPage = nextPage
+    if (isTrackablePath(nextPage.path)) {
+      nextPage.pageviewReady = previousPage.pageviewReady.then(() => send(pageviewPayload(nextPage, false)))
+      try {
+        win.zaraz?.spaPageview?.()
+      } catch {
+        // Zaraz is an optional consent-gated mirror.
+      }
+    }
   })
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') sendDurationBeacon()
+    if (document.visibilityState === 'hidden') sendDuration(currentPage)
   })
-  window.addEventListener('pagehide', sendDurationBeacon)
+  window.addEventListener('pagehide', () => sendDuration(currentPage))
 }

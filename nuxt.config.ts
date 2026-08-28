@@ -248,8 +248,6 @@ export default defineNuxtConfig({
           '/tenant-setup-incomplete',
           '/tenant-setup-pending',
           '/_next',
-          '/site.webmanifest',
-          '/tenant.webmanifest',
         ],
       },
     ],

@@ -129,6 +129,7 @@ type ComparisonRow = { feature: string } & Record<string, CellValue>
 
 const comparisonRows: ComparisonRow[] = [
   { feature: 'AI site builder (live in minutes)', free: true, growth: true },
+  { feature: 'Site language', free: 'English only', growth: 'English + 1 more' },
   { feature: 'WhatsApp content updates', free: false, growth: true },
   { feature: 'Bookings & experiences', free: true, growth: true },
   { feature: 'Shared organization usage credits', free: '500 / UTC week', growth: '2,000 / UTC week' },

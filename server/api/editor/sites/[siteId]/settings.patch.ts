@@ -2,7 +2,7 @@
 // Update site settings including brand color theme
 import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { deleteConfig, setConfig, type SiteConfig } from '~/server/utils/site-config'
-import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
+import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { resolveColor } from '~/utils/color-utils'
 import { defineHandler } from 'nitro';
 import {  getRouterParam  } from 'nitro/h3';
@@ -70,13 +70,9 @@ export default defineHandler(async (event) => {
 
   if (analyticsMeasurementId !== undefined) {
     try {
-      if (analyticsMeasurementId) {
-        await syncTenantZarazAnalytics(env, db, { siteId, organizationId, measurementId: analyticsMeasurementId })
-      } else {
-        await removeTenantZarazAnalytics(env, db, siteId)
-      }
+      await reconcileZarazAnalytics(env, db)
     } catch (error) {
-      console.error('zaraz_sync_failed', { siteId, error })
+      console.error('zaraz_reconciliation_failed', { siteId, error })
     }
   }
 

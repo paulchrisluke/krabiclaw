@@ -334,6 +334,7 @@ const tenantForm = ref<TenantContactForm>({
     : '',
 })
 const tenantSubmitting = ref(false)
+const { mirrorSubmission } = useSiteConversionTracking()
 const tenantErrors = ref<TenantFieldError[]>([])
 const tenantSubmitError = ref<string | null>(null)
 const tenantFieldError = (name: keyof TenantContactForm) =>
@@ -370,6 +371,7 @@ const handleTenantContact = async () => {
     tenantSubmitting.value = false
     return
   }
+  mirrorSubmission('contact_submit')
 
   // Best-effort only — a failure here (private browsing, storage quota) must
   // never make a successful submission look like it failed.

@@ -1,17 +1,40 @@
 import { createI18n } from 'vue-i18n'
 import en from '~/i18n/locales/en.json'
-import th from '~/i18n/locales/th.json'
-import { APP_DEFAULT_LOCALE, normalizeAppLocale } from '~/utils/app-i18n'
+
+function expandMessages(messages: Record<string, string>): Record<string, unknown> {
+  const root: Record<string, unknown> = {}
+  for (const [path, value] of Object.entries(messages)) {
+    const parts = path.split('.')
+    let cursor = root
+    for (const [index, part] of parts.entries()) {
+      if (index === parts.length - 1) cursor[part] = value
+      else {
+        const next = cursor[part]
+        if (!next || typeof next !== 'object' || Array.isArray(next)) cursor[part] = {}
+        cursor = cursor[part] as Record<string, unknown>
+      }
+    }
+  }
+  return root
+}
 
 export default defineNuxtPlugin((nuxtApp) => {
-  const requestLocale = normalizeAppLocale(useRequestURL().searchParams.get('locale'))
+  const publicLocale = useState<string>('public-locale', () => 'en')
+  const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
   const i18n = createI18n({
     legacy: false,
     globalInjection: true,
-    locale: requestLocale ?? APP_DEFAULT_LOCALE,
-    fallbackLocale: APP_DEFAULT_LOCALE,
-    messages: { en, th },
+    locale: 'en',
+    fallbackLocale: false,
+    messages: { en },
   })
+
+  watch([publicLocale, platformMessages], ([locale, messages]) => {
+    if (locale !== 'en' && messages) {
+      i18n.global.setLocaleMessage(locale, expandMessages(messages) as typeof en)
+    }
+    i18n.global.locale.value = locale as 'en'
+  }, { immediate: true })
 
   nuxtApp.vueApp.use(i18n)
   nuxtApp.provide('appLocale', i18n.global.locale)

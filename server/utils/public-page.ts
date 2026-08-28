@@ -621,11 +621,18 @@ async function loadPublicPageSource(
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const sourceLocale = site.source_locale;
+  const sourceLocale = 'en';
   const canonicalPath = requestedDatasets.has('content') ? canonicalTenantPagePath(page) : null
   const tenantPage = canonicalPath
     ? await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale, preview: isPreviewAuthorized })
     : null
+  if (canonicalPath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized) {
+    // This paid localization feature never falls back to English content -
+    // a missing exact-locale variant must 404, not silently render the page
+    // shell with an empty content dataset (see localized-pages/[locale].get.ts,
+    // which enforces the same "exact locale or nothing" contract).
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized page was not found' })
+  }
   const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
 
   let products: Product[] = []

@@ -62,7 +62,7 @@ export default defineHandler(async (event) => {
     conversationId: conversation.id, organizationId: site.organization_id, siteId, userId: session.user.id, role: 'user', channel: 'dashboard', content: userText, }, session.user.id)
 
   const messages = await getRecentAgentMessages(db, conversation.id, siteId, session.user.id)
-  const defaultCurrency = site.default_currency || 'THB'
+  const defaultCurrency = site.default_currency || 'USD'
 
   setResponseHeader(event, 'Content-Type', 'text/event-stream')
   setResponseHeader(event, 'Cache-Control', 'no-cache')

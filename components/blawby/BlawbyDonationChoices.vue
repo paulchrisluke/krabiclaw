@@ -25,7 +25,7 @@
         <h2 class="mt-6 text-xl font-semibold">{{ tier.title }}</h2>
         <p class="mt-2 text-sm opacity-80">{{ tier.description }}</p>
         <div class="mt-4 text-4xl font-bold">${{ tier.amount }}</div>
-        <BlawbyButton :to="destination" class="mt-6 w-full" @click="$emit('click')">
+        <BlawbyButton :to="destination" class="mt-6 w-full" @click="$emit('click', { label: tier.title, amount: tier.amount })">
           Donate ${{ tier.amount }}
         </BlawbyButton>
       </div>
@@ -38,7 +38,7 @@
         </div>
         <h2 class="mt-6 text-xl font-semibold">Custom Amount</h2>
         <p class="mt-2 text-sm text-gray-500">Choose your own donation amount</p>
-        <BlawbyButton :to="destination" class="mt-6 w-full" @click="$emit('click')">
+        <BlawbyButton :to="destination" class="mt-6 w-full" @click="$emit('click', { label: 'Custom Amount', amount: null })">
           Donate custom amount
         </BlawbyButton>
       </div>
@@ -58,5 +58,5 @@ defineProps<{
   destination?: string | null
 }>()
 
-defineEmits<{ click: [] }>()
+defineEmits<{ click: [choice: { label: string; amount: number | null }] }>()
 </script>

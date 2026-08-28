@@ -218,6 +218,18 @@ export async function getPublicTenantPageForPath(
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
+  if (page.locale !== 'en') {
+    const canonicalHydration = page.blocks.some(block =>
+      (block.type === 'offering_grid' && (block.data.source === 'site_offerings' || Array.isArray(block.data.offering_ids)))
+      || (block.type === 'location_grid' && Array.isArray(block.data.location_ids))
+      || (block.type === 'faq' && block.data.source === 'page_qa')
+      || (block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
+      || (block.type === 'feature_grid' && block.data.source === 'site_posts'),
+    )
+    if (canonicalHydration) {
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized embedded content is unavailable' })
+    }
+  }
   return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources))
 }
 
