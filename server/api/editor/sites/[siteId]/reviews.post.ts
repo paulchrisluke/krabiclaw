@@ -6,7 +6,7 @@ import { createOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-  const { db, session, site } = await requireSiteAccess(event, siteId, 'context')
+  const { db, env, session, site } = await requireSiteAccess(event, siteId, 'context')
   assertOrganizationAccess(site.member_role)
   const body = await readStrictBody(event, {
     author_name: 'string', rating: 'number', title: 'nullable-string', content: 'string',
@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   })
   try {
     const result = await createOwnerEnteredSiteReview(db, {
-      organizationId: site.organization_id, siteId, enteredByUserId: session.user.id, }, body as never)
+      organizationId: site.organization_id, siteId, enteredByUserId: session.user.id, }, body as never, env)
     return jsonResponse(result, { status: 201 })
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Review creation failed' }, { status: 400 })

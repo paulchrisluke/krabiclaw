@@ -1,5 +1,7 @@
-import { execute, executeBatch, queryAll, type DbClient } from '../db/index.ts'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import { getMediaPlacements } from './media-placement.ts'
+import { syncSocialImageForOwnerAfterCommit } from './social-image/sync.ts'
+import type { CloudflareEnv } from './auth.ts'
 
 export const OWNER_REVIEW_COLLECTION_METHODS = ['in_person', 'email', 'phone', 'migration', 'other'] as const
 export type OwnerReviewCollectionMethod = typeof OWNER_REVIEW_COLLECTION_METHODS[number]
@@ -80,6 +82,7 @@ export async function createOwnerEnteredSiteReview(
   db: DbClient,
   scope: { organizationId: string; siteId: string; enteredByUserId: string },
   input: OwnerEnteredReviewInput,
+  env?: CloudflareEnv,
 ) {
   if (input.publication_authorized !== true) throw new Error('publication_authorized must be explicitly accepted')
   const authorName = requiredString(input.author_name, 'author_name', 120)
@@ -111,6 +114,9 @@ export async function createOwnerEnteredSiteReview(
     now,
     now,
   ])
+  if (env) {
+    await syncSocialImageForOwnerAfterCommit(db, env, { siteId: scope.siteId, ownerType: 'review', ownerId: id, title: `${rating}-star review from ${authorName}` })
+  }
   return { id, created: true, verified: false }
 }
 
@@ -119,6 +125,7 @@ export async function updateOwnerEnteredSiteReview(
   scope: { organizationId: string; siteId: string },
   reviewId: string,
   input: Partial<OwnerEnteredReviewInput>,
+  env?: CloudflareEnv,
 ) {
   const sets = ['updated_at = ?']
   const params: unknown[] = [new Date().toISOString()]
@@ -149,6 +156,12 @@ export async function updateOwnerEnteredSiteReview(
     WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
   `, params)
   if (!Number(result.meta.changes ?? 0)) throw new Error('Owner-entered review not found')
+  if (env) {
+    const current = await queryFirst<{ rating: number; author_name: string }>(db, 'SELECT rating, author_name FROM reviews WHERE id = ? LIMIT 1', [reviewId])
+    if (current) {
+      await syncSocialImageForOwnerAfterCommit(db, env, { siteId: scope.siteId, ownerType: 'review', ownerId: reviewId, title: `${current.rating}-star review from ${current.author_name}` })
+    }
+  }
   return { review_id: reviewId, updated: true, verified: false }
 }
 

@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reviewId = getRouterParam(event, 'reviewId')
 
-  const { db, site } = await requireSiteAccess(event, siteId!, 'context')
+  const { db, env, site } = await requireSiteAccess(event, siteId!, 'context')
   assertOrganizationAccess(site.member_role)
 
   const body = await readStrictBody<ApiRecord>(event, {
@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
   }
   if (hasOwnerEntryFields) {
     try {
-      await updateOwnerEnteredSiteReview(db, { organizationId: site.organization_id, siteId: siteId! }, reviewId!, body)
+      await updateOwnerEnteredSiteReview(db, { organizationId: site.organization_id, siteId: siteId! }, reviewId!, body, env)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Review update failed'
       return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
