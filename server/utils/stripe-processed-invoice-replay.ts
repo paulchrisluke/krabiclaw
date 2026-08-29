@@ -86,11 +86,11 @@ interface OrganizationBillingReplayRow {
   organization_id: string
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
-  plan: string | null
-  status: string | null
+  access_plan: string | null
+  access_expires_at: string | null
   payment_status: string | null
   paid_through: string | null
-  current_period_end: string | null
+  past_due_since: string | null
   last_paid_invoice_id: string | null
   last_payment_event_created: number | null
   last_payment_event_id: string | null
@@ -353,8 +353,8 @@ async function readInvoiceRow(db: DbClient, invoiceId: string): Promise<StripeIn
 
 async function readOrganizationRow(db: DbClient, organizationId: string): Promise<OrganizationBillingReplayRow> {
   const row = await queryFirst<OrganizationBillingReplayRow>(db, `
-    SELECT organization_id, stripe_customer_id, stripe_subscription_id, plan,
-           status, payment_status, paid_through, current_period_end,
+    SELECT organization_id, stripe_customer_id, stripe_subscription_id, access_plan,
+           access_expires_at, payment_status, paid_through, past_due_since,
            last_paid_invoice_id, last_payment_event_created,
            last_payment_event_id, updated_at
       FROM organization_billing
@@ -454,7 +454,7 @@ function validateProviderEvidence(
     || provider.customerId !== organization.stripe_customer_id
     || betterAuth.stripeCustomerId !== organization.stripe_customer_id
     || betterAuth.periodEnd !== provider.periodEnd
-    || organization.current_period_end !== provider.periodEnd
+    || organization.access_expires_at !== provider.periodEnd
     || organization.stripe_subscription_id !== retained.subscriptionId
     || invoice?.id !== retained.invoiceId
     || provider.latestInvoiceId !== retained.invoiceId
@@ -509,7 +509,7 @@ async function readReplayEvidence(
     || invoice.stripe_invoice_id !== retained.invoiceId
     || invoice.status !== 'paid'
     || organization.organization_id !== input.organizationId
-    || organization.plan !== 'growth'
+    || organization.access_plan !== 'growth'
     || organization.stripe_subscription_id !== retained.subscriptionId
   ) {
     fail('local_evidence_mismatch', 409, 'Local invoice or organization billing evidence does not match the retained event.')
@@ -798,11 +798,11 @@ export async function applyStripeProcessedInvoiceReplay(
           WHERE ob.organization_id = ?
             AND ob.stripe_customer_id IS ?
             AND ob.stripe_subscription_id IS ?
-            AND ob.plan IS ?
-            AND ob.status IS ?
+            AND ob.access_plan IS ?
+            AND ob.access_expires_at IS ?
             AND ob.payment_status IS ?
             AND ob.paid_through IS ?
-            AND ob.current_period_end IS ?
+            AND ob.past_due_since IS ?
             AND ob.last_paid_invoice_id IS ?
             AND ob.last_payment_event_created IS ?
             AND ob.last_payment_event_id IS ?
@@ -832,11 +832,11 @@ export async function applyStripeProcessedInvoiceReplay(
     evidence.organization.organization_id,
     evidence.organization.stripe_customer_id,
     evidence.organization.stripe_subscription_id,
-    evidence.organization.plan,
-    evidence.organization.status,
+    evidence.organization.access_plan,
+    evidence.organization.access_expires_at,
     evidence.organization.payment_status,
     evidence.organization.paid_through,
-    evidence.organization.current_period_end,
+    evidence.organization.past_due_since,
     evidence.organization.last_paid_invoice_id,
     evidence.organization.last_payment_event_created,
     evidence.organization.last_payment_event_id,

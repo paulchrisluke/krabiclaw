@@ -71,6 +71,9 @@ export const FORBIDDEN_ACTIVE_PATTERNS = [
   /\bupdate_tenant_page_draft\b/,
   /\bblog_draft\b/,
   /\bunpublish_(?:blog_post|platform_blog_post|platform_doc)\b/,
+  /\bSELECT\b[^;`]{0,800}\bs\.plan\b/i,
+  /\bob\.(?:plan|status|current_period_end|cancel_at_period_end|ga_client_id|ga_user_id)\b/,
+  /\borganization_billing\b[^;]{0,500}\b(?:ga_client_id|ga_user_id)\b/,
 ]
 const FORBIDDEN_SEED_NAMING_PATTERNS = [
   /\bsiteContent\b/,
@@ -177,12 +180,11 @@ export function collectSiteTransferPolicyViolations(root = ROOT) {
 export function findProductModelViolations(relativePath, source) {
   if (['scripts/check-product-model-guard.mjs', 'scripts/report-publication-cleanup.mjs'].includes(relativePath.replaceAll('\\', '/'))) return []
   const normalizedPath = relativePath.replaceAll('\\', '/')
-  if (
-    normalizedPath.includes('onboarding')
-    || normalizedPath.includes('public-draft-bootstrap')
-    || normalizedPath === 'server/db/schema.ts'
-  ) return []
-  const patterns = PUBLICATION_MODEL_PATH.test(normalizedPath)
+  if (normalizedPath === 'server/db/schema.ts') return []
+  const checksPublicationModel = !normalizedPath.includes('onboarding')
+    && !normalizedPath.includes('public-draft-bootstrap')
+    && PUBLICATION_MODEL_PATH.test(normalizedPath)
+  const patterns = checksPublicationModel
     ? [...FORBIDDEN_ACTIVE_PATTERNS, ...FORBIDDEN_PUBLICATION_PATTERNS]
     : FORBIDDEN_ACTIVE_PATTERNS
   return patterns

@@ -123,8 +123,8 @@ export async function runSiteCreation(
         {
           query: `
             INSERT INTO sites
-              (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, default_currency, status, plan, onboarding_status, analytics_data_start_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'USD', 'active', 'free', 'pending', ?, ?, ?)
+              (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, default_currency, status, onboarding_status, analytics_data_start_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'USD', 'active', 'pending', ?, ?, ?)
           `,
           params: [siteId, organizationId, themeId, storedVertical, normalizedSubdomain, normalizedSubdomain, name, now, now, now],
         },

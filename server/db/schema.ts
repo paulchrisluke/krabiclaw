@@ -685,7 +685,7 @@ export const products = sqliteTable("products", {
 	}).onDelete("cascade"),
 	unique("products_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
 	unique("products_site_location_slug_unique").on(table.site_id, table.location_id, table.slug),
-	unique("products_site_location_type_sort_order_unique").on(table.site_id, table.location_id, table.product_type, table.sort_order),
+	index("products_site_location_type_sort_order_idx").on(table.site_id, table.location_id, table.product_type, table.sort_order),
 	index("products_site_location_visible_sort_idx").on(table.site_id, table.location_id, table.is_visible, table.sort_order),
 	index("products_site_location_featured_sort_idx").on(table.site_id, table.location_id, table.featured, table.featured_sort_order),
 	index("products_organization_site_idx").on(table.organization_id, table.site_id),

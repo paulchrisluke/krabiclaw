@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
 
 const repoRoot = resolve(import.meta.dirname, '..')
-const baselineSql = readFileSync(resolve(repoRoot, 'migrations/0000_epoch_3_baseline.sql'), 'utf8')
+const migrationsDirectory = resolve(repoRoot, 'migrations')
+const epoch3MigrationSql = readdirSync(migrationsDirectory)
+  .filter(name => /^\d{4}_.+\.sql$/u.test(name))
+  .sort()
+  .map(name => ({ name, sql: readFileSync(join(migrationsDirectory, name), 'utf8') }))
 const PLATFORM_ORGANIZATION_ID = 'platform'
 const PLATFORM_SITE_ID = 'platform'
 const DELETION_CENSUS = ['client_import_artifacts', 'customer_claims', 'google_place_snapshots', 'platform_analytics']
@@ -245,7 +249,7 @@ function buildManifest(source, target, copiedTables) {
 }
 
 function transform(source, target) {
-  target.exec(baselineSql)
+  for (const migration of epoch3MigrationSql) target.exec(migration.sql)
   for (const table of DELETION_CENSUS) {
     if (tableExists(source, table) && count(source, table) !== 0) throw new Error(`Deletion census failed: ${table} is non-empty`)
   }
