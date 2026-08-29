@@ -5,7 +5,7 @@ description: Turn the current conversation context into a PRD and publish it to 
 
 This skill takes the current conversation context and codebase understanding and produces a PRD. Do NOT interview the user — just synthesize what you already know.
 
-Publish PRDs to the tracker configured by `/setup-skills` in `docs/agents/issue-tracker.md`. Use the documented GitHub or GitLab repository when one is configured; for `local-markdown`, write the PRD to the feature folder described there. If no tracker configuration exists, ask the user where to publish instead of guessing.
+Publish PRDs to the project issue tracker. Use the documented GitHub or GitLab repository when one is configured; for `local-markdown`, write the PRD to the feature folder described there. If no tracker configuration exists, ask the user where to publish instead of guessing.
 
 The triage label vocabulary should have been provided to you — run `/setup-skills` if not.
 

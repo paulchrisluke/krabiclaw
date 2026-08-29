@@ -9,11 +9,7 @@ const ROOTS = ['components', 'composables', 'config', 'layouts', 'lib', 'pages',
 const EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.vue', '.json'])
 const ALLOWED_FILES = new Set([
   'scripts/check-product-domain-guard.mjs',
-  'scripts/preflight-product-migration.mjs',
-  'scripts/postflight-product-migration.mjs',
-  'scripts/utils/product-migration-report.mjs',
   'tests/unit/product-domain-guard.test.ts',
-  'tests/unit/tenant-page-migration.test.ts',
 ])
 const ALLOWED_PREFIXES = ['migrations/']
 

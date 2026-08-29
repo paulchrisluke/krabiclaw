@@ -6,7 +6,7 @@ import { chowbotToolFromMcp } from './from-mcp'
 // publish_post's channels field is derived along with everything
 // else, but chowbot-agent.ts's publish_post case always overrides channels
 // to ["site"] regardless of what's passed — ChowBot has no social_publishing
-// UI/prompt surface, matching docs/tool-parity.md.
+// UI/prompt surface.
 export const POSTS_CHOWBOT_TOOLS: AiTool[] = POSTS_TOOLS
   .filter((tool) => !tool.uiResourceUri)
   .map(chowbotToolFromMcp)

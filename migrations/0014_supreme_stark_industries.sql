@@ -1,1 +1,0 @@
-ALTER TABLE `posts` ADD `source` text DEFAULT 'manual' NOT NULL;

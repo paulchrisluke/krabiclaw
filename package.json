@@ -46,6 +46,8 @@
     "schema:local": "wrangler d1 migrations apply DB --local",
     "drizzle:check": "drizzle-kit check",
     "db:generate": "drizzle-kit generate",
+    "db:epoch2:prepare": "node scripts/epoch2-data.mjs prepare",
+    "db:epoch2:verify": "node scripts/epoch2-data.mjs verify",
     "db:reset:preview": "node scripts/reset-preview-d1.mjs",
     "seed:demo:generate": "node --experimental-strip-types scripts/generate-demo-seed.ts --stdout > /dev/null && node --experimental-strip-types scripts/generate-demo-bundle.ts",
     "seed:demo:preview": "node --experimental-strip-types scripts/generate-demo-seed.ts --preview",

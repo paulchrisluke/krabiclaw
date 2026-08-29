@@ -86,8 +86,8 @@ DISCORD_DELIVERY_MODE = "provider"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db"
-database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"
+database_name = "krabiclaw-db-epoch2"
+database_id = "81f0e392-e7a1-4602-8ae9-7df87fc66868"
 migrations_dir = "migrations"
 remote = false
 
@@ -140,8 +140,8 @@ enabled = true
 # Preview environment — CI deploys here on every PR; Playwright smoke tests run
 # against preview.krabiclaw.com. Dedicated resources isolated from staging/prod.
 #
-# Dedicated preview resources (created 2026-06-09):
-#   krabiclaw-db-preview         D1   fba9d0aa-c6e2-411e-8cf5-ede43c15aae5
+# Dedicated preview resources (D1 replaced for epoch 2 on 2026-08-29):
+#   krabiclaw-db-preview-epoch2  D1   1313d772-20cd-44cf-8f31-60df1148b41a
 #   krabiclaw-media-preview      R2
 #   krabiclaw-site-cache-preview KV   69252567b9cd4becbd486a337ab1e589
 [env.preview]
@@ -153,7 +153,7 @@ routes = [
 ]
 
 # Top-level [triggers] crons are inherited by named environments unless
-# overridden here. Preview is a CI-only, per-PR database — scheduled tasks
+# overridden here. Preview is a fixed shared CI database — scheduled tasks
 # (domain-reconciliation, etc.) must never run
 # against it; they drove a 93B-row D1 billing spike by scanning ever-growing,
 # never-cleaned E2E data every 5-10 minutes.
@@ -182,8 +182,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.preview.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-preview"
-database_id = "abda2264-f84f-4cc7-8483-930fe9fc288d"
+database_name = "krabiclaw-db-preview-epoch2"
+database_id = "1313d772-20cd-44cf-8f31-60df1148b41a"
 migrations_dir = "migrations"
 remote = false
 
@@ -266,8 +266,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-staging"
-database_id = "b6e29548-155d-43ce-81ba-f6f6c5473069"
+database_name = "krabiclaw-db-staging-epoch2"
+database_id = "688c419a-5bcd-4eaf-b008-50d68a7d453f"
 migrations_dir = "migrations"
 remote = false
 
