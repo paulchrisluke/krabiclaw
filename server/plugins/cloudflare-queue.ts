@@ -2,11 +2,16 @@ import { definePlugin } from 'nitro';
 import type { MessageBatch } from '@cloudflare/workers-types'
 import { processGuestDelivery, type GuestDeliveryWorkerEnv } from '~/server/cloudflare/guest-delivery-queue'
 import type { GuestDeliveryQueueMessage } from '~/server/domain/guest-threads/outbox-publisher'
+import { retryFrozenQueueBatch } from '~/server/utils/database-write-freeze'
 
 export default definePlugin((nitroApp) => {
   nitroApp.hooks.hook('cloudflare:queue', async ({ batch, env }) => {
     const typedBatch = batch as MessageBatch<GuestDeliveryQueueMessage>
     const workerEnv = env as GuestDeliveryWorkerEnv
+    if (retryFrozenQueueBatch(workerEnv, typedBatch)) {
+      console.warn('Guest delivery queue batch deferred during database maintenance')
+      return
+    }
     for (const message of typedBatch.messages) {
       try {
         if (message.body.schemaVersion !== 1) throw new Error('Unsupported guest delivery queue message schema')

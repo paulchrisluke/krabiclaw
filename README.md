@@ -210,7 +210,7 @@ yarn wrangler secret put CRON_SECRET
 
 `CRON_SECRET` protects internal scheduled endpoints. Local commands read their configuration from `.env`; deployed Workers use Cloudflare secrets and the variables in `wrangler.toml`.
 
-CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules are documented in [docs/ci-e2e-guardrails.md](docs/ci-e2e-guardrails.md). MCP reconnect triage and Cloudflare auth debugging are documented in [docs/mcp-auth-debugging.md](docs/mcp-auth-debugging.md) and [docs/observability-debugging.md](docs/observability-debugging.md).
+MCP reconnect triage and Cloudflare auth debugging are documented in [docs/observability.md](docs/observability.md).
 
 The mandatory deployed-browser release gate and outage recovery rules are documented in [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
 

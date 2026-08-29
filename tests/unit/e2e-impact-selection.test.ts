@@ -61,7 +61,7 @@ test('changing an E2E spec always selects that exact deployed-preview spec', () 
 test('schema, migration, Worker, and test-harness changes receive full coverage', () => {
   for (const path of [
     'server/db/schema.ts',
-    'migrations/0121_example.sql',
+    'migrations/0001_example.sql',
     'scripts/reset-e2e-artifacts.ts',
     'workers/app-entry.ts',
     'tests/e2e/helpers/auth.ts'

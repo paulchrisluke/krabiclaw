@@ -1,32 +1,23 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 
-function findReviewRequestMigration() {
-  for (const name of readdirSync('migrations').filter(file => /^\d+_.*\.sql$/.test(file)).sort()) {
-    const sql = readFileSync(join('migrations', name), 'utf8')
-    if (sql.includes('CREATE TABLE `review_requests`')) return sql
-  }
-  throw new Error('review_requests migration not found')
-}
-
-const migrationSql = findReviewRequestMigration()
+const baselineSql = readFileSync('migrations/0000_epoch_2_baseline.sql', 'utf8')
 const billingSource = readFileSync('server/utils/billing-entitlements.ts', 'utf8')
 
-test('review request migration creates the canonical request table', () => {
-  assert.match(migrationSql, /CREATE TABLE `review_requests`/)
-  assert.match(migrationSql, /`token_hash` text NOT NULL/)
-  assert.match(migrationSql, /CREATE UNIQUE INDEX `idx_review_requests_active_booking_unique`/)
+test('epoch-2 baseline creates the canonical review request schema', () => {
+  assert.match(baselineSql, /CREATE TABLE `review_requests`/)
+  assert.match(baselineSql, /`token_hash` text NOT NULL/)
+  assert.match(baselineSql, /CREATE UNIQUE INDEX `idx_review_requests_active_booking_unique`/)
 })
 
-test('review request migration extends bookings, reviews, and locations', () => {
-  assert.match(migrationSql, /ALTER TABLE `business_locations` ADD `google_review_url` text/)
-  assert.match(migrationSql, /`completed_at` text/)
-  assert.match(migrationSql, /`review_request_sent_at` text/)
-  assert.match(migrationSql, /`review_submitted_at` text/)
-  assert.match(migrationSql, /`review_request_id` text/)
-  assert.match(migrationSql, /`helpful_count` integer DEFAULT 0/)
+test('epoch-2 baseline includes the complete review request domain', () => {
+  assert.match(baselineSql, /`google_review_url` text/)
+  assert.match(baselineSql, /`completed_at` text/)
+  assert.match(baselineSql, /`review_request_sent_at` text/)
+  assert.match(baselineSql, /`review_submitted_at` text/)
+  assert.match(baselineSql, /`review_request_id` text/)
+  assert.match(baselineSql, /`helpful_count` integer DEFAULT 0/)
 })
 
 test('review request entitlement follows paid plan policy', () => {

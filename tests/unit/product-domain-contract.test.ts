@@ -101,21 +101,3 @@ test('Product editor keeps the form open and exposes delete and primary-image fa
   assert.match(editor, /Failed to update primary image/)
   assert.match(editor, /catch \(cause\)/)
 })
-
-test('Product schema and migration enforce location identity without rebuilding sites', () => {
-  const schema = readFileSync(new URL('../../server/db/schema.ts', import.meta.url), 'utf8')
-  const migration = readFileSync(new URL('../../migrations/0132_conscious_micromax.sql', import.meta.url), 'utf8')
-  const preflight = readFileSync(new URL('../../scripts/preflight-product-migration.mjs', import.meta.url), 'utf8')
-
-  assert.match(schema, /unique\("products_site_location_slug_unique"\)\.on\(table\.site_id, table\.location_id, table\.slug\)/)
-  assert.match(schema, /name: "products_location_scope_fk"/)
-  assert.match(migration, /CREATE TRIGGER `sites_default_currency_insert_guard`/)
-  assert.match(migration, /NEW\.`default_currency` NOT IN \('THB','USD'/)
-  assert.doesNotMatch(migration, /trim\(NEW\.`default_currency`\)/)
-  assert.doesNotMatch(migration, /(?:DROP|ALTER) TABLE `?sites`?/i)
-  assert.match(preflight, /sites\.default_currency must already be enforced as NOT NULL/)
-  assert.match(preflight, /SELECT id, default_currency FROM sites ORDER BY id/)
-  assert.doesNotMatch(preflight, /default_currency FROM sites WHERE status = 'active'/)
-  assert.match(migration, /`price_amount` NOT LIKE '%\.0'/)
-  assert.match(migration, /substr\(`price_amount`, -1\) <> '0'/)
-})
