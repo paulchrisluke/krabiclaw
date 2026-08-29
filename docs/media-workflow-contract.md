@@ -1,6 +1,8 @@
 # Media Workflow Contract
 
-This document defines the canonical media workflow that ChowBot, the dashboard, and future MCP tools must share.
+**Status: Contract**
+
+This document defines the canonical media workflow that ChowBot, the dashboard, and future MCP tools must share. References to future MCP tools are non-authorizing — they describe planned direction, not current implementation permission.
 
 ## Scope
 

@@ -11,7 +11,7 @@ import { queryFirst } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { buildOwnerThreadInboxUrl, getPlatformDomain } from '~/server/utils/dashboard-notification-links'
-import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
@@ -158,7 +158,7 @@ export default defineHandler(async (event) => {
   await recordCustomerBooking(db, customer.id, customerInput)
 
   const [, thread] = await Promise.all([
-    fireSiteEventSafe({
+    fireOrganizationEventSafe({
       db, organizationId: site.organization_id, siteId, locationId: experience.location_id, eventType: 'experience.booking_received', entityType: 'experience_booking', entityId: booking.id, metadata: {
         experience_id: experience.id, booking_date: bookingDate, time_slot: timeSlot, party_size: partySize, }, }),
     ensureGuestThread(db, experienceBookingAdapter, booking.id, { publishEnv: env }),

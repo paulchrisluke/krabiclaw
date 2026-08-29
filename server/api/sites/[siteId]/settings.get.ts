@@ -46,7 +46,7 @@ export default defineHandler(async (event) => {
 
     const site = await queryFirst<ApiRecord>(db, `
       SELECT s.id, s.organization_id, s.subdomain, s.theme, s.status, s.primary_location_id, s.public_url, s.custom_domain_status, s.default_currency, s.brand_name, s.brand_description,
-             s.contact_email, s.settings, s.last_published_at, s.created_at, s.updated_at
+             s.contact_email, s.last_published_at, s.created_at, s.updated_at
       FROM sites s
       WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1

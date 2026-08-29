@@ -16,8 +16,8 @@
           <h1 class="saya-display-md mt-3">{{ product.name }}</h1>
           <p class="mt-2 text-sm text-muted">{{ location.title }}</p>
           <div class="mt-6 flex items-baseline gap-3 text-xl">
-            <span v-if="saleActive && product.compare_at_price_amount" class="text-muted line-through">{{ formatProductMoney(product.compare_at_price_amount, currency) }}</span>
-            <span class="font-semibold">{{ formatProductMoney(product.price_amount, currency) }}</span>
+            <span v-if="product.price?.compare_at_amount_minor" class="text-muted line-through">{{ formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null }) }}</span>
+            <span class="font-semibold">{{ formatProductMoney(product.price) }}</span>
           </div>
           <p v-if="product.description" class="mt-8 leading-7 text-muted">{{ product.description }}</p>
           <p v-if="!product.available" class="mt-8 font-semibold text-muted">Currently unavailable</p>
@@ -72,7 +72,7 @@
 import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
-import { isSaleActive } from '~/shared/money'
+import { minorAmountToMajor } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 
@@ -90,7 +90,6 @@ const props = defineProps<{
   analyticsEnabled?: boolean
 }>()
 
-const saleActive = computed(() => isSaleActive(props.product))
 const { trackProductOrder } = useSiteConversionTracking()
 const breadcrumbs = computed(() => [
   { to: '/', label: 'Home' },
@@ -115,8 +114,8 @@ useSchemaOrg(computed(() => ({
   image: props.product.image?.public_url,
   offers: {
     '@type': 'Offer',
-    price: props.product.price_amount,
-    priceCurrency: props.currency,
+    price: props.product.price ? minorAmountToMajor(props.product.price.amount_minor, props.product.price.currency) : undefined,
+    priceCurrency: props.product.price?.currency,
     availability: props.product.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     url: props.product.order_url || props.presentation.productPath(props.location.slug, props.product.slug),
   },

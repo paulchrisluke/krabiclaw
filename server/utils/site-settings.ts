@@ -26,7 +26,6 @@ interface SiteSettingsRow {
   organization_id: string
   subdomain: string | null
   brand_name: string | null
-  settings: string | null
   vertical: string
   theme_id: string
 }
@@ -91,7 +90,7 @@ export async function loadSettingsPayload(
            contact_email,
            seo_title, seo_description, canonical_url, robots,
            social_facebook_url, social_instagram_url, social_tiktok_url,
-           feature_overrides, settings, last_published_at, sites.created_at, sites.updated_at,
+           feature_overrides, last_published_at, sites.created_at, sites.updated_at,
            vertical, theme_id
     FROM sites
     LEFT JOIN media_placements mp ON mp.site_id = sites.id AND mp.owner_type = 'site'
@@ -479,7 +478,7 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, organization_id, subdomain, brand_name, settings, vertical, theme_id
+    SELECT id, organization_id, subdomain, brand_name, vertical, theme_id
     FROM sites
     WHERE id = ? AND organization_id = ?
     LIMIT 1

@@ -1,9 +1,8 @@
 import type Stripe from 'stripe'
 import type { StripePlan, Subscription as BetterAuthSubscription } from '@better-auth/stripe'
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
-import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
+import { getEffectiveAccessPlan, PAST_DUE_GRACE_PERIOD_MS } from '~/server/utils/billing-access'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import {
   isKnownRecurringPlan,
@@ -191,12 +190,22 @@ function isoDate(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
 }
 
-/**
- * Projects Better Auth Stripe's organization subscription into the existing
- * app-owned billing/entitlement read models. Better Auth remains the billing
- * authority; these rows exist so feature checks and legacy dashboard reads
- * resolve the same organization-level subscription during the migration.
- */
+function accessExpiry(input: SubscriptionProjectionInput, payment: {
+  paid_through: string | null
+  past_due_since: string | null
+}, accessPlan: string): string | null {
+  if (accessPlan === 'free') return null
+  if (input.status === 'trialing') return isoDate(input.periodEnd)
+  if (input.status === 'active') return payment.paid_through ?? isoDate(input.periodEnd)
+  if (input.status === 'past_due') {
+    const anchor = payment.paid_through ?? payment.past_due_since
+    if (!anchor) return null
+    return new Date(Date.parse(anchor) + PAST_DUE_GRACE_PERIOD_MS).toISOString()
+  }
+  return null
+}
+
+/** Better Auth remains authoritative; this is sessionless access evidence. */
 export async function projectOrganizationSubscription(
   db: DbClient,
   input: SubscriptionProjectionInput,
@@ -221,121 +230,32 @@ export async function projectOrganizationSubscription(
     paidThrough: paymentRow?.paid_through,
     pastDueSince: paymentRow?.past_due_since,
   })
-  const entitlements = getPlanEntitlements(accessPlan)
-  const entitlementEntries = Object.entries(entitlements)
-  const entitlementKeys = entitlementEntries.map(([key]) => key)
-  const sites = await queryAll<{ id: string }>(db, `
-    SELECT id FROM sites WHERE organization_id = ? ORDER BY id
-  `, [input.organizationId])
-  const organizationQueries: Array<{ query: string; params: unknown[] }> = [
-    {
-      query: `
-        INSERT INTO organization_billing
-          (id, organization_id, stripe_customer_id, stripe_subscription_id,
-           status, plan, current_period_end, cancel_at_period_end, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(organization_id) DO UPDATE SET
-          stripe_customer_id = excluded.stripe_customer_id,
-          stripe_subscription_id = excluded.stripe_subscription_id,
-          status = excluded.status,
-          plan = excluded.plan,
-          current_period_end = excluded.current_period_end,
-          cancel_at_period_end = excluded.cancel_at_period_end,
-          updated_at = excluded.updated_at
-      `,
-      params: [
-        `billing-${input.organizationId}`,
-        input.organizationId,
-        input.customerId,
-        input.subscriptionId,
-        input.status,
-        input.plan,
-        isoDate(input.periodEnd),
-        input.cancelAtPeriodEnd ? 1 : 0,
-        now,
-      ],
-    },
-  ]
-
-  for (const [key, value] of entitlementEntries) {
-    organizationQueries.push({
-      query: `
-        INSERT INTO organization_entitlements
-          (id, organization_id, key, value, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'better-auth-stripe', ?, ?)
-        ON CONFLICT(organization_id, key) DO UPDATE SET
-          value = excluded.value,
-          source = excluded.source,
-          updated_at = excluded.updated_at
-      `,
-      params: [`org-${input.organizationId}-${key}`, input.organizationId, key, String(value), now, now],
-    })
-  }
-  organizationQueries.push({
-    query: `DELETE FROM organization_entitlements
-      WHERE organization_id = ? AND source = 'better-auth-stripe'
-      AND key NOT IN (SELECT value FROM json_each(?))`,
-    params: [input.organizationId, d1JsonStringSet(entitlementKeys)],
-  })
-  const allQueries = [...organizationQueries]
-  for (const site of sites) {
-    const siteQueries: Array<{ query: string; params: unknown[] }> = []
-    for (const [key, value] of entitlementEntries) {
-      siteQueries.push({
-        query: `
-          INSERT INTO site_entitlements
-            (id, site_id, organization_id, key, value, source, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, 'better-auth-stripe', ?, ?)
-          ON CONFLICT(site_id, key) DO UPDATE SET
-            value = excluded.value,
-            source = excluded.source,
-            updated_at = excluded.updated_at
-        `,
-        params: [`sent-${site.id}-${key}`, site.id, input.organizationId, key, String(value), now, now],
-      })
-    }
-
-    siteQueries.push({
-      query: `DELETE FROM site_entitlements
-        WHERE site_id = ? AND source = 'better-auth-stripe'
-        AND key NOT IN (SELECT value FROM json_each(?))`,
-      params: [site.id, d1JsonStringSet(entitlementKeys)],
-    })
-    siteQueries.push({
-      query: `
-        INSERT INTO site_billing
-          (id, site_id, organization_id, stripe_subscription_id, plan, status,
-           current_period_end, cancel_at_period_end, stripe_customer_id, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(site_id) DO UPDATE SET
-          stripe_subscription_id = excluded.stripe_subscription_id,
-          plan = excluded.plan,
-          status = excluded.status,
-          current_period_end = excluded.current_period_end,
-          cancel_at_period_end = excluded.cancel_at_period_end,
-          stripe_customer_id = excluded.stripe_customer_id,
-          updated_at = excluded.updated_at
-      `,
-      params: [
-        `sb-${site.id}`,
-        site.id,
-        input.organizationId,
-        null,
-        accessPlan,
-        input.status,
-        isoDate(input.periodEnd),
-        input.cancelAtPeriodEnd ? 1 : 0,
-        input.customerId,
-        now,
-      ],
-    })
-    siteQueries.push({
-      query: `UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-      params: [accessPlan, now, site.id, input.organizationId],
-    })
-    allQueries.push(...siteQueries)
-  }
-  await executeBatch(db, allQueries)
+  await execute(db, `
+    INSERT INTO organization_billing
+      (id, organization_id, stripe_customer_id, stripe_subscription_id,
+       payment_status, paid_through, past_due_since, last_paid_invoice_id,
+       access_plan, access_expires_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id) DO UPDATE SET
+      stripe_customer_id = excluded.stripe_customer_id,
+      stripe_subscription_id = excluded.stripe_subscription_id,
+      payment_status = excluded.payment_status,
+      access_plan = excluded.access_plan,
+      access_expires_at = excluded.access_expires_at,
+      updated_at = excluded.updated_at
+  `, [
+    `billing-${input.organizationId}`,
+    input.organizationId,
+    input.customerId,
+    input.subscriptionId,
+    paymentStatus,
+    paymentRow?.paid_through ?? null,
+    paymentRow?.past_due_since ?? null,
+    paymentRow?.last_paid_invoice_id ?? null,
+    accessPlan,
+    accessExpiry(input, paymentRow ?? { paid_through: null, past_due_since: null }, accessPlan),
+    now,
+  ])
 }
 
 function stripeCustomerId(customer: Stripe.Subscription['customer']): string | null {
@@ -858,9 +778,6 @@ export async function markOrganizationPayment(
     return
   }
 
-  const sites = await queryAll<{ id: string }>(db, `
-    SELECT id FROM sites WHERE organization_id = ? ORDER BY id
-  `, [input.organizationId])
   await executeBatch(db, [
     {
       query: `
@@ -988,9 +905,9 @@ export async function markOrganizationPayment(
       query: `
         INSERT INTO organization_billing
           (id, organization_id, stripe_customer_id, stripe_subscription_id,
-           status, plan, payment_status, paid_through, past_due_since, last_paid_invoice_id,
+           payment_status, paid_through, past_due_since, last_paid_invoice_id,
            last_payment_event_created, last_payment_event_id, updated_at)
-        VALUES (?, ?, ?, ?, 'free', 'free',
+        VALUES (?, ?, ?, ?,
           (SELECT status FROM stripe_invoice_payments WHERE organization_id = ? ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
           (SELECT period_end FROM stripe_invoice_payments WHERE organization_id = ? AND status = 'paid' AND base_plan_price_id IS NOT NULL AND period_end IS NOT NULL ORDER BY period_end DESC, last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
           (SELECT past_due_since FROM stripe_invoice_payments WHERE organization_id = ? AND status = 'failed' ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
@@ -1023,41 +940,6 @@ export async function markOrganizationPayment(
         now,
       ],
     },
-    {
-      query: `
-        UPDATE site_billing
-          SET payment_status = (SELECT payment_status FROM organization_billing WHERE organization_id = ? LIMIT 1),
-            paid_through = (SELECT paid_through FROM organization_billing WHERE organization_id = ? LIMIT 1),
-            past_due_since = (SELECT past_due_since FROM organization_billing WHERE organization_id = ? LIMIT 1),
-            last_paid_invoice_id = (SELECT last_paid_invoice_id FROM organization_billing WHERE organization_id = ? LIMIT 1),
-            last_payment_event_created = (SELECT last_payment_event_created FROM organization_billing WHERE organization_id = ? LIMIT 1),
-            last_payment_event_id = (SELECT last_payment_event_id FROM organization_billing WHERE organization_id = ? LIMIT 1),
-            updated_at = ?
-          WHERE organization_id = ?
-      `,
-      params: [
-        input.organizationId,
-        input.organizationId,
-        input.organizationId,
-        input.organizationId,
-        input.organizationId,
-        input.organizationId,
-        now,
-        input.organizationId,
-      ],
-    },
-    ...sites.map(site => ({
-      query: `
-        INSERT OR IGNORE INTO site_billing
-          (id, site_id, organization_id, payment_status, paid_through, past_due_since, last_paid_invoice_id,
-           last_payment_event_created, last_payment_event_id, updated_at)
-        SELECT ?, ?, ?, payment_status, paid_through, past_due_since, last_paid_invoice_id,
-               last_payment_event_created, last_payment_event_id, ?
-        FROM organization_billing
-        WHERE organization_id = ?
-      `,
-      params: [`sb-${site.id}`, site.id, input.organizationId, now, input.organizationId],
-    })),
   ])
 }
 

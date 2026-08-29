@@ -205,25 +205,33 @@ export default defineHandler(async (event) => {
       query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id IN (SELECT id FROM products WHERE site_id = ?)`,
       params: [siteId],
     })
-    batchQueries.push({ query: `DELETE FROM reviews WHERE product_id IN (SELECT id FROM products WHERE site_id = ?)`, params: [siteId] })
-    batchQueries.push({ query: `DELETE FROM products WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
+    batchQueries.push({ query: `DELETE FROM reviews WHERE product_id IN (SELECT id FROM products WHERE site_id = ? AND product_type = 'standard')`, params: [siteId] })
+    batchQueries.push({ query: `DELETE FROM products WHERE organization_id = ? AND site_id = ? AND product_type = 'standard'`, params: [organizationId, siteId] })
     for (const product of payload.preview.products) {
       batchQueries.push({
         query: `
           INSERT INTO products
-            (id, organization_id, site_id, location_id, category, name, slug, description,
-             price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, order_url,
+            (id, organization_id, site_id, location_id, product_type, category, name, slug, description, order_url,
              is_visible, available, featured, featured_sort_order, sort_order, tags_json,
              details_json, source, created_at, updated_at, created_by, updated_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, params: [
           product.id, organizationId, siteId, locationRow.id, product.category, product.name,
-          product.slug, product.description, product.price_amount, product.compare_at_price_amount,
-          product.sale_starts_at, product.sale_ends_at, product.order_url,
+          product.slug, product.description, product.order_url,
           product.is_visible ? 1 : 0, product.available ? 1 : 0, product.featured ? 1 : 0,
           product.featured_sort_order, product.sort_order, JSON.stringify(product.tags),
           JSON.stringify(product.details), product.source, now, now, session.user.id, session.user.id,
         ],
+      })
+      const currency = product.price.currency ?? payload.source.details.currency
+      batchQueries.push({
+        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,'item','unspecified',?,?,?,'import',?,?)`,
+        params: [crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id,
+          product.price.amount_minor, currency,
+          product.price.compare_at_amount_minor ?? null,
+          product.price.valid_from ?? now,
+          product.price.valid_until ?? null,
+          session.user.id, now],
       })
     }
 

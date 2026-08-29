@@ -119,4 +119,4 @@ export const isPublicPagePayload = (
   && Array.isArray(value.products)
   && value.products.every(item => isRecord(item) && typeof item.id === 'string'
     && typeof item.location_id === 'string' && typeof item.category === 'string'
-    && typeof item.slug === 'string' && typeof item.price_amount === 'string')
+    && typeof item.slug === 'string' && (item.price === null || isRecord(item.price)))

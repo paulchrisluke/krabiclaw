@@ -32,6 +32,9 @@ The only KrabiClaw-specific adaptations to the Uber restaurant model are the QR/
 - Integrations must preserve stable KrabiClaw IDs, provider mapping IDs when applicable, immutable snapshots, idempotency keys, and external references without making provider IDs the canonical commerce identity.
 - Payment/provider eligibility and country rules remain separate from SaaS subscription billing. Payment webhooks update Payment/Invoice state and do not silently rewrite Order/Fulfillment state.
 - The public SEO menu and interactive Ordering menu are distinct surfaces over shared published catalog data.
+- The shared catalog identity is `products`; bookable Experiences are one-to-one Product extensions using the same stable ID rather than a parallel sellable identity.
+- Sellable amounts come only from immutable, scoped `prices` rows. Repricing closes a validity interval and inserts a new row, scheduled intervals cannot overlap, and future Prices are editor/MCP detail data rather than part of the public current-price response.
+- Price amounts are integer minor units with an ISO currency and a structured unit (`item`, `person`, or `table`). A site's default currency is applied only when a Price is created.
 
 ## Explicit non-goals
 

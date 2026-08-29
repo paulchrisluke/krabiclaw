@@ -1334,7 +1334,7 @@ const clientManifest = {
   forbidden_copy_domains: FORBIDDEN_BY_VERTICAL[VERTICAL] ?? [],
 };
 
-// Remove _raw from manifest (too verbose — stored separately in google_place_snapshots)
+// Remove the verbose provider payload from the durable manifest.
 const manifestForFile = JSON.parse(
   JSON.stringify(clientManifest, (k, v) => (k === "_raw" ? undefined : v)),
 );

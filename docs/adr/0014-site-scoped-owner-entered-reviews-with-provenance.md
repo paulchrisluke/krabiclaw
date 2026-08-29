@@ -1,5 +1,9 @@
 # Site-scoped owner-entered reviews with provenance
 
+**Status: Accepted**
+**Date: 2026-06-XX**
+**Supersedes:** Deprecated location-scoped manual review routes
+
 KrabiClaw will support rated reviews about a tenant as a whole without requiring a location, including reviews collected in person, by email, or during an approved migration. Owner-entered reviews require a 1-5 rating, collection provenance, attribution, and an attestation that publication is authorized; they must not receive a verified badge unless KrabiClaw collected them directly.
 
 The deprecated location-scoped manual review create, edit, and delete routes remain removed. The capability returns through an authenticated, site-scoped review contract so tenant isolation, moderation, attribution, and provenance are explicit instead of accepting arbitrary location review payloads.

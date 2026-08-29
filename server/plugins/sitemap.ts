@@ -10,6 +10,7 @@ import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import { assertSiteLanguageEntitlement } from '~/server/utils/localization'
+import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
 
 interface SitemapEntry {
   loc: string
@@ -75,7 +76,7 @@ export default definePlugin((nitroApp) => {
           `SELECT slug, category, updated_at
            FROM blog_posts
            WHERE (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
-             AND site_id IS NULL
+             AND site_id = '${PLATFORM_SITE_ID}'
              AND visibility = 'public'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         ),

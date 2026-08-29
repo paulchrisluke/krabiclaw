@@ -34,9 +34,9 @@ export default defineHandler(async (event) => {
   const tokenHash = await hashReservationCancelToken(token)
   const booking = await queryFirst(
     db, `
-    SELECT eb.guest_name AS name, eb.booking_date AS date, eb.time_slot AS time, eb.party_size AS guests, eb.status, eb.location_id, e.title AS experience_title
+    SELECT eb.guest_name AS name, eb.booking_date AS date, eb.time_slot AS time, eb.party_size AS guests, eb.status, eb.location_id, p.name AS experience_title
     FROM experience_bookings eb
-    JOIN experiences e ON e.id = eb.experience_id
+    JOIN products p ON p.id = eb.experience_id
     WHERE eb.id = ?
       AND eb.site_id = ?
       AND eb.cancellation_token_hash = ?

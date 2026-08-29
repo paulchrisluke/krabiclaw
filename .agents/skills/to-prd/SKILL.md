@@ -3,6 +3,12 @@ name: to-prd
 description: Turn the current conversation context into a PRD and publish it to the project issue tracker. Use when user wants to create a PRD from the current context.
 ---
 
+# Repository contracts override this generic skill
+
+This skill provides syntax, testing technique, and vendor reference material for PRD creation. It does not authorize new architecture, dependencies, infrastructure, abstractions, schema, routes, resources, or workflows.
+
+When this skill conflicts with AGENTS.md, CLAUDE.md, repository runbooks, existing package scripts, or existing configuration, follow the repository. Do not "modernize" the repository to match this skill.
+
 This skill takes the current conversation context and codebase understanding and produces a PRD. Do NOT interview the user — just synthesize what you already know.
 
 Publish PRDs to the project issue tracker. Use the documented GitHub or GitLab repository when one is configured; for `local-markdown`, write the PRD to the feature folder described there. If no tracker configuration exists, ask the user where to publish instead of guessing.

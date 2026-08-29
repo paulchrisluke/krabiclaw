@@ -1,5 +1,5 @@
 /**
- * Ownership policy for the 67 schema tables that carry both organization_id
+ * Ownership policy for schema tables that carry both organization_id
  * and site_id.  Every table belongs to exactly one category; the product
  * model guard parses schema.ts and verifies that this union stays exhaustive.
  *
@@ -9,7 +9,6 @@
 
 export const SITE_TRANSFER_REPARENT_TABLES = [
   'customers',
-  'customer_claims',
   'business_locations',
   'contact_submissions',
   'guest_threads',
@@ -21,6 +20,7 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'media_assets',
   'media_placements',
   'products',
+  'prices',
   'blog_posts',
   'posts',
   'reservation_slot_overrides',
@@ -45,7 +45,7 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'site_conversion_events',
   'site_domain_events',
   'site_domains',
-  'site_events',
+  'organization_events',
   'site_locales',
   'work_requests',
   'experiences',
@@ -53,14 +53,12 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
 ] as const
 
 export const SITE_TRANSFER_RETAIN_TABLES = [
-  'ai_usage_log',
   'usage_events',
   'stripe_ga4_subscription_intents',
   'canary_runs',
   'mcp_tool_call_events',
   'notification_events',
   'notifications',
-  'client_import_artifacts',
   'chowbot_conversations',
   'chowbot_messages',
 ] as const
@@ -72,10 +70,9 @@ export const SITE_TRANSFER_REVOKE_TABLES = [
   'site_language_licenses',
 ] as const
 
-export const SITE_TRANSFER_REBUILD_TABLES = [
-  'site_billing',
-  'site_entitlements',
-] as const
+// Epoch 3 inherits access directly from the destination organization. No billing,
+// entitlement, or other derived projection is rebuilt during a site transfer.
+export const SITE_TRANSFER_REBUILD_TABLES = [] as const
 
 export const SITE_TRANSFER_POLICY = {
   reparent: SITE_TRANSFER_REPARENT_TABLES,

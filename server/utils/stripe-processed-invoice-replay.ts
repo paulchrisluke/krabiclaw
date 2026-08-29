@@ -377,23 +377,18 @@ async function readQuotaSnapshot(db: DbClient, organizationId: string): Promise<
       FROM usage_quota_grants
      WHERE organization_id = ? AND resource = 'ai_inference'
   `, [organizationId])
-  const credits = await queryFirst<{
-    balance: unknown
-    lifetime_used: unknown
-    balance_period_key: string | null
-  }>(db, `
-    SELECT balance, lifetime_used, balance_period_key
-      FROM ai_credits
-     WHERE organization_id = ?
-     LIMIT 1
+  const usage = await queryFirst<{ lifetime_used: unknown }>(db, `
+    SELECT COALESCE(SUM(quantity), 0) AS lifetime_used
+      FROM usage_events
+     WHERE organization_id = ? AND unit = 'credit'
   `, [organizationId])
   return {
     totalGrants: safeCount(grants?.total_grants ?? 0, 'quota grant count'),
     planGrants: safeCount(grants?.plan_grants ?? 0, 'plan grant count'),
     appliedPlanGrants: safeCount(grants?.applied_plan_grants ?? 0, 'applied plan grant count'),
-    balance: nullableSafeInteger(credits?.balance, 'AI credit balance'),
-    lifetimeUsed: nullableSafeInteger(credits?.lifetime_used, 'AI credit lifetime_used'),
-    balancePeriodKey: credits?.balance_period_key ?? null,
+    balance: null,
+    lifetimeUsed: nullableSafeInteger(usage?.lifetime_used, 'AI credit lifetime usage'),
+    balancePeriodKey: null,
   }
 }
 

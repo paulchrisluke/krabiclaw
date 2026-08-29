@@ -132,9 +132,9 @@ mock.module('../../server/utils/cloudflare-r2.ts', {
   },
 })
 
-mock.module('../../server/utils/site-events.ts', {
+mock.module('../../server/utils/organization-events.ts', {
   namedExports: {
-    fireSiteEventSafe: async () => {
+    fireOrganizationEventSafe: async () => {
       state.events += 1
     },
   },

@@ -62,9 +62,10 @@ export const contactAdapter: GuestThreadSourceAdapter<ContactSource, ContactOpen
         ct.status,
         ct.created_at,
         bl.title AS location_title,
-        e.title AS experience_title
+        p.name AS experience_title
       FROM contact_submissions ct
       LEFT JOIN experiences e ON e.id = ct.experience_id
+      LEFT JOIN products p ON p.id = e.id
       LEFT JOIN business_locations bl ON bl.id = COALESCE(ct.location_id, e.location_id)
       WHERE ct.id = ?
       LIMIT 1

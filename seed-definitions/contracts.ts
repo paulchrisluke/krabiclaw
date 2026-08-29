@@ -25,7 +25,6 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     theme: string
     brandDescription: string
     status: 'active' | 'inactive'
-    plan: 'free' | 'growth'
     onboardingStatus: 'pending' | 'active' | 'failed'
     primaryLocationId: string
     contactEmail: string | null

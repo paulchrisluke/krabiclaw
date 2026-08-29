@@ -89,7 +89,7 @@ export default defineHandler(async (event) => {
 
   // Guard check: if transfer requires payment, ensure the recipient organization
   // has a non-free effective plan. Billing is organization-scoped; the source
-  // site's site_billing projection must not authorize the recipient.
+  // site ownership must not authorize the recipient's organization access.
   if (transfer.requires_payment === 1) {
     const billingProjection = await getOrganizationBillingProjection(db, organizationId)
 

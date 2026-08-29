@@ -35,6 +35,7 @@ jobs:
       - run: yarn mcp:catalog
       - run: yarn lint:seeds
       - run: yarn lint:migrations
+      - run: yarn lint:schema-drift
 
   e2e-plan:
     name: Plan affected browser coverage

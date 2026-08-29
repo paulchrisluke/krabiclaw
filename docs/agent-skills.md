@@ -1,6 +1,8 @@
 # Agent Skills
 
-Agent Skills are reusable instruction bundles for AI-assisted authoring workflows. They provide quality guidance; product correctness stays in backend contracts, permissions, schema validation, media storage, and publication workflows.
+**Status: Contract**
+
+Agent Skills are reusable instruction bundles for AI-assisted authoring workflows. They provide quality guidance; product correctness stays in backend contracts, permissions, schema validation, media storage, and publication workflows. References to future CMS/admin lifecycle tables and provenance-bound persistence are non-authorizing — they describe planned direction, not current implementation permission.
 
 ## Current Scaffold
 

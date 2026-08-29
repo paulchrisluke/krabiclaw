@@ -111,7 +111,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           "Call get_workspace_context and list_locations, then use the explicit location_id selected by the user.",
           "Call every list_location_products page before deciding whether this is a create or reconciliation.",
-          `Parse the following into individual Products (name, category, price_amount, and description where given), then call batch_create_products for entirely new Products or sync_products for mixed create/update work: ${itemsDescription}`,
+          `Parse the following into individual Products (name, category, nested Price with integer amount_minor, and description where given), then call batch_create_products for entirely new Products or sync_products for mixed create/update work: ${itemsDescription}`,
           "If the user has photos or videos, offer to attach them after creation. Use set_media with { owner_type: 'product', owner_id: <exact Product id>, slot: 'image' } for the explicit primary and attach_media with slot 'gallery' for detail-gallery assets.",
           "Report the Products that were created or updated.",
         ].join(" "),
@@ -139,7 +139,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: "Create a new bookable experience",
         text: [
-          `Based on this description, call create_experience with a sensible title, tagline, body, and any of price_amount/duration_minutes/max_capacity/time_slots that are implied or stated: ${description}`,
+          `Based on this description, call create_experience with a sensible title, tagline, body, and any nested Price, duration_minutes, max_capacity, or time_slots that are implied or stated: ${description}`,
           "Use active only when the user has approved making the experience public; otherwise use inactive.",
           "If the user has media ready, call attach_media once per asset after creation with placement { owner_type: 'experience', owner_id: <exact experience id>, slot: 'gallery' }, then use reorder_media only if the requested order differs.",
           "Report back what was created, its current status, and the live URL when one is available.",

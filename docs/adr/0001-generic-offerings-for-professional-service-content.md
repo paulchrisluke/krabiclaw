@@ -1,5 +1,8 @@
 # Use Generic Offerings for Professional-Service Content
 
+**Status: Accepted**
+**Date: 2026-06-XX**
+
 Professional-service tenants need durable public content for services, practice areas, and similar expertise-led pages, but this content should not inherit restaurant menu semantics or bookable experience semantics. KrabiClaw will model these as generic offerings and let templates/API surfaces label them in tenant-appropriate language, such as "Practice Areas" for legal tenants.
 
 ## Considered Options

@@ -1,7 +1,5 @@
-import { hasEntitlement, hasSiteEntitlement } from '~/server/utils/billing'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { execute } from '~/server/db'
-
-type SetupEnv = Parameters<typeof hasEntitlement>[0]
 
 export type WorkRequestType =
   | 'content_update'
@@ -32,7 +30,6 @@ export const VALID_WORK_REQUEST_TYPES: WorkRequestType[] = [
 export const VALID_WORK_REQUEST_PRIORITIES: WorkRequestPriority[] = ['low', 'normal', 'high', 'urgent']
 
 export async function createWorkRequest(
-  env: SetupEnv,
   db: D1Database,
   organizationId: string,
   siteId: string | null,
@@ -50,9 +47,7 @@ export async function createWorkRequest(
   const priority = (input.priority as WorkRequestPriority | undefined) ?? 'normal'
   const source = input.source ?? 'dashboard'
 
-  const entitled = siteId
-    ? await hasSiteEntitlement(db, siteId, 'managed_service')
-    : await hasEntitlement(env, db, organizationId, 'managed_service')
+  const entitled = await hasOrganizationEntitlement(db, organizationId, 'managed_service')
   if (!entitled) {
     return { status: 403, data: { error: 'Work requests require Growth.' } }
   }

@@ -21,6 +21,8 @@ reviews:
         - Adding tolerant-parse fallbacks for data validation
         - Defensive programming patterns that conflict with cleanup goals
         - "Pre-existing" workarounds or compatibility shims
+        - New layers, schema, routes, services, wrappers, state, or dependencies unless replacing an existing one
+        - New abstractions, helpers, or architectural patterns when existing code can be deleted or modified
         
         DO suggest:
         - Missing status filters on media placement joins (mp.status = 'active')
@@ -36,3 +38,4 @@ reviews:
         
         This project is actively removing legacy code, fallbacks, and defensive patterns.
         Assume intentional deletions are cleanup, not regression.
+        Default order: delete, reuse, modify, add.

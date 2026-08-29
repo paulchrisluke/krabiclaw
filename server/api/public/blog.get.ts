@@ -3,6 +3,7 @@ import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachFeaturedMediaFromBareJoin } from '~/server/utils/platform-content'
 import { blogCategoryToSlug } from '~/utils/blog-categories'
+import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -15,7 +16,7 @@ export default defineHandler(async (event) => {
     FROM blog_posts p
     LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0 AND mp.status = 'active'
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-    WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'
+    WHERE p.status = 'published' AND p.site_id = '${PLATFORM_SITE_ID}' AND p.visibility = 'public'
     ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.published_at DESC
     LIMIT 100
   `

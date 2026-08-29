@@ -3,6 +3,12 @@ name: grill-with-docs
 description: Grilling session that challenges your plan against the existing domain model, sharpens terminology, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
 ---
 
+# Repository contracts override this generic skill
+
+This skill provides syntax, testing technique, and vendor reference material for documentation planning. It does not authorize new architecture, dependencies, infrastructure, abstractions, schema, routes, resources, or workflows.
+
+When this skill conflicts with AGENTS.md, CLAUDE.md, repository runbooks, existing package scripts, or existing configuration, follow the repository. Do not "modernize" the repository to match this skill.
+
 <what-to-do>
 
 Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.

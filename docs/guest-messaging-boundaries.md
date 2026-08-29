@@ -1,6 +1,8 @@
 # Guest Messaging Boundaries
 
-This note exists so future sessions do not collapse three different systems into one:
+**Status: Contract**
+
+This note exists so future sessions do not collapse three different systems into one. References to future sessions are for clarity, not authorization to implement changes.
 
 - **WhatsApp OTP** is owner authentication for using **ChowBot on WhatsApp**.
 - **Notifications** are system-generated owner/guest sends from `server/utils/notifications.ts`.

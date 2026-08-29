@@ -264,7 +264,8 @@ export interface MediaPlacementMove {
 // must already be in the collection or the whole call is rejected before any
 // write happens. The write itself is guarded atomically against the exact
 // live membership read moments earlier — if anything attached or detached in
-// between, the guard row's owner_type fails media_placements_owner_type_check,
+// between, the guard row's deliberately invalid lifecycle status fails the retained
+// media_placements_status_check,
 // the whole batch (including every position update) rolls back, and the
 // caller gets a 409 to re-read and retry. This is stricter than checking just
 // the moved assets: it also catches an unrelated concurrent attach/remove
@@ -365,7 +366,7 @@ function buildMembershipGuardQuery(input: {
   const now = new Date().toISOString()
   return {
     query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-      SELECT ?, ?, ?, '__reorder_guard__', ?, ?, '__reorder_guard__', 0, 'active', ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, '__reorder_guard__', 0, '__reorder_guard__', ?, ?
        WHERE EXISTS (
          SELECT asset_id FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
          EXCEPT
@@ -377,7 +378,7 @@ function buildMembershipGuardQuery(input: {
          SELECT asset_id FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
        )`,
     params: [
-      crypto.randomUUID(), input.organizationId, input.siteId, input.placement.owner_id, input.placement.slot, now, now,
+      crypto.randomUUID(), input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, now, now,
       ...scopeParams, expectedAssetIds,
       expectedAssetIds, ...scopeParams,
     ],

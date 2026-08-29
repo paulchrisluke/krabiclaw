@@ -10,12 +10,17 @@ import { PRODUCTS_TOOLS } from '../../server/utils/mcp-tools/products.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
 import { ONBOARDING_TOOLS } from '../../server/utils/mcp-tools/onboarding.ts'
 import { SITES_TOOLS } from '../../server/utils/mcp-tools/sites.ts'
-import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
+import { blogPostObject, siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
 import { CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/index.ts'
 import { MEDIA_CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/media.ts'
 import { PostValidationError, validatePostInput } from '../../server/utils/post-management.ts'
 import { INTEGRATIONS_TOOLS } from '../../server/utils/mcp-tools/integrations.ts'
 import { publishToPage } from '../../server/utils/facebook-pages.ts'
+import { PLATFORM_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
+import {
+  PUBLICATION_CONTENT_BLOCK_TYPES,
+  PUBLICATION_CONTENT_DOCUMENT_OWNER_TYPES,
+} from '../../shared/content-registries.ts'
 
 type ToolContract = {
   name: string
@@ -47,16 +52,16 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
 
   for (const name of ['create_product', 'update_product']) {
     const product = tool(PRODUCTS_TOOLS, name)
-    assert.ok(product.inputSchema.properties?.price_amount)
-    assert.equal(product.inputSchema.properties?.price, undefined)
+    assert.ok(product.inputSchema.properties?.price)
+    assert.equal(product.inputSchema.properties?.price_amount, undefined)
   }
   for (const name of ['batch_create_products', 'sync_products']) {
     const productBatch = tool(PRODUCTS_TOOLS, name)
     const products = productBatch.inputSchema.properties?.products as {
       items?: { properties?: Record<string, unknown>, additionalProperties?: boolean }
     }
-    assert.ok(products.items?.properties?.price_amount)
-    assert.equal(products.items?.properties?.price, undefined)
+    assert.ok(products.items?.properties?.price)
+    assert.equal(products.items?.properties?.price_amount, undefined)
     assert.equal(products.items?.additionalProperties, false)
   }
 
@@ -143,6 +148,31 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.match(upload.description, /native ChatGPT file argument/i)
   assert.match(upload.description, /never pass a bare file_id/i)
   assert.match(upload.description, /one download attempt/i)
+})
+
+test('publication MCP schemas import the shared extensible content registries', () => {
+  const tenantCreate = tool(BLOG_TOOLS, 'create_blog_post')
+  const tenantBlocks = tenantCreate.inputSchema.properties?.content_blocks as {
+    items?: { properties?: { type?: { enum?: readonly string[] } } }
+  }
+  assert.deepEqual(tenantBlocks.items?.properties?.type?.enum, [...PUBLICATION_CONTENT_BLOCK_TYPES])
+
+  const tenantResponseBlocks = (blogPostObject.properties.content_blocks as {
+    items?: { properties?: { type?: { enum?: readonly string[] } } }
+  })
+  assert.deepEqual(tenantResponseBlocks.items?.properties?.type?.enum, [...PUBLICATION_CONTENT_BLOCK_TYPES])
+
+  const platformCreate = tool(PLATFORM_MCP_TOOLS, 'create_platform_blog_post')
+  const platformBlocks = platformCreate.inputSchema.properties?.content_blocks as {
+    items?: { properties?: { type?: { enum?: readonly string[] } } }
+  }
+  assert.deepEqual(platformBlocks.items?.properties?.type?.enum, [...PUBLICATION_CONTENT_BLOCK_TYPES])
+
+  const contentLookup = tool(PLATFORM_MCP_TOOLS, 'get_content_document_outline')
+  assert.deepEqual(
+    (contentLookup.inputSchema.properties?.owner_type as { enum?: readonly string[] }).enum,
+    [...PUBLICATION_CONTENT_DOCUMENT_OWNER_TYPES],
+  )
 })
 
 test('Facebook publication is immediate and has no persisted-draft argument', async (t) => {

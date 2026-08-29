@@ -4,6 +4,12 @@ description: Sets up an `## Agent skills` block in AGENTS.md/CLAUDE.md so the en
 disable-model-invocation: true
 ---
 
+# Repository contracts override this generic skill
+
+This skill provides syntax, testing technique, and vendor reference material for repository setup. It does not authorize new architecture, dependencies, infrastructure, abstractions, schema, routes, resources, or workflows.
+
+When this skill conflicts with AGENTS.md, CLAUDE.md, repository runbooks, existing package scripts, or existing configuration, follow the repository. Do not "modernize" the repository to match this skill.
+
 # Setup Skills
 
 Scaffold the per-repo configuration that the engineering skills assume:

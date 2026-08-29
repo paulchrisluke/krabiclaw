@@ -4,6 +4,7 @@ import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, objectArray, omit, optionalString, requiredString } from './shared'
+import { CONTENT_BLOCK_TYPES } from '~/server/utils/content-documents'
 
 const UPDATE_BLOG_MUTATION_FIELDS = [
   'title',
@@ -44,18 +45,7 @@ const BLOG_METADATA_FIELDS = [
   'reset_slug_override',
 ]
 
-const BLOG_CONTENT_BLOCK_TYPES = new Set([
-  'heading',
-  'markdown',
-  'image',
-  'gallery',
-  'faq',
-  'how_to',
-  'divider',
-  'ai_assistance',
-  'cta',
-  'callout',
-])
+const BLOG_CONTENT_BLOCK_TYPES = new Set<string>(CONTENT_BLOCK_TYPES)
 
 const BLOG_POST_STATUSES = new Set(['published', 'scheduled'])
 const BLOG_VISIBILITIES = new Set(['public', 'unlisted'])

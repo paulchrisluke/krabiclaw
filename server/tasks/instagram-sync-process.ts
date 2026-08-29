@@ -23,13 +23,11 @@ interface ConnectionRow {
   encrypted_page_token: string | null
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
-  plan: string | null
-  status: string | null
+  access_plan: string | null
+  access_expires_at: string | null
   payment_status: string | null
   paid_through: string | null
   past_due_since: string | null
-  current_period_end: string | null
-  cancel_at_period_end: unknown
   updated_at: string | null
 }
 
@@ -69,14 +67,12 @@ export default defineScheduledTask({
     const billingRows = await queryAll<ConnectionRow>(db, `
       SELECT fpc.id, fpc.organization_id, fpc.site_id,
              fpc.facebook_page_id, fpc.encrypted_user_token, fpc.encrypted_page_token,
-             ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
-             ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
-             ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
+             ob.stripe_customer_id, ob.stripe_subscription_id, ob.access_plan,
+             ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
       FROM facebook_pages_connections fpc
       INNER JOIN organization_billing ob
         ON ob.organization_id = fpc.organization_id
-       AND ob.plan = 'growth'
-       AND ob.status IN ('active', 'trialing', 'past_due')
+       AND ob.access_plan = 'growth'
       WHERE fpc.status = 'active'
         OR (fpc.status = 'error' AND fpc.updated_at < datetime('now', '-1 hour'))
       ORDER BY fpc.organization_id

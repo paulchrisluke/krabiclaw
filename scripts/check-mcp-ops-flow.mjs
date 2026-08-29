@@ -91,10 +91,6 @@ function expectValue(label, condition, detail) {
   else fail(label, detail)
 }
 
-function moneyEquals(value, expected) {
-  return Number(value) === Number(expected)
-}
-
 async function getOrCreateSite(headers) {
   if (SITE_ID) return SITE_ID
   if (!allowCreate) throw new Error('Refusing to create a site on a non-local target. Pass --site-id or set MCP_ALLOW_CREATE=1.')
@@ -130,7 +126,7 @@ async function main() {
     location_id: locationId,
     category: 'Mains',
     name: 'MCP Ops Curry',
-    price_amount: '12.5',
+    price: { amount_minor: 1250, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
   })
   expectStatus('create_product with price succeeds', product)
   const productId = data(product.body)?.product?.id
@@ -138,14 +134,14 @@ async function main() {
 
   const initialRead = await mcp(headers, 'get_product', { site_id: siteId, product_id: productId })
   expectStatus('get_product succeeds after create', initialRead)
-  expectValue('created Product has initial price amount', moneyEquals(data(initialRead.body)?.product?.price_amount, 12.5), initialRead.body)
+  expectValue('created Product has initial Price', data(initialRead.body)?.product?.price?.amount_minor === 1250, initialRead.body)
 
   const batch = await mcp(headers, 'batch_create_products', {
     site_id: siteId,
     location_id: locationId,
     products: [
-      { category: 'Shots', name: 'B-52', price_amount: '7' },
-      { category: 'Shots', name: 'Lemon Drop', price_amount: '8' },
+      { category: 'Shots', name: 'B-52', price: { amount_minor: 700, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
+      { category: 'Shots', name: 'Lemon Drop', price: { amount_minor: 800, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
     ],
   })
   expectStatus('batch_create_products succeeds', batch)
@@ -155,7 +151,7 @@ async function main() {
     site_id: siteId,
     product_id: productId,
     name: 'MCP Ops Green Curry',
-    price_amount: '13',
+    price: { amount_minor: 1300, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
   })
   expectStatus('update_product price succeeds', productUpdate)
 
@@ -163,7 +159,7 @@ async function main() {
   expectStatus('get_product succeeds', productRead)
   expectValue('get_product includes updated Product', data(productRead.body)?.product?.name === 'MCP Ops Green Curry', productRead.body)
   expectValue('get_product preserves location_id', data(productRead.body)?.product?.location_id === locationId, productRead.body)
-  expectValue('updated Product has new price amount', moneyEquals(data(productRead.body)?.product?.price_amount, 13), productRead.body)
+  expectValue('updated Product has replacement Price', data(productRead.body)?.product?.price?.amount_minor === 1300, productRead.body)
   const productDelete = await mcp(headers, 'delete_product', { site_id: siteId, product_id: productId })
   expectStatus('delete_product succeeds', productDelete)
   expectValue('delete_product returns deleted true', data(productDelete.body)?.deleted === true, productDelete.body)

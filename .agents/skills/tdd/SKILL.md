@@ -3,6 +3,18 @@ name: tdd
 description: Test-driven development with red-green-refactor loop. Use when user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
 ---
 
+# Repository contracts override this generic skill
+
+This skill provides syntax, testing technique, and vendor reference material for TDD. It does not authorize new architecture, dependencies, infrastructure, abstractions, schema, routes, resources, or workflows.
+
+When this skill conflicts with AGENTS.md, CLAUDE.md, repository runbooks, existing package scripts, or existing configuration, follow the repository. Do not "modernize" the repository to match this skill.
+
+**KrabiClaw-specific overrides:**
+- Prioritize deletion, inlining, and reuse over extracting new abstractions
+- Do not introduce generic SOLID patterns, value objects, or "modern" refactoring patterns unless the task explicitly requests them
+- Follow the repository's complexity control contract: delete → reuse → modify → add
+- Net production code should decrease during cleanup/refactor work
+
 # Test-Driven Development
 
 ## Philosophy

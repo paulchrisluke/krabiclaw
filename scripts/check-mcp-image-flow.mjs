@@ -169,7 +169,7 @@ async function createProduct(headers, siteId, locationId) {
     name: 'MCP Image Dish',
     description: 'Used for image tool coverage',
     category: 'Main',
-    price_amount: '12',
+    price: { amount_minor: 1200, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
   })
   expectStatus('create_product succeeds', product)
   const productId = data(product.body)?.product?.id

@@ -4,6 +4,7 @@ import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-
 import { queryFirst } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
+import type { PriceInput } from '~/shared/prices'
 
 const optionalNumber = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -46,19 +47,8 @@ export default defineHandler(async (event) => {
     throw err
   }
   if ('meeting_point' in body) updates.meeting_point = body.meeting_point ? String(body.meeting_point).trim() : null
-  if ('price' in body) updates.price = body.price ? String(body.price).trim() : null
-  if ('price_amount' in body) updates.price_amount = optionalNumber(body.price_amount)
-  if ('compare_at_price_amount' in body) {
-    if (body.compare_at_price_amount === null || body.compare_at_price_amount === undefined || body.compare_at_price_amount === '') {
-      updates.compare_at_price_amount = null
-    } else {
-      const parsed = Number(body.compare_at_price_amount)
-      if (!Number.isFinite(parsed)) return jsonResponse({ error: 'compare_at_price_amount must be a valid number' }, { status: 400 })
-      updates.compare_at_price_amount = parsed
-    }
-  }
-  if ('sale_starts_at' in body) updates.sale_starts_at = body.sale_starts_at ? String(body.sale_starts_at) : null
-  if ('sale_ends_at' in body) updates.sale_ends_at = body.sale_ends_at ? String(body.sale_ends_at) : null
+  if ('pricing_note' in body) updates.pricing_note = body.pricing_note ? String(body.pricing_note).trim() : null
+  if ('price' in body) updates.price = body.price === null ? null : body.price as PriceInput
   if ('duration_minutes' in body) updates.duration_minutes = optionalInteger(body.duration_minutes)
   if ('max_capacity' in body) updates.max_capacity = optionalInteger(body.max_capacity)
   if ('time_slots' in body) updates.time_slots = Array.isArray(body.time_slots) ? body.time_slots.map(String) : null

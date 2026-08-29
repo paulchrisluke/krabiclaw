@@ -19,6 +19,15 @@ export type CurrencyCode = typeof SUPPORTED_CURRENCIES[number]
 
 export const DEFAULT_CURRENCY: CurrencyCode = 'USD'
 
+export const CURRENCY_FRACTION_DIGITS: Readonly<Record<CurrencyCode, 0 | 2>> = Object.freeze({
+  THB: 2, USD: 2, EUR: 2, GBP: 2, JPY: 0, AUD: 2, CAD: 2,
+  SGD: 2, HKD: 2, MYR: 2, IDR: 2, PHP: 2, VND: 0, INR: 2,
+})
+
+export function currencyFractionDigits(currency: CurrencyCode): 0 | 2 {
+  return CURRENCY_FRACTION_DIGITS[currency]
+}
+
 export const CURRENCY_OPTIONS: Array<{ label: string; value: CurrencyCode }> = [
   { label: 'Thai Baht (THB)', value: 'THB' },
   { label: 'US Dollar (USD)', value: 'USD' },

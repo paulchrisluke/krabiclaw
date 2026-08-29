@@ -5,7 +5,7 @@ import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isBlawbyTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
-import { blogCategoryToSlug } from '~/utils/blog-categories'
+import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
 import { resolveLocalizedRedirect } from '~/server/utils/localization'
 
 const redirects: Record<string, string> = {
@@ -83,10 +83,6 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   return null
 }
 
-function safeDecodePathSegment(value: string) {
-  try { return decodeURIComponent(value) } catch { return null }
-}
-
 export default defineHandler(async (event) => {
   const url = event.url
   const normalizedPathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
@@ -159,18 +155,15 @@ export default defineHandler(async (event) => {
   // are scoped to blog_posts and must work on both Saya (/blog) and Blawby
   // (/article) route surfaces.
   if (event.req.method === 'GET') {
-    const platformMatch = normalizedPathname.match(/^\/blog\/[^/]+\/([^/]+)$/)
-    if (platformMatch && event.context.tenantType === TENANT_TYPES.PLATFORM) {
+    if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
       const db = cloudflareEnv(event).db
-      const oldSlug = safeDecodePathSegment(platformMatch[1]!)
-      if (db && oldSlug !== null) {
+      if (db) {
         try {
-          const redirected = await queryFirst<{ slug: string; category: string | null } | null>(db, `
-            SELECT p.slug, p.category FROM platform_blog_redirects r JOIN blog_posts p ON p.id = r.post_id
-             WHERE p.site_id IS NULL AND r.old_slug = ? AND p.status = 'published' LIMIT 1
-          `, [oldSlug])
-          const category = blogCategoryToSlug(redirected?.category)
-          if (redirected && category) return redirect(`/blog/${category}/${encodeURIComponent(redirected.slug)}${url.search}${url.hash}`, 301)
+          const redirected = await queryFirst<{ to_path: string } | null>(db, `
+            SELECT to_path FROM site_redirects
+             WHERE site_id = ? AND locale = 'en' AND from_path = ? AND behavior = 'redirect' LIMIT 1
+          `, [PLATFORM_SITE_ID, normalizedPathname])
+          if (redirected) return redirect(`${redirected.to_path}${url.search}${url.hash}`, 301)
         } catch (error) {
           console.error('Platform blog redirect lookup failed', error)
         }

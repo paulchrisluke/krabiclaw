@@ -1,9 +1,7 @@
 import { execute, queryAll, type DbClient } from '~/server/db'
 import { organizationAdapter } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
-
-export const PLATFORM_MEDIA_ORG_ID = 'platform'
-export const PLATFORM_MEDIA_SITE_ID = 'platform'
+import { PLATFORM_ORGANIZATION_ID, PLATFORM_SITE_ID } from '~/shared/platform-scope'
 
 export interface PlatformMediaAssetRecord {
   id: string
@@ -32,19 +30,19 @@ export interface PlatformMediaAssetRecord {
 // so writing it directly is fine.
 export async function ensurePlatformMediaScope(env: CloudflareEnv, db: DbClient): Promise<void> {
   const adapter = await organizationAdapter(env)
-  if (!(await adapter.findOrganizationBySlug(PLATFORM_MEDIA_ORG_ID))) {
+  if (!(await adapter.findOrganizationBySlug(PLATFORM_ORGANIZATION_ID))) {
     try {
       await adapter.createOrganization({
         organization: {
-          id: PLATFORM_MEDIA_ORG_ID,
+          id: PLATFORM_ORGANIZATION_ID,
           name: 'KrabiClaw Platform',
-          slug: PLATFORM_MEDIA_ORG_ID,
+          slug: PLATFORM_ORGANIZATION_ID,
           createdAt: new Date(),
         },
       })
     } catch (error) {
       // A concurrent first caller may have created it between the check and here.
-      if (!(await adapter.findOrganizationBySlug(PLATFORM_MEDIA_ORG_ID))) throw error
+      if (!(await adapter.findOrganizationBySlug(PLATFORM_ORGANIZATION_ID))) throw error
     }
   }
 
@@ -52,7 +50,7 @@ export async function ensurePlatformMediaScope(env: CloudflareEnv, db: DbClient)
   await execute(db, `
     INSERT OR IGNORE INTO sites (id, organization_id, theme_id, theme, slug, status, onboarding_status, created_at, updated_at)
     VALUES (?, ?, 'saya-theme-v1', 'saya', ?, 'active', 'active', ?, ?)
-  `, [PLATFORM_MEDIA_SITE_ID, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID, now, now])
+  `, [PLATFORM_SITE_ID, PLATFORM_ORGANIZATION_ID, PLATFORM_SITE_ID, now, now])
 }
 
 export async function listPlatformMediaAssets(
@@ -60,7 +58,7 @@ export async function listPlatformMediaAssets(
   options: { id?: string; kind?: 'image' | 'video' | 'file'; limit?: number } = {},
 ): Promise<PlatformMediaAssetRecord[]> {
   const conditions = [`site_id = ?`, `status = 'active'`]
-  const params: Array<string | number> = [PLATFORM_MEDIA_SITE_ID]
+  const params: Array<string | number> = [PLATFORM_SITE_ID]
 
   if (options.id) {
     conditions.push('id = ?')

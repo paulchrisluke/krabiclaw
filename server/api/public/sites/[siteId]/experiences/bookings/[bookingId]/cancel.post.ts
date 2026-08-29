@@ -87,7 +87,7 @@ export default defineHandler(async (event) => {
       AND cancellation_token_used_at IS NULL
       AND cancellation_token_expires_at > ?
       AND status IN ('pending', 'confirmed')
-    RETURNING organization_id, site_id, guest_name, guest_email, guest_phone, booking_date, time_slot, party_size, notes, location_id, (SELECT title FROM experiences WHERE id = experience_bookings.experience_id) AS experience_title
+    RETURNING organization_id, site_id, guest_name, guest_email, guest_phone, booking_date, time_slot, party_size, notes, location_id, (SELECT name FROM products WHERE id = experience_bookings.experience_id) AS experience_title
   `, [now, bookingId, siteId, tokenHash, now], )
 
   if (!booking) {

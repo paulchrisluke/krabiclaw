@@ -2,10 +2,10 @@
 import { jsonResponse } from "~/server/utils/api-response";
 import { getDashboardContext } from "~/server/utils/dashboard-context";
 import { createWorkRequest } from "~/server/utils/work-request-management";
-import { fireSiteEventSafe, resolvePrimarySiteForEvent } from "~/server/utils/site-events";
+import { fireOrganizationEventSafe } from "~/server/utils/organization-events";
 
 export default defineHandler(async (event) => {
-  const { env, db, organization, site, userId } = await getDashboardContext(event, {
+  const { db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: false, });
 
   const body = (await readBody(event).catch(() => ({}))) as {
@@ -25,15 +25,12 @@ export default defineHandler(async (event) => {
       : body.source === "whatsapp"
         ? "whatsapp"
         : "dashboard";
-  const result = await createWorkRequest(env, db, organization.id, site?.id ?? null, {
+  const result = await createWorkRequest(db, organization.id, site?.id ?? null, {
     type, title: title ?? "", description, priority: body.priority, source, });
 
   if (result.status === 201 && "id" in result.data) {
-    const eventSiteId = site?.id ?? (await resolvePrimarySiteForEvent(db, organization.id));
-    if (eventSiteId) {
-      await fireSiteEventSafe({
-        db, organizationId: organization.id, siteId: eventSiteId, actorId: userId, eventType: "work_request.created", entityType: "work_request", entityId: result.data.id, metadata: { type, priority: body.priority ?? "normal", source }, });
-    }
+    await fireOrganizationEventSafe({
+      db, organizationId: organization.id, siteId: site?.id ?? null, actorId: userId, eventType: "work_request.created", entityType: "work_request", entityId: result.data.id, metadata: { type, priority: body.priority ?? "normal", source }, });
   }
 
   return jsonResponse(result.data, { status: result.status });

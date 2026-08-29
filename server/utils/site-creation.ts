@@ -2,7 +2,6 @@
 // idempotency, subdomain uniqueness, and seeding.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
-import { getOrganizationBillingStatus, setSiteEntitlementsFromPlan, type BillingEnv } from '~/server/utils/billing'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -363,11 +362,6 @@ async function performSeeding(
   if (!resolvedSubdomain?.trim()) throw new Error(`Missing subdomain for site ${siteId}`)
 
   await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
-
-  // New sites start with the organization's current plan projection. The
-  // organization subscription remains the sole recurring Stripe subscription.
-  const organizationBilling = await getOrganizationBillingStatus(env as BillingEnv, db, organizationId)
-  await setSiteEntitlementsFromPlan(db, siteId, organizationId, organizationBilling.plan)
 
   await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 

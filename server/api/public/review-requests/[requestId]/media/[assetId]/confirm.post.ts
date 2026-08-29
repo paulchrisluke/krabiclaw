@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
   const [, activation] = await executeBatch(db, [
     {
       query: `
-        INSERT INTO site_events (
+        INSERT INTO organization_events (
           id, organization_id, site_id, location_id, actor_id, event_type, entity_type, entity_id, metadata, created_at
         )
         SELECT ?, ?, ?, ?, ?, 'media.uploaded', 'media_asset', ?, ?, ?
