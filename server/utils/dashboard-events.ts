@@ -3,7 +3,7 @@ import { queryAll, type DbClient } from '~/server/db'
 export interface DashboardEvent {
   id: string
   event_type: string
-  site_id: string
+  site_id: string | null
   location_id: string | null
   entity_type: string | null
   entity_id: string | null
@@ -51,7 +51,7 @@ export async function listDashboardEvents(
     SELECT e.id, e.event_type, e.site_id, e.location_id, e.entity_type, e.entity_id, e.metadata, e.created_at,
            e.actor_id,
            l.title AS location_title
-    FROM site_events e
+    FROM organization_events e
     LEFT JOIN business_locations l ON l.id = e.location_id
     WHERE ${conditions.join(' AND ')}
     ORDER BY e.created_at DESC, e.id DESC

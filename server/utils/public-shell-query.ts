@@ -55,7 +55,7 @@ export function appendPublicShellQueries(
                WHERE organization_id = ? AND site_id = ?
               UNION ALL
               SELECT '__experience_count',
-                     CAST((SELECT COUNT(*) FROM experiences WHERE site_id = ? AND status != 'inactive') AS TEXT)
+                     CAST((SELECT COUNT(*) FROM experiences e JOIN products p ON p.id = e.id WHERE e.site_id = ? AND p.is_visible = 1) AS TEXT)
               `, [organizationId, siteId, siteId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM site_locales
@@ -64,7 +64,7 @@ export function appendPublicShellQueries(
                ORDER BY is_source DESC, locale ASC`, [organizationId, siteId]),
     productLocations: push(`SELECT DISTINCT location_id
                               FROM products
-                             WHERE organization_id = ? AND site_id = ? AND is_visible = 1
+                             WHERE organization_id = ? AND site_id = ? AND product_type = 'standard' AND is_visible = 1
                              ORDER BY location_id`, [organizationId, siteId]),
   }
 }

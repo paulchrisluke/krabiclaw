@@ -1,5 +1,9 @@
 # KrabiClaw - Blog Strategy
 
+**Status: Strategy / Roadmap**
+
+This document describes content strategy and editorial direction. It does not authorize schema, API, product, or infrastructure implementation. Future/planned features mentioned here are not current authorization to build them.
+
 ## Strategy Name
 
 **AI-Managed Local Presence**

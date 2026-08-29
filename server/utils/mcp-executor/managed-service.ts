@@ -18,7 +18,6 @@ export async function handleManagedServiceTools(ctx: McpExecutorContext): Promis
       }
     case "create_work_request": {
       const result = await createWorkRequest(
-        site.env,
         site.db,
         site.organizationId,
         site.siteId,

@@ -1,6 +1,10 @@
 # Database epoch 2 reset
 
-This document records the schema audit and repeatable epoch-1 to epoch-2 data move. Epoch 2 starts on new D1 database IDs; `0000_epoch_2_baseline.sql` must never be applied to an epoch-1 database.
+**Status: Historical / Special database-epoch runbook**
+
+This document records the schema audit and repeatable epoch-1 to epoch-2 data move. This is a one-time database epoch cutover procedure, not the normal migration workflow. For normal schema changes, see [docs/database/migrations.md](../database/migrations.md).
+
+Epoch 2 starts on new D1 database IDs; `0000_epoch_2_baseline.sql` must never be applied to an epoch-1 database.
 
 ## Recorded starting point
 

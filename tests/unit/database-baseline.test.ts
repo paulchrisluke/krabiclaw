@@ -6,11 +6,11 @@ import Database from 'better-sqlite3'
 function baselineDatabase() {
   const database = new Database(':memory:')
   database.pragma('foreign_keys = ON')
-  database.exec(readFileSync('migrations/0000_epoch_2_baseline.sql', 'utf8'))
+  database.exec(readFileSync('migrations/0000_epoch_3_baseline.sql', 'utf8'))
   return database
 }
 
-test('epoch-2 baseline creates the complete schema from zero', () => {
+test('epoch-3 baseline creates the complete schema from zero', () => {
   const database = baselineDatabase()
   try {
     const objectCounts = database.prepare(`
@@ -20,9 +20,8 @@ test('epoch-2 baseline creates the complete schema from zero', () => {
       GROUP BY type
     `).all() as Array<{ type: string; count: number }>
     assert.deepEqual(Object.fromEntries(objectCounts.map(row => [row.type, row.count])), {
-      index: 268,
-      table: 113,
-      trigger: 1,
+      index: 244,
+      table: 103,
     })
     const ledgerCount = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE name = 'd1_migrations'").get() as { count: number }
     assert.equal(ledgerCount.count, 0)
@@ -36,7 +35,7 @@ test('epoch-2 baseline creates the complete schema from zero', () => {
   }
 })
 
-test('epoch-2 baseline enforces canonical cross-scope and value constraints', () => {
+test('epoch-3 baseline enforces canonical cross-scope and value constraints', () => {
   const database = baselineDatabase()
   try {
     database.prepare("INSERT INTO themes (id, name, slug) VALUES ('saya-theme-v1', 'Saya', 'saya')").run()
@@ -47,9 +46,11 @@ test('epoch-2 baseline enforces canonical cross-scope and value constraints', ()
     database.prepare(`
       INSERT INTO products (
         id, organization_id, site_id, location_id, category, name, slug,
-        price_amount, sort_order, created_by, updated_by
-      ) VALUES ('product', 'org', 'site', 'location', 'food', 'Product', 'product', '100', 0, 'user', 'user')
+        sort_order, created_by, updated_by
+      ) VALUES ('product', 'org', 'site', 'location', 'food', 'Product', 'product', 0, 'user', 'user')
     `).run()
+    database.prepare(`INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, valid_from, provenance, created_by)
+      VALUES ('price', 'org', 'site', 'location', 'product', 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'test', 'user')`).run()
 
     assert.throws(
       () => database.prepare("INSERT INTO organization (id, name, slug) VALUES ('blank', 'Blank', '   ')").run(),
@@ -73,6 +74,30 @@ test('epoch-2 baseline enforces canonical cross-scope and value constraints', ()
     )
     database.prepare("INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, rating) VALUES ('review', 'org', 'site', 'location', 'product', 5)").run()
     assert.equal(database.pragma('foreign_key_check').length, 0)
+  } finally {
+    database.close()
+  }
+})
+
+test('epoch-3 leaves extensible application registries out of database CHECK constraints', () => {
+  const database = baselineDatabase()
+  try {
+    const definitions = database.prepare(`
+      SELECT name, sql
+      FROM sqlite_schema
+      WHERE type = 'table'
+        AND name IN ('content_documents', 'content_blocks', 'resource_localizations', 'media_assets', 'media_placements')
+      ORDER BY name
+    `).all() as Array<{ name: string, sql: string }>
+
+    assert.equal(definitions.length, 5)
+    const sqlByTable = Object.fromEntries(definitions.map(row => [row.name, row.sql]))
+    assert.doesNotMatch(sqlByTable.content_documents, /owner_type[^,]*CHECK/i)
+    assert.doesNotMatch(sqlByTable.content_blocks, /type[^,]*CHECK/i)
+    assert.doesNotMatch(sqlByTable.resource_localizations, /resource_type[^,]*CHECK/i)
+    assert.doesNotMatch(sqlByTable.media_assets, /owner_type[^,]*CHECK/i)
+    assert.doesNotMatch(sqlByTable.media_placements, /owner_type[^,]*CHECK/i)
+    assert.doesNotMatch(sqlByTable.media_placements, /slot[^,]*CHECK/i)
   } finally {
     database.close()
   }

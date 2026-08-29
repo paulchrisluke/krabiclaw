@@ -22,7 +22,7 @@ export async function listSitesForUser(
 
   return await queryAll<Record<string, unknown>>(db, `
     SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-           s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
+           s.custom_domain, s.status, s.created_at, s.updated_at, s.onboarding_status
     FROM sites s
     WHERE s.organization_id IN (SELECT value FROM json_each(?))
     ORDER BY s.created_at DESC
@@ -37,7 +37,7 @@ export async function getSiteForMcp(
 ) {
   const site = await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-             s.custom_domain, s.status, s.plan, s.created_at, s.updated_at, s.onboarding_status
+             s.custom_domain, s.status, s.created_at, s.updated_at, s.onboarding_status
       FROM sites s
       WHERE s.id = ?
       LIMIT 1

@@ -129,7 +129,7 @@ export async function getDashboardHomeData(
       SELECT e.id, e.event_type, e.entity_type, e.entity_id,
              e.location_id, e.metadata, e.created_at,
              l.title as location_title
-      FROM site_events e
+      FROM organization_events e
       LEFT JOIN business_locations l ON l.id = e.location_id
       WHERE e.organization_id = ? AND e.site_id = ?
       ${eventScopeClause}

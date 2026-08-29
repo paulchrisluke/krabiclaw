@@ -340,35 +340,3 @@ export async function expireStripeGa4Intents(
      WHERE status = 'consumed' AND consumed_at IS NOT NULL AND consumed_at < ?
   `, [retentionCutoff])
 }
-
-export async function persistStripeGa4Attribution(
-  db: DbClient,
-  organizationId: string,
-  userId: string | null,
-  clientId: string,
-): Promise<void> {
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO organization_billing
-      (id, organization_id, ga_client_id, ga_user_id, status, plan, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(organization_id) DO UPDATE SET
-      ga_client_id = excluded.ga_client_id,
-      ga_user_id = excluded.ga_user_id,
-      updated_at = excluded.updated_at
-  `, [`billing-${organizationId}`, organizationId, clientId, userId, 'free', 'free', now])
-}
-
-export async function getPersistedStripeGa4Attribution(
-  db: DbClient,
-  organizationId: string,
-): Promise<{ clientId: string | null; userId: string | null }> {
-  const row = await queryFirst<{ clientId: string | null; userId: string | null }>(db, `
-    SELECT ga_client_id AS clientId, ga_user_id AS userId
-      FROM organization_billing WHERE organization_id = ? LIMIT 1
-  `, [organizationId])
-  return {
-    clientId: row?.clientId ?? null,
-    userId: row?.userId ?? null,
-  }
-}

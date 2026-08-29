@@ -40,14 +40,6 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       }
     case "create_experience": {
       const ceArgs = expandSlotGeneratorArgs(args as Record<string, unknown>);
-      const priceAmountRaw = ceArgs.price_amount;
-      if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
-      }
-      const compareAtPriceAmountRaw = ceArgs.compare_at_price_amount;
-      if (compareAtPriceAmountRaw !== undefined && compareAtPriceAmountRaw !== null && typeof compareAtPriceAmountRaw !== "number") {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "compare_at_price_amount must be a number or null");
-      }
       let locationId = ceArgs.location_id ? String(ceArgs.location_id) : null;
       if (!locationId) {
         try {
@@ -73,8 +65,6 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           {
             ...(ceArgs as unknown as CreateExperienceInput),
             location_id: locationId,
-            price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null,
-            compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null,
           },
           site.userId,
         );
@@ -96,26 +86,12 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
     }
     case "update_experience": {
       const ueArgs = expandSlotGeneratorArgs(omit(args, ["experience_id"]) as Record<string, unknown>);
-      const priceAmountRaw = ueArgs.price_amount;
-      if (priceAmountRaw !== undefined && priceAmountRaw !== null && typeof priceAmountRaw !== "number") {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "price_amount must be a number or null");
-      }
-      const compareAtPriceAmountRaw = ueArgs.compare_at_price_amount;
-      if (compareAtPriceAmountRaw !== undefined && compareAtPriceAmountRaw !== null && typeof compareAtPriceAmountRaw !== "number") {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "compare_at_price_amount must be a number or null");
-      }
       const experience = await updateExperience(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
           {
             ...(ueArgs as unknown as UpdateExperienceInput),
-            ...(priceAmountRaw !== undefined
-              ? { price_amount: typeof priceAmountRaw === "number" ? priceAmountRaw : null }
-              : {}),
-            ...(compareAtPriceAmountRaw !== undefined
-              ? { compare_at_price_amount: typeof compareAtPriceAmountRaw === "number" ? compareAtPriceAmountRaw : null }
-              : {}),
           },
         );
       if (!experience) {

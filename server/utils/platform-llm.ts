@@ -6,6 +6,7 @@ import { getContentBlocksForOwner } from './content-documents.ts'
 import { findAuthUsersByIds, type CloudflareEnv } from './auth.ts'
 import { blogCategoryToSlug, slugToBlogCategory } from '../../utils/blog-categories.ts'
 import { categoryToSlug, slugToCategory } from '../../utils/docs-categories.ts'
+import { PLATFORM_SITE_ID } from '../../shared/platform-scope.ts'
 
 interface PlatformLlmDocSummary {
   id: string
@@ -277,7 +278,7 @@ export async function listPublishedPlatformBlogPostsForLlm(db: DbClient, env: Cl
     `SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, p.author_id
      FROM blog_posts p
-     WHERE p.status = 'published' AND p.site_id IS NULL AND p.visibility = 'public'
+     WHERE p.status = 'published' AND p.site_id = '${PLATFORM_SITE_ID}' AND p.visibility = 'public'
      ORDER BY p.category, p.published_at DESC`,
   )
   const authors = await findAuthUsersByIds(env, posts.map(post => post.author_id))
@@ -329,7 +330,7 @@ export async function getPublishedPlatformBlogPostBySlug(db: DbClient, categoryS
     `SELECT
       p.id, p.title, p.slug, p.excerpt, p.category, p.canonical_url, p.seo_description, p.published_at, p.updated_at
      FROM blog_posts p
-     WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id IS NULL`,
+     WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id = '${PLATFORM_SITE_ID}'`,
     [slug, category],
   )
   if (!detail) return null

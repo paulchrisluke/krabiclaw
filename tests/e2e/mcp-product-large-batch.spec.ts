@@ -18,9 +18,9 @@ test('Product batches validate and commit atomically at the supported limit', as
     category: index < 50 ? 'First' : 'Second',
     name: `Batch Product ${String(index + 1).padStart(3, '0')}`,
     description: `Original ${index + 1}`,
-    price_amount: String(100 + index),
+    price: { amount_minor: (100 + index) * 100, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
   }))
-  const invalidProducts = products.map((product, index) => index === 99 ? { ...product, sale_starts_at: 'invalid' } : product)
+  const invalidProducts = products.map((product, index) => index === 99 ? { ...product, price: { ...product.price, valid_from: 'invalid' } } : product)
 
   const invalidCreate = await mcpRequest(request, baseURL!, {
     method: 'tools/call', toolName: 'batch_create_products',
@@ -46,7 +46,7 @@ test('Product batches validate and commit atomically at the supported limit', as
     category: index < 50 ? 'First' : 'Second',
     name: `Batch Product ${String(index + 1).padStart(3, '0')}`,
     description: index === 0 ? 'Updated atomically' : `Original ${index + 1}`,
-    price_amount: String(100 + index),
+    price: { amount_minor: (100 + index) * 100, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
   }))
   const syncResponse = await mcpRequest(request, baseURL!, {
     method: 'tools/call', toolName: 'sync_products',

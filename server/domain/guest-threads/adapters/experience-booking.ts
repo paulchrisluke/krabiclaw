@@ -87,10 +87,10 @@ export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookin
         eb.status,
         eb.created_at,
         bl.title AS location_title,
-        e.title AS experience_title
+        p.name AS experience_title
       FROM experience_bookings eb
       LEFT JOIN business_locations bl ON bl.id = eb.location_id
-      LEFT JOIN experiences e ON e.id = eb.experience_id
+      LEFT JOIN products p ON p.id = eb.experience_id
       WHERE eb.id = ?
       LIMIT 1
     `, [submissionId])

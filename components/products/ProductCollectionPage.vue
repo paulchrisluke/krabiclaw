@@ -34,7 +34,7 @@
               <div class="p-5">
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-semibold">{{ product.name }}</h3>
-                  <span class="shrink-0 tabular-nums">{{ formatProductMoney(product.price_amount, currency) }}</span>
+                  <span class="shrink-0 tabular-nums">{{ formatProductMoney(product.price) }}</span>
                 </div>
                 <p v-if="showLocations" class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">{{ locationTitle(product.location_id) }}</p>
                 <p v-if="product.description" class="mt-3 text-sm leading-6 text-muted">{{ product.description }}</p>
@@ -53,6 +53,7 @@ import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
+import { minorAmountToMajor } from '~/shared/prices'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 
 interface LocationSummary { id: string; slug: string; title: string }
@@ -100,7 +101,7 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
           '@type': 'MenuItem',
           name: product.name,
           description: product.description,
-          offers: { '@type': 'Offer', price: product.price_amount, priceCurrency: props.currency },
+          offers: product.price ? { '@type': 'Offer', price: minorAmountToMajor(product.price.amount_minor, product.price.currency), priceCurrency: product.price.currency } : undefined,
         })),
       })),
     }
@@ -114,7 +115,7 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
           '@type': 'Product',
           name: product.name,
           description: product.description,
-          offers: { '@type': 'Offer', price: product.price_amount, priceCurrency: props.currency },
+          offers: product.price ? { '@type': 'Offer', price: minorAmountToMajor(product.price.amount_minor, product.price.currency), priceCurrency: product.price.currency } : undefined,
         },
       })),
     }))

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test, { mock } from 'node:test'
 import Database from 'better-sqlite3'
+import { PLATFORM_SITE_ID } from '../../shared/platform-scope.ts'
 
 type SqliteDb = InstanceType<typeof Database>
 type BatchQuery = { query: string; params?: unknown[] }
@@ -76,7 +77,7 @@ function insertScheduledPost(input: { id: string; siteId?: string | null; schedu
     .run(input.id, siteId, scheduledFor, POST_UPDATED_AT)
   if (input.withDocument !== false) {
     db.prepare(`INSERT INTO content_documents (id, owner_type, owner_id, updated_at) VALUES (?, ?, ?, ?)`)
-      .run(`${input.id}-document`, siteId === null ? 'platform_blog' : 'tenant_blog', input.id, DOCUMENT_UPDATED_AT)
+      .run(`${input.id}-document`, siteId === PLATFORM_SITE_ID ? 'platform_blog' : 'tenant_blog', input.id, DOCUMENT_UPDATED_AT)
   }
 }
 
@@ -118,7 +119,7 @@ test('a concurrent content edit aborts the scheduled publish atomically', async 
 })
 
 test('a late post failure rolls back the complete scheduled transition', async () => {
-  insertScheduledPost({ id: 'rollback', siteId: null })
+  insertScheduledPost({ id: 'rollback', siteId: PLATFORM_SITE_ID })
   db.exec(`CREATE TRIGGER fail_scheduled_blog_publish BEFORE UPDATE OF status ON blog_posts
     WHEN NEW.status = 'published' BEGIN SELECT RAISE(ABORT, 'forced late publish failure'); END;`)
 

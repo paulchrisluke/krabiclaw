@@ -13,7 +13,8 @@ import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/clo
 import { createMediaAsset, deleteMediaAsset, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { getPlatformMcpTool } from '~/server/utils/platform-mcp-tools'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
-import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
+import { ensurePlatformMediaScope, listPlatformMediaAssets } from '~/server/utils/platform-media'
+import { PLATFORM_ORGANIZATION_ID, PLATFORM_SITE_ID } from '~/shared/platform-scope'
 import {
   appendContentBlock,
   deleteContentBlock,
@@ -23,6 +24,8 @@ import {
   getContentOutline,
   renderContentPreview,
   replaceContentBlock,
+  CONTENT_BLOCK_TYPES,
+  CONTENT_DOCUMENT_OWNER_TYPES,
   type ContentBlockType,
   type ContentBlockInput,
   type ContentDocumentOwnerType,
@@ -114,8 +117,6 @@ function platformMediaInput(args: Record<string, unknown>) {
   })
 }
 
-const CONTENT_DOCUMENT_OWNER_TYPES: readonly ContentDocumentOwnerType[] = ['platform_blog', 'tenant_blog', 'platform_doc']
-const CONTENT_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
 const PLATFORM_BLOG_POST_STATUSES = new Set(['published', 'scheduled'])
 const PLATFORM_BLOG_VISIBILITIES = new Set(['public', 'unlisted'])
 const PLATFORM_BLOG_ROBOTS = new Set(['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'])
@@ -806,8 +807,8 @@ export async function executePlatformMcpToolCall(
       const assetId = crypto.randomUUID()
       await createMediaAsset(user.db, {
         id: assetId,
-        organization_id: PLATFORM_MEDIA_ORG_ID,
-        site_id: PLATFORM_MEDIA_SITE_ID,
+        organization_id: PLATFORM_ORGANIZATION_ID,
+        site_id: PLATFORM_SITE_ID,
         kind: 'image',
         provider: 'cloudflare_images',
         source: 'uploaded',
@@ -827,7 +828,7 @@ export async function executePlatformMcpToolCall(
     }
     case 'update_platform_media_asset': {
       const assetId = requiredString(rawArguments, 'asset_id')
-      const updated = await updateMediaAssetMetadata(user.db, assetId, PLATFORM_MEDIA_SITE_ID, {
+      const updated = await updateMediaAssetMetadata(user.db, assetId, PLATFORM_SITE_ID, {
         alt_text: rawArguments.alt_text === null ? null : optionalString(rawArguments, 'alt_text'),
       })
       if (!updated) {
@@ -841,7 +842,7 @@ export async function executePlatformMcpToolCall(
       const assetId = requiredString(rawArguments, 'asset_id')
       const asset = (await listPlatformMediaAssets(user.db, { id: assetId, limit: 1 }))[0] ?? null
       if (!asset) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Platform media asset not found.')
-      await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_MEDIA_SITE_ID, user.userId)
+      await deleteMediaAsset(user.db, user.env, assetId, PLATFORM_SITE_ID, user.userId)
       return { success: true }
     }
     case 'get_content_document_outline': {

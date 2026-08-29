@@ -5,6 +5,10 @@ import {
   AGENT_SKILL_TASK_SCHEMA,
   RESOLVED_AGENT_GUIDANCE_SCHEMA,
 } from '~/server/utils/agent-skills/mcp-schema'
+import {
+  PUBLICATION_CONTENT_BLOCK_TYPES,
+  PUBLICATION_CONTENT_DOCUMENT_OWNER_TYPES,
+} from '~/shared/content-registries'
 
 export interface PlatformMcpToolDefinition {
   name: string
@@ -26,8 +30,8 @@ const NULLABLE_NUMBER = { type: ['number', 'null'] }
 const ROBOTS_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
 const DOC_CATEGORY_ENUM = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced']
 const DOC_DIFFICULTY_ENUM = ['Beginner', 'Intermediate', 'Advanced']
-const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = ['platform_blog', 'tenant_blog', 'platform_doc']
-const CONTENT_BLOCK_TYPE_ENUM = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
+const CONTENT_DOCUMENT_OWNER_TYPE_ENUM = [...PUBLICATION_CONTENT_DOCUMENT_OWNER_TYPES]
+const CONTENT_BLOCK_TYPE_ENUM = [...PUBLICATION_CONTENT_BLOCK_TYPES]
 const PAGINATION_INPUT_SCHEMA = {
   limit: { type: 'number', minimum: 1, maximum: 100, description: 'Page size. Defaults to 50; maximum 100.' },
   cursor: { type: 'string', description: 'Opaque next_cursor from the previous page.' },

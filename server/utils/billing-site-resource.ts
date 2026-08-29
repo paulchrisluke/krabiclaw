@@ -29,8 +29,7 @@ export async function loadOrganizationSiteSummaries(
 
 /**
  * Site IDs are checkout context only. Plan and subscription state always come
- * from the single organization billing resolver, even when stale site_billing
- * rows disagree across sites.
+ * from the single organization billing resolver.
  */
 export function mapOrganizationSites(
   rows: OrganizationSiteRow[],

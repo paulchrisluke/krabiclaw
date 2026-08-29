@@ -48,19 +48,3 @@ export function isSupportedMediaPlacement(placement: { owner_type: string; slot:
 export function isSingleMediaPlacement(placement: { owner_type: string; slot: string }) {
   return isSupportedMediaPlacement(placement) && !ORDERED_PLACEMENTS.has(`${placement.owner_type}:${placement.slot}`)
 }
-
-function sqlString(value: string) {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
-export const MEDIA_PLACEMENT_OWNER_CHECK_SQL = `owner_type IN (${Object.keys(MEDIA_PLACEMENT_SLOTS).map(sqlString).join(',')})`
-
-export const MEDIA_PLACEMENT_SLOT_CHECK_SQL = Object.entries(MEDIA_PLACEMENT_SLOTS).map(([ownerType, slots]) => {
-  const staticSlots = slots.length === 1
-    ? `slot = ${sqlString(slots[0])}`
-    : `slot IN (${slots.map(sqlString).join(',')})`
-  const indexedSlots = INDEXED_SLOTS
-    .filter(pattern => pattern.ownerType === ownerType)
-    .map(pattern => `slot GLOB ${sqlString(pattern.sqlGlob)}`)
-  return `(owner_type = ${sqlString(ownerType)} AND (${[staticSlots, ...indexedSlots].join(' OR ')}))`
-}).join(' OR ')

@@ -10,7 +10,7 @@ import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
-import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
@@ -171,7 +171,7 @@ export default defineHandler(async (event) => {
   await recordCustomerBooking(db, customer.id, customerInput)
 
   const [, thread] = await Promise.all([
-    fireSiteEventSafe({
+    fireOrganizationEventSafe({
       db, organizationId: site.organization_id, siteId, locationId: resolvedLocationId, eventType: 'reservation.created', entityType: 'reservation_submission', entityId: id, metadata: {
         date, time, guests, }, }),
     ensureGuestThread(db, reservationAdapter, id, { publishEnv: env }),

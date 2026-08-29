@@ -43,8 +43,8 @@ mock.module('../../server/utils/billing.ts', {
   namedExports: { hasSiteEntitlement: async () => false },
 })
 
-mock.module('../../server/utils/site-events.ts', {
-  namedExports: { fireSiteEventSafe: async () => undefined },
+mock.module('../../server/utils/organization-events.ts', {
+  namedExports: { fireOrganizationEventSafe: async () => undefined },
 })
 
 const { createSystemSubdomain } = await import('../../server/utils/domains.ts')

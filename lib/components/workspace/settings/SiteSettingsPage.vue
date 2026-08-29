@@ -269,7 +269,7 @@ const form = reactive({
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
-const hasFacebookAccess = computed(() => dashboard.site.value?.plan === 'growth')
+const hasFacebookAccess = computed(() => dashboard.site.value?.effective_plan === 'growth')
 const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
   .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.license_status !== 'disabled'))
   .map(catalog => ({ label: `${catalog.label} (${catalog.locale})`, value: catalog.locale })))

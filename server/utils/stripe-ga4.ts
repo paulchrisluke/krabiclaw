@@ -21,9 +21,7 @@ import {
   findConsumedStripeGa4CancellationIntent,
   findPendingInitialStripeGa4Intent,
   findPendingStripeGa4Intent,
-  getPersistedStripeGa4Attribution,
   markStripeGa4IntentLifecycleSent,
-  persistStripeGa4Attribution,
   attachStripeGa4IntentToSubscription,
   type StripeGa4Intent,
 } from '~/server/utils/stripe-ga4-intents'
@@ -268,19 +266,13 @@ async function resolveStripeGa4Context(
     intent = await findPendingInitialStripeGa4Intent(db, organizationId)
     if (intent) await attachStripeGa4IntentToSubscription(db, intent.id, subscription.id)
   }
-  const persisted = organizationId
-    ? await getPersistedStripeGa4Attribution(db, organizationId)
-    : { clientId: null, userId: null }
-
   const userId = stripeMetadataValue(metadata, 'user_id', 'userId', 'pending_user_id')
     ?? stripeMetadataValue(customerMeta, 'user_id', 'userId')
     ?? intent?.userId
-    ?? persisted.userId
     ?? null
   const clientId = stripeMetadataValue(metadata, 'ga_client_id', 'pending_ga_client_id')
     ?? stripeMetadataValue(customerMeta, 'ga_client_id')
     ?? intent?.clientId
-    ?? persisted.clientId
     ?? null
   const interactiveAction = purchaseType === 'initial_subscription'
     || purchaseType === 'upgrade'
@@ -361,9 +353,6 @@ async function sendStripeGa4Purchase(
     throw error
   }
 
-  if (context.organizationId && context.clientId) {
-    await persistStripeGa4Attribution(db, context.organizationId, context.userId, context.clientId)
-  }
   if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription')) {
     await consumeStripeGa4Intent(db, context.intent.id, event.id)
   }

@@ -12,9 +12,7 @@ export type ScheduledPaidEntitlement =
 /**
  * Return whether a scheduled integration may run for one billing projection.
  *
- * `site_entitlements` is a compatibility projection and can be stale while a
- * subscription is being reconciled. Scheduled integrations therefore must
- * validate the organization billing projection itself and require the
+ * Scheduled integrations validate the organization access projection and require the
  * invoice-backed paid-through boundary before using paid capabilities.
  * Missing and expired projections fail closed. A malformed projection remains
  * an operational error so the scheduled run cannot silently hide billing

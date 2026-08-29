@@ -2,6 +2,7 @@ import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { listLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
 import { listExperiences } from '~/server/utils/experiences'
@@ -52,22 +53,19 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   }
   await assertSiteContextAccess(db, principal)
   const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
-  const [locationRows, entitlementRows] = await Promise.all([
+  const [locationRows, billing] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, is_primary, status, feature_overrides
         FROM business_locations
        WHERE organization_id = ? AND site_id = ? AND status = 'active'
        ORDER BY is_primary DESC, title ASC
     `, [site.organization_id, siteId]),
-    queryAll<{ key: string; value: string }>(db, 'SELECT key, value FROM site_entitlements WHERE site_id = ?', [siteId]),
+    getOrganizationBillingProjection(db, site.organization_id),
   ])
   const locations = locationRows
     .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
     .map(location => ({ ...location, is_primary: Boolean(location.is_primary) }))
-  const entitlements = entitlementRows.reduce<Record<string, string | boolean>>((result, row) => {
-    result[row.key] = row.value === 'true' ? true : row.value === 'false' ? false : row.value
-    return result
-  }, {})
+  const entitlements = billing.entitlements
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }

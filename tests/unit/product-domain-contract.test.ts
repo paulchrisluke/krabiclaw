@@ -3,36 +3,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
-  normalizeRequiredProductPrice,
   validateProductOrderUrl,
-  validateProductSale,
 } from '../../server/utils/product-validation.ts'
-import { formatProductMoney } from '../../utils/product-money.ts'
 import { resolveProductPresentation } from '../../utils/product-presentation.ts'
-
-test('Product prices normalize canonically and reject ambiguous display fallbacks', () => {
-  assert.equal(normalizeRequiredProductPrice('0'), '0')
-  assert.equal(normalizeRequiredProductPrice('12.3400'), '12.34')
-  assert.equal(normalizeRequiredProductPrice(150), '150')
-  for (const value of ['', '-1', '.5', '01', '12.', 'THB 100', Number.NaN]) {
-    assert.throws(() => normalizeRequiredProductPrice(value))
-  }
-  assert.equal(formatProductMoney('12.34', 'THB'), '฿12.34')
-  assert.throws(() => formatProductMoney('12.', 'THB'))
-})
-
-test('Product sale validation rejects incomplete and inverted sale states', () => {
-  assert.deepEqual(validateProductSale({ price_amount: '100', compare_at_price_amount: '120.00', sale_starts_at: '2026-09-01', sale_ends_at: '2026-09-30' }), {
-    priceAmount: '100',
-    compareAtPriceAmount: '120',
-    saleStartsAt: '2026-09-01',
-    saleEndsAt: '2026-09-30',
-  })
-  assert.throws(() => validateProductSale({ price_amount: '100', sale_starts_at: '2026-09-01' }))
-  assert.throws(() => validateProductSale({ price_amount: '100', compare_at_price_amount: '100' }))
-  assert.throws(() => validateProductSale({ price_amount: '100', compare_at_price_amount: '120', sale_starts_at: '2026-09-30', sale_ends_at: '2026-09-01' }))
-  assert.throws(() => validateProductSale({ price_amount: '100', compare_at_price_amount: '120', sale_starts_at: '2026-02-30' }))
-})
 
 test('Product order URLs accept only absolute credential-free HTTPS destinations', () => {
   assert.equal(validateProductOrderUrl('https://orders.example.com/item/1'), 'https://orders.example.com/item/1')

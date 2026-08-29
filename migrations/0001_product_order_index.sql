@@ -1,0 +1,2 @@
+DROP INDEX `products_site_location_type_sort_order_unique`;--> statement-breakpoint
+CREATE INDEX `products_site_location_type_sort_order_idx` ON `products` (`site_id`,`location_id`,`product_type`,`sort_order`);

@@ -2,6 +2,7 @@ import type { SiteVertical } from '~/utils/vertical-copy'
 import { queryFirst } from '~/server/db'
 import type { PlaceDetails } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
+import type { PriceInput } from '~/shared/prices'
 
 type DraftSourceType = 'google_places' | 'manual'
 
@@ -50,10 +51,7 @@ export interface DraftProductRecord {
   name: string
   slug: string
   description: string
-  price_amount: string
-  compare_at_price_amount: string | null
-  sale_starts_at: string | null
-  sale_ends_at: string | null
+  price: PriceInput
   order_url: string | null
   is_visible: boolean
   available: boolean
@@ -112,7 +110,7 @@ export interface DraftContentRecord {
 }
 
 export interface OnboardingDraftPayload {
-  version: 1
+  version: 2
   source: {
     type: DraftSourceType
     place: PlaceDetailsSnapshot | null
@@ -273,7 +271,7 @@ export function buildOnboardingDraftPayload(input: {
   const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroDescription)
 
   return {
-    version: 1,
+    version: 2,
     source: {
       type: placeSnapshot ? 'google_places' : 'manual',
       place: placeSnapshot,
@@ -322,7 +320,7 @@ export function buildOnboardingDraftPayload(input: {
 
 export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload {
   const parsed = JSON.parse(raw) as OnboardingDraftPayload
-  if (!parsed || parsed.version !== 1 || !parsed.preview || !Array.isArray(parsed.preview.media) || !Array.isArray(parsed.preview.products)) {
+  if (!parsed || parsed.version !== 2 || !parsed.preview || !Array.isArray(parsed.preview.media) || !Array.isArray(parsed.preview.products)) {
     throw new Error('Unsupported onboarding draft payload')
   }
   return parsed

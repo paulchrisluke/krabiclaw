@@ -41,35 +41,6 @@ export interface QuotaGrantInput {
 const MAX_SAFE_INTEGER_SQL = String(Number.MAX_SAFE_INTEGER)
 
 /**
- * Keep derived credit writes inside the numeric domain that the application
- * can represent exactly. Legacy rows may still be quarantined with a NULL
- * period key; active grant application requires a canonical current-period
- * key separately.
- */
-const safeCreditProjectionCondition = `
-  typeof(balance) = 'integer'
-  AND balance >= 0
-  AND balance <= ${MAX_SAFE_INTEGER_SQL}
-  AND typeof(lifetime_used) = 'integer'
-  AND lifetime_used >= 0
-  AND lifetime_used <= ${MAX_SAFE_INTEGER_SQL}
-  AND (
-    balance_period_key IS NULL
-    OR (
-      typeof(balance_period_key) = 'text'
-      AND length(balance_period_key) = 10
-      AND balance_period_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-      AND date(balance_period_key, '+0 days') = balance_period_key
-      AND strftime('%Y-%m-%d', balance_period_key) = balance_period_key
-      AND strftime('%w', balance_period_key) = '1'
-    )
-  )
-  AND typeof(updated_at) = 'text'
-  AND length(trim(updated_at)) > 0
-  AND julianday(updated_at) IS NOT NULL
-`
-
-/**
  * Validate a quantity read from an append-only ledger before it participates
  * in allowance or balance arithmetic. Database column affinity does not
  * prevent malformed values from being stored, so runtime reads must not rely
@@ -219,169 +190,9 @@ export async function getCurrentCreditGrantProjection(
   }
 }
 
-function utcWeekKey(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) throw new Error('Quota period start must be a valid date.')
-  const day = date.getUTCDay()
-  const daysFromMonday = (day + 6) % 7
-  date.setUTCDate(date.getUTCDate() - daysFromMonday)
-  return date.toISOString().slice(0, 10)
-}
-
-function isAiCreditGrant(input: Pick<QuotaGrantInput, 'resource' | 'unit'>): boolean {
-  return input.resource === 'ai_inference' && input.unit === 'credit'
-}
-
 function assertGrantUnit(input: Pick<QuotaGrantInput, 'resource' | 'unit'>): void {
   if (input.resource === 'ai_inference' && input.unit !== 'credit') {
     throw new Error('ai_inference quota grants require unit "credit"')
-  }
-}
-
-function applyGrantQuery(
-  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'quantity' | 'grantType' | 'periodStart' | 'periodEnd' | 'idempotencyKey'>,
-  appliedAt: string,
-): { query: string; params: unknown[] } | null {
-  if (!isAiCreditGrant(input)) return null
-
-  const grantReference = `
-    EXISTS (
-      SELECT 1 FROM usage_quota_grants
-      WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
-    )
-  `
-  if (input.grantType === 'reset') {
-    return {
-      query: `
-        UPDATE ai_credits
-        SET balance = ?,
-            balance_period_key = CASE WHEN balance_period_key IS NULL THEN NULL ELSE ? END,
-            updated_at = ?
-        WHERE organization_id = ?
-          AND balance_period_key IS NOT NULL
-          AND ${safeCreditProjectionCondition}
-          AND ${grantReference}
-      `,
-      params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
-    }
-  }
-
-  if (input.grantType === 'manual') {
-    return {
-      query: `
-        UPDATE ai_credits
-        SET balance = balance + ?, updated_at = ?
-        WHERE organization_id = ?
-          AND balance_period_key IS NOT NULL
-          AND ${safeCreditProjectionCondition}
-          AND balance <= ${MAX_SAFE_INTEGER_SQL} - ?
-          AND ${grantReference}
-      `,
-      params: [input.quantity, appliedAt, input.organizationId, input.quantity, input.organizationId, input.idempotencyKey],
-    }
-  }
-
-  const periodEnd = normalizedPeriodEnd(input.periodStart, input.periodEnd)
-  return {
-    query: `
-      UPDATE ai_credits
-      SET balance = MAX(0, ? - CAST(COALESCE((
-            SELECT TOTAL(quantity)
-            FROM usage_events
-            WHERE organization_id = ?
-              AND unit = 'credit'
-              AND created_at >= ?
-              AND created_at < ?
-          ), 0) AS INTEGER)),
-          balance_period_key = CASE WHEN balance_period_key IS NULL THEN NULL ELSE ? END,
-          updated_at = ?
-      WHERE organization_id = ?
-        AND balance_period_key IS NOT NULL
-        AND ${safeCreditProjectionCondition}
-        AND ${grantReference}
-        AND NOT EXISTS (
-          SELECT 1 FROM usage_events
-          WHERE organization_id = ?
-            AND unit = 'credit'
-            AND created_at >= ?
-            AND created_at < ?
-            AND (
-              typeof(quantity) != 'integer'
-              OR quantity < 0
-              OR quantity > 9007199254740991
-            )
-        )
-    `,
-    params: [
-      input.quantity,
-      input.organizationId,
-      input.periodStart,
-      periodEnd,
-      utcWeekKey(input.periodStart),
-      appliedAt,
-      input.organizationId,
-      input.organizationId,
-      input.idempotencyKey,
-      input.organizationId,
-      input.periodStart,
-      periodEnd,
-    ],
-  }
-}
-
-function markGrantAppliedQuery(
-  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'grantType' | 'periodStart' | 'periodEnd' | 'idempotencyKey'>,
-  appliedAt: string,
-): { query: string; params: unknown[] } {
-  // D1 batch statements execute in order on one SQLite transaction. For an
-  // AI grant this mark immediately follows the guarded projection UPDATE, so
-  // changes() is the operation correlation rather than a mutable row value.
-  const aiCreditCondition = isAiCreditGrant(input)
-    ? `
-          AND changes() = 1
-          AND EXISTS (
-            SELECT 1 FROM ai_credits
-            WHERE organization_id = ?
-              AND balance_period_key IS NOT NULL
-              AND ${safeCreditProjectionCondition}
-          )
-      `
-    : ''
-  const planUsageCondition = isAiCreditGrant(input) && input.grantType === 'plan'
-    ? `
-          AND NOT EXISTS (
-            SELECT 1 FROM usage_events
-            WHERE organization_id = ?
-              AND unit = 'credit'
-              AND created_at >= ?
-              AND created_at < ?
-              AND (
-                typeof(quantity) != 'integer'
-                OR quantity < 0
-                OR quantity > 9007199254740991
-              )
-          )
-      `
-    : ''
-  const params = isAiCreditGrant(input)
-    ? [
-        appliedAt,
-        input.organizationId,
-        input.idempotencyKey,
-        input.organizationId,
-        ...(input.grantType === 'plan'
-          ? [input.organizationId, input.periodStart, normalizedPeriodEnd(input.periodStart, input.periodEnd)]
-          : []),
-      ]
-    : [appliedAt, input.organizationId, input.idempotencyKey]
-  return {
-    query: `
-      UPDATE usage_quota_grants SET applied_at = ?
-      WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
-      ${aiCreditCondition}
-      ${planUsageCondition}
-    `,
-    params,
   }
 }
 
@@ -429,26 +240,12 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
 
   const periodEnd = normalizedPeriodEnd(input.periodStart, input.periodEnd)
   const createdAt = input.createdAt ?? new Date().toISOString()
-  const statements: Array<{ query: string; params: unknown[] }> = []
-  if (isAiCreditGrant(input)) {
-    statements.push({
-      query: `
-        INSERT OR IGNORE INTO ai_credits
-          (organization_id, balance, lifetime_used, balance_period_key, updated_at)
-        VALUES (?, 0, 0, ?, ?)
-      `,
-      params: [input.organizationId, utcWeekKey(input.periodStart), createdAt],
-    })
-  }
-  const grantStatementIndex = statements.length
-  statements.push({
-    query: `
-      INSERT OR IGNORE INTO usage_quota_grants
-        (id, organization_id, resource, quantity, unit, period_key, period_start,
-         period_end, grant_type, reason, created_by, idempotency_key, applied_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
-    `,
-    params: [
+  const result = await execute(db, `
+    INSERT OR IGNORE INTO usage_quota_grants
+      (id, organization_id, resource, quantity, unit, period_key, period_start,
+       period_end, grant_type, reason, created_by, idempotency_key, applied_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
       crypto.randomUUID(),
       input.organizationId,
       input.resource,
@@ -462,17 +259,9 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
       input.createdBy ?? null,
       input.idempotencyKey,
       createdAt,
-    ],
-  })
-  const normalizedInput = { ...input, periodEnd }
-  const apply = applyGrantQuery(normalizedInput, createdAt)
-  if (apply) statements.push(apply)
-  statements.push(markGrantAppliedQuery(normalizedInput, createdAt))
-
-  const results = await executeBatch(db, statements)
-  const grantInserted = Number(results[grantStatementIndex]?.meta.changes ?? 0) > 0
-  const grantApplied = Number(results[results.length - 1]?.meta.changes ?? 0) > 0
-  return isAiCreditGrant(input) ? grantApplied : grantInserted
+      createdAt,
+  ])
+  return Number(result?.meta.changes ?? 0) > 0
 }
 
 /**
@@ -501,16 +290,6 @@ export async function resetOrganizationQuota(
   }
   const createdAt = new Date().toISOString()
   const statements: Array<{ query: string; params: unknown[] }> = []
-  if (input.grants.some(grant => isAiCreditGrant(grant))) {
-    statements.push({
-      query: `
-        INSERT OR IGNORE INTO ai_credits
-          (organization_id, balance, lifetime_used, balance_period_key, updated_at)
-        VALUES (?, 0, 0, ?, ?)
-      `,
-      params: [input.organizationId, utcWeekKey(input.grants[0]?.periodStart ?? new Date().toISOString()), createdAt],
-    })
-  }
   for (const grant of input.grants) {
     assertQuantity(grant.quantity)
     const idempotencyKey = `reset:${input.resetId}:${grant.resource}`
@@ -518,8 +297,8 @@ export async function resetOrganizationQuota(
       query: `
         INSERT OR IGNORE INTO usage_quota_grants
           (id, organization_id, resource, quantity, unit, period_key, period_start,
-           period_end, grant_type, reason, created_by, idempotency_key, applied_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reset', ?, ?, ?, NULL, ?)
+          period_end, grant_type, reason, created_by, idempotency_key, applied_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reset', ?, ?, ?, ?, ?)
       `,
       params: [
         crypto.randomUUID(),
@@ -534,24 +313,9 @@ export async function resetOrganizationQuota(
         input.createdBy ?? null,
         idempotencyKey,
         createdAt,
+        createdAt,
       ],
     })
-    const apply = applyGrantQuery({
-      ...grant,
-      organizationId: input.organizationId,
-      grantType: 'reset',
-      idempotencyKey,
-    }, createdAt)
-    if (apply) statements.push(apply)
-    statements.push(markGrantAppliedQuery({
-      organizationId: input.organizationId,
-      resource: grant.resource,
-      unit: grant.unit,
-      grantType: 'reset',
-      periodStart: grant.periodStart,
-      periodEnd: grant.periodEnd,
-      idempotencyKey,
-    }, createdAt))
   }
 
   await executeBatch(db, statements)
