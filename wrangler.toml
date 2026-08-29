@@ -140,8 +140,8 @@ enabled = true
 # Preview environment — CI deploys here on every PR; Playwright smoke tests run
 # against preview.krabiclaw.com. Dedicated resources isolated from staging/prod.
 #
-# Dedicated preview resources (D1 replaced for epoch 2 on 2026-08-29):
-#   krabiclaw-db-preview-epoch2  D1   1313d772-20cd-44cf-8f31-60df1148b41a
+# Dedicated preview resources (D1 replaced for epoch 3 on 2026-08-29):
+#   krabiclaw-db-preview-epoch3  D1   d2f7a4a0-d6b8-493b-b484-8c0ead1ff83b
 #   krabiclaw-media-preview      R2
 #   krabiclaw-site-cache-preview KV   69252567b9cd4becbd486a337ab1e589
 [env.preview]
@@ -182,8 +182,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.preview.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-preview-epoch2"
-database_id = "1313d772-20cd-44cf-8f31-60df1148b41a"
+database_name = "krabiclaw-db-preview-epoch3"
+database_id = "d2f7a4a0-d6b8-493b-b484-8c0ead1ff83b"
 migrations_dir = "migrations"
 remote = false
 
@@ -266,8 +266,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-staging-epoch2"
-database_id = "688c419a-5bcd-4eaf-b008-50d68a7d453f"
+database_name = "krabiclaw-db-staging-epoch3"
+database_id = "61af16e5-0873-49b9-90ce-aea2ff1991e4"
 migrations_dir = "migrations"
 remote = false
 

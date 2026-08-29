@@ -5,6 +5,13 @@
 
 Epoch 3 provisions new preview, staging, and production D1 resources and begins from `migrations/0000_epoch_3_baseline.sql`. The baseline must never be applied to an Epoch 2 resource. The old production D1 remains untouched rollback state until post-production verification is complete and it is explicitly retired.
 
+Provisioned APAC non-production resources:
+
+- Preview: `krabiclaw-db-preview-epoch3` (`d2f7a4a0-d6b8-493b-b484-8c0ead1ff83b`)
+- Staging: `krabiclaw-db-staging-epoch3` (`61af16e5-0873-49b9-90ce-aea2ff1991e4`)
+
+No Epoch 3 production resource or binding is created during preview/staging promotion.
+
 Normal schema work still follows [migrations.md](migrations.md). This document is the exceptional database-epoch procedure authorized for the broad schema cleanup.
 
 ## Canonical ownership after cutover
@@ -71,10 +78,10 @@ The planning snapshot produced 210 standard Products, 11 Experience Products, 21
 ## Staging
 
 1. Promote the exact preview-verified SHA to `staging` through the repository PR flow.
-2. Create a new APAC staging D1, apply the baseline, import the verified transformed data, and bind only staging.
+2. Create a new APAC staging D1, apply the baseline, and bind only staging. Staging contains replaceable test fixtures, not authoritative customer state: load the canonical demo, Pottery House, Kikuzuki, and NCLS fixtures into the candidate. Do not weaken the transformer or invent reserved platform scope to accept an invalid historical staging export.
 3. Deploy once and confirm staging serves the exact SHA.
 4. Perform read-only staging verification. Do not repeat mutation tests against staging.
-5. Record the D1 ID, staging SHA, Worker version, manifest SHA-256, CI run, and verification evidence.
+5. Record the D1 ID, staging SHA, Worker version, fixture validation, CI run, and verification evidence.
 
 ## Production — requires the owner present
 

@@ -62,6 +62,11 @@ function openEpoch2(input) {
   const path = resolve(input)
   if (!path.endsWith('.sql')) return new Database(path, { readonly: true, fileMustExist: true })
   const db = new Database(':memory:')
+  // D1 exports interleave CREATE TABLE and INSERT statements in name order, so a
+  // child table can be populated before its referenced parent table is created.
+  // Materialize the immutable source with enforcement off; the transformed target
+  // is validated with a complete foreign_key_check before it can be emitted.
+  db.pragma('foreign_keys = OFF')
   db.exec(readFileSync(path, 'utf8'))
   return db
 }
