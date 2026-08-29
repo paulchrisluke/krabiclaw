@@ -102,6 +102,17 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 Never rewrite migration history for an active D1 database resource. Rebaselining schema history requires a new database epoch: provision new D1 resources, apply one generated baseline, transfer and verify data explicitly, cut bindings over under the documented write freeze, and retain the old production resource for rollback.
 
+The database-epoch write freeze is the only exception to the normal one-deploy
+release path. Deploy the exact release candidate once with the old production
+D1 binding and `DB_WRITE_FROZEN = "true"`. That flag returns HTTP 503 before
+Nitro routes or middleware can reach D1, defers queue batches with an explicit
+retry, and skips scheduled work. Wait at least 60 seconds for requests already
+running on the prior Worker version to drain before taking the final export.
+After the import and invariant checks pass, the ordinary `main` deployment must
+bind the new D1 resource and omit the flag, which restores HTTP, queue, and cron
+processing. If cutover cannot finish promptly, restore the prior Worker version
+instead of allowing queued messages to exhaust their retry limit.
+
 `server/db/schema.ts` is the source of truth for schema changes. Staging and production use native `wrangler d1 migrations apply`. Before applying migrations, ensure `yarn lint:migrations` passes.
 
 Before dropping or retiring a legacy table or writer:

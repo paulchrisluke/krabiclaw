@@ -137,6 +137,7 @@ export interface CloudflareEnv {
   WHATSAPP_BUSINESS_ACCOUNT_ID?: string
   E2E_ALLOW_DEV_ROUTES?: string
   E2E_DEV_ROUTE_SECRET?: string
+  DB_WRITE_FROZEN?: string
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string

@@ -10,6 +10,7 @@ import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 
 export interface GuestDeliveryWorkerEnv extends ReplyEmailEnv {
   DB: D1Database
+  DB_WRITE_FROZEN?: string
   GUEST_DELIVERY_QUEUE?: Queue<GuestDeliveryQueueMessage>
   GUEST_INBOX_HUBS?: DurableObjectNamespace
   [key: string]: unknown
