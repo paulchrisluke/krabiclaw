@@ -10,11 +10,9 @@
  * 1. Rejects bare BEGIN/COMMIT/ROLLBACK statements in migrations/*.sql outside
  *    of CREATE TRIGGER ... BEGIN ... END bodies (where BEGIN/END are trigger
  *    body delimiters, not transaction control, and are always allowed).
- * 2. Rejects renaming/removing the historical, already-applied 0001-0007
- *    migration filenames (see AGENTS.md "Database Schema Workflow" — wrangler
- *    tracks applied migrations by filename, not content, so renaming a
- *    filename that's already applied anywhere makes wrangler re-run it and
- *    fail with "table X already exists").
+ * 2. Requires the epoch-2 baseline to remain first and rejects duplicate
+ *    migration numbers. Every file applied to an active D1 ID is immutable;
+ *    squashing starts a new database epoch instead of rewriting this one.
  * Usage:
  *   node scripts/lint-migrations.mjs
  */
@@ -25,17 +23,7 @@ import { join, relative } from 'node:path'
 
 const ROOT = process.cwd()
 const MIGRATIONS_DIR = join(ROOT, 'migrations')
-const LAST_AUDITED_DUPLICATE_NUMBER = 99
-
-const REQUIRED_HISTORICAL_FILES = [
-  '0001_initial.sql',
-  '0002_add_work_requests_and_platform_content_components.sql',
-  '0003_add_pageview_visitor_geo_columns.sql',
-  '0004_add_platform_pageview_tracking.sql',
-  '0005_drop_platform_content_components_type_check.sql',
-  '0006_add_platform_docs_canonical_url_robots.sql',
-  '0007_add_missing_platform_blog_post_seo_columns.sql',
-]
+const EPOCH_BASELINE = '0000_epoch_2_baseline.sql'
 
 function stripTriggerBodies(sql) {
   // Replace with an equal number of newlines (not '') so line numbers for any
@@ -70,20 +58,13 @@ async function collectSqlFiles() {
     .map((entry) => join(MIGRATIONS_DIR, entry))
 }
 
-function lintHistoricalFilenames(presentFiles) {
-  const violations = []
-  const presentNames = new Set(presentFiles.map((file) => relative(MIGRATIONS_DIR, file)))
-
-  for (const requiredName of REQUIRED_HISTORICAL_FILES) {
-    if (!presentNames.has(requiredName)) {
-      violations.push({
-        file: `migrations/${requiredName}`,
-        message: 'Missing or renamed historical migration file. 0001-0007 are already applied everywhere by filename — never rename, renumber, or squash them.',
-      })
-    }
-  }
-
-  return violations
+function lintEpochBaseline(presentFiles) {
+  const names = presentFiles.map((file) => relative(MIGRATIONS_DIR, file))
+  if (names[0] === EPOCH_BASELINE) return []
+  return [{
+    file: `migrations/${EPOCH_BASELINE}`,
+    message: 'Epoch 2 must start with its immutable generated baseline. A future squash requires new D1 resources and a new database epoch.',
+  }]
 }
 
 function lintDuplicateMigrationNumbers(presentFiles) {
@@ -91,7 +72,7 @@ function lintDuplicateMigrationNumbers(presentFiles) {
   for (const file of presentFiles) {
     const name = relative(MIGRATIONS_DIR, file)
     const number = Number.parseInt(name.slice(0, 4), 10)
-    if (!Number.isInteger(number) || number <= LAST_AUDITED_DUPLICATE_NUMBER) continue
+    if (!Number.isInteger(number)) continue
     const names = byNumber.get(number) ?? []
     names.push(name)
     byNumber.set(number, names)
@@ -109,7 +90,7 @@ let totalViolations = 0
 
 const sqlFiles = await collectSqlFiles()
 
-for (const violation of lintHistoricalFilenames(sqlFiles)) {
+for (const violation of lintEpochBaseline(sqlFiles)) {
   console.error(`  ✗ ${violation.file} — ${violation.message}`)
   totalViolations++
 }

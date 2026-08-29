@@ -2,7 +2,11 @@
 
 ## Canonical operating contracts
 
-The mandatory release, incident, migration-safety, browser-verification, and deployment contract is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md). Release gates and environment behavior are documented in [docs/operations/release-flow.md](docs/operations/release-flow.md).
+Database and release work must follow:
+- [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md)
+- [docs/operations/release-flow.md](docs/operations/release-flow.md)
+
+Do not invent alternative deployment, migration, rollback, or environment-management mechanisms.
 
 - Fix the canonical API, schema, or domain source of truth. Do not add frontend fallbacks, guards, shadow models, compatibility branches, or silent empty success states unless nullable behavior is intentional and documented.
 - Do not hand-mutate staging or production data or schema to mask application failures.
@@ -19,14 +23,6 @@ Better Auth owns identity, sessions, OAuth provider state, organizations, member
 - Do not add custom role parsers, tenant bypasses, custom impersonation proxies, manual OAuth token verification, shadow membership or scope tables, or undocumented support principals or cookies.
 - Tenant dashboard, ChowBot, WhatsApp, and tenant MCP access must use shared permission utilities backed by Better Auth organization permissions and Teams.
 - Platform admin access is not tenant owner access unless the user is a tenant member or is impersonating one through Better Auth.
-
-## Database invariants
-
-`server/db/schema.ts` is the source of truth for new schema changes. Migrations `0001` through `0007` are historical; migrations from `0008` onward are generated from `schema.ts`.
-
-- Any migration applied to staging or production is immutable by filename and content. Never rename, edit, renumber, or re-squash it.
-- Never create replacement preview resources, edit `d1_migrations`, hand-patch shared schema, or use ad hoc SQL files for schema changes.
-- Follow the migration-safety contract linked above and ensure `yarn lint:migrations` passes before applying migrations.
 
 ## Client-site integrity
 

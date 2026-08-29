@@ -1,1 +1,0 @@
-CREATE INDEX `sites_created_at_idx` ON `sites` (`created_at`);

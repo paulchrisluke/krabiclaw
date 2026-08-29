@@ -100,14 +100,9 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
-Migration files applied to staging or production are immutable.
-`server/db/schema.ts` remains the source of truth, and staging and production
-use native `wrangler d1 migrations apply`. A migration applied only to the
-isolated preview database may still be regenerated while its PR is in flight,
-but the preview database must then be wiped in place and the final migration
-chain replayed from zero with the guarded preview reset command. Never create a
-replacement D1 resource or edit only the migration ledger/schema to make
-rewritten history appear applied.
+Never rewrite migration history for an active D1 database resource. Rebaselining schema history requires a new database epoch: provision new D1 resources, apply one generated baseline, transfer and verify data explicitly, cut bindings over under the documented write freeze, and retain the old production resource for rollback.
+
+`server/db/schema.ts` is the source of truth for schema changes. Staging and production use native `wrangler d1 migrations apply`. Before applying migrations, ensure `yarn lint:migrations` passes.
 
 Before dropping or retiring a legacy table or writer:
 
@@ -118,14 +113,9 @@ Before dropping or retiring a legacy table or writer:
 - compare the resulting schema and run `PRAGMA foreign_key_check`;
 - repeat a read-only schema and foreign-key check after deployment.
 
-Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute
-foreign-key actions during a generated rebuild. An obsolete unreferenced table
-may be dropped in the same release once these checks pass. Do not retain inert
-tables or compatibility code for an extra release as a substitute for proving
-the migration.
+Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute foreign-key actions during a generated rebuild. An obsolete unreferenced table may be dropped in the same release once these checks pass. Do not retain inert tables or compatibility code for an extra release as a substitute for proving the migration.
 
-Never reseed or hand-mutate production to hide a renderer, routing, or migration
-bug. Preserve customer data and fix the source of truth.
+Never reseed or hand-mutate production to hide a renderer, routing, or migration bug. Preserve customer data and fix the source of truth.
 
 ## Incident recovery
 

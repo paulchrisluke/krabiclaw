@@ -1,1 +1,0 @@
-DROP TABLE `invitation_access_scope`;

@@ -104,8 +104,7 @@ export const ai_usage_log = sqliteTable("ai_usage_log", {
 	cf_gateway_log_id: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	// WHERE organization_id = ? on /api/billing/credits.get.ts (customer-facing usage/credits page).
-	index("ai_usage_log_organization_id_idx").on(table.organization_id),
+	index("idx_ai_usage_log_org").on(table.organization_id, table.created_at),
 ]);
 
 export const business_locations = sqliteTable("business_locations", {
@@ -180,7 +179,10 @@ export const canary_runs = sqliteTable("canary_runs", {
 	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
 	details_json: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_canary_runs_status_created").on(table.status, table.created_at),
+	index("idx_canary_runs_type_created").on(table.run_type, table.created_at),
+]);
 
 export const chowbot_channel_state = sqliteTable("chowbot_channel_state", {
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
@@ -192,6 +194,13 @@ export const chowbot_channel_state = sqliteTable("chowbot_channel_state", {
 	last_inbound_id: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	primaryKey({ columns: [table.user_id, table.channel] }),
+	foreignKey({
+		columns: [table.active_conversation_id, table.selected_site_id, table.user_id],
+		foreignColumns: [chowbot_conversations.id, chowbot_conversations.site_id, chowbot_conversations.user_id],
+		name: "chowbot_channel_state_conversation_scope_fk",
+	}),
+	check("chowbot_channel_state_active_site_check", sql`active_conversation_id IS NULL OR selected_site_id IS NOT NULL`),
 	index("chowbot_channel_state_user_id_idx").on(table.user_id),
 ]);
 
@@ -207,8 +216,11 @@ export const chowbot_conversations = sqliteTable("chowbot_conversations", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	unique("chowbot_conversations_id_site_user_unique").on(table.id, table.site_id, table.user_id),
+	unique("chowbot_conversations_id_org_site_unique").on(table.id, table.organization_id, table.site_id),
 	index("chowbot_conversations_org_site_idx").on(table.organization_id, table.site_id),
 	index("chowbot_conversations_user_id_idx").on(table.user_id),
+	index("idx_chowbot_conversations_site").on(table.site_id, table.user_id, table.status, table.updated_at),
 ]);
 
 export const chowbot_messages = sqliteTable("chowbot_messages", {
@@ -226,7 +238,12 @@ export const chowbot_messages = sqliteTable("chowbot_messages", {
 	error: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	index("chowbot_messages_conversation_id_idx").on(table.conversation_id),
+	foreignKey({
+		columns: [table.conversation_id, table.organization_id, table.site_id],
+		foreignColumns: [chowbot_conversations.id, chowbot_conversations.organization_id, chowbot_conversations.site_id],
+		name: "chowbot_messages_conversation_scope_fk",
+	}),
+	index("idx_chowbot_messages_conversation").on(table.conversation_id, table.created_at),
 	index("chowbot_messages_org_site_idx").on(table.organization_id, table.site_id),
 ]);
 
@@ -247,6 +264,7 @@ export const contact_submissions = sqliteTable("contact_submissions", {
 }, (table) => [
 	index("contact_submissions_org_site_idx").on(table.organization_id, table.site_id),
 	index("contact_submissions_location_idx").on(table.location_id, table.created_at),
+	index("idx_contact_submissions_site").on(table.site_id, table.created_at),
 ]);
 
 export const guest_threads = sqliteTable("guest_threads", {
@@ -458,7 +476,9 @@ export const domain_reconciliation_jobs = sqliteTable("domain_reconciliation_job
 	last_error: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-});
+}, (table) => [
+	index("idx_domain_reconciliation_jobs_due").on(table.status, table.run_after),
+]);
 
 export const experience_bookings = sqliteTable("experience_bookings", {
 	id: text().primaryKey(),
@@ -510,6 +530,8 @@ export const experience_slot_overrides = sqliteTable("experience_slot_overrides"
 	created_by: text(),
 }, (table) => [
 	index("experience_slot_overrides_org_site_idx").on(table.organization_id, table.site_id),
+	index("idx_experience_slot_overrides_date").on(table.experience_id, table.override_date),
+	uniqueIndex("idx_experience_slot_overrides_unique").on(table.experience_id, table.override_date, table.time_slot),
 ]);
 
 export const facebook_pages_connections = sqliteTable("facebook_pages_connections", {
@@ -539,7 +561,10 @@ export const google_place_snapshots = sqliteTable("google_place_snapshots", {
 	source_url: text(),
 	snapshot_json: text().notNull(),
 	fetched_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_google_place_snapshots_place_id").on(table.place_id),
+	index("idx_google_place_snapshots_site").on(table.site_id),
+]);
 
 export const invitation = sqliteTable("invitation", {
 	id: text().primaryKey(),
@@ -625,6 +650,7 @@ export const media_assets = sqliteTable("media_assets", {
 	// The historical site/status index covers the media library query path.
 }, (table) => [
 	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog')`),
+	check("media_assets_video_thumbnail_check", sql`kind <> 'video' OR (thumbnail_url IS NOT NULL AND length(trim(thumbnail_url)) > 0)`),
 	check("media_assets_status_check", sql`status IN ('pending', 'active', 'deleted', 'failed')`),
 	check("media_assets_provider_check", sql`provider IN ('cloudflare_images', 'cloudflare_r2')`),
 	check("media_assets_source_check", sql`source IN ('uploaded', 'generated', 'external')`),
@@ -728,6 +754,7 @@ export const products = sqliteTable("products", {
 		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
 		name: "products_location_scope_fk",
 	}).onDelete("cascade"),
+	unique("products_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
 	unique("products_site_location_slug_unique").on(table.site_id, table.location_id, table.slug),
 	unique("products_site_location_sort_order_unique").on(table.site_id, table.location_id, table.sort_order),
 	index("products_site_location_visible_sort_idx").on(table.site_id, table.location_id, table.is_visible, table.sort_order),
@@ -955,7 +982,9 @@ export const organization = sqliteTable("organization", {
 	// Better Auth Stripe plugin organization customer field.
 	stripeCustomerId: text().unique(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
-});
+}, (table) => [
+	check("organization_slug_required_check", sql`trim(${table.slug}) <> ''`),
+]);
 
 export const subscription = sqliteTable("subscription", {
 	id: text().primaryKey(),
@@ -1107,7 +1136,9 @@ export const platform_contact_submissions = sqliteTable("platform_contact_submis
 	status: text().default("new").notNull(),
 	ip_hash: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_platform_contact_submissions_status_created").on(table.status, table.created_at),
+]);
 
 export const platform_content = sqliteTable("platform_content", {
 	id: text().primaryKey(),
@@ -1196,7 +1227,9 @@ export const rate_limits = sqliteTable("rate_limits", {
 	count: integer().default(0).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	expires_at: text(),
-});
+}, (table) => [
+	index("idx_rate_limits_expires").on(table.expires_at),
+]);
 
 export const reservation_slot_overrides = sqliteTable("reservation_slot_overrides", {
 	id: text().primaryKey(),
@@ -1349,6 +1382,11 @@ export const reviews = sqliteTable("reviews", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 }, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.product_id],
+		foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id],
+		name: "reviews_product_scope_fk",
+	}).onDelete("restrict"),
 	index("idx_reviews_request_id").on(table.review_request_id),
 	index("idx_reviews_customer_id").on(table.customer_id),
 	index("idx_reviews_location_status").on(table.location_id, table.status, table.created_at),
@@ -1358,6 +1396,7 @@ export const reviews = sqliteTable("reviews", {
 	check("reviews_rating_check", sql`rating BETWEEN 1 AND 5`),
 	check("reviews_publication_authorized_check", sql`publication_authorized IN (0, 1)`),
 	check("reviews_collection_method_check", sql`collection_method IS NULL OR collection_method IN ('in_person', 'email', 'phone', 'migration', 'other')`),
+	check("reviews_product_scope_check", sql`product_id IS NULL OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NOT NULL)`),
 	check("reviews_owner_entered_provenance_check", sql`source != 'owner_entered' OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NULL AND entered_by_user_id IS NOT NULL AND collection_method IS NOT NULL AND publication_authorized = 1)`),
 	index("reviews_organization_id_idx").on(table.organization_id),
 ]);
@@ -1389,7 +1428,7 @@ export const site_analytics_daily = sqliteTable("site_analytics_daily", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	unique_visitors: integer().default(0),
-	pages_per_session: real(),
+	pages_per_session: real().default(0),
 	returning_visitors: integer().default(0),
 }, (table) => [
 	unique("site_analytics_daily_site_id_date_unique").on(table.site_id, table.date),
@@ -1481,7 +1520,9 @@ export const site_billing = sqliteTable("site_billing", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	stripe_customer_id: text(),
 	payment_method: text().default("stripe").notNull(),
-});
+}, (table) => [
+	index("idx_site_billing_org").on(table.organization_id),
+]);
 
 export const site_config = sqliteTable("site_config", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -1752,9 +1793,8 @@ export const site_domain_events = sqliteTable("site_domain_events", {
 	metadata: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 }, (table) => [
-	// WHERE domain_id = ? in domains.ts - organization_id/site_id are only ever joined, never
-	// filtered directly, per grep of actual call sites.
-	index("site_domain_events_domain_id_idx").on(table.domain_id),
+	index("idx_site_domain_events_domain").on(table.domain_id, table.created_at),
+	index("idx_site_domain_events_site").on(table.site_id, table.created_at),
 ]);
 
 export const site_domains = sqliteTable("site_domains", {
@@ -1799,6 +1839,8 @@ export const site_domains = sqliteTable("site_domains", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 }, (table) => [
 	index("site_domains_org_site_idx").on(table.organization_id, table.site_id),
+	uniqueIndex("idx_site_domains_one_canonical").on(table.site_id).where(sql`role = 'canonical' AND status = 'active'`),
+	index("idx_site_domains_reconcile").on(table.status, table.next_check_at),
 ]);
 
 export const spent_subdomains = sqliteTable("spent_subdomains", {
@@ -1837,6 +1879,8 @@ export const site_events = sqliteTable("site_events", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("site_events_org_site_idx").on(table.organization_id, table.site_id),
+	index("idx_site_events_location").on(table.location_id, table.created_at).where(sql`location_id IS NOT NULL`),
+	index("idx_site_events_site").on(table.site_id, table.created_at),
 ]);
 
 export const site_locales = sqliteTable("site_locales", {
@@ -1853,6 +1897,7 @@ export const site_locales = sqliteTable("site_locales", {
 	unique("site_locales_organization_id_site_id_locale_unique").on(table.organization_id, table.site_id, table.locale),
 	uniqueIndex("idx_site_locales_one_source_per_site").on(table.organization_id, table.site_id).where(sql`is_source = 1`),
 	check("site_locales_status_check", sql`status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')`),
+	check("site_locales_english_source_check", sql`locale <> 'en' OR (is_source = 1 AND status = 'published')`),
 ]);
 
 export const platform_locale_catalogs = sqliteTable("platform_locale_catalogs", {
@@ -1906,6 +1951,7 @@ export const site_language_licenses = sqliteTable("site_language_licenses", {
 	}).onDelete("cascade"),
 	unique("site_language_licenses_org_site_locale_unique").on(table.organization_id, table.site_id, table.locale),
 	check("site_language_licenses_status_check", sql`${table.status} IN ('enabling', 'active', 'disabling', 'disabled')`),
+	check("site_language_licenses_non_english_check", sql`${table.locale} <> 'en'`),
 	index("site_language_licenses_organization_status_idx").on(table.organization_id, table.status),
 	index("site_language_licenses_subscription_item_idx").on(table.stripe_subscription_item_id),
 ]);
@@ -1923,7 +1969,10 @@ export const platform_pageview_events = sqliteTable("platform_pageview_events", 
 	region: text(),
 	city: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("idx_platform_pageview_events_created_at").on(table.created_at),
+	index("idx_platform_pageview_events_session_id").on(table.session_id),
+]);
 
 export const site_pageview_events = sqliteTable("site_pageview_events", {
 	id: text().primaryKey(),
@@ -1950,6 +1999,8 @@ export const site_pageview_events = sqliteTable("site_pageview_events", {
 	// created_at < ? (customer-facing analytics dashboard) - mirrors the existing
 	// site_conversion_events_site_created_idx composite pattern in this same schema.
 	index("site_pageview_events_site_created_idx").on(table.site_id, table.created_at),
+	index("idx_pageview_events_session").on(table.site_id, table.session_id),
+	index("idx_pageview_events_site_visitor").on(table.site_id, table.visitor_id),
 ]);
 
 export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
@@ -2017,7 +2068,10 @@ export const site_transfer_requests = sqliteTable("site_transfer_requests", {
 	custom_domains_removed_at: text(),
 	invited_interval: text().default("month").notNull(),
 }, (table) => [
-	index("site_transfer_requests_site_id_idx").on(table.site_id),
+	uniqueIndex("idx_site_transfer_pending").on(table.site_id).where(sql`status = 'pending'`),
+	index("idx_site_transfer_reminders").on(table.status, table.requires_payment, table.created_at),
+	index("idx_site_transfer_site").on(table.site_id, table.status),
+	uniqueIndex("idx_site_transfer_token").on(table.token),
 ]);
 
 export const sites = sqliteTable("sites", {
@@ -2072,6 +2126,8 @@ export const sites = sqliteTable("sites", {
 	check("sites_onboarding_status_check", sql`${table.onboarding_status} IN ('pending', 'active', 'failed')`),
 	check("sites_url_structure_check", sql`${table.url_structure} IN ('location_subdirectories', 'brand_pages')`),
 	check("sites_vertical_check", sql`${table.vertical} IN ('restaurant', 'experience', 'retail', 'wellness', 'service')`),
+	check("sites_default_currency_check", sql`${table.default_currency} IN ('THB','USD','EUR','GBP','JPY','AUD','CAD','SGD','HKD','MYR','IDR','PHP','VND','INR')`),
+	uniqueIndex("idx_sites_custom_domain_unique").on(table.custom_domain).where(sql`custom_domain IS NOT NULL`),
 	// organization_id is the join/filter column in dozens of call sites across the codebase
 	// (dashboard context resolution, MCP site listing/auth, billing, editor routes). Confirmed
 	// via wrangler d1 insights as driving two of the top four rows-read queries post-cron-fix
@@ -2273,9 +2329,8 @@ export const work_requests = sqliteTable("work_requests", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	// WHERE organization_id = ? on /api/dashboard/work-requests.get.ts (customer-facing), plus
-	// mcp-workflows.ts and the admin listing. site_id is only ever SELECTed/joined, not filtered.
-	index("work_requests_organization_id_idx").on(table.organization_id),
+	index("idx_work_requests_org").on(table.organization_id, table.status, table.created_at),
+	index("idx_work_requests_status").on(table.status, table.priority, table.created_at),
 ]);
 
 export const experiences = sqliteTable("experiences", {
@@ -2399,6 +2454,7 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 		.where(sql`route_path IS NOT NULL`),
 	check("resource_localizations_values_json_check", sql`json_valid(${table.values_json}) AND json_type(${table.values_json}) = 'object'`),
 	check("resource_localizations_resource_type_check", sql`${table.resource_type} IN ('site', 'business_location', 'product', 'experience', 'offering', 'site_post', 'tenant_blog_post', 'location_qa', 'media_asset', 'booking_policy', 'site_link_page', 'site_link_item', 'tenant_compliance', 'site_consultation_settings')`),
+	check("resource_localizations_non_english_check", sql`${table.locale} <> 'en'`),
 	check("resource_localizations_route_path_check", sql`${table.route_path} IS NULL OR (${table.route_path} LIKE '/' || ${table.locale} || '/%' AND ${table.route_path} NOT LIKE '%?%' AND ${table.route_path} NOT LIKE '%#%' AND ${table.route_path} NOT LIKE '%//%')`),
 	index("resource_localizations_site_locale_type_idx").on(table.site_id, table.locale, table.resource_type),
 	index("resource_localizations_resource_idx").on(table.resource_type, table.resource_id),

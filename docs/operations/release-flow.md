@@ -1,7 +1,6 @@
 # Release flow
 
-KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare
-Workers.
+KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Workers.
 
 | Git event | Worker | Release-blocking validation |
 | --- | --- | --- |
@@ -10,48 +9,8 @@ Workers.
 | `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | Read-only rendering/navigation on all three customer custom domains |
 
-Each environment receives one normal `wrangler deploy`. Preview may apply its
-disposable fixtures and run writes. Its isolated D1 database may be wiped in
-place when a PR rewrites migration history that has not reached staging or
-production. The guarded reset drops preview application schema and its ledger,
-replays the full migration chain, and then requires fixture provisioning,
-deployment, and verification. Staging applies migrations but never sweeps, resets,
-reseeds customers, provisions E2E identities, or performs guest/MCP writes.
-Production is never seeded, reset, or mutated by test automation.
+Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. Staging applies migrations but never sweeps, resets, reseeds customers, provisions E2E identities, or performs guest/MCP writes. Production is never seeded, reset, or mutated by test automation.
 
-Production deployment and verification are separate jobs in the same workflow.
-The deploy job builds once, performs the single Wrangler deployment, then
-applies forward-compatible migrations and refreshes search. Deploying the
-dual-schema-compatible Worker before mutating shared D1 prevents the previous
-Worker from observing a schema it cannot read. The verification job waits until all three
-custom domains expose that exact Nuxt build and its referenced assets, then runs
-read-only browser coverage. Retrying a failed verification job never redeploys
-production.
+Production deployment and verification are separate jobs in the same workflow. The deploy job builds once, performs the single Wrangler deployment, then applies forward-compatible migrations and refreshes search. The verification job waits until all three custom domains expose that exact Nuxt build and its referenced assets, then runs read-only browser coverage. Retrying a failed verification job never redeploys production.
 
-The only release-qualified surfaces are:
-
-- Pottery House, Kikuzuki, and NCLS public rendering and navigation;
-- Pottery experience booking and contact, plus Kikuzuki reservation;
-- tenant MCP OAuth, isolation, reads, writes, content, and media.
-
-Admin, dashboard, CMS/editor, ChowBot, billing/back-office, staging-review,
-site-administration, platform marketing, and platform MCP behavior are not
-release-qualified surfaces. Their failures do not receive synthetic browser
-coverage in the release workflow.
-
-`config/e2e-impact-map.mjs` has exactly three groups: `tenant-public`,
-`guest-journeys`, and `tenant-mcp`. Documentation-only changes skip preview.
-High-impact and unclassified runtime changes run the complete retained eight-file
-inventory; narrower changes run tenant public coverage plus affected groups.
-
-Preview writes use fixed customer/MCP fixtures and `@playwright.example` guest
-identities. The required PR lane performs a guarded in-place schema wipe and
-full migration replay before seeding, so the shared preview ledger always
-matches the branch under test. `scripts/reset-e2e-artifacts.ts` remains the
-local row-level cleanup path. Replacement resources, standalone
-`d1_migrations` edits, and remote schema patches are forbidden. Staging and
-production verification is read-only.
-
-Releases enter staging and production through reviewed branch merges. During an
-outage, restore the last known-good Worker from Cloudflare deployment history
-without changing D1 data, then repair the source through the normal branch flow.
+For migration safety, preview reset behavior, database epoch transitions, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md).
