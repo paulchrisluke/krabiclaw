@@ -32,7 +32,4 @@ Use the approved client onboarding and import pipeline. Never manually seed or p
 
 ## Agent documentation
 
-- Issue tracker: [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md)
-- Triage labels: [docs/agents/triage-labels.md](docs/agents/triage-labels.md)
-- Domain context and ADRs: [docs/agents/domain.md](docs/agents/domain.md), root `CONTEXT.md`, and `docs/adr/`
-- Development workflow: [docs/agents/development-workflow.md](docs/agents/development-workflow.md)
+- Domain context and ADRs: root `CONTEXT.md` and `docs/adr/`

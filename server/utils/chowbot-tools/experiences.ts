@@ -18,8 +18,7 @@ export const EXPERIENCES_CHOWBOT_TOOLS: AiTool[] = [
   ...EXPERIENCES_TOOLS.filter((tool) => EXPERIENCES_DOMAIN_TOOL_NAMES.has(tool.name)).map(chowbotToolFromMcp),
   // get_experience_availability, set_experience_slot_override, and
   // list_experience_slot_overrides have no MCP_TOOLS definition — they're
-  // executor-only (see mcp-executor/experiences.ts and
-  // docs/tool-parity.md's "ChowBot-only" table). runMcpExecutorToolForChowbot
+  // executor-only (see mcp-executor/experiences.ts). runMcpExecutorToolForChowbot
   // requires a real MCP_TOOLS entry to read minimumRole/requiredEntitlement
   // from, so these three stay as their own chowbot-agent.ts case bodies
   // calling the shared experiences.ts functions directly, not through the

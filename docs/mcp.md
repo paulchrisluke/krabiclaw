@@ -1,6 +1,6 @@
-# MCP Surface Split
+# MCP
 
-KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, discovery, consent, and tool exposure.
+KrabiClaw ships two separate MCP surfaces with strict security boundaries.
 
 ## Surfaces
 
@@ -12,7 +12,7 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 - Server entrypoint: `server/api/mcp.post.ts`
 - Scope: `tenant`
 - Exposes by default: site setup, menus, experiences, posts, media, reviews, submissions, notifications, content, QA, analytics
-- Feature-flagged conversational groups: social/OAuth publishing, domains, managed-service work requests. Manual locale management remains available as ordinary content editing. See `docs/tool-parity.md`.
+- Feature-flagged conversational groups: social/OAuth publishing, domains, managed-service work requests. Manual locale management remains available as ordinary content editing.
 
 ### Platform Admin MCP
 
@@ -33,7 +33,7 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 
 ## Auth Model
 
-- CLAUDE.md's "Better Auth Boundary Rules" is the canonical statement of Better Auth authorization scope.
+- AGENTS.md's "Better Auth Boundary Rules" is the canonical statement of Better Auth authorization scope.
 - Platform MCP requires documented Better Auth Admin plugin platform permissions.
 - Tenant MCP requires Better Auth Organization permissions and, for scoped editors, the matching Better Auth Team membership.
 - Org member roles (`owner`, `admin`, `editor`, optional read-only `member`) remain tenant-scoped only and do not grant platform access.
@@ -45,3 +45,33 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 - Platform Admin MCP app URL: `https://krabiclaw.com/api/mcp/platform`
 
 Only internal KrabiClaw operators should connect the Platform Admin MCP app.
+
+## Tool catalog
+
+KrabiClaw exposes one canonical tool contract for each MCP surface. Every tool name, input schema, output schema, and executor must agree. Unknown tool names return JSON-RPC `-32601` over HTTP 200. Unknown arguments return an invalid-params response and are never translated into another field.
+
+### Release sequence
+
+1. Update the canonical definition and executor together.
+2. Update the owning invariant test.
+3. Run `yarn mcp:catalog:write` and review the catalog snapshot diff.
+4. Run `yarn mcp:catalog` and the affected MCP integration tests.
+5. Deploy the preview Worker and verify `tools/list`, the changed tool call, and `_meta["krabiclaw/catalogFingerprint"]` through the real client.
+6. Refresh and publish the ChatGPT app action catalog when its schema changed.
+7. Verify the deployed staging MCP app before promoting to production.
+
+Do not use `serverInfo.version` as a catalog boundary. The endpoint, live `tools/list` response, and reviewed snapshot define the contract.
+
+### Catalog enforcement
+
+Public catalogs are snapshotted in `server/utils/mcp-catalog-snapshots/`. `yarn mcp:catalog` requires every public tool to be dispatchable and rejects snapshot drift.
+
+### Incident queries
+
+Use `mcp_tool_call_events` to find unknown tools and repeated failures:
+
+- group unknown tools by `mcp_surface`, `unknown_tool_name`, `oauth_client_id_hash`, and `catalog_fingerprint`
+- group repeated failures by `session_id_hash`, `method`, `tool_name`, and `jsonrpc_error_code`
+- verify protocol errors use HTTP 200 unless authentication or authorization requires an HTTP error
+
+Telemetry stores hashed session and client identifiers. Never log raw session ids, OAuth client ids, bearer tokens, authorization headers, full arguments, article bodies, or upload URLs.

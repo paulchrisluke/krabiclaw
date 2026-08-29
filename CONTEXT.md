@@ -10,7 +10,7 @@ A tenant whose public site sells expertise, consultation, representation, care, 
 **Tenant vertical (canonical contract)**:
 The business category that controls public copy, route expectations, schema defaults, onboarding language, and verification rules for a tenant. A vertical is broader than a template and must not be used to hardcode one client.
 
-There is exactly one canonical app-level vertical value set — `SiteVertical` in `utils/vertical-copy.ts` (`ALL_VERTICALS`: `restaurant` | `experience` | `professional_service`) — and exactly one normalization boundary bridging it to the narrower DB `sites_vertical_check` constraint, which does not have a `professional_service` value:
+There is exactly one canonical app-level vertical value set — `SiteVertical` in `utils/vertical-copy.ts` (`ALL_VERTICALS`: `restaurant` | `experience` | `professional_service`) — and a normalization boundary bridging it to the DB storage representation:
 
 - **Write direction**: `server/utils/site-creation.ts`'s `toStoredVertical()` maps app-level `professional_service` → DB-stored `service` at the single place that writes `sites.vertical` (`runSiteCreation()`). Every other stored value (`restaurant`, `experience`) passes through unchanged.
 - **Read direction**: `utils/vertical-copy.ts`'s `normalizeVertical()` maps stored `service` → app-level `professional_service` for every reader. `checklist.get.ts` and the public template registry (`utils/template-registry.ts`) already funnel through this.

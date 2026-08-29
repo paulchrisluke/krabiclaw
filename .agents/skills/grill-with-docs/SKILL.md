@@ -23,7 +23,7 @@ A grill session has three phases — setup, an interview loop with mandatory che
 
 1. **Setup** — create the session folder + `notes.md`, tell the user the path.
 2. **Interview loop** (repeat until done) — ask one question → record the answer → checkpoint: append to `notes.md`, update `CONTEXT.md` if a term resolved, write an ADR if the decision is hard-to-reverse + surprising + a real trade-off → next question.
-3. **End** — reconcile `notes.md` against CONTEXT.md / ADRs; if feature-shaped, produce a PRD and route it via `docs/agents/issue-tracker.md`; link the PRD location back into `notes.md`; recommend `/to-issues`.
+3. **End** — reconcile `notes.md` against CONTEXT.md / ADRs; if feature-shaped, produce a PRD and link the PRD location back into `notes.md`; recommend `/to-issues`.
 
 ### Where things land
 
@@ -47,8 +47,7 @@ For grill-originated features, the grill session folder IS the feature folder fo
 │           └── notes.md                              ← no designs/, no prd.md, no issues/ (not feature-shaped)
 ├── CONTEXT.md                                        ← glossary; updated inline (single-context repos)
 ├── docs/
-│   ├── adr/NNNN-<slug>.md                            ← ADRs (lazy, written when a decision warrants one)
-│   └── agents/issue-tracker.md                       ← read at end-of-session to pick PRD destination
+│   └── adr/NNNN-<slug>.md                            ← ADRs (lazy, written when a decision warrants one)
 ```
 
 Multi-context repos (`CONTEXT-MAP.md` at the root) put `CONTEXT.md` and `docs/adr/` under each context's own folder instead of at the project root.
@@ -61,7 +60,7 @@ GitHub-tracker projects publish the PRD as a GitHub issue and implementation tic
    - **Always anchor paths to the project root**, not the current working directory. Find the root with `git rev-parse --show-toplevel` (or fall back to the highest folder containing a project marker like `package.json`, `pyproject.toml`, `Cargo.toml`, `.git/`, etc. if not in a git repo).
    - Create the session folder if it doesn't exist. Polished outputs (CONTEXT.md updates, ADRs) land in their own files outside the session folder — the capture file is the raw audit trail.
    - Get today's date with `date +%F` (Bash) if you don't already know it.
-   - Note: `.scratch/` is also used by the local-markdown issue tracker convention, where features-not-from-a-grill live at `.scratch/<feature-slug>/`. The `grill-with-docs/` namespace is distinct enough that it won't collide with feature slugs. **Only when the project's tracker is local-markdown** (set via `/setup-skills` and recorded in `docs/agents/issue-tracker.md`) does the grill session folder also double as the feature folder — the PRD lives at `prd.md` (root of the session folder) and `/to-issues` outputs land in an `issues/` subfolder as `01-<slug>.md`, `02-<slug>.md`, …, inside the grill session folder rather than in a separate `.scratch/<feature-slug>/`. For GitHub or GitLab trackers, the PRD and implementation issues live on the remote tracker — the grill folder only holds `notes.md` (with links to those URLs) and any `designs/`.
+   - Note: `.scratch/` is also used by the local-markdown issue tracker convention, where features-not-from-a-grill live at `.scratch/<feature-slug>/`. The `grill-with-docs/` namespace is distinct enough that it won't collide with feature slugs. **Only when the project's tracker is local-markdown** (set via `/setup-skills`) does the grill session folder also double as the feature folder — the PRD lives at `prd.md` (root of the session folder) and `/to-issues` outputs land in an `issues/` subfolder as `01-<slug>.md`, `02-<slug>.md`, …, inside the grill session folder rather than in a separate `.scratch/<feature-slug>/`. For GitHub or GitLab trackers, the PRD and implementation issues live on the remote tracker — the grill folder only holds `notes.md` (with links to those URLs) and any `designs/`.
    - A sibling `designs/` subfolder inside the session folder (`<project-root>/.scratch/grill-with-docs/{YYYY-MM-DD}-{topic-slug}/designs/`) is reserved for HTML visual mockups only — never write markdown there. It's created lazily by the visual companion (see below), and only when the session actually has frontend/UI/visual decisions to make.
 2. **Create the capture file immediately** with a header: title, date, the goal of the session, and an empty "Open flags" section.
 3. **Tell the user where you're saving**, in one line. Then ask Q1.
@@ -193,15 +192,15 @@ If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](
 
 If the session produced feature-shaped output (something the user wants to ship), turn it into a PRD. Skip this entirely if the session was purely about sharpening terminology or updating CONTEXT.md / ADRs.
 
-Where the PRD lands is determined at setup time by `/setup-skills`, not per-session. The choice is recorded in `docs/agents/issue-tracker.md`. Read that file first to pick the right path:
+Where the PRD lands is determined at setup time by `/setup-skills`, not per-session. Read the `## Agent skills` block in `AGENTS.md` or `CLAUDE.md` to pick the right path:
 
 - **GitHub tracker** → invoke `/to-prd` to publish the PRD as a GitHub issue using the `gh` CLI.
 - **Local-markdown tracker** → write the PRD directly into the grill session's own folder as `<project-root>/.scratch/grill-with-docs/{YYYY-MM-DD}-{topic-slug}/prd.md`. The grill session folder doubles as the feature folder: `prd.md` sits at the session root next to `notes.md` and the `designs/` subfolder, and `/to-issues` writes implementation tickets into an `issues/` subfolder (`issues/01-<slug>.md`, `issues/02-<slug>.md`, …). Each artifact type gets its own subfolder; the PRD stays at the root because there's only one. Use the same template `/to-prd` produces: Problem Statement / Solution / User Stories / Implementation Decisions / Testing Decisions / Out of Scope / Further Notes.
-- **GitLab or other tracker** → follow the publish path documented in `docs/agents/issue-tracker.md`.
+- **GitLab or other tracker** → follow the publish path documented in the `## Agent skills` block.
 
 In all cases, append a `## PRD` section to the top of the grill session's `notes.md` with the resulting URL (GitHub/GitLab) or local file path (`prd.md`). For GitHub/GitLab the tracker location is canonical and the link is the audit trail; for local-markdown the PRD already sits in the same folder as `notes.md`, so the link is just a same-folder reference for symmetry.
 
-If `docs/agents/issue-tracker.md` does not exist, the project has not run `/setup-skills` yet. Recommend the user run it first so the PRD destination is unambiguous, rather than guessing.
+If the `## Agent skills` block does not exist in `AGENTS.md` or `CLAUDE.md`, the project has not run `/setup-skills` yet. Recommend the user run it first so the PRD destination is unambiguous, rather than guessing.
 
 After the PRD is published or written, recommend running `/to-issues` to break it into independently-grabbable implementation tickets. For local-markdown tracker projects, `/to-issues` should write the numbered issue files into the `issues/` subfolder of this grill session folder, not a separate `.scratch/<feature-slug>/`.
 
