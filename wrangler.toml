@@ -86,8 +86,8 @@ DISCORD_DELIVERY_MODE = "provider"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-epoch2"
-database_id = "81f0e392-e7a1-4602-8ae9-7df87fc66868"
+database_name = "krabiclaw-db-epoch3"
+database_id = "4a02e2ec-6fb0-4bed-96ab-925ec1e508df"
 migrations_dir = "migrations"
 remote = false
 
