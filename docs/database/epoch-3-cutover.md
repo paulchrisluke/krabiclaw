@@ -10,7 +10,9 @@ Provisioned APAC non-production resources:
 - Preview: `krabiclaw-db-preview-epoch3` (`d2f7a4a0-d6b8-493b-b484-8c0ead1ff83b`)
 - Staging: `krabiclaw-db-staging-epoch3` (`61af16e5-0873-49b9-90ce-aea2ff1991e4`)
 
-No Epoch 3 production resource or binding is created during preview/staging promotion.
+The owner-present production cutover provisioned `krabiclaw-db-epoch3`
+(`4a02e2ec-6fb0-4bed-96ab-925ec1e508df`) in APAC. The old production D1 remains
+the rollback resource and is not retired by this release.
 
 Normal schema work still follows [migrations.md](migrations.md). This document is the exceptional database-epoch procedure authorized for the broad schema cleanup.
 
@@ -88,7 +90,7 @@ The planning snapshot produced 210 standard Products, 11 Experience Products, 21
 Stop before this section unless the owner explicitly authorizes the production flip while present.
 
 1. Confirm preview mutation gates, staging read-only gates, all required CI, exact-SHA checks, final Epoch 2 export tooling, and rollback access are green.
-2. Provision the new APAC production D1 and apply only the Epoch 3 baseline. Do not change the active production binding yet.
+2. Provision the new APAC production D1 and apply the complete committed Epoch 3 migration chain, beginning with the baseline. Do not change the active production binding yet.
 3. Deploy the release candidate against Epoch 2 with `DB_WRITE_FROZEN=true`.
 4. Confirm the exact release candidate is serving, writes return the documented maintenance response, and queue work retries without consuming messages.
 5. Wait at least 60 seconds after the freeze is confirmed.
