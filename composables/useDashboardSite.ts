@@ -19,7 +19,7 @@ interface DashboardSite {
   public_url: string | null
   status: string
   onboarding_status: string
-  plan: string | null
+  effective_plan: string
   primary_location_id: string | null
   default_currency: string | null
   feature_overrides: string | null
@@ -33,7 +33,7 @@ interface DashboardSiteSummary {
   vertical: 'restaurant' | 'experience' | 'service' | 'professional_service' | null
   status: string | null
   onboarding_status: string | null
-  plan: string | null
+  effective_plan: string
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 

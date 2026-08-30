@@ -75,8 +75,24 @@ The stable catalog identity and content record for a sellable offering. Product 
 _Avoid_: menu item as the combined product/price/placement model
 
 **Price**:
-The sellable monetary definition for a Product, including amount, currency, tax behavior, and active/versioned validity. Order lines snapshot the Price and displayed values; changing an amount creates a new sellable Price rather than rewriting historical order data.
+The organization/site/location-scoped sellable monetary definition for a Product. A Price stores an integer minor-unit amount, ISO currency, structured unit (`item`, `person`, or `table`), tax behavior, optional compare-at amount, immutable provenance, and an ISO validity interval. Repricing closes the current interval and inserts a new Price; intervals for one Product may be scheduled but must not overlap. A site's default currency is only a creation default and never rewrites existing Prices. Order lines snapshot the Price and displayed values; changing an amount never rewrites historical order data.
 _Avoid_: mutable price field on an immutable order, sale as an untracked total override
+
+**Experience**:
+A booking-specific one-to-one extension of Product that uses the same stable ID. Product owns the Experience title, slug, description, visibility, availability, ordering, SEO, audit fields, and Price; Experience owns duration, capacity, slots, inclusions, meeting point, booking data, and other experience-only fields. An inquiry-only Experience has no active Price and may carry one concise `pricing_note`.
+_Avoid_: separate experience catalog identity, duplicated title or slug, free-text per-person pricing
+
+**Organization access projection**:
+The slim, sessionless application projection of subscription access used by cron and queue work. Better Auth is the subscription authority and authenticated billing management reads its documented subscription APIs; `organization_billing` stores only payment/reconciliation evidence, the correlated subscription ID, `access_plan`, and `access_expires_at`. Capabilities are derived from `getPlanEntitlements(effectivePlan)` rather than persisted entitlement rows.
+_Avoid_: site billing, site entitlement, mutable capability projection, direct runtime SQL against Better Auth tables
+
+**Organization activity event**:
+An auditable organization-owned action stored in `organization_events`. `organization_id` is required; `site_id` and `location_id` are nullable so membership, invitations, and organization-only work can be represented without assigning an arbitrary primary site. Site dashboards show their scoped activity, while the organization feed includes both organization-only and site events.
+_Avoid_: site event for organization-only work, arbitrary primary-site resolution, conversion click duplicated into activity
+
+**Platform scope**:
+The reserved organization and site identified by `PLATFORM_ORGANIZATION_ID` and `PLATFORM_SITE_ID`. Platform blog, redirect, and analytics data use these ordinary non-null scopes and the same canonical writers and query paths as tenant data; platform behavior is selected by the reserved site ID rather than a null owner.
+_Avoid_: null platform scope, media-only platform constants, parallel platform analytics table
 
 **Order round**:
 One immutable guest submission from the current Cart. Multiple Order rounds may accumulate on one open Invoice/check; each round is independently delivered to the merchant handoff and independently idempotent.

@@ -218,12 +218,7 @@ The mandatory deployed-browser release gate and outage recovery rules are docume
 
 ## Schema
 
-`server/db/schema.ts` (Drizzle ORM) is the source of truth for new schema changes. `migrations/0001_initial.sql`–`0007_*.sql` are historical and hand-authored; from `0008` onward, schema changes start in `schema.ts`, then `yarn db:generate` (`drizzle-kit generate`) produces the matching `migrations/000N_*.sql` file. Every migration becomes immutable as soon as any shared environment applies it. Use `yarn schema:local` locally; preview migrations belong to the required PR workflow, and staging/production migrations run in their branch deployment jobs. Never rebuild a referenced parent table with `DROP TABLE`; a verified obsolete unreferenced table may be removed normally. Do not invoke a remote migration command as a substitute for release approval. `drizzle-kit generate` cannot emit triggers or CHECK constraints, so those required constraints must be hand-appended to the generated migration; indexes and uniques declared in `schema.ts` are generated normally. Full workflow and constraint caveats are documented in `AGENTS.md`'s "Database Schema Workflow" section.
-
-```bash
-yarn db:generate     # generate a migration from schema.ts after editing it
-yarn schema:local    # apply pending migrations locally
-```
+Database schema changes must follow the canonical migration workflow in [docs/database/migrations.md](docs/database/migrations.md). `server/db/schema.ts` is the only schema source of truth.
 
 ---
 

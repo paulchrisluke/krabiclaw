@@ -153,7 +153,7 @@ test('validateArguments rejects unknown fields in nested Products', () => {
     () => validateArguments(batch.inputSchema, {
       site_id: 'site-1',
       location_id: 'location-1',
-      products: [{ category: 'Mains', name: 'Curry', price_amount: '250', prize_amount: 250 }],
+      products: [{ category: 'Mains', name: 'Curry', price: { amount_minor: 25000 }, prize_amount: 250 }],
     }),
     isInvalidParamsErrorContaining('products[0].prize_amount'),
   )
@@ -170,14 +170,14 @@ test('validateArguments enforces recursive array bounds and uniqueness', () => {
     () => validateArguments(batch.inputSchema, {
       site_id: 'site-1',
       location_id: 'location-1',
-      products: Array.from({ length: maxProducts + 1 }, (_, index) => ({ category: 'Mains', name: `Product ${index}`, price_amount: '1' })),
+      products: Array.from({ length: maxProducts + 1 }, (_, index) => ({ category: 'Mains', name: `Product ${index}`, price: { amount_minor: 100 } })),
     }),
     isInvalidParamsErrorContaining(`products must contain at most ${maxProducts} items`),
   )
   assert.doesNotThrow(() => validateArguments(batch.inputSchema, {
     site_id: 'site-1',
     location_id: 'location-1',
-    products: Array.from({ length: maxProducts }, (_, index) => ({ category: 'Mains', name: `Product ${index}`, price_amount: '1' })),
+    products: Array.from({ length: maxProducts }, (_, index) => ({ category: 'Mains', name: `Product ${index}`, price: { amount_minor: 100 } })),
   }))
 
   const nestedArraySchema = {

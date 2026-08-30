@@ -1,10 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { deleteOrganization, listOrganizationMembers, listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
-
-const ACTIVE_STATUSES = ['active', 'trialing', 'past_due']
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -38,9 +36,10 @@ export default defineHandler(async (event) => {
     const activeSubscription = await queryFirst(db, `
       SELECT organization_id FROM organization_billing
       WHERE organization_id IN (SELECT value FROM json_each(?))
-      AND status IN (SELECT value FROM json_each(?))
+      AND access_plan <> 'free'
+      AND (access_expires_at IS NULL OR access_expires_at > ?)
       LIMIT 1
-    `, [d1JsonStringSet(allOrgIds), d1JsonStringSet(ACTIVE_STATUSES)])
+    `, [d1JsonStringSet(allOrgIds), new Date().toISOString()])
 
     if (activeSubscription) {
       return jsonResponse(
@@ -59,19 +58,6 @@ export default defineHandler(async (event) => {
     }
   }
 
-  // Attribution is user-linked data even though the client ID is stored on
-  // the organization billing projection. Erase both fields for organizations
-  // the user leaves; the FK only protects ga_user_id and would otherwise leave
-  // the client identifier behind on co-owned organizations.
-  const billingAttribution = await queryAll<{ id: string; ga_client_id: string | null; ga_user_id: string | null }>(db, `
-    SELECT id, ga_client_id, ga_user_id FROM organization_billing WHERE ga_user_id = ?
-  `, [userId])
-  await execute(db, `
-    UPDATE organization_billing
-    SET ga_client_id = NULL, ga_user_id = NULL, updated_at = ?
-    WHERE ga_user_id = ?
-  `, [new Date().toISOString(), userId])
-
   const auth = createAuth(env)
   const response = await (auth.api as unknown as {
     deleteUser(_input: { body: Record<string, never>; headers: HeadersInit; asResponse: true }): Promise<Response>
@@ -82,14 +68,6 @@ export default defineHandler(async (event) => {
   })
   if (!response.ok) {
     const message = await response.text().catch(() => '')
-    const restoredAt = new Date().toISOString()
-    for (const attribution of billingAttribution) {
-      await execute(db, `
-        UPDATE organization_billing
-        SET ga_client_id = ?, ga_user_id = ?, updated_at = ?
-        WHERE id = ?
-      `, [attribution.ga_client_id, attribution.ga_user_id, restoredAt, attribution.id])
-    }
     return jsonResponse({ error: 'account_deletion_failed', message: message || 'Failed to delete account.' }, { status: response.status })
   }
 

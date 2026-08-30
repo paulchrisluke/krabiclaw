@@ -168,7 +168,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
-const isGrowth = computed(() => dashboard.state.value?.site?.plan === 'growth')
+const isGrowth = computed(() => dashboard.state.value?.site?.effective_plan === 'growth')
 const isFree = computed(() => !isGrowth.value)
 const managedServiceEnabled = dashboard.managedServiceEnabled
 const { open: openUpsell } = useServiceUpsell()
@@ -246,12 +246,12 @@ const { data, refresh, error: requestsError } = await useAsyncData<{ requests: W
       const { cloudflareEnv } = await import('~/server/utils/api-response')
       const db = cloudflareEnv(requestEvent).DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      if (!dashboardContext.site?.plan || dashboardContext.site.plan === 'free') return { requests: [] }
+      if (!dashboardContext.site?.effective_plan || dashboardContext.site.effective_plan === 'free') return { requests: [] }
       const { listWorkRequests } = await import('~/server/utils/work-requests-dashboard')
       const requests = await listWorkRequests(db, organizationId)
       return { requests }
     }
-    if (!dashboardContext.site?.plan || dashboardContext.site.plan === 'free') return { requests: [] }
+    if (!dashboardContext.site?.effective_plan || dashboardContext.site.effective_plan === 'free') return { requests: [] }
     return await dashboardApi<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', {
       validate: (value): value is { requests: WorkRequest[] } =>
         isRecord(value)

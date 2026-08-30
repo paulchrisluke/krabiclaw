@@ -9,6 +9,7 @@ import {
   assertDirectOperatorSession,
   OperatorSessionError,
 } from '~/server/utils/operator-session'
+import { getAiQuotaStatus } from '~/server/utils/ai-credits'
 
 const APPROVAL_WINDOW_MS = 10 * 60 * 1000
 const APPROVAL_PURPOSE = 'quota_adjustment' as const
@@ -92,13 +93,6 @@ export class QuotaAdjustmentError extends Error {
     this.code = code
     this.statusCode = statusCode
   }
-}
-
-interface CreditRow {
-  balance: unknown
-  lifetime_used: unknown
-  balance_period_key: string | null
-  updated_at: unknown
 }
 
 interface AggregateRow {
@@ -290,22 +284,9 @@ async function readSnapshot(
   organizationLookup: QuotaAdjustmentOrganizationLookup,
 ): Promise<QuotaAdjustmentSnapshot> {
   await assertQuotaOrganization(organizationLookup, input.organizationId)
-  const credits = await queryFirst<CreditRow>(db, `
-    SELECT balance, lifetime_used, balance_period_key, updated_at
-    FROM ai_credits WHERE organization_id = ? LIMIT 1
-  `, [input.organizationId])
-  if (!credits) {
-    fail('quota_initialization_required', 409, 'AI quota requires initialization before an operator adjustment.')
-  }
-  if (!credits.balance_period_key || !credits.balance_period_key.trim()) {
-    fail('quota_reconciliation_required', 409, 'AI quota requires legacy reconciliation before an operator adjustment.')
-  }
-  const balance = quotaStateInteger(credits.balance, 'AI quota balance')
-  const lifetimeUsed = quotaStateInteger(credits.lifetime_used, 'AI quota lifetime usage')
-  const creditsUpdatedAt = quotaStateTimestamp(credits.updated_at, 'AI quota updated_at')!
-  if (credits.balance_period_key !== balancePeriodKey(period)) {
-    fail('quota_reconciliation_required', 409, 'AI quota is not initialized for the current UTC week.')
-  }
+  const quota = await getAiQuotaStatus(db, input.organizationId, null, new Date(period.start))
+  const balance = quotaStateInteger(quota.balance, 'AI quota balance')
+  const lifetimeUsed = quotaStateInteger(quota.lifetimeUsed, 'AI quota lifetime usage')
 
   const grants = await queryFirst<AggregateRow>(db, `
     SELECT COUNT(*) AS count,
@@ -376,8 +357,8 @@ async function readSnapshot(
       credits: {
         balance,
         lifetimeUsed,
-        balancePeriodKey: credits.balance_period_key,
-        updatedAt: creditsUpdatedAt,
+        balancePeriodKey: balancePeriodKey(period),
+        updatedAt: latestGrantCreatedAt ?? latestUsageCreatedAt ?? period.start,
       },
       grants: {
         count: grantCount,
@@ -422,15 +403,7 @@ function grantId(input: QuotaAdjustmentInput): string {
 function stateMatchPredicate(input: QuotaAdjustmentInput, period: QuotaAdjustmentPeriod, state: QuotaAdjustmentState): { sql: string; params: unknown[] } {
   return {
     sql: `
-      EXISTS (
-        SELECT 1 FROM ai_credits
-        WHERE organization_id = ?
-          AND balance = ?
-          AND lifetime_used = ?
-          AND balance_period_key IS ?
-          AND updated_at IS ?
-      )
-      AND (SELECT COUNT(*) FROM usage_quota_grants
+      (SELECT COUNT(*) FROM usage_quota_grants
            WHERE organization_id = ? AND resource = 'ai_inference' AND unit = 'credit'
              AND period_start = ? AND period_end = ?) = ?
       AND (SELECT COALESCE(SUM(quantity), 0) FROM usage_quota_grants
@@ -450,11 +423,6 @@ function stateMatchPredicate(input: QuotaAdjustmentInput, period: QuotaAdjustmen
            WHERE organization_id = ? AND resource = 'ai_inference' AND unit = 'credit' AND created_at >= ? AND created_at < ?) IS ?
     `,
     params: [
-      input.organizationId,
-      state.credits.balance,
-      state.credits.lifetimeUsed,
-      state.credits.balancePeriodKey,
-      state.credits.updatedAt,
       input.organizationId,
       period.start,
       period.end,
@@ -501,7 +469,7 @@ function grantValues(input: QuotaAdjustmentInput, actor: string, period: QuotaAd
     input.reason,
     actor,
     input.idempotencyKey,
-    null,
+    createdAt,
     createdAt,
   ]
 }
@@ -611,39 +579,6 @@ export async function applyQuotaAdjustment(
         VALUES (${values.map(() => '?').join(', ')})
       `,
       params: values,
-    },
-    {
-      query: `
-        UPDATE ai_credits
-        SET balance = CASE WHEN ? = 'manual' THEN balance + ? ELSE ? END,
-            balance_period_key = ?,
-            updated_at = ?
-        WHERE organization_id = ?
-          AND balance = ?
-          AND lifetime_used = ?
-          AND balance_period_key IS ?
-          AND updated_at IS ?
-      `,
-      params: [
-        input.action,
-        input.quantity,
-        input.quantity,
-        balancePeriodKey(period),
-        createdAt,
-        input.organizationId,
-        snapshot.state.credits.balance,
-        snapshot.state.credits.lifetimeUsed,
-        snapshot.state.credits.balancePeriodKey,
-        snapshot.state.credits.updatedAt,
-      ],
-    },
-    {
-      query: `
-        UPDATE usage_quota_grants
-        SET applied_at = ?
-        WHERE id = ? AND organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
-      `,
-      params: [createdAt, id, input.organizationId, input.idempotencyKey],
     },
   ]
 

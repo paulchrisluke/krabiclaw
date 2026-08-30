@@ -50,7 +50,7 @@ export default defineHandler(async (event) => {
     // Build WHERE clause for multiple organization IDs
     const sites = await queryAll(db, `
       SELECT id, organization_id, theme_id, brand_name, slug, subdomain,
-             custom_domain, status, plan, created_at, updated_at,
+             custom_domain, status, created_at, updated_at,
              onboarding_status
       FROM sites
       WHERE organization_id IN (SELECT value FROM json_each(?))

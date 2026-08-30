@@ -1,5 +1,8 @@
 # Canonical Services Routes with Cutover Redirects
 
+**Status: Accepted**
+**Date: 2026-06-XX**
+
 Professional-service offerings should have stable KrabiClaw-native routes at `/services` and `/services/<slug>`, but real tenant migrations may have existing indexed URLs and paid-conversion paths that should not be discarded. KrabiClaw will use `/services` as the canonical offering route family while preserving valuable NCLS legacy URLs through an explicit redirect manifest and verification checks.
 
 ## Considered Options

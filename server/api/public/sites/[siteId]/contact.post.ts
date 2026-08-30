@@ -1,7 +1,7 @@
 import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyContactSubmitted } from '~/server/utils/notifications'
-import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
 import { contactAdapter } from '~/server/domain/guest-threads/adapters/contact'
@@ -78,7 +78,7 @@ export default defineHandler(async (event) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [id, site.organization_id, siteId, assignedLocationId, name, email, subject || null, message, consentAt, ipHash, experience?.id ?? null])
 
-  await fireSiteEventSafe({
+  await fireOrganizationEventSafe({
     db, organizationId: site.organization_id, siteId, eventType: 'contact.created', entityType: 'contact_submission', entityId: id, locationId: assignedLocationId, metadata: {
       subject: subject || null, location_id: assignedLocationId, }, })
 

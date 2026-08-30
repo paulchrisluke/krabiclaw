@@ -26,9 +26,9 @@ export default defineHandler(async (event) => {
   `, [siteId, customerId])
 
   const experienceBookings = await queryAll<ApiRecord>(db, `
-    SELECT eb.id, eb.location_id, eb.experience_id, e.title AS experience_title, eb.guest_name, eb.guest_email, eb.guest_phone, eb.booking_date, eb.time_slot, eb.party_size, eb.status, eb.completed_at, eb.completion_source, eb.review_request_sent_at, eb.review_reminder_sent_at, eb.review_submitted_at, eb.review_id, eb.created_at
+    SELECT eb.id, eb.location_id, eb.experience_id, p.name AS experience_title, eb.guest_name, eb.guest_email, eb.guest_phone, eb.booking_date, eb.time_slot, eb.party_size, eb.status, eb.completed_at, eb.completion_source, eb.review_request_sent_at, eb.review_reminder_sent_at, eb.review_submitted_at, eb.review_id, eb.created_at
     FROM experience_bookings eb
-    LEFT JOIN experiences e ON e.id = eb.experience_id
+    LEFT JOIN products p ON p.id = eb.experience_id
     WHERE eb.site_id = ? AND eb.customer_id = ?
     ORDER BY eb.booking_date DESC, eb.time_slot DESC, eb.created_at DESC
     LIMIT 25

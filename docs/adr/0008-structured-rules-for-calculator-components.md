@@ -1,5 +1,8 @@
 # Structured Rules for Calculator Components
 
+**Status: Accepted**
+**Date: 2026-06-XX**
+
 Calculator components may influence legal or financial expectations, so their behavior must be reviewable, testable, and importable as data. KrabiClaw calculators will use structured rule configuration for inputs, thresholds, result bands, explanatory copy, CTAs, and source/effective-date notes rather than arbitrary formulas, CMS JavaScript, or tenant-specific custom component code.
 
 ## Considered Options

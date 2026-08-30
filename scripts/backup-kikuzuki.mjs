@@ -99,11 +99,6 @@ out.push(inserts('tenant_pages', query(`SELECT * FROM tenant_pages WHERE organiz
 out.push('-- tenant_page_variants')
 out.push(inserts('tenant_page_variants', query(`SELECT * FROM tenant_page_variants WHERE organization_id = '${ORG}'`)))
 
-// --- Credits + booking ---
-console.log('Fetching ai_credits...')
-out.push('-- ai_credits')
-out.push(inserts('ai_credits', query(`SELECT * FROM ai_credits WHERE organization_id = '${ORG}'`)))
-
 console.log('Fetching reservation_submissions...')
 out.push('-- reservation_submissions')
 out.push(inserts('reservation_submissions', query(`SELECT * FROM reservation_submissions WHERE organization_id = '${ORG}'`)))

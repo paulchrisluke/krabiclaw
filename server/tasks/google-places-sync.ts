@@ -22,13 +22,11 @@ interface PlaceLocationRow {
   google_place_id: string
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
-  plan: string | null
-  status: string | null
+  access_plan: string | null
+  access_expires_at: string | null
   payment_status: string | null
   paid_through: string | null
   past_due_since: string | null
-  current_period_end: string | null
-  cancel_at_period_end: unknown
   updated_at: string | null
 }
 
@@ -75,14 +73,12 @@ export default defineScheduledTask({
     // integrations; legacy entitlement caches are not access grants here.
     const billingRows = await queryAll<PlaceLocationRow>(db, `
       SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id,
-             ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
-             ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
-             ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
+             ob.stripe_customer_id, ob.stripe_subscription_id, ob.access_plan,
+             ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
       FROM business_locations bl
       INNER JOIN organization_billing ob
         ON ob.organization_id = bl.organization_id
-       AND ob.plan = 'growth'
-       AND ob.status IN ('active', 'trialing', 'past_due')
+       AND ob.access_plan = 'growth'
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
       ORDER BY bl.organization_id, bl.site_id

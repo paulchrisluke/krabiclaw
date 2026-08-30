@@ -97,7 +97,7 @@ interface TransferOnboardingContext {
   state: 'payment_pending' | 'accepted'
   transfer_id?: string
   organization?: { id: string; slug: string } | null
-  site?: { id: string; brand_name: string | null; vertical?: string | null; subdomain: string | null; plan: string | null } | null
+  site?: { id: string; brand_name: string | null; vertical?: string | null; subdomain: string | null; effective_plan: string } | null
   locations?: LocationRow[]
   notifications?: { whatsapp_phone: string | null; channels: string[] }
 }
@@ -197,7 +197,7 @@ function applyTransferContext(ctx: TransferOnboardingContext) {
     siteName.value = ctx.site.brand_name.trim()
     siteVertical.value = normalizeVertical(ctx.site.vertical) as SiteVertical
     subdomain.value = ctx.site.subdomain ?? ''
-    plan.value = ctx.site.plan ?? 'free'
+    plan.value = ctx.site.effective_plan
   }
 
   // A missing site is a genuine load failure, not "nothing to show yet" —

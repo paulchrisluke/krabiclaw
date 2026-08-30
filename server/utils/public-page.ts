@@ -208,8 +208,21 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     recurring_slots = parsed as Partial<Record<string, string[]>>
   }
 
+  const {
+    price_id, amount_minor, currency, price_unit, tax_behavior, compare_at_amount_minor,
+    valid_from, valid_until, provenance, price_created_by, price_created_at,
+    ...experienceRow
+  } = row
   return {
-    ...(row as unknown as Experience),
+    ...(experienceRow as unknown as Experience),
+    price: price_id == null ? null : {
+      id: String(price_id), organization_id: String(row.organization_id), site_id: String(row.site_id),
+      location_id: row.location_id == null ? null : String(row.location_id), product_id: String(row.id), amount_minor: Number(amount_minor),
+      currency: String(currency), unit: String(price_unit), tax_behavior: String(tax_behavior),
+      compare_at_amount_minor: compare_at_amount_minor == null ? null : Number(compare_at_amount_minor),
+      valid_from: String(valid_from), valid_until: valid_until == null ? null : String(valid_until),
+      provenance: String(provenance), created_by: String(price_created_by), created_at: String(price_created_at),
+    } as Experience['price'],
     status: row.status as Experience["status"],
     highlights: parseStringArr(row.highlights),
     included_items: parseStringArr(row.included_items),
@@ -218,7 +231,7 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     time_slots,
     recurring_slots,
     featured: Boolean(row.featured),
-  } as Experience;
+  } as Experience
 }
 
 async function loadPublicPageSource(
@@ -412,14 +425,18 @@ async function loadPublicPageSource(
       ? [orgId, siteId, locationId ?? '__missing-location__']
       : [orgId, siteId]
     idxProducts = push(
-      `SELECT id, organization_id, site_id, location_id, category, name, slug, description,
-              price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, order_url,
-              is_visible, available, featured, featured_sort_order, sort_order, tags_json,
-              details_json, seo_title, seo_description, canonical_url, robots, source,
-              created_at, updated_at, created_by, updated_by
-         FROM products
-        WHERE organization_id = ? AND site_id = ? AND is_visible = 1 ${locationClause}
-        ORDER BY location_id, sort_order, id`,
+      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category, p.name, p.slug, p.description,
+              p.order_url, p.is_visible, p.available, p.featured, p.featured_sort_order, p.sort_order, p.tags_json,
+              p.details_json, p.seo_title, p.seo_description, p.canonical_url, p.robots, p.source,
+              p.created_at, p.updated_at, p.created_by, p.updated_by,
+              pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
+              pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
+              pr.created_by AS price_created_by, pr.created_at AS price_created_at
+         FROM products p
+         LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+           AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard' AND p.is_visible = 1 ${locationClause.replace('location_id', 'p.location_id')}
+        ORDER BY p.location_id, p.sort_order, p.id`,
       productParams,
     )
 
@@ -447,31 +464,43 @@ async function loadPublicPageSource(
   if (needsExperiencesList) {
     const expParams: unknown[] = [orgId, siteId];
     let expSql = `SELECT e.id, e.organization_id, e.site_id, e.location_id,
-                         e.title, e.slug, e.tagline, e.body,
-                         e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+                         p.name AS title, p.slug, e.tagline, p.description AS body, e.pricing_note,
+                         pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
+                         pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
+                         pr.created_by AS price_created_by, pr.created_at AS price_created_at,
+                         e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
-                         e.status, e.sort_order, e.featured, e.featured_sort_order,
-                         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
+                         CASE WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
+                         p.sort_order, p.featured, p.featured_sort_order,
+                         p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
                   FROM experiences e
-                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
+                  JOIN products p ON p.id = e.id
+                  LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                  WHERE e.organization_id = ? AND e.site_id = ? AND p.is_visible = 1`;
     if (locationId) {
       expSql += ` AND e.location_id = ?`;
       expParams.push(locationId);
     }
-    expSql += ` ORDER BY e.sort_order ASC, e.created_at ASC`;
+    expSql += ` ORDER BY p.sort_order ASC, p.created_at ASC`;
     idxExperiencesList = push(expSql, expParams);
   }
 
   if (requestedDatasets.has("experienceDetail") && experienceSlug) {
     idxExperienceDetail = push(
       `SELECT e.id, e.organization_id, e.site_id, e.location_id,
-              e.title, e.slug, e.tagline, e.body,
-              e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+              p.name AS title, p.slug, e.tagline, p.description AS body, e.pricing_note,
+              pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
+              pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
+              pr.created_by AS price_created_by, pr.created_at AS price_created_at,
+              e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
-              e.status, e.sort_order, e.featured, e.featured_sort_order,
-              e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
+              CASE WHEN p.is_visible = 0 THEN 'inactive' WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
+              p.sort_order, p.featured, p.featured_sort_order,
+              p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
        FROM experiences e
-       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
+       JOIN products p ON p.id = e.id
+       LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+       WHERE e.organization_id = ? AND e.site_id = ? AND p.slug = ?
        LIMIT 1`,
       [orgId, siteId, experienceSlug],
     );

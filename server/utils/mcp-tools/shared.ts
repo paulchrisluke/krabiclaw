@@ -3,6 +3,7 @@
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
+import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
 
 export interface McpToolDefinition {
   name: string
@@ -257,7 +258,7 @@ const blogContentBlockObject = {
   properties: {
     id: { type: 'string' },
     parent_block_id: { type: ['string', 'null'] },
-    type: { type: 'string', enum: ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout'] },
+    type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
     position: { type: 'number' },
     level: { type: ['number', 'null'] },
     data: { type: 'object' },
@@ -525,6 +526,31 @@ export const resolvedMediaAssetObject = {
   required: ['asset_id', 'kind', 'public_url', 'status'],
 }
 
+export const priceObject = {
+  type: ['object', 'null'],
+  properties: {
+    id: { type: 'string' }, amount_minor: { type: 'integer' }, currency: { type: 'string' },
+    unit: { type: 'string', enum: ['item', 'person', 'table'] },
+    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
+    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: { type: 'string' },
+    valid_until: { type: ['string', 'null'] }, provenance: { type: 'string' },
+  },
+  required: ['id', 'amount_minor', 'currency', 'unit', 'tax_behavior', 'compare_at_amount_minor', 'valid_from', 'valid_until', 'provenance'],
+}
+
+export const priceWriteObject = {
+  type: ['object', 'null'],
+  properties: {
+    amount_minor: { type: 'integer', minimum: 0 }, currency: { type: 'string' },
+    unit: { type: 'string', enum: ['item', 'person', 'table'] },
+    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
+    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: { type: 'string' },
+    valid_until: { type: ['string', 'null'] }, provenance: { type: 'string' },
+  },
+  required: ['amount_minor'],
+  additionalProperties: false,
+}
+
 export const experienceObject = {
   type: 'object',
   properties: {
@@ -534,11 +560,9 @@ export const experienceObject = {
     tagline: { type: ['string', 'null'] },
     body: { type: ['string', 'null'] },
     duration_minutes: { type: ['number', 'null'] },
-    price: { type: ['string', 'null'] },
-    price_amount: { type: ['number', 'null'] },
-    compare_at_price_amount: { type: ['number', 'null'] },
-    sale_starts_at: { type: ['string', 'null'] },
-    sale_ends_at: { type: ['string', 'null'] },
+    price: priceObject,
+    scheduled_prices: { type: 'array', items: priceObject },
+    pricing_note: { type: ['string', 'null'] },
     max_capacity: { type: ['number', 'null'] },
     status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
     location_id: { type: ['string', 'null'] },
@@ -606,11 +630,8 @@ export const experienceWriteSchema = {
       required: ['asset_id'],
     },
   },
-  price: { type: ['string', 'null'], description: 'Optional display override for pricing text, e.g. "Ask us" or "Free". Leave both price and price_amount unset entirely (not "Ask us") for group/custom-quote experiences — that triggers the public page\'s "Contact us" inquiry flow instead of a Reserve Now button; setting price to text like "Ask us" instead just shows that text as the price label with normal booking still enabled.' },
-  price_amount: { type: ['number', 'null'], description: 'Numeric price amount when the experience has a concrete price.' },
-  compare_at_price_amount: { type: ['number', 'null'], description: 'Regular/pre-sale price. Set alongside price_amount to run a sale.' },
-  sale_starts_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale becomes active. Optional.' },
-  sale_ends_at: { type: ['string', 'null'], description: 'ISO 8601 date/time the sale ends. Optional.' },
+  price: { ...priceWriteObject, description: 'Canonical immutable Price. Use null for inquiry-only experiences.' },
+  pricing_note: { type: ['string', 'null'], description: 'Concise pricing context for an inquiry-only experience.' },
   duration_minutes: { type: ['number', 'null'], description: 'Expected duration in minutes.' },
   max_capacity: { type: ['number', 'null'], description: 'Maximum guest count for a single booking or session.' },
   time_slots: { type: ['array', 'null'], items: { type: 'string' }, description: 'Flat daily time slots in HH:MM format, used when the same schedule applies every day. Ignored if recurring_slots is set.' },

@@ -15,7 +15,7 @@ import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
-import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
@@ -241,11 +241,8 @@ export function createAuth(env: CloudflareEnv) {
       organization: { id: string; name: string }
       inviter: { user: { name: string; email: string } }
     }) => {
-      const siteId = await resolvePrimarySiteForEvent(db, data.organization.id)
-      if (!siteId) throw new Error('Organization invitation requires a site')
       await notifyOrganizationInvited(env, db, {
         organizationId: data.organization.id,
-        siteId,
         invitationId: data.id,
         email: data.email,
         role: data.role,
@@ -308,12 +305,9 @@ export function createAuth(env: CloudflareEnv) {
       member: {
         update: {
           after: async (member: MemberRow) => {
-            const siteId = await resolvePrimarySiteForEvent(db, member.organizationId)
-            if (!siteId) return
-            await fireSiteEventSafe({
+            await fireOrganizationEventSafe({
               db,
               organizationId: member.organizationId,
-              siteId,
               eventType: 'member.role_changed',
               entityType: 'member',
               entityId: member.id,
@@ -323,12 +317,9 @@ export function createAuth(env: CloudflareEnv) {
         },
         delete: {
           after: async (member: MemberRow) => {
-            const siteId = await resolvePrimarySiteForEvent(db, member.organizationId)
-            if (!siteId) return
-            await fireSiteEventSafe({
+            await fireOrganizationEventSafe({
               db,
               organizationId: member.organizationId,
-              siteId,
               eventType: 'member.removed',
               entityType: 'member',
               entityId: member.id,
@@ -340,12 +331,9 @@ export function createAuth(env: CloudflareEnv) {
       invitation: {
         create: {
           after: async (invitation: InvitationRow) => {
-            const siteId = await resolvePrimarySiteForEvent(db, invitation.organizationId)
-            if (!siteId) return
-            await fireSiteEventSafe({
+            await fireOrganizationEventSafe({
               db,
               organizationId: invitation.organizationId,
-              siteId,
               actorId: invitation.inviterId,
               eventType: 'member.invited',
               entityType: 'invitation',

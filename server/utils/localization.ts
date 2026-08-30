@@ -1,7 +1,7 @@
 import { HTTPError } from 'nitro'
 import englishManifest from '~/i18n/locales/en.json' with { type: 'json' }
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { localizationError } from '~/server/utils/localization-errors'
 import {
   RESOURCE_LOCALIZATION_REGISTRY,
@@ -62,16 +62,7 @@ interface ResourceLocalizationRow extends Omit<ResourceLocalizationRecord, 'valu
   values_json: string
 }
 
-interface OrganizationBillingRow {
-  plan: string | null
-  status: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-  current_period_end: string | null
-}
-
-interface EntitlementRow extends OrganizationBillingRow {
+interface EntitlementRow {
   locale_status: string | null
   license_status: SiteLanguageLicenseStatus | null
   catalog_status: PlatformLocaleStatus | null
@@ -369,13 +360,11 @@ export async function assertSiteLanguageEntitlement(
   const source = await getPersistedSourceLocale(db, organizationId, siteId)
   if (locale === source.locale) return { locale, source: true, platform_messages: null }
   const row = await queryFirst<EntitlementRow & { organization_slug: string | null; site_slug: string | null }>(db, `
-    SELECT ob.plan, ob.status, ob.payment_status, ob.paid_through, ob.past_due_since, ob.current_period_end,
-           sl.status AS locale_status, l.status AS license_status,
+    SELECT sl.status AS locale_status, l.status AS license_status,
            c.status AS catalog_status, c.source_manifest_hash,
            o.slug AS organization_slug, s.slug AS site_slug
       FROM sites s
       JOIN organization o ON o.id = s.organization_id
-      LEFT JOIN organization_billing ob ON ob.organization_id = s.organization_id
       LEFT JOIN site_locales sl ON sl.organization_id = s.organization_id AND sl.site_id = s.id AND sl.locale = ?
       LEFT JOIN site_language_licenses l ON l.organization_id = s.organization_id AND l.site_id = s.id AND l.locale = ?
       LEFT JOIN platform_locale_catalogs c ON c.locale = ?
@@ -386,14 +375,7 @@ export async function assertSiteLanguageEntitlement(
   if (row.license_status === 'enabling' || row.license_status === 'disabling') {
     localizationError(409, 'LANGUAGE_LICENSE_SYNCING', 'Language license synchronization is still in progress', { site_id: siteId, locale })
   }
-  const plan = getEffectiveAccessPlan({
-    plan: row.plan,
-    status: row.status,
-    paymentStatus: row.payment_status,
-    paidThrough: row.paid_through,
-    pastDueSince: row.past_due_since,
-    periodEnd: row.current_period_end,
-  })
+  const plan = (await getOrganizationBillingProjection(db, organizationId)).effectivePlan
   const manifestCurrent = row.source_manifest_hash === await englishManifestHash()
   if (row.catalog_status !== 'available' || !manifestCurrent) {
     localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale catalog is unavailable', { locale })

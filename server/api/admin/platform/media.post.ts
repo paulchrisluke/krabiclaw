@@ -6,7 +6,8 @@ import { getAuthSession } from '~/server/utils/auth'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
-import { ensurePlatformMediaScope, listPlatformMediaAssets, PLATFORM_MEDIA_ORG_ID, PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
+import { ensurePlatformMediaScope, listPlatformMediaAssets } from '~/server/utils/platform-media'
+import { PLATFORM_ORGANIZATION_ID, PLATFORM_SITE_ID } from '~/shared/platform-scope'
 
 const IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 const MAX_BYTES = 10 * 1024 * 1024
@@ -81,7 +82,7 @@ export default defineHandler(async (event) => {
     await ensurePlatformMediaScope(env, db)
     const assetId = crypto.randomUUID()
     await createMediaAsset(db, {
-      id: assetId, organization_id: PLATFORM_MEDIA_ORG_ID, site_id: PLATFORM_MEDIA_SITE_ID, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: uploaded.imageId, public_url: uploaded.publicUrl, thumbnail_url: uploaded.thumbnailUrl, alt_text: altText, mime_type: contentType, file_name: filename, status: 'active', created_by_user_id: session.user.id, })
+      id: assetId, organization_id: PLATFORM_ORGANIZATION_ID, site_id: PLATFORM_SITE_ID, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: uploaded.imageId, public_url: uploaded.publicUrl, thumbnail_url: uploaded.thumbnailUrl, alt_text: altText, mime_type: contentType, file_name: filename, status: 'active', created_by_user_id: session.user.id, })
 
     const asset = (await listPlatformMediaAssets(db, { id: assetId, limit: 1 }))[0] ?? null
     if (!asset) return jsonResponse({ error: 'Uploaded media asset was not found after creation' }, { status: 500 })

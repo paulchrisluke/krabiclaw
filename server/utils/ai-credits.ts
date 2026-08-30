@@ -1,4 +1,4 @@
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import {
   getCurrentCreditGrantProjection,
   grantQuota,
@@ -148,55 +148,6 @@ export function groupUsageEvents(rows: CanonicalUsageEvent[]): CanonicalUsageGro
   return [...groups.values()].sort((left, right) => right.quantity - left.quantity || left.resource.localeCompare(right.resource))
 }
 
-interface CreditRow {
-  balance: number
-  lifetime_used: number
-  balance_period_key: string | null
-  updated_at: string
-}
-
-function invalidCreditState(field: string, detail: string): never {
-  throw new Error(`Invalid AI credit state: ${field} ${detail}.`)
-}
-
-function parseCreditRow(row: CreditRow | null | undefined): CreditRow {
-  if (!row) throw new Error('AI credits row missing for organization.')
-  if (typeof row.balance !== 'number' || !Number.isSafeInteger(row.balance) || row.balance < 0) {
-    invalidCreditState('balance', 'must be a non-negative safe integer')
-  }
-  if (typeof row.lifetime_used !== 'number' || !Number.isSafeInteger(row.lifetime_used) || row.lifetime_used < 0) {
-    invalidCreditState('lifetime_used', 'must be a non-negative safe integer')
-  }
-  if (typeof row.updated_at !== 'string' || !row.updated_at.trim() || Number.isNaN(Date.parse(row.updated_at))) {
-    invalidCreditState('updated_at', 'must be a non-empty valid timestamp')
-  }
-  if (row.balance_period_key === null) return row
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.balance_period_key)) {
-    invalidCreditState('balance_period_key', 'must be NULL or a canonical YYYY-MM-DD UTC week key')
-  }
-  const periodDate = new Date(`${row.balance_period_key}T00:00:00.000Z`)
-  if (
-    Number.isNaN(periodDate.getTime())
-    || periodDate.toISOString().slice(0, 10) !== row.balance_period_key
-    || periodDate.getUTCDay() !== 1
-  ) {
-    invalidCreditState('balance_period_key', 'must be NULL or a canonical Monday UTC week key')
-  }
-  return row
-}
-
-async function assertLifetimeCapacity(db: DbClient, organizationId: string, credits: number): Promise<void> {
-  const row = await queryFirst<{ lifetime_used: unknown }>(db, `
-    SELECT lifetime_used
-    FROM ai_credits WHERE organization_id = ? LIMIT 1
-  `, [organizationId])
-  if (!row) return
-  const lifetimeUsed = parseLedgerQuantity(row.lifetime_used, 'AI lifetime usage')
-  if (lifetimeUsed > MAX_SAFE_LEDGER_VALUE - credits) {
-    throw new Error('AI lifetime usage would exceed the safe integer range.')
-  }
-}
-
 export function utcWeekStart(now = new Date()): Date {
   const start = new Date(now)
   start.setUTCHours(0, 0, 0, 0)
@@ -235,7 +186,7 @@ async function getOrganizationPlanInfo(db: DbClient, organizationId: string, now
   }
 }
 
-async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, now = new Date()): Promise<CreditRow> {
+async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, now = new Date()): Promise<void> {
   const { plan, version } = await getOrganizationPlanInfo(db, organizationId, now)
   const entitlements = getPlanEntitlements(plan)
   const weeklyLimit = typeof entitlements.ai_credits === 'number' ? entitlements.ai_credits : null
@@ -243,26 +194,6 @@ async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, n
   const periodStart = utcWeekStart(now).toISOString()
   const periodEnd = utcWeekEnd(now).toISOString()
   const nowIso = now.toISOString()
-  const existingRow = await queryFirst<CreditRow>(db, `
-    SELECT balance, lifetime_used, balance_period_key, updated_at
-    FROM ai_credits WHERE organization_id = ? LIMIT 1
-  `, [organizationId])
-  let existing = existingRow ? parseCreditRow(existingRow) : null
-
-  if (!existing) {
-    await execute(db, `
-      INSERT OR IGNORE INTO ai_credits
-        (organization_id, balance, lifetime_used, balance_period_key, updated_at)
-      VALUES (?, ?, 0, ?, ?)
-    `, [organizationId, weeklyLimit ?? 0, periodKey, nowIso])
-    existing = parseCreditRow(await queryFirst<CreditRow>(db, `
-      SELECT balance, lifetime_used, balance_period_key, updated_at
-      FROM ai_credits WHERE organization_id = ? LIMIT 1
-    `, [organizationId]))
-  }
-
-  if (existing?.balance_period_key === null) return existing
-
   const projection = await getCurrentCreditGrantProjection(db, organizationId, now)
   const latestBaseline = projection.baselineCreatedAt
     ? await queryFirst<{ period_key: string; grant_type: 'plan' | 'reset' }>(db, `
@@ -322,11 +253,6 @@ async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, n
     })
   }
 
-  const row = parseCreditRow(await queryFirst<CreditRow>(db, `
-    SELECT balance, lifetime_used, balance_period_key, updated_at
-    FROM ai_credits WHERE organization_id = ? LIMIT 1
-  `, [organizationId]))
-  return row
 }
 
 async function currentWeeklyUsage(db: DbClient, organizationId: string, periodStart: string, periodEnd: string): Promise<number> {
@@ -437,14 +363,14 @@ export function usageForFlatCreditAction(action: FlatCreditAction): {
   }
 }
 
-/** Returns the current balance, creating the recurring plan allowance row when needed. */
+/** Returns the ledger-derived balance after ensuring the recurring plan grant exists. */
 export async function getOrCreateCredits(
   db: DbClient,
   organizationId: string,
   now = new Date(),
 ): Promise<{ balance: number; lifetime_used: number }> {
-  const row = await ensurePlanCreditAllowance(db, organizationId, now)
-  return { balance: row.balance, lifetime_used: row.lifetime_used }
+  const status = await getAiQuotaStatus(db, organizationId, null, now)
+  return { balance: status.balance, lifetime_used: status.lifetimeUsed }
 }
 
 export async function getAiQuotaStatus(
@@ -457,7 +383,7 @@ export async function getAiQuotaStatus(
   const entitlements = getPlanEntitlements(plan)
   const weeklyLimit = typeof entitlements.ai_credits === 'number' ? entitlements.ai_credits : null
   const sessionLimit = typeof entitlements.ai_session_credits === 'number' ? entitlements.ai_session_credits : null
-  const credits = await ensurePlanCreditAllowance(db, organizationId, now)
+  await ensurePlanCreditAllowance(db, organizationId, now)
   const periodStart = utcWeekStart(now).toISOString()
   const periodEnd = utcWeekEnd(now).toISOString()
   const weeklyUsed = await currentWeeklyUsage(db, organizationId, periodStart, periodEnd)
@@ -485,16 +411,16 @@ export async function getAiQuotaStatus(
     : null
   const sessionUsed = parseLedgerUsageAggregate(session, 'Session credit usage')
   const projection = await getCurrentCreditGrantProjection(db, organizationId, now)
-  const reconciliationRequired = credits.balance_period_key === null
-  const quotaUsed = reconciliationRequired
-    ? 0
-    : await currentQuotaUsage(db, organizationId, projection.consumptionStart ?? periodStart, periodEnd)
-  const periodAllowance = reconciliationRequired
-    ? null
-    : weeklyLimit === null ? null : projection.grantQuantity ?? weeklyLimit
-  const periodRemaining = reconciliationRequired
-    ? 0
-    : periodAllowance === null ? null : Math.max(0, periodAllowance - quotaUsed)
+  const quotaUsed = await currentQuotaUsage(db, organizationId, projection.consumptionStart ?? periodStart, periodEnd)
+  const periodAllowance = weeklyLimit === null ? null : projection.grantQuantity ?? weeklyLimit
+  const periodRemaining = periodAllowance === null ? null : Math.max(0, periodAllowance - quotaUsed)
+  const lifetime = await queryFirst<LedgerUsageAggregateRow>(db, `
+    SELECT
+      COALESCE(SUM(CASE WHEN typeof(quantity) = 'integer' AND quantity >= 0 AND quantity <= 9007199254740991 THEN quantity ELSE 0 END), 0) AS total,
+      COALESCE(SUM(CASE WHEN typeof(quantity) = 'integer' AND quantity >= 0 AND quantity <= 9007199254740991 THEN 0 ELSE 1 END), 0) AS invalid_count
+    FROM usage_events WHERE organization_id = ? AND unit = 'credit'
+  `, [organizationId])
+  const lifetimeUsed = parseLedgerUsageAggregate(lifetime, 'Lifetime credit usage')
 
   return {
     plan,
@@ -502,8 +428,8 @@ export async function getAiQuotaStatus(
     periodAllowance,
     periodUsed: weeklyUsed,
     periodRemaining,
-    lifetimeUsed: credits.lifetime_used,
-    balance: credits.balance,
+    lifetimeUsed,
+    balance: periodRemaining ?? MAX_SAFE_LEDGER_VALUE,
     weeklyLimit,
     weeklyUsed,
     weeklyRemaining: periodRemaining,
@@ -513,8 +439,8 @@ export async function getAiQuotaStatus(
     periodStart,
     periodEnd,
     grantQuantity: periodAllowance,
-    unlimited: !reconciliationRequired && weeklyLimit === null,
-    reconciliationRequired,
+    unlimited: weeklyLimit === null,
+    reconciliationRequired: false,
   }
 }
 
@@ -645,7 +571,7 @@ export async function hasCredits(
 }
 
 /**
- * Deducts credits and writes to ai_usage_log.
+ * Records charged AI usage in the canonical append-only ledger.
  * Must be called after a successful AI Gateway response.
  * Atomically checks and deducts credits to prevent TOCTOU race conditions.
  * Throws if insufficient credits remain.
@@ -685,10 +611,10 @@ export async function chargeCredits(
     }
   }
 
-  await assertLifetimeCapacity(db, organizationId, creditsCharged)
-  await getOrCreateCredits(db, organizationId, nowDate)
   const quota = await assertAiQuotaAvailable(db, organizationId, creditsCharged, opts.sessionId, nowDate)
-  const balanceWasDebited = quota.weeklyLimit !== null
+  if (quota.lifetimeUsed > MAX_SAFE_LEDGER_VALUE - creditsCharged) {
+    throw new Error('AI lifetime usage would exceed the safe integer range.')
+  }
   const eventId = crypto.randomUUID()
   const periodStart = quota.periodStart
   const periodEnd = quota.periodEnd
@@ -700,107 +626,32 @@ export async function chargeCredits(
     inputTokens: opts.inputTokens,
     outputTokens: opts.outputTokens,
     cfGatewayLogId: opts.cfGatewayLogId ?? null,
-    charged: balanceWasDebited,
+    charged: true,
   })
 
-  const results = await executeBatch(db, [
-    {
-      query: `
-        INSERT OR IGNORE INTO usage_events
-          (id, organization_id, site_id, resource, source, provider, channel,
-           session_id, quantity, unit, metadata_json, idempotency_key, created_at)
-        SELECT ?, ?, ?, 'ai_inference', ?, 'ai', ?, ?, ?, 'credit', ?, ?, ?
-        WHERE EXISTS (
-          SELECT 1 FROM ai_credits
-          WHERE organization_id = ?
-            AND (? = 1 OR balance >= ?)
-            AND typeof(lifetime_used) = 'integer'
-            AND lifetime_used >= 0
-            AND lifetime_used <= ?
-        )
-          AND (
-            ? = 1
-            OR ? IS NULL
-            OR COALESCE((
-              SELECT SUM(quantity) FROM usage_events
-              WHERE organization_id = ?
-                AND resource = 'ai_inference'
-                AND unit = 'credit'
-                AND session_id = ?
-                AND created_at >= ?
-                AND created_at < ?
-            ), 0) + ? <= ?
-          )
-      `,
-      params: [
-        eventId,
-        organizationId,
-        opts.siteId ?? null,
-        source,
-        opts.action,
-        opts.sessionId ?? null,
-        creditsCharged,
-        metadata,
-        usageIdempotencyKey,
-        now,
-        organizationId,
-        balanceWasDebited ? 0 : 1,
-        creditsCharged,
-        MAX_SAFE_LEDGER_VALUE - creditsCharged,
-        sessionGuardDisabled ? 1 : 0,
-        opts.sessionId ?? null,
-        organizationId,
-        opts.sessionId ?? null,
-        periodStart,
-        periodEnd,
-        creditsCharged,
-        quota.sessionLimit ?? 0,
-      ],
-    },
-    {
-      query: `
-        UPDATE ai_credits
-        SET balance = CASE WHEN ? = 1 THEN balance ELSE balance - ? END,
-            lifetime_used = lifetime_used + ?,
-            updated_at = ?
-        WHERE organization_id = ?
-          AND EXISTS (
-            SELECT 1 FROM usage_events
-            WHERE id = ? AND organization_id = ?
-          )
-      `,
-      params: [balanceWasDebited ? 0 : 1, creditsCharged, creditsCharged, now, organizationId, eventId, organizationId],
-    },
-    {
-      query: `
-        INSERT INTO ai_usage_log
-          (id, organization_id, site_id, action, model, input_tokens, output_tokens,
-           credits_charged, cf_gateway_log_id, created_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN ? ELSE 0 END, ?, ?
-        WHERE EXISTS (
-          SELECT 1 FROM usage_events
-          WHERE id = ? AND organization_id = ?
-        )
-      `,
-      params: [
-        crypto.randomUUID(),
-        organizationId,
-        opts.siteId ?? null,
-        opts.action,
-        opts.model,
-        opts.inputTokens,
-        opts.outputTokens,
-        balanceWasDebited ? 1 : 0,
-        creditsCharged,
-        opts.cfGatewayLogId ?? null,
-        now,
-        eventId,
-        organizationId,
-      ],
-    },
+  const result = await execute(db, `
+    INSERT OR IGNORE INTO usage_events
+      (id, organization_id, site_id, resource, source, provider, channel,
+       session_id, quantity, unit, metadata_json, idempotency_key, created_at)
+    SELECT ?, ?, ?, 'ai_inference', ?, 'ai', ?, ?, ?, 'credit', ?, ?, ?
+    WHERE (? IS NULL OR COALESCE((
+      SELECT SUM(quantity) FROM usage_events
+      WHERE organization_id = ? AND unit = 'credit' AND created_at >= ? AND created_at < ?
+    ), 0) + ? <= ?)
+      AND (? = 1 OR COALESCE((
+        SELECT SUM(quantity) FROM usage_events
+        WHERE organization_id = ? AND resource = 'ai_inference' AND unit = 'credit'
+          AND session_id = ? AND created_at >= ? AND created_at < ?
+      ), 0) + ? <= ?)
+  `, [
+    eventId, organizationId, opts.siteId ?? null, source, opts.action,
+    opts.sessionId ?? null, creditsCharged, metadata, usageIdempotencyKey, now,
+    quota.periodAllowance, organizationId, periodStart, periodEnd, creditsCharged, quota.periodAllowance ?? 0,
+    sessionGuardDisabled ? 1 : 0, organizationId, opts.sessionId ?? null,
+    periodStart, periodEnd, creditsCharged, quota.sessionLimit ?? 0,
   ])
 
-  if (Number(results[0]?.meta.changes ?? 0) === 0) {
+  if (Number(result?.meta.changes ?? 0) === 0) {
     const existing = await queryFirst<{ quantity: number; metadata_json: string | null }>(db, `
       SELECT quantity, metadata_json FROM usage_events
       WHERE organization_id = ? AND idempotency_key = ? LIMIT 1
@@ -821,16 +672,13 @@ export async function chargeCredits(
     throw new Error('AI credit deduction failed.')
   }
 
-  const updated = parseCreditRow(await queryFirst<CreditRow>(db, `
-    SELECT balance, lifetime_used, balance_period_key, updated_at
-    FROM ai_credits WHERE organization_id = ? LIMIT 1
-  `, [organizationId]))
-  return { creditsCharged: balanceWasDebited ? creditsCharged : 0, newBalance: updated.balance }
+  const updated = await getAiQuotaStatus(db, organizationId, opts.sessionId, nowDate)
+  return { creditsCharged, newBalance: updated.balance }
 }
 
 /**
  * Deducts a flat per-action credit cost for non-token-based external API
- * usage (WhatsApp sends, Google Places calls) and logs it to ai_usage_log.
+ * usage (WhatsApp sends, Google Places calls) in the canonical usage ledger.
  * Unlike chargeCredits, this records insufficient balance as an uncharged
  * usage event and returns `charged: false`. Infrastructure, query, and
  * malformed-projection failures are not insufficient balance: they propagate
@@ -866,13 +714,12 @@ export async function chargeFlatCredits(
       return { charged, creditsCharged: charged ? persistedQuantity : 0, newBalance: current.balance }
     }
   }
-  await assertLifetimeCapacity(db, organizationId, credits)
   const usage = usageForFlatCreditAction(opts.action)
-  await getOrCreateCredits(db, organizationId, nowDate)
   const quota = await getAiQuotaStatus(db, organizationId, null, nowDate)
-  const debitEligible = !quota.reconciliationRequired && quota.weeklyLimit !== null
+  if (quota.lifetimeUsed > MAX_SAFE_LEDGER_VALUE - credits) {
+    throw new Error('AI lifetime usage would exceed the safe integer range.')
+  }
   const eventId = crypto.randomUUID()
-  const logId = crypto.randomUUID()
   const baseMetadata = {
     action: opts.action,
     creditsCharged: credits,
@@ -881,93 +728,26 @@ export async function chargeFlatCredits(
   const chargedMetadata = JSON.stringify({ ...baseMetadata, charged: true })
   const unchargedMetadata = JSON.stringify({ ...baseMetadata, charged: false })
 
-  const results = await executeBatch(db, [
-    {
-      query: `
-        INSERT OR IGNORE INTO usage_events
-          (id, organization_id, site_id, resource, source, provider, channel,
-           session_id, quantity, unit, metadata_json, idempotency_key, created_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?,
-               CASE WHEN ? = 1 AND balance >= ? THEN ? ELSE ? END,
-               ?, ?
-        FROM ai_credits
-        WHERE organization_id = ?
-          AND typeof(lifetime_used) = 'integer'
-          AND lifetime_used >= 0
-          AND lifetime_used <= ?
-      `,
-      params: [
-        eventId,
-        organizationId,
-        opts.siteId ?? null,
-        usage.resource,
-        usage.source,
-        usage.provider,
-        usage.channel,
-        credits,
-        usage.unit,
-        debitEligible ? 1 : 0,
-        credits,
-        chargedMetadata,
-        unchargedMetadata,
-        usageIdempotencyKey,
-        now,
-        organizationId,
-        MAX_SAFE_LEDGER_VALUE - credits,
-      ],
-    },
-    {
-      query: `
-        UPDATE ai_credits
-        SET balance = balance - ?, updated_at = ?
-        WHERE organization_id = ?
-          AND EXISTS (
-            SELECT 1 FROM usage_events
-            WHERE id = ?
-              AND organization_id = ?
-              AND instr(COALESCE(metadata_json, ''), '"charged":true') > 0
-          )
-      `,
-      params: [credits, now, organizationId, eventId, organizationId],
-    },
-    {
-      query: `
-        UPDATE ai_credits
-        SET lifetime_used = lifetime_used + ?, updated_at = ?
-        WHERE organization_id = ?
-          AND EXISTS (
-            SELECT 1 FROM usage_events
-            WHERE id = ? AND organization_id = ?
-          )
-      `,
-      params: [credits, now, organizationId, eventId, organizationId],
-    },
-    {
-      query: `
-        INSERT INTO ai_usage_log
-          (id, organization_id, site_id, action, model, input_tokens, output_tokens,
-           credits_charged, cf_gateway_log_id, created_at)
-        SELECT ?, ?, ?, ?, 'flat', 0, 0,
-               CASE WHEN instr(COALESCE(metadata_json, ''), '"charged":true') > 0 THEN ? ELSE 0 END,
-               ?, ?
-        FROM usage_events
-        WHERE id = ? AND organization_id = ?
-      `,
-      params: [
-        logId,
-        organizationId,
-        opts.siteId ?? null,
-        opts.action,
-        credits,
-        opts.cfGatewayLogId ?? null,
-        now,
-        eventId,
-        organizationId,
-      ],
-    },
+  const result = await execute(db, `
+    INSERT OR IGNORE INTO usage_events
+      (id, organization_id, site_id, resource, source, provider, channel,
+       session_id, quantity, unit, metadata_json, idempotency_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?,
+      CASE
+        WHEN ? IS NULL THEN ?
+        WHEN COALESCE((SELECT SUM(quantity) FROM usage_events
+          WHERE organization_id = ? AND unit = 'credit' AND created_at >= ? AND created_at < ?), 0) + ? <= ? THEN ?
+        ELSE ?
+      END, ?, ?)
+  `, [
+    eventId, organizationId, opts.siteId ?? null, usage.resource, usage.source,
+    usage.provider, usage.channel, credits, usage.unit,
+    quota.periodAllowance, unchargedMetadata,
+    organizationId, quota.periodStart, quota.periodEnd, credits, quota.periodAllowance ?? 0,
+    chargedMetadata, unchargedMetadata, usageIdempotencyKey, now,
   ])
 
-  if (Number(results[0]?.meta.changes ?? 0) === 0) {
+  if (Number(result?.meta.changes ?? 0) === 0) {
     const existing = await queryFirst<{ quantity: number; metadata_json: string | null }>(db, `
       SELECT quantity, metadata_json FROM usage_events
       WHERE organization_id = ? AND idempotency_key = ? LIMIT 1
@@ -981,10 +761,10 @@ export async function chargeFlatCredits(
     throw new Error('Flat-credit usage event was not recorded.')
   }
 
-  const charged = Number(results[1]?.meta.changes ?? 0) === 1
-  const updated = parseCreditRow(await queryFirst<CreditRow>(db, `
-    SELECT balance, lifetime_used, balance_period_key, updated_at
-    FROM ai_credits WHERE organization_id = ? LIMIT 1
-  `, [organizationId]))
+  const persisted = await queryFirst<{ metadata_json: string | null }>(db, `
+    SELECT metadata_json FROM usage_events WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [eventId, organizationId])
+  const charged = flatUsageWasCharged(persisted?.metadata_json)
+  const updated = await getAiQuotaStatus(db, organizationId, null, nowDate)
   return { charged, creditsCharged: charged ? credits : 0, newBalance: updated.balance }
 }

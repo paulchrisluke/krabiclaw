@@ -6,6 +6,7 @@ import { resolvePublishedTenantPageIdentity as resolveCanonicalTenantPageIdentit
 import { resolveAttributionTouch, type AttributionParams } from '~/utils/analytics-attribution'
 import { publicTemplateRegistry, resolvePublicTemplate } from '~/utils/template-registry'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
+import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
 export { isTrackablePath, PAGEVIEW_SKIP_PREFIXES } from '~/utils/pageview-path'
 
 export const VISITOR_COOKIE = 'kc_visitor_id'
@@ -182,10 +183,10 @@ export async function recordPlatformPageview(db: AppDb, input: {
   eventId: string; pagePath: string; referrerHost: string | null; userAgent: string; ipHash: string;
   sessionId: string; visitorId: string; country: string | null; region: string | null; city: string | null; now: string
 }): Promise<void> {
-  await execute(db, `INSERT OR IGNORE INTO platform_pageview_events (
-    id, page_path, referrer, user_agent, ip_hash, session_id, visitor_id, duration_seconds, country, region, city, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`, [
-    input.eventId, input.pagePath, input.referrerHost, input.userAgent, input.ipHash,
+  await execute(db, `INSERT OR IGNORE INTO site_pageview_events (
+    id, site_id, page_path, referrer, user_agent, ip_hash, session_id, visitor_id, duration_seconds, country, region, city, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`, [
+    input.eventId, PLATFORM_SITE_ID, input.pagePath, input.referrerHost, input.userAgent, input.ipHash,
     input.sessionId, input.visitorId, input.country, input.region, input.city, input.now,
   ])
 }
@@ -193,7 +194,7 @@ export async function recordPlatformPageview(db: AppDb, input: {
 export async function updatePlatformPageviewDuration(db: AppDb, input: {
   eventId: string; sessionId: string; durationSeconds: number
 }): Promise<void> {
-  await execute(db, `UPDATE platform_pageview_events SET duration_seconds = ? WHERE id = ? AND session_id = ?`, [
-    input.durationSeconds, input.eventId, input.sessionId,
+  await execute(db, `UPDATE site_pageview_events SET duration_seconds = ? WHERE site_id = ? AND id = ? AND session_id = ?`, [
+    input.durationSeconds, PLATFORM_SITE_ID, input.eventId, input.sessionId,
   ])
 }

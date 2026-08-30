@@ -1,6 +1,6 @@
 import type Stripe from 'stripe'
 import { HTTPError } from 'nitro';
-import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { queryFirst, type DbClient } from '~/server/db'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
@@ -13,11 +13,6 @@ import {
   resolveStripeCatalogPrice,
   selectStripeCatalogPrice,
 } from '~/server/utils/stripe-catalog'
-
-interface EntitlementRow {
-  key: string
-  value: string
-}
 
 export interface BillingEnv {
   STRIPE_SECRET_KEY?: string
@@ -34,10 +29,6 @@ export interface SiteBillingStatus {
   cancelAtPeriodEnd?: boolean
   entitlements: EntitlementsMap
 }
-
-// Keep the old name as an alias so callers that haven't migrated yet still compile
-export type BillingStatus = SiteBillingStatus
-export type OrganizationEntitlement = { id: string; site_id: string; organization_id: string; key: string; value: string; source: string; created_at: string; updated_at: string }
 
 const billingAuthorizationOptions = {
   ac: organizationAccessControl,
@@ -91,18 +82,6 @@ export async function getOrganizationBillingStatus(
 
 // ── Per-site entitlements ─────────────────────────────────────────────────────
 
-export async function getSiteEntitlements(db: D1Database, siteId: string): Promise<EntitlementsMap> {
-  const rows = await queryAll<EntitlementRow>(db, `SELECT key, value FROM site_entitlements WHERE site_id = ?`, [siteId])
-  return parseEntitlementRows(rows ?? [])
-}
-
-export async function getOrganizationEntitlements(db: D1Database, organizationId: string): Promise<EntitlementsMap> {
-  const rows = await queryAll<EntitlementRow>(db, `
-    SELECT key, value FROM organization_entitlements WHERE organization_id = ?
-  `, [organizationId])
-  return parseEntitlementRows(rows ?? [])
-}
-
 export async function hasSiteEntitlement(db: DbClient, siteId: string, key: string): Promise<boolean> {
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
@@ -112,51 +91,13 @@ export async function hasSiteEntitlement(db: DbClient, siteId: string, key: stri
   return projection.entitlements[key] === true
 }
 
-// Backward-compat shim
-export async function hasEntitlement(
-  env: BillingEnv,
+export async function hasOrganizationEntitlement(
   db: D1Database,
   organizationId: string,
   key: string,
 ): Promise<boolean> {
-  void env
   const projection = await getOrganizationBillingProjection(db, organizationId)
   return projection.entitlements[key] === true
-}
-
-export async function setSiteEntitlementsFromPlan(
-  db: D1Database,
-  siteId: string,
-  organizationId: string,
-  plan: string,
-): Promise<void> {
-  const now = new Date().toISOString()
-  const entitlements = getPlanEntitlements(plan)
-  const queries: { query: string; params: unknown[] }[] = []
-  for (const [key, value] of Object.entries(entitlements)) {
-    queries.push({
-      query: `
-        INSERT OR REPLACE INTO site_entitlements
-          (id, site_id, organization_id, key, value, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'system', ?, ?)
-      `,
-      params: [`sent-${siteId}-${key}`, siteId, organizationId, key, String(value), now, now],
-    })
-  }
-  // sites.plan is a denormalized cache read directly by mcp-workflows, the
-  // transfer onboarding wizard, and Google Places sync gating. Keep it in
-  // sync with the organization subscription projection used for this site's
-  // entitlements.
-  //
-  // executeBatch runs these as a single atomic D1Database.batch() call — do
-  // not swap this for batchStatements()/sequential execute(), which provide
-  // no transactional guarantee and could leave entitlements and sites.plan
-  // out of sync if one write fails partway through.
-  queries.push({
-    query: `UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-    params: [plan, now, siteId, organizationId],
-  })
-  await executeBatch(db, queries)
 }
 
 // ── Stripe helpers ────────────────────────────────────────────────────────────
@@ -244,17 +185,4 @@ export async function verifyStripeWebhook(
       error: error instanceof Error ? error.message : 'Unknown Stripe webhook verification error',
     }
   }
-}
-
-// ── User billing items ────────────────────────────────────────────────────────
-
-function parseEntitlementRows(rows: EntitlementRow[]): EntitlementsMap {
-  const result: EntitlementsMap = {}
-  for (const row of rows) {
-    const v = row.value.toLowerCase()
-    if (v === 'true' || v === 'false') result[row.key] = v === 'true'
-    else if (/^-?\d+$/.test(v)) result[row.key] = parseInt(v, 10)
-    else result[row.key] = row.value
-  }
-  return result
 }

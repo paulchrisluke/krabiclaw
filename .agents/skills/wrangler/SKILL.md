@@ -3,6 +3,19 @@ name: wrangler
 description: Cloudflare Workers CLI for deploying, developing, and managing Workers, KV, R2, D1, Vectorize, Hyperdrive, Workers AI, Containers, Queues, Workflows, Pipelines, and Secrets Store. Load before running wrangler commands to ensure correct syntax and best practices. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.
 ---
 
+# Repository contracts override this generic skill
+
+This skill provides syntax, testing technique, and vendor reference material for Wrangler CLI. It does not authorize new architecture, dependencies, infrastructure, abstractions, schema, routes, resources, or workflows.
+
+When this skill conflicts with AGENTS.md, CLAUDE.md, repository runbooks, existing package scripts, or existing configuration, follow the repository. Do not "modernize" the repository to match this skill.
+
+**KrabiClaw-specific overrides:**
+- Do not install wrangler with npm — use the repository's existing package manager setup
+- Do not prefer wrangler.jsonc over TOML — use the repository's existing wrangler.toml
+- Do not use `wrangler d1 migrations create` or `wrangler d1 migrations apply` — follow the canonical migration workflow in docs/database/migrations.md
+- Do not apply remote migrations directly — all migrations must go through the PR/branch deployment workflow
+- Do not introduce new Cloudflare products, bindings, or resources without explicit task authorization
+
 # Wrangler CLI
 
 Your knowledge of Wrangler CLI flags, config fields, and subcommands may be outdated. **Prefer retrieval over pre-training** for any Wrangler task.

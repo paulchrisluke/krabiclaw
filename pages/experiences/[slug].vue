@@ -30,9 +30,9 @@
         data-experience-cta="mobile"
         class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
       >
-        <div v-if="experienceCta.action === 'book' && experience.price" class="min-w-0">
+        <div v-if="experienceCta.action === 'book' && experiencePrice" class="min-w-0">
           <p v-if="experienceIsOnSale" class="text-xs text-muted line-through">{{ experienceCompareAtPrice }}</p>
-          <p class="font-semibold text-default leading-tight">{{ experience.price }}</p>
+          <p class="font-semibold text-default leading-tight">{{ experiencePrice }}</p>
           <p class="text-xs text-muted">per person</p>
         </div>
         <SayaButton
@@ -214,9 +214,9 @@
               </div>
 
               <!-- Price -->
-              <div v-if="experience.price" class="hidden lg:flex items-baseline gap-1.5">
+              <div v-if="experiencePrice" class="hidden lg:flex items-baseline gap-1.5">
                 <span v-if="experienceIsOnSale" class="text-lg text-muted line-through">{{ experienceCompareAtPrice }}</span>
-                <span class="text-2xl font-bold text-default">{{ experience.price }}</span>
+                <span class="text-2xl font-bold text-default">{{ experiencePrice }}</span>
                 <span class="text-sm text-muted">per person</span>
               </div>
 
@@ -339,7 +339,7 @@
 import { $fetch } from 'ofetch'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
-import { formatMoneyAmount, isSaleActive } from '~/shared/money'
+import { formatMinorAmount, minorAmountToMajor } from '~/shared/prices'
 import {
   buildExperienceContactUrl,
   resolveExperienceAvailabilityMessage,
@@ -361,10 +361,13 @@ const experienceCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertic
 
 const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById, site: publicSite } = await usePublicPageData()
 
-const experienceIsOnSale = computed(() => isSaleActive((experience.value as ApiValue) ?? {}))
-const experienceCompareAtPrice = computed(() =>
-  formatMoneyAmount((experience.value as ApiValue)?.compare_at_price_amount, siteConfig.value?.default_currency || 'USD')
-)
+const experiencePrice = computed(() => experience.value?.price
+  ? formatMinorAmount(experience.value.price.amount_minor, experience.value.price.currency, locale.value)
+  : '')
+const experienceIsOnSale = computed(() => experience.value?.price?.compare_at_amount_minor != null)
+const experienceCompareAtPrice = computed(() => experience.value?.price?.compare_at_amount_minor != null
+  ? formatMinorAmount(experience.value.price.compare_at_amount_minor, experience.value.price.currency, locale.value)
+  : '')
 
 const experienceLocation = computed(() => {
   const locId = (experience.value as ApiValue)?.location_id
@@ -645,7 +648,7 @@ useHead({
         const experienceUrl = resolvedCanonicalUrl.value
         const orgId = `${siteUrl}/#organization`
         const experienceId = `${experienceUrl}#experience`
-        const currency = siteConfig.value?.default_currency || 'USD'
+        const currency = val.price?.currency || siteConfig.value?.default_currency || 'USD'
 
         // Preserve the canonical media order used by the page.
         const images = [
@@ -654,9 +657,9 @@ useHead({
             .filter((url): url is string => Boolean(url)),
         ]
 
-        // Use price_amount, the canonical numeric field. Text prices such as "Ask us"
-        // are intentionally not emitted as numeric structured data.
-        const priceNum = val.price_amount ?? null
+        const priceNum = val.price?.amount_minor != null
+          ? Number(minorAmountToMajor(val.price.amount_minor, val.price.currency))
+          : null
 
         // ISO 8601 duration from duration_minutes (e.g. 90 → PT1H30M)
         const duration = val.duration_minutes != null
@@ -674,7 +677,7 @@ useHead({
               url: experienceUrl,
               price: priceNum,
               priceCurrency: currency,
-              ...(isSaleActive(val) && val.sale_ends_at ? { priceValidUntil: val.sale_ends_at } : {}),
+              ...(val.price?.valid_until ? { priceValidUntil: val.price.valid_until } : {}),
               // Matches the same availability_state canonical mapping used for
               // the card badge/booking UI — see computeExperienceAvailabilitySummary.
               availability: (() => {

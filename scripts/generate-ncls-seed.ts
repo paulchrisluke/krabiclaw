@@ -36,7 +36,8 @@ export function renderNclsFixtureSql(): string {
   const site = table('sites').rows[0]
   if (!site) throw new Error('NCLS fixture has no site row')
   const initialSite = (row: Record<string, NclsSeedValue>) => {
-    return { ...row, primary_location_id: null }
+    const { plan: _plan, settings: _settings, ...canonical } = row
+    return { ...canonical, primary_location_id: null }
   }
   const blogPostWithoutBody = (row: Record<string, NclsSeedValue>) => {
     const { body: _body, ...rest } = row

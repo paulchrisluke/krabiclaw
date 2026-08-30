@@ -2,6 +2,8 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { HTTPError, defineHandler  } from 'nitro';
 import {  getQuery  } from 'nitro/h3';
 import { queryFirst, queryAll } from '~/server/db'
+import { validateOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import type { OrganizationBillingProjectionRow } from '~/server/utils/organization-billing'
 
 const textEncoder = new TextEncoder()
 
@@ -44,22 +46,16 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'organization_id is required' }, { status: 400 })
   }
 
-  const billing = await queryFirst(db, `
-    SELECT ob.organization_id, ob.stripe_customer_id, ob.stripe_subscription_id, ob.status, ob.plan, ob.payment_status, ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
+  const billing = await queryFirst<OrganizationBillingProjectionRow>(db, `
+    SELECT ob.organization_id, ob.stripe_customer_id, ob.stripe_subscription_id,
+           ob.payment_status, ob.paid_through, ob.past_due_since,
+           ob.access_plan, ob.access_expires_at, ob.updated_at
     FROM organization_billing ob
     WHERE ob.organization_id = ? LIMIT 1
   `, [organizationId])
 
-  const entitlements = await queryAll(db, `
-    SELECT se.site_id, se.key, se.value, se.source
-    FROM site_entitlements se
-    JOIN sites s ON s.id = se.site_id
-    WHERE s.organization_id = ?
-    ORDER BY se.key ASC
-  `, [organizationId])
-
   const sitePlans = await queryAll(db, `
-    SELECT id AS site_id, plan, status
+    SELECT id AS site_id, status
     FROM sites
     WHERE organization_id = ?
     ORDER BY id ASC
@@ -88,5 +84,7 @@ export default defineHandler(async (event) => {
   const webhookEvents = await queryAll(db, sql, binds)
 
   return jsonResponse({
-    billing: billing ?? null, entitlements: entitlements ?? [], site_plans: sitePlans ?? [], invoice_payments: invoicePayments ?? [], webhook_events: webhookEvents ?? [], })
+    billing: billing ?? null,
+    entitlements: validateOrganizationBillingProjection(billing, organizationId).entitlements,
+    site_plans: sitePlans ?? [], invoice_payments: invoicePayments ?? [], webhook_events: webhookEvents ?? [], })
 })

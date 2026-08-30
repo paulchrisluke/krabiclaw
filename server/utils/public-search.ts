@@ -3,6 +3,7 @@ import { bytesToHex } from '@noble/hashes/utils.js'
 import { queryAll, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
 import {
   PLATFORM_DASHBOARD_ROUTE_ENTRIES,
   PLATFORM_KNOWLEDGE_FAQ_ENTRIES,
@@ -424,7 +425,7 @@ export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKn
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
     SELECT id, site_id, title, slug, excerpt, category, tags_json, seo_description, seo_keywords
     FROM blog_posts
-    WHERE status = 'published' AND site_id IS NOT NULL AND visibility = 'public'
+    WHERE status = 'published' AND site_id <> '${PLATFORM_SITE_ID}' AND visibility = 'public'
     ORDER BY site_id, published_at DESC, updated_at DESC
   `), loadContentBodies(db, ['tenant_blog'])])
 
@@ -469,7 +470,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
     queryAll<PlatformBlogSearchRow>(db, `
       SELECT id, title, slug, excerpt, category, seo_description, seo_keywords
       FROM blog_posts
-      WHERE status = 'published' AND site_id IS NULL AND visibility = 'public'
+      WHERE status = 'published' AND site_id = '${PLATFORM_SITE_ID}' AND visibility = 'public'
       ORDER BY category, published_at DESC, updated_at DESC
     `),
     buildTenantBlogDocuments(db),

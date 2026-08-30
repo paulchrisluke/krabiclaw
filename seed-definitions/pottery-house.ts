@@ -32,7 +32,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     brandDescription:
       'A creative pottery studio in Krabi, Thailand. Wheel throwing classes, handbuilding workshops, Cocktails & Clay nights, and a beachfront popup. Clay, calm, and a place to return to each week.',
     status: 'active',
-    plan: 'growth',
     onboardingStatus: 'active',
     primaryLocationId: 'loc-pottery-house',
     contactEmail: null,
@@ -916,7 +915,7 @@ export function renderCompiledPotteryHouseCoreSeedBlock(): string {
 INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   public_url, brand_name, brand_description,
-  status, plan, onboarding_status, primary_location_id,
+  status, onboarding_status, primary_location_id,
   contact_email, contact_phone, default_currency, vertical, analytics_data_start_at
 ) VALUES (
   ${sqlValue(identity.siteId)},
@@ -929,7 +928,6 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.brandName)},
   ${sqlValue(site.brandDescription)},
   ${sqlValue(site.status)},
-  ${sqlValue(site.plan)},
   ${sqlValue(site.onboardingStatus)},
   NULL,
   ${sqlValue(site.contactEmail)},
@@ -1051,29 +1049,40 @@ UPDATE sites SET primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.
 
 export function renderCompiledPotteryHouseExperiencesBlock(): string {
   const experienceMedia = compiledPotteryHouseSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const experienceProductRows = compiledPotteryHouseSeed.experiences
+    .map(experience => `  (${[
+      sqlValue(experience.id), sqlValue(experience.organizationId), sqlValue(experience.siteId),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
+      sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
+      sqlValue('[]'), sqlValue('[]'), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
+      sqlValue('template'), sqlValue('seed:pottery-house'), sqlValue('seed:pottery-house'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceRows = compiledPotteryHouseSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
       sqlValue(experience.organizationId),
       sqlValue(experience.siteId),
       sqlValue(experience.locationId),
-      sqlValue(experience.title),
-      sqlValue(experience.slug),
       sqlValue(experience.tagline),
-      sqlValue(experience.body),
-      sqlValue(experience.price),
-      sqlValue(experience.priceAmount),
+      sqlValue(experience.priceAmount == null ? experience.price : null),
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
       experience.timeSlots.length > 0 ? sqlJson(experience.timeSlots) : 'NULL',
       'NULL',
       sqlValue(experience.availableNote),
-      sqlValue(experience.status),
-      sqlValue(experience.sortOrder),
-      sqlValue(experience.featured),
-      sqlValue(experience.featuredSortOrder),
-      sqlValue(experience.seoTitle),
-      sqlValue(experience.seoDescription),
+    ].join(', ')})`)
+    .join(',\n')
+  const experiencePriceRows = compiledPotteryHouseSeed.experiences
+    .filter(experience => experience.priceAmount != null)
+    .map(experience => `  (${[
+      sqlValue(`price-${experience.id}`), sqlValue(experience.organizationId), sqlValue(experience.siteId),
+      sqlValue(experience.locationId), sqlValue(experience.id), sqlValue(Math.round(experience.priceAmount! * 100)),
+      sqlValue(compiledPotteryHouseSeed.site.defaultCurrency), sqlValue('person'), sqlValue('unspecified'), 'NULL',
+      sqlValue('2026-01-01T00:00:00.000Z'), 'NULL', sqlValue('template'), sqlValue('seed:pottery-house'),
+      sqlValue('2026-01-01T00:00:00.000Z'),
     ].join(', ')})`)
     .join(',\n')
   const coverBlock = experienceMedia.length
@@ -1096,15 +1105,24 @@ ${experienceMedia
 
   return `-- BEGIN GENERATED: pottery_experiences
 -- Experiences for Pottery House Krabi.
-INSERT OR REPLACE INTO experiences
-  (id, organization_id, site_id, location_id,
-   title, slug, tagline, body,
-   price, price_amount, duration_minutes, max_capacity,
-   time_slots, recurring_slots, available_note,
-   status, sort_order, featured, featured_sort_order,
-   seo_title, seo_description)
+INSERT OR REPLACE INTO products
+  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+   is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
+   seo_title, seo_description, source, created_by, updated_by)
 VALUES
-${experienceRows};${coverBlock}
+${experienceProductRows};
+
+INSERT OR REPLACE INTO experiences
+  (id, organization_id, site_id, location_id, tagline, pricing_note,
+   duration_minutes, max_capacity, time_slots, recurring_slots, available_note)
+VALUES
+${experienceRows};
+
+INSERT OR REPLACE INTO prices
+  (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior,
+   compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
+VALUES
+${experiencePriceRows};${coverBlock}
 -- END GENERATED: pottery_experiences`
 }
 

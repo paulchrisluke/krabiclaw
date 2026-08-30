@@ -24,7 +24,7 @@ function isProduct(value: unknown): value is Product {
     && typeof value.category === 'string'
     && typeof value.name === 'string'
     && typeof value.slug === 'string'
-    && typeof value.price_amount === 'string'
+    && (value.price === null || isRecord(value.price))
     && typeof value.is_visible === 'boolean'
     && typeof value.available === 'boolean'
     && Array.isArray(value.tags)

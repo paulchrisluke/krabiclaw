@@ -32,7 +32,7 @@ test('Product batch service validates all rows before one D1 batch and never tru
     assert.doesNotMatch(segment, /\.slice\(0,\s*\d+\)/)
     assert.match(segment, /inputs\.length > 100/)
   }
-  assert.match(create, /const inserts: BatchQuery\[\] = inputs\.map/)
+  assert.match(create, /const inserts: BatchQuery\[\] = inputs\.flatMap/)
   assert.match(sync, /const writes: BatchQuery\[\]/)
   assert.match(sync, /product_id values must be unique/)
 })

@@ -1,5 +1,5 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
 import { buildDeleteOwnerPlacementsQuery, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
@@ -449,7 +449,7 @@ export async function createPost(
 
   const createdPost = await getPost(db, organizationId, siteId, id, env)
   if (!createdPost) throw new Error('Post not found after creation')
-  await fireSiteEventSafe({
+  await fireOrganizationEventSafe({
     db,
     organizationId,
     siteId,
@@ -464,7 +464,7 @@ export async function createPost(
     },
   })
   if (createdPost.status === 'published') {
-    await fireSiteEventSafe({
+    await fireOrganizationEventSafe({
       db,
       organizationId,
       siteId,
@@ -640,7 +640,7 @@ export async function publishPost(
 
   const post = await getPost(db, organizationId, siteId, postId, env)
   if (post && channels.includes('site') && existing.status !== 'published') {
-    await fireSiteEventSafe({
+    await fireOrganizationEventSafe({
       db,
       organizationId,
       siteId,

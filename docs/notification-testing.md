@@ -165,7 +165,9 @@ paths are migrated incrementally.
 
 ChowBot messages are conversation state and may summarize notifications, but they do
 not replace canonical notification records. PWA installation and OS-level push are
-future delivery surfaces and are not required for this in-app center.
+future delivery surfaces and are not required for this in-app center. These future
+delivery surfaces are non-authorizing — they describe planned direction, not current
+implementation permission.
 
 ## Discord production rollout
 

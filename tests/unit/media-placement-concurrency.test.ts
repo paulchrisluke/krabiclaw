@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test, { mock } from 'node:test'
 import Database from 'better-sqlite3'
-import { MEDIA_PLACEMENT_OWNER_CHECK_SQL, MEDIA_PLACEMENT_SLOT_CHECK_SQL, MAX_ORDERED_MEDIA_ASSETS } from '../../shared/media-placement-contract.ts'
+import { MAX_ORDERED_MEDIA_ASSETS } from '../../shared/media-placement-contract.ts'
 
 type SqliteDb = InstanceType<typeof Database>
 type BatchQuery = { query: string; params?: unknown[] }
@@ -40,21 +40,22 @@ db.exec(`
     id TEXT PRIMARY KEY,
     organization_id TEXT NOT NULL,
     site_id TEXT NOT NULL,
-    owner_type TEXT NOT NULL CHECK (${MEDIA_PLACEMENT_OWNER_CHECK_SQL}),
+    owner_type TEXT NOT NULL,
     owner_id TEXT NOT NULL,
-    slot TEXT NOT NULL CHECK (${MEDIA_PLACEMENT_SLOT_CHECK_SQL}),
+    slot TEXT NOT NULL,
     asset_id TEXT NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active', 'rejected')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    UNIQUE (owner_type, owner_id, slot, asset_id),
-    UNIQUE (owner_type, owner_id, slot, sort_order)
+    UNIQUE (site_id, owner_type, owner_id, slot, asset_id),
+    UNIQUE (site_id, owner_type, owner_id, slot, sort_order)
   );
 `)
-// The reorder guard row deliberately fails this check (owner_type = '__reorder_guard__' is not
-// in the editable-owner allowlist) — the CHECK above must NOT allow it, matching production.
-assert.throws(() => db.prepare(`INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, created_at, updated_at) VALUES ('x','o','s','__reorder_guard__','o','gallery','__reorder_guard__','t','t')`).run(), /CHECK constraint failed/)
+// Epoch 3 deliberately removes extensible owner/slot enum checks from D1; the canonical
+// media service below owns registry and authorization validation.
+assert.doesNotThrow(() => db.prepare(`INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, created_at, updated_at) VALUES ('x','o','s','__unknown__','o','custom','__unknown__','t','t')`).run())
+db.exec('DELETE FROM media_placements')
 
 const state: { batches: BatchQuery[][]; beforeBatch: (() => void) | null } = { batches: [], beforeBatch: null }
 

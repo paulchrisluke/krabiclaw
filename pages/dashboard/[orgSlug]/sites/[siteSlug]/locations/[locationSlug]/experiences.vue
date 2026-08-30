@@ -137,19 +137,19 @@
           </UFormField>
           <div class="grid gap-5 sm:grid-cols-2">
             <UFormField label="Price amount" :help="`Numeric amount in ${defaultCurrency}. Leave empty for free or contact-only pricing.`">
-              <UInputNumber v-model="form.price_amount" :min="0" :step="0.01" :placeholder="`e.g. 1500`" class="w-full" />
+              <UInputNumber v-model="form.price_major" :min="0" :step="0.01" :placeholder="`e.g. 1500`" class="w-full" />
             </UFormField>
-            <UFormField label="Price display override" help='Optional. Overrides the displayed price text, e.g. "Ask us" or "Free".'>
-              <UInput v-model="form.price" placeholder="Ask us" class="w-full" />
+            <UFormField label="Inquiry pricing note" help='Used only when no active Price exists, e.g. "Ask us about monthly pricing".'>
+              <UInput v-model="form.pricing_note" placeholder="Ask us about pricing" class="w-full" />
             </UFormField>
             <UFormField label="Compare-at price" :help="`Optional. Regular/pre-sale price in ${defaultCurrency}, shown struck through when running a sale. Leave empty when not on sale.`">
-              <UInputNumber v-model="form.compare_at_price_amount" :min="0" :step="0.01" class="w-full" />
+              <UInputNumber v-model="form.compare_at_major" :min="0" :step="0.01" class="w-full" />
             </UFormField>
             <UFormField label="Sale starts" help="Optional. Leave empty to start immediately.">
-              <UInput v-model="form.sale_starts_at" type="date" class="w-full" />
+              <UInput v-model="form.valid_from" type="date" class="w-full" />
             </UFormField>
             <UFormField label="Sale ends" help="Optional. Leave empty for no end date.">
-              <UInput v-model="form.sale_ends_at" type="date" class="w-full" />
+              <UInput v-model="form.valid_until" type="date" class="w-full" />
             </UFormField>
             <UFormField label="Duration (minutes)">
               <UInputNumber v-model="form.duration_minutes" :min="0" class="w-full" />
@@ -337,6 +337,8 @@ import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 import { getErrorMessage } from '~/utils/errors'
+import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
+import type { CurrencyCode } from '~/shared/currencies'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
@@ -519,11 +521,11 @@ const emptyForm = () => ({
   tagline: '',
   body: '',
   media: [] as Array<{ _key: string; asset_id: string | null; url: string | null; thumbnail_url: string | null; kind: 'image' | 'video' }>,
-  price: '',
-  price_amount: null as number | null,
-  compare_at_price_amount: null as number | null,
-  sale_starts_at: '',
-  sale_ends_at: '',
+  pricing_note: '',
+  price_major: null as number | null,
+  compare_at_major: null as number | null,
+  valid_from: '',
+  valid_until: '',
   duration_minutes: null as number | null,
   max_capacity: null as number | null,
   available_note: '',
@@ -614,11 +616,11 @@ function openEdit(exp: ApiRecord) {
       thumbnail_url: asset.thumbnail_url ?? null,
       kind: asset.kind === 'video' ? 'video' : 'image',
     })),
-    price: exp.price ?? '',
-    price_amount: exp.price_amount ?? null,
-    compare_at_price_amount: exp.compare_at_price_amount ?? null,
-    sale_starts_at: exp.sale_starts_at ? String(exp.sale_starts_at).slice(0, 10) : '',
-    sale_ends_at: exp.sale_ends_at ? String(exp.sale_ends_at).slice(0, 10) : '',
+    pricing_note: exp.pricing_note ?? '',
+    price_major: exp.price ? Number(minorAmountToMajor(exp.price.amount_minor, exp.price.currency)) : null,
+    compare_at_major: exp.price?.compare_at_amount_minor != null ? Number(minorAmountToMajor(exp.price.compare_at_amount_minor, exp.price.currency)) : null,
+    valid_from: exp.price?.valid_from ? String(exp.price.valid_from).slice(0, 10) : '',
+    valid_until: exp.price?.valid_until ? String(exp.price.valid_until).slice(0, 10) : '',
     duration_minutes: exp.duration_minutes ?? null,
     max_capacity: exp.max_capacity ?? null,
     available_note: exp.available_note ?? '',
@@ -715,14 +717,25 @@ async function save() {
       return Number.isFinite(parsed) ? parsed : null
     }
     const mediaIds = form.media.flatMap(item => item.asset_id ? [item.asset_id] : [])
-    const { media: _media, ...formFields } = form
+    const { media: _media, pricing_note: _pricingNote, price_major: _priceMajor,
+      compare_at_major: _compareAt, valid_from: _validFrom, valid_until: _validUntil, ...formFields } = form
+    const hasPrice = parseNumber(form.price_major) !== null
     const payload = {
       ...formFields,
       location_id: locationId,
-      price_amount: parseNumber(form.price_amount),
-      compare_at_price_amount: parseNumber(form.compare_at_price_amount),
-      sale_starts_at: form.sale_starts_at.trim() || null,
-      sale_ends_at: form.sale_ends_at.trim() || null,
+      pricing_note: hasPrice ? null : form.pricing_note.trim() || null,
+      price: !hasPrice ? null : {
+        amount_minor: majorAmountToMinor(String(form.price_major), defaultCurrency.value as CurrencyCode),
+        currency: defaultCurrency.value as CurrencyCode,
+        unit: 'person' as const,
+        tax_behavior: 'unspecified' as const,
+        compare_at_amount_minor: parseNumber(form.compare_at_major) === null
+          ? null
+          : majorAmountToMinor(String(form.compare_at_major), defaultCurrency.value as CurrencyCode),
+        ...(form.valid_from.trim() ? { valid_from: `${form.valid_from.trim()}T00:00:00.000Z` } : {}),
+        ...(form.valid_until.trim() ? { valid_until: `${form.valid_until.trim()}T23:59:59.999Z` } : {}),
+        provenance: 'editor',
+      },
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
       featured_sort_order: parseNumber(form.featured_sort_order) ?? 0,
