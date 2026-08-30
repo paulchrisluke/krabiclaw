@@ -8,26 +8,20 @@ import {
   MAX_ORDERED_MEDIA_ASSETS,
   buildSingleMediaPlacementQueries,
   isSingleMediaPlacement,
-  isSupportedMediaPlacement,
-  toResolvedMediaAsset,
+  readMediaPlacements,
   type MediaAssetRefInput,
-  type ResolvedMediaAsset,
-  type MediaAsset,
+  type StoredMediaPlacementItem,
 } from '~/server/utils/media-asset-manager'
-import { EDITABLE_MEDIA_PLACEMENT_OWNERS, type EditableMediaPlacementOwnerType, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
+import { isEditableMediaPlacement, isEditableMediaPlacementOwnerType, type EditableMediaPlacementOwnerType, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
+import { regenerateSiteSocialCards, refreshSocialCard, socialCardRefreshOwnerForPlacement } from '~/server/utils/social-card'
 
 export { EDITABLE_MEDIA_PLACEMENT_OWNERS } from '~/shared/media-placement-contract'
+export type MediaPlacementItem = StoredMediaPlacementItem
 
 export interface MediaPlacementKey {
   owner_type: EditableMediaPlacementOwnerType
   owner_id: string
   slot: string
-}
-
-export type MediaPlacementItem = ResolvedMediaAsset & {
-  placement_id: string
-  slot: string
-  sort_order: number
 }
 
 interface PlacementAuthInput {
@@ -59,15 +53,15 @@ export function parseMediaPlacementKey(value: unknown): MediaPlacementKey {
   const ownerType = typeof record.owner_type === 'string' ? record.owner_type.trim() : ''
   const ownerId = typeof record.owner_id === 'string' ? record.owner_id.trim() : ''
   const slot = typeof record.slot === 'string' ? record.slot.trim() : ''
-  if (!EDITABLE_MEDIA_PLACEMENT_OWNERS.includes(ownerType as typeof EDITABLE_MEDIA_PLACEMENT_OWNERS[number])) {
+  if (!isEditableMediaPlacementOwnerType(ownerType)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'placement.owner_type is invalid' })
   }
   if (!ownerId) throw new HTTPError({ statusCode: 400, statusMessage: 'placement.owner_id is required' })
   if (!slot) throw new HTTPError({ statusCode: 400, statusMessage: 'placement.slot is required' })
-  if (!isSupportedMediaPlacement({ owner_type: ownerType, slot })) {
+  if (!isEditableMediaPlacement({ owner_type: ownerType, slot })) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'placement owner_type and slot are not supported' })
   }
-  return { owner_type: ownerType as EditableMediaPlacementOwnerType, owner_id: ownerId, slot }
+  return { owner_type: ownerType, owner_id: ownerId, slot }
 }
 
 export function parseMediaPlacementMoves(value: unknown): MediaPlacementMove[] {
@@ -165,7 +159,31 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
     fieldName: 'asset_id',
   })
   await executeBatch(db, buildSingleMediaPlacementQueries({ ...input, media }))
+  await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
+}
+
+export async function getMediaPlacements(db: DbClient, input: {
+  siteId: string
+  ownerType: MediaPlacementOwnerType
+  ownerIds: string[]
+  slot?: string
+}): Promise<Map<string, MediaPlacementItem[]>> {
+  return await readMediaPlacements(db, input)
+}
+
+async function refreshSocialCardForPlacement(db: DbClient, input: {
+  env?: CloudflareEnv
+  siteId: string
+  placement: MediaPlacementKey
+}) {
+  const owner = socialCardRefreshOwnerForPlacement(input.placement)
+  if (!input.env || !owner) return
+  if (owner.owner_type === 'site') {
+    await regenerateSiteSocialCards({ db, env: input.env, siteId: input.siteId })
+    return
+  }
+  await refreshSocialCard({ db, env: input.env, owner })
 }
 
 // Attaches one asset to an ordered collection. Appends at the end (its
@@ -224,6 +242,7 @@ export async function attachMediaPlacement(db: DbClient, input: {
   if (Number(results[0]?.meta?.changes ?? 0) === 0) {
     throw new HTTPError({ statusCode: 422, statusMessage: `Media placements accept at most ${MAX_ORDERED_MEDIA_ASSETS} assets` })
   }
+  await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
 }
 
@@ -245,6 +264,7 @@ export async function removeMediaPlacement(db: DbClient, input: {
     DELETE FROM media_placements
      WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?
   `, [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, input.assetId])
+  await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
 }
 
@@ -351,6 +371,7 @@ export async function reorderMediaPlacements(db: DbClient, input: {
   } catch (error) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'This collection changed while reordering. Reload and try again.', cause: error })
   }
+  await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
 }
 
@@ -383,39 +404,6 @@ function buildMembershipGuardQuery(input: {
       expectedAssetIds, ...scopeParams,
     ],
   }
-}
-
-export async function getMediaPlacements(db: DbClient, input: {
-  siteId: string
-  ownerType: MediaPlacementOwnerType
-  ownerIds: string[]
-  slot?: string
-}): Promise<Map<string, MediaPlacementItem[]>> {
-  const ownerIds = [...new Set(input.ownerIds)].filter(Boolean)
-  const result = new Map(ownerIds.map(id => [id, [] as MediaPlacementItem[]]))
-  if (!ownerIds.length) return result
-  const rows = await queryAll<Record<string, unknown>>(db, `
-    SELECT mp.id AS placement_id, mp.owner_id, mp.slot, mp.sort_order,
-           mp.asset_id AS asset_id, ma.*
-      FROM media_placements mp
-      JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id AND ma.site_id = mp.site_id
-     WHERE mp.site_id = ? AND mp.owner_type = ?
-       AND mp.owner_id IN (SELECT value FROM json_each(?))
-       ${input.slot ? 'AND mp.slot = ?' : ''}
-       AND mp.status = 'active' AND ma.status = 'active'
-     ORDER BY mp.owner_id, mp.slot, mp.sort_order
-  `, [input.siteId, input.ownerType, d1JsonStringSet(ownerIds), ...(input.slot ? [input.slot] : [])])
-  for (const row of rows) {
-    const resolved = toResolvedMediaAsset(row as unknown as MediaAsset)
-    result.get(String(row.owner_id))?.push({
-      ...resolved,
-      asset_id: String(row.asset_id),
-      placement_id: String(row.placement_id),
-      slot: String(row.slot),
-      sort_order: Number(row.sort_order),
-    })
-  }
-  return result
 }
 
 async function requirePlacementOwner(db: DbClient, input: {

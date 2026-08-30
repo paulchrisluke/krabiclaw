@@ -1,5 +1,7 @@
 import { execute, executeBatch, queryAll, type DbClient } from '../db/index.ts'
 import { getMediaPlacements } from './media-placement.ts'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { refreshSocialCard } from '~/server/utils/social-card'
 
 export const OWNER_REVIEW_COLLECTION_METHODS = ['in_person', 'email', 'phone', 'migration', 'other'] as const
 export type OwnerReviewCollectionMethod = typeof OWNER_REVIEW_COLLECTION_METHODS[number]
@@ -78,7 +80,7 @@ export async function attachReviewMedia<T extends Record<string, unknown>>(db: D
 
 export async function createOwnerEnteredSiteReview(
   db: DbClient,
-  scope: { organizationId: string; siteId: string; enteredByUserId: string },
+  scope: { organizationId: string; siteId: string; enteredByUserId: string; env?: CloudflareEnv },
   input: OwnerEnteredReviewInput,
 ) {
   if (input.publication_authorized !== true) throw new Error('publication_authorized must be explicitly accepted')
@@ -111,12 +113,13 @@ export async function createOwnerEnteredSiteReview(
     now,
     now,
   ])
+  if (scope.env) await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: id }, actorId: scope.enteredByUserId })
   return { id, created: true, verified: false }
 }
 
 export async function updateOwnerEnteredSiteReview(
   db: DbClient,
-  scope: { organizationId: string; siteId: string },
+  scope: { organizationId: string; siteId: string; env?: CloudflareEnv },
   reviewId: string,
   input: Partial<OwnerEnteredReviewInput>,
 ) {
@@ -149,6 +152,7 @@ export async function updateOwnerEnteredSiteReview(
     WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
   `, params)
   if (!Number(result.meta.changes ?? 0)) throw new Error('Owner-entered review not found')
+  if (scope.env) await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: reviewId } })
   return { review_id: reviewId, updated: true, verified: false }
 }
 

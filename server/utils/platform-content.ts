@@ -35,6 +35,7 @@ import { getMediaPlacements } from '~/server/utils/media-placement'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
+import { refreshSocialCard } from '~/server/utils/social-card'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
@@ -614,11 +615,13 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_blog', String(post.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+  const media = (await getMediaPlacements(db, { siteId: PLATFORM_SITE_ID, ownerType: 'blog_post', ownerIds: [String(post.id)] })).get(String(post.id)) ?? []
   const { author_id: authorId, ...postRecord } = post
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks }),
+    media,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -649,11 +652,13 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_doc', String(doc.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Documentation content document is missing' })
+  const media = (await getMediaPlacements(db, { siteId: PLATFORM_SITE_ID, ownerType: 'platform_doc', ownerIds: [String(doc.id)] })).get(String(doc.id)) ?? []
   const { author_id: authorId, ...docRecord } = doc
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...docRecord, content_blocks: contentBlocks }),
+    media,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -861,11 +866,13 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
     getContentBlocksForOwner(db, 'tenant_blog', String(post.id)),
     listBlocksForDocument(db, contentDocument.id),
   ])
+  const media = (await getMediaPlacements(db, { siteId, ownerType: 'blog_post', ownerIds: [String(post.id)] })).get(String(post.id)) ?? []
   const { author_id: authorId, ...postRecord } = post
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks ?? [], body: renderContentBlocksToMarkdown(rawBlocks) }),
+    media,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -1025,6 +1032,7 @@ export async function createPlatformBlogPost(
         ],
       })
       const post = await getPlatformBlogPost(db, id, siteId, env)
+      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'blog_post', owner_id: id }, actorId: authorId })
       return {
         success: true,
         id,
@@ -1328,6 +1336,7 @@ export async function updatePlatformBlogPost(
     }
 
     const updatedPost = await getPlatformBlogPost(db, postId, siteId, env)
+    if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'blog_post', owner_id: postId } })
     return {
       success: true,
       admin_edit_url: updatedPost.admin_edit_url,
@@ -1477,6 +1486,7 @@ export async function createPlatformDoc(
   db: D1Database,
   authorId: string,
   input: PlatformDocCreateInput,
+  env?: CloudflareEnv,
 ) {
   if (!input.title || !input.content_blocks?.length) badRequest('title and content_blocks are required')
   validateDocCommon(input)
@@ -1529,6 +1539,7 @@ export async function createPlatformDoc(
       })
 
       const doc = await getPlatformDoc(db, id)
+      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'platform_doc', owner_id: id }, actorId: authorId })
       return {
         success: true,
         id,
@@ -1550,6 +1561,7 @@ export async function updatePlatformDoc(
   db: D1Database,
   docIdOrSlug: string,
   input: PlatformDocUpdateInput,
+  env?: CloudflareEnv,
 ) {
   const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
   validateDocCommon(input)
@@ -1633,6 +1645,7 @@ export async function updatePlatformDoc(
     }
 
     const updatedDoc = await getPlatformDoc(db, docId)
+    if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'platform_doc', owner_id: docId } })
     return {
       success: true,
       admin_edit_url: updatedDoc.admin_edit_url,

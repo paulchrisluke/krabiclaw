@@ -1,5 +1,7 @@
-import { execute, queryFirst, type DbClient, type QueryResultRow } from '~/server/db'
+import { execute, executeBatch, queryFirst, type DbClient, type QueryResultRow } from '~/server/db'
 import { getMediaPlacements } from '~/server/utils/media-placement'
+import { refreshSocialCard } from '~/server/utils/social-card'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 export async function getPublicReview(db: DbClient, siteId: string, locationSlug: string, reviewId: string) {
   const review = await queryFirst<QueryResultRow>(db, `
@@ -22,7 +24,6 @@ export async function getPublicReview(db: DbClient, siteId: string, locationSlug
     siteId,
     ownerType: 'review',
     ownerIds: [reviewId],
-    slot: 'gallery',
   })).get(reviewId) ?? []
 
   return {
@@ -61,4 +62,36 @@ export async function replyToReview(
       updated_at: now,
     },
   }
+}
+
+export type ReviewModerationStatus = 'pending' | 'approved' | 'rejected'
+
+export function isReviewModerationStatus(value: unknown): value is ReviewModerationStatus {
+  return value === 'pending' || value === 'approved' || value === 'rejected'
+}
+
+export async function updateReviewModerationStatus(
+  db: DbClient,
+  scope: { siteId: string; env: CloudflareEnv },
+  reviewId: string,
+  status: ReviewModerationStatus,
+) {
+  const now = new Date().toISOString()
+  const queries = [{
+    query: 'UPDATE reviews SET status = ?, updated_at = ? WHERE id = ? AND site_id = ?',
+    params: [status, now, reviewId, scope.siteId],
+  }]
+  if (status === 'approved' || status === 'rejected') {
+    queries.push({
+      query: `UPDATE media_placements SET status = ?, updated_at = ?
+        WHERE owner_type = 'review' AND owner_id = ? AND site_id = ?`,
+      params: [status === 'approved' ? 'active' : 'rejected', now, reviewId, scope.siteId],
+    })
+  }
+  const [reviewUpdate] = await executeBatch(db, queries)
+  if (!Number(reviewUpdate?.meta.changes ?? 0)) {
+    return { status: 404, data: { error: 'Review not found' } }
+  }
+  await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: reviewId } })
+  return { status: 200, data: { updated: true } }
 }

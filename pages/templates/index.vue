@@ -36,14 +36,6 @@
           <!-- Top gradient strip -->
           <div class="h-1 shrink-0" style="background: linear-gradient(90deg, var(--kc-coral) 0%, var(--kc-teal) 100%);"></div>
 
-          <!--
-            Real per-template screenshot when available (utils/template-registry.ts's
-            previewImageUrl, captured from the template's live demo site) — falls back to
-            a letter avatar otherwise. This is static screenshot art, not routed through the
-            #259 OG-image pipeline (server/utils/og-image/pipeline.ts), which generates a
-            title/description social-share card (see /templates/[slug].vue's useSocialMetadata
-            call), a different shape of asset than a gallery preview image.
-          -->
           <div class="relative flex aspect-[16/9] items-center justify-center overflow-hidden" style="background: linear-gradient(135deg, var(--ui-bg-muted) 0%, var(--ui-bg-elevated) 100%);">
             <img
               v-if="template.previewImageUrl"

@@ -139,6 +139,7 @@ export function buildPublicDraftBlawbyDocument(
         seo_description: heroDescription,
         canonical_url: null,
         robots: 'noindex',
+        media: [],
         blocks: [{
           id: 'draft-home-hero',
           type: 'hero',

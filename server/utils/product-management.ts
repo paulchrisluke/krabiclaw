@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { d1JsonArray, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import type {
   CreateProductInput,
@@ -9,6 +10,7 @@ import type {
   UpdateProductInput,
 } from '~/server/types/products'
 import { getMediaPlacements } from '~/server/utils/media-placement'
+import { regenerateSiteSocialCards, refreshSocialCard } from '~/server/utils/social-card'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode } from '~/shared/currencies'
@@ -64,6 +66,7 @@ export function mapProduct(row: ProductRow): Product {
     details: parseJsonArray<ProductDetail>(row.details_json, 'details_json'),
     image: null,
     gallery: [],
+    media: [],
     seo_title: row.seo_title === null ? null : String(row.seo_title),
     seo_description: row.seo_description === null ? null : String(row.seo_description),
     canonical_url: row.canonical_url === null ? null : String(row.canonical_url),
@@ -148,6 +151,7 @@ async function hydrateProductMedia(db: DbClient, siteId: string, products: Produ
       ...product,
       image: media.find(item => item.slot === 'image') ?? null,
       gallery: media.filter(item => item.slot === 'gallery'),
+      media,
     }
   })
 }
@@ -327,6 +331,7 @@ export async function createProduct(
   locationId: string,
   input: CreateProductInput,
   actor: string,
+  env?: CloudflareEnv,
 ): Promise<Product> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const category = requireTrimmedProductString(input.category, 'category', PRODUCT_LIMITS.category)
@@ -392,6 +397,7 @@ export async function createProduct(
   await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, productId: id, metadata: { category, name } })
   const created = await getProduct(db, organizationId, siteId, locationId, id)
   if (!created) throw new Error('Product not found after create')
+  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'product', owner_id: id }, actorId: actor })
   return created
 }
 
@@ -402,6 +408,7 @@ export async function createProductsBatch(
   locationId: string,
   inputs: CreateProductInput[],
   actor: string,
+  env?: CloudflareEnv,
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > PRODUCT_LIMITS.batchCreate) {
@@ -470,6 +477,7 @@ export async function syncProducts(
   inputs: SyncProductInput[],
   actor: string,
   setMissingUnavailable = false,
+  env?: CloudflareEnv,
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length > PRODUCT_LIMITS.sync) throw new HTTPError({ statusCode: 400, statusMessage: `products may contain at most ${PRODUCT_LIMITS.sync} rows` })
@@ -586,6 +594,7 @@ export async function updateProduct(
   productId: string,
   input: UpdateProductInput,
   actor: string,
+  env?: CloudflareEnv,
 ): Promise<Product> {
   const existing = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!existing) notFound()
@@ -655,6 +664,7 @@ export async function updateProduct(
   await productEvent(db, 'product.updated', { organizationId, siteId, locationId, actor, productId })
   const updated = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!updated) throw new Error('Product not found after update')
+  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'product', owner_id: productId }, actorId: actor })
   return updated
 }
 

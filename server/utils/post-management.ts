@@ -4,6 +4,7 @@ import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
 import { buildDeleteOwnerPlacementsQuery, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
+import { refreshSocialCard } from '~/server/utils/social-card'
 import {
   loadExactPublicLocalizations,
   projectExactLocalizedResource,
@@ -30,7 +31,7 @@ export interface PublicPostMedia {
   public_url: string
   thumbnail_url: string | null
   kind: 'image' | 'video'
-  slot: 'cover' | 'gallery'
+  slot: 'cover' | 'gallery' | 'social_card'
   sort_order: number
   alt_text: string | null
   width: number | null
@@ -277,7 +278,7 @@ function publicMediaFromRows(rows: MediaPlacementItem[] | undefined): PublicPost
       public_url: row.public_url!,
       thumbnail_url: row.thumbnail_url,
       kind: row.kind === 'video' ? 'video' as const : 'image' as const,
-      slot: row.slot === 'cover' ? 'cover' as const : 'gallery' as const,
+      slot: row.slot === 'cover' || row.slot === 'social_card' ? row.slot : 'gallery',
       sort_order: row.sort_order,
       alt_text: row.alt_text,
       width: row.width ?? null,
@@ -486,6 +487,7 @@ export async function createPost(
       },
     })
   }
+  await refreshSocialCard({ db, env, owner: { owner_type: 'post', owner_id: id }, actorId: createdBy })
   return createdPost
 }
 
@@ -588,7 +590,9 @@ export async function updatePost(
     }
   }
 
-  return await getPost(db, organizationId, siteId, postId, env)
+  const updated = await getPost(db, organizationId, siteId, postId, env)
+  await refreshSocialCard({ db, env, owner: { owner_type: 'post', owner_id: postId }, actorId: _updatedBy })
+  return updated
 }
 
 export async function publishPost(
@@ -661,6 +665,8 @@ export async function publishPost(
       },
     })
   }
+
+  if (post) await refreshSocialCard({ db, env, owner: { owner_type: 'post', owner_id: postId } })
 
   return post
 }

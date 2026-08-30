@@ -148,21 +148,7 @@ export interface PublicBlawbyRouteData {
   post: PublicBlogPost | null
 }
 
-export interface PublicTenantPage {
-  id: string
-  path: string
-  title: string
-  page_type: string
-  recipe: string | null
-  locale: string
-  summary: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_url: string | null
-  robots: string | null
-  blocks: import('~/utils/tenant-page-blocks').TenantPageBlock[]
-  updated_at: string
-}
+export type PublicTenantPage = import('~/server/utils/public-tenant-pages').PublicTenantPage
 
 export interface PublicConsultationSettings {
   mode: 'external_url' | 'native_disabled'

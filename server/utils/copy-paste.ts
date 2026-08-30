@@ -173,7 +173,7 @@ export async function copyLocationBatch(
   // Apply field overrides to target location via the standard update path, which
   // handles slug uniqueness, media asset validation, and field normalization.
   if (field_overrides && Object.keys(field_overrides).length > 0) {
-    const updateResult = await updateLocation(rawClient(db), organizationId, siteId, targetLocationId, field_overrides, userId)
+    const updateResult = await updateLocation(rawClient(db), organizationId, siteId, targetLocationId, field_overrides, userId, env)
     if (updateResult.status >= 400) {
       return await cleanupOnFailure({ success: false, error: (updateResult.data as { error?: string }).error ?? 'Failed to apply field overrides' })
     }

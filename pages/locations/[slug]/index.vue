@@ -479,6 +479,7 @@ const heroMedia = computed(() => {
   if (contentHero.value.image) return resolveMedia({ public_url: contentHero.value.image, kind: contentHero.value.imageKind || 'image' })
   return resolveMedia(location.value ? locationMedia(location.value as ApiRecord) : null)
 })
+const locationSocialCard = computed(() => location.value?.media?.find((item: ApiRecord) => item.slot === 'social_card') ?? null)
 const heroTitle = computed(() => contentHero.value.title || null)
 const heroSubtitle = computed(() => contentHero.value.subtitle || null)
 
@@ -525,6 +526,14 @@ useSocialMetadata(() => ({
   description: location.value?.seo_description || (location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : ''),
   location: location.value?.title || null,
   robots: location.value?.robots || null,
+  socialImage: locationSocialCard.value?.public_url
+    ? {
+        url: String(locationSocialCard.value.public_url),
+        width: 1200,
+        height: 630,
+        type: 'image/png',
+      }
+    : null,
   brand: {
     siteName: siteName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,

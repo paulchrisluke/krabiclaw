@@ -623,6 +623,7 @@ const { canonicalUrl } = useSocialMetadata(() => {
       faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
       primaryColor: siteConfig.value?.brand_color || null,
     },
+    ownerMedia: experience.value?.media ?? [],
     heroImage: heroImageUrl ? { url: heroImageUrl } : null,
   }
 })

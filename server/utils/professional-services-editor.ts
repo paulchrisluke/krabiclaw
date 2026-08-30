@@ -6,6 +6,8 @@ import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
 import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { assertNoEmbeddedMediaFields } from '~/utils/tenant-page-blocks'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { refreshSocialCard } from '~/server/utils/social-card'
 
 export class ProfessionalServiceValidationError extends Error {
   constructor(message: string) {
@@ -236,14 +238,16 @@ export async function upsertProfessionalServiceContent(
     siteId: string
     data: ApiRecord
     updatedBy?: string | null
+    env?: CloudflareEnv
   },
 ) {
   validateProfessionalServicePayload(input.data)
-  const { organizationId, siteId, data, updatedBy = null } = input
+  const { organizationId, siteId, data, updatedBy = null, env } = input
   const written: Record<string, number> = {}
   const statements: BatchQuery[] = []
   const existingOfferings = await queryAll<{ id: string; slug: string }>(db, 'SELECT id, slug FROM offerings WHERE site_id = ?', [siteId])
   const offeringIdBySlug = new Map(existingOfferings.map(offering => [offering.slug, offering.id]))
+  const writtenOfferingIds: string[] = []
   const existingOfferingMedia = await getMediaPlacements(db, {
     siteId,
     ownerType: 'offering',
@@ -265,6 +269,7 @@ export async function upsertProfessionalServiceContent(
     incomingOfferingSlugs.add(slug)
     const existingOfferingId = offeringIdBySlug.get(slug)
     const id = existingOfferingId ?? cleanString(item.id, 80) ?? idWith('offering')
+    writtenOfferingIds.push(id)
     validateOfferingContent(item, slug)
     const offeringMedia = strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
     statements.push({
@@ -502,6 +507,11 @@ export async function upsertProfessionalServiceContent(
 
   if (statements.length) {
     await executeBatch(db, statements)
+  }
+  if (env) {
+    for (const ownerId of writtenOfferingIds) {
+      await refreshSocialCard({ db, env, owner: { owner_type: 'offering', owner_id: ownerId }, actorId: updatedBy })
+    }
   }
 
   return { success: true, written }

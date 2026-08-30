@@ -31,6 +31,7 @@ export interface Product {
   details: ProductDetail[]
   image: ResolvedMediaAsset | null
   gallery: ResolvedMediaAsset[]
+  media: ResolvedMediaAsset[]
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null

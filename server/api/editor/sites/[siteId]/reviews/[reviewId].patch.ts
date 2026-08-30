@@ -3,15 +3,14 @@
 import { jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertOrganizationAccess } from '~/server/utils/member-access'
-import { replyToReview } from '~/server/utils/review-management'
-import { execute } from '~/server/db'
+import { isReviewModerationStatus, replyToReview, updateReviewModerationStatus } from '~/server/utils/review-management'
 import { updateOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reviewId = getRouterParam(event, 'reviewId')
 
-  const { db, site } = await requireSiteAccess(event, siteId!, 'context')
+  const { env, db, site } = await requireSiteAccess(event, siteId!, 'context')
   assertOrganizationAccess(site.member_role)
 
   const body = await readStrictBody<ApiRecord>(event, {
@@ -29,7 +28,7 @@ export default defineHandler(async (event) => {
   }
   if (hasOwnerEntryFields) {
     try {
-      await updateOwnerEnteredSiteReview(db, { organizationId: site.organization_id, siteId: siteId! }, reviewId!, body)
+      await updateOwnerEnteredSiteReview(db, { organizationId: site.organization_id, siteId: siteId!, env }, reviewId!, body)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Review update failed'
       return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
@@ -48,33 +47,18 @@ export default defineHandler(async (event) => {
     }
   }
 
-  if (body.status !== undefined && !['pending', 'approved', 'rejected'].includes(String(body.status))) {
+  if (body.status !== undefined && !isReviewModerationStatus(body.status)) {
     return jsonResponse({ error: 'Invalid review status' }, { status: 400 })
   }
 
-  const allowed = ['status']
-  const sets = ['updated_at = ?']
-  const params: ApiRecord[] = [new Date().toISOString()]
-  for (const key of allowed) {
-    if (key in body) { sets.push(`${key} = ?`); params.push(body[key] ?? null) }
-  }
-  if (sets.length === 1) return jsonResponse({ updated: true })
-  params.push(reviewId, siteId)
-
-  const reviewUpdate = await execute(db, `UPDATE reviews SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
-  if (Number(reviewUpdate?.meta?.changes ?? 0) === 0) {
-    return jsonResponse({ error: 'Review not found' }, { status: 404 })
-  }
-  if (body.status === 'approved' || body.status === 'rejected') {
-    await execute(db, `
-      UPDATE media_placements
-      SET status = ?, updated_at = ?
-      WHERE owner_type = 'review' AND owner_id = ?
-        AND site_id = ?
-    `, [body.status === 'approved' ? 'active' : 'rejected', new Date().toISOString(), reviewId, siteId])
-  }
-
-  return jsonResponse({ updated: true })
+  if (body.status === undefined) return jsonResponse({ updated: true })
+  const result = await updateReviewModerationStatus(
+    db,
+    { siteId: siteId!, env },
+    reviewId!,
+    body.status,
+  )
+  return jsonResponse(result.data, { status: result.status })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam  } from 'nitro/h3';

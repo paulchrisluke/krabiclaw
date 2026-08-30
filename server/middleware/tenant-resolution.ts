@@ -19,6 +19,7 @@ import { verifyScopedPreviewToken } from "../utils/preview-token";
 import { isPlatformPath } from "~/utils/platform-routes";
 import { getDraftMedia, parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
 import { resolvePublicTemplate } from "~/utils/template-registry";
+import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
 
 interface TenantSiteRow {
   id: string;
@@ -305,6 +306,17 @@ export default defineHandler(async (event) => {
   if (isPlatform) {
     setTenantType(event, TENANT_TYPES.PLATFORM);
     event.context.siteId = null;
+    const platformSite = env.db
+      ? await queryFirst<Pick<TenantSiteRow, 'brand_name' | 'media_json' | 'vertical'>>(env.db, `
+          SELECT s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
+          FROM sites s WHERE s.id = ? AND s.status = 'active' LIMIT 1
+        `, [PLATFORM_SITE_ID])
+      : null
+    event.context.site = {
+      brand_name: platformSite?.brand_name?.trim() || 'KrabiClaw',
+      media: platformSite ? tenantSiteMedia(platformSite) : [],
+      vertical: platformSite?.vertical ?? null,
+    }
     return;
   }
 

@@ -1,7 +1,7 @@
 import satori, { init as initSatori } from 'satori/standalone'
 import { Resvg, type InitInput } from '@resvg/resvg-wasm'
 import type { ReactNode } from 'react'
-import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, type OgImageRenderPayload } from '~/utils/social-metadata'
+import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, type SocialCardRenderPayload } from '~/utils/social-metadata'
 import { getOgImageFonts } from './fonts.ts'
 import { resolveOgImageRenderer } from './renderers/index.ts'
 import { fetchImageAsDataUri } from './fetch-image.ts'
@@ -63,7 +63,7 @@ async function loadBundledPngEncoderWasm(): Promise<WebAssembly.Module> {
 // comment below. Tenant media (background photos, logos, favicons) is sometimes imported
 // as WebP unchanged from its original source file, so any of the three image slots below
 // can hit this. Re-encode to PNG rather than reject outright, so imported WebP photos
-// still render instead of silently falling back to the flat template gradient.
+// remain valid card sources.
 async function resolveWebpSafeDataUri(
   dataUri: string | null,
   deps: Pick<RenderOgImageDeps, 'webpDecoderWasmModule' | 'pngEncoderWasmModule'>,
@@ -107,7 +107,7 @@ export interface RenderOgImageDeps {
 
 /** Renders one OG image payload to real, decodable 1200×630 PNG bytes. */
 export async function renderOgImagePng(
-  payload: OgImageRenderPayload,
+  payload: SocialCardRenderPayload,
   deps: RenderOgImageDeps,
 ): Promise<Uint8Array> {
   await Promise.all([
@@ -125,7 +125,7 @@ export async function renderOgImagePng(
     resolveLogoDataUri(payload.logoUrl, deps.platformDomain),
     fetchImageAsDataUri(payload.faviconUrl, { timeoutMs: 4000 }),
   ])
-  if (payload.backgroundImageUrl && !rawBackgroundImageDataUri) {
+  if (!rawBackgroundImageDataUri) {
     throw new Error(`OG page media could not be loaded: ${payload.backgroundImageUrl}`)
   }
 
@@ -135,6 +135,7 @@ export async function renderOgImagePng(
     resolveWebpSafeDataUri(rawFaviconDataUri, deps),
   ])
 
+  if (!backgroundImageDataUri) throw new Error('OG page media could not be decoded')
   const renderer = resolveOgImageRenderer(payload.template)
   const tree = renderer({ ...payload, backgroundImageDataUri, logoDataUri, faviconDataUri })
 

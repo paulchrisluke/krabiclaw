@@ -111,6 +111,7 @@ const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   description: seoDescription.value,
   pageType: 'article',
   brand: { siteName: siteName.value, logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null },
+  ownerMedia: post.value?.media ?? [],
   heroImage: coverMedia.value
     ? { url: coverMedia.value.public_url, kind: coverMedia.value.kind, thumbnailUrl: coverMedia.value.thumbnail_url }
     : null,

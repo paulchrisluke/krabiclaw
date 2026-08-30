@@ -248,6 +248,7 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
+    media: page.media,
     updated_at: page.updated_at,
   }))
 }
@@ -273,6 +274,7 @@ export async function getPublicTenantPageByPath(
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
+    media: page.media,
     updated_at: page.updated_at,
   }
 }

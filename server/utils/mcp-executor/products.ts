@@ -64,11 +64,11 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
     case 'create_product': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { product: await createProduct(site.db, site.organizationId, site.siteId, locationId, omit(args, ['location_id']) as unknown as CreateProductInput, site.userId) }
+      return { product: await createProduct(site.db, site.organizationId, site.siteId, locationId, omit(args, ['location_id']) as unknown as CreateProductInput, site.userId, site.env) }
     }
     case 'update_product': {
       const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
-      return { product: await updateProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, omit(args, ['product_id']) as UpdateProductInput, site.userId) }
+      return { product: await updateProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, omit(args, ['product_id']) as UpdateProductInput, site.userId, site.env) }
     }
     case 'delete_product': {
       const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
@@ -102,12 +102,12 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
     case 'batch_create_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { products: await createProductsBatch(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as CreateProductInput[], site.userId) }
+      return { products: await createProductsBatch(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as CreateProductInput[], site.userId, site.env) }
     }
     case 'sync_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { products: await syncProducts(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as SyncProductInput[], site.userId, args.set_missing_unavailable === true) }
+      return { products: await syncProducts(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as SyncProductInput[], site.userId, args.set_missing_unavailable === true, site.env) }
     }
     case 'import_products_from_media': {
       const locationId = requiredString(args, 'location_id')

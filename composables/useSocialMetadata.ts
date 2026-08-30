@@ -3,8 +3,9 @@ import { resolveSeoUrl } from '~/composables/useSeoUrls'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import {
   composeSocialMetadata,
-  resolveSocialOgImage,
+  resolveSocialImageFromMedia,
   type SocialBrand,
+  type SocialMediaSource,
   type SocialPageMetadataInput,
   type SocialPageType,
   type SocialTemplate,
@@ -34,6 +35,7 @@ export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' |
   path: string
   template?: SocialTemplate
   brand?: SocialBrand
+  ownerMedia?: readonly SocialMediaSource[]
   breadcrumbs?: PageBreadcrumb[]
   schemaPageType?: SchemaPageType
   schemaNodes?: ApiRecord[]
@@ -83,7 +85,11 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       pageType: value.socialType || value.pageType || 'website',
       canonicalUrl,
     }
-    const resolvedImage = resolveSocialOgImage(socialInput, origin)
+    const fallbackImage = resolveSocialImageFromMedia(value.ownerMedia ?? [], tenant.site?.media ?? [])
+    const sourceImage = value.socialImage ?? fallbackImage ?? (brand.logoUrl ? { url: brand.logoUrl } : null)
+    const resolvedImage = sourceImage
+      ? { ...sourceImage, url: resolveSeoUrl(sourceImage.url, origin), alt: sourceImage.alt || value.title }
+      : null
     return { value, origin, template, tags: composeSocialMetadata(socialInput, resolvedImage) }
   })
 

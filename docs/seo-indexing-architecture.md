@@ -104,7 +104,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 ## Adding a tenant route
 
 1. Ensure the route requires a resolved tenant/site.
-2. Add page-specific canonical and social metadata through `useSocialMetadata()`; every social image is rendered by `/og-image-render.png`, with that page's media used only as its background input.
+2. Add page-specific canonical and social metadata through `useSocialMetadata()`. The composer uses the persisted owner card, site card, social sharing image, or logo supplied by the public payload.
 3. Add the platform-host route classification when the path is tenant-only.
 4. Add the route to `server/plugins/sitemap.ts` only when it has durable public search value and can avoid empty/thin output.
 5. Query and filter tenant-owned records explicitly.

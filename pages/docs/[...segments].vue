@@ -338,6 +338,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   description: seoDescription.value,
   path: resolveSeoUrl(docPath.value, platformOrigin.value),
   brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
+  ownerMedia: doc.value?.media ?? [],
   label: doc.value?.category || null,
   heroImage: docMedia.value.thumb ? { url: docMedia.value.thumb } : null,
   robots: doc.value?.robots?.trim() || null,

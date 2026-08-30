@@ -128,5 +128,6 @@ useSocialMetadata(() => ({
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
     faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
+  ownerMedia: page.value.media,
 }))
 </script>

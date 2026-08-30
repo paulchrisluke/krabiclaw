@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro';
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -16,6 +17,7 @@ import {
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements } from '~/server/utils/media-placement'
+import { refreshSocialCard } from '~/server/utils/social-card'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -156,7 +158,6 @@ async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId:
     siteId,
     ownerType: 'experience',
     ownerIds: experiences.map(experience => experience.id),
-    slot: 'gallery',
   })
   return experiences.map(experience => ({
     ...experience,
@@ -455,6 +456,7 @@ export async function createExperience(
   siteId: string,
   input: CreateExperienceInput,
   userId: string,
+  env?: CloudflareEnv,
 ): Promise<Experience> {
   if (!input.location_id) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'location_id is required' })
@@ -569,6 +571,7 @@ export async function createExperience(
       status: created.status,
     },
   })
+  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id }, actorId: userId })
   return created
 }
 
@@ -578,6 +581,7 @@ export async function updateExperience(
   siteId: string,
   idOrSlug: string,
   input: UpdateExperienceInput,
+  env?: CloudflareEnv,
 ): Promise<Experience | null> {
   const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
@@ -673,8 +677,9 @@ export async function updateExperience(
   }
   if (!queries.length) return getExperienceById(db, siteId, id)
   await executeBatch(db, queries)
-
-  return getExperienceById(db, siteId, id)
+  const updated = await getExperienceById(db, siteId, id)
+  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id } })
+  return updated
 }
 
 export async function deleteExperience(

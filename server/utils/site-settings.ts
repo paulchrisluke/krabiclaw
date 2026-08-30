@@ -9,6 +9,7 @@ import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
 import type { SiteVertical } from '~/utils/vertical-copy'
 import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { regenerateSiteSocialCards } from '~/server/utils/social-card'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -46,6 +47,10 @@ interface FullSiteRow extends SiteSettingsRow {
   favicon_public_url: string | null
   favicon_thumbnail_url: string | null
   favicon_kind: 'image' | 'video' | null
+  social_share_media_id: string | null
+  social_share_public_url: string | null
+  social_share_thumbnail_url: string | null
+  social_share_kind: 'image' | 'video' | null
   contact_email: string | null
   last_published_at: string | null
   seo_title: string | null
@@ -87,6 +92,8 @@ export async function loadSettingsPayload(
            ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
            fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
            fma.thumbnail_url AS favicon_thumbnail_url, fma.kind AS favicon_kind,
+           smp.asset_id AS social_share_media_id, sma.public_url AS social_share_public_url,
+           sma.thumbnail_url AS social_share_thumbnail_url, sma.kind AS social_share_kind,
            contact_email,
            seo_title, seo_description, canonical_url, robots,
            social_facebook_url, social_instagram_url, social_tiktok_url,
@@ -99,6 +106,9 @@ export async function loadSettingsPayload(
     LEFT JOIN media_placements fmp ON fmp.site_id = sites.id AND fmp.owner_type = 'site'
       AND fmp.owner_id = sites.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
     LEFT JOIN media_assets fma ON fma.id = fmp.asset_id AND fma.status = 'active'
+    LEFT JOIN media_placements smp ON smp.site_id = sites.id AND smp.owner_type = 'site'
+      AND smp.owner_id = sites.id AND smp.slot = 'social_share' AND smp.sort_order = 0 AND smp.status = 'active'
+    LEFT JOIN media_assets sma ON sma.id = smp.asset_id AND sma.status = 'active'
     WHERE sites.id = ? AND sites.organization_id = ?
     LIMIT 1
   `, [siteId, organizationId])
@@ -150,6 +160,13 @@ export async function loadSettingsPayload(
         public_url: updatedSite.favicon_public_url,
         thumbnail_url: updatedSite.favicon_thumbnail_url,
         kind: updatedSite.favicon_kind,
+      }] : []),
+      ...(updatedSite.social_share_media_id ? [{
+        asset_id: updatedSite.social_share_media_id,
+        slot: 'social_share',
+        public_url: updatedSite.social_share_public_url,
+        thumbnail_url: updatedSite.social_share_thumbnail_url,
+        kind: updatedSite.social_share_kind,
       }] : []),
     ],
     contact_email: updatedSite.contact_email,
@@ -445,10 +462,20 @@ async function attemptSiteUpdate(
       organizationId,
       siteId,
       placement: { owner_type: 'site', owner_id: siteId, slot },
-      media: siteMedia.filter(item => item.slot === slot).map(item => ({ asset_id: item.asset_id })),
+      media: siteMedia.filter(item => item.slot === slot && item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
       now,
     }))
     await executeBatch(db, queries)
+  }
+
+  const cardInputChanged = updates.brand_name !== undefined
+    || updates.brand_description !== undefined
+    || updates.seo_title !== undefined
+    || updates.seo_description !== undefined
+    || updates.brand_color !== undefined
+    || siteMedia !== undefined
+  if (cardInputChanged) {
+    await regenerateSiteSocialCards({ db, env, siteId, actorId: userId })
   }
 
   const settings = await loadSettingsPayload(db, organizationId, siteId)
@@ -493,14 +520,14 @@ export async function updateSiteSettingsFields(
 
   const siteMedia = updates.media
   if (siteMedia !== undefined) {
-    if (!Array.isArray(siteMedia) || siteMedia.some(item => !item || !['logo', 'favicon'].includes(item.slot) || typeof item.asset_id !== 'string')) {
-      return { status: 400, data: { error: 'media must contain asset_id and a logo or favicon slot' } }
+    if (!Array.isArray(siteMedia) || siteMedia.some(item => !item || !['logo', 'favicon', 'social_share'].includes(item.slot) || (item.asset_id !== null && typeof item.asset_id !== 'string'))) {
+      return { status: 400, data: { error: 'media must contain an asset_id and a logo, favicon, or social_share slot' } }
     }
     try {
       await hydrateMediaAssetRefs(db, {
         organizationId,
         siteId,
-        refs: siteMedia.map(item => ({ asset_id: item.asset_id })),
+        refs: siteMedia.filter(item => item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
         allowedKinds: ['image'],
       })
     } catch {

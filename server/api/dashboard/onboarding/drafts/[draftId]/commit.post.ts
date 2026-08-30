@@ -152,7 +152,7 @@ export default defineHandler(async (event) => {
     if (primaryLocation) {
       updatedSlug = primaryLocation.slug || locationRow.slug || slugify(primaryLocation.title)
       const updateResult = await updateLocation(db, organizationId, siteId, locationRow.id, {
-        title: primaryLocation.title, slug: updatedSlug, city: primaryLocation.city, address: primaryLocation.address, description: primaryLocation.description, phone: primaryLocation.phone, website_url: primaryLocation.website_url, opening_hours: primaryLocation.opening_hours, rating: primaryLocation.rating, review_count: primaryLocation.review_count, notification_phone: payload.source.details.notificationPhone, timezone: payload.source.details.timezone, is_primary: true, status: 'active', maps_url: payload.source.place?.mapsUrl, google_place_id: payload.source.place?.placeId, }, session.user.id)
+        title: primaryLocation.title, slug: updatedSlug, city: primaryLocation.city, address: primaryLocation.address, description: primaryLocation.description, phone: primaryLocation.phone, website_url: primaryLocation.website_url, opening_hours: primaryLocation.opening_hours, rating: primaryLocation.rating, review_count: primaryLocation.review_count, notification_phone: payload.source.details.notificationPhone, timezone: payload.source.details.timezone, is_primary: true, status: 'active', maps_url: payload.source.place?.mapsUrl, google_place_id: payload.source.place?.placeId, }, session.user.id, env)
 
       if (updateResult.status !== 200) {
         throw new Error(
@@ -169,7 +169,7 @@ export default defineHandler(async (event) => {
       contentByPage.set(row.page, rows)
     }
     await applyOnboardingTenantPages(db, {
-      organizationId, siteId, userId: session.user.id, pages: [...contentByPage].map(([pageName, rows]) => {
+      organizationId, siteId, userId: session.user.id, env, pages: [...contentByPage].map(([pageName, rows]) => {
         const pageType = pageName === 'privacy' || pageName === 'terms' ? 'legal' : pageName === 'home' || pageName === 'about' || pageName === 'contact' ? 'system' : 'recipe'
         return {
           path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows), trustedSystemPage: pageType === 'system', }

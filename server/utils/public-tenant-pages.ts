@@ -21,7 +21,7 @@ export interface PublicTenantPage {
   recipe: string | null
   locale: string
   blocks: TenantPageBlock[]
-  
+  media: MediaPlacementItem[]
   updated_at: string
 }
 
@@ -187,7 +187,7 @@ async function hydrateBlocks(
   })
 }
 
-function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPage {
+function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], media: MediaPlacementItem[]): PublicTenantPage {
   return {
     id: page.id,
     page_id: page.page_id,
@@ -202,6 +202,7 @@ function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPa
     recipe: page.recipe,
     locale: page.locale,
     blocks,
+    media,
     updated_at: page.updated_at,
   }
 }
@@ -232,7 +233,11 @@ export async function getPublicTenantPageForPath(
       throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized embedded content is unavailable' })
     }
   }
-  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources))
+  const [blocks, media] = await Promise.all([
+    hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources),
+    getMediaPlacements(db, { siteId, ownerType: 'tenant_page', ownerIds: [page.id] }),
+  ])
+  return mapPage(page, blocks, media.get(page.id) ?? [])
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {
