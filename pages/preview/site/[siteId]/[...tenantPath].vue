@@ -20,6 +20,6 @@ const pagePath = computed(() => {
 })
 const localePrefix = computed(() => splitLocalePrefix(pagePath.value))
 const localeSegment = computed(() => localePrefix.value.localeSegment)
-const tenantPagePath = computed(() => localePrefix.value.tenantPagePath)
+const tenantPagePath = computed(() => localePrefix.value.sourcePath)
 const activeLocale = computed(() => queryLocale.value || localeSegment.value)
 </script>

@@ -1,13 +1,9 @@
-const SOURCE_ROUTE_ROOTS = new Set([
-  'about', 'article', 'blog', 'contact', 'experiences', 'help', 'links', 'locations',
-  'menu', 'order', 'photos', 'posts', 'privacy', 'products', 'qa', 'reservations',
-  'reviews', 'services', 'terms',
-])
+import { isPublicSourceRouteRoot, RESERVED_PUBLIC_ROUTE_ROOTS } from '~/shared/public-locale-routes'
 
 export default defineNuxtRouteMiddleware((to) => {
   const first = to.path.split('/')[1] || ''
   const state = useState<string>('public-locale', () => 'en')
-  if (!first || SOURCE_ROUTE_ROOTS.has(first) || ['admin', 'api', 'dashboard', 'preview'].includes(first)) {
+  if (!first || isPublicSourceRouteRoot(first) || RESERVED_PUBLIC_ROUTE_ROOTS.has(first)) {
     state.value = 'en'
     return
   }
