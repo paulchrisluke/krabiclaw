@@ -10,7 +10,7 @@
   <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
     <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
       <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" label="Search stories..." aria-label="Open story search" class="mb-6" />
-      <BlogCategoryNav :categories="categories" base-path="/blog" :active-slug="post?.slug" />
+      <BlogCategoryNav :categories="categories" :base-path="blogBasePath" :active-slug="post?.slug" />
     </aside>
 
     <article class="min-w-0">
@@ -22,7 +22,7 @@
         <p v-if="authorName" class="text-sm font-semibold text-default">{{ authorName }}</p>
         <p class="text-sm text-dimmed">More stories and updates from {{ siteName }}</p>
       </div>
-      <PlatformButton to="/blog" variant="outline" size="sm">More Posts</PlatformButton>
+      <PlatformButton :to="blogBasePath" variant="outline" size="sm">More Posts</PlatformButton>
     </div>
     </div>
 
@@ -32,7 +32,7 @@
         <NuxtLink
           v-for="relatedPost in relatedPosts"
           :key="relatedPost.id"
-          :to="`/blog/${relatedPost.slug}`"
+          :to="`${blogBasePath}/${relatedPost.slug}`"
           class="block rounded-xl border border-default bg-elevated p-5 no-underline transition-shadow hover:shadow-md"
         >
           <h3 class="text-base font-semibold text-default">{{ relatedPost.title }}</h3>
@@ -46,7 +46,7 @@
   <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
     <h1 class="text-2xl font-bold text-default">Post not found</h1>
     <p class="mt-3 text-muted">This post may have been moved or removed.</p>
-    <PlatformButton to="/blog" variant="outline" size="sm" class="mt-6">More Posts</PlatformButton>
+    <PlatformButton :to="blogBasePath" variant="outline" size="sm" class="mt-6">More Posts</PlatformButton>
   </div>
 
   <PlatformCommandSearchModal surface="tenant_blog" variant="saya" />
@@ -57,6 +57,8 @@ import PlatformCommandSearchModal from '~/components/platform/search/PlatformCom
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
+import { splitLocalePrefix } from '~/utils/tenant-locale-path'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
@@ -85,11 +87,14 @@ interface TenantBlogPost {
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null }>
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
+  localeRepresentations: PublicLocaleRepresentation[]
 }
 
 const route = useRoute()
+const locale = splitLocalePrefix(route.path).localeSegment ?? 'en'
+const blogBasePath = locale === 'en' ? '/blog' : `/${locale}/blog`
 const requestEvent = useRequestEvent()
-const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}`)
+const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}?locale=${encodeURIComponent(locale)}`)
 
 interface PublicBlogResponse {
   post: TenantBlogPost | null
@@ -102,17 +107,18 @@ const isPublicBlogResponse = (value: unknown): value is PublicBlogResponse =>
     && typeof value.post.id === 'string'
     && typeof value.post.title === 'string'
     && typeof value.post.slug === 'string'
+    && Array.isArray(value.post.localeRepresentations)
   ))
 
 const { data, pending, error } = await useAsyncData(
-  () => `tenant-blog-post-${siteId}-${String(route.params.slug)}`,
+  () => `tenant-blog-post-${siteId}-${locale}-${String(route.params.slug)}`,
   async () => {
     let post: TenantBlogPost | null | undefined
 
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
 
-      const [{ cloudflareEnv }, { getPublishedSiteBlogPost }] = await Promise.all([
+      const [{ cloudflareEnv }, { getPublishedLocalizedSiteBlogPost }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/platform-content'),
       ])
@@ -120,7 +126,7 @@ const { data, pending, error } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedSiteBlogPost(db, siteId, String(route.params.slug), env) as TenantBlogPost | null
+      post = await getPublishedLocalizedSiteBlogPost(db, siteId, String(route.params.slug), locale, env) as TenantBlogPost | null
     } else {
       let payload: PublicBlogResponse
       try {
@@ -159,13 +165,16 @@ if (!data.value?.post) {
 if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_blocks.length === 0) {
   throw createError({ statusCode: 500, statusMessage: 'Published blog content is missing its canonical blocks' })
 }
+useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = data.value.post.localeRepresentations
 
 const post = computed(() => data.value?.post ?? null)
 const { blogList, config, site: publicSite } = await usePublicPageData()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
-const siteName = computed(() => site?.brand_name?.trim() ?? '')
+const siteName = computed(() => locale === 'en'
+  ? (publicSite.value?.brand_name?.trim() ?? site?.brand_name?.trim() ?? '')
+  : (publicSite.value?.brand_name?.trim() ?? ''))
 const authorName = computed(() => post.value?.author?.name ?? null)
 const authorImage = computed(() => post.value?.author?.image ?? null)
 const readTime = computed(() => {
@@ -196,7 +205,7 @@ const selectedPostImage = computed(() => {
 const postMedia = computed(() => resolveMedia(selectedPostImage.value))
 const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
 
-const postPath = computed(() => `/blog/${post.value?.slug ?? ''}`)
+const postPath = computed(() => `${blogBasePath}/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,

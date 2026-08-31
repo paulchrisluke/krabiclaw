@@ -32,7 +32,7 @@ const pagePath = computed(() => {
 
 const localePrefix = computed(() => splitLocalePrefix(pagePath.value))
 const localeSegment = computed(() => localePrefix.value.localeSegment)
-const tenantPagePath = computed(() => localePrefix.value.tenantPagePath)
+const tenantPagePath = computed(() => localePrefix.value.sourcePath)
 const requestEvent = useRequestEvent()
 const isLocalizedRouteResponse = (value: unknown): value is { route: LocalizedPublicRoute } =>
   isRecord(value) && isRecord(value.route) && typeof value.route.locale === 'string'
