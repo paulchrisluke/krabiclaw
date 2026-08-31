@@ -24,8 +24,6 @@ export type PublicPageDataset =
   | 'reservationPolicies'
   | 'experiencePolicies'
 
-import { splitLocalePrefix } from '~/utils/tenant-locale-path'
-
 export interface PublicPageRequest {
   page: string | null;
   location: string | null;
@@ -253,13 +251,12 @@ export const usePublicPageRequest = () => {
   return computed<PublicPageRequest>(() => {
     const previewSubpath = getPreviewSubpath(route.path)
     const effectivePath = previewSubpath ?? route.path
-    const localePath = splitLocalePrefix(effectivePath)
     const token = previewSubpath !== null && typeof route.query.token === 'string'
       ? route.query.token
       : null
     return {
-      ...getPublicPageRequest(localePath.sourcePath),
-      locale: localePath.localeSegment ?? locale.value,
+      ...getPublicPageRequest(effectivePath),
+      locale: locale.value,
       token,
     }
   });
@@ -311,14 +308,16 @@ export const buildPublicPageUrl = (
     qs.set("preview", "true");
     qs.set("token", params.token);
   }
+  const q = qs.toString();
   const draftId = typeof route.params.draftId === 'string' && route.path.startsWith('/preview/draft/')
     ? route.params.draftId
     : null
-  if (!draftId && params.locale && params.locale !== 'en') qs.set('locale', params.locale)
-  const q = qs.toString();
   if (draftId) {
     const draftQuery = qs.toString()
     return `/api/public/drafts/${draftId}/${resourceKind}${draftQuery ? `?${draftQuery}` : ""}`
   }
-  return `/api/public/sites/${siteId}/${resourceKind}${q ? `?${q}` : ""}`;
+  const localizedResource = params.locale && params.locale !== 'en'
+    ? `localized-${resourceKind}/${encodeURIComponent(params.locale)}`
+    : resourceKind
+  return `/api/public/sites/${siteId}/${localizedResource}${q ? `?${q}` : ""}`;
 };

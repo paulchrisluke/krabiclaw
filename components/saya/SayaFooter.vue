@@ -117,7 +117,7 @@
         <div>© {{ year }} {{ restaurantName }}</div>
         <div class="flex items-center gap-6">
           <ZarazConsentButton />
-          <SayaDropdown :items="languageItems" placement="top">
+          <SayaDropdown :items="languageItems" panel-class="saya-theme" placement="top">
             <template #default="{ open, toggle, triggerKeydown }">
               <button
                 type="button"

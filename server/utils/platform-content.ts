@@ -5,7 +5,6 @@ import {
   createContentDocumentWithBlocks,
   getContentEditorSnapshot,
   getContentBlocksForOwner,
-  getContentOutline,
   getContentDocumentByOwner,
   listBlocksForDocument,
   replaceContentDocumentBlocks,
@@ -13,14 +12,6 @@ import {
   type ContentDocumentOwnerType,
   type ContentBlockInput,
 } from '~/server/utils/content-documents'
-import {
-  loadExactPublicLocalizations,
-  projectExactLocalizedResource,
-  projectLocalizedMediaAlt,
-  resolveLocalizedRouteResourceId,
-} from '~/server/utils/public-localization'
-import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
-import { normalizeVertical } from '~/utils/vertical-copy'
 import { slugifyTitle } from '~/utils/post-slugs'
 import { PLATFORM_ORGANIZATION_ID, PLATFORM_SITE_ID, isPlatformSite } from '~/shared/platform-scope'
 import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categories'
@@ -867,75 +858,6 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks ?? [], body: renderContentBlocksToMarkdown(rawBlocks) }),
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
-  }
-}
-
-export async function getPublishedLocalizedSiteBlogPost(
-  db: DbClient,
-  siteId: string,
-  slug: string,
-  locale: string,
-  env: CloudflareEnv,
-) {
-  const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `
-    SELECT organization_id, vertical FROM sites WHERE id = ? AND status = 'active' LIMIT 1
-  `, [siteId])
-  if (!site) return null
-  const prefix = normalizeVertical(site.vertical) === 'professional_service' ? 'article' : 'blog'
-  if (locale === 'en') {
-    const post = await getPublishedSiteBlogPost(db, siteId, slug, env)
-    if (!post || typeof post.id !== 'string') return post
-    return {
-      ...post,
-      localeRepresentations: await listPublicLocaleRepresentations(db, {
-        organizationId: site.organization_id,
-        siteId,
-        sourcePath: `/${prefix}/${slug}`,
-        sourceLabel: 'English',
-        resource: { type: 'tenant_blog_post', id: post.id },
-      }),
-    }
-  }
-
-  const localizations = await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
-  const routePath = `/${locale}/${prefix}/${slug}`
-  const resourceId = resolveLocalizedRouteResourceId(localizations, 'tenant_blog_post', routePath)
-  if (!resourceId) return null
-  const row = await queryFirst<{ document_id: string | null }>(db, `
-    SELECT document_id FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND locale = ?
-       AND resource_type = 'tenant_blog_post' AND resource_id = ?
-     LIMIT 1
-  `, [site.organization_id, siteId, locale, resourceId])
-  if (!row?.document_id) return null
-  const source = await queryFirst<{ slug: string }>(db, `
-    SELECT slug FROM blog_posts WHERE id = ? AND site_id = ? AND status = 'published' LIMIT 1
-  `, [resourceId, siteId])
-  if (!source) return null
-  const canonical = await getPublishedSiteBlogPost(db, siteId, source.slug, env)
-  if (!canonical || typeof canonical.id !== 'string') return null
-  const postLocalization = localizations.find(item => item.resourceType === 'tenant_blog_post' && item.resourceId === resourceId)
-  if (!postLocalization) return null
-  const [contentBlocks, rawBlocks] = await Promise.all([
-    getContentOutline(db, row.document_id),
-    listBlocksForDocument(db, row.document_id),
-  ])
-  const localized = projectExactLocalizedResource('tenant_blog_post', canonical, postLocalization)
-  const media = Array.isArray(localized.media)
-    ? projectLocalizedMediaAlt(localized.media, localizations)
-    : []
-  return {
-    ...localized,
-    body: renderContentBlocksToMarkdown(rawBlocks),
-    content_blocks: contentBlocks,
-    media,
-    localeRepresentations: await listPublicLocaleRepresentations(db, {
-      organizationId: site.organization_id,
-      siteId,
-      sourcePath: `/${prefix}/${source.slug}`,
-      sourceLabel: 'English',
-      resource: { type: 'tenant_blog_post', id: resourceId },
-    }),
   }
 }
 

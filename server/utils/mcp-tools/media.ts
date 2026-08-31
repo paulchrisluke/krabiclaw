@@ -141,7 +141,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_media_asset',
-      description: 'Update media metadata. Provide at least one of alt_text or category.',
+      description: 'Update media metadata.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,

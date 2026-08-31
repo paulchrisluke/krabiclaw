@@ -75,5 +75,5 @@ async function saveMessages() { await run(async () => { const messages = JSON.pa
 async function publishCatalog() { await run(async () => { const messages = JSON.parse(messagesJson.value) as unknown; await applicationFetch(`/api/admin/localization/${encodeURIComponent(selectedLocale.value)}/publish`, { method: 'POST', body: { messages }, validate: isCatalog }); await refresh(); await selectCatalog(selectedLocale.value); toast.add({ description: 'Catalog is available', color: 'success' }) }) }
 async function saveCatalog(available: boolean) { if (available) return; await run(async () => { await applicationFetch(`/api/admin/localization/${encodeURIComponent(selectedLocale.value)}`, { method: 'PUT', body: { status: 'unavailable' }, validate: isCatalog }); await refresh(); await selectCatalog(selectedLocale.value) }) }
 async function deleteCatalog() { if (!window.confirm(`Delete ${selectedLocale.value}?`)) return; await run(async () => { await applicationFetch(`/api/admin/localization/${encodeURIComponent(selectedLocale.value)}`, { method: 'DELETE', validate: isRecord }); selected.value = null; selectedLocale.value = ''; await refresh() }) }
-onMounted(refresh)
+await refresh()
 </script>

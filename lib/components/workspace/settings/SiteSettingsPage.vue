@@ -489,10 +489,10 @@ async function loadLocalizationSettings() {
   } catch (error) { localizationError.value = errorMessage(error, 'Failed to load localization settings') }
   finally { localizationLoading.value = false }
 }
-async function mutateLocalization(path: string, method: 'POST' | 'DELETE', body?: Record<string, unknown>) {
+async function mutateLocalization(path: string, method: 'POST' | 'DELETE') {
   localizationBusy.value = true
   try {
-    await dashboardApi(path, { method, body, validate: (value): value is Record<string, unknown> => isRecord(value) })
+    await dashboardApi(path, { method, validate: (value): value is Record<string, unknown> => isRecord(value) })
     await loadLocalizationSettings()
     return true
   } catch (error) {
@@ -504,9 +504,7 @@ async function mutateLocalization(path: string, method: 'POST' | 'DELETE', body?
 }
 async function enableLanguage(): Promise<boolean> {
   if (newLocale.value) {
-    const selectedCatalog = localizationSettings.value?.available_catalogs.find(catalog => catalog.locale === newLocale.value)
-    if (!selectedCatalog) return false
-    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST', { label: selectedCatalog.label })
+    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST')
     if (success) newLocale.value = ''
     return success
   }

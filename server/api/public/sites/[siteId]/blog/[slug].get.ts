@@ -1,8 +1,6 @@
 // GET /api/public/sites/[siteId]/blog/[slug] - Get a single published tenant blog post
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getPublishedLocalizedSiteBlogPost } from '~/server/utils/platform-content'
-import { assertExactCanonicalLocale } from '~/server/utils/localization'
-import { getQuery } from 'nitro/h3'
+import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -13,8 +11,7 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const locale = assertExactCanonicalLocale(getQuery(event).locale ?? 'en')
-  const post = await getPublishedLocalizedSiteBlogPost(db, siteId, slug, locale, env)
+  const post = await getPublishedSiteBlogPost(db, siteId, slug, env)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   return jsonResponse({ post })
 })

@@ -10,6 +10,9 @@ export function chowbotToolFromMcp(tool: McpToolDefinition): AiTool {
   const { site_id: _siteId, ...properties } = schemaProperties
   const schemaRequired = (tool.inputSchema.required ?? []) as string[]
   const required = schemaRequired.filter((key) => key !== 'site_id')
+  const anyOf = Array.isArray(tool.inputSchema.anyOf) ? tool.inputSchema.anyOf as ApiRecord[] : undefined
+  const oneOf = Array.isArray(tool.inputSchema.oneOf) ? tool.inputSchema.oneOf as ApiRecord[] : undefined
+  const allOf = Array.isArray(tool.inputSchema.allOf) ? tool.inputSchema.allOf as ApiRecord[] : undefined
   const additionalProperties = typeof tool.inputSchema.additionalProperties === 'boolean'
     ? tool.inputSchema.additionalProperties
     : undefined
@@ -20,6 +23,9 @@ export function chowbotToolFromMcp(tool: McpToolDefinition): AiTool {
       type: 'object',
       properties,
       required,
+      ...(anyOf === undefined ? {} : { anyOf }),
+      ...(oneOf === undefined ? {} : { oneOf }),
+      ...(allOf === undefined ? {} : { allOf }),
       ...(additionalProperties === undefined ? {} : { additionalProperties }),
     },
   }

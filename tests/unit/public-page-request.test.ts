@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { buildPublicPageUrl, getPublicPageRequest } from '../../composables/usePublicPageRequest.ts'
-import { splitLocalePrefix } from '../../utils/tenant-locale-path.ts'
 
 test('location experiences route requests an experiences page scoped to the location slug', () => {
   assert.deepEqual(getPublicPageRequest('/locations/beachfront-pottery/experiences'), {
@@ -53,40 +52,10 @@ test('draft public resource URLs never select locale by query parameter', () => 
   )
 })
 
-test('published localized resources use the canonical page endpoint with an explicit locale query', () => {
+test('published localized resources use a locale path segment', () => {
   const request = { ...getPublicPageRequest('/about'), locale: 'th', token: null }
   assert.equal(
     buildPublicPageUrl('site-1', request, { path: '/th/about', params: {} }),
-    '/api/public/sites/site-1/page?page=about&datasets=content&locale=th',
+    '/api/public/sites/site-1/localized-page/th?page=about&datasets=content',
   )
-})
-
-test('locale-prefixed routes parse the locale-bare source path', () => {
-  const localized = splitLocalePrefix('/th/locations/ao-nang/menu/khao-soi')
-
-  assert.deepEqual(localized, {
-    localeSegment: 'th',
-    sourcePath: '/locations/ao-nang/menu/khao-soi',
-    publicPath: '/th/locations/ao-nang/menu/khao-soi',
-  })
-  assert.deepEqual(getPublicPageRequest(localized.sourcePath), {
-    page: 'menu',
-    location: 'ao-nang',
-    experience: null,
-    datasets: ['content', 'location', 'products', 'experiences', 'experiencePolicies'],
-    blogSlug: null,
-  })
-})
-
-test('source routes remain exact and non-canonical locale prefixes are not stripped', () => {
-  assert.deepEqual(splitLocalePrefix('/menu'), {
-    localeSegment: null,
-    sourcePath: '/menu',
-    publicPath: '/menu',
-  })
-  assert.deepEqual(splitLocalePrefix('/TH/menu'), {
-    localeSegment: null,
-    sourcePath: '/TH/menu',
-    publicPath: '/TH/menu',
-  })
 })

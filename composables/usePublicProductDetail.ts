@@ -2,8 +2,6 @@ import type { Product } from '~/server/types/products'
 import type { PublicProductReview } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { publicApiRequest } from '~/utils/api-clients'
-import { splitLocalePrefix } from '~/utils/tenant-locale-path'
-import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicProductDetailPayload {
   product: Product
@@ -12,7 +10,6 @@ export interface PublicProductDetailPayload {
   vertical: string
   brandName: string
   reviews: PublicProductReview[]
-  localeRepresentations: PublicLocaleRepresentation[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,12 +52,6 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof review.title === 'string'
       && typeof review.content === 'string'
       && typeof review.createdAt === 'string')
-    && Array.isArray(value.localeRepresentations)
-    && value.localeRepresentations.every(item => isRecord(item)
-      && typeof item.locale === 'string'
-      && typeof item.label === 'string'
-      && typeof item.route_path === 'string'
-      && (item.source === 'source' || item.source === 'localized'))
 }
 
 export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
@@ -69,12 +60,10 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
   const { siteId } = useTenantSite()
   const locationSlug = String(route.params.slug ?? '')
   const productSlug = String(route.params.productSlug ?? '')
-  const locale = splitLocalePrefix(route.path).localeSegment ?? 'en'
-  const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
   if (!siteId || !locationSlug || !productSlug) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
 
   const { data, error } = await useAsyncData<PublicProductDetailPayload | null>(
-    `public-product-${siteId}-${locale}-${locationSlug}-${productSlug}`,
+    `public-product-${siteId}-${locationSlug}-${productSlug}`,
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
@@ -84,7 +73,7 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
         ])
         const db = cloudflareEnv(requestEvent).DB
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-        const detail = await loadPublicProductDetail(db, siteId, routeKind, locationSlug, productSlug, locale)
+        const detail = await loadPublicProductDetail(db, siteId, routeKind, locationSlug, productSlug)
         if (!detail) return null
         return {
           product: detail.product,
@@ -93,10 +82,9 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
           vertical: detail.site.vertical,
           brandName: detail.site.brand_name,
           reviews: await loadPublicProductReviews(db, detail),
-          localeRepresentations: detail.localeRepresentations,
         }
       }
-      return publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}?locale=${encodeURIComponent(locale)}`, {
+      return publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`, {
         signal,
         coalesceKey: `public-product-${siteId}-${locationSlug}-${productSlug}`,
         validate: isPublicProductDetailPayload,
@@ -106,6 +94,5 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
   )
   if (error.value) throw error.value
   if (!data.value) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
-  localeRepresentations.value = data.value.localeRepresentations
   return { siteId, detail: data as Ref<PublicProductDetailPayload> }
 }

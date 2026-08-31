@@ -1,10 +1,9 @@
 import { computed } from 'vue'
 import { useI18n as useVueI18n } from 'vue-i18n'
-import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export function useI18n() {
   const composer = useVueI18n()
-  const representations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
+  const representations = useState<Array<{ locale: string; label: string; route_path: string }>>('public-locale-representations', () => [])
   const locales = computed(() => representations.value.map(item => ({ code: item.locale, name: item.label })))
 
   const setLocale = (value: string) => {
