@@ -3,9 +3,17 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { defineHandler } from 'nitro'
 
+const NCLS_SITE_ID = 'site-ncls-blawby'
+const NCLS_CONSULTATION_URL = 'https://ncls.cliogrow.com/book'
+
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
+
+  if (siteId === NCLS_SITE_ID) {
+    return sendRedirect(event, NCLS_CONSULTATION_URL, 302)
+  }
+
   const db = cloudflareEnv(event).db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
 
