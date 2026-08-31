@@ -70,6 +70,7 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
   const locationSlug = String(route.params.slug ?? '')
   const productSlug = String(route.params.productSlug ?? '')
   const locale = splitLocalePrefix(route.path).localeSegment ?? 'en'
+  const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
   if (!siteId || !locationSlug || !productSlug) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
 
   const { data, error } = await useAsyncData<PublicProductDetailPayload | null>(
@@ -105,6 +106,6 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
   )
   if (error.value) throw error.value
   if (!data.value) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
-  useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = data.value.localeRepresentations
+  localeRepresentations.value = data.value.localeRepresentations
   return { siteId, detail: data as Ref<PublicProductDetailPayload> }
 }
