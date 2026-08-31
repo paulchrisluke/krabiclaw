@@ -14,7 +14,7 @@ All screenshots taken logged in as an admin impersonating tenant `richard.garrad
 | `.../locations/[locationSlug]/index-my-location-tab.jpg` | `/dashboard/[org]/sites/[site]/locations/[loc]` — "My location" tab | Location overview: photo card + Guest activity / Hours / Discovery cards |
 | `.../locations/[locationSlug]/content-tab.jpg` | same route — "Content" tab | Content list: Photos, Menu, Posts, Q&A cards, plus a "Manage" section (Reservations) |
 | `.../locations/[locationSlug]/photos/index.jpg` | `/dashboard/[org]/.../locations/[loc]/photos` | Photo grid (3-column), tap-to-tag, upload/attach-existing actions |
-| `.../locations/[locationSlug]/products/index.jpg` | `/dashboard/[org]/.../locations/[loc]/products` | Menu list — 105 flat rows (image, name, category, price). Rows did not open a per-item edit screen on this pass (see principles notes) |
+| `.../locations/[locationSlug]/products/index.jpg` | `/dashboard/[org]/.../locations/[loc]/products` | Menu list — 105 flat rows (image, name, category, price). Per-item edit form renders off-screen below the full list on mobile — bug, filed as [#709](https://github.com/paulchrisluke/krabiclaw/issues/709) |
 | `.../locations/[locationSlug]/posts/index.jpg` | `/dashboard/[org]/.../locations/[loc]/posts` | Posts: AI composer card at top, list of published/scheduled posts below |
 | `.../locations/[locationSlug]/qa/index.jpg` | `/dashboard/[org]/.../locations/[loc]/qa` | Q&A: empty state + inline "Add Q&A" form (question + answer textareas) on the same screen |
 | _(not included)_ | `/dashboard/[org]/.../locations/[loc]/reservations` | Reservation requests list (guest name, date, party size). Screenshot omitted from this packet — contains real guest PII |

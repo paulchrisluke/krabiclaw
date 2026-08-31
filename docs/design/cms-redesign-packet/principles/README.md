@@ -42,6 +42,6 @@ Descriptive comparison only — what each surface actually does today. Not a sco
 - Goal: top nav (back arrow + title + contextual action) + bottom tab bar (Today / Calendar / Listings / Messages / Menu).
 - Called out by the user as a minor difference, not the redesign's focus.
 
-## 7. One open question surfaced during capture
+## 7. Bug found during capture
 
-Clicking a row in the current Menu list (`.../products`) did not open a per-item detail screen in this pass — the row highlighted (focus state) but stayed on the list. Worth confirming in the codebase whether product editing exists as a separate route/drawer, or whether it's currently only reachable a different way (e.g. desktop-only, or a modal that didn't trigger from this click path). This is the most direct 1:1 comparison point to Airbnb's Photo tour / per-room and per-field screens, so it's worth checking before scoping the redesign.
+Clicking a row in the current Menu list (`.../products`) did not visibly open a per-item edit screen in this pass — the row highlighted (focus state) but appeared to stay on the list. Traced to source: `components/products/ProductEditor.vue` renders the edit form as a sibling of the product list inside a grid that's only two-column at the `lg` breakpoint; below that, the form stacks below the full product list (105 rows in this case) with no scroll-into-view. The click handler and edit logic work correctly — the form was just rendering off-screen. Filed as [#709](https://github.com/paulchrisluke/krabiclaw/issues/709) with an exact fix (move the form into a `USlideover`, matching the pattern already used in `BlogPostEditor.vue`).
