@@ -72,7 +72,7 @@ const postBrand = computed(() => ({
 }))
 
 const { data, error } = await useAsyncData(
-  () => `public-post-${siteId}-${slug.value}`,
+  () => `public-post-${siteId}-${locale.value}-${slug.value}`,
   async () => {
     let post: PublicPost | null | undefined
     if (import.meta.server) {

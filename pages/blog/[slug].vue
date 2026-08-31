@@ -91,8 +91,12 @@ interface TenantBlogPost {
 }
 
 const route = useRoute()
-const locale = splitLocalePrefix(route.path).localeSegment ?? 'en'
-const blogBasePath = locale === 'en' ? '/blog' : `/${locale}/blog`
+const parsedRoute = splitLocalePrefix(route.path)
+const locale = parsedRoute.localeSegment ?? 'en'
+useState<string>('public-locale', () => 'en').value = locale
+const blogSection = parsedRoute.sourcePath.startsWith('/article/') ? 'article' : 'blog'
+const sourceBlogBasePath = `/${blogSection}`
+const blogBasePath = locale === 'en' ? sourceBlogBasePath : `/${locale}${sourceBlogBasePath}`
 const requestEvent = useRequestEvent()
 const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}?locale=${encodeURIComponent(locale)}`)
 
@@ -253,9 +257,9 @@ useContentPageSchema(computed(() => {
     authorName: authorName.value,
     articleSection: post.value.category || undefined,
     keywords: post.value.seo_keywords || undefined,
-    inLanguage: 'en-US',
+    inLanguage: locale === 'en' ? 'en-US' : locale,
     breadcrumbs: [
-      { name: 'Blog', url: '/blog' },
+      { name: blogSection === 'article' ? 'Articles' : 'Blog', url: blogBasePath },
       { name: post.value.title, url: postPath.value },
     ],
     components: renderableComponents.value,
