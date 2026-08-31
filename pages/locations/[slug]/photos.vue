@@ -79,7 +79,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, media: photos, config: pageConfig, site: publicSite } = await usePublicPageData({ lazy: false })
+const { location, media: photos } = await usePublicPageData({ lazy: false })
 
 const cats = [
   { key: 'ALL', label: 'All' },
@@ -135,16 +135,9 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/photos`,
   title: `Photos · ${location.value?.title || slug.value}`,
   description: `${photos.value.length} photos from ${location.value?.title || slug.value} at ${siteName.value}.`,
-  location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: photos.value[0]?.public_url
-    ? { url: photos.value[0].public_url }
-    : null,
 }))
 
 useSchemaOrg([

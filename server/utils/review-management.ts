@@ -1,5 +1,5 @@
 import { execute, executeBatch, queryFirst, type DbClient, type QueryResultRow } from '~/server/db'
-import { getMediaPlacements } from '~/server/utils/media-placement'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import type { CloudflareEnv } from '~/server/utils/auth'
 
@@ -20,15 +20,12 @@ export async function getPublicReview(db: DbClient, siteId: string, locationSlug
   `, [reviewId, siteId, locationSlug])
   if (!review) return null
 
-  const media = (await getMediaPlacements(db, {
-    siteId,
-    ownerType: 'review',
-    ownerIds: [reviewId],
-  })).get(reviewId) ?? []
+  const socialMedia = (await loadPublicSocialMedia(db, siteId, 'review', [reviewId])).get(reviewId)
 
   return {
     ...review,
-    media,
+    media: socialMedia?.media ?? [],
+    social_image: socialMedia?.social_image ?? null,
   }
 }
 
@@ -92,6 +89,8 @@ export async function updateReviewModerationStatus(
   if (!Number(reviewUpdate?.meta.changes ?? 0)) {
     return { status: 404, data: { error: 'Review not found' } }
   }
-  await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: reviewId } })
+  if (status === 'approved') {
+    await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: reviewId } })
+  }
   return { status: 200, data: { updated: true } }
 }

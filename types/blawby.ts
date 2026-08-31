@@ -1,3 +1,5 @@
+import type { SocialImageSource } from '~/utils/social-metadata'
+
 export interface PublicOfferingFeature {
   title: string
   description: string
@@ -18,6 +20,7 @@ export interface PublicOffering {
   cta_label: string | null
   cta_url: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string; alt_text: string | null; width: number | null; height: number | null }>
+  social_image: SocialImageSource | null
   schema_type: string | null
   seo_title: string | null
   seo_description: string | null
@@ -94,6 +97,7 @@ export interface PublicBlogSummary {
     width: number | null
     height: number | null
   }>
+  social_image: SocialImageSource | null
 }
 
 export interface PublicBlogPost extends PublicBlogSummary {
@@ -209,6 +213,7 @@ export interface PublicBlawbyIdentity {
   brand_name: string
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
+  social_image: SocialImageSource | null
   phone: string | null
   banner_content: string | null
   banner_dismissible: boolean

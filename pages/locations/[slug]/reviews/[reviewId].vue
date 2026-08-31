@@ -148,14 +148,7 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/reviews/${reviewId.value}`,
   title: review.value ? `${review.value.rating}-star review from ${review.value.author_name || 'Guest'}` : 'Review',
   description: String(review.value?.content || '').slice(0, 150),
-  ownerMedia: mediaItems.value,
-  heroImage: mediaItems.value[0]
-    ? {
-        url: String(mediaItems.value[0].public_url),
-        kind: mediaItems.value[0].kind === 'video' ? 'video' : 'image',
-        thumbnailUrl: typeof mediaItems.value[0].thumbnail_url === 'string' ? mediaItems.value[0].thumbnail_url : null,
-      }
-    : null,
+  socialImage: review.value?.social_image ?? null,
   brand: {
     siteName: String(review.value?.site_name || ''),
   },

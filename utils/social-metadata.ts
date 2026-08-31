@@ -86,17 +86,31 @@ export function resolveSocialImageFromMedia(
   return null
 }
 
+export interface PublicSocialMedia<T extends SocialMediaSource = SocialMediaSource> {
+  media: T[]
+  social_image: SocialImageSource | null
+}
+
+export function publicSocialMediaFromPlacements<T extends SocialMediaSource>(
+  ownerMedia: readonly T[],
+  siteMedia: readonly T[],
+): PublicSocialMedia<T> {
+  return {
+    media: ownerMedia.filter(item => item.slot !== 'social_card'),
+    social_image: resolveSocialImageFromMedia(ownerMedia, siteMedia),
+  }
+}
+
+export function resolvePublicSocialImage(
+  ownerImage: SocialImageSource | null,
+  siteImage: SocialImageSource | null,
+): SocialImageSource | null {
+  return ownerImage ?? siteImage
+}
+
 export interface SocialBrand {
   /** og:site_name and the name rendered on generated OG image cards. */
   siteName: string
-  logoUrl?: string | null
-  /** Square icon (favicon) — preferred over logoUrl for the small brand mark on generated
-   * OG cards, since logoUrl is often a non-square wordmark that distorts when forced into
-   * a square slot. Falls back to logoUrl when unset. */
-  faviconUrl?: string | null
-  /** Hex color, e.g. '#0f172a'. Used as the generated-card background/accent. */
-  primaryColor?: string | null
-  secondaryColor?: string | null
 }
 
 export interface SocialPageMetadataInput {
@@ -109,11 +123,6 @@ export interface SocialPageMetadataInput {
   canonicalUrl: string
   brand: SocialBrand
   socialImage?: SocialImageSource | null
-  /** A real photo to feature (article hero, offering photo, location photo). */
-  heroImage?: SocialImageSource | null
-  /** Short eyebrow/category shown on the generated card (e.g. "Service", "Blog"). */
-  label?: string | null
-  location?: string | null
   author?: string | null
   /** ISO 8601 date string. Only meaningful when pageType is 'article'. */
   publishedAt?: string | null
@@ -220,8 +229,5 @@ export interface SocialCardRenderPayload {
   label?: string | null
   location?: string | null
   logoUrl?: string | null
-  faviconUrl?: string | null
   backgroundImageUrl: string
-  primaryColor?: string | null
-  secondaryColor?: string | null
 }

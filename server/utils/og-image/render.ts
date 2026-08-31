@@ -115,7 +115,7 @@ export async function renderOgImagePng(
     ensureSatoriInitialized(deps.yogaModule),
   ])
 
-  const [rawBackgroundImageDataUri, rawLogoDataUri, rawFaviconDataUri] = await Promise.all([
+  const [rawBackgroundImageDataUri, rawLogoDataUri] = await Promise.all([
     // WebP is accepted here (unlike before) and converted to PNG below via
     // resolveWebpSafeDataUri — Satori itself still can't decode WebP directly.
     fetchImageAsDataUri(payload.backgroundImageUrl, {
@@ -123,21 +123,19 @@ export async function renderOgImagePng(
       acceptedContentTypes: ['image/png', 'image/jpeg', 'image/webp'],
     }),
     resolveLogoDataUri(payload.logoUrl, deps.platformDomain),
-    fetchImageAsDataUri(payload.faviconUrl, { timeoutMs: 4000 }),
   ])
   if (!rawBackgroundImageDataUri) {
     throw new Error(`OG page media could not be loaded: ${payload.backgroundImageUrl}`)
   }
 
-  const [backgroundImageDataUri, logoDataUri, faviconDataUri] = await Promise.all([
+  const [backgroundImageDataUri, logoDataUri] = await Promise.all([
     resolveWebpSafeDataUri(rawBackgroundImageDataUri, deps),
     resolveWebpSafeDataUri(rawLogoDataUri, deps),
-    resolveWebpSafeDataUri(rawFaviconDataUri, deps),
   ])
 
   if (!backgroundImageDataUri) throw new Error('OG page media could not be decoded')
   const renderer = resolveOgImageRenderer(payload.template)
-  const tree = renderer({ ...payload, backgroundImageDataUri, logoDataUri, faviconDataUri })
+  const tree = renderer({ ...payload, backgroundImageDataUri, logoDataUri })
 
   const svg = await satori(tree as unknown as ReactNode, {
     width: OG_IMAGE_WIDTH,

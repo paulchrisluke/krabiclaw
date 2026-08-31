@@ -105,7 +105,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, qaList, config: pageConfig, site: publicSite } = await usePublicPageData()
+const { location, qaList } = await usePublicPageData()
 const { formatDate } = useLocaleDate()
 
 const qa = qaList
@@ -130,12 +130,8 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/qa`,
   title: `Questions and answers · ${location.value?.title || slug.value}`,
   description: `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`,
-  location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
 }))
 

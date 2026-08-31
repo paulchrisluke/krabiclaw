@@ -3,9 +3,7 @@ import { resolveSeoUrl } from '~/composables/useSeoUrls'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import {
   composeSocialMetadata,
-  resolveSocialImageFromMedia,
   type SocialBrand,
-  type SocialMediaSource,
   type SocialPageMetadataInput,
   type SocialPageType,
   type SocialTemplate,
@@ -35,7 +33,6 @@ export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' |
   path: string
   template?: SocialTemplate
   brand?: SocialBrand
-  ownerMedia?: readonly SocialMediaSource[]
   breadcrumbs?: PageBreadcrumb[]
   schemaPageType?: SchemaPageType
   schemaNodes?: ApiRecord[]
@@ -72,9 +69,6 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const brand = value.brand ?? (template === 'platform'
       ? {
           siteName: PLATFORM_NAME,
-          logoUrl: resolveSeoUrl('/krabi-claw-logo.png', origin),
-          primaryColor: '#1e1b4b',
-          secondaryColor: '#4338ca',
         }
       : null)
     if (!brand?.siteName.trim()) throw new Error('Page social metadata requires a site name')
@@ -85,8 +79,9 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       pageType: value.socialType || value.pageType || 'website',
       canonicalUrl,
     }
-    const fallbackImage = resolveSocialImageFromMedia(value.ownerMedia ?? [], tenant.site?.media ?? [])
-    const sourceImage = value.socialImage ?? fallbackImage ?? (brand.logoUrl ? { url: brand.logoUrl } : null)
+    const sourceImage = Object.hasOwn(value, 'socialImage')
+      ? value.socialImage ?? null
+      : tenant.site?.social_image ?? null
     const resolvedImage = sourceImage
       ? { ...sourceImage, url: resolveSeoUrl(sourceImage.url, origin), alt: sourceImage.alt || value.title }
       : null

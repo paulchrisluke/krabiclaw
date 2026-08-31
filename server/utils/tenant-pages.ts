@@ -24,7 +24,7 @@ import {
 } from '~/utils/tenant-page-blocks'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { regenerateSiteSocialCards, refreshSocialCard } from '~/server/utils/social-card'
+import { refreshSocialCard } from '~/server/utils/social-card'
 import { normalizeDomain } from '~/server/utils/domain-shared'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
@@ -640,7 +640,6 @@ export async function createTenantPagesBatch(
   if (created > 0) {
     queries.push(publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-seed'))
     await executeBatch(db, queries)
-    if (input.env) await regenerateSiteSocialCards({ db, env: input.env, siteId: input.siteId, actorId: input.userId })
   }
   return { created }
 }
@@ -818,9 +817,6 @@ export async function applyOnboardingTenantPages(
     })
     created = result.created
   }
-  if (input.env && updated + created > 0) {
-    await regenerateSiteSocialCards({ db, env: input.env, siteId: input.siteId, actorId: input.userId })
-  }
   return { updated, created }
 }
 
@@ -886,7 +882,10 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       params: [now, input.userId, variantId],
     }, publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-create')],
   })
-  if (input.env) await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
+  if (input.env) {
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
+    if (path === '/') await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.siteId }, actorId: input.userId })
+  }
   return { page: await getTenantPageForEditor(db, variantId) }
 }
 
@@ -979,7 +978,12 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
     expected_document_updated_at: input.data.expectedDocumentUpdatedAt,
     additionalQueriesAfter: [...placementQueries, updateVariant, updatePage, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-update')],
   })
-  if (input.env) await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
+  if (input.env) {
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
+    if (row.path === '/' || path === '/') {
+      await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.scope.siteId }, actorId: input.userId })
+    }
+  }
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }
 }
 

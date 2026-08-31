@@ -4,6 +4,7 @@ import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isCurrencyCode } from '~/shared/currencies'
+import { resolvePublicSocialImage } from '~/utils/social-metadata'
 
 type BatchResult = { results?: unknown[] }
 
@@ -117,8 +118,11 @@ export function buildPublicShellPayload(
       status: location.status,
       media: [
         ...(publicUrl ? [{ asset_id: location.asset_id, slot: 'hero', public_url: publicUrl, thumbnail_url: location.media_thumbnail_url, kind: location.media_kind }] : []),
-        ...(socialUrl ? [{ asset_id: location.social_asset_id, slot: 'social_card', public_url: socialUrl, thumbnail_url: location.social_thumbnail_url, kind: location.social_kind }] : []),
       ],
+      social_image: resolvePublicSocialImage(
+        socialUrl ? { url: socialUrl, width: 1200, height: 630, type: 'image/png' as const } : null,
+        site.social_image,
+      ),
       city: location.city,
       neighborhood: location.neighborhood ?? null,
       short_description: location.short_description ?? null,
@@ -175,6 +179,7 @@ export function buildPublicShellPayload(
       brand_description: site.brand_description,
       vertical: site.vertical,
       media: site.media,
+      social_image: site.social_image,
       config: { phone: site.contact_phone },
     },
     locations,

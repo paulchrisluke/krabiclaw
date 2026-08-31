@@ -20,6 +20,7 @@ import { isPlatformPath } from "~/utils/platform-routes";
 import { getDraftMedia, parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
 import { resolvePublicTemplate } from "~/utils/template-registry";
 import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
+import { publicSocialMediaFromPlacements } from '~/utils/social-metadata'
 
 interface TenantSiteRow {
   id: string;
@@ -54,6 +55,11 @@ const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
 
 function tenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>): TenantSiteMedia[] {
   return JSON.parse(site.media_json) as TenantSiteMedia[]
+}
+
+function publicTenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>) {
+  const placements = tenantSiteMedia(site)
+  return publicSocialMediaFromPlacements(placements, placements)
 }
 
 export interface SpentSubdomainResolution {
@@ -124,6 +130,7 @@ function setResolvedTenantContext(
   canonicalDomain: string | null,
 ) {
   const metadata = requireTenantMetadata(site, site.id)
+  const socialMedia = publicTenantSiteMedia(site)
   event.context.siteId = site.id
   event.context.organizationId = site.organization_id
   event.context.themeId = metadata.themeId
@@ -133,7 +140,7 @@ function setResolvedTenantContext(
   event.context.canonicalDomain = canonicalDomain
   event.context.site = {
     brand_name: metadata.brandName,
-    media: tenantSiteMedia(site),
+    ...socialMedia,
     vertical: metadata.vertical,
   }
 }
@@ -221,6 +228,7 @@ export default defineHandler(async (event) => {
       );
       if (previewSite) {
         const metadata = requireTenantMetadata(previewSite, previewSite.id)
+        const socialMedia = publicTenantSiteMedia(previewSite)
         event.context.siteId = previewSite.id;
         event.context.organizationId = previewSite.organization_id;
         event.context.themeId = metadata.themeId;
@@ -228,7 +236,7 @@ export default defineHandler(async (event) => {
         setTenantType(event, TENANT_TYPES.TENANT);
         event.context.site = {
           brand_name: metadata.brandName,
-          media: tenantSiteMedia(previewSite),
+          ...socialMedia,
           vertical: metadata.vertical,
         };
         return;
@@ -314,7 +322,7 @@ export default defineHandler(async (event) => {
       : null
     event.context.site = {
       brand_name: platformSite?.brand_name?.trim() || 'KrabiClaw',
-      media: platformSite ? tenantSiteMedia(platformSite) : [],
+      ...(platformSite ? publicTenantSiteMedia(platformSite) : { media: [], social_image: null }),
       vertical: platformSite?.vertical ?? null,
     }
     return;

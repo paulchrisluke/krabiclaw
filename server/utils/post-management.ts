@@ -3,8 +3,10 @@ import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
 import { buildDeleteOwnerPlacementsQuery, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
-import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
+import type { MediaPlacementItem } from '~/server/utils/media-placement'
 import { refreshSocialCard } from '~/server/utils/social-card'
+import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
+import type { SocialImageSource } from '~/utils/social-metadata'
 import {
   loadExactPublicLocalizations,
   projectExactLocalizedResource,
@@ -31,7 +33,7 @@ export interface PublicPostMedia {
   public_url: string
   thumbnail_url: string | null
   kind: 'image' | 'video'
-  slot: 'cover' | 'gallery' | 'social_card'
+  slot: 'cover' | 'gallery'
   sort_order: number
   alt_text: string | null
   width: number | null
@@ -53,6 +55,7 @@ export interface Post {
   public_path?: string | null
   canonical_url?: string | null
   media?: PublicPostMedia[]
+  social_image?: SocialImageSource | null
   cta_type: string | null
   cta_url: string | null
   event_title: string | null
@@ -100,6 +103,7 @@ interface PublishedPostSummary {
   public_path: string
   canonical_url: string | null
   media: PublicPostMedia[]
+  social_image: SocialImageSource | null
   cta_type: string | null
   cta_url: string | null
   event_title: string | null
@@ -263,11 +267,7 @@ function postMediaPlacementQueries(
 }
 
 async function getPostMediaByPostIds(db: DbClient, siteId: string, postIds: string[]) {
-  return await getMediaPlacements(db, {
-    siteId,
-    ownerType: 'post',
-    ownerIds: postIds,
-  })
+  return await loadPublicSocialMedia(db, siteId, 'post', postIds)
 }
 
 function publicMediaFromRows(rows: MediaPlacementItem[] | undefined): PublicPostMedia[] {
@@ -278,7 +278,7 @@ function publicMediaFromRows(rows: MediaPlacementItem[] | undefined): PublicPost
       public_url: row.public_url!,
       thumbnail_url: row.thumbnail_url,
       kind: row.kind === 'video' ? 'video' as const : 'image' as const,
-      slot: row.slot === 'cover' || row.slot === 'social_card' ? row.slot : 'gallery',
+      slot: row.slot === 'cover' ? row.slot : 'gallery',
       sort_order: row.sort_order,
       alt_text: row.alt_text,
       width: row.width ?? null,
@@ -288,25 +288,26 @@ function publicMediaFromRows(rows: MediaPlacementItem[] | undefined): PublicPost
 
 function attachPostPublicFields<T extends Post>(
   post: T,
-  mediaRows: MediaPlacementItem[] | undefined,
+  socialMedia: PublicSocialMedia | undefined,
   origin: string | null,
 ): T {
   const slug = post.slug ?? post.id
   const publicPath = postPublicPath(slug)
-  const media = publicMediaFromRows(mediaRows)
+  const media = publicMediaFromRows(socialMedia?.media)
   return {
     ...post,
     slug,
     public_path: publicPath,
     canonical_url: absoluteUrl(origin, publicPath),
     media,
+    social_image: socialMedia?.social_image ?? null,
   }
 }
 
-function formatPublishedPost(row: PublishedPostRow, mediaRows: MediaPlacementItem[] | undefined, origin: string | null): PublishedPostSummary {
+function formatPublishedPost(row: PublishedPostRow, socialMedia: PublicSocialMedia | undefined, origin: string | null): PublishedPostSummary {
   const slug = row.slug ?? row.id
   const publicPath = postPublicPath(slug)
-  const media = publicMediaFromRows(mediaRows)
+  const media = publicMediaFromRows(socialMedia?.media)
   return {
     id: row.id,
     slug,
@@ -316,6 +317,7 @@ function formatPublishedPost(row: PublishedPostRow, mediaRows: MediaPlacementIte
     public_path: publicPath,
     canonical_url: absoluteUrl(origin, publicPath),
     media,
+    social_image: socialMedia?.social_image ?? null,
     cta_type: row.cta_type,
     cta_url: row.cta_url,
     event_title: row.event_title,

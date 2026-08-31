@@ -41,19 +41,15 @@ if (!siteId && !draftId) throw createError({ statusCode: 404 })
 
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
 
-const { blogList, error, pending, config, site: publicSite } = await usePublicPageData()
+const { blogList, error, pending } = await usePublicPageData()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
 useSocialMetadata(() => ({
   path: '/blog',
   title: `Blog | ${siteName.value}`,
   description: `Stories, news, and updates from ${siteName.value}.`,
-  label: 'Blog',
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 </script>

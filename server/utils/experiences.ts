@@ -16,8 +16,9 @@ import {
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
-import { getMediaPlacements } from '~/server/utils/media-placement'
 import { refreshSocialCard } from '~/server/utils/social-card'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
+import type { SocialImageSource } from '~/utils/social-metadata'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -38,6 +39,7 @@ export interface Experience {
   tagline: string | null
   body: string | null
   media: ResolvedMediaAsset[]
+  social_image: SocialImageSource | null
   price: Price | null
   scheduled_prices?: Price[]
   pricing_note: string | null
@@ -149,19 +151,17 @@ function parseRow(row: ExperienceRow): Experience {
     time_slots,
     recurring_slots,
     media: [],
+    social_image: null,
     featured: Boolean(row.featured)
   }
 }
 
 async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
-  const mediaByExperience = await getMediaPlacements(db, {
-    siteId,
-    ownerType: 'experience',
-    ownerIds: experiences.map(experience => experience.id),
-  })
+  const mediaByExperience = await loadPublicSocialMedia(db, siteId, 'experience', experiences.map(experience => experience.id))
   return experiences.map(experience => ({
     ...experience,
-    media: mediaByExperience.get(experience.id) ?? [],
+    media: mediaByExperience.get(experience.id)?.media ?? [],
+    social_image: mediaByExperience.get(experience.id)?.social_image ?? null,
   }))
 }
 

@@ -127,6 +127,7 @@ interface Doc {
     width: number | null
     height: number | null
   }>
+  social_image?: import('~/utils/social-metadata').SocialImageSource | null
   content_blocks: BlogEditorBlock[]
 }
 
@@ -337,10 +338,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: seoTitle.value,
   description: seoDescription.value,
   path: resolveSeoUrl(docPath.value, platformOrigin.value),
-  brand: { siteName: 'KrabiClaw', logoUrl: resolveSeoUrl('/krabi-claw-logo.png', platformOrigin.value), primaryColor: '#1e1b4b', secondaryColor: '#4338ca' },
-  ownerMedia: doc.value?.media ?? [],
-  label: doc.value?.category || null,
-  heroImage: docMedia.value.thumb ? { url: docMedia.value.thumb } : null,
+  brand: { siteName: 'KrabiClaw' },
+  socialImage: doc.value?.social_image ?? null,
   robots: doc.value?.robots?.trim() || null,
   indexable: !doc.value?.robots || !/noindex/i.test(doc.value.robots),
 }))

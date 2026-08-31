@@ -13,7 +13,7 @@ import {
   type StoredMediaPlacementItem,
 } from '~/server/utils/media-asset-manager'
 import { isEditableMediaPlacement, isEditableMediaPlacementOwnerType, type EditableMediaPlacementOwnerType, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
-import { regenerateSiteSocialCards, refreshSocialCard, socialCardRefreshOwnerForPlacement } from '~/server/utils/social-card'
+import { refreshSocialCard, socialCardRefreshOwnersForPlacement } from '~/server/utils/social-card'
 
 export { EDITABLE_MEDIA_PLACEMENT_OWNERS } from '~/shared/media-placement-contract'
 export type MediaPlacementItem = StoredMediaPlacementItem
@@ -177,13 +177,18 @@ async function refreshSocialCardForPlacement(db: DbClient, input: {
   siteId: string
   placement: MediaPlacementKey
 }) {
-  const owner = socialCardRefreshOwnerForPlacement(input.placement)
-  if (!input.env || !owner) return
-  if (owner.owner_type === 'site') {
-    await regenerateSiteSocialCards({ db, env: input.env, siteId: input.siteId })
-    return
+  if (!input.env) return
+  try {
+    const owners = await socialCardRefreshOwnersForPlacement(db, input.placement)
+    for (const owner of owners) await refreshSocialCard({ db, env: input.env, owner })
+  } catch (error) {
+    console.error('[social-card]', {
+      stage: 'placement_refresh',
+      ownerType: input.placement.owner_type,
+      ownerId: input.placement.owner_id,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
-  await refreshSocialCard({ db, env: input.env, owner })
 }
 
 // Attaches one asset to an ordered collection. Appends at the end (its

@@ -442,6 +442,7 @@ export async function createLocation(
   siteId: string,
   input: CreateLocationInput,
   userId: string,
+  options: { refreshSocialCardAfterCreate?: boolean } = {},
 ) {
   const title = input.title.trim();
   if (!title) {
@@ -681,7 +682,9 @@ export async function createLocation(
           is_primary: isPrimary,
         },
       })
-      await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: id }, actorId: userId })
+      if (options.refreshSocialCardAfterCreate !== false) {
+        await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: id }, actorId: userId })
+      }
       return { status: 201, data: { success: true, location } };
     } catch (error) {
       if (isUniqueConstraintError(error)) continue;

@@ -9,8 +9,8 @@ import type {
   SyncProductInput,
   UpdateProductInput,
 } from '~/server/types/products'
-import { getMediaPlacements } from '~/server/utils/media-placement'
-import { regenerateSiteSocialCards, refreshSocialCard } from '~/server/utils/social-card'
+import { refreshSocialCard } from '~/server/utils/social-card'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode } from '~/shared/currencies'
@@ -67,6 +67,7 @@ export function mapProduct(row: ProductRow): Product {
     image: null,
     gallery: [],
     media: [],
+    social_image: null,
     seo_title: row.seo_title === null ? null : String(row.seo_title),
     seo_description: row.seo_description === null ? null : String(row.seo_description),
     canonical_url: row.canonical_url === null ? null : String(row.canonical_url),
@@ -144,14 +145,16 @@ async function siteDefaultCurrency(db: DbClient, organizationId: string, siteId:
 async function hydrateProductMedia(db: DbClient, siteId: string, products: Product[]): Promise<Product[]> {
   if (!products.length) return products
   const ownerIds = products.map(product => product.id)
-  const placements = await getMediaPlacements(db, { siteId, ownerType: 'product', ownerIds })
+  const placements = await loadPublicSocialMedia(db, siteId, 'product', ownerIds)
   return products.map((product) => {
-    const media = placements.get(product.id) ?? []
+    const socialMedia = placements.get(product.id) ?? { media: [], social_image: null }
+    const media = socialMedia.media
     return {
       ...product,
       image: media.find(item => item.slot === 'image') ?? null,
       gallery: media.filter(item => item.slot === 'gallery'),
       media,
+      social_image: socialMedia.social_image,
     }
   })
 }
@@ -408,7 +411,7 @@ export async function createProductsBatch(
   locationId: string,
   inputs: CreateProductInput[],
   actor: string,
-  env?: CloudflareEnv,
+  _env?: CloudflareEnv,
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > PRODUCT_LIMITS.batchCreate) {
@@ -477,7 +480,7 @@ export async function syncProducts(
   inputs: SyncProductInput[],
   actor: string,
   setMissingUnavailable = false,
-  env?: CloudflareEnv,
+  _env?: CloudflareEnv,
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length > PRODUCT_LIMITS.sync) throw new HTTPError({ statusCode: 400, statusMessage: `products may contain at most ${PRODUCT_LIMITS.sync} rows` })

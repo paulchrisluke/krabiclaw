@@ -57,8 +57,6 @@ useSocialMetadata(() => ({
   description: firstString('seo_description') || summary.value,
   brand: {
     siteName: String(props.route.site.values.brand_name || ''),
-    logoUrl: null,
-    faviconUrl: null,
   },
 }))
 </script>

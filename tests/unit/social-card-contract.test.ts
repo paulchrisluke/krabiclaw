@@ -4,7 +4,7 @@ import {
   isEditableMediaPlacement,
   isSupportedMediaPlacement,
 } from '../../shared/media-placement-contract.ts'
-import { resolveSocialImageFromMedia } from '../../utils/social-metadata.ts'
+import { publicSocialMediaFromPlacements, resolvePublicSocialImage, resolveSocialImageFromMedia } from '../../utils/social-metadata.ts'
 import {
   buildSocialCardGenerationKey,
   selectSocialCardPlacements,
@@ -67,6 +67,25 @@ test('metadata uses a video thumbnail and omits unsupported media', () => {
   }]), null)
 })
 
+test('public payloads expose the resolved image without leaking social cards into display media', () => {
+  const ownerMedia = [
+    placedAsset('post', 'post-1', 'cover', 'cover'),
+    placedAsset('post', 'post-1', 'social_card', 'owner-card'),
+  ]
+  const siteMedia = [placedAsset('site', 'site-1', 'social_card', 'site-card')]
+  const result = publicSocialMediaFromPlacements(ownerMedia, siteMedia)
+  assert.deepEqual(result.media.map(item => item.asset_id), ['cover'])
+  assert.equal(result.social_image?.url, 'https://img.example/owner-card.png')
+})
+
+test('public payloads resolve owner images before the site image', () => {
+  const ownerImage = { url: 'https://img.example/owner-card.png' }
+  const siteImage = { url: 'https://img.example/site-card.png' }
+  assert.equal(resolvePublicSocialImage(ownerImage, siteImage), ownerImage)
+  assert.equal(resolvePublicSocialImage(null, siteImage), siteImage)
+  assert.equal(resolvePublicSocialImage(null, null), null)
+})
+
 const placedAsset = (
   owner_type: string,
   owner_id: string,
@@ -107,18 +126,43 @@ test('write-time selection keeps owner and site cards separate', () => {
   assert.equal(siteSelected.source?.asset_id, 'site-share')
 })
 
+test('homepage and tenant-page cards prefer canonical content-block media', () => {
+  const assets = [
+    placedAsset('site', 'site-1', 'social_share', 'site-share'),
+    placedAsset('content_block', 'hero-block', 'media', 'page-hero'),
+  ]
+  assert.equal(selectSocialCardPlacements(
+    assets,
+    { owner_type: 'site', owner_id: 'site-1' },
+    'site-1',
+  ).source?.asset_id, 'page-hero')
+  assert.equal(selectSocialCardPlacements(
+    assets,
+    { owner_type: 'tenant_page', owner_id: 'page-1' },
+    'site-1',
+  ).source?.asset_id, 'page-hero')
+})
+
+test('offering cards prefer hero media over thumbnails and galleries', () => {
+  const selected = selectSocialCardPlacements([
+    placedAsset('offering', 'offering-1', 'thumbnail', 'thumb'),
+    placedAsset('offering', 'offering-1', 'hero', 'hero'),
+    placedAsset('offering', 'offering-1', 'gallery', 'gallery'),
+  ], { owner_type: 'offering', owner_id: 'offering-1' }, 'site-1')
+  assert.equal(selected.source?.asset_id, 'hero')
+})
+
 test('the generation key includes source asset identity', () => {
   const base = {
-    owner: { owner_type: 'site' as const, owner_id: 'site-1' },
-    ownerUpdatedAt: '2026-08-29T00:00:00.000Z',
-    siteUpdatedAt: '2026-08-29T00:00:00.000Z',
-    sourceUpdatedAt: '2026-08-29T00:00:00.000Z',
     logoAssetId: 'logo-1',
-    faviconAssetId: null,
-    payload: { template: 'saya' as const, title: 'Site', siteName: 'Site' },
+    payload: { template: 'saya' as const, title: 'Site', siteName: 'Site', backgroundImageUrl: 'https://img.example/background.png' },
   }
   assert.notEqual(
     buildSocialCardGenerationKey({ ...base, sourceAssetId: 'source-1' }),
     buildSocialCardGenerationKey({ ...base, sourceAssetId: 'source-2' }),
+  )
+  assert.notEqual(
+    buildSocialCardGenerationKey({ ...base, sourceAssetId: 'source-1' }),
+    buildSocialCardGenerationKey({ ...base, sourceAssetId: 'source-1', payload: { ...base.payload, title: 'Changed' } }),
   )
 })

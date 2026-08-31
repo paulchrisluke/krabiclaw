@@ -1,4 +1,6 @@
 import process from 'node:process'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import sharp from 'sharp'
 
@@ -6,16 +8,22 @@ const args = process.argv.slice(2)
 const requireGeneratedSize = args.includes('--require-generated-size')
 const pageUrls = args.filter(arg => arg !== '--require-generated-size')
 
-if (pageUrls.length === 0) {
-  console.error('usage: node scripts/check-social-images.mjs [--require-generated-size] <page-url> [...]')
-  process.exit(2)
-}
-
 function readAttributes(tag) {
   const attributes = new Map()
   const pattern = /([^\s=]+)\s*=\s*(["'])(.*?)\2/g
-  for (const match of tag.matchAll(pattern)) attributes.set(match[1].toLowerCase(), match[3])
+  for (const match of tag.matchAll(pattern)) attributes.set(match[1].toLowerCase(), decodeHtmlAttribute(match[3]))
   return attributes
+}
+
+export function decodeHtmlAttribute(value) {
+  const named = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' }
+  return value.replace(/&(#x[\da-f]+|#\d+|amp|quot|apos|lt|gt);/gi, (entity, body) => {
+    if (body[0] !== '#') return named[body.toLowerCase()] ?? entity
+    const codePoint = body[1]?.toLowerCase() === 'x'
+      ? Number.parseInt(body.slice(2), 16)
+      : Number.parseInt(body.slice(1), 10)
+    return Number.isSafeInteger(codePoint) ? String.fromCodePoint(codePoint) : entity
+  })
 }
 
 function readMetaContent(html, attribute, value) {
@@ -74,17 +82,26 @@ async function checkPage(pageUrl) {
   }
 }
 
-const results = await Promise.allSettled(pageUrls.map(checkPage))
-let failed = false
-
-for (let index = 0; index < results.length; index += 1) {
-  const result = results[index]
-  if (result.status === 'fulfilled') {
-    console.log(JSON.stringify(result.value))
-  } else {
-    failed = true
-    console.error(JSON.stringify({ pageUrl: pageUrls[index], error: String(result.reason?.message ?? result.reason) }))
+async function main() {
+  if (pageUrls.length === 0) {
+    console.error('usage: node scripts/check-social-images.mjs [--require-generated-size] <page-url> [...]')
+    process.exitCode = 2
+    return
   }
+
+  const results = await Promise.allSettled(pageUrls.map(checkPage))
+  let failed = false
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index]
+    if (result.status === 'fulfilled') {
+      console.log(JSON.stringify(result.value))
+    } else {
+      failed = true
+      console.error(JSON.stringify({ pageUrl: pageUrls[index], error: String(result.reason?.message ?? result.reason) }))
+    }
+  }
+  if (failed) process.exitCode = 1
 }
 
-if (failed) process.exit(1)
+const entryUrl = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null
+if (entryUrl === import.meta.url) await main()

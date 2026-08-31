@@ -36,6 +36,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
 import { refreshSocialCard } from '~/server/utils/social-card'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
@@ -615,13 +616,14 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_blog', String(post.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-  const media = (await getMediaPlacements(db, { siteId: PLATFORM_SITE_ID, ownerType: 'blog_post', ownerIds: [String(post.id)] })).get(String(post.id)) ?? []
+  const socialMedia = (await loadPublicSocialMedia(db, PLATFORM_SITE_ID, 'blog_post', [String(post.id)])).get(String(post.id))
   const { author_id: authorId, ...postRecord } = post
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks }),
-    media,
+    media: socialMedia?.media ?? [],
+    social_image: socialMedia?.social_image ?? null,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -652,13 +654,14 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_doc', String(doc.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Documentation content document is missing' })
-  const media = (await getMediaPlacements(db, { siteId: PLATFORM_SITE_ID, ownerType: 'platform_doc', ownerIds: [String(doc.id)] })).get(String(doc.id)) ?? []
+  const socialMedia = (await loadPublicSocialMedia(db, PLATFORM_SITE_ID, 'platform_doc', [String(doc.id)])).get(String(doc.id))
   const { author_id: authorId, ...docRecord } = doc
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...docRecord, content_blocks: contentBlocks }),
-    media,
+    media: socialMedia?.media ?? [],
+    social_image: socialMedia?.social_image ?? null,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -866,13 +869,14 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
     getContentBlocksForOwner(db, 'tenant_blog', String(post.id)),
     listBlocksForDocument(db, contentDocument.id),
   ])
-  const media = (await getMediaPlacements(db, { siteId, ownerType: 'blog_post', ownerIds: [String(post.id)] })).get(String(post.id)) ?? []
+  const socialMedia = (await loadPublicSocialMedia(db, siteId, 'blog_post', [String(post.id)])).get(String(post.id))
   const { author_id: authorId, ...postRecord } = post
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks ?? [], body: renderContentBlocksToMarkdown(rawBlocks) }),
-    media,
+    media: socialMedia?.media ?? [],
+    social_image: socialMedia?.social_image ?? null,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
