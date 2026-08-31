@@ -147,11 +147,25 @@ export default definePlugin((nitroApp) => {
         queryAll<{ route_path: string; updated_at: number }>(db, `
           SELECT route_path, updated_at FROM resource_localizations
            WHERE site_id = ? AND locale = ? AND route_path IS NOT NULL
+             AND EXISTS (
+               SELECT 1 FROM resource_localizations site_rl
+                WHERE site_rl.site_id = resource_localizations.site_id
+                  AND site_rl.locale = resource_localizations.locale
+                  AND site_rl.resource_type = 'site'
+                  AND site_rl.resource_id = resource_localizations.site_id
+             )
            ORDER BY route_path
         `, [siteId, candidate.locale]),
         queryAll<{ path: string; updated_at: string; robots: string | null }>(db, `
           SELECT path, updated_at, robots FROM tenant_page_variants
            WHERE site_id = ? AND locale = ?
+             AND EXISTS (
+               SELECT 1 FROM resource_localizations site_rl
+                WHERE site_rl.site_id = tenant_page_variants.site_id
+                  AND site_rl.locale = tenant_page_variants.locale
+                  AND site_rl.resource_type = 'site'
+                  AND site_rl.resource_id = tenant_page_variants.site_id
+             )
            ORDER BY path
         `, [siteId, candidate.locale]),
       ])

@@ -10,6 +10,7 @@ import {
   type SocialTemplate,
 } from '~/utils/social-metadata'
 import { resolvePublicTemplate } from '~/utils/template-registry'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PageBreadcrumb {
   name: string
@@ -55,6 +56,8 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   const config = useRuntimeConfig()
   const requestURL = useRequestURL()
   const tenant = useTenantSite()
+  const publicLocale = useState<string>('public-locale', () => 'en')
+  const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
 
   const normalized = computed(() => {
     const value = toValue(input)
@@ -62,7 +65,8 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const origin = template === 'platform'
       ? config.public.siteUrl || requestURL.origin
       : requestURL.origin || config.public.siteUrl
-    const canonicalUrl = resolveSeoUrl(value.path, origin)
+    const exactRepresentation = localeRepresentations.value.find(item => item.locale === publicLocale.value)
+    const canonicalUrl = resolveSeoUrl(exactRepresentation?.route_path ?? value.path, origin)
     const brand = value.brand ?? (template === 'platform'
       ? {
           siteName: PLATFORM_NAME,
@@ -83,9 +87,19 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     return { value, origin, template, tags: composeSocialMetadata(socialInput, resolvedImage) }
   })
 
-  useHead(() => ({
-    title: normalized.value.tags.title,
-    meta: [
+  useHead(() => {
+    const alternateLinks: Array<{ rel: 'alternate'; hreflang: string; href: string }> = localeRepresentations.value.map(representation => ({
+      rel: 'alternate',
+      hreflang: representation.locale,
+      href: resolveSeoUrl(representation.route_path, normalized.value.origin),
+    }))
+    const canonicalLink: { rel: 'canonical'; href: string } = {
+      rel: 'canonical',
+      href: normalized.value.tags.canonicalUrl,
+    }
+    return {
+      title: normalized.value.tags.title,
+      meta: [
       { name: 'description', content: normalized.value.tags.description },
       { property: 'og:title', content: normalized.value.tags.ogTitle },
       { property: 'og:description', content: normalized.value.tags.ogDescription },
@@ -105,9 +119,13 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       { property: 'article:author', content: normalized.value.tags.articleAuthor },
       { property: 'article:published_time', content: normalized.value.tags.articlePublishedTime },
       ...(normalized.value.tags.robots ? [{ name: 'robots', content: normalized.value.tags.robots }] : []),
-    ].filter(item => item.content !== undefined),
-    link: [{ rel: 'canonical', href: normalized.value.tags.canonicalUrl }],
-  }))
+      ].filter(item => item.content !== undefined),
+      link: [
+        canonicalLink,
+        ...alternateLinks,
+      ],
+    }
+  })
 
   useSchemaOrg(computed(() => {
     const { value, origin, template, tags } = normalized.value

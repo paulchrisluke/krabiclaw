@@ -4,6 +4,13 @@ import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
 import { buildDeleteOwnerPlacementsQuery, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
+import {
+  loadExactPublicLocalizations,
+  projectExactLocalizedResource,
+  projectLocalizedMediaAlt,
+  resolveLocalizedRouteResourceId,
+} from '~/server/utils/public-localization'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 
 export { normalizePostSlug, postPublicPath }
 
@@ -741,4 +748,45 @@ export async function getPublishedPostBySlug(
     seo_title: row.seo_title,
     seo_description: row.seo_description,
   }
+}
+
+export async function getPublishedPostByPublicRoute(
+  db: DbClient,
+  siteId: string,
+  slug: string,
+  locale: string,
+  env: DomainEnv,
+) {
+  const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
+  if (!site) return null
+
+  let resourceId = slug
+  let localizations = [] as Awaited<ReturnType<typeof loadExactPublicLocalizations>>
+  if (locale !== 'en') {
+    localizations = await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+    const routeResourceId = resolveLocalizedRouteResourceId(localizations, 'site_post', `/${locale}/posts/${slug}`)
+    if (!routeResourceId) return null
+    resourceId = routeResourceId
+  }
+
+  const sourcePost = await getPublishedPostBySlug(db, siteId, resourceId, env)
+  if (!sourcePost) return null
+  let post = sourcePost
+  if (locale !== 'en') {
+    const postLocalization = localizations.find(item => item.resourceType === 'site_post' && item.resourceId === sourcePost.id)
+    if (!postLocalization) return null
+    post = {
+      ...projectExactLocalizedResource('site_post', sourcePost, postLocalization),
+      media: projectLocalizedMediaAlt(sourcePost.media, localizations),
+    }
+  }
+
+  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+    organizationId: site.organization_id,
+    siteId,
+    sourcePath: sourcePost.public_path,
+    sourceLabel: 'English',
+    resource: { type: 'site_post', id: sourcePost.id },
+  })
+  return { ...post, localeRepresentations }
 }

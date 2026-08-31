@@ -36,6 +36,16 @@ test('Product detail metadata receives the canonical site brand from its API pay
   assert.doesNotMatch(`${menuPage}\n${productsPage}`, /siteName: ''/)
 })
 
+test('Product detail captures Nuxt state before its asynchronous load', () => {
+  const composable = readFileSync(new URL('../../composables/usePublicProductDetail.ts', import.meta.url), 'utf8')
+  const state = composable.indexOf("useState<PublicLocaleRepresentation[]>('public-locale-representations'")
+  const load = composable.indexOf('await useAsyncData<PublicProductDetailPayload | null>')
+
+  assert.ok(state >= 0)
+  assert.ok(load >= 0)
+  assert.ok(state < load)
+})
+
 test('site preview collection routes use index files beside Product detail routes', () => {
   const previewRoutes = [
     '../../pages/preview/site/[siteId]/locations/[slug]/menu',

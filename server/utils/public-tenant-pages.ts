@@ -9,6 +9,7 @@ import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/medi
 
 export interface PublicTenantPage {
   id: string
+  page_id: string
   path: string
   title: string
   summary: string | null
@@ -189,6 +190,7 @@ async function hydrateBlocks(
 function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPage {
   return {
     id: page.id,
+    page_id: page.page_id,
     path: page.path,
     title: page.title,
     summary: page.summary,
