@@ -106,10 +106,12 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   ])
   const chowbotUpdateMedia = MEDIA_CHOWBOT_TOOLS.find(candidate => candidate.name === 'update_media_asset')
   assert.ok(chowbotUpdateMedia)
-  assert.deepEqual((chowbotUpdateMedia.input_schema as { anyOf?: unknown[] }).anyOf, [
-    { required: ['alt_text'] },
-    { required: ['category'] },
-  ])
+  assert.equal((chowbotUpdateMedia.input_schema as { anyOf?: unknown[] }).anyOf, undefined)
+  assert.match(chowbotUpdateMedia.description, /at least one of alt_text or category/)
+  assert.equal(
+    CHOWBOT_TOOLS.some(candidate => ['oneOf', 'anyOf', 'allOf'].some(key => key in candidate.input_schema)),
+    false,
+  )
   assert.deepEqual(
     (updateMedia.inputSchema.properties?.category as { enum?: string[] }).enum,
     ['exterior', 'interior', 'food', 'menu', 'team', 'other'],
