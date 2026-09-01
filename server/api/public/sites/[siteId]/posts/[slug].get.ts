@@ -10,10 +10,12 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Public post data is temporarily unavailable')
 
-  const post = await getPublishedPostBySlug(db, siteId, slug, env)
+  const query = getQuery(event)
+  const locale = typeof query.locale === 'string' ? query.locale : null
+  const post = await getPublishedPostBySlug(db, siteId, slug, env, locale)
   if (!post) return apiErrorResponse(event, 404, 'POST_NOT_FOUND', 'Post not found')
 
   return jsonResponse({ success: true, post })
 })
 import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';
+import { getRouterParam, getQuery } from 'nitro/h3';

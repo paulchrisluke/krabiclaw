@@ -823,10 +823,11 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   }
 }
 
-export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv) {
+export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv, locale?: string | null) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.seo_title, p.seo_description, p.seo_keywords,
+      p.id, p.organization_id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.nav_title,
+      p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots, p.featured_order, p.visibility,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
@@ -846,13 +847,22 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
 
   if (!post) return null
 
+  let localizedPost = post
+  if (locale && locale !== 'en') {
+    const { loadExactPublicLocalizations, projectExactLocalizedResource } = await import('~/server/utils/public-localization')
+    const localizations = await loadExactPublicLocalizations(db, String(post.organization_id), siteId, locale)
+    const localization = localizations.find(item => item.resourceType === 'tenant_blog_post' && item.resourceId === String(post.id))
+    if (!localization) return null
+    localizedPost = projectExactLocalizedResource('tenant_blog_post', { ...post, id: String(post.id) }, localization)
+  }
+
   const contentDocument = await getContentDocumentByOwner(db, 'tenant_blog', String(post.id))
   if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const [contentBlocks, rawBlocks] = await Promise.all([
     getContentBlocksForOwner(db, 'tenant_blog', String(post.id)),
     listBlocksForDocument(db, contentDocument.id),
   ])
-  const { author_id: authorId, ...postRecord } = post
+  const { author_id: authorId, ...postRecord } = localizedPost
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {

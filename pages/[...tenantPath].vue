@@ -3,6 +3,26 @@
     <SiteLinksPage
       v-if="localizedRoute?.representation.kind === 'resource' && localizedRoute.representation.resource_type === 'site_link_page'"
     />
+    <ExperienceDetailPage
+      v-else-if="localizedRoute?.representation.kind === 'resource' && localizedRoute.representation.resource_type === 'experience'"
+    />
+    <LocationDetailPage
+      v-else-if="localizedRoute?.representation.kind === 'resource' && localizedRoute.representation.resource_type === 'business_location'"
+    />
+    <ProductDetailRoutePage
+      v-else-if="localizedRoute?.representation.kind === 'resource' && localizedRoute.representation.resource_type === 'product' && productRouteParts"
+      :route-kind="productRouteParts.routeKind"
+      :location-slug="productRouteParts.locationSlug"
+      :product-slug="productRouteParts.productSlug"
+    />
+    <PostDetailPage
+      v-else-if="localizedRoute?.representation.kind === 'resource' && localizedRoute.representation.resource_type === 'site_post' && resourceSlug"
+      :slug="resourceSlug"
+    />
+    <BlogPostDetailPage
+      v-else-if="localizedRoute?.representation.kind === 'resource' && localizedRoute.representation.resource_type === 'tenant_blog_post' && resourceSlug"
+      :slug="resourceSlug"
+    />
     <LocalizedResourcePage
       v-else-if="localizedRoute?.representation.kind === 'resource'"
       :route="localizedRoute"
@@ -69,6 +89,22 @@ const localizedData = localeSegment.value
   : null
 if (localizedData?.error.value) throw localizedData.error.value
 const localizedRoute = computed(() => localizedData?.data.value?.route ?? null)
+// route: 'product' route_paths are /{locale}/locations/{locationSlug}/(menu|products)/{productSlug} -
+// parsed from tenantPagePath (already locale-stripped) instead of route.params,
+// which under this catch-all only ever holds the raw tenantPath segments.
+const productRouteParts = computed(() => {
+  const match = tenantPagePath.value.match(/^\/locations\/([^/]+)\/(menu|products)\/([^/]+)$/)
+  if (!match) return null
+  return { locationSlug: match[1], routeKind: match[2] as 'menu' | 'products', productSlug: match[3] }
+})
+// site_post (/posts/{slug}) and tenant_blog_post (/blog/{slug}) route_paths
+// are a single trailing slug segment — the resource's canonical slug isn't
+// itself a localizable field (see RESOURCE_LOCALIZATION_REGISTRY), so it's
+// safe to read directly off the already locale-stripped tenantPagePath.
+const resourceSlug = computed(() => {
+  const match = tenantPagePath.value.match(/^\/(?:posts|blog)\/([^/]+)$/)
+  return match ? match[1] : null
+})
 if (localeSegment.value && !localizedRoute.value) throw createError({ statusCode: 404, statusMessage: 'Localized route not found' })
 if (localizedRoute.value) {
   // Set the i18n locale imperatively here, synchronously, rather than via a

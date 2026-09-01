@@ -11,9 +11,11 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const post = await getPublishedSiteBlogPost(db, siteId, slug, env)
+  const query = getQuery(event)
+  const locale = typeof query.locale === 'string' ? query.locale : null
+  const post = await getPublishedSiteBlogPost(db, siteId, slug, env, locale)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   return jsonResponse({ post })
 })
 import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';
+import { getRouterParam, getQuery } from 'nitro/h3';

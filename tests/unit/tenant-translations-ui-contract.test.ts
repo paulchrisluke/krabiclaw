@@ -79,13 +79,17 @@ test('SiteSettingsPage.vue exposes translation fields for every registered site 
 
 test('experiences.vue exposes translation fields for every registered experience field', () => {
   // RESOURCE_LOCALIZATION_REGISTRY.experience required+optional: title,
-  // tagline, body, price, available_note, highlights_json, included_items_json,
+  // tagline, body, pricing_note, available_note, highlights_json, included_items_json,
   // what_to_bring, meeting_point, cancellation_policy, seo_title, seo_description.
+  // pricing_note (not 'price') - the registry key must match the canonical
+  // Experience field name exactly, since the public overlay spreads localized
+  // values straight onto the canonical resource by key; 'price' collided
+  // with the canonical structured price object and crashed the public page.
   // Live-verified this session: all 12 fields save/reload/persist for the
   // real Kikuzuki experience (exp-kiku-teppanyaki), and /th/experiences/
   // teppanyaki-experience server-renders the translated title and body.
   const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/experiences.vue')
-  for (const field of ['translationFields.title', 'translationFields.tagline', 'translationFields.body', 'translationFields.price', 'translationFields.available_note', 'translationFields.highlights_text', 'translationFields.included_items_text', 'translationFields.what_to_bring_text', 'translationFields.meeting_point', 'translationFields.cancellation_policy', 'translationFields.seo_title', 'translationFields.seo_description']) {
+  for (const field of ['translationFields.title', 'translationFields.tagline', 'translationFields.body', 'translationFields.pricing_note', 'translationFields.available_note', 'translationFields.highlights_text', 'translationFields.included_items_text', 'translationFields.what_to_bring_text', 'translationFields.meeting_point', 'translationFields.cancellation_policy', 'translationFields.seo_title', 'translationFields.seo_description']) {
     assert.match(source, new RegExp(field.replace('.', '\\.')), `expected a translation field for ${field}`)
   }
 })

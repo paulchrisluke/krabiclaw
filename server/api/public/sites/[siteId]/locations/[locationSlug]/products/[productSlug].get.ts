@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { loadPublicProductApiDetail, loadPublicProductReviews } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
-import { getRouterParam } from 'nitro/h3'
+import { getRouterParam, getQuery } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -11,7 +11,9 @@ export default defineHandler(async (event) => {
   try {
     const db = cloudflareEnv(event).DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
-    const result = await loadPublicProductApiDetail(db, siteId, locationSlug, productSlug)
+    const query = getQuery(event)
+    const locale = typeof query.locale === 'string' ? query.locale : null
+    const result = await loadPublicProductApiDetail(db, siteId, locationSlug, productSlug, locale)
     if (!result) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const reviews = await loadPublicProductReviews(db, result)
     return jsonResponse({

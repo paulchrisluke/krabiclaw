@@ -54,16 +54,20 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof review.createdAt === 'string')
 }
 
-export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
+export async function usePublicProductDetail(
+  routeKind: 'menu' | 'products',
+  overrides?: { locationSlug?: string; productSlug?: string },
+) {
   const route = useRoute()
   const requestEvent = useRequestEvent()
   const { siteId } = useTenantSite()
-  const locationSlug = String(route.params.slug ?? '')
-  const productSlug = String(route.params.productSlug ?? '')
+  const locationSlug = overrides?.locationSlug ?? String(route.params.slug ?? '')
+  const productSlug = overrides?.productSlug ?? String(route.params.productSlug ?? '')
   if (!siteId || !locationSlug || !productSlug) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
+  const locale = useState<string>('public-locale', () => 'en')
 
   const { data, error } = await useAsyncData<PublicProductDetailPayload | null>(
-    `public-product-${siteId}-${locationSlug}-${productSlug}`,
+    `public-product-${siteId}-${locationSlug}-${productSlug}-${locale.value}`,
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
@@ -73,7 +77,7 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
         ])
         const db = cloudflareEnv(requestEvent).DB
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-        const detail = await loadPublicProductDetail(db, siteId, routeKind, locationSlug, productSlug)
+        const detail = await loadPublicProductDetail(db, siteId, routeKind, locationSlug, productSlug, locale.value)
         if (!detail) return null
         return {
           product: detail.product,
@@ -86,7 +90,8 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
       }
       return publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`, {
         signal,
-        coalesceKey: `public-product-${siteId}-${locationSlug}-${productSlug}`,
+        query: locale.value !== 'en' ? { locale: locale.value } : undefined,
+        coalesceKey: `public-product-${siteId}-${locationSlug}-${productSlug}-${locale.value}`,
         validate: isPublicProductDetailPayload,
       })
     },

@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const experiencePage = readFileSync('pages/experiences/[slug].vue', 'utf8')
+// The experience detail page's content moved to a shared component so a
+// locale-prefixed route can render the same real page (see
+// components/tenant-pages/LocationQaPage.vue for why) - pages/experiences/[slug].vue
+// is now a thin wrapper around it.
+const experiencePage = readFileSync('components/tenant-pages/ExperienceDetailPage.vue', 'utf8')
 const mediaGallery = readFileSync('components/saya/SayaMediaGallery.vue', 'utf8')
 const lightbox = readFileSync('components/saya/SayaLightbox.vue', 'utf8')
 

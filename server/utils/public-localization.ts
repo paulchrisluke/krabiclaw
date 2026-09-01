@@ -47,6 +47,16 @@ export async function loadExactPublicLocalizations(
 }
 
 const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {
+  business_location: {
+    // The canonical business_location.opening_hours is a structured Google
+    // Places hours object (consumed by formatGoogleHours/getTodayGoogleHours),
+    // not the newline-per-day string array the CMS translation form stores it
+    // as - overlaying it directly onto the canonical field crashed every
+    // themed page that calls formatGoogleHours on a translated location
+    // (TypeError, wrong shape). Land it under a different key instead of
+    // rendering nowhere, matching the products/experience json-field pattern.
+    opening_hours: 'opening_hours_translated',
+  },
   product: {
     tags_json: 'tags',
     details_json: 'details',

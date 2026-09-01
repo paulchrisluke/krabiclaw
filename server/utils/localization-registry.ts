@@ -49,7 +49,12 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   experience: {
     table: 'experiences',
     required: ['title'],
-    optional: ['tagline', 'body', 'price', 'available_note', 'highlights_json', 'included_items_json', 'what_to_bring', 'meeting_point', 'cancellation_policy', 'seo_title', 'seo_description'],
+    // pricing_note (not 'price') - the canonical Experience.price is a
+    // structured { amount_minor, currency, ... } object never editable as a
+    // translated string; the registry key must match the canonical field
+    // name exactly since the public overlay spreads localized values
+    // straight onto the canonical resource (see projectExactLocalizedResource).
+    optional: ['tagline', 'body', 'pricing_note', 'available_note', 'highlights_json', 'included_items_json', 'what_to_bring', 'meeting_point', 'cancellation_policy', 'seo_title', 'seo_description'],
     shapes: { highlights_json: 'string_array', included_items_json: 'string_array', what_to_bring: 'string_array' },
     route: 'experience',
   },

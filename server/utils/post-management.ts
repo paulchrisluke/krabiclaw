@@ -713,11 +713,12 @@ export async function getPublishedPostBySlug(
   siteId: string,
   slugOrId: string,
   env: DomainEnv,
+  locale?: string | null,
 ) {
-  const row = await queryFirst<PublishedPostRow>(
+  const row = await queryFirst<PublishedPostRow & { organization_id: string }>(
     db,
     `
-    SELECT p.id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
+    SELECT p.id, p.organization_id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
            p.slug, p.post_type, p.title, p.body,
            p.seo_title, p.seo_description,
            p.cta_type, p.cta_url, p.event_title, p.event_start, p.event_end,
@@ -734,11 +735,20 @@ export async function getPublishedPostBySlug(
     resolveSitePublicOrigin(db, siteId, env),
     getPostMediaByPostIds(db, siteId, [row.id]),
   ])
-  const summary = formatPublishedPost(row, mediaByPost.get(row.id), origin)
+  let localizedRow = row
+  if (locale && locale !== 'en') {
+    const { loadExactPublicLocalizations, projectExactLocalizedResource } = await import('~/server/utils/public-localization')
+    const localizations = await loadExactPublicLocalizations(db, row.organization_id, siteId, locale)
+    const localization = localizations.find(item => item.resourceType === 'site_post' && item.resourceId === row.id)
+    if (!localization) return null
+    const projected = projectExactLocalizedResource('site_post', row, localization)
+    localizedRow = { ...row, ...projected }
+  }
+  const summary = formatPublishedPost(localizedRow, mediaByPost.get(row.id), origin)
   return {
-    ...row,
+    ...localizedRow,
     ...summary,
-    seo_title: row.seo_title,
-    seo_description: row.seo_description,
+    seo_title: localizedRow.seo_title,
+    seo_description: localizedRow.seo_description,
   }
 }

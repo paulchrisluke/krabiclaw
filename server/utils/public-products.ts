@@ -95,12 +95,20 @@ export async function loadPublicProductDetail(
   routeKind: 'menu' | 'products',
   locationSlug: string,
   productSlug: string,
+  locale?: string | null,
 ): Promise<PublicProductDetail | null> {
   const collection = await loadPublicProductCollection(db, siteId, routeKind, locationSlug)
   const location = collection?.locations[0]
   if (!collection || !location) return null
   const product = await getPublicProductBySlug(db, siteId, location.id, productSlug)
   if (!product) return null
+  if (locale && locale !== 'en') {
+    const { loadExactPublicLocalizations, projectExactLocalizedResource } = await import('~/server/utils/public-localization')
+    const localizations = await loadExactPublicLocalizations(db, collection.site.organization_id, siteId, locale)
+    const localization = localizations.find(item => item.resourceType === 'product' && item.resourceId === product.id)
+    if (!localization) return null
+    return { ...collection, location, product: projectExactLocalizedResource('product', product, localization) }
+  }
   return { ...collection, location, product }
 }
 
@@ -120,11 +128,12 @@ export async function loadPublicProductApiDetail(
   siteId: string,
   locationSlug: string,
   productSlug: string,
+  locale?: string | null,
 ): Promise<PublicProductDetail | null> {
   const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [siteId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null
   if (!presentation) return null
-  return loadPublicProductDetail(db, siteId, presentation.locationCollectionSegment, locationSlug, productSlug)
+  return loadPublicProductDetail(db, siteId, presentation.locationCollectionSegment, locationSlug, productSlug, locale)
 }
 
 export async function loadPublicProductReviews(
