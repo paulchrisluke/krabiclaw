@@ -39,3 +39,15 @@ for (const { file, resourceType } of cases) {
     assert.match(source, /is_source/)
   })
 }
+
+test('media.vue saves alt-text translations through the canonical localization API for media_asset', () => {
+  // media_asset alt_text had no CMS surface at all before this change (the
+  // server/api PATCH endpoint for the English field existed but nothing
+  // called it, and there was no Translations UI) - the media library grid
+  // is the CMS surface tenants actually use to manage assets, so the edit
+  // affordance and translation control both live there.
+  const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/media.vue')
+  assert.match(source, /localization\/media_asset\/\$\{editingAsset\.value\.id\}\/\$\{encodeURIComponent\(translationLocale\.value\)\}/)
+  assert.match(source, /method: 'PUT'/)
+  assert.match(source, /is_source/)
+})
