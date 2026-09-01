@@ -26,6 +26,13 @@ Do not implement adjacent cleanup, TODOs, "future work," roadmap ideas, or revie
 
 For cleanup/refactor work, net handwritten production code should decrease.
 
+## Test discipline
+
+Follow [docs/testing-strategy.md](docs/testing-strategy.md). Do not add a test by
+default. Unit tests may not inspect production source text or mock internal
+application modules. Prove UI, persistence, and MCP workflows through their real
+runtime boundaries.
+
 ## Platform and authorization boundaries
 
 KrabiClaw supports the ChatGPT MCP app, dashboard CMS, ChowBot in the dashboard, and ChowBot over WhatsApp where applicable. These surfaces must use shared server/domain utilities and the same canonical state. Do not fork business logic or create shadow data models.

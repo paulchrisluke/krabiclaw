@@ -297,9 +297,7 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
   return {
     mode: row.mode,
     cta_label: ctaLabel,
-    external_url: typeof row.external_url === 'string' && row.external_url
-      ? `/api/public/sites/${encodeURIComponent(siteId)}/consultation-handoff`
-      : null,
+    external_url: typeof row.external_url === 'string' ? row.external_url : null,
     schedule_path: schedulePath,
     confirmation_path: confirmationPath,
     tracking_enabled: row.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),

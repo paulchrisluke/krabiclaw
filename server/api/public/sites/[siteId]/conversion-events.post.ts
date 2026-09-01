@@ -6,7 +6,6 @@ import { recordSiteConversionEvent, type ConversionEntityType, type ConversionSt
 import { SITE_CONVERSION_EVENT_NAMES, type SiteConversionEventName } from '~/utils/site-conversion-events'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { defineHandler } from 'nitro'
-import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 const VALID_EVENTS = new Set<string>(SITE_CONVERSION_EVENT_NAMES)
 
@@ -22,9 +21,6 @@ function destinationHost(value: string): string | null {
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
-  if (event.context.tenantType !== TENANT_TYPES.TENANT || event.context.siteId !== siteId) {
-    return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  }
   const db = cloudflareEnv(event).db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
   let body: ApiRecord
@@ -52,8 +48,8 @@ export default defineHandler(async (event) => {
   let metadata: ApiRecord | null = null
 
   if (eventName === 'consultation_cta_click') {
-    if (body.stage !== 'schedule_navigation') return jsonResponse({ error: 'Invalid consultation stage' }, { status: 400 })
-    stage = 'schedule_navigation'
+    if (body.stage !== 'schedule_navigation' && body.stage !== 'external_booking_handoff') return jsonResponse({ error: 'Invalid consultation stage' }, { status: 400 })
+    stage = body.stage
     pageType = cleanString(body.page_type, 80) || null
     pagePath = cleanString(body.page_path, 300) || null
     if (pagePath && (!pagePath.startsWith('/') || pagePath.includes('?') || pagePath.includes('#'))) return jsonResponse({ error: 'Invalid page_path' }, { status: 400 })
@@ -63,7 +59,15 @@ export default defineHandler(async (event) => {
       if (!page) return jsonResponse({ error: 'Page not found' }, { status: 404 })
       entityType = 'tenant_page'; entityId = page.id
     }
-    ctaDestination = '/schedule'
+    if (stage === 'external_booking_handoff') {
+      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT external_url FROM site_consultation_settings WHERE site_id = ? AND mode = 'external_url' LIMIT 1`, [siteId])
+      const host = consultation?.external_url ? destinationHost(consultation.external_url) : null
+      if (!host) return jsonResponse({ error: 'Consultation destination is unavailable' }, { status: 404 })
+      ctaDestination = host
+      metadata = { destination_hostname: host }
+    } else {
+      ctaDestination = '/schedule'
+    }
   } else if (eventName === 'product_order_external_click') {
     stage = 'external_handoff'
     locationId = cleanString(body.location_id, 120) || null
