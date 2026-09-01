@@ -103,6 +103,22 @@ test('posts.vue exposes translation fields for every registered site_post field'
   }
 })
 
+test('blog/[postId].vue exposes translation fields for every registered tenant_blog_post field', () => {
+  // RESOURCE_LOCALIZATION_REGISTRY.tenant_blog_post required+optional: title,
+  // excerpt, category, tags_json, nav_title, seo_title, seo_description.
+  // Live-verified this session: created a real fixture through the ordinary
+  // POST /api/editor/sites/{siteId}/blog/posts create endpoint (the
+  // block-based rich editor was unreliable for synthetic input in this
+  // browser-automation environment - not a UI defect), then saved and
+  // reloaded all 7 fields through the real CMS Translations panel, and
+  // confirmed /th/blog/sushi-making-class-highlights renders the translated
+  // title.
+  const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/blog/[postId].vue')
+  for (const field of ['translationFields.title', 'translationFields.excerpt', 'translationFields.category', 'translationFields.tags_text', 'translationFields.nav_title', 'translationFields.seo_title', 'translationFields.seo_description']) {
+    assert.match(source, new RegExp(field.replace('.', '\\.')), `expected a translation field for ${field}`)
+  }
+})
+
 test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
   // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
   // it's reachable from every vertical, including Kikuzuki's restaurant/saya

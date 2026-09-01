@@ -31,6 +31,11 @@
       <p class="text-xs text-muted">Source (English): {{ postResource?.post.title }}</p>
       <label class="block text-sm">Title ({{ translationLocale }})<input v-model="translationFields.title" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="block text-sm">Excerpt ({{ translationLocale }})<textarea v-model="translationFields.excerpt" :rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
+      <label class="block text-sm">Category ({{ translationLocale }})<input v-model="translationFields.category" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <label class="block text-sm">Tags ({{ translationLocale }})<input v-model="translationFields.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
+      <label class="block text-sm">Nav title ({{ translationLocale }})<input v-model="translationFields.nav_title" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <label class="block text-sm">SEO title ({{ translationLocale }})<input v-model="translationFields.seo_title" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <label class="block text-sm">SEO description ({{ translationLocale }})<textarea v-model="translationFields.seo_description" :rows="2" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
       <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
       <button type="button" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="translationSaving" @click="saveTranslation">
         {{ translationSaving ? 'Saving…' : 'Save translation' }}
@@ -95,7 +100,7 @@ const dashboardApi = useDashboardApi()
 const toast = useToast()
 const translationLocale = ref('en')
 const translationLocales = ref<string[]>([])
-const translationFields = reactive({ title: '', excerpt: '' })
+const translationFields = reactive({ title: '', excerpt: '', category: '', tags_text: '', nav_title: '', seo_title: '', seo_description: '' })
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
 function isBlogLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
@@ -123,10 +128,17 @@ async function loadTranslationFields() {
     const values = response.localization.values
     translationFields.title = typeof values.title === 'string' ? values.title : ''
     translationFields.excerpt = typeof values.excerpt === 'string' ? values.excerpt : ''
+    translationFields.category = typeof values.category === 'string' ? values.category : ''
+    translationFields.tags_text = Array.isArray(values.tags_json) ? values.tags_json.join(', ') : ''
+    translationFields.nav_title = typeof values.nav_title === 'string' ? values.nav_title : ''
+    translationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    translationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
     translationFields.title = ''; translationFields.excerpt = ''
+    translationFields.category = ''; translationFields.tags_text = ''; translationFields.nav_title = ''
+    translationFields.seo_title = ''; translationFields.seo_description = ''
   }
 }
 watch(translationLocale, () => { if (translationLocale.value !== 'en') void loadTranslationFields() })
@@ -137,10 +149,15 @@ async function saveTranslation() {
     const values: Record<string, string> = {}
     if (translationFields.title.trim()) values.title = translationFields.title.trim()
     if (translationFields.excerpt.trim()) values.excerpt = translationFields.excerpt.trim()
+    if (translationFields.category.trim()) values.category = translationFields.category.trim()
+    if (translationFields.nav_title.trim()) values.nav_title = translationFields.nav_title.trim()
+    if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
+    if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
     const slug = String(postResource.value?.post.slug ?? '')
+    const tags_json = translationFields.tags_text.split(',').map(tag => tag.trim()).filter(Boolean)
     await dashboardApi(`/api/editor/sites/${siteId}/localization/tenant_blog_post/${postId}/${encodeURIComponent(translationLocale.value)}`, {
       method: 'PUT',
-      body: { values, route_path: `/${translationLocale.value}/blog/${slug}` },
+      body: { values: { ...values, ...(tags_json.length ? { tags_json } : {}) }, route_path: `/${translationLocale.value}/blog/${slug}` },
       validate: isRecord,
     })
     toast.add({ description: 'Translation saved', color: 'success' })
