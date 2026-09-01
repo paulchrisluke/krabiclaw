@@ -23,7 +23,7 @@ Correction from an earlier pass of this packet: Settings surfaces were described
   - Menu: whole 105-item list on one screen; per-item edit form exists but renders off-screen below the list on mobile (bug, [#709](https://github.com/paulchrisluke/krabiclaw/issues/709)).
   - Posts: AI composer + full list share one screen.
   - Q&A (both site- and location-level), Testimonials, Links: empty-state/list + full "Add" form share one screen, rather than the add flow getting its own screen.
-- **The Blog post editor** (`sites/[site]/blog/new`) is the one current-CMS surface that already matches Airbnb's "one thing, full screen" feel: large title, Markdown body, near-zero chrome, with Category/Tags/Excerpt/Publishing pushed into a settings slideover instead of competing for space on the writing surface.
+- **The Blog post editor** (`sites/[site]/blog/new`) keeps its main writing surface large and uncluttered (title + Markdown body, near-zero chrome) by pushing Category/Tags/Excerpt/Publishing into a settings slideover — but the *mechanism* differs from Airbnb, not just the visuals. Airbnb splits each field into its own full screen (hub → single field, back-navigation, one Cancel/Save bar per screen). The Blog editor keeps you on one persistent canvas and brings a slideover to you, with a single top-bar "Publish now" action and no per-field Cancel/Save. Same instinct (don't let secondary fields crowd the main content), different implementation — see §8.
 - **Goal — all editable fields**: hub screens split further into single-field screens. Description alone is 5 screens deep (hub → Listing description / Your property / Guest access / Interaction with guests / Other details to note).
 
 ## 3. Navigation depth
@@ -56,11 +56,17 @@ Correction from an earlier pass of this packet: Settings surfaces were described
 
 Clicking a row in the current Menu list (`.../products`) did not visibly open a per-item edit screen in this pass — the row highlighted (focus state) but appeared to stay on the list. Traced to source: `components/products/ProductEditor.vue` renders the edit form as a sibling of the product list inside a grid that's only two-column at the `lg` breakpoint; below that, the form stacks below the full product list (105 rows in this case) with no scroll-into-view. The click handler and edit logic work correctly — the form was just rendering off-screen. Filed as [#709](https://github.com/paulchrisluke/krabiclaw/issues/709) with an exact fix (move the form into a `USlideover`, matching the pattern already used in `BlogPostEditor.vue`).
 
-## 8. Internal reference points for the redesign
+## 8. Internal reference points for the redesign — two different mechanisms, neither identical to Airbnb
 
-Two different patterns already exist side by side in the current codebase:
+Two patterns already exist side by side in the current codebase, and they solve "keep secondary fields from crowding the main content" in genuinely different ways. Neither is a direct match for Airbnb; both are worth knowing about before picking a direction.
 
-- **Settings/Brand pattern** (list → single-field screen → Cancel/Save bar): structurally close to Airbnb, visually plainer. Good starting point for *navigation shape*.
-- **Blog editor pattern** (full-screen, minimal chrome, metadata in a slideover): closest existing match to Airbnb's *visual* feel for a single large field. Good starting point for *large text content*.
+| | Settings/Brand pattern | Blog editor pattern | Airbnb |
+|---|---|---|---|
+| Where metadata lives | Its own screen, reached by drilling down | A slideover over the current screen | Its own screen, reached by drilling down |
+| How you get there | Tap a list row | Tap a settings icon | Tap a card |
+| Save model | Cancel/Save bar per field screen | One top-bar "Publish now" for the whole post, no per-field save | Cancel/Save bar per field screen |
+| Leaves the main view? | Yes, every time | No — canvas stays open behind the slideover | Yes, every time |
 
-The page content editor (`pages/[pageId]`) and the Menu editor are the two surfaces furthest from both reference points — worth prioritizing if the redesign is scoped incrementally.
+Settings/Brand matches Airbnb's *navigation mechanism* (sequential screens, per-field save) but not its visual density (§1). The Blog editor matches neither Airbnb's mechanism nor its density, but does share the underlying goal of an uncluttered primary content area. Picking a direction for the redesign means choosing (or blending) between these three, not assuming one of the two existing patterns already *is* the Airbnb pattern.
+
+The page content editor (`pages/[pageId]`) and the Menu editor are the two surfaces furthest from all three reference points — worth prioritizing if the redesign is scoped incrementally.
