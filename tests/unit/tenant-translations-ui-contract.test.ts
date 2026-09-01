@@ -77,6 +77,19 @@ test('SiteSettingsPage.vue exposes translation fields for every registered site 
   }
 })
 
+test('experiences.vue exposes translation fields for every registered experience field', () => {
+  // RESOURCE_LOCALIZATION_REGISTRY.experience required+optional: title,
+  // tagline, body, price, available_note, highlights_json, included_items_json,
+  // what_to_bring, meeting_point, cancellation_policy, seo_title, seo_description.
+  // Live-verified this session: all 12 fields save/reload/persist for the
+  // real Kikuzuki experience (exp-kiku-teppanyaki), and /th/experiences/
+  // teppanyaki-experience server-renders the translated title and body.
+  const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/experiences.vue')
+  for (const field of ['translationFields.title', 'translationFields.tagline', 'translationFields.body', 'translationFields.price', 'translationFields.available_note', 'translationFields.highlights_text', 'translationFields.included_items_text', 'translationFields.what_to_bring_text', 'translationFields.meeting_point', 'translationFields.cancellation_policy', 'translationFields.seo_title', 'translationFields.seo_description']) {
+    assert.match(source, new RegExp(field.replace('.', '\\.')), `expected a translation field for ${field}`)
+  }
+})
+
 test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
   // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
   // it's reachable from every vertical, including Kikuzuki's restaurant/saya

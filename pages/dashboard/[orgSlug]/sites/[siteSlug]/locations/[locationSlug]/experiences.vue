@@ -105,6 +105,33 @@
             <UFormField :label="`Description (${translationLocale})`">
               <UTextarea v-model="translationFields.body" :rows="5" class="w-full" />
             </UFormField>
+            <UFormField :label="`Price note (${translationLocale})`">
+              <UInput v-model="translationFields.price" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Availability note (${translationLocale})`">
+              <UInput v-model="translationFields.available_note" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Highlights (${translationLocale}, one per line)`">
+              <UTextarea v-model="translationFields.highlights_text" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Included items (${translationLocale}, one per line)`">
+              <UTextarea v-model="translationFields.included_items_text" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`What to bring (${translationLocale}, one per line)`">
+              <UTextarea v-model="translationFields.what_to_bring_text" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Meeting point (${translationLocale})`">
+              <UInput v-model="translationFields.meeting_point" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Cancellation policy (${translationLocale})`">
+              <UTextarea v-model="translationFields.cancellation_policy" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`SEO title (${translationLocale})`">
+              <UInput v-model="translationFields.seo_title" class="w-full" />
+            </UFormField>
+            <UFormField :label="`SEO description (${translationLocale})`">
+              <UTextarea v-model="translationFields.seo_description" :rows="2" class="w-full" />
+            </UFormField>
             <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
             <UButton :loading="translationSaving" label="Save translation" @click="saveTranslation" />
           </template>
@@ -478,7 +505,7 @@ async function loadExperiences() {
 // ── Translations (resource_localizations, same API as the editor CRUD) ──
 const translationLocale = ref('en')
 const translationLocales = ref<string[]>([])
-const translationFields = reactive({ title: '', tagline: '', body: '' })
+const translationFields = reactive({ title: '', tagline: '', body: '', price: '', available_note: '', highlights_text: '', included_items_text: '', what_to_bring_text: '', meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '' })
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
 function isExperienceLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
@@ -507,10 +534,22 @@ async function loadTranslationFields(experienceId: string) {
     translationFields.title = typeof values.title === 'string' ? values.title : ''
     translationFields.tagline = typeof values.tagline === 'string' ? values.tagline : ''
     translationFields.body = typeof values.body === 'string' ? values.body : ''
+    translationFields.price = typeof values.price === 'string' ? values.price : ''
+    translationFields.available_note = typeof values.available_note === 'string' ? values.available_note : ''
+    translationFields.highlights_text = Array.isArray(values.highlights_json) ? values.highlights_json.join('\n') : ''
+    translationFields.included_items_text = Array.isArray(values.included_items_json) ? values.included_items_json.join('\n') : ''
+    translationFields.what_to_bring_text = Array.isArray(values.what_to_bring) ? values.what_to_bring.join('\n') : ''
+    translationFields.meeting_point = typeof values.meeting_point === 'string' ? values.meeting_point : ''
+    translationFields.cancellation_policy = typeof values.cancellation_policy === 'string' ? values.cancellation_policy : ''
+    translationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    translationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
     translationFields.title = ''; translationFields.tagline = ''; translationFields.body = ''
+    translationFields.price = ''; translationFields.available_note = ''; translationFields.highlights_text = ''
+    translationFields.included_items_text = ''; translationFields.what_to_bring_text = ''; translationFields.meeting_point = ''
+    translationFields.cancellation_policy = ''; translationFields.seo_title = ''; translationFields.seo_description = ''
   }
 }
 watch(translationLocale, () => {
@@ -524,10 +563,27 @@ async function saveTranslation() {
     if (translationFields.title.trim()) values.title = translationFields.title.trim()
     if (translationFields.tagline.trim()) values.tagline = translationFields.tagline.trim()
     if (translationFields.body.trim()) values.body = translationFields.body.trim()
+    if (translationFields.price.trim()) values.price = translationFields.price.trim()
+    if (translationFields.available_note.trim()) values.available_note = translationFields.available_note.trim()
+    if (translationFields.meeting_point.trim()) values.meeting_point = translationFields.meeting_point.trim()
+    if (translationFields.cancellation_policy.trim()) values.cancellation_policy = translationFields.cancellation_policy.trim()
+    if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
+    if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
+    const highlights_json = translationFields.highlights_text.split('\n').map(line => line.trim()).filter(Boolean)
+    const included_items_json = translationFields.included_items_text.split('\n').map(line => line.trim()).filter(Boolean)
+    const what_to_bring = translationFields.what_to_bring_text.split('\n').map(line => line.trim()).filter(Boolean)
     const slug = String(editing.value.slug ?? '')
     await dashboardApi(`/api/editor/sites/${siteId}/localization/experience/${editing.value.id}/${encodeURIComponent(translationLocale.value)}`, {
       method: 'PUT',
-      body: { values, route_path: `/${translationLocale.value}/experiences/${slug}` },
+      body: {
+        values: {
+          ...values,
+          ...(highlights_json.length ? { highlights_json } : {}),
+          ...(included_items_json.length ? { included_items_json } : {}),
+          ...(what_to_bring.length ? { what_to_bring } : {}),
+        },
+        route_path: `/${translationLocale.value}/experiences/${slug}`,
+      },
       validate: isRecord,
     })
   } catch (cause) {
