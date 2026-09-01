@@ -8,6 +8,7 @@ const i18nPlugin = readFileSync(new URL('../../plugins/i18n.ts', import.meta.url
 const localizationUtil = readFileSync(new URL('../../server/utils/localization.ts', import.meta.url), 'utf8')
 const publicPageRequest = readFileSync(new URL('../../composables/usePublicPageRequest.ts', import.meta.url), 'utf8')
 const qaPage = readFileSync(new URL('../../pages/locations/[slug]/qa.vue', import.meta.url), 'utf8')
+const photosPage = readFileSync(new URL('../../pages/locations/[slug]/photos.vue', import.meta.url), 'utf8')
 const publicPageUtil = readFileSync(new URL('../../server/utils/public-page.ts', import.meta.url), 'utf8')
 
 test('components/localization is registered so <LocalizedResourcePage> resolves at runtime', () => {
@@ -38,15 +39,17 @@ test('location_qa has no route_path of its own, so a Thai /locations/{slug}/qa r
   // the canonical (English) slug directly instead of requiring a translated
   // route_path to exist.
   assert.match(localizationUtil, /kind:\s*'location_subpage'/)
-  assert.match(localizationUtil, /\/\^\\\/locations\\\/\(\[\^\/\]\+\)\\\/qa\$\//)
+  assert.match(localizationUtil, /\/\^\\\/locations\\\/\(\[\^\/\]\+\)\\\/\(qa\|photos\)\$\//)
 })
 
-test('the tenantPath catch-all renders the shared Q&A component for location_subpage routes', () => {
-  assert.match(tenantPath, /<LocationQaPage[\s\S]*?v-else-if="localizedRoute\?\.representation\.kind === 'location_subpage'"/)
+test('the tenantPath catch-all renders the matching shared component per location_subpage sub_page', () => {
+  assert.match(tenantPath, /<LocationQaPage[\s\S]*?v-else-if="localizedRoute\?\.representation\.kind === 'location_subpage' && localizedRoute\.representation\.sub_page === 'qa'"/)
+  assert.match(tenantPath, /<LocationPhotosPage[\s\S]*?v-else-if="localizedRoute\?\.representation\.kind === 'location_subpage' && localizedRoute\.representation\.sub_page === 'photos'"/)
 })
 
-test('the English /locations/[slug]/qa route and the Thai catch-all render the same component, not duplicated logic', () => {
+test('the English location sub-pages and the Thai catch-all render the same components, not duplicated logic', () => {
   assert.match(qaPage, /<LocationQaPage\s*\/>/)
+  assert.match(photosPage, /<LocationPhotosPage\s*\/>/)
 })
 
 test('usePublicPageRequest strips the locale prefix before parsing the page path', () => {

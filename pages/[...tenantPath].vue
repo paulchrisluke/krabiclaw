@@ -5,7 +5,10 @@
       :route="localizedRoute"
     />
     <LocationQaPage
-      v-else-if="localizedRoute?.representation.kind === 'location_subpage'"
+      v-else-if="localizedRoute?.representation.kind === 'location_subpage' && localizedRoute.representation.sub_page === 'qa'"
+    />
+    <LocationPhotosPage
+      v-else-if="localizedRoute?.representation.kind === 'location_subpage' && localizedRoute.representation.sub_page === 'photos'"
     />
     <TenantPublicPage
       v-else
