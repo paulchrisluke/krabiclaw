@@ -81,8 +81,14 @@ export interface UpdateProductInput {
   robots?: string | null
 }
 
-export interface ReorderProductsInput {
-  products: Array<{ id: string; sort_order: number }>
+export interface MoveProductsInput {
+  product_ids: string[]
+  before_product_id: string | null
+}
+
+export interface MoveProductCategoryInput {
+  category: string
+  before_category: string | null
 }
 
 export interface RenameProductCategoryInput {

@@ -2,6 +2,8 @@ import { HTTPError } from 'nitro'
 import type { ProductDetail } from '~/server/types/products'
 
 export const PRODUCT_LIMITS = {
+  batchCreate: 400,
+  sync: 200,
   category: 120,
   name: 240,
   description: 10_000,
