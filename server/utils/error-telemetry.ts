@@ -33,7 +33,7 @@ export function errorChainForTelemetry(error: unknown): ErrorTelemetryEntry[] {
 
   while (current != null && !seen.has(current) && chain.length < MAX_ERROR_DEPTH) {
     seen.add(current)
-    const record = typeof current === 'object' ? current : null
+    const record = typeof current === 'object' || typeof current === 'function' ? current : null
     const statusMessage = record ? Reflect.get(record, 'statusMessage') : undefined
     const errorMessage = record ? Reflect.get(record, 'message') : undefined
     const name = record ? Reflect.get(record, 'name') : undefined

@@ -11,6 +11,7 @@ mock.module('../../server/db/index.ts', {
   namedExports: {
     createDb: () => { throw new Error('createDb is not used by this integration fixture') },
     schema: {},
+    d1JsonArray: (values: unknown[]) => JSON.stringify(values),
     execute: async (sqlite: SqliteDb, query: string, params: unknown[] = []) => {
       const result = sqlite.prepare(query).run(...sqliteParams(params))
       return { meta: { changes: Number(result.changes) } }
@@ -31,7 +32,7 @@ mock.module('../../server/db/index.ts', {
   },
 })
 
-const { createProduct, getProduct, updateProduct } = await import('../../server/utils/product-management.ts?product-price-integration')
+const { createProduct, getProduct, moveProductCategory, moveProducts, updateProduct } = await import('../../server/utils/product-management.ts?product-price-integration')
 const { createExperience, getExperienceById, updateExperience } = await import('../../server/utils/experiences.ts?experience-price-integration')
 
 function fixtureDatabase() {
@@ -44,6 +45,19 @@ function fixtureDatabase() {
   database.prepare("INSERT INTO sites (id, organization_id, slug, subdomain, default_currency) VALUES ('site', 'org', 'site', 'site', 'THB')").run()
   database.prepare("INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('location', 'org', 'site', 'location', 'Location')").run()
   return database
+}
+
+function insertOrderedProducts(database: SqliteDb, products: ReadonlyArray<readonly [id: string, category: string]>) {
+  database.exec('DROP INDEX products_site_location_type_sort_order_unique')
+  const insert = database.prepare(`
+    INSERT INTO products (
+      id, organization_id, site_id, location_id, category, name, slug,
+      sort_order, created_by, updated_by
+    ) VALUES (?, 'org', 'site', 'location', ?, ?, ?, ?, 'user', 'user')
+  `)
+  for (const [sortOrder, [id, category]] of products.entries()) {
+    insert.run(id, category, id.toUpperCase(), id, sortOrder)
+  }
 }
 
 test('Product service persists one canonical Price and returns the joined contract', async () => {
@@ -122,6 +136,117 @@ test('Product replacement rejects an overlapping scheduled Price without mutatin
       /overlaps an existing Price/,
     )
     assert.deepEqual(database.prepare('SELECT id, amount_minor, valid_from, valid_until FROM prices WHERE product_id=? ORDER BY valid_from').all(product.id), before)
+  } finally {
+    database.close()
+  }
+})
+
+test('concurrent Product moves both apply to the live location order', async () => {
+  const database = fixtureDatabase()
+  try {
+    insertOrderedProducts(database, [['a', 'Food'], ['b', 'Food'], ['c', 'Food'], ['d', 'Food']])
+
+    await Promise.all([
+      moveProducts({
+        db: database as unknown as D1Database,
+        organizationId: 'org',
+        siteId: 'site',
+        locationId: 'location',
+        productIds: ['a'],
+        beforeProductId: 'c',
+        actor: 'user',
+      }),
+      moveProducts({
+        db: database as unknown as D1Database,
+        organizationId: 'org',
+        siteId: 'site',
+        locationId: 'location',
+        productIds: ['d'],
+        beforeProductId: 'b',
+        actor: 'user',
+      }),
+    ])
+
+    const order = database.prepare("SELECT id FROM products WHERE product_type = 'standard' ORDER BY sort_order, id").all()
+    assert.deepEqual(order, [{ id: 'd' }, { id: 'b' }, { id: 'a' }, { id: 'c' }])
+  } finally {
+    database.close()
+  }
+})
+
+test('concurrent Product category moves both apply to the live location order', async () => {
+  const database = fixtureDatabase()
+  try {
+    insertOrderedProducts(database, [
+      ['a1', 'A'],
+      ['a2', 'A'],
+      ['b', 'B'],
+      ['c', 'C'],
+      ['d', 'D'],
+    ])
+
+    await Promise.all([
+      moveProductCategory({
+        db: database as unknown as D1Database,
+        organizationId: 'org',
+        siteId: 'site',
+        locationId: 'location',
+        category: 'A',
+        beforeCategory: 'C',
+        actor: 'user',
+      }),
+      moveProductCategory({
+        db: database as unknown as D1Database,
+        organizationId: 'org',
+        siteId: 'site',
+        locationId: 'location',
+        category: 'D',
+        beforeCategory: 'B',
+        actor: 'user',
+      }),
+    ])
+
+    const order = database.prepare("SELECT id FROM products WHERE product_type = 'standard' ORDER BY sort_order, id").all()
+    assert.deepEqual(order, [{ id: 'd' }, { id: 'b' }, { id: 'a1' }, { id: 'a2' }, { id: 'c' }])
+  } finally {
+    database.close()
+  }
+})
+
+test('a category move preserves a concurrent move within that category', async () => {
+  const database = fixtureDatabase()
+  try {
+    insertOrderedProducts(database, [
+      ['a1', 'A'],
+      ['a2', 'A'],
+      ['b1', 'B'],
+      ['b2', 'B'],
+      ['c', 'C'],
+    ])
+
+    await Promise.all([
+      moveProducts({
+        db: database as unknown as D1Database,
+        organizationId: 'org',
+        siteId: 'site',
+        locationId: 'location',
+        productIds: ['a2'],
+        beforeProductId: 'a1',
+        actor: 'user',
+      }),
+      moveProductCategory({
+        db: database as unknown as D1Database,
+        organizationId: 'org',
+        siteId: 'site',
+        locationId: 'location',
+        category: 'A',
+        beforeCategory: 'C',
+        actor: 'user',
+      }),
+    ])
+
+    const order = database.prepare("SELECT id FROM products WHERE product_type = 'standard' ORDER BY sort_order, id").all()
+    assert.deepEqual(order, [{ id: 'b1' }, { id: 'b2' }, { id: 'a2' }, { id: 'a1' }, { id: 'c' }])
   } finally {
     database.close()
   }

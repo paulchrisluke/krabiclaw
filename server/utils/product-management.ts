@@ -680,7 +680,7 @@ async function orderedProducts({ db, organizationId, siteId, locationId }: Produ
   `, [organizationId, siteId, locationId])
 }
 
-function orderedIdsAfterMove(existingIds: string[], movedIds: string[], beforeId: string | null): string[] {
+function validateProductMove(existingIds: string[], movedIds: string[], beforeId: string | null): void {
   if (movedIds.length === 0) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'product_ids must contain at least one Product ID' })
   }
@@ -701,11 +701,6 @@ function orderedIdsAfterMove(existingIds: string[], movedIds: string[], beforeId
   if (insertionIndex < 0) {
     throw new HTTPError({ statusCode: 404, statusMessage: `before_product_id was not found at this location: ${beforeId}` })
   }
-  return [
-    ...remainingIds.slice(0, insertionIndex),
-    ...movedIds,
-    ...remainingIds.slice(insertionIndex),
-  ]
 }
 
 function denseProductOrderQuery({ organizationId, siteId, locationId, ids, actor, now }: {
@@ -734,10 +729,122 @@ function denseProductOrderQuery({ organizationId, siteId, locationId, ids, actor
   }
 }
 
-async function persistProductOrder({ db, organizationId, siteId, locationId, ids, actor }: ProductOrderScope & { ids: string[] }): Promise<void> {
-  const now = new Date().toISOString()
+function atomicProductMoveQuery({ organizationId, siteId, locationId, movedIds, beforeId, actor, now }: {
+  organizationId: string
+  siteId: string
+  locationId: string
+  movedIds: string[]
+  beforeId: string | null
+  actor: string
+  now: string
+}): BatchQuery {
+  return {
+    query: `
+      WITH moved_products AS (
+        SELECT value AS id, CAST(key AS INTEGER) AS moved_order
+          FROM json_each(?)
+      ),
+      remaining_products AS MATERIALIZED (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY sort_order, id) - 1 AS remaining_order
+          FROM products
+         WHERE organization_id = ? AND site_id = ? AND location_id = ?
+           AND product_type = 'standard'
+           AND id NOT IN (SELECT id FROM moved_products)
+      ),
+      insertion AS (
+        SELECT CASE
+          WHEN ? IS NULL THEN (SELECT COUNT(*) FROM remaining_products)
+          ELSE (SELECT remaining_order FROM remaining_products WHERE id = ?)
+        END AS position
+      ),
+      desired_order AS (
+        SELECT remaining_products.id,
+               CASE
+                 WHEN remaining_order < insertion.position THEN remaining_order
+                 ELSE remaining_order + (SELECT COUNT(*) FROM moved_products)
+               END AS sort_order
+          FROM remaining_products CROSS JOIN insertion
+        UNION ALL
+        SELECT moved_products.id, insertion.position + moved_order
+          FROM moved_products CROSS JOIN insertion
+      )
+      UPDATE products
+         SET sort_order = (SELECT sort_order FROM desired_order WHERE desired_order.id = products.id),
+             updated_at = ?,
+             updated_by = ?
+       WHERE organization_id = ? AND site_id = ? AND location_id = ?
+         AND product_type = 'standard'
+         AND EXISTS (SELECT 1 FROM desired_order WHERE desired_order.id = products.id)
+    `,
+    params: [
+      d1JsonArray(movedIds), organizationId, siteId, locationId, beforeId, beforeId,
+      now, actor, organizationId, siteId, locationId,
+    ],
+  }
+}
+
+function atomicProductCategoryMoveQuery({ organizationId, siteId, locationId, category, beforeCategory, actor, now }: {
+  organizationId: string
+  siteId: string
+  locationId: string
+  category: string
+  beforeCategory: string | null
+  actor: string
+  now: string
+}): BatchQuery {
+  return {
+    query: `
+      WITH current_products AS MATERIALIZED (
+        SELECT id, category, sort_order
+          FROM products
+         WHERE organization_id = ? AND site_id = ? AND location_id = ?
+           AND product_type = 'standard'
+      ),
+      moved_products AS MATERIALIZED (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY sort_order, id) - 1 AS moved_order
+          FROM current_products
+         WHERE category = ?
+      ),
+      remaining_products AS MATERIALIZED (
+        SELECT id, category, ROW_NUMBER() OVER (ORDER BY sort_order, id) - 1 AS remaining_order
+          FROM current_products
+         WHERE category <> ?
+      ),
+      insertion AS (
+        SELECT CASE
+          WHEN ? IS NULL THEN (SELECT COUNT(*) FROM remaining_products)
+          ELSE (SELECT MIN(remaining_order) FROM remaining_products WHERE category = ?)
+        END AS position
+      ),
+      desired_order AS (
+        SELECT remaining_products.id,
+               CASE
+                 WHEN remaining_order < insertion.position THEN remaining_order
+                 ELSE remaining_order + (SELECT COUNT(*) FROM moved_products)
+               END AS sort_order
+          FROM remaining_products CROSS JOIN insertion
+        UNION ALL
+        SELECT moved_products.id, insertion.position + moved_order
+          FROM moved_products CROSS JOIN insertion
+      )
+      UPDATE products
+         SET sort_order = (SELECT sort_order FROM desired_order WHERE desired_order.id = products.id),
+             updated_at = ?,
+             updated_by = ?
+       WHERE organization_id = ? AND site_id = ? AND location_id = ?
+         AND product_type = 'standard'
+         AND EXISTS (SELECT 1 FROM desired_order WHERE desired_order.id = products.id)
+    `,
+    params: [
+      organizationId, siteId, locationId, category, category, beforeCategory, beforeCategory,
+      now, actor, organizationId, siteId, locationId,
+    ],
+  }
+}
+
+async function persistProductMove(db: DbClient, siteId: string, move: BatchQuery): Promise<void> {
   await executeBatch(db, [
-    denseProductOrderQuery({ organizationId, siteId, locationId, ids, actor, now }),
+    move,
     publicResourceCacheInvalidationQuery(siteId, 'product.reordered'),
   ], { operation: 'reorder Products' })
 }
@@ -748,8 +855,16 @@ export async function moveProducts({ db, organizationId, siteId, locationId, pro
 }): Promise<void> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const existingIds = (await orderedProducts({ db, organizationId, siteId, locationId })).map(product => product.id)
-  const ids = orderedIdsAfterMove(existingIds, productIds, beforeProductId)
-  await persistProductOrder({ db, organizationId, siteId, locationId, ids, actor })
+  validateProductMove(existingIds, productIds, beforeProductId)
+  await persistProductMove(db, siteId, atomicProductMoveQuery({
+    organizationId,
+    siteId,
+    locationId,
+    movedIds: productIds,
+    beforeId: beforeProductId,
+    actor,
+    now: new Date().toISOString(),
+  }))
   await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { product_ids: productIds, before_product_id: beforeProductId } })
 }
 
@@ -778,8 +893,16 @@ export async function moveProductCategory({ db, organizationId, siteId, location
   const beforeProductId = normalizedBeforeCategory === null
     ? null
     : remainingProducts.find(product => product.category === normalizedBeforeCategory)?.id ?? null
-  const ids = orderedIdsAfterMove(products.map(product => product.id), movedIds, beforeProductId)
-  await persistProductOrder({ db, organizationId, siteId, locationId, ids, actor })
+  validateProductMove(products.map(product => product.id), movedIds, beforeProductId)
+  await persistProductMove(db, siteId, atomicProductCategoryMoveQuery({
+    organizationId,
+    siteId,
+    locationId,
+    category: normalizedCategory,
+    beforeCategory: normalizedBeforeCategory,
+    actor,
+    now: new Date().toISOString(),
+  }))
   await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { category: normalizedCategory, before_category: normalizedBeforeCategory, product_count: movedIds.length } })
 }
 
