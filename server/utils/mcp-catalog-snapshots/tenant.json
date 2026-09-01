@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:eddce4819b8346806d0bc164ecbbd8245685b71e139de75c9f2cf9223902ebde",
+  "fingerprint": "sha256:c6605df8a7d09ab064e50a89768b11d6200bb83fd45935226b08ced28fc5c3ed",
   "tools": [
     {
       "name": "analyze_document",
@@ -8425,204 +8425,14 @@
                 "available": {
                   "type": "boolean"
                 },
-                "canonical_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "category": {
-                  "type": "string"
-                },
-                "created_at": {
-                  "type": "string"
-                },
-                "created_by": {
                   "type": "string"
                 },
                 "description": {
                   "type": "string"
                 },
-                "details": {
-                  "items": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "key": {
-                        "type": "string"
-                      },
-                      "label": {
-                        "type": "string"
-                      },
-                      "values": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "required": [
-                      "key",
-                      "label",
-                      "values"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "featured": {
-                  "type": "boolean"
-                },
-                "featured_sort_order": {
-                  "type": "number"
-                },
-                "gallery": {
-                  "items": {
-                    "properties": {
-                      "alt_text": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "asset_id": {
-                        "type": "string"
-                      },
-                      "duration": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "height": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "kind": {
-                        "enum": [
-                          "image",
-                          "video",
-                          "file"
-                        ],
-                        "type": "string"
-                      },
-                      "mime_type": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "provider": {
-                        "type": "string"
-                      },
-                      "public_url": {
-                        "type": "string"
-                      },
-                      "status": {
-                        "enum": [
-                          "active"
-                        ],
-                        "type": "string"
-                      },
-                      "thumbnail_url": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "width": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "asset_id",
-                      "kind",
-                      "public_url",
-                      "status"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
                 "id": {
                   "type": "string"
-                },
-                "image": {
-                  "properties": {
-                    "alt_text": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "asset_id": {
-                      "type": "string"
-                    },
-                    "duration": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "height": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "kind": {
-                      "enum": [
-                        "image",
-                        "video",
-                        "file"
-                      ],
-                      "type": "string"
-                    },
-                    "mime_type": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "provider": {
-                      "type": "string"
-                    },
-                    "public_url": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "enum": [
-                        "active"
-                      ],
-                      "type": "string"
-                    },
-                    "thumbnail_url": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "width": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "asset_id",
-                    "kind",
-                    "public_url",
-                    "status"
-                  ],
-                  "type": [
-                    "object",
-                    "null"
-                  ]
                 },
                 "is_visible": {
                   "type": "boolean"
@@ -8632,12 +8442,6 @@
                 },
                 "name": {
                   "type": "string"
-                },
-                "order_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
                 },
                 "price": {
                   "properties": {
@@ -8651,12 +8455,6 @@
                       ]
                     },
                     "currency": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "provenance": {
                       "type": "string"
                     },
                     "tax_behavior": {
@@ -8674,78 +8472,22 @@
                         "table"
                       ],
                       "type": "string"
-                    },
-                    "valid_from": {
-                      "type": "string"
-                    },
-                    "valid_until": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     }
                   },
                   "required": [
-                    "id",
                     "amount_minor",
                     "currency",
                     "unit",
                     "tax_behavior",
-                    "compare_at_amount_minor",
-                    "valid_from",
-                    "valid_until",
-                    "provenance"
+                    "compare_at_amount_minor"
                   ],
                   "type": [
                     "object",
                     "null"
                   ]
                 },
-                "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "slug": {
-                  "type": "string"
-                },
                 "sort_order": {
-                  "type": "number"
-                },
-                "source": {
-                  "enum": [
-                    "manual",
-                    "template",
-                    "ai",
-                    "import",
-                    "copy"
-                  ],
-                  "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "updated_at": {
-                  "type": "string"
-                },
-                "updated_by": {
-                  "type": "string"
+                  "type": "integer"
                 }
               },
               "required": [
@@ -8753,23 +8495,11 @@
                 "location_id",
                 "category",
                 "name",
-                "slug",
                 "description",
                 "price",
                 "is_visible",
                 "available",
-                "featured",
-                "featured_sort_order",
-                "sort_order",
-                "tags",
-                "details",
-                "image",
-                "gallery",
-                "source",
-                "created_at",
-                "updated_at",
-                "created_by",
-                "updated_by"
+                "sort_order"
               ],
               "type": "object"
             },
