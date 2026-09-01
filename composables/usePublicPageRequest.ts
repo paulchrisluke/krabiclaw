@@ -106,7 +106,11 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "blog",
       location: null,
       experience: null,
-      datasets: ['blogPost'],
+      // 'blog' (the list) is required alongside 'blogPost' - BlogPostDetailPage.vue's
+      // sidebar category nav (BlogCategoryNav.vue) is built from the full post list,
+      // not just the current post. Without it the nav renders as a category list
+      // with zero posts inside, on every locale.
+      datasets: ['blogPost', 'blog'],
       blogSlug: blogMatch[1] ?? null,
     };
   }
