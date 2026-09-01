@@ -106,7 +106,7 @@
               <UTextarea v-model="translationFields.body" :rows="5" class="w-full" />
             </UFormField>
             <UFormField :label="`Price note (${translationLocale})`">
-              <UInput v-model="translationFields.price" class="w-full" />
+              <UInput v-model="translationFields.pricing_note" class="w-full" />
             </UFormField>
             <UFormField :label="`Availability note (${translationLocale})`">
               <UInput v-model="translationFields.available_note" class="w-full" />
@@ -513,7 +513,7 @@ async function loadExperiences() {
 // ── Translations (resource_localizations, same API as the editor CRUD) ──
 const translationLocale = ref('en')
 const translationLocales = ref<string[]>([])
-const translationFields = reactive({ title: '', tagline: '', body: '', price: '', available_note: '', highlights_text: '', included_items_text: '', what_to_bring_text: '', meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '' })
+const translationFields = reactive({ title: '', tagline: '', body: '', pricing_note: '', available_note: '', highlights_text: '', included_items_text: '', what_to_bring_text: '', meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '' })
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
 function isExperienceLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
@@ -542,7 +542,7 @@ async function loadTranslationFields(experienceId: string) {
     translationFields.title = typeof values.title === 'string' ? values.title : ''
     translationFields.tagline = typeof values.tagline === 'string' ? values.tagline : ''
     translationFields.body = typeof values.body === 'string' ? values.body : ''
-    translationFields.price = typeof values.price === 'string' ? values.price : ''
+    translationFields.pricing_note = typeof values.pricing_note === 'string' ? values.pricing_note : ''
     translationFields.available_note = typeof values.available_note === 'string' ? values.available_note : ''
     translationFields.highlights_text = Array.isArray(values.highlights_json) ? values.highlights_json.join('\n') : ''
     translationFields.included_items_text = Array.isArray(values.included_items_json) ? values.included_items_json.join('\n') : ''
@@ -555,7 +555,7 @@ async function loadTranslationFields(experienceId: string) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
     translationFields.title = ''; translationFields.tagline = ''; translationFields.body = ''
-    translationFields.price = ''; translationFields.available_note = ''; translationFields.highlights_text = ''
+    translationFields.pricing_note = ''; translationFields.available_note = ''; translationFields.highlights_text = ''
     translationFields.included_items_text = ''; translationFields.what_to_bring_text = ''; translationFields.meeting_point = ''
     translationFields.cancellation_policy = ''; translationFields.seo_title = ''; translationFields.seo_description = ''
   }
@@ -572,7 +572,7 @@ async function saveTranslation() {
     if (translationFields.title.trim()) values.title = translationFields.title.trim()
     if (translationFields.tagline.trim()) values.tagline = translationFields.tagline.trim()
     if (translationFields.body.trim()) values.body = translationFields.body.trim()
-    if (translationFields.price.trim()) values.price = translationFields.price.trim()
+    if (translationFields.pricing_note.trim()) values.pricing_note = translationFields.pricing_note.trim()
     if (translationFields.available_note.trim()) values.available_note = translationFields.available_note.trim()
     if (translationFields.meeting_point.trim()) values.meeting_point = translationFields.meeting_point.trim()
     if (translationFields.cancellation_policy.trim()) values.cancellation_policy = translationFields.cancellation_policy.trim()
@@ -756,7 +756,7 @@ function handleGalleryMediaChange(index: number, asset: { asset_id: string; publ
   item.kind = asset?.kind === 'video' ? 'video' : 'image'
 }
 
-function openEdit(exp: ApiRecord) {
+async function openEdit(exp: ApiRecord) {
   translationLocale.value = 'en'
   editing.value = exp
   Object.assign(form, {
@@ -791,7 +791,10 @@ function openEdit(exp: ApiRecord) {
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
   slotsMode.value = exp.recurring_slots ? 'recurring' : 'flat'
-  void loadExperiencePolicy(exp.id, currentLocationId.value ?? exp.location_id)
+  // Awaited, not fire-and-forget: opening the slider before this resolves let a
+  // user's edit to bookingPolicyDraft race the GET response, which then
+  // clobbered whatever they'd just typed with the stale server snapshot.
+  await loadExperiencePolicy(exp.id, currentLocationId.value ?? exp.location_id)
   sliderOpen.value = true
 }
 
