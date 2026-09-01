@@ -1,8 +1,8 @@
 # CMS Redesign Design Packet
 
-Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31 through 2026-09-01.
+Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31 through 2026-09-02.
 
-**Captured: 82 CMS screenshots + 48 Airbnb screenshots = 130.** Every requested Airbnb screen has been captured, and every CMS route is captured, privacy-excluded, redirect-only, or a stated blocker with a filed issue.
+**Captured: 82 CMS screenshots + 57 Airbnb screenshots = 139.** This packet is not finished. `docs/design/cms-redesign-packet/AUDIT.tsv` is the authoritative manifest of every route, redirect, exclusion, and blocker; `scripts/verify-cms-redesign-packet.py` checks it against the files on disk and currently **fails with 2 unresolved rows** — see "Outstanding work" below. Do not read any "Done," "complete," or "every screen captured" language elsewhere in this repo's history as still accurate; the manifest and verifier are the source of truth going forward.
 
 `current/` was derived from the actual Nuxt route tree (`pages/dashboard/**/*.vue`) and the CMS capability registry (`config/cms-registry.ts`) for a restaurant-vertical site, on **production** (`krabiclaw.com`), impersonating the real Kikuzuki Krabi Thailand tenant — an earlier version of this README wrongly said staging, corrected after checking the actual navigation history. See `current/README.md` for the full route→file table, the privacy-exclusion table (including the org Members list), the two redirect-only routes with no distinct screen, and the two production bugs found while capturing.
 
@@ -10,13 +10,14 @@ Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-
 
 ## Outstanding work
 
-- **Two CMS successful-state screens blocked, not skipped**: the Menu editor's selected-item edit form, and the Available Features screen's actual working state (only its 500 error is captured). Both are blocked on the same two filed issues — see `current/README.md`.
-- **Two production bugs filed while capturing, unrelated to the redesign**: [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) (Available features 500, confirmed on both locations) and [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) (Menu editor product list broke on both locations — timing suggests this may already be fixed by a same-day revert; flagged for re-verification, not confirmed still-broken).
+- **Two CMS successful-state screens blocked, not skipped, for both locations each**: the Menu editor's selected-item edit form, and the Available Features screen's actual working state (only its 500 error is captured). Both are blocked on the same two filed issues, and both are recorded in `AUDIT.tsv` with `status=blocked` — this is why `scripts/verify-cms-redesign-packet.py` currently fails. See `current/README.md`.
+- **Two production bugs filed while capturing, unrelated to the redesign**: [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) (Available features 500, confirmed on both locations) and [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) (Menu editor product list broke on both locations, needs a direct re-test against current production — an earlier draft of this packet speculated about which deploys caused/fixed it; that speculation was checked against the actual commit diffs, found unsupported, and has been removed).
+- Two Airbnb items were deliberately not pursued further and are recorded as `excluded` in `AUDIT.tsv`, not silently dropped: dragging a photo into a new order (would have mutated a real, shared draft listing without authorization), and a second "In progress" Experience listing's own setup flow (the Home listing's Unlisted/1-task state already covers the incomplete-setup requirement).
 - The live test blog post created during capture (`c7854046-70cd-42d3-81ad-fe04afd289dd`) has been deleted and verified 404 — see `current/README.md`.
 
 ## Viewport
 
-The most recent capture batch (everything from the 2026-09-01 evening re-login onward, both CMS and Airbnb) was measured directly at CSS 500×701, device pixel ratio 2. Earlier batches from separate browser sessions can't be re-measured retroactively; see `current/README.md` and `goal/README.md` for what's independently verified versus assumed consistent.
+Two different things, reported separately: the **browser CSS viewport** used to load each page, and the **stored JPEG's pixel dimensions**. The screenshot tool resamples full-page captures to its own internal limits rather than saving a fixed multiple of the CSS viewport, so stored dimensions vary by page even within one session — the most recent batch's browser measured `window.innerWidth`=500, `window.innerHeight`=701, `window.devicePixelRatio`=2, but its stored files land at several different pixel sizes, not one. See `AUDIT.tsv` for the exact recorded dimensions of every file, and `current/README.md`/`goal/README.md` for what's independently verified versus assumed consistent for earlier batches.
 
 ## Folders
 

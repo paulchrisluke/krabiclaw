@@ -2,13 +2,15 @@
 
 Reference screenshots from Airbnb's own listing editor, used only for the navigation/layout patterns called out in `principles/README.md` — large photo cards, single-field-per-screen editing, drill-down navigation, bottom Cancel/Save bars, large text areas.
 
-**Captured: 48 screenshots** across two capture sessions — 30 on 2026-08-31/09-01 (CSS viewport width not independently verified for that session — see Viewport note below), 18 more on 2026-09-01 evening (verified 500×701 CSS px, device pixel ratio 2 — see Viewport note).
+**Captured: 57 screenshots** across three capture sessions — 30 on 2026-08-31/09-01, 18 more on 2026-09-01 evening, 9 more on 2026-09-02 from a recursive pass over every hub's children (Preferences' remaining 4 items, the Photo tour task list and the room it points to, and a nested "Add details" editor inside Guest safety → Property info).
 
-Every screen listed in the original request has now been captured: Arrival guide's full set of child editors, Guest safety's child editors, a Photo tour room/caption editor, Preferences and guest requirements, and an authorized incomplete-listing/unpublished state. Nothing below is listed as blocked — the only prior "blocked by session expiry" framing was inaccurate; these were simply not yet done, and are done now.
+This is not asserted as a complete recursive audit — see "What's still not captured, and why" below for the two items deliberately excluded, and `AUDIT.tsv` for the authoritative per-screen manifest.
 
-## Viewport note
+## Viewport
 
-The 2026-09-01 evening batch (18 files, listed below) was measured directly: `window.innerWidth` 500, `window.innerHeight` 701, `window.devicePixelRatio` 2 — i.e. an effective 1000×1402 physical pixel capture at CSS 500×701. The original 30-file batch from the prior session used a different browser instance that's no longer available to re-measure; session notes from that pass describe deliberately reproducing "~500px raw width" mobile layouts, consistent with this batch, but its exact height and device-pixel-ratio were not logged and can't be retroactively confirmed. Do not read the two batches as using different viewports — the best available evidence is that they match — but only the second batch's numbers are independently verified.
+Two separate things: the **browser CSS viewport** used to load each page, and the **stored JPEG's pixel dimensions**. They are not the same number and are not a fixed multiple of each other — the screenshot tool resamples full-page captures to its own internal limits, so stored dimensions vary with page height. The 2026-09-01 evening and 2026-09-02 batches (27 files together) had their browser measured directly: `window.innerWidth`=500, `window.innerHeight`=701, `window.devicePixelRatio`=2 — that describes the page as loaded, not the file on disk. Their actual stored dimensions are 924×1295 for the great majority, with `arrival/index.jpg` at 500×701; `AUDIT.tsv` records every file's exact dimensions.
+
+The original 30-file batch from 2026-08-31/09-01 used a different browser instance that can't be re-measured retroactively; its own session notes describe deliberately reproducing "~500px raw width" mobile layouts, but exact height and device-pixel-ratio weren't logged. Its stored files land at either 500×701 or 953×1233. Do not assume that batch used the exact same CSS viewport as the later ones — only the later ones are independently confirmed.
 
 ## Privacy note
 
@@ -36,6 +38,10 @@ Correcting an earlier assumption in this README: the listing used throughout ("E
 | `.../details/photo-tour/additional-photos/index.jpg` | `.../photo-tour/additional-photos` | One room's photo grid (4+ photos) |
 | `.../details/photo-tour/additional-photos/photo-edit-detail.jpg` | `.../photo-tour/additional-photos/{photoId}` | **Per-photo caption/edit state**: delete, "Add a visual description" field with a 250-char textarea, "Move from [room]?" reassignment |
 | `.../details/photo-tour/photos/index.jpg` | `.../photo-tour/photos` | All-photos grid with a "Cover photo" badge — Airbnb's manual reorder/cover-photo surface. Its own "Arrange photos" AI-sort suggestion modal was dismissed via "No thanks," not applied, so the order shown is unmodified |
+| `.../details/photo-tour/tasks/index.jpg` | Photo tour hub → "View your tasks" | **The task list itself**: one task, "Add photos: Bedroom," with a direct link to the Bedroom room screen — there is no separate task-detail screen beyond this link |
+| `.../details/photo-tour/bedroom/index.jpg` | the Bedroom room, reached from the task link or the room card | Empty "Add photo" state + two more child rows: Sleeping arrangements, Privacy info |
+| `.../details/photo-tour/bedroom/beds/index.jpg` | `.../photo-tour/{roomId}/beds` | Bed-type counters: Single/Double/Queen/King/Small double/Bunk bed |
+| `.../details/photo-tour/bedroom/privacy/index.jpg` | `.../photo-tour/{roomId}/privacy` | "Private attached bathroom" toggle |
 | `.../details/description/index.jpg` | `/details/description` | Description **hub** — sub-list: Listing description / Your property / Guest access / Interaction with guests / Other details to note |
 | `.../details/description/listing-description/index.jpg` | `.../description/listing-description` | Full-screen textarea, live character counter |
 | `.../details/description/your-property/index.jpg` | `.../description/your-property` | Full-screen textarea child field |
@@ -55,6 +61,7 @@ Correcting an earlier assumption in this README: the listing used throughout ("E
 | `.../details/guest-safety/safety-considerations/index.jpg` | `.../guest-safety/safety-considerations` | Toggle list: "Not a good fit for children 2–12," "for infants under 2," pool/hot-tub gate, nearby water, each with a Learn-more link |
 | `.../details/guest-safety/safety-devices/index.jpg` | `.../guest-safety/safety-devices` | Toggle list: exterior security camera, noise decibel monitor, carbon monoxide alarm, etc. |
 | `.../details/guest-safety/property-info/index.jpg` | `.../guest-safety/property-info` | Toggle list: stairs, potential noise, pets on property, no parking, each with an "Add details" affordance |
+| `.../details/guest-safety/property-info/add-details-stairs/index.jpg` | `.../property-info`, "Add details" on "Guests must climb stairs" | Nested modal-over-modal: 300-char textarea to describe the stairs' location/steepness |
 | `.../details/cancellation-policy/index.jpg` | `/details/cancellation-policy` | Policy tier selection (Flexible/Moderate/Firm/Strict) |
 | `.../details/custom-link/index.jpg` | `/details/custom-link` | Custom listing URL slug field |
 | `.../details/instant-book/index.jpg` | `/details/instant-book` | "Use Instant Book" / "Approve all bookings" — Booking settings screen |
@@ -70,8 +77,12 @@ Correcting an earlier assumption in this README: the listing used throughout ("E
 | `preferences/index.jpg` | `/preferences` (via the listing editor's settings-gear icon) | Preferences **hub**: Listing status, Languages, Guest requirements, Local laws, Taxes, Airbnb.org stays |
 | `preferences/status/index.jpg` | `/preferences/status` | **The actual publishing-state screen** — Listed vs. Unlisted choice, this listing is currently Unlisted |
 | `preferences/guest-requirements/index.jpg` | `/preferences/guest-requirements` | "Require a profile photo" toggle + the fixed list of requirements every Airbnb guest must meet |
+| `preferences/languages/index.jpg` | `/preferences/languages` | "Add a language" empty state |
+| `preferences/local-laws/index.jpg` | `/preferences/local-laws` | Informational content page (no editable field) — "review the local laws that apply to your listing," a "Learn about hosting regulations" link, no external redirect |
+| `preferences/taxes/index.jpg` | `/preferences/taxes` | "Taxes Airbnb submits" (4 pre-checked Chattanooga/Hamilton/Tennessee taxes) + "Add a tax" affordance |
+| `preferences/airbnb-org-stays/index.jpg` | `/preferences/airbnb-org-stays` | "Available for Airbnb.org guests for free or at a discount" toggle, off |
 
-## What's still not captured, and why
+## What's deliberately not captured, and why (recorded as `excluded` in `AUDIT.tsv`, not skipped silently)
 
 - **Photo reorder via drag** — the manual reorder surface (`photo-tour/photos`) is captured showing the Cover-photo badge, but an actual drag-in-progress or a changed order wasn't captured, since doing so would have modified this real, shared draft listing's photo order without authorization to make that change. The all-photos grid and its "Cover photo" designation are the closest observable evidence of the ordering mechanism without mutating it.
 - **A second, more visibly "in-progress" listing** — this account also has an "In progress" Experience listing ("Practice wellness with a fitness coach") visible on `/hosting/listings`, not explored further since the home listing's own Unlisted/1-task state already satisfied the incomplete-setup requirement.

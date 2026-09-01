@@ -4,7 +4,7 @@ Descriptive comparison only — what each surface actually does today. Not a sco
 
 Covers what's captured in `current/README.md` against the Airbnb reference in `goal/README.md` — see both READMEs for exactly what's captured and excluded.
 
-**A note on the Menu editor's state below**: §1, §2, and §7 describe the Menu list as a working 105-item list, captured 2026-09-01 ~20:31. A separate capture at ~21:50 the same day found the list broken (issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) — "Invalid URL" error, no products load), possibly caused by a deploy that landed in between and may already be reverted (see the issue for the timing detail). The working-list observations below describe the list's *intended, normal* behavior; the current live state may differ until #723 is confirmed resolved.
+**A note on the Menu editor's state below**: §1, §2, and §7 describe the Menu list as a working 105-item list, captured 2026-09-01 ~20:31. A separate capture at ~21:50 the same day found the list broken (issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) — "Invalid URL" error, no products load). An earlier draft of this note speculated about which same-day deploys might have caused or reverted the break; that speculation was checked directly against the commits' actual diffs, found unsupported (neither touches the dashboard's product-fetch code), and has been removed. The only valid way to know the Menu editor's current state is a direct re-test against production. The working-list observations below describe the list's *intended, normal* behavior; the current live state is unknown until #723 is re-tested.
 
 ## 1. Card size and density
 
@@ -58,7 +58,7 @@ Correction from an earlier pass of this packet: Settings surfaces were described
 
 - **[#709](https://github.com/paulchrisluke/krabiclaw/issues/709)** — Clicking a row in the current Menu list (`.../products`) did not visibly open a per-item edit screen in this pass — the row highlighted (focus state) but appeared to stay on the list. Traced to source: `components/products/ProductEditor.vue` renders the edit form as a sibling of the product list inside a grid that's only two-column at the `lg` breakpoint; below that, the form stacks below the full product list (105 rows in this case) with no scroll-into-view. The click handler and edit logic work correctly — the form was just rendering off-screen. Fix: move the form into a `USlideover`, matching the pattern already used in `BlogPostEditor.vue`.
 - **[#720](https://github.com/paulchrisluke/krabiclaw/issues/720)** — Location Settings → Available features throws a 500, reproduced on both locations.
-- **[#723](https://github.com/paulchrisluke/krabiclaw/issues/723)**, found later the same day — the Menu list itself (not just the per-item form) stopped loading entirely, surfacing a raw "Invalid URL" client error. Possibly caused, and possibly already fixed, by a deploy that landed within minutes of this capture — see the issue.
+- **[#723](https://github.com/paulchrisluke/krabiclaw/issues/723)**, found later the same day — the Menu list itself (not just the per-item form) stopped loading entirely, surfacing a raw "Invalid URL" client error. Needs a direct re-test against current production; do not assume a cause without checking.
 
 ## 8. Internal reference points for the redesign — two different mechanisms, neither identical to Airbnb
 
