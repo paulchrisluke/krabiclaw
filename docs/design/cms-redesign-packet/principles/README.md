@@ -2,38 +2,48 @@
 
 Descriptive comparison only — what each surface actually does today. Not a scoring of good vs. bad; that call is for the redesign discussion, not this packet.
 
+Covers the full sweep in `current/README.md` (every route reachable for a restaurant-vertical site) against the Airbnb reference in `goal/README.md`.
+
 ## 1. Card size and density
 
 | | Current (KrabiClaw) | Goal (Airbnb) |
 |---|---|---|
-| List entry cards (Sites, Locations) | Large, full-width photo cards — already matches | Large, full-width photo cards |
-| Settings entry cards | Compact list rows, one field summary per row | Same — compact rows, one field summary per row |
-| Content entry cards (Menu) | Compact rows: thumbnail + name + category + price, 105 in a row | N/A directly comparable — Airbnb's nearest analog (Amenities) uses icon + name + one-line description per row |
+| List entry cards (Sites, Locations) | Large, full-width photo cards | Large, full-width photo cards — matches |
+| Settings-style entry cards (Site/Location Settings, Brand, Search & analytics) | Compact text rows, no icons, no photos, tight vertical spacing | Larger icon-led or photo-led cards, generous spacing, one field group each |
+| Content entry cards (Menu, Amenities) | Menu: thumbnail + name + category + price, 105 in a row | Amenities: icon + name + one-line description, more breathing room per row |
+
+Correction from an earlier pass of this packet: Settings surfaces were described as "close to the Airbnb reference" — that referred only to the *navigation shape* (see §2 below), not the visual density. Visually, Settings/Brand rows here are noticeably tighter and plainer than anything in the Airbnb reference. Don't read "same shape" as "looks the same."
 
 ## 2. Screen scope (fields per screen)
 
-- **Current — Settings surfaces** (Site Settings, Location Settings): one screen = one field group (Localization, Hours, Discovery, Notifications, Profile). Each opens from a list row, edits, and returns via Cancel/Save.
-- **Current — Content surfaces**: mixed scope per screen.
+- **Settings-style surfaces** (Site Settings, Location Settings, Brand): one screen = one field group. Each opens from a list row, edits, and returns via Cancel/Save. "Search and analytics" goes a level deeper still — it opens into its *own* sub-list (Google Analytics / Search verification / Search visibility) before reaching an actual field.
+- **The page content editor** (`sites/[site]/pages/[pageId]`, e.g. the About Us page): title, short description, and every content block (Hero, Heading, Rich text ×2, Image, …) live on **one continuous scrolling page**. Clicking a Rich text block expands it in place into a large textarea — still the same page, still stacked among every other block. This is the closest current-CMS equivalent to Airbnb's Description/Amenities/Pricing fields, and it's structured the opposite way: one page holding everything, vs. Airbnb's one field per screen.
+- **Content surfaces at the location level**: mixed scope per screen.
   - Photos: whole grid on one screen (expected — it's a media library).
-  - Menu: whole 105-item list on one screen; per-item editing wasn't reached via a click in this pass (see below).
+  - Menu: whole 105-item list on one screen; per-item edit form exists but renders off-screen below the list on mobile (bug, [#709](https://github.com/paulchrisluke/krabiclaw/issues/709)).
   - Posts: AI composer + full list share one screen.
-  - Q&A: empty-state + full "Add Q&A" form (question textarea + answer textarea) share one screen.
+  - Q&A (both site- and location-level), Testimonials, Links: empty-state/list + full "Add" form share one screen, rather than the add flow getting its own screen.
+- **The Blog post editor** (`sites/[site]/blog/new`) is the one current-CMS surface that already matches Airbnb's "one thing, full screen" feel: large title, Markdown body, near-zero chrome, with Category/Tags/Excerpt/Publishing pushed into a settings slideover instead of competing for space on the writing surface.
 - **Goal — all editable fields**: hub screens split further into single-field screens. Description alone is 5 screens deep (hub → Listing description / Your property / Guest access / Interaction with guests / Other details to note).
 
 ## 3. Navigation depth
 
-- Current: 2 levels typical (list → detail), e.g. Sites → Site → Locations list → Location → tab → item. Settings goes 3 levels (Settings list → field screen).
+- Current: 2 levels typical (list → detail), e.g. Sites → Site → Locations list → Location → tab → item. Settings/Brand go 3 levels (list → field screen); "Search and analytics" goes 4 (Settings → Search and analytics → sub-list → field).
+- The page editor is 1 level deep but very tall — no further drill-down, everything expands in place instead.
 - Goal: 3 levels typical for content fields (Your space tab → field hub → single field), consistently.
 
 ## 4. Text areas
 
-- Current — Q&A: two stacked plain textareas (Question, Answer) inline on the list screen, no visible character limit shown.
+- Current — Q&A (site and location level): two stacked plain textareas (Question, Answer) inline on the list screen, no visible character limit.
+- Current — page editor Rich text blocks: textarea expands in place within the block list, no character counter, competing visually with sibling blocks above/below.
+- Current — Blog post body: full-screen Markdown textarea, closest match to the goal pattern.
 - Goal — Description: one full-screen textarea per field, with a live character counter (`482/500 available`), nothing else competing on screen.
 
 ## 5. Save/cancel affordance
 
-- Current — Settings field screens (Localization, Hours, Profile, Notifications): bottom bar with Cancel (left) / Save (right), consistently.
-- Current — Q&A form: single "Add question" button, no separate Cancel.
+- Current — Settings-style field screens (Localization, Hours, Profile, Notifications, Search verification, etc.): bottom bar with Cancel (left) / Save (right), consistently.
+- Current — page editor: single top-of-page "Save" button, no per-block save/cancel — saving is all-or-nothing for the whole page.
+- Current — inline "Add" forms (Q&A, Testimonials): single submit button, no separate Cancel in most cases.
 - Goal — every field screen: same bottom Cancel/Save bar pattern, consistently, including inside a full-screen text editor.
 
 ## 6. Top-level navigation shape
@@ -45,3 +55,12 @@ Descriptive comparison only — what each surface actually does today. Not a sco
 ## 7. Bug found during capture
 
 Clicking a row in the current Menu list (`.../products`) did not visibly open a per-item edit screen in this pass — the row highlighted (focus state) but appeared to stay on the list. Traced to source: `components/products/ProductEditor.vue` renders the edit form as a sibling of the product list inside a grid that's only two-column at the `lg` breakpoint; below that, the form stacks below the full product list (105 rows in this case) with no scroll-into-view. The click handler and edit logic work correctly — the form was just rendering off-screen. Filed as [#709](https://github.com/paulchrisluke/krabiclaw/issues/709) with an exact fix (move the form into a `USlideover`, matching the pattern already used in `BlogPostEditor.vue`).
+
+## 8. Internal reference points for the redesign
+
+Two different patterns already exist side by side in the current codebase:
+
+- **Settings/Brand pattern** (list → single-field screen → Cancel/Save bar): structurally close to Airbnb, visually plainer. Good starting point for *navigation shape*.
+- **Blog editor pattern** (full-screen, minimal chrome, metadata in a slideover): closest existing match to Airbnb's *visual* feel for a single large field. Good starting point for *large text content*.
+
+The page content editor (`pages/[pageId]`) and the Menu editor are the two surfaces furthest from both reference points — worth prioritizing if the redesign is scoped incrementally.

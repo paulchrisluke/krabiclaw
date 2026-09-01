@@ -1,6 +1,8 @@
 # CMS Redesign Design Packet
 
-Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31. All screenshots were taken at a mobile viewport (~390–420px wide) since mobile-friendliness is the primary driver for this redesign.
+Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31 through 2026-09-01. All screenshots were taken at a mobile viewport (~390–420px wide) since mobile-friendliness is the primary driver for this redesign.
+
+`current/` is a full sweep of every dashboard route reachable for a restaurant-vertical site (site-level: Sites, Site overview/Pages/Settings, Pages management + the actual page content editor, Analytics, Domains, Assistant, Media, Orders, Q&A, Links, Testimonials, Brand, Blog; location-level: Locations overview/Content, Photos, Menu, Posts, Q&A, Reservations, Settings). Two routes (`professional-services`, location `experiences`) 404 for this vertical and are confirmed not applicable, not missed.
 
 ## Folders
 
