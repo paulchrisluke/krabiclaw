@@ -56,6 +56,14 @@ const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Reco
     // (TypeError, wrong shape). Land it under a different key instead of
     // rendering nowhere, matching the products/experience json-field pattern.
     opening_hours: 'opening_hours_translated',
+    // Same reasoning: the canonical business_location.address is a structured
+    // PostalAddress-shaped object (addressLines/locality/administrativeArea/
+    // postalCode) used for JSON-LD and the maps link; the CMS translation
+    // form stores the translated address as a single flat display string.
+    // Overlaying it directly onto the canonical field would clobber the
+    // structured object with a string for every consumer, not just the
+    // visible address line.
+    address: 'address_translated',
   },
   product: {
     tags_json: 'tags',

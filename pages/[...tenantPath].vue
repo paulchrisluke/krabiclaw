@@ -116,7 +116,16 @@ if (localizedRoute.value) {
   $setAppLocale(localizedRoute.value.locale, localizedRoute.value.platform_messages)
   useHead({
     htmlAttrs: { lang: localizedRoute.value.locale },
-    link: [{ rel: 'alternate', hreflang: localizedRoute.value.locale, href: localizedRoute.value.route_path }],
+    // Self-referencing alternate plus a link back to the canonical English
+    // route (tenantPagePath is already locale-stripped) so crawlers can
+    // discover both directions from the Thai page. The reverse direction -
+    // the English route advertising its Thai alternate - isn't implemented:
+    // the English pages are matched by Nuxt's own file router (not this
+    // catch-all) and don't currently know whether a translation exists.
+    link: [
+      { rel: 'alternate', hreflang: localizedRoute.value.locale, href: localizedRoute.value.route_path },
+      { rel: 'alternate', hreflang: 'en', href: tenantPagePath.value },
+    ],
   })
 }
 </script>

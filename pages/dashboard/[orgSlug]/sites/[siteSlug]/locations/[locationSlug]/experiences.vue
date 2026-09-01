@@ -690,6 +690,14 @@ const emptyForm = () => ({
 
 const form = reactive(emptyForm())
 const originalExperienceMediaIds = ref<string[]>([])
+// Snapshot of the price fields as loaded, so save() can tell "the price form
+// still shows what's on the server" apart from "the owner actually changed
+// the price" - server/utils/experiences.ts treats every payload that includes
+// `price` as a reprice (closes the current immutable prices row, inserts a
+// replacement), by design, for real price changes. Without this guard, every
+// full-form save re-sent the unchanged price and triggered a spurious
+// reprice, growing a new prices row on each save.
+const originalExperiencePrice = ref<{ price_major: number | null; compare_at_major: number | null; valid_from: string; valid_until: string; pricing_note: string } | null>(null)
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
 const bookingPolicyId = ref<string | null>(null)
@@ -712,6 +720,7 @@ function openCreate() {
   bookingPolicyDraft.value = {}
   bookingPolicySummary.value = null
   originalExperienceMediaIds.value = []
+  originalExperiencePrice.value = null
   sliderOpen.value = true
 }
 
@@ -788,6 +797,13 @@ async function openEdit(exp: ApiRecord) {
     featured_sort_order: exp.featured_sort_order ?? 0,
   })
   originalExperienceMediaIds.value = form.media.flatMap(item => item.asset_id ? [item.asset_id] : [])
+  originalExperiencePrice.value = {
+    price_major: form.price_major,
+    compare_at_major: form.compare_at_major,
+    valid_from: form.valid_from,
+    valid_until: form.valid_until,
+    pricing_note: form.pricing_note,
+  }
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
   slotsMode.value = exp.recurring_slots ? 'recurring' : 'flat'
@@ -921,22 +937,38 @@ async function save() {
     const { media: _media, pricing_note: _pricingNote, price_major: _priceMajor,
       compare_at_major: _compareAt, valid_from: _validFrom, valid_until: _validUntil, ...formFields } = form
     const hasPrice = parseNumber(form.price_major) !== null
+    // Only send price/pricing_note when the owner actually edited them - the
+    // server treats any payload with `price` present as a real reprice
+    // (closes the current prices row, inserts a new one), so re-sending the
+    // unchanged loaded value on every full-form save would silently grow a
+    // fresh prices row each time. New experiences (no baseline) always send it.
+    const priceFieldsChanged = !originalExperiencePrice.value || (
+      originalExperiencePrice.value.price_major !== form.price_major
+      || originalExperiencePrice.value.compare_at_major !== form.compare_at_major
+      || originalExperiencePrice.value.valid_from !== form.valid_from
+      || originalExperiencePrice.value.valid_until !== form.valid_until
+      || originalExperiencePrice.value.pricing_note !== form.pricing_note
+    )
     const payload = {
       ...formFields,
       location_id: locationId,
-      pricing_note: hasPrice ? null : form.pricing_note.trim() || null,
-      price: !hasPrice ? null : {
-        amount_minor: majorAmountToMinor(String(form.price_major), defaultCurrency.value as CurrencyCode),
-        currency: defaultCurrency.value as CurrencyCode,
-        unit: 'person' as const,
-        tax_behavior: 'unspecified' as const,
-        compare_at_amount_minor: parseNumber(form.compare_at_major) === null
-          ? null
-          : majorAmountToMinor(String(form.compare_at_major), defaultCurrency.value as CurrencyCode),
-        ...(form.valid_from.trim() ? { valid_from: `${form.valid_from.trim()}T00:00:00.000Z` } : {}),
-        ...(form.valid_until.trim() ? { valid_until: `${form.valid_until.trim()}T23:59:59.999Z` } : {}),
-        provenance: 'editor',
-      },
+      ...(priceFieldsChanged
+        ? {
+            pricing_note: hasPrice ? null : form.pricing_note.trim() || null,
+            price: !hasPrice ? null : {
+              amount_minor: majorAmountToMinor(String(form.price_major), defaultCurrency.value as CurrencyCode),
+              currency: defaultCurrency.value as CurrencyCode,
+              unit: 'person' as const,
+              tax_behavior: 'unspecified' as const,
+              compare_at_amount_minor: parseNumber(form.compare_at_major) === null
+                ? null
+                : majorAmountToMinor(String(form.compare_at_major), defaultCurrency.value as CurrencyCode),
+              ...(form.valid_from.trim() ? { valid_from: `${form.valid_from.trim()}T00:00:00.000Z` } : {}),
+              ...(form.valid_until.trim() ? { valid_until: `${form.valid_until.trim()}T23:59:59.999Z` } : {}),
+              provenance: 'editor',
+            },
+          }
+        : {}),
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
       featured_sort_order: parseNumber(form.featured_sort_order) ?? 0,

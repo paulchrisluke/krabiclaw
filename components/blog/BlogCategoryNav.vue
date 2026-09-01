@@ -10,13 +10,13 @@
         :class="post.slug === activeSlug ? 'font-semibold text-gray-900 bg-gray-100' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
         data-blog-nav-link
       >
-        <span class="max-w-full break-words line-clamp-2 leading-snug" data-blog-nav-title>{{ post.title }}</span>
+        <span class="max-w-full break-words line-clamp-2 leading-snug" data-blog-nav-title>{{ post.nav_title || post.title }}</span>
         <span
           aria-hidden="true"
           class="pointer-events-none absolute left-2.5 top-full z-10 mt-1 hidden max-w-72 rounded bg-gray-900 px-2 py-1 text-xs font-normal leading-snug text-white shadow-lg group-hover:block group-focus-visible:block"
           data-blog-nav-tooltip
         >
-          {{ post.title }}
+          {{ post.nav_title || post.title }}
         </span>
       </NuxtLink>
     </div>

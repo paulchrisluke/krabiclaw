@@ -492,8 +492,12 @@ const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
 const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
-// Derived location data
-const formattedAddress = computed(() => {
+// Derived location data. `address_translated`/`opening_hours_translated` are
+// the CMS translation overlay (see PROJECTED_FIELD_NAMES.business_location) —
+// plain display text, kept under a different key than the canonical
+// structured fields so the visible surface can show localized text while
+// maps/JSON-LD/open-now logic keep reading the untouched canonical object.
+const canonicalFormattedAddress = computed(() => {
   const loc = location.value
   if (!loc) return ''
   if (loc.address && typeof loc.address === 'object') {
@@ -502,9 +506,17 @@ const formattedAddress = computed(() => {
   }
   return loc.address || loc.city || ''
 })
+const formattedAddress = computed(() => {
+  const translated = String(location.value?.address_translated || '').trim()
+  return translated || canonicalFormattedAddress.value
+})
 
+const translatedWeekdayHours = computed(() => {
+  const translated = location.value?.opening_hours_translated
+  return Array.isArray(translated) && translated.length ? translated : null
+})
 const weekHours = computed(() => {
-  const hours = location.value?.opening_hours
+  const hours = translatedWeekdayHours.value ? { weekdayDescriptions: translatedWeekdayHours.value } : location.value?.opening_hours
   if (!hours) return []
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   const today = nowInTimezone(location.value?.timezone).weekday
@@ -514,7 +526,16 @@ const weekHours = computed(() => {
   }))
 })
 
-const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours, nowInTimezone(location.value?.timezone).weekday))
+const todayHours = computed(() => {
+  if (translatedWeekdayHours.value) {
+    const today = nowInTimezone(location.value?.timezone).weekday
+    const line = translatedWeekdayHours.value.find((l: string) => l.trim().toUpperCase().startsWith(`${today}:`))
+    if (line) return line.replace(/^[^:]+:\s*/, '').trim()
+  }
+  return getTodayGoogleHours(location.value?.opening_hours, nowInTimezone(location.value?.timezone).weekday)
+})
+// Open/closed is a machine determination — always computed off the
+// canonical structured hours object, never the translated display text.
 const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours, location.value?.timezone))
 
 const activeClosure = computed(() => getActiveSpecialClosure(location.value?.special_hours, location.value?.timezone))
@@ -555,8 +576,8 @@ useSchemaOrg([
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
-      description: formattedAddress.value,
-      address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
+      description: canonicalFormattedAddress.value,
+      address: { '@type': 'PostalAddress', streetAddress: canonicalFormattedAddress.value },
       telephone: loc.phone,
       url: `${siteUrl}/locations/${loc.slug}`,
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),
