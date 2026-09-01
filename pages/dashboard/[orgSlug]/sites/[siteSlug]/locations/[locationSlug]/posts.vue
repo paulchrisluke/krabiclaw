@@ -169,6 +169,10 @@
               <p class="text-xs text-muted">Source (English): {{ editForm.title }}</p>
               <UFormField :label="`Title (${translationLocale})`"><UInput v-model="translationFields.title" class="w-full" /></UFormField>
               <UFormField :label="`Body (${translationLocale})`"><UTextarea v-model="translationFields.body" :rows="5" class="w-full" /></UFormField>
+              <UFormField :label="`SEO title (${translationLocale})`"><UInput v-model="translationFields.seo_title" class="w-full" /></UFormField>
+              <UFormField :label="`SEO description (${translationLocale})`"><UTextarea v-model="translationFields.seo_description" :rows="2" class="w-full" /></UFormField>
+              <UFormField :label="`Event title (${translationLocale})`"><UInput v-model="translationFields.event_title" class="w-full" /></UFormField>
+              <UFormField :label="`Offer terms (${translationLocale})`"><UTextarea v-model="translationFields.offer_terms" :rows="2" class="w-full" /></UFormField>
               <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
               <UButton :loading="translationSaving" label="Save translation" @click="saveTranslation" />
             </template>
@@ -385,7 +389,7 @@ const closeEditor = () => {
 // ── Translations (resource_localizations, same API as the editor CRUD) ──
 const translationLocale = ref('en')
 const translationLocales = ref<string[]>([])
-const translationFields = reactive({ title: '', body: '' })
+const translationFields = reactive({ title: '', body: '', seo_title: '', seo_description: '', event_title: '', offer_terms: '' })
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
 function isPostLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
@@ -413,10 +417,16 @@ async function loadTranslationFields(postId: string) {
     const values = response.localization.values
     translationFields.title = typeof values.title === 'string' ? values.title : ''
     translationFields.body = typeof values.body === 'string' ? values.body : ''
+    translationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    translationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
+    translationFields.event_title = typeof values.event_title === 'string' ? values.event_title : ''
+    translationFields.offer_terms = typeof values.offer_terms === 'string' ? values.offer_terms : ''
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
     translationFields.title = ''; translationFields.body = ''
+    translationFields.seo_title = ''; translationFields.seo_description = ''
+    translationFields.event_title = ''; translationFields.offer_terms = ''
   }
 }
 watch(translationLocale, () => {
@@ -429,6 +439,10 @@ async function saveTranslation() {
     const values: Record<string, string> = {}
     if (translationFields.title.trim()) values.title = translationFields.title.trim()
     if (translationFields.body.trim()) values.body = translationFields.body.trim()
+    if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
+    if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
+    if (translationFields.event_title.trim()) values.event_title = translationFields.event_title.trim()
+    if (translationFields.offer_terms.trim()) values.offer_terms = translationFields.offer_terms.trim()
     const slug = String(selectedPost.value.slug ?? '')
     await dashboardApi(`/api/editor/sites/${siteId}/localization/site_post/${selectedPost.value.id}/${encodeURIComponent(translationLocale.value)}`, {
       method: 'PUT',

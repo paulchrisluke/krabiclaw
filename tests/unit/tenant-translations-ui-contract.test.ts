@@ -90,6 +90,19 @@ test('experiences.vue exposes translation fields for every registered experience
   }
 })
 
+test('posts.vue exposes translation fields for every registered site_post field', () => {
+  // RESOURCE_LOCALIZATION_REGISTRY.site_post required+optional: title, body,
+  // seo_title, seo_description, event_title, offer_terms.
+  // Live-verified this session with a genuine full-page reload (navigate
+  // away and back, not a storage-API check): all 6 fields save/reload/
+  // persist for the real Kikuzuki post ("Weekend Special"), and
+  // /th/posts/weekend-special server-renders the translated title and body.
+  const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/posts.vue')
+  for (const field of ['translationFields.title', 'translationFields.body', 'translationFields.seo_title', 'translationFields.seo_description', 'translationFields.event_title', 'translationFields.offer_terms']) {
+    assert.match(source, new RegExp(field.replace('.', '\\.')), `expected a translation field for ${field}`)
+  }
+})
+
 test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
   // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
   // it's reachable from every vertical, including Kikuzuki's restaurant/saya
