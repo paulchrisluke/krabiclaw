@@ -17,6 +17,7 @@
 @source "../../components/menu";
 @source "../../components/platform/PlatformButton.vue";
 @source "../../components/platform/PlatformIcon.vue";
+@source "../../components/products";
 @source "../../components/saya";
 @source "../../components/ui/AppBreadcrumb.vue";
 @source "../../components/ui/AppSection.vue";
