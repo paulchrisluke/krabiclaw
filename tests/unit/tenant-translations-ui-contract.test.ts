@@ -52,6 +52,19 @@ test('ProductEditor.vue exposes translation fields for every registered product 
   }
 })
 
+test('LocationSettingsPage.vue exposes translation fields for every registered business_location field', () => {
+  // RESOURCE_LOCALIZATION_REGISTRY.business_location required+optional: title,
+  // address, city, neighborhood, description, short_description,
+  // opening_hours, seo_title, seo_description.
+  // Live-verified this session: all 9 fields save/reload/persist for the
+  // real Kikuzuki location (loc-kikuzuki), and /th/locations/... server-
+  // renders the translated description and city.
+  const source = read('lib/components/workspace/settings/LocationSettingsPage.vue')
+  for (const field of ['translationFields.title', 'translationFields.short_description', 'translationFields.description', 'translationFields.city', 'translationFields.neighborhood', 'translationFields.address', 'translationFields.opening_hours_text', 'translationFields.seo_title', 'translationFields.seo_description']) {
+    assert.match(source, new RegExp(field.replace('.', '\\.')), `expected a translation field for ${field}`)
+  }
+})
+
 test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
   // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
   // it's reachable from every vertical, including Kikuzuki's restaurant/saya

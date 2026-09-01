@@ -73,6 +73,9 @@
               <UFormField :label="`City (${translationLocale})`"><UInput v-model="translationFields.city" size="xl" class="w-full" /></UFormField>
               <UFormField :label="`Neighbourhood (${translationLocale})`"><UInput v-model="translationFields.neighborhood" size="xl" class="w-full" /></UFormField>
               <UFormField :label="`Address (${translationLocale})`"><UTextarea v-model="translationFields.address" :rows="4" class="w-full" /></UFormField>
+              <UFormField :label="`Opening hours (${translationLocale}, one per line)`"><UTextarea v-model="translationFields.opening_hours_text" :rows="4" class="w-full" /></UFormField>
+              <UFormField :label="`SEO title (${translationLocale})`"><UInput v-model="translationFields.seo_title" size="xl" class="w-full" /></UFormField>
+              <UFormField :label="`SEO description (${translationLocale})`"><UTextarea v-model="translationFields.seo_description" :rows="3" class="w-full" /></UFormField>
               <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
               <UButton :loading="translationSaving" label="Save translation" @click="saveTranslation" />
             </template>
@@ -566,7 +569,7 @@ const translationLocales = ref<string[]>([])
 const translationLocaleOptions = computed(() => translationLocales.value)
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
-const translationFields = reactive({ title: '', short_description: '', description: '', city: '', neighborhood: '', address: '' })
+const translationFields = reactive({ title: '', short_description: '', description: '', city: '', neighborhood: '', address: '', opening_hours_text: '', seo_title: '', seo_description: '' })
 function isTranslationLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
   return isRecord(value) && Array.isArray(value.languages)
 }
@@ -600,11 +603,15 @@ async function loadTranslationFields() {
     translationFields.city = typeof values.city === 'string' ? values.city : ''
     translationFields.neighborhood = typeof values.neighborhood === 'string' ? values.neighborhood : ''
     translationFields.address = typeof values.address === 'string' ? values.address : ''
+    translationFields.opening_hours_text = Array.isArray(values.opening_hours) ? values.opening_hours.join('\n') : ''
+    translationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    translationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) translationError.value = getErrorMessage(cause, 'Failed to load translation')
     translationFields.title = ''; translationFields.short_description = ''; translationFields.description = ''
     translationFields.city = ''; translationFields.neighborhood = ''; translationFields.address = ''
+    translationFields.opening_hours_text = ''; translationFields.seo_title = ''; translationFields.seo_description = ''
   }
 }
 watch(translationLocale, () => { void loadTranslationFields() })
@@ -619,9 +626,14 @@ async function saveTranslation() {
     if (translationFields.city.trim()) values.city = translationFields.city.trim()
     if (translationFields.neighborhood.trim()) values.neighborhood = translationFields.neighborhood.trim()
     if (translationFields.address.trim()) values.address = translationFields.address.trim()
+    if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
+    if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
+    const openingHoursValues: Record<string, unknown> = {}
+    const openingHoursLines = translationFields.opening_hours_text.split('\n').map(line => line.trim()).filter(Boolean)
+    if (openingHoursLines.length) openingHoursValues.opening_hours = openingHoursLines
     await dashboardApi(`/api/editor/sites/${siteId}/localization/business_location/${locationId.value}/${encodeURIComponent(translationLocale.value)}`, {
       method: 'PUT',
-      body: { values, route_path: `/${translationLocale.value}/locations/${detailsForm.slug || String(route.params.locationSlug)}` },
+      body: { values: { ...values, ...openingHoursValues }, route_path: `/${translationLocale.value}/locations/${detailsForm.slug || String(route.params.locationSlug)}` },
       validate: isRecord,
     })
     toast.add({ description: 'Translation saved', color: 'success' })
