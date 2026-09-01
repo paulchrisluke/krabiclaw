@@ -2,7 +2,11 @@
 
 Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31 through 2026-09-01. All screenshots were taken at a mobile viewport (~390–420px wide) since mobile-friendliness is the primary driver for this redesign.
 
-`current/` covers most dashboard routes reachable for a restaurant-vertical site across two capture passes — it is not a verified-complete sweep. See `current/README.md` for the known-gap list (create/`new` screens, existing-post blog editor, several Settings/Brand sub-detail screens, the second location, conversation detail, org-level Today/Calendar). Two routes (`professional-services`, location `experiences`) were confirmed, not assumed, to 404 for this vertical.
+**61 CMS screenshots + 30 Airbnb screenshots = 91 total.**
+
+`current/` was derived from the actual Nuxt route tree, the CMS capability registry (`config/cms-registry.ts`), navigation, and dynamic child routes for a restaurant-vertical site, then captured against that manifest — not assembled from what happened to get clicked. See `current/README.md` for the full route→file table, the deliberate org-admin scope boundary, the full privacy-exclusion table, and the one remaining known gap (second location's Settings sub-detail screens). Two routes (`professional-services`, location `experiences`) were confirmed, not assumed, to 404 for this vertical.
+
+`goal/` was derived the same way from Airbnb's own listing-editor navigation, including every field referenced by its overview and hub screens. See `goal/README.md` for the full route→file table and its remaining known gaps (Guest safety sub-children, photo-tour per-room editor, Preferences page, unpublished-listing setup state).
 
 ## Folders
 
