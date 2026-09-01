@@ -62,9 +62,13 @@ if (localizedData?.error.value) throw localizedData.error.value
 const localizedRoute = computed(() => localizedData?.data.value?.route ?? null)
 if (localeSegment.value && !localizedRoute.value) throw createError({ statusCode: 404, statusMessage: 'Localized route not found' })
 if (localizedRoute.value) {
-  useState<string>('public-locale', () => 'en').value = localizedRoute.value.locale
-  useState<Record<string, string> | null>('platform-locale-messages', () => null).value = localizedRoute.value.platform_messages
-  useState<Record<string, string> | null>('localized-site-values', () => null).value = localizedRoute.value.site.values as Record<string, string>
+  // Set the i18n locale imperatively here, synchronously, rather than via a
+  // reactive useState + watch bridge — this script setup fully resolves before
+  // any descendant (header/footer, which call t()) renders, so this is the one
+  // point guaranteed to run in time regardless of SSR watcher flush timing.
+  const { $setAppLocale } = useNuxtApp() as { $setAppLocale?: (locale: string, messages: Record<string, string> | null) => void }
+  if (!$setAppLocale) throw new Error('Application locale setter is unavailable')
+  $setAppLocale(localizedRoute.value.locale, localizedRoute.value.platform_messages)
   useHead({
     htmlAttrs: { lang: localizedRoute.value.locale },
     link: [{ rel: 'alternate', hreflang: localizedRoute.value.locale, href: localizedRoute.value.route_path }],

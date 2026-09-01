@@ -271,6 +271,10 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
+      path: '~/components/localization',
+      pathPrefix: false,
+    },
+    {
       path: '~/components/blawby',
       pathPrefix: false,
     },
