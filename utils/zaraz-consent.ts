@@ -5,14 +5,10 @@ export const ZARAZ_ANALYTICS_PURPOSE = {
   description: 'Measure site usage and advertising effectiveness so we can improve our services.',
 }
 
-type ZarazConsent = {
-  modal: boolean
-}
-
 function openConsentModal() {
-  const consent = (window as Window & { zaraz?: { consent?: ZarazConsent } }).zaraz?.consent
-  if (!consent) return false
-  consent.modal = true
+  const zaraz = (window as Window & { zaraz?: { showConsentModal?: () => void } }).zaraz
+  if (!zaraz?.showConsentModal) return false
+  zaraz.showConsentModal()
   return true
 }
 

@@ -12,8 +12,8 @@
   <component
     :is="linkTag"
     v-else
-    :href="(isExternal || isServerRoute) ? to : undefined"
-    :to="(isExternal || isServerRoute) ? undefined : to"
+    :href="isExternal ? to : undefined"
+    :to="isExternal ? undefined : to"
     :target="isExternal ? '_blank' : undefined"
     :rel="isExternal ? 'noopener noreferrer' : undefined"
     class="inline-block no-underline"
@@ -50,8 +50,7 @@ defineEmits<{
 
 const isButton = computed(() => props.as === 'button')
 const isExternal = computed(() => !isButton.value && (/^https?:\/\//i.test(props.to) || props.to.startsWith('mailto:') || props.to.startsWith('tel:')))
-const isServerRoute = computed(() => !isButton.value && props.to.startsWith('/api/'))
-const linkTag = computed(() => (isExternal.value || isServerRoute.value) ? 'a' : NuxtLink)
+const linkTag = computed(() => isExternal.value ? 'a' : NuxtLink)
 const buttonClasses = computed(() => [
   'group inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold uppercase no-underline disabled:cursor-not-allowed disabled:opacity-60 min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg',
   props.variant === 'outline'
