@@ -41,24 +41,22 @@ function mirrorConversion(payload: ConversionPayload) {
 export function useSiteConversionTracking(consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
   const { siteId } = useTenantSite()
 
-  function track(payload: ConversionPayload, native = true) {
+  function track(payload: ConversionPayload) {
     if (!siteId) return
-    if (native) nativeConversion(siteId, payload)
+    nativeConversion(siteId, payload)
     mirrorConversion(payload)
   }
 
   function trackConsultationClick(pageType: string, pagePath: string, destination?: string | null, pageId?: string | null) {
     if (toValue(consultationSource)?.tracking_enabled === false) return
-    const directExternal = /^https?:\/\//i.test(destination || '')
-    const internalHandoff = /^\/api\/public\/sites\/[^/]+\/consultation-handoff(?:\?|$)/.test(destination || '')
-    const external = directExternal || internalHandoff
+    const external = /^https?:\/\//i.test(destination || '')
     track({
       event_name: 'consultation_cta_click',
       stage: external ? 'external_booking_handoff' : 'schedule_navigation',
       page_type: pageType,
       page_path: pagePath,
       page_id: pageId,
-    }, !internalHandoff)
+    })
   }
 
   function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'experience_booking_submit', locationId?: string | null) {
