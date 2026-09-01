@@ -2,11 +2,19 @@
 
 Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31 through 2026-09-01. All screenshots were taken at a mobile viewport (~390–420px wide) since mobile-friendliness is the primary driver for this redesign.
 
-**61 CMS screenshots + 30 Airbnb screenshots = 91 total.**
+**Captured so far: 61 CMS screenshots + 30 Airbnb screenshots = 91.** This is not the full manifest — see "Outstanding work" below and each folder's README for exactly what's still missing and why.
 
-`current/` was derived from the actual Nuxt route tree, the CMS capability registry (`config/cms-registry.ts`), navigation, and dynamic child routes for a restaurant-vertical site, then captured against that manifest — not assembled from what happened to get clicked. See `current/README.md` for the full route→file table, the deliberate org-admin scope boundary, the full privacy-exclusion table, and the one remaining known gap (second location's Settings sub-detail screens). Two routes (`professional-services`, location `experiences`) were confirmed, not assumed, to 404 for this vertical.
+`current/` was derived from the actual Nuxt route tree (`pages/dashboard/**/*.vue`) and the CMS capability registry (`config/cms-registry.ts`) for a restaurant-vertical site. See `current/README.md` for the full route→file table, the full privacy-exclusion table, and the inaccessible-routes table (16 org-level/account/second-location/Menu-editor screens blocked on a re-login, not excluded by scope).
 
-`goal/` was derived the same way from Airbnb's own listing-editor navigation, including every field referenced by its overview and hub screens. See `goal/README.md` for the full route→file table and its remaining known gaps (Guest safety sub-children, photo-tour per-room editor, Preferences page, unpublished-listing setup state).
+`goal/` was derived the same way from Airbnb's own listing-editor navigation, including every field referenced by its overview and hub screens. See `goal/README.md` for the full route→file table and its remaining known gaps (Guest safety sub-children, photo-tour per-room editor, Preferences page, unpublished-listing setup state, and the Arrival guide's child editors — check-in method, house manual, Wi-Fi, directions — which were opened during navigation but not individually captured).
+
+## Outstanding work (not done — do not read this packet as complete)
+
+- The admin-impersonation browser session expired mid-task. Every remaining capture below needs a human to log back in to `staging.krabiclaw.com`; this tooling cannot authenticate on its own.
+- 16 CMS routes/states not yet captured: `activity`, 6 org Settings screens, Support, 2 onboarding screens, 3 account screens, the second location's 6 Settings sub-screens, and the Menu editor's selected-item edit state.
+- Airbnb: Guest safety's sub-children, the photo-tour per-room editor, a Preferences/guest-requirements screen, an unpublished-listing setup state, and the Arrival guide's child editors.
+- A live test blog post (`c7854046-70cd-42d3-81ad-fe04afd289dd`, slug `test-post-delete-me`) is still published on the real tenant site and has not been deleted — see `current/README.md`'s operational-side-effect section for the exact endpoint and why the UI delete flow couldn't complete it.
+- Issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) filed for a reproducible 500 at Location Settings → Available features.
 
 ## Folders
 

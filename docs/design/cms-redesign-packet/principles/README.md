@@ -2,7 +2,7 @@
 
 Descriptive comparison only — what each surface actually does today. Not a scoring of good vs. bad; that call is for the redesign discussion, not this packet.
 
-Covers the full sweep in `current/README.md` (every route reachable for a restaurant-vertical site) against the Airbnb reference in `goal/README.md`.
+Covers what's captured in `current/README.md` against the Airbnb reference in `goal/README.md` — see both READMEs for exactly what's captured, excluded, and still blocked pending a session re-login.
 
 ## 1. Card size and density
 

@@ -41,10 +41,11 @@ One screenshot (`details/location/index.jpg`) shows a real host's address and ph
 | `.../details/custom-link/index.jpg` | `/details/custom-link` | Custom listing URL slug field |
 | `.../details/instant-book/index.jpg` | `/details/instant-book` | Instant Book toggle + guest requirements |
 | `.../details/accessibility/index.jpg` | `/details/accessibility` | Accessibility features checklist |
-| `arrival/index.jpg` | `/arrival` ("Arrival guide" tab) | Check-in method, house manual, Wi-Fi details |
+| `arrival/index.jpg` | `/arrival` ("Arrival guide" tab) | The tab's own hub screen only — see gap below, its children were opened during navigation but not individually captured |
 
-## Known gaps (identified, not captured)
+## Known gaps (identified, not captured — blocked on browser session, see root README)
 
+- **Arrival guide's child editors** — check-in method, house manual, Wi-Fi details, and directions were each opened while navigating this tab (confirmed reachable) but the session expired before their individual screens were captured. Only the hub screen (`arrival/index.jpg`) exists in this packet.
 - **Guest safety's own sub-children** — the Guest safety screen lists items (e.g. "Not suitable for children and infants," climbing/security-camera disclosures) that may open their own detail screens on Airbnb; this pass only captured the top-level Guest safety list.
 - **Photo-tour per-room editing state** — `photo-tour/index.jpg` captures the room-grouped grid; drilling into an individual room's photo-reorder/caption editor was not captured.
 - **Preferences page** — a "Guest requirements/Preferences" screen reachable from the Your space or Listings tab was not captured.
