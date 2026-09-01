@@ -496,16 +496,13 @@ test.describe('stateless MCP server', () => {
 
       const reorder = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'reorder_products',
+        toolName: 'move_products',
         idempotent: true,
         args: {
           site_id: siteId,
           location_id: locationId,
-          products: [
-            { id: productId, sort_order: 1 },
-            { id: secondProductId, sort_order: 0 },
-            { id: batchedProducts[1]!.id, sort_order: 2 },
-          ],
+          product_ids: [secondProductId],
+          before_product_id: productId,
         },
       })
       expect(reorder.status()).toBe(200)

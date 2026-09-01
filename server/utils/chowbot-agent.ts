@@ -238,7 +238,8 @@ async function executeTool(
     case "create_product":
     case "update_product":
     case "delete_product":
-    case "reorder_products":
+    case "move_products":
+    case "move_product_category":
     case "rename_product_category":
     case "delete_product_category":
     case "batch_create_products":

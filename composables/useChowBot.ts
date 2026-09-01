@@ -1,7 +1,7 @@
 import { useChowBotHistory, type ChowBotConv } from './useChowBotHistory'
 import { useAnalytics } from './useAnalytics'
 
-const PRODUCT_TOOLS = new Set(['create_product', 'update_product', 'delete_product', 'reorder_products', 'rename_product_category', 'delete_product_category', 'batch_create_products', 'sync_products', 'import_products_from_media'])
+const PRODUCT_TOOLS = new Set(['create_product', 'update_product', 'delete_product', 'move_products', 'move_product_category', 'rename_product_category', 'delete_product_category', 'batch_create_products', 'sync_products', 'import_products_from_media'])
 
 export interface ChowbotToolCall {
   name: string
