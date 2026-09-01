@@ -149,6 +149,12 @@ const dirty = ref(false)
 const hydrating = ref(false)
 const requestGate = createTenantPageRequestGate()
 const localeRevertGuard = createTenantPageLocaleRevertGuard()
+// Set while the editor holds an in-progress "create a translation of this
+// page" draft (selected.value.id === '' but props.pageId still points at the
+// source-locale page) - isNew only reflects whether this route is
+// pages/new.vue, so save() needs this to know it must navigate to the new
+// variant's own URL after creating it, same as the pages/new.vue flow does.
+const creatingVariantFor = ref<string | null>(null)
 const selectedBlockIndex = ref(0)
 const draggedBlockIndex = ref<number | null>(null)
 const newBlockType = ref<TenantPageBlockType>('markdown')
@@ -334,8 +340,11 @@ async function save() {
       throw new Error(`Resolve the highlighted fields in section ${invalidIndex + 1} before saving.`)
     }
     selected.value.blocks.forEach((block, index) => { block.position = index })
-    const path = selected.value.id ? selected.value.path : `/${slugifyTitle(title)}`
-    if (!selected.value.id && path === '/') throw new Error('Choose a more specific page title.')
+    // A translation-in-progress carries its path over from the source-locale
+    // page (e.g. Home must stay '/', not re-slugify to '/home') rather than
+    // deriving a fresh one from the title, the way an actually-new page does.
+    const path = selected.value.id || creatingVariantFor.value ? selected.value.path : `/${slugifyTitle(title)}`
+    if (!selected.value.id && !creatingVariantFor.value && path === '/') throw new Error('Choose a more specific page title.')
     const body = {
       id: selected.value.id || undefined,
       pageId: selected.value.page_id || undefined,
@@ -356,13 +365,17 @@ async function save() {
     const response = selected.value.id
       ? await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${selected.value.id}`, { method: 'PATCH', body, validate: validatePage })
       : await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: validatePage })
+    const wasCreate = !selected.value.id
     hydrating.value = true
     selected.value = toEditorPage(response.page)
     savedBlockIds.value = new Set(response.page.blocks.map(block => block.id))
     dirty.value = false
     hydrating.value = false
     toast.add({ title: 'Saved', description: 'Page saved.', color: 'success' })
-    if (isNew.value) await navigateTo(`${pagesPath.value}/${response.page.id}`)
+    if (isNew.value || (wasCreate && creatingVariantFor.value)) {
+      creatingVariantFor.value = null
+      await navigateTo(`${pagesPath.value}/${response.page.id}`)
+    }
   } catch (error) {
     editorError.value = error instanceof Error ? error.message : 'Unable to save page'
   } finally {
@@ -389,9 +402,33 @@ watch(locale, async (nextLocale, previousLocale) => {
   try {
     const response = await dashboardApi<{ pages: PageSummary[] }>(`/api/editor/sites/${siteId}/pages?locale=${encodeURIComponent(nextLocale)}`, { validate: validateList })
     const translatedPage = response.pages.find(page => page.page_id === selected.value?.page_id)
-    if (!translatedPage) throw new Error('This page is unavailable in the selected language.')
-    dirty.value = false
-    await navigateTo(`${pagesPath.value}/${translatedPage.id}`)
+    if (translatedPage) {
+      dirty.value = false
+      await navigateTo(`${pagesPath.value}/${translatedPage.id}`)
+      return
+    }
+    // No variant exists yet in the target locale - offer to create one from
+    // the current page's content instead of only reporting it's missing.
+    // Reuses the same POST /pages the "New page" flow already uses; passing
+    // pageId links the new variant to this page's existing translation group
+    // (see save()'s body.pageId and the page_id match above) instead of
+    // creating an unrelated page that happens to share a title.
+    if (!window.confirm(`No ${nextLocale} version of this page exists yet. Create one now, starting from the current English content?`)) {
+      localeRevertGuard.arm(previousLocale)
+      locale.value = previousLocale
+      return
+    }
+    if (!selected.value) return
+    creatingVariantFor.value = nextLocale
+    // Blocks need fresh ids - carrying over the source page's own ids would
+    // try to INSERT content_blocks rows that already exist for the English
+    // page, colliding on the primary key.
+    const blocks = selected.value.blocks.map((block, position) => ({
+      ...block, id: crypto.randomUUID(), data: structuredClone(toRaw(block.data)), position,
+    }))
+    selected.value = { ...selected.value, id: '', document: { updated_at: '' }, locale: nextLocale, blocks }
+    savedBlockIds.value = new Set()
+    dirty.value = true
   } catch (error) {
     localeRevertGuard.arm(previousLocale)
     locale.value = previousLocale
