@@ -4,6 +4,9 @@
       v-if="localizedRoute?.representation.kind === 'resource'"
       :route="localizedRoute"
     />
+    <LocationQaPage
+      v-else-if="localizedRoute?.representation.kind === 'location_subpage'"
+    />
     <TenantPublicPage
       v-else
       :path="tenantPagePath"

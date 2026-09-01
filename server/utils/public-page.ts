@@ -737,11 +737,18 @@ async function loadPublicPageSource(
     ? await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale, preview: isPreviewAuthorized })
     : null
   if (canonicalPath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized) {
-    // This paid localization feature never falls back to English content -
-    // a missing exact-locale variant must 404, not silently render the page
-    // shell with an empty content dataset (see localized-pages/[locale].get.ts,
-    // which enforces the same "exact locale or nothing" contract).
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized page was not found' })
+    // This paid localization feature never falls back to English content for
+    // a page that actually has CMS-authored content - a missing exact-locale
+    // variant must 404, not silently render the page shell with an empty
+    // content dataset (see localized-pages/[locale].get.ts, which enforces
+    // the same "exact locale or nothing" contract). But some canonical paths
+    // (e.g. /qa, /reviews - the built-in Saya location sub-pages) never have
+    // an English tenant_page_variants row either; they're pure templates with
+    // no CMS content layer, so there is nothing to require a translation of.
+    const sourcePage = await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale: sourceLocale, preview: isPreviewAuthorized })
+    if (sourcePage) {
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized page was not found' })
+    }
   }
   const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
 

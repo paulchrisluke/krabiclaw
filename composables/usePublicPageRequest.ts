@@ -1,3 +1,4 @@
+import { splitLocalePrefix } from "~/utils/tenant-locale-path";
 
 // Maps each public route to the exact page datasets it may request.
 //
@@ -250,7 +251,12 @@ export const usePublicPageRequest = () => {
 
   return computed<PublicPageRequest>(() => {
     const previewSubpath = getPreviewSubpath(route.path)
-    const effectivePath = previewSubpath ?? route.path
+    const rawPath = previewSubpath ?? route.path
+    // A locale-prefixed request (e.g. /th/locations/{slug}/qa) is served by
+    // the tenantPath catch-all, whose route.path still carries the locale
+    // segment - strip it the same way pages/[...tenantPath].vue does before
+    // matching it against the locale-bare page-request patterns below.
+    const effectivePath = locale.value !== 'en' ? splitLocalePrefix(rawPath).tenantPagePath : rawPath
     const token = previewSubpath !== null && typeof route.query.token === 'string'
       ? route.query.token
       : null

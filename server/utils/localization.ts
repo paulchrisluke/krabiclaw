@@ -52,6 +52,7 @@ export interface LocalizedPublicRoute {
   representation:
     | { kind: 'tenant_page'; resource_type: 'tenant_page'; resource_id: string }
     | { kind: 'resource'; resource_type: LocalizedResourceType; resource_id: string; localization: ResourceLocalizationRecord }
+    | { kind: 'location_subpage'; resource_type: 'business_location'; resource_id: string; sub_page: 'qa'; tenant_page_path: string }
 }
 
 interface SiteLocaleRow extends Omit<SiteLocaleRecord, 'is_source'> {
@@ -506,14 +507,37 @@ export async function resolveLocalizedPublicRoute(
      WHERE v.organization_id = ? AND v.site_id = ? AND v.locale = ? AND v.path = ?
      LIMIT 1
   `, [organizationId, siteId, locale, tenantPagePath])
-  if (!page) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized route was not found', { locale, route_path: routePath })
-  return {
-    locale,
-    route_path: routePath,
-    platform_messages: entitlement.platform_messages ?? {},
-    site,
-    representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.id },
+  if (page) {
+    return {
+      locale,
+      route_path: routePath,
+      platform_messages: entitlement.platform_messages ?? {},
+      site,
+      representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.id },
+    }
   }
+  // business_location sub-pages (e.g. /locations/{slug}/qa) have no route_path
+  // of their own in resource_localizations - route: 'none' for location_qa,
+  // since the QA rows aren't independently routable resources. The slug isn't
+  // a localizable field (see RESOURCE_LOCALIZATION_REGISTRY.business_location),
+  // so it's identical across locales and the canonical business_locations row
+  // can be looked up directly.
+  const qaMatch = tenantPagePath.match(/^\/locations\/([^/]+)\/qa$/)
+  if (qaMatch) {
+    const location = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM business_locations WHERE organization_id = ? AND site_id = ? AND slug = ? LIMIT 1
+    `, [organizationId, siteId, qaMatch[1]])
+    if (location) {
+      return {
+        locale,
+        route_path: routePath,
+        platform_messages: entitlement.platform_messages ?? {},
+        site,
+        representation: { kind: 'location_subpage', resource_type: 'business_location', resource_id: location.id, sub_page: 'qa', tenant_page_path: tenantPagePath },
+      }
+    }
+  }
+  localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized route was not found', { locale, route_path: routePath })
 }
 
 export async function resolveLocalizedRedirect(
