@@ -33,24 +33,31 @@ export function errorChainForTelemetry(error: unknown): ErrorTelemetryEntry[] {
 
   while (current != null && !seen.has(current) && chain.length < MAX_ERROR_DEPTH) {
     seen.add(current)
-    const record = typeof current === 'object'
-      ? current as { name?: unknown; message?: unknown; code?: unknown; stack?: unknown; cause?: unknown }
-      : null
-    const message = record && typeof record.message === 'string'
-      ? record.message
-      : String(current)
+    const record = typeof current === 'object' || typeof current === 'function' ? current : null
+    const statusMessage = record ? Reflect.get(record, 'statusMessage') : undefined
+    const errorMessage = record ? Reflect.get(record, 'message') : undefined
+    const name = record ? Reflect.get(record, 'name') : undefined
+    const code = record ? Reflect.get(record, 'code') : undefined
+    const stack = record ? Reflect.get(record, 'stack') : undefined
+    const message = typeof statusMessage === 'string' && statusMessage.length > 0
+      ? statusMessage
+      : typeof errorMessage === 'string'
+        ? errorMessage
+        : record
+          ? ''
+          : String(current)
     const entry: ErrorTelemetryEntry = {
-      name: record && typeof record.name === 'string' ? record.name : typeof current,
+      name: typeof name === 'string' ? name : typeof current,
       message: redactErrorMessage(message),
     }
-    if (record && (typeof record.code === 'string' || typeof record.code === 'number')) {
-      entry.code = String(record.code)
+    if (typeof code === 'string' || typeof code === 'number') {
+      entry.code = String(code)
     }
-    if (record && typeof record.stack === 'string') {
-      entry.stack = redactErrorStack(record.stack)
+    if (typeof stack === 'string') {
+      entry.stack = redactErrorStack(stack)
     }
     chain.push(entry)
-    current = record?.cause
+    current = record ? Reflect.get(record, 'cause') : undefined
   }
 
   return chain
