@@ -65,6 +65,18 @@ test('LocationSettingsPage.vue exposes translation fields for every registered b
   }
 })
 
+test('SiteSettingsPage.vue exposes translation fields for every registered site field', () => {
+  // RESOURCE_LOCALIZATION_REGISTRY.site required+optional: brand_name,
+  // brand_description, seo_title, seo_description.
+  // Live-verified this session: all 4 fields save/reload/persist for the
+  // real Kikuzuki site, and the translated brand_name renders in the shared
+  // shell on a real Thai public page.
+  const source = read('lib/components/workspace/settings/SiteSettingsPage.vue')
+  for (const field of ['siteTranslationFields.brand_name', 'siteTranslationFields.brand_description', 'siteTranslationFields.seo_title', 'siteTranslationFields.seo_description']) {
+    assert.match(source, new RegExp(field.replace('.', '\\.')), `expected a translation field for ${field}`)
+  }
+})
+
 test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
   // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
   // it's reachable from every vertical, including Kikuzuki's restaurant/saya

@@ -129,6 +129,8 @@
               <p class="text-xs text-muted">Source (English): {{ form.brand_name }}</p>
               <UFormField :label="`Brand name (${siteTranslationLocale})`"><UInput v-model="siteTranslationFields.brand_name" size="xl" class="w-full" /></UFormField>
               <UFormField :label="`Description (${siteTranslationLocale})`"><UTextarea v-model="siteTranslationFields.brand_description" :rows="6" class="w-full" /></UFormField>
+              <UFormField :label="`SEO title (${siteTranslationLocale})`"><UInput v-model="siteTranslationFields.seo_title" size="xl" class="w-full" /></UFormField>
+              <UFormField :label="`SEO description (${siteTranslationLocale})`"><UTextarea v-model="siteTranslationFields.seo_description" :rows="3" class="w-full" /></UFormField>
               <p v-if="siteTranslationError" class="text-sm text-error">{{ siteTranslationError }}</p>
               <UButton :loading="siteTranslationSaving" label="Save translation" @click="saveSiteTranslation" />
             </template>
@@ -398,7 +400,7 @@ const siteTranslationLocales = ref<string[]>([])
 const siteTranslationLocaleOptions = computed(() => siteTranslationLocales.value)
 const siteTranslationError = ref<string | null>(null)
 const siteTranslationSaving = ref(false)
-const siteTranslationFields = reactive({ brand_name: '', brand_description: '' })
+const siteTranslationFields = reactive({ brand_name: '', brand_description: '', seo_title: '', seo_description: '' })
 function isSiteTranslationLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
   return isRecord(value) && Array.isArray(value.languages)
 }
@@ -426,10 +428,13 @@ async function loadSiteTranslationFields() {
     const values = response.localization.values
     siteTranslationFields.brand_name = typeof values.brand_name === 'string' ? values.brand_name : ''
     siteTranslationFields.brand_description = typeof values.brand_description === 'string' ? values.brand_description : ''
+    siteTranslationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    siteTranslationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) siteTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
     siteTranslationFields.brand_name = ''; siteTranslationFields.brand_description = ''
+    siteTranslationFields.seo_title = ''; siteTranslationFields.seo_description = ''
   }
 }
 watch(siteTranslationLocale, () => { void loadSiteTranslationFields() })
@@ -441,6 +446,8 @@ async function saveSiteTranslation() {
     const values: Record<string, string> = {}
     if (siteTranslationFields.brand_name.trim()) values.brand_name = siteTranslationFields.brand_name.trim()
     if (siteTranslationFields.brand_description.trim()) values.brand_description = siteTranslationFields.brand_description.trim()
+    if (siteTranslationFields.seo_title.trim()) values.seo_title = siteTranslationFields.seo_title.trim()
+    if (siteTranslationFields.seo_description.trim()) values.seo_description = siteTranslationFields.seo_description.trim()
     await dashboardApi(`/api/editor/sites/${siteId}/localization/site/${siteId}/${encodeURIComponent(siteTranslationLocale.value)}`, {
       method: 'PUT',
       body: { values },
