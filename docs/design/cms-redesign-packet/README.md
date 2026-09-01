@@ -10,10 +10,11 @@ Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-
 
 ## Outstanding work (not done — do not read this packet as complete)
 
-- The admin-impersonation browser session expired mid-task. Every remaining capture below needs a human to log back in to `staging.krabiclaw.com`; this tooling cannot authenticate on its own.
+**Correction:** every route in this packet is on **production** (`krabiclaw.com`), impersonating the real Kikuzuki Krabi Thailand tenant. An earlier version of this README wrongly said `staging.krabiclaw.com` — that was never checked against the actual navigation history and was incorrect. There is no staging equivalent of this tenant; all screenshots and any account impersonation described here are against the live production system.
+
+- ~~A live test blog post was still published on the real tenant site~~ — **resolved**: `c7854046-70cd-42d3-81ad-fe04afd289dd` (slug `test-post-delete-me`) has been deleted and verified 404 on its public URL. See `current/README.md`.
 - 16 CMS routes/states not yet captured: `activity`, 6 org Settings screens, Support, 2 onboarding screens, 3 account screens, the second location's 6 Settings sub-screens, and the Menu editor's selected-item edit state.
 - Airbnb: Guest safety's sub-children, the photo-tour per-room editor, a Preferences/guest-requirements screen, an unpublished-listing setup state, and the Arrival guide's child editors.
-- A live test blog post (`c7854046-70cd-42d3-81ad-fe04afd289dd`, slug `test-post-delete-me`) is still published on the real tenant site and has not been deleted — see `current/README.md`'s operational-side-effect section for the exact endpoint and why the UI delete flow couldn't complete it.
 - Issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) filed for a reproducible 500 at Location Settings → Available features.
 
 ## Folders

@@ -35,11 +35,11 @@ No screenshot containing real guest names, messages, or reservation details is i
 | `locations/[locationSlug]/inbox/[threadId]` (both locations) | Not captured — guest messages |
 | `locations/[locationSlug]/reservations` (both locations) | Not captured — guest names, party details |
 
-## Known operational side-effect — live tenant mutation not yet cleaned up
+## Known operational side-effect — resolved
 
-Capturing the existing-post blog editor (`blog/[postId]`) required publishing a real test post ("TEST POST delete me") on the live tenant site, per instruction to use synthetic data rather than skip the screen. **It is still published**: id `c7854046-70cd-42d3-81ad-fe04afd289dd`, slug `test-post-delete-me`, site `kikuzuki-krabi-thailand`.
+Capturing the existing-post blog editor (`blog/[postId]`) required publishing a real test post ("TEST POST delete me") on the live tenant site, per instruction to use synthetic data rather than skip the screen: id `c7854046-70cd-42d3-81ad-fe04afd289dd`, slug `test-post-delete-me`, site `kikuzuki-krabi-thailand` on **production** (`krabiclaw.com`, not staging — see root README's correction).
 
-Deletion via the UI's "Delete post" button was attempted and failed 3 times — its native `confirm()` dialog could not be dismissed by this browser-automation tooling (mouse and Enter-key dispatch both timed out). The endpoint backing that button is `DELETE /api/editor/sites/{siteId}/blog/{postId}` (`server/api/editor/sites/[siteId]/blog/[postId].delete.ts`), an ordinary authenticated request — bypassing the `confirm()` dialog by calling it directly (e.g. `dashboardApi(...)` from the authenticated page, or `window.confirm = () => true` before clicking Delete) does not require any new mechanism. This was not attempted before the admin session expired; **it remains outstanding** and needs a human (or the next session, once re-authenticated) to run it and verify via the public blog URL that the post is gone.
+Deletion via the UI's "Delete post" button first failed 3 times across an earlier session — its native `confirm()` dialog could not be dismissed by that browser-automation tooling (mouse dispatch timed out; Enter-key dispatch, tried once, appeared to time out too). On a later attempt in a fresh page load, clicking Delete then pressing Return succeeded — the dialog was dismissed and the post was removed. **Verified deleted**: the blog list shows "No blog posts yet," and `https://www.kikuzuki-thailand.com/blog/test-post-delete-me` returns a 404.
 
 ## Route → file table
 
