@@ -18,6 +18,25 @@ is deployed, start the relevant browser and MCP checks while the remaining CI
 jobs continue. Automated E2E and manual browser evidence are independent gates;
 neither must wait for the other to begin.
 
+### Release-owner emergency override
+
+The release owner may explicitly waive waiting for an incomplete qualification
+check for one named release when production already has a material
+customer-facing regression and delay would prolong the incident. The owner must
+acknowledge the incomplete gate and authorize the promotion directly. Do not
+infer an override from urgency, prior releases, or general deployment access.
+
+Before promotion, record the customer impact, the exact checks being waived or
+left incomplete, and the required post-deploy verification in the promotion
+pull request or merge record. Begin production verification as soon as the
+deployment converges. If the affected journey is not restored, use Cloudflare's
+ordinary deployment history to restore the last known-good Worker and continue
+incident recovery through the normal release flow.
+
+This override cannot waive a known reproducible first-party failure,
+database-epoch or migration safeguards, production data protections, or the
+restriction on production writes and notifications without an explicit canary.
+
 Validation follows product risk:
 
 1. Test the affected tenant journey first.
