@@ -40,6 +40,18 @@ for (const { file, resourceType } of cases) {
   })
 }
 
+test('ProductEditor.vue exposes translation fields for every registered product field', () => {
+  // RESOURCE_LOCALIZATION_REGISTRY.product required+optional: category, name,
+  // description, tags_json, details_json, seo_title, seo_description.
+  // Live-verified this session: all 7 fields save/reload/persist for a real
+  // Kikuzuki product (item-kiku-tuna-sushi), and /th/locations/.../menu/tuna-sushi
+  // server-renders the translated name and description.
+  const source = read('components/products/ProductEditor.vue')
+  for (const field of ['localizedFields.name', 'localizedFields.category', 'localizedFields.description', 'localizedFields.tags_text', 'localizedFields.details_text', 'localizedFields.seo_title', 'localizedFields.seo_description']) {
+    assert.match(source, new RegExp(field.replace('.', '\\.')), `expected a translation field for ${field}`)
+  }
+})
+
 test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
   // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
   // it's reachable from every vertical, including Kikuzuki's restaurant/saya

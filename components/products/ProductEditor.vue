@@ -58,6 +58,10 @@
         <label class="block text-sm">Name ({{ locale }})<input v-model="localizedFields.name" maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
         <label class="block text-sm">{{ presentation.categoryLabel }} ({{ locale }})<input v-model="localizedFields.category" maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
         <label class="block text-sm">Description ({{ locale }})<textarea v-model="localizedFields.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
+        <label class="block text-sm">Tags ({{ locale }})<input v-model="localizedFields.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
+        <label class="block text-sm">Details JSON ({{ locale }})<textarea v-model="localizedFields.details_text" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2 font-mono text-xs" placeholder='[{"key":"spice","label":"Spice level","values":["Mild"]}]' /></label>
+        <label class="block text-sm">SEO title ({{ locale }})<input v-model="localizedFields.seo_title" maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+        <label class="block text-sm">SEO description ({{ locale }})<textarea v-model="localizedFields.seo_description" maxlength="500" rows="2" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
       </template>
       <div class="flex gap-3">
         <button :disabled="saving" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit">{{ saving ? 'Saving…' : 'Save' }}</button>
@@ -92,7 +96,7 @@ const locale = ref('en')
 const locales = ref<string[]>(['en'])
 const localeOptions = computed(() => locales.value)
 const localeError = ref<string | null>(null)
-const localizedFields = ref({ name: '', category: '', description: '' })
+const localizedFields = ref({ name: '', category: '', description: '', tags_text: '', details_text: '', seo_title: '', seo_description: '' })
 function isLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
   return isRecord(value) && Array.isArray(value.languages)
 }
@@ -120,12 +124,16 @@ async function loadLocalizedValues(productId: string, targetLocale: string) {
       name: typeof values.name === 'string' ? values.name : '',
       category: typeof values.category === 'string' ? values.category : '',
       description: typeof values.description === 'string' ? values.description : '',
+      tags_text: Array.isArray(values.tags_json) ? values.tags_json.join(', ') : '',
+      details_text: Array.isArray(values.details_json) ? JSON.stringify(values.details_json, null, 2) : '',
+      seo_title: typeof values.seo_title === 'string' ? values.seo_title : '',
+      seo_description: typeof values.seo_description === 'string' ? values.seo_description : '',
     }
   } catch (cause) {
     // 404 just means no translation saved yet for this locale — start blank.
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) localeError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
-    localizedFields.value = { name: '', category: '', description: '' }
+    localizedFields.value = { name: '', category: '', description: '', tags_text: '', details_text: '', seo_title: '', seo_description: '' }
   }
 }
 watch(locale, (value) => {
@@ -160,6 +168,11 @@ async function saveLocalized() {
   if (!product?.id) return
   saving.value = true; localeError.value = null
   try {
+    let details_json: unknown
+    if (localizedFields.value.details_text.trim()) {
+      try { details_json = JSON.parse(localizedFields.value.details_text) }
+      catch { throw new Error('Details JSON must be valid JSON') }
+    }
     await dashboardApi(`/api/editor/sites/${props.siteId}/localization/product/${product.id}/${encodeURIComponent(locale.value)}`, {
       method: 'PUT',
       body: {
@@ -167,6 +180,10 @@ async function saveLocalized() {
           category: localizedFields.value.category,
           name: localizedFields.value.name,
           ...(localizedFields.value.description ? { description: localizedFields.value.description } : {}),
+          ...(localizedFields.value.tags_text.trim() ? { tags_json: localizedFields.value.tags_text.split(',').map(tag => tag.trim()).filter(Boolean) } : {}),
+          ...(details_json ? { details_json } : {}),
+          ...(localizedFields.value.seo_title.trim() ? { seo_title: localizedFields.value.seo_title.trim() } : {}),
+          ...(localizedFields.value.seo_description.trim() ? { seo_description: localizedFields.value.seo_description.trim() } : {}),
         },
         route_path: `/${locale.value}/locations/${props.locationSlug}/${productFamily.value}/${product.name ? slugForRoute(product) : ''}`,
       },
