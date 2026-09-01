@@ -9,7 +9,7 @@ import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
 
 const props = defineProps<{ path: string; previewToken?: string | null; locale?: string | null }>()
 const { siteId, isTenant, site } = useTenantSite()
-const { site: publicSite } = useSiteShellState()
+const { site: publicSite, config: shellConfig } = useSiteShellState()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale } = useI18n()
 if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Tenant site context is unavailable' })
@@ -120,8 +120,12 @@ useProfessionalServiceSchema(() => {
 })
 useSocialMetadata(() => ({
   path: page.value.canonical_url || page.value.path,
-  title: page.value.seo_title || `${page.value.title} | ${site?.brand_name || ''}`,
-  description: page.value.seo_description || page.value.summary || '',
+  // Fallback order: this page's own SEO override, then the site-level
+  // registered seo_title/seo_description (shellConfig already carries the
+  // locale-overlaid value - see server/utils/public-shell.ts), then a
+  // generated default built from the page's own title.
+  title: page.value.seo_title || shellConfig.value?.seo_title || `${page.value.title} | ${site?.brand_name || ''}`,
+  description: page.value.seo_description || shellConfig.value?.seo_description || page.value.summary || '',
   robots: page.value.robots,
   brand: {
     siteName: site?.brand_name || '',
