@@ -119,6 +119,25 @@ test('blog/[postId].vue exposes translation fields for every registered tenant_b
   }
 })
 
+test('experiences.vue exposes a translation control for booking_policy', () => {
+  // RESOURCE_LOCALIZATION_REGISTRY.booking_policy optional: weather_policy,
+  // additional_notes_html. Kikuzuki had no booking_policy row for its
+  // experience - created one through the real BookingPolicyForm/Save changes
+  // flow, then live-verified this translation control: saved and reloaded
+  // Thai values for both fields through the real CMS. Public rendering is
+  // separately blocked by a pre-existing architectural gap, not this field:
+  // /th/experiences/{slug} (representation.kind 'resource') renders through
+  // components/localization/LocalizedResourcePage.vue, a minimal
+  // title/summary/body/details view that never renders booking-policy
+  // summaries, media galleries, or other rich UI in ANY locale's translated
+  // resource pages - out of scope for field-content translation work.
+  const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/experiences.vue')
+  assert.match(source, /policyTranslationFields\.weather_policy/)
+  assert.match(source, /policyTranslationFields\.additional_notes_html/)
+  assert.match(source, /\/localization\/booking_policy\/\$\{bookingPolicyId\.value\}\/\$\{encodeURIComponent\(translationLocale\.value\)\}/)
+  assert.match(source, /method: 'PUT'/)
+})
+
 test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
   // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
   // it's reachable from every vertical, including Kikuzuki's restaurant/saya

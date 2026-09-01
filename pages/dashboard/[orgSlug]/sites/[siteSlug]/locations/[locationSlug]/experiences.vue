@@ -293,6 +293,14 @@
               :summary="bookingPolicySummary"
             />
           </UFormField>
+          <UFormField v-if="bookingPolicyId && translationLocales.length" :label="`Booking policy (${translationLocale})`" help="Translated weather policy and additional notes for the saved booking policy above.">
+            <div class="space-y-2">
+              <UTextarea v-model="policyTranslationFields.weather_policy" :rows="2" :placeholder="`Weather policy (${translationLocale})`" class="w-full" />
+              <UTextarea v-model="policyTranslationFields.additional_notes_html" :rows="2" :placeholder="`Additional notes (${translationLocale})`" class="w-full" />
+              <p v-if="policyTranslationError" class="text-sm text-error">{{ policyTranslationError }}</p>
+              <UButton size="sm" variant="soft" :loading="policyTranslationSaving" label="Save policy translation" @click="savePolicyTranslation" />
+            </div>
+          </UFormField>
         </div>
       </template>
       <template #footer>
@@ -406,7 +414,7 @@ const isExperienceResponse = (value: unknown): value is { experience: ApiRecord 
   && typeof value.experience.title === 'string'
 const isPolicyResponse = (
   value: unknown,
-): value is { policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null } =>
+): value is { policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null; resolved_policy?: { id?: string } } =>
   isRecord(value)
   && (value.policy === null || isRecord(value.policy))
   && (value.summary === null || isRecord(value.summary))
@@ -554,6 +562,7 @@ async function loadTranslationFields(experienceId: string) {
 }
 watch(translationLocale, () => {
   if (editing.value?.id && translationLocale.value !== 'en') void loadTranslationFields(String(editing.value.id))
+  void loadPolicyTranslation()
 })
 async function saveTranslation() {
   if (!editing.value?.id || translationLocale.value === 'en') return
@@ -683,6 +692,10 @@ const form = reactive(emptyForm())
 const originalExperienceMediaIds = ref<string[]>([])
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
+const bookingPolicyId = ref<string | null>(null)
+const policyTranslationFields = reactive({ weather_policy: '', additional_notes_html: '' })
+const policyTranslationError = ref<string | null>(null)
+const policyTranslationSaving = ref(false)
 
 watch(currentLocationId, () => {
   sliderOpen.value = false
@@ -784,7 +797,7 @@ function openEdit(exp: ApiRecord) {
 
 async function loadExperiencePolicy(experienceId: string, locationId: string | null | undefined) {
   try {
-    const res = await dashboardApi<{ policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+    const res = await dashboardApi<{ policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null; resolved_policy?: { id?: string } }>(`/api/editor/sites/${siteId}/booking-policy`, {
       query: {
         policy_type: 'experience',
         scope_type: 'experience',
@@ -796,10 +809,53 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = res.policy ?? {}
     bookingPolicySummary.value = res.summary ?? null
+    bookingPolicyId.value = res.resolved_policy?.id || null
+    void loadPolicyTranslation()
   } catch {
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = {}
     bookingPolicySummary.value = null
+    bookingPolicyId.value = null
+  }
+}
+
+async function loadPolicyTranslation() {
+  policyTranslationError.value = null
+  policyTranslationFields.weather_policy = ''
+  policyTranslationFields.additional_notes_html = ''
+  if (!bookingPolicyId.value || !translationLocale.value || translationLocale.value === 'en') return
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/booking_policy/${bookingPolicyId.value}/${encodeURIComponent(translationLocale.value)}`,
+      { validate: (value): value is { localization: { values: Record<string, unknown> } } => isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values) },
+    )
+    const values = response.localization.values
+    policyTranslationFields.weather_policy = typeof values.weather_policy === 'string' ? values.weather_policy : ''
+    policyTranslationFields.additional_notes_html = typeof values.additional_notes_html === 'string' ? values.additional_notes_html : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) policyTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+  }
+}
+
+async function savePolicyTranslation() {
+  if (!bookingPolicyId.value || !translationLocale.value || translationLocale.value === 'en') return
+  policyTranslationSaving.value = true
+  policyTranslationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (policyTranslationFields.weather_policy.trim()) values.weather_policy = policyTranslationFields.weather_policy.trim()
+    if (policyTranslationFields.additional_notes_html.trim()) values.additional_notes_html = policyTranslationFields.additional_notes_html.trim()
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/booking_policy/${bookingPolicyId.value}/${encodeURIComponent(translationLocale.value)}`, {
+      method: 'PUT',
+      body: { values },
+      validate: isRecord,
+    })
+    toast.add({ title: 'Translation saved', color: 'success' })
+  } catch (cause) {
+    policyTranslationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    policyTranslationSaving.value = false
   }
 }
 
