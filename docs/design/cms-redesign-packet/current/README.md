@@ -2,29 +2,21 @@
 
 All screenshots taken via admin impersonation of a real tenant account, site "Kikuzuki Krabi Thailand" (two locations: Kikuzuki Japanese Robatayaki & Izakaya, Take Me Away by Kikuzuki). Mobile viewport (~390–500px wide).
 
-**Captured: 61 screenshots. Expected (full route tree, every `pages/dashboard/**/*.vue` file): 75+ distinct routes/states — see the inaccessible list below for what's still outstanding and why.**
+**Captured: 82 screenshots** (including 2 that capture a currently-broken error state, see below). This is the full `pages/dashboard/**` route tree — every route is either captured, excluded for a stated privacy reason, or listed below as still blocked, with a concrete reason. None are dropped by redefining scope.
 
-This is the full `pages/dashboard/**` route tree, not a redefined subset. Every route below is either captured, excluded for a stated privacy reason, or listed as inaccessible with a concrete blocker — none are dropped by redefining scope.
-
-## Inaccessible — blocked, not excluded
-
-The admin-impersonation browser session used for every capture in this packet expired mid-task and could not be resumed: this tooling cannot enter a password or complete an interactive Google/OAuth sign-in on the user's behalf. Every route below still needs to be captured once a human re-authenticates the session; none of these were judged out of scope.
+## Still blocked — one item
 
 | Route | Why it's not yet captured |
 |---|---|
-| `dashboard/[orgSlug]/activity.vue` (Activity — filters + event history) | Session expired before this route was visited. Real repo route, not previously in this manifest — added here per audit. |
-| `dashboard/[orgSlug]/settings/{members,billing,general,analytics,appearance,chatgpt}.vue` (6 screens) | Session expired before these were visited |
-| `dashboard/[orgSlug]/support.vue` | Session expired before this was visited |
-| `dashboard/[orgSlug]/onboarding.vue`, `dashboard/onboarding.vue` | Session expired before these were visited |
-| `dashboard/account/{index,profile,authentication}.vue` (3 screens) | Session expired before these were visited |
-| `.../locations/[locationSlug]/products` **selected-item edit state** (both locations) | The list is captured; the per-item edit form (confirmed in source to exist — see bug [#709](https://github.com/paulchrisluke/krabiclaw/issues/709)) renders off-screen below a 105-row list on mobile and was never captured in its opened state, only inferred from source |
-| `.../locations/take-me-away-by-kikuzuki/settings/{profile,hours,content,discovery,notifications,features}` (6 screens) | Only the Settings index was captured for the second location before the session expired |
+| `.../locations/[locationSlug]/products` **selected-item edit state** (both locations) | Cannot currently be captured: the product list itself is broken in production right now — see the Menu-editor bug below. There is nothing to click. Filed as issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723); once fixed, this state still needs capturing. |
 
-These are genuine blockers pending a human re-login, not decisions made on this packet's behalf.
+## New production bug found while capturing — Menu editor
 
-## Excluded for privacy (real customer data)
+The Menu editor's product list is currently broken for **both** locations of this tenant: it renders "No Products published for this location" plus a raw, unformatted client-side error string reading `Invalid URL: /api/editor/sites/site-kikuzuki/locations/loc-kikuzuki/products?org=...&site=...`. The underlying API call actually returns 200 (confirmed via network inspection), so this looks like a client-side URL-construction bug, not a real 404/500. Confirmed reproducible on 2 separate loads per location. The **public storefront menu is unaffected** — `kikuzuki-thailand.com/menu` renders correctly, so this is confined to the dashboard editor. Filed as issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723). Screenshots of this broken state are included as `products/index-error-invalid-url.jpg` for both locations, since this is the CMS's actual current behavior, not a capture gap.
 
-No screenshot containing real guest names, messages, or reservation details is included. This covers **every** inbox/reservation-scoped route in the tree, not just the two originally flagged:
+## Excluded for privacy (real customer/team data)
+
+No screenshot containing real guest names, messages, reservation details, or team member identities is included. This covers **every** inbox/reservation-scoped route in the tree, plus the org Members list found in this pass:
 
 | Route pattern | Status |
 |---|---|
@@ -34,6 +26,7 @@ No screenshot containing real guest names, messages, or reservation details is i
 | `locations/[locationSlug]/inbox` (both locations) | Not captured — guest names |
 | `locations/[locationSlug]/inbox/[threadId]` (both locations) | Not captured — guest messages |
 | `locations/[locationSlug]/reservations` (both locations) | Not captured — guest names, party details |
+| `dashboard/[orgSlug]/settings/members` | Not captured — the screen is a list of real org team members (6 people) showing full names, personal email addresses, and avatar photos; there's no way to show this screen's actual content without exposing them |
 
 ## Known operational side-effect — resolved
 
@@ -104,8 +97,29 @@ Deletion via the UI's "Delete post" button first failed 3 times across an earlie
 | `.../locations/take-me-away-by-kikuzuki/posts/index.jpg` | | Empty-state variant of Posts (no posts yet) |
 | `.../locations/take-me-away-by-kikuzuki/qa/index.jpg` | | Empty-state Q&A |
 | `.../locations/take-me-away-by-kikuzuki/settings/index.jpg` | | Settings card list for the second location |
+| `.../locations/take-me-away-by-kikuzuki/settings/profile/index.jpg` | second location — `.../settings/profile` | Identity/contact fields drill-down, second location |
+| `.../locations/take-me-away-by-kikuzuki/settings/hours/index.jpg` | second location — `.../settings/hours` | Per-day hours drill-down, second location |
+| `.../locations/take-me-away-by-kikuzuki/settings/content/index.jpg` | second location — `.../settings/content` | Public-facing description fields, second location |
+| `.../locations/take-me-away-by-kikuzuki/settings/discovery/index.jpg` | second location — `.../settings/discovery` | Google Places connection, second location — 4.9 rating, 65 reviews |
+| `.../locations/take-me-away-by-kikuzuki/settings/notifications/index.jpg` | second location — `.../settings/notifications` | WhatsApp/timezone, second location |
+| `.../locations/take-me-away-by-kikuzuki/settings/features/index-error-500.jpg` | second location — `.../settings/features` | Same 500 as the first location — confirms issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) isn't location-specific |
+| `.../locations/[locationSlug]/products/index-error-invalid-url.jpg` | `.../products` | **Current broken state**, not the intended design — see Menu-editor bug above, issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) |
+| `.../locations/take-me-away-by-kikuzuki/products/index-error-invalid-url.jpg` | second location — `.../products` | Same bug, second location |
 | `calendar/index.jpg` | `dashboard/[orgSlug]/calendar` | Org-level calendar, empty-state |
 | `index/today-redacted.jpg` ⚠️ | `dashboard/[orgSlug]` | Org Today — guest names in "Needs attention" **redacted with black bars** |
+| `activity/index.jpg` | `dashboard/[orgSlug]/activity` | Filterable event log (Site/Location/Type/Actor), e.g. "Team member Reordered Products" |
+| `settings/index.jpg` | `dashboard/[orgSlug]/settings` | Org Settings hub: General, Appearance, Members, Billing, Analytics under two groups |
+| `settings/general/index.jpg` | `.../settings/general` | Org name, your role |
+| `settings/appearance/index.jpg` | `.../settings/appearance` | Theme picker: System/Light/Dark |
+| `settings/billing/index.jpg` | `.../settings/billing` | Plan, payment method, shared usage credits |
+| `settings/analytics/index.jpg` | `.../settings/analytics` | Per-site Google Analytics/Search Console selector |
+| `settings/chatgpt/index.jpg` | `.../settings/chatgpt` | MCP server URL for ChatGPT connection |
+| `support/index.jpg` | `dashboard/[orgSlug]/support` | "Priority support isn't available yet" empty state |
+| `account/index.jpg` | `dashboard/account` | Profile / Authentication list |
+| `account/profile/index.jpg` | `dashboard/account/profile` | Display name, email (via Google), phone, delete-account |
+| `account/authentication/index.jpg` | `dashboard/account/authentication` | Email/Google/WhatsApp connection rows |
+| `onboarding-org/index.jpg` | `dashboard/[orgSlug]/onboarding` | "Your site is ready" welcome + live site preview |
+| `onboarding-dashboard/index.jpg` | `dashboard/onboarding` | "Tell me about your business" AI-driven site builder intro |
 
 ## Confirmed not applicable to this vertical (not a gap)
 
@@ -118,4 +132,4 @@ Deletion via the UI's "Delete post" button first failed 3 times across an earlie
 - **The actual page content editor** (`pages/[pageId]`) is the biggest contrast point with Airbnb: title, description, and every content block live on one continuous scrolling page, with rich text fields expanding in place rather than opening their own screen.
 - **The Blog post editor** is the current CMS's own closest match to the Airbnb pattern already: full-screen, minimal-chrome writing surface with metadata pushed into a slideover.
 - **Several "add" flows put the form inline on the list screen** rather than a separate screen: Q&A (both site- and location-level), Testimonials, Links.
-- **A real, reproducible server bug** exists at Location Settings → Available features (500 error, confirmed twice) — worth filing separately from this packet's redesign scope.
+- **Two real, reproducible production bugs** were found and filed while capturing, unrelated to the redesign itself: Location Settings → Available features throws a 500 on both locations ([#720](https://github.com/paulchrisluke/krabiclaw/issues/720)), and the Menu editor's product list is currently broken on both locations with a raw error string surfaced to the user ([#723](https://github.com/paulchrisluke/krabiclaw/issues/723)).

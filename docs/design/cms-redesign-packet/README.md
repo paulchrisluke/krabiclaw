@@ -2,20 +2,18 @@
 
 Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31 through 2026-09-01. All screenshots were taken at a mobile viewport (~390–420px wide) since mobile-friendliness is the primary driver for this redesign.
 
-**Captured so far: 61 CMS screenshots + 30 Airbnb screenshots = 91.** This is not the full manifest — see "Outstanding work" below and each folder's README for exactly what's still missing and why.
+**Captured: 82 CMS screenshots + 30 Airbnb screenshots = 112.** Every route in `pages/dashboard/**` is now accounted for as captured, privacy-excluded, or a stated blocker with a filed issue — see "Outstanding work" below for the one remaining CMS item and the Airbnb side's gaps.
 
-`current/` was derived from the actual Nuxt route tree (`pages/dashboard/**/*.vue`) and the CMS capability registry (`config/cms-registry.ts`) for a restaurant-vertical site. See `current/README.md` for the full route→file table, the full privacy-exclusion table, and the inaccessible-routes table (16 org-level/account/second-location/Menu-editor screens blocked on a re-login, not excluded by scope).
+`current/` was derived from the actual Nuxt route tree (`pages/dashboard/**/*.vue`) and the CMS capability registry (`config/cms-registry.ts`) for a restaurant-vertical site, on **production** (`krabiclaw.com`), impersonating the real Kikuzuki Krabi Thailand tenant — an earlier version of this README wrongly said staging, corrected after checking the actual navigation history. See `current/README.md` for the full route→file table, the privacy-exclusion table (now including the org Members list), and the two production bugs found and filed while capturing.
 
 `goal/` was derived the same way from Airbnb's own listing-editor navigation, including every field referenced by its overview and hub screens. See `goal/README.md` for the full route→file table and its remaining known gaps (Guest safety sub-children, photo-tour per-room editor, Preferences page, unpublished-listing setup state, and the Arrival guide's child editors — check-in method, house manual, Wi-Fi, directions — which were opened during navigation but not individually captured).
 
-## Outstanding work (not done — do not read this packet as complete)
+## Outstanding work
 
-**Correction:** every route in this packet is on **production** (`krabiclaw.com`), impersonating the real Kikuzuki Krabi Thailand tenant. An earlier version of this README wrongly said `staging.krabiclaw.com` — that was never checked against the actual navigation history and was incorrect. There is no staging equivalent of this tenant; all screenshots and any account impersonation described here are against the live production system.
-
-- ~~A live test blog post was still published on the real tenant site~~ — **resolved**: `c7854046-70cd-42d3-81ad-fe04afd289dd` (slug `test-post-delete-me`) has been deleted and verified 404 on its public URL. See `current/README.md`.
-- 16 CMS routes/states not yet captured: `activity`, 6 org Settings screens, Support, 2 onboarding screens, 3 account screens, the second location's 6 Settings sub-screens, and the Menu editor's selected-item edit state.
-- Airbnb: Guest safety's sub-children, the photo-tour per-room editor, a Preferences/guest-requirements screen, an unpublished-listing setup state, and the Arrival guide's child editors.
-- Issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) filed for a reproducible 500 at Location Settings → Available features.
+- **One CMS item blocked, not skipped**: the Menu editor's selected-item edit state can't be captured because the product list itself is currently broken in production for this tenant (issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723)) — there's nothing to click. Once fixed, this state still needs capturing.
+- **Airbnb gaps** (unrelated to any blocker, just not yet done): Guest safety's sub-children, the photo-tour per-room editor, a Preferences/guest-requirements screen, an unpublished-listing setup state, and the Arrival guide's child editors.
+- **Two production bugs filed while capturing, unrelated to the redesign**: [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) (Available features 500, both locations) and [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) (Menu editor product list broken, both locations, public storefront unaffected).
+- The live test blog post created during capture (`c7854046-70cd-42d3-81ad-fe04afd289dd`) has been deleted and verified 404 — see `current/README.md`.
 
 ## Folders
 
@@ -29,6 +27,6 @@ Each route folder contains an `index.jpg` (or a few named variants where a page 
 
 ## Privacy note
 
-No screenshot containing real guest names or reservation details is included in this packet. That covers every inbox and reservation scope that exists in the route tree (org-level inbox, site-level inbox list and thread detail, location-level inbox list and thread detail, location reservations) — none of those were captured, not just the two originally called out.
+No screenshot containing real guest or team-member personal data is included in this packet. That covers every inbox and reservation scope that exists in the route tree (org-level inbox, site-level inbox list and thread detail, location-level inbox list and thread detail, location reservations), plus the org Settings → Members screen (real team names, emails, and avatars) found in a later pass — none of those were captured.
 
 The impersonated tenant's personal email address was previously included in this README's text and has been removed from the current commit; it is still present in earlier commits on this branch's history. One `goal/` screenshot (Airbnb's own listing) shows a real host's address and photo; that listing belongs to Airbnb's demo/reference account, not a KrabiClaw customer.
