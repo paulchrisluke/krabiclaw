@@ -2,7 +2,7 @@
 
 Reference screenshots for planning the dashboard CMS redesign, captured 2026-08-31 through 2026-09-01. All screenshots were taken at a mobile viewport (~390–420px wide) since mobile-friendliness is the primary driver for this redesign.
 
-`current/` is a full sweep of every dashboard route reachable for a restaurant-vertical site (site-level: Sites, Site overview/Pages/Settings, Pages management + the actual page content editor, Analytics, Domains, Assistant, Media, Orders, Q&A, Links, Testimonials, Brand, Blog; location-level: Locations overview/Content, Photos, Menu, Posts, Q&A, Reservations, Settings). Two routes (`professional-services`, location `experiences`) 404 for this vertical and are confirmed not applicable, not missed.
+`current/` covers most dashboard routes reachable for a restaurant-vertical site across two capture passes — it is not a verified-complete sweep. See `current/README.md` for the known-gap list (create/`new` screens, existing-post blog editor, several Settings/Brand sub-detail screens, the second location, conversation detail, org-level Today/Calendar). Two routes (`professional-services`, location `experiences`) were confirmed, not assumed, to 404 for this vertical.
 
 ## Folders
 
@@ -16,4 +16,6 @@ Each route folder contains an `index.jpg` (or a few named variants where a page 
 
 ## Privacy note
 
-Screenshots of the guest inbox and reservations list (real guest names, reservation details — live production data viewed via admin impersonation of the tenant) were deliberately left out of this packet; see `current/README.md` for the routes they'd have covered. One `goal/` screenshot (Airbnb's own listing) shows a real host's address and photo; that listing belongs to Airbnb's demo/reference account, not a KrabiClaw customer.
+No screenshot containing real guest names or reservation details is included in this packet. That covers every inbox and reservation scope that exists in the route tree (org-level inbox, site-level inbox list and thread detail, location-level inbox list and thread detail, location reservations) — none of those were captured, not just the two originally called out.
+
+The impersonated tenant's personal email address was previously included in this README's text and has been removed from the current commit; it is still present in earlier commits on this branch's history. One `goal/` screenshot (Airbnb's own listing) shows a real host's address and photo; that listing belongs to Airbnb's demo/reference account, not a KrabiClaw customer.

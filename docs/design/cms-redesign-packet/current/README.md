@@ -1,8 +1,8 @@
 # Current: KrabiClaw Dashboard CMS
 
-All screenshots taken logged in as an admin impersonating tenant `richard.garrad18@gmail.com`, site "Kikuzuki Krabi Thailand" (two locations: Kikuzuki Japanese Robatayaki & Izakaya, Take Me Away by Kikuzuki). Mobile viewport.
+All screenshots taken via admin impersonation of a real tenant account, site "Kikuzuki Krabi Thailand" (two locations: Kikuzuki Japanese Robatayaki & Izakaya, Take Me Away by Kikuzuki). Mobile viewport, Kikuzuki Japanese Robatayaki & Izakaya location only — Take Me Away by Kikuzuki was not separately captured.
 
-This is a full sweep of every route reachable from the dashboard nav for this site's vertical (restaurant). `professional-services` and location `experiences` routes exist in the codebase but return 404 for this vertical — not screenshotted, not a gap.
+This covers the routes walked during two capture passes, not a verified-complete route sweep. Known gaps as of this commit: `new`/create screens (site, location, page), existing-post blog editor (only `/blog/new` was captured), conversation detail, org-level Today/Calendar, several Brand/Settings sub-detail screens (Currency, Facebook publishing, Google Analytics, Search verification, Search visibility, Public content, Available features), and the second location. `professional-services` and location `experiences` routes were confirmed (not assumed) to 404 for this vertical.
 
 ## Site-level routes
 
