@@ -1,7 +1,10 @@
 <template>
   <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
+    <SiteLinksPage
+      v-if="localizedRoute?.representation.kind === 'resource' && localizedRoute.representation.resource_type === 'site_link_page'"
+    />
     <LocalizedResourcePage
-      v-if="localizedRoute?.representation.kind === 'resource'"
+      v-else-if="localizedRoute?.representation.kind === 'resource'"
       :route="localizedRoute"
     />
     <LocationQaPage

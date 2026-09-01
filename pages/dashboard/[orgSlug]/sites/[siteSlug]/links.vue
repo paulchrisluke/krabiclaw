@@ -56,6 +56,39 @@
             </div>
           </UCard>
 
+          <UCard v-if="translationLocales.length">
+            <template #header>
+              <div class="flex items-center justify-between gap-4">
+                <h2 class="text-base font-semibold text-highlighted">Translations</h2>
+                <select v-model="translationLocale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
+                  <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
+                </select>
+              </div>
+            </template>
+            <div class="grid gap-4 md:grid-cols-2">
+              <UFormField :label="`Title (${translationLocale})`">
+                <UInput v-model="translationFields.title" />
+              </UFormField>
+              <UFormField :label="`SEO title (${translationLocale})`">
+                <UInput v-model="translationFields.seo_title" />
+              </UFormField>
+              <UFormField class="md:col-span-2" :label="`SEO description (${translationLocale})`">
+                <UInput v-model="translationFields.seo_description" />
+              </UFormField>
+            </div>
+            <p v-if="translationError" class="mt-2 text-sm text-error">{{ translationError }}</p>
+            <UButton class="mt-3" size="sm" :loading="translationSaving" @click="saveTranslation">Save translation</UButton>
+
+            <div v-if="items[0]" class="mt-6 border-t border-default pt-4">
+              <p class="text-sm text-muted">First link item ({{ items[0].label || 'untitled' }})</p>
+              <UFormField :label="`Label (${translationLocale})`" class="mt-2">
+                <UInput v-model="itemTranslationLabel" />
+              </UFormField>
+              <p v-if="itemTranslationError" class="mt-2 text-sm text-error">{{ itemTranslationError }}</p>
+              <UButton class="mt-3" size="sm" variant="soft" :loading="itemTranslationSaving" @click="saveItemTranslation">Save translation</UButton>
+            </div>
+          </UCard>
+
           <div class="space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -126,6 +159,7 @@ useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofoll
 type ItemStatus = 'active' | 'hidden'
 
 interface LinksPage {
+  id: string
   title: string
   robots: string
   seo_title: string
@@ -182,6 +216,7 @@ const robotsOptions = [
   { label: 'No index, no follow', value: 'noindex,nofollow' },
 ]
 const form = reactive<LinksPage>({
+  id: '',
   title: '',
   robots: 'noindex,follow',
   seo_title: '',
@@ -328,4 +363,109 @@ onBeforeRouteLeave(() => {
   if (!dirty.value || !import.meta.client) return true
   return window.confirm('Discard unsaved links page changes?')
 })
+
+// ── Translations (resource_localizations, same API as the editor CRUD) ──
+const translationLocale = ref('')
+const translationLocales = ref<string[]>([])
+const translationFields = reactive({ title: '', seo_title: '', seo_description: '' })
+const translationError = ref<string | null>(null)
+const translationSaving = ref(false)
+const itemTranslationLabel = ref('')
+const itemTranslationError = ref<string | null>(null)
+const itemTranslationSaving = ref(false)
+
+function isLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
+  return isRecord(value) && Array.isArray(value.languages)
+}
+async function loadTranslationLocales() {
+  try {
+    const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
+      `/api/editor/sites/${siteId}/locales`,
+      { validate: isLocalesResponse },
+    )
+    translationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
+    translationLocale.value = translationLocales.value[0] ?? ''
+  } catch { translationLocales.value = []; translationLocale.value = '' }
+}
+function isTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
+}
+async function loadTranslationFields() {
+  translationError.value = null
+  translationFields.title = ''; translationFields.seo_title = ''; translationFields.seo_description = ''
+  if (!form.id || !translationLocale.value) return
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/site_link_page/${form.id}/${encodeURIComponent(translationLocale.value)}`,
+      { validate: isTranslationResponse },
+    )
+    const values = response.localization.values
+    translationFields.title = typeof values.title === 'string' ? values.title : ''
+    translationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    translationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+  }
+}
+async function loadItemTranslation() {
+  itemTranslationError.value = null
+  itemTranslationLabel.value = ''
+  const item = items.value[0]
+  if (!item || !translationLocale.value) return
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/site_link_item/${item.id}/${encodeURIComponent(translationLocale.value)}`,
+      { validate: isTranslationResponse },
+    )
+    const value = response.localization.values.label
+    itemTranslationLabel.value = typeof value === 'string' ? value : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) itemTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+  }
+}
+watch(translationLocale, () => { void loadTranslationFields(); void loadItemTranslation() })
+watch(() => form.id, () => { if (form.id) void loadTranslationLocales().then(() => { void loadTranslationFields(); void loadItemTranslation() }) })
+
+async function saveTranslation() {
+  if (!form.id || !translationLocale.value) return
+  translationSaving.value = true
+  translationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (translationFields.title.trim()) values.title = translationFields.title.trim()
+    if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
+    if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/site_link_page/${form.id}/${encodeURIComponent(translationLocale.value)}`, {
+      method: 'PUT',
+      body: { values, route_path: `/${translationLocale.value}/links` },
+      validate: isRecord,
+    })
+    toast.add({ description: 'Translation saved', color: 'success' })
+  } catch (cause) {
+    translationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    translationSaving.value = false
+  }
+}
+
+async function saveItemTranslation() {
+  const item = items.value[0]
+  if (!item || !translationLocale.value || !itemTranslationLabel.value.trim()) return
+  itemTranslationSaving.value = true
+  itemTranslationError.value = null
+  try {
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/site_link_item/${item.id}/${encodeURIComponent(translationLocale.value)}`, {
+      method: 'PUT',
+      body: { values: { label: itemTranslationLabel.value.trim() } },
+      validate: isRecord,
+    })
+    toast.add({ description: 'Translation saved', color: 'success' })
+  } catch (cause) {
+    itemTranslationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    itemTranslationSaving.value = false
+  }
+}
 </script>

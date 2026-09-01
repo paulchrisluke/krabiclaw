@@ -72,3 +72,19 @@ test('a localized content-page 404 only fires when an English source variant act
   assert.match(publicPageUtil, /const sourcePage = await getPublicTenantPageForPath\(db, siteId, canonicalPath, \{ locale: sourceLocale, preview: isPreviewAuthorized \}\)/)
   assert.match(publicPageUtil, /if \(sourcePage\) \{\s*throw new HTTPError\(\{ statusCode: 404, statusMessage: 'Exact localized page was not found' \}\)/)
 })
+
+test('the tenantPath catch-all renders the real links page (with items) for site_link_page, not the generic title-only component', () => {
+  // Regression: site_link_page has an exact route_path (unlike location_qa),
+  // so it always matched the generic 'resource' representation kind and
+  // rendered <LocalizedResourcePage> - a title/summary/body/details view
+  // with no concept of the page's site_link_item rows, so a translated
+  // links page would show a translated <h1> but never the links themselves.
+  assert.match(tenantPath, /<SiteLinksPage[\s\S]*?v-if="localizedRoute\?\.representation\.kind === 'resource' && localizedRoute\.representation\.resource_type === 'site_link_page'"/)
+})
+
+test('getPublicLinksPage overlays translated page and item content instead of only supporting English', () => {
+  const siteLinksUtil = readFileSync(new URL('../../server/utils/site-links.ts', import.meta.url), 'utf8')
+  assert.match(siteLinksUtil, /loadExactPublicLocalizations/)
+  assert.match(siteLinksUtil, /projectExactLocalizedResource\('site_link_page'/)
+  assert.match(siteLinksUtil, /projectExactLocalizedCollection\('site_link_item'/)
+})

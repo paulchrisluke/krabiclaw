@@ -40,6 +40,19 @@ for (const { file, resourceType } of cases) {
   })
 }
 
+test('links.vue saves translations through the canonical localization API for site_link_page and site_link_item', () => {
+  // links (site.links) is in ALWAYS_ON_FEATURES (config/cms-registry.ts) so
+  // it's reachable from every vertical, including Kikuzuki's restaurant/saya
+  // combination - unlike offering/tenant_compliance/site_consultation_settings,
+  // which only resolve for the professional_service/blawby combination and
+  // are correctly out of scope for this site.
+  const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/links.vue')
+  assert.match(source, /\/api\/editor\/sites\/\$\{siteId\}\/localization\/site_link_page\//)
+  assert.match(source, /\/api\/editor\/sites\/\$\{siteId\}\/localization\/site_link_item\//)
+  assert.match(source, /method: 'PUT'/)
+  assert.match(source, /is_source/)
+})
+
 test('media.vue saves alt-text translations through the canonical localization API for media_asset', () => {
   // media_asset alt_text had no CMS surface at all before this change (the
   // server/api PATCH endpoint for the English field existed but nothing
