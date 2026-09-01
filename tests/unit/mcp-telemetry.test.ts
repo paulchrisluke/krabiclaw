@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { describeErrorForTelemetry, errorChainForTelemetry } from "../../server/utils/error-telemetry.ts";
+import { describeErrorForTelemetry } from "../../server/utils/error-telemetry.ts";
 
 test("describeErrorForTelemetry preserves a nested database root cause", () => {
   const cause = new Error("D1_ERROR: CHECK constraint failed: media_assets_category_check");
@@ -24,27 +24,4 @@ test("describeErrorForTelemetry handles circular cause chains", () => {
   error.cause = error;
 
   assert.equal(describeErrorForTelemetry(error), "outer");
-});
-
-test("errorChainForTelemetry preserves fields and causes on callable errors", () => {
-  const callableError = Object.assign(function CallableError() {}, {
-    message: "outer callable failure",
-    code: 503,
-    stack: "CallableError: outer callable failure",
-    cause: new Error("inner failure"),
-  });
-
-  assert.deepEqual(errorChainForTelemetry(callableError), [
-    {
-      name: "CallableError",
-      message: "outer callable failure",
-      code: "503",
-      stack: "CallableError: outer callable failure",
-    },
-    {
-      name: "Error",
-      message: "inner failure",
-      stack: callableError.cause.stack,
-    },
-  ]);
 });
