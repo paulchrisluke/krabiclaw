@@ -28,27 +28,41 @@
     </section>
 
     <form v-if="editing" class="space-y-4 rounded-xl border border-default p-5" @submit.prevent="save">
-      <h2 class="font-semibold">{{ editing.id ? `Edit ${presentation.itemLabel}` : `New ${presentation.itemLabel}` }}</h2>
-      <label class="block text-sm">Name<input v-model="editing.name" required maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
-      <label class="block text-sm">{{ presentation.categoryLabel }}<input v-model="editing.category" required maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
-      <label class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
-      <label class="block text-sm">Description<textarea v-model="editing.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
-      <label class="block text-sm">Order URL<input v-model="editing.order_url" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="orderHostname" class="mt-1 block text-xs text-muted">Destination: {{ orderHostname }}</span></label>
-      <label class="block text-sm">Tags<input v-model="editing.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
-      <label class="block text-sm">Details JSON<textarea v-model="editing.details_text" rows="5" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2 font-mono text-xs" /></label>
-      <div v-if="editing.id">
-        <p class="mb-1 text-sm">Primary image</p>
-        <MediaPicker :site-id="siteId" :location-id="locationId" :model-value="editing.image_asset_id" accept="image" title="Product primary image" @update:model-value="setPrimaryImage" />
+      <div class="flex items-center justify-between gap-4">
+        <h2 class="font-semibold">{{ editing.id ? `Edit ${presentation.itemLabel}` : `New ${presentation.itemLabel}` }}</h2>
+        <select v-if="editing.id && localeOptions.length > 1" v-model="locale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
+          <option v-for="option in localeOptions" :key="option" :value="option">{{ option }}</option>
+        </select>
       </div>
-      <div class="grid grid-cols-3 gap-3 text-sm">
-        <label><input v-model="editing.is_visible" type="checkbox"> Visible</label>
-        <label><input v-model="editing.available" type="checkbox"> Available</label>
-        <label><input v-model="editing.featured" type="checkbox"> Featured</label>
-      </div>
+      <p v-if="localeError" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700">{{ localeError }}</p>
+      <template v-if="locale === 'en'">
+        <label class="block text-sm">Name<input v-model="editing.name" required maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+        <label class="block text-sm">{{ presentation.categoryLabel }}<input v-model="editing.category" required maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+        <label class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+        <label class="block text-sm">Description<textarea v-model="editing.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
+        <label class="block text-sm">Order URL<input v-model="editing.order_url" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="orderHostname" class="mt-1 block text-xs text-muted">Destination: {{ orderHostname }}</span></label>
+        <label class="block text-sm">Tags<input v-model="editing.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
+        <label class="block text-sm">Details JSON<textarea v-model="editing.details_text" rows="5" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2 font-mono text-xs" /></label>
+        <div v-if="editing.id">
+          <p class="mb-1 text-sm">Primary image</p>
+          <MediaPicker :site-id="siteId" :location-id="locationId" :model-value="editing.image_asset_id" accept="image" title="Product primary image" @update:model-value="setPrimaryImage" />
+        </div>
+        <div class="grid grid-cols-3 gap-3 text-sm">
+          <label><input v-model="editing.is_visible" type="checkbox"> Visible</label>
+          <label><input v-model="editing.available" type="checkbox"> Available</label>
+          <label><input v-model="editing.featured" type="checkbox"> Featured</label>
+        </div>
+      </template>
+      <template v-else>
+        <p class="text-xs text-muted">Source (English): {{ editing.name }} / {{ editing.category }}</p>
+        <label class="block text-sm">Name ({{ locale }})<input v-model="localizedFields.name" maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+        <label class="block text-sm">{{ presentation.categoryLabel }} ({{ locale }})<input v-model="localizedFields.category" maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+        <label class="block text-sm">Description ({{ locale }})<textarea v-model="localizedFields.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
+      </template>
       <div class="flex gap-3">
         <button :disabled="saving" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit">{{ saving ? 'Saving…' : 'Save' }}</button>
         <button class="rounded-lg border border-default px-4 py-2 text-sm" type="button" @click="editing = null">Cancel</button>
-        <button v-if="editing.id" class="ml-auto text-sm text-red-600" type="button" @click="remove">Delete</button>
+        <button v-if="editing.id && locale === 'en'" class="ml-auto text-sm text-red-600" type="button" @click="remove">Delete</button>
       </div>
     </form>
   </div>
@@ -61,7 +75,7 @@ import type { CurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
 import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
 
-const props = defineProps<{ siteId: string; locationId: string; locationTitle: string; currency: CurrencyCode; presentation: ProductPresentation }>()
+const props = defineProps<{ siteId: string; locationId: string; locationSlug: string; locationTitle: string; currency: CurrencyCode; presentation: ProductPresentation; vertical: string }>()
 interface EditingProduct { id: string | null; name: string; category: string; price_major: string; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
 const products = ref<Product[]>([])
 const editing = ref<EditingProduct | null>(null)
@@ -69,6 +83,54 @@ const loading = ref(true)
 const saving = ref(false)
 const error = ref<string | null>(null)
 const dashboardApi = useDashboardApi()
+
+// Field-level localization: the canonical record above stays English-only.
+// A translated value for a locale lives in the shared resource_localizations
+// store (server/utils/localization.ts) behind the same editor API used by
+// the platform admin catalog and CMS pages editor.
+const locale = ref('en')
+const locales = ref<string[]>(['en'])
+const localeOptions = computed(() => locales.value)
+const localeError = ref<string | null>(null)
+const localizedFields = ref({ name: '', category: '', description: '' })
+function isLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
+  return isRecord(value) && Array.isArray(value.languages)
+}
+async function loadLocales() {
+  try {
+    const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
+      `/api/editor/sites/${props.siteId}/locales`,
+      { validate: isLocalesResponse },
+    )
+    locales.value = ['en', ...response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)]
+  } catch { locales.value = ['en'] }
+}
+function isLocalizationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
+}
+async function loadLocalizedValues(productId: string, targetLocale: string) {
+  localeError.value = null
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${props.siteId}/localization/product/${productId}/${encodeURIComponent(targetLocale)}`,
+      { validate: isLocalizationResponse },
+    )
+    const values = response.localization.values
+    localizedFields.value = {
+      name: typeof values.name === 'string' ? values.name : '',
+      category: typeof values.category === 'string' ? values.category : '',
+      description: typeof values.description === 'string' ? values.description : '',
+    }
+  } catch (cause) {
+    // 404 just means no translation saved yet for this locale — start blank.
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) localeError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+    localizedFields.value = { name: '', category: '', description: '' }
+  }
+}
+watch(locale, (value) => {
+  if (editing.value?.id && value !== 'en') void loadLocalizedValues(editing.value.id, value)
+})
 const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details)
 const isList = (value: unknown): value is { success: true; products: Product[] } => isRecord(value) && value.success === true && Array.isArray(value.products) && value.products.every(isProduct)
 const isOne = (value: unknown): value is { success: true; product: Product } => isRecord(value) && value.success === true && isProduct(value.product)
@@ -82,16 +144,45 @@ async function load() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Failed to load Products' }
   finally { loading.value = false }
 }
-function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
-function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null } }
+function startCreate() { locale.value = 'en'; editing.value = { id: null, name: '', category: '', price_major: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
+function editProduct(product: Product) {
+  locale.value = 'en'
+  editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null }
+}
+const productFamily = computed(() => props.vertical === 'restaurant' ? 'menu' : 'products')
 function payload(product: EditingProduct) {
   let details: ProductDetail[]
   try { details = JSON.parse(product.details_text) as ProductDetail[] } catch { throw new Error('Details must be valid JSON') }
   return { name: product.name, category: product.category, price: { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured }
 }
+async function saveLocalized() {
+  const product = editing.value
+  if (!product?.id) return
+  saving.value = true; localeError.value = null
+  try {
+    await dashboardApi(`/api/editor/sites/${props.siteId}/localization/product/${product.id}/${encodeURIComponent(locale.value)}`, {
+      method: 'PUT',
+      body: {
+        values: {
+          category: localizedFields.value.category,
+          name: localizedFields.value.name,
+          ...(localizedFields.value.description ? { description: localizedFields.value.description } : {}),
+        },
+        route_path: `/${locale.value}/locations/${props.locationSlug}/${productFamily.value}/${product.name ? slugForRoute(product) : ''}`,
+      },
+      validate: isRecord,
+    })
+  } catch (cause) { localeError.value = cause instanceof Error ? cause.message : 'Failed to save translation' }
+  finally { saving.value = false }
+}
+function slugForRoute(product: EditingProduct): string {
+  const source = products.value.find(item => item.id === product.id)
+  return source?.slug ?? ''
+}
 async function save() {
   const product = editing.value
   if (!product) return
+  if (locale.value !== 'en') return await saveLocalized()
   saving.value = true; error.value = null
   try {
     const response = product.id
@@ -132,5 +223,5 @@ async function setPrimaryImage(assetId: string | null) {
     error.value = cause instanceof Error ? cause.message : 'Failed to update primary image'
   }
 }
-await load()
+await Promise.all([load(), loadLocales()])
 </script>

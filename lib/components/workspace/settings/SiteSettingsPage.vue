@@ -117,6 +117,23 @@
             </template>
           </div>
 
+          <div v-else-if="detailKey === 'site-translations'" class="space-y-6">
+            <p class="text-base text-muted">Edit the site's brand name and description in another published language. The default-language values are unaffected.</p>
+            <UFormField label="Language">
+              <select v-model="siteTranslationLocale" aria-label="Translation language" class="rounded-lg border border-default bg-default px-3 py-2">
+                <option v-for="option in siteTranslationLocaleOptions" :key="option" :value="option">{{ option }}</option>
+              </select>
+            </UFormField>
+            <p v-if="siteTranslationLocaleOptions.length === 0" class="text-sm text-muted">No additional languages are enabled for this site yet.</p>
+            <template v-else>
+              <p class="text-xs text-muted">Source (English): {{ form.brand_name }}</p>
+              <UFormField :label="`Brand name (${siteTranslationLocale})`"><UInput v-model="siteTranslationFields.brand_name" size="xl" class="w-full" /></UFormField>
+              <UFormField :label="`Description (${siteTranslationLocale})`"><UTextarea v-model="siteTranslationFields.brand_description" :rows="6" class="w-full" /></UFormField>
+              <p v-if="siteTranslationError" class="text-sm text-error">{{ siteTranslationError }}</p>
+              <UButton :loading="siteTranslationSaving" label="Save translation" @click="saveSiteTranslation" />
+            </template>
+          </div>
+
           <div v-else-if="detailKey === 'notifications'" class="space-y-8">
             <p class="text-base text-muted">Choose the default channels used when a location has no notification override.</p>
             <UFormField label="Alert channels">
@@ -234,7 +251,7 @@ const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
 const validBrandKeys = new Set(['name', 'logo', 'description', 'color', 'contact', 'social'])
-const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization'])
+const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization', 'site-translations'])
 const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
 const routeIsCanonical = computed(() => {
   const segments = routeSegments.value
@@ -299,6 +316,7 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
 const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'domains', label: 'Domain', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${siteDashboardPath.value}/domains` },
   { id: 'localization', label: 'Localization', summary: 'Languages and localized content', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
+  { id: 'site-translations', label: 'Translations', summary: 'Brand name and description in other languages', icon: 'i-lucide-languages', to: `${settingsPath.value}/site-translations` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
   { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
   { id: 'search', label: 'Search and analytics', summary: searchSummary.value, icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/search` },
@@ -319,7 +337,7 @@ const navigationGroups = computed(() => {
 })
 const activeNavigationId = computed(() => surface.value === 'brand' ? detailKey.value : firstSegment.value === 'search' && secondSegment.value ? detailKey.value : firstSegment.value)
 const hasDetail = computed(() => detailKey.value !== null)
-const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization' }
+const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization', 'site-translations': 'Translations' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
 const navbarTitle = computed(() => detailTitle.value ?? (surface.value === 'brand' ? 'Brand' : 'Site Settings'))
 const navbarActionIcon = computed(() => hasDetail.value && !secondSegment.value ? 'i-lucide-x' : 'i-lucide-arrow-left')
@@ -369,7 +387,72 @@ const validationMessage = computed(() => {
     default: return null
   }
 })
-const saveDisabled = computed(() => !dirty.value || validationMessage.value !== null)
+const saveDisabled = computed(() => {
+  if (detailKey.value === 'site-translations') return siteTranslationLocaleOptions.value.length === 0
+  return !dirty.value || validationMessage.value !== null
+})
+
+// ── Site translations (resource_localizations, same API as the editor CRUD) ──
+const siteTranslationLocale = ref('')
+const siteTranslationLocales = ref<string[]>([])
+const siteTranslationLocaleOptions = computed(() => siteTranslationLocales.value)
+const siteTranslationError = ref<string | null>(null)
+const siteTranslationSaving = ref(false)
+const siteTranslationFields = reactive({ brand_name: '', brand_description: '' })
+function isSiteTranslationLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
+  return isRecord(value) && Array.isArray(value.languages)
+}
+async function loadSiteTranslationLocales() {
+  try {
+    const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
+      `/api/editor/sites/${siteId}/locales`,
+      { validate: isSiteTranslationLocalesResponse },
+    )
+    siteTranslationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
+    if (siteTranslationLocales.value.length && !siteTranslationLocale.value) siteTranslationLocale.value = siteTranslationLocales.value[0]!
+  } catch { siteTranslationLocales.value = [] }
+}
+function isSiteTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
+}
+async function loadSiteTranslationFields() {
+  if (!siteTranslationLocale.value) return
+  siteTranslationError.value = null
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/site/${siteId}/${encodeURIComponent(siteTranslationLocale.value)}`,
+      { validate: isSiteTranslationResponse },
+    )
+    const values = response.localization.values
+    siteTranslationFields.brand_name = typeof values.brand_name === 'string' ? values.brand_name : ''
+    siteTranslationFields.brand_description = typeof values.brand_description === 'string' ? values.brand_description : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) siteTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+    siteTranslationFields.brand_name = ''; siteTranslationFields.brand_description = ''
+  }
+}
+watch(siteTranslationLocale, () => { void loadSiteTranslationFields() })
+watch(detailKey, key => { if (key === 'site-translations' && !siteTranslationLocales.value.length) loadSiteTranslationLocales() }, { immediate: true })
+async function saveSiteTranslation() {
+  if (!siteTranslationLocale.value) return
+  siteTranslationSaving.value = true; siteTranslationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (siteTranslationFields.brand_name.trim()) values.brand_name = siteTranslationFields.brand_name.trim()
+    if (siteTranslationFields.brand_description.trim()) values.brand_description = siteTranslationFields.brand_description.trim()
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/site/${siteId}/${encodeURIComponent(siteTranslationLocale.value)}`, {
+      method: 'PUT',
+      body: { values },
+      validate: isRecord,
+    })
+    toast.add({ description: 'Translation saved', color: 'success' })
+  } catch (cause) {
+    siteTranslationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    siteTranslationSaving.value = false
+  }
+}
 
 function fillForm(settings: SiteSettingsResponse) {
   loadedSettings.value = settings
@@ -443,6 +526,7 @@ async function patchSettings(body: Record<string, unknown>, successMessage: stri
 }
 async function saveCurrentEditor() {
   if (saveDisabled.value || !detailKey.value) return
+  if (detailKey.value === 'site-translations') { await saveSiteTranslation(); return }
   saving.value = true
   try {
     switch (detailKey.value) {

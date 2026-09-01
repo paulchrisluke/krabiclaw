@@ -63,13 +63,32 @@
           </template>
 
           <div class="space-y-4">
-            <UFormField label="Question">
-              <UTextarea v-model="form.question" :rows="3" placeholder="Do you accept walk-ins?" />
+            <UFormField v-if="editingId && translationLocales.length" label="Language">
+              <select v-model="translationLocale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
+                <option value="en">en</option>
+                <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
+              </select>
             </UFormField>
-            <UFormField label="Answer">
-              <UTextarea v-model="form.answer" :rows="4" placeholder="Yes, walk-ins are welcome when seats are available." />
-            </UFormField>
-            <div class="flex gap-2">
+            <template v-if="translationLocale === 'en'">
+              <UFormField label="Question">
+                <UTextarea v-model="form.question" :rows="3" placeholder="Do you accept walk-ins?" />
+              </UFormField>
+              <UFormField label="Answer">
+                <UTextarea v-model="form.answer" :rows="4" placeholder="Yes, walk-ins are welcome when seats are available." />
+              </UFormField>
+            </template>
+            <template v-else>
+              <p class="text-xs text-muted">Source (English): {{ form.question }}</p>
+              <UFormField :label="`Question (${translationLocale})`">
+                <UTextarea v-model="translationFields.question" :rows="3" />
+              </UFormField>
+              <UFormField :label="`Answer (${translationLocale})`">
+                <UTextarea v-model="translationFields.answer" :rows="4" />
+              </UFormField>
+              <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
+              <UButton block :loading="translationSaving" label="Save translation" @click="saveTranslation" />
+            </template>
+            <div v-if="translationLocale === 'en'" class="flex gap-2">
               <UButton v-if="editingId" block color="neutral" variant="ghost" @click="resetForm">Cancel</UButton>
               <UButton block :loading="saving" :disabled="!locationId || !form.question.trim()" @click="saveQa">
                 {{ editingId ? 'Save changes' : 'Add question' }}
@@ -167,7 +186,69 @@ function resetForm() {
   form.answer = ''
 }
 
+// ── Translations (resource_localizations, same API as the editor CRUD) ──
+const translationLocale = ref('en')
+const translationLocales = ref<string[]>([])
+const translationFields = reactive({ question: '', answer: '' })
+const translationError = ref<string | null>(null)
+const translationSaving = ref(false)
+function isQaLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
+  return isRecord(value) && Array.isArray(value.languages)
+}
+async function loadTranslationLocales() {
+  try {
+    const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
+      `/api/editor/sites/${siteId}/locales`,
+      { validate: isQaLocalesResponse },
+    )
+    translationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
+  } catch { translationLocales.value = [] }
+}
+function isQaTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
+}
+async function loadTranslationFields(qaId: string) {
+  translationError.value = null
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/location_qa/${qaId}/${encodeURIComponent(translationLocale.value)}`,
+      { validate: isQaTranslationResponse },
+    )
+    const values = response.localization.values
+    translationFields.question = typeof values.question === 'string' ? values.question : ''
+    translationFields.answer = typeof values.answer === 'string' ? values.answer : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+    translationFields.question = ''; translationFields.answer = ''
+  }
+}
+watch(translationLocale, () => {
+  if (editingId.value && translationLocale.value !== 'en') void loadTranslationFields(editingId.value)
+})
+async function saveTranslation() {
+  if (!editingId.value || translationLocale.value === 'en') return
+  translationSaving.value = true; translationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (translationFields.question.trim()) values.question = translationFields.question.trim()
+    if (translationFields.answer.trim()) values.answer = translationFields.answer.trim()
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/location_qa/${editingId.value}/${encodeURIComponent(translationLocale.value)}`, {
+      method: 'PUT',
+      body: { values },
+      validate: isRecord,
+    })
+    toast.add({ description: 'Translation saved', color: 'success' })
+  } catch (cause) {
+    translationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    translationSaving.value = false
+  }
+}
+void loadTranslationLocales()
+
 function startEdit(item: QaRow) {
+  translationLocale.value = 'en'
   editingId.value = item.id
   form.question = item.question
   form.answer = item.answer ?? ''

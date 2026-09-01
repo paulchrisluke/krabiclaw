@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')
+
+// Every tenant-content Translations control added this round calls the same
+// canonical per-resource localization API (server/utils/localization.ts,
+// exposed at /api/editor/sites/{siteId}/localization/{resourceType}/{resourceId}/{locale})
+// rather than inventing a parallel storage path or endpoint.
+const cases: Array<{ file: string; resourceType: string }> = [
+  { file: 'components/products/ProductEditor.vue', resourceType: 'product' },
+  { file: 'lib/components/workspace/settings/LocationSettingsPage.vue', resourceType: 'business_location' },
+  { file: 'lib/components/workspace/settings/SiteSettingsPage.vue', resourceType: 'site' },
+  { file: 'pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/experiences.vue', resourceType: 'experience' },
+  { file: 'pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/qa.vue', resourceType: 'location_qa' },
+  { file: 'pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/posts.vue', resourceType: 'site_post' },
+  { file: 'pages/dashboard/[orgSlug]/sites/[siteSlug]/blog/[postId].vue', resourceType: 'tenant_blog_post' },
+]
+
+for (const { file, resourceType } of cases) {
+  test(`${file} saves translations through the canonical localization API for ${resourceType}`, () => {
+    const source = read(file)
+    assert.match(
+      source,
+      new RegExp(`/api/editor/sites/\\$\\{(props\\.)?siteId\\}/localization/${resourceType}/`),
+      `expected a PUT to the canonical /localization/${resourceType}/ endpoint`,
+    )
+    assert.match(source, /method: 'PUT'/)
+  })
+
+  test(`${file} excludes the source locale from its translation-language options`, () => {
+    // Every one of these editors filters out is_source when building the
+    // locale picker — 'en' is edited through the canonical (non-localized)
+    // field, not through PUT .../localization/.../en, which the server
+    // rejects (English source content must be edited through its canonical
+    // resource).
+    const source = read(file)
+    assert.match(source, /is_source/)
+  })
+}

@@ -77,15 +77,37 @@
     <USlideover v-model:open="sliderOpen" :title="editing ? 'Edit experience' : 'New experience'" side="right">
       <template #body>
         <div class="space-y-5 p-6">
-          <UFormField label="Title" required>
-            <UInput v-model="form.title" placeholder="e.g. Chef's Table Omakase" class="w-full" />
+          <UFormField v-if="editing && translationLocales.length" label="Language">
+            <select v-model="translationLocale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
+              <option value="en">en</option>
+              <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
+            </select>
           </UFormField>
-          <UFormField label="Tagline" help="One-line hook shown on the listing card.">
-            <UInput v-model="form.tagline" placeholder="e.g. Eight courses, one table, full attention." class="w-full" />
-          </UFormField>
-          <UFormField label="Description">
-            <UTextarea v-model="form.body" :rows="5" placeholder="Describe the experience in detail." class="w-full" />
-          </UFormField>
+          <template v-if="translationLocale === 'en'">
+            <UFormField label="Title" required>
+              <UInput v-model="form.title" placeholder="e.g. Chef's Table Omakase" class="w-full" />
+            </UFormField>
+            <UFormField label="Tagline" help="One-line hook shown on the listing card.">
+              <UInput v-model="form.tagline" placeholder="e.g. Eight courses, one table, full attention." class="w-full" />
+            </UFormField>
+            <UFormField label="Description">
+              <UTextarea v-model="form.body" :rows="5" placeholder="Describe the experience in detail." class="w-full" />
+            </UFormField>
+          </template>
+          <template v-else>
+            <p class="text-xs text-muted">Source (English): {{ form.title }}</p>
+            <UFormField :label="`Title (${translationLocale})`">
+              <UInput v-model="translationFields.title" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Tagline (${translationLocale})`">
+              <UInput v-model="translationFields.tagline" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Description (${translationLocale})`">
+              <UTextarea v-model="translationFields.body" :rows="5" class="w-full" />
+            </UFormField>
+            <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
+            <UButton :loading="translationSaving" label="Save translation" @click="saveTranslation" />
+          </template>
           <UFormField label="Media gallery" help="Order images and videos exactly as they should appear publicly. The first item is the cover.">
             <div class="space-y-3">
               <div
@@ -453,6 +475,69 @@ async function loadExperiences() {
   }
 }
 
+// ── Translations (resource_localizations, same API as the editor CRUD) ──
+const translationLocale = ref('en')
+const translationLocales = ref<string[]>([])
+const translationFields = reactive({ title: '', tagline: '', body: '' })
+const translationError = ref<string | null>(null)
+const translationSaving = ref(false)
+function isExperienceLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
+  return isRecord(value) && Array.isArray(value.languages)
+}
+async function loadTranslationLocales() {
+  try {
+    const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
+      `/api/editor/sites/${siteId}/locales`,
+      { validate: isExperienceLocalesResponse },
+    )
+    translationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
+  } catch { translationLocales.value = [] }
+}
+function isExperienceTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
+}
+async function loadTranslationFields(experienceId: string) {
+  translationError.value = null
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/experience/${experienceId}/${encodeURIComponent(translationLocale.value)}`,
+      { validate: isExperienceTranslationResponse },
+    )
+    const values = response.localization.values
+    translationFields.title = typeof values.title === 'string' ? values.title : ''
+    translationFields.tagline = typeof values.tagline === 'string' ? values.tagline : ''
+    translationFields.body = typeof values.body === 'string' ? values.body : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+    translationFields.title = ''; translationFields.tagline = ''; translationFields.body = ''
+  }
+}
+watch(translationLocale, () => {
+  if (editing.value?.id && translationLocale.value !== 'en') void loadTranslationFields(String(editing.value.id))
+})
+async function saveTranslation() {
+  if (!editing.value?.id || translationLocale.value === 'en') return
+  translationSaving.value = true; translationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (translationFields.title.trim()) values.title = translationFields.title.trim()
+    if (translationFields.tagline.trim()) values.tagline = translationFields.tagline.trim()
+    if (translationFields.body.trim()) values.body = translationFields.body.trim()
+    const slug = String(editing.value.slug ?? '')
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/experience/${editing.value.id}/${encodeURIComponent(translationLocale.value)}`, {
+      method: 'PUT',
+      body: { values, route_path: `/${translationLocale.value}/experiences/${slug}` },
+      validate: isRecord,
+    })
+  } catch (cause) {
+    translationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    translationSaving.value = false
+  }
+}
+void loadTranslationLocales()
+
 // ── Form ──────────────────────────────────────────────────
 const sliderOpen = ref(false)
 const editing = ref<ApiRecord | null>(null)
@@ -603,6 +688,7 @@ function handleGalleryMediaChange(index: number, asset: { asset_id: string; publ
 }
 
 function openEdit(exp: ApiRecord) {
+  translationLocale.value = 'en'
   editing.value = exp
   Object.assign(form, {
     title: exp.title ?? '',
