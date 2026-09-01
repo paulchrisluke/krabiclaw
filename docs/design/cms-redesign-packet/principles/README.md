@@ -2,7 +2,9 @@
 
 Descriptive comparison only — what each surface actually does today. Not a scoring of good vs. bad; that call is for the redesign discussion, not this packet.
 
-Covers what's captured in `current/README.md` against the Airbnb reference in `goal/README.md` — see both READMEs for exactly what's captured, excluded, and still blocked pending a session re-login.
+Covers what's captured in `current/README.md` against the Airbnb reference in `goal/README.md` — see both READMEs for exactly what's captured and excluded.
+
+**A note on the Menu editor's state below**: §1, §2, and §7 describe the Menu list as a working 105-item list, captured 2026-09-01 ~20:31. A separate capture at ~21:50 the same day found the list broken (issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) — "Invalid URL" error, no products load), possibly caused by a deploy that landed in between and may already be reverted (see the issue for the timing detail). The working-list observations below describe the list's *intended, normal* behavior; the current live state may differ until #723 is confirmed resolved.
 
 ## 1. Card size and density
 
@@ -20,7 +22,7 @@ Correction from an earlier pass of this packet: Settings surfaces were described
 - **The page content editor** (`sites/[site]/pages/[pageId]`, e.g. the About Us page): title, short description, and every content block (Hero, Heading, Rich text ×2, Image, …) live on **one continuous scrolling page**. Clicking a Rich text block expands it in place into a large textarea — still the same page, still stacked among every other block. This is the closest current-CMS equivalent to Airbnb's Description/Amenities/Pricing fields, and it's structured the opposite way: one page holding everything, vs. Airbnb's one field per screen.
 - **Content surfaces at the location level**: mixed scope per screen.
   - Photos: whole grid on one screen (expected — it's a media library).
-  - Menu: whole 105-item list on one screen; per-item edit form exists but renders off-screen below the list on mobile (bug, [#709](https://github.com/paulchrisluke/krabiclaw/issues/709)).
+  - Menu: whole 105-item list on one screen (as captured 2026-09-01 ~20:31, before the #723 regression below); per-item edit form exists in source but renders off-screen below the list on mobile (bug, [#709](https://github.com/paulchrisluke/krabiclaw/issues/709)) — that state was never actually opened and screenshotted, only confirmed from source, and now can't be captured at all until #723 is fixed.
   - Posts: AI composer + full list share one screen.
   - Q&A (both site- and location-level), Testimonials, Links: empty-state/list + full "Add" form share one screen, rather than the add flow getting its own screen.
 - **The Blog post editor** (`sites/[site]/blog/new`) keeps its main writing surface large and uncluttered (title + Markdown body, near-zero chrome) by pushing Category/Tags/Excerpt/Publishing into a settings slideover — but the *mechanism* differs from Airbnb, not just the visuals. Airbnb splits each field into its own full screen (hub → single field, back-navigation, one Cancel/Save bar per screen). The Blog editor keeps you on one persistent canvas and brings a slideover to you, with a single top-bar "Publish now" action and no per-field Cancel/Save. Same instinct (don't let secondary fields crowd the main content), different implementation — see §8.
@@ -52,9 +54,11 @@ Correction from an earlier pass of this packet: Settings surfaces were described
 - Goal: top nav (back arrow + title + contextual action) + bottom tab bar (Today / Calendar / Listings / Messages / Menu).
 - Called out by the user as a minor difference, not the redesign's focus.
 
-## 7. Bug found during capture
+## 7. Bugs found during capture
 
-Clicking a row in the current Menu list (`.../products`) did not visibly open a per-item edit screen in this pass — the row highlighted (focus state) but appeared to stay on the list. Traced to source: `components/products/ProductEditor.vue` renders the edit form as a sibling of the product list inside a grid that's only two-column at the `lg` breakpoint; below that, the form stacks below the full product list (105 rows in this case) with no scroll-into-view. The click handler and edit logic work correctly — the form was just rendering off-screen. Filed as [#709](https://github.com/paulchrisluke/krabiclaw/issues/709) with an exact fix (move the form into a `USlideover`, matching the pattern already used in `BlogPostEditor.vue`).
+- **[#709](https://github.com/paulchrisluke/krabiclaw/issues/709)** — Clicking a row in the current Menu list (`.../products`) did not visibly open a per-item edit screen in this pass — the row highlighted (focus state) but appeared to stay on the list. Traced to source: `components/products/ProductEditor.vue` renders the edit form as a sibling of the product list inside a grid that's only two-column at the `lg` breakpoint; below that, the form stacks below the full product list (105 rows in this case) with no scroll-into-view. The click handler and edit logic work correctly — the form was just rendering off-screen. Fix: move the form into a `USlideover`, matching the pattern already used in `BlogPostEditor.vue`.
+- **[#720](https://github.com/paulchrisluke/krabiclaw/issues/720)** — Location Settings → Available features throws a 500, reproduced on both locations.
+- **[#723](https://github.com/paulchrisluke/krabiclaw/issues/723)**, found later the same day — the Menu list itself (not just the per-item form) stopped loading entirely, surfacing a raw "Invalid URL" client error. Possibly caused, and possibly already fixed, by a deploy that landed within minutes of this capture — see the issue.
 
 ## 8. Internal reference points for the redesign — two different mechanisms, neither identical to Airbnb
 

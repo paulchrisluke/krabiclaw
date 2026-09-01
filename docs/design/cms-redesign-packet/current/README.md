@@ -1,18 +1,34 @@
 # Current: KrabiClaw Dashboard CMS
 
-All screenshots taken via admin impersonation of a real tenant account, site "Kikuzuki Krabi Thailand" (two locations: Kikuzuki Japanese Robatayaki & Izakaya, Take Me Away by Kikuzuki). Mobile viewport (~390–500px wide).
+All screenshots taken via admin impersonation of a real tenant account, site "Kikuzuki Krabi Thailand" (two locations: Kikuzuki Japanese Robatayaki & Izakaya, Take Me Away by Kikuzuki).
 
-**Captured: 82 screenshots** (including 2 that capture a currently-broken error state, see below). This is the full `pages/dashboard/**` route tree — every route is either captured, excluded for a stated privacy reason, or listed below as still blocked, with a concrete reason. None are dropped by redefining scope.
+## Viewport
 
-## Still blocked — one item
+The 2026-09-01 evening batch (everything captured from the second re-login onward — second-location Settings sub-screens, Activity, org Settings, Support, Account, Onboarding, and both Menu-editor error captures) was measured directly: `window.innerWidth` 500, `window.innerHeight` 701, `window.devicePixelRatio` 2. Earlier batches from prior sessions used different browser instances that can't be re-measured retroactively; their own notes describe targeting the same ~500px CSS width, but height and device-pixel-ratio weren't logged for those and aren't independently confirmed. Treat 500×701 CSS px @ 2x as the standard this packet aims for; only the last batch is verified against it.
+
+**Captured: 82 screenshots.** This is the full `pages/dashboard/**` route tree — every route is either captured, excluded for a stated privacy reason, listed as redirect-only with no distinct screen, or listed below as still blocked, with a concrete reason. None are dropped by redefining scope.
+
+## Redirect-only routes (no distinct rendered screen)
+
+| Route | Behavior |
+|---|---|
+| `/dashboard` | Redirects to `/api/post-login`, which resolves the signed-in user's org/site and forwards to their dashboard home. No screen of its own to capture. |
+| `dashboard/[orgSlug]/sites/[siteSlug]/locations` | Redirects to the site overview (`sites/[siteSlug]`) rather than rendering its own list — the Locations list a user actually sees lives on the site overview's "My site" tab, already captured as `sites/[siteSlug]/index-my-site-locations-tab.jpg`. |
+
+## Still blocked — two successful-state screens
 
 | Route | Why it's not yet captured |
 |---|---|
-| `.../locations/[locationSlug]/products` **selected-item edit state** (both locations) | Cannot currently be captured: the product list itself is broken in production right now — see the Menu-editor bug below. There is nothing to click. Filed as issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723); once fixed, this state still needs capturing. |
+| `.../locations/[locationSlug]/products` **selected-item edit state** (both locations) | Cannot currently be captured: the product list itself is broken in production — see the Menu-editor bug below. There is nothing to click. Filed as issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723); once fixed, this state still needs capturing. |
+| `.../locations/[locationSlug]/settings/features` **the actual working Available Features screen** (both locations) | Only the 500 error is captured for each location (issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720)) — the intended functioning screen (a list of `locationToggleableFeatures` with toggle state) has never been seen or captured. This is not the same thing as the error screenshot; it remains an outstanding capture once #720 is fixed. |
 
-## New production bug found while capturing — Menu editor
+## New production bugs found while capturing — Menu editor
 
-The Menu editor's product list is currently broken for **both** locations of this tenant: it renders "No Products published for this location" plus a raw, unformatted client-side error string reading `Invalid URL: /api/editor/sites/site-kikuzuki/locations/loc-kikuzuki/products?org=...&site=...`. The underlying API call actually returns 200 (confirmed via network inspection), so this looks like a client-side URL-construction bug, not a real 404/500. Confirmed reproducible on 2 separate loads per location. The **public storefront menu is unaffected** — `kikuzuki-thailand.com/menu` renders correctly, so this is confined to the dashboard editor. Filed as issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723). Screenshots of this broken state are included as `products/index-error-invalid-url.jpg` for both locations, since this is the CMS's actual current behavior, not a capture gap.
+**Working state, captured 2026-09-01 ~20:31 and ~17:42** (`products/index.jpg` for each location): the Menu list rendered normally — 105 products for Kikuzuki Japanese Robatayaki & Izakaya, 75 for Take Me Away by KIKUZUKI.
+
+**Broken state, captured 2026-09-01 ~21:50** (`products/index-error-invalid-url.jpg` for each location): the same route on both locations rendered "No Products published for this location" plus a raw, unformatted client-side error string reading `Invalid URL: /api/editor/sites/site-kikuzuki/locations/loc-kikuzuki/products?org=...&site=...`. The underlying API call actually returns 200 (confirmed via network inspection), so this looks like a client-side URL-construction bug, not a real 404/500.
+
+These two states are **not simultaneous** — the working screenshots and the broken screenshots are roughly 75–140 minutes apart, and two commits landed on this branch in between (`b8e5ef62` "fix(mcp): compact product list responses" at 21:16, `e2e91d3e` "fix: restore Saya product collection styling" at 21:53). It's possible the break was transient and already reverted by the second commit — this was not re-verified before the admin session expired again. **Do not read this packet as showing the Menu editor is currently broken with certainty** — issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) is flagged for re-verification. The **public storefront menu was unaffected** throughout — `kikuzuki-thailand.com/menu` rendered correctly during the same window, so if this was a real regression it was confined to the dashboard editor.
 
 ## Excluded for privacy (real customer/team data)
 
@@ -80,7 +96,7 @@ Deletion via the UI's "Delete post" button first failed 3 times across an earlie
 | `.../locations/[locationSlug]/index-my-location-tab.jpg` | `.../locations/[loc]` — "My location" | Photo card + Guest activity/Hours/Discovery cards (Kikuzuki Japanese Robatayaki) |
 | `.../locations/[locationSlug]/content-tab.jpg` | same — "Content" tab | Photos/Menu/Posts/Q&A cards + Reservations |
 | `.../locations/[locationSlug]/photos/index.jpg` | `.../locations/[loc]/photos` | Photo grid |
-| `.../locations/[locationSlug]/products/index.jpg` | `.../locations/[loc]/products` | Menu, 105 rows. Per-item edit form renders off-screen on mobile — bug [#709](https://github.com/paulchrisluke/krabiclaw/issues/709) |
+| `.../locations/[locationSlug]/products/index.jpg` | `.../locations/[loc]/products` | Menu, 105 rows, **working state, ~20:31**. Per-item edit form renders off-screen on mobile — bug [#709](https://github.com/paulchrisluke/krabiclaw/issues/709) |
 | `.../locations/[locationSlug]/posts/index.jpg` | `.../locations/[loc]/posts` | AI composer + post list |
 | `.../locations/[locationSlug]/qa/index.jpg` | `.../locations/[loc]/qa` | Inline add-form pattern |
 | `.../locations/[locationSlug]/settings/index.jpg` | `.../locations/[loc]/settings` | Grouped cards: Profile, Hours, Public content, Discovery, Notifications, Available features |
@@ -89,11 +105,11 @@ Deletion via the UI's "Delete post" button first failed 3 times across an earlie
 | `.../locations/[locationSlug]/settings/content/index.jpg` | `.../settings/content` | Public-facing description fields |
 | `.../locations/[locationSlug]/settings/discovery/index.jpg` | `.../settings/discovery` | Google Places connection drill-down |
 | `.../locations/[locationSlug]/settings/notifications/index.jpg` | `.../settings/notifications` | WhatsApp number, timezone |
-| `.../locations/[locationSlug]/settings/features/index-error-500.jpg` | `.../settings/features` | **Reproducible server error** (confirmed twice) — "Available features" throws a 500, filed as issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) |
+| `.../locations/[locationSlug]/settings/features/index-error-500.jpg` | `.../settings/features` | **Error state only, ~16:05** — "Available features" throws a 500, filed as issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720). The working screen is not captured — see "Still blocked" above |
 | `.../locations/take-me-away-by-kikuzuki/index-my-location-tab.jpg` | second location — "My location" | Second location's overview (75-product menu, different hours) |
 | `.../locations/take-me-away-by-kikuzuki/content-tab.jpg` | second location — "Content" | Content tab for the second location |
 | `.../locations/take-me-away-by-kikuzuki/photos/index.jpg` | | Photo grid, different image set |
-| `.../locations/take-me-away-by-kikuzuki/products/index.jpg` | | Menu, 75 products (vs. 105 on the first location) |
+| `.../locations/take-me-away-by-kikuzuki/products/index.jpg` | | Menu, 75 products (vs. 105 on the first location), **working state, ~17:42** |
 | `.../locations/take-me-away-by-kikuzuki/posts/index.jpg` | | Empty-state variant of Posts (no posts yet) |
 | `.../locations/take-me-away-by-kikuzuki/qa/index.jpg` | | Empty-state Q&A |
 | `.../locations/take-me-away-by-kikuzuki/settings/index.jpg` | | Settings card list for the second location |
@@ -102,9 +118,9 @@ Deletion via the UI's "Delete post" button first failed 3 times across an earlie
 | `.../locations/take-me-away-by-kikuzuki/settings/content/index.jpg` | second location — `.../settings/content` | Public-facing description fields, second location |
 | `.../locations/take-me-away-by-kikuzuki/settings/discovery/index.jpg` | second location — `.../settings/discovery` | Google Places connection, second location — 4.9 rating, 65 reviews |
 | `.../locations/take-me-away-by-kikuzuki/settings/notifications/index.jpg` | second location — `.../settings/notifications` | WhatsApp/timezone, second location |
-| `.../locations/take-me-away-by-kikuzuki/settings/features/index-error-500.jpg` | second location — `.../settings/features` | Same 500 as the first location — confirms issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) isn't location-specific |
-| `.../locations/[locationSlug]/products/index-error-invalid-url.jpg` | `.../products` | **Current broken state**, not the intended design — see Menu-editor bug above, issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723) |
-| `.../locations/take-me-away-by-kikuzuki/products/index-error-invalid-url.jpg` | second location — `.../products` | Same bug, second location |
+| `.../locations/take-me-away-by-kikuzuki/settings/features/index-error-500.jpg` | second location — `.../settings/features`, **error state only, ~21:40** | Same 500 as the first location — confirms issue [#720](https://github.com/paulchrisluke/krabiclaw/issues/720) isn't location-specific. Working screen not captured here either |
+| `.../locations/[locationSlug]/products/index-error-invalid-url.jpg` | `.../products`, **broken state, ~21:50** | Not the intended design — see Menu-editor bugs section above, issue [#723](https://github.com/paulchrisluke/krabiclaw/issues/723), flagged for re-verification |
+| `.../locations/take-me-away-by-kikuzuki/products/index-error-invalid-url.jpg` | second location — `.../products`, **broken state, ~21:50** | Same bug, second location |
 | `calendar/index.jpg` | `dashboard/[orgSlug]/calendar` | Org-level calendar, empty-state |
 | `index/today-redacted.jpg` ⚠️ | `dashboard/[orgSlug]` | Org Today — guest names in "Needs attention" **redacted with black bars** |
 | `activity/index.jpg` | `dashboard/[orgSlug]/activity` | Filterable event log (Site/Location/Type/Actor), e.g. "Team member Reordered Products" |
@@ -132,4 +148,4 @@ Deletion via the UI's "Delete post" button first failed 3 times across an earlie
 - **The actual page content editor** (`pages/[pageId]`) is the biggest contrast point with Airbnb: title, description, and every content block live on one continuous scrolling page, with rich text fields expanding in place rather than opening their own screen.
 - **The Blog post editor** is the current CMS's own closest match to the Airbnb pattern already: full-screen, minimal-chrome writing surface with metadata pushed into a slideover.
 - **Several "add" flows put the form inline on the list screen** rather than a separate screen: Q&A (both site- and location-level), Testimonials, Links.
-- **Two real, reproducible production bugs** were found and filed while capturing, unrelated to the redesign itself: Location Settings → Available features throws a 500 on both locations ([#720](https://github.com/paulchrisluke/krabiclaw/issues/720)), and the Menu editor's product list is currently broken on both locations with a raw error string surfaced to the user ([#723](https://github.com/paulchrisluke/krabiclaw/issues/723)).
+- **Two real production bugs** were found and filed while capturing, unrelated to the redesign itself: Location Settings → Available features throws a 500 on both locations, confirmed reproducible ([#720](https://github.com/paulchrisluke/krabiclaw/issues/720)); the Menu editor's product list broke on both locations with a raw error string surfaced to the user, but the timing lines up closely with a same-day deploy and revert, so it's flagged for re-verification rather than confirmed still-broken ([#723](https://github.com/paulchrisluke/krabiclaw/issues/723)). Both bugs leave one CMS screen each un-capturable in its intended working state: the Available Features screen, and the Menu editor's selected-item edit form.
