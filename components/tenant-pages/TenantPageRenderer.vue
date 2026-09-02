@@ -44,6 +44,7 @@
       </template>
 
       <template v-else-if="block.type === 'gallery'">
+        <p v-if="text(block.data.caption)" class="mb-4 text-center text-sm text-muted">{{ text(block.data.caption) }}</p>
         <div v-if="galleryImages(block).length" class="my-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <figure v-for="image in galleryImages(block)" :key="image.id || image.url">
             <video
