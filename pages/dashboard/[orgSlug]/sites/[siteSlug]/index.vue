@@ -332,6 +332,31 @@ const locationMediaUrl = (location: DashboardHomeData['locations'][number]) => {
   return media?.public_url || null
 }
 
+const isNullableString = (value: unknown): value is string | null => value === null || typeof value === 'string'
+const isManagerPreviews = (value: unknown): value is DashboardHomeData['managerPreviews'] =>
+  isRecord(value)
+  && Array.isArray(value.blog)
+  && value.blog.every(item => isRecord(item)
+    && typeof item.id === 'string'
+    && typeof item.title === 'string'
+    && typeof item.status === 'string')
+  && Array.isArray(value.testimonials)
+  && value.testimonials.every(item => isRecord(item)
+    && typeof item.id === 'string'
+    && typeof item.author_name === 'string'
+    && typeof item.content === 'string'
+    && typeof item.rating === 'number')
+  && Array.isArray(value.qa)
+  && value.qa.every(item => isRecord(item)
+    && typeof item.id === 'string'
+    && typeof item.question === 'string'
+    && isNullableString(item.answer))
+  && Array.isArray(value.services)
+  && value.services.every(item => isRecord(item)
+    && typeof item.id === 'string'
+    && typeof item.name === 'string'
+    && isNullableString(item.summary))
+
 const { data: overviewData, pending, error: overviewError } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
@@ -366,7 +391,8 @@ const { data: overviewData, pending, error: overviewError } = await useAsyncData
       && isRecord(value.settings)
       && Array.isArray(value.pages)
       && Array.isArray(value.media)
-      && Array.isArray(value.links),
+      && Array.isArray(value.links)
+      && isManagerPreviews(value.managerPreviews),
   })
 })
 const overview = computed(() => {

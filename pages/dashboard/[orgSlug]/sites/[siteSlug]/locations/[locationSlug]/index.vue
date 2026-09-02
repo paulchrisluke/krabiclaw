@@ -389,17 +389,26 @@ const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSumm
 
 const isPostsResponse = (value: unknown): value is { posts: LocationPostPreview[] } =>
   isRecord(value) && Array.isArray(value.posts)
-  && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.body === 'string')
+  && value.posts.every(post => isRecord(post)
+    && typeof post.id === 'string'
+    && (post.title === null || typeof post.title === 'string')
+    && typeof post.body === 'string'
+    && typeof post.status === 'string')
 
 const isQaResponse = (value: unknown): value is { qa: LocationQaPreview[] } =>
   isRecord(value) && Array.isArray(value.qa)
-  && value.qa.every(entry => isRecord(entry) && typeof entry.id === 'string' && typeof entry.question === 'string')
+  && value.qa.every(entry => isRecord(entry)
+    && typeof entry.id === 'string'
+    && typeof entry.question === 'string'
+    && (entry.answer === null || typeof entry.answer === 'string'))
 
 const isExperiencesResponse = (value: unknown): value is { experiences: LocationExperiencePreview[] } =>
   isRecord(value) && Array.isArray(value.experiences)
   && value.experiences.every(experience => isRecord(experience)
     && typeof experience.id === 'string'
-    && typeof experience.title === 'string')
+    && typeof experience.title === 'string'
+    && (experience.tagline === null || typeof experience.tagline === 'string')
+    && typeof experience.status === 'string')
 
 const requestEvent = useRequestEvent()
 const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${locationManagers.value.map(manager => manager.id).join(',')}`)

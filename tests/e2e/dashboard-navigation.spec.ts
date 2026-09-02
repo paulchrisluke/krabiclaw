@@ -141,3 +141,19 @@ test.describe('authenticated dashboard navigation', () => {
     await expect(page).toHaveURL(/\/dashboard\/account\/profile(?:\?.*)?$/)
   })
 })
+
+test.describe('site manager previews', () => {
+  test.beforeEach(async ({ page, baseURL }) => {
+    await loginAs(page.context().request, baseURL!, 'user-e2e-ncls-owner')
+  })
+
+  test('renders seeded site content through the production worker', async ({ page }) => {
+    await page.goto('/dashboard/north-carolina-legal-services/sites/ncls')
+    await page.getByRole('tab', { name: 'Website', exact: true }).click()
+
+    await expect(page.getByTestId('manager-preview-blog')).toContainText('IEP Violations in North Carolina')
+    await expect(page.getByTestId('manager-preview-testimonials')).toContainText('Jonathan Matthews')
+    await expect(page.getByTestId('manager-preview-qa')).toContainText('Why should I hire an attorney?')
+    await expect(page.getByTestId('manager-preview-services')).toContainText('Family law')
+  })
+})
