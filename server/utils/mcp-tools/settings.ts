@@ -1,32 +1,7 @@
 import type { McpToolDefinition } from './shared'
 import { siteTool } from './shared'
-import { DASHBOARD_DESTINATIONS } from '~/server/utils/dashboard-links'
 
 export const SETTINGS_TOOLS: McpToolDefinition[] = [
-  siteTool({
-      name: 'get_dashboard_link',
-      description: 'Resolve a deep link into this site\'s org dashboard for a given destination, so a reply can point the user straight at the right settings page instead of just naming it.',
-      domain: 'settings',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        destination: {
-          type: 'string',
-          enum: Object.keys(DASHBOARD_DESTINATIONS),
-          description: 'Which dashboard page to link to.',
-        },
-        location_slug: {
-          type: 'string',
-          description: 'Required for location.overview and location.settings destinations.',
-        },
-      },
-      required: ['destination'],
-      outputSchema: {
-        type: 'object',
-        properties: { url: { type: 'string' } },
-        required: ['url'],
-      },
-    }),
   // ─── Domain management ───────────────────────────────────────────────────────
     siteTool({
       name: 'get_site_domains',

@@ -89,7 +89,7 @@ test('readMcpRequest rejects an explicitly unsupported protocol version', () => 
 })
 
 test('parseMcpToolCallArguments accepts only the canonical nested arguments envelope', () => {
-  assert.deepEqual(parseMcpToolCallArguments({ name: 'get_current_user' }), {})
+  assert.deepEqual(parseMcpToolCallArguments({ name: 'get_workspace_context' }), {})
   assert.deepEqual(
     parseMcpToolCallArguments({ name: 'get_site', arguments: { site_id: 'site-1' } }),
     { site_id: 'site-1' },

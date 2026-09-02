@@ -1000,6 +1000,8 @@ export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'secu
 export const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
+  openWorldHint: false,
+  destructiveHint: false,
 })
 
 export function boundedWriteAnnotations(): McpToolAnnotations {
@@ -1019,11 +1021,9 @@ export function openWorldDestructiveAnnotations(): McpToolAnnotations {
 }
 
 export const READ_ONLY_TOOL_NAMES = [
-  'get_current_user',
   'get_workspace_context',
   'show_generated_images',
   'list_sites',
-  'show_site_preview',
   'get_site',
   'get_site_settings',
   'list_locations',
@@ -1036,7 +1036,6 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_blog_post',
   'get_site_media_assets',
   'get_facebook_connection',
-  'get_dashboard_link',
   'list_tenant_pages',
   'get_tenant_page',
   'get_professional_service_content',
@@ -1056,21 +1055,16 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_contact_inquiries',
   'get_reservation_inquiries',
   'get_notification_settings',
-  'list_work_requests',
   'get_site_domains',
   'get_site_analytics',
-  'resolve_agent_guidance',
-  'review_agent_guidance_candidate',
 ] as const
 
 export const BOUNDED_WRITE_TOOL_NAMES = [
   'set_workspace_context',
   'analyze_document',
-  'update_media_asset',
   'update_experience_booking',
   'update_notification_settings',
-  'attach_media',
-  'reorder_media',
+  'import_from_maps',
 ] as const
 
 export const OPEN_WORLD_WRITE_TOOL_NAMES = [
@@ -1085,11 +1079,7 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'publish_blog_post',
   'create_post',
   'update_post',
-  'put_resource_localization',
-  'sync_product_catalog_localization',
-  'create_work_request',
   'set_default_currency',
-  'import_from_maps',
   'update_site_settings',
   'create_location',
   'update_location',
@@ -1101,11 +1091,8 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'move_products',
   'move_product_category',
   'reorder_blog_posts',
-  'publish_post',
-  'publish_to_facebook',
   'sync_facebook_page',
   'create_tenant_page',
-  'update_tenant_page',
   'change_tenant_page_path',
   'update_professional_service_content',
   'update_booking_policy',
@@ -1117,22 +1104,31 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'reorder_site_qa',
   'create_owner_entered_site_review',
   'update_owner_entered_site_review',
-  'reply_to_review',
   'create_experience',
   'update_experience',
   'create_domain',
   'set_canonical_domain',
   'sync_domain',
+  'attach_media',
+  'reorder_media',
+  'update_media_asset',
 ] as const
 
-export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = ['remove_media'] as const
+export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [] as const
 
 export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_media_asset',
+  'remove_media',
   'set_media',
   'sync_products',
   'update_blog_post',
   'replace_blog_content',
+  'reply_to_review',
+  'publish_to_facebook',
+  'publish_post',
+  'update_tenant_page',
+  'put_resource_localization',
+  'sync_product_catalog_localization',
   'delete_location',
   'delete_product',
   'delete_product_category',
@@ -1175,12 +1171,22 @@ export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDe
     throw new Error(`Missing MCP tool annotation classification for "${definition.name}".`)
   }
 
-  if (annotations.readOnlyHint === false) {
-    if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
-      throw new Error(`Write tool "${definition.name}" must declare openWorldHint and destructiveHint.`)
+  // ChatGPT Apps submission review requires every tool to declare all three
+  // hints explicitly — required for every tool, not just write tools, so a
+  // future read-only classification that forgets openWorldHint/destructiveHint
+  // (they're optional on McpToolAnnotations) fails loudly at module load
+  // instead of silently shipping an incomplete submission.
+  if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
+    throw new Error(`Tool "${definition.name}" must declare openWorldHint and destructiveHint explicitly.`)
+  }
+
+  if (annotations.readOnlyHint === true) {
+    if (annotations.openWorldHint || annotations.destructiveHint) {
+      throw new Error(`Read-only tool "${definition.name}" cannot declare openWorldHint or destructiveHint as true.`)
     }
-  } else if (definition.confirmRequired) {
-    throw new Error(`Read-only MCP tool "${definition.name}" cannot require confirmation.`)
+    if (definition.confirmRequired) {
+      throw new Error(`Read-only MCP tool "${definition.name}" cannot require confirmation.`)
+    }
   }
 
   return {

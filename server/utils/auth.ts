@@ -32,7 +32,7 @@ import { notifyOrganizationInvited } from '~/server/utils/notifications'
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
 
-const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
+const CIMD_TENANT_SCOPES = ['openid', 'email', 'offline_access', 'tenant'] as const
 
 export const OAUTH_SIGNING_POLICY = {
   algorithm: 'RS256',
@@ -46,13 +46,13 @@ export function oauthSigningConfig(authBaseUrl: string) {
       {
         identifier: `${authBaseUrl}/api/mcp`,
         name: 'KrabiClaw tenant MCP',
-        allowedScopes: ['openid', 'offline_access', 'tenant'],
+        allowedScopes: ['openid', 'email', 'offline_access', 'tenant'],
         signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
       },
       {
         identifier: `${authBaseUrl}/api/mcp/platform`,
         name: 'KrabiClaw platform MCP',
-        allowedScopes: ['openid', 'offline_access', 'platform_admin'],
+        allowedScopes: ['openid', 'email', 'offline_access', 'platform_admin'],
         signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
       },
     ],
@@ -454,7 +454,7 @@ export function createAuth(env: CloudflareEnv) {
         allowDynamicClientRegistration: false,
         allowUnauthenticatedClientRegistration: false,
         enforcePerClientResources: false,
-        scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
+        scopes: ['openid', 'email', 'offline_access', 'tenant', 'platform_admin'],
         ...oauthSigningConfig(authBaseUrl),
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
         // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.

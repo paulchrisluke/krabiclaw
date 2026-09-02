@@ -28,7 +28,7 @@ export const NOTIFICATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_notification_settings',
-      description: 'Update notification settings.',
+      description: 'Update the site\'s private owner-alert settings — the WhatsApp number and which channels (email, WhatsApp) receive notifications. Does not affect anything guests see.',
       domain: 'notifications',
       minimumRole: 'admin',
       confirmRequired: false,

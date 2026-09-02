@@ -1005,7 +1005,7 @@ export async function normalizeWorkspaceArguments(
 ) {
   const args = { ...rawArguments };
 
-  if (["get_current_user", "get_workspace_context", "set_workspace_context", "import_from_maps", "list_sites", "create_site"].includes(toolName)) {
+  if (["get_workspace_context", "set_workspace_context", "import_from_maps", "list_sites", "create_site"].includes(toolName)) {
     return args;
   }
 

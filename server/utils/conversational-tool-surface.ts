@@ -23,14 +23,12 @@ type ChowBotToolLike = ToolLike & {
 export type ConversationalToolSurfaceGroup =
   | 'social_publishing'
   | 'domains'
-  | 'managed_service'
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled'])
 
 const GROUP_FLAG_ENV: Record<ConversationalToolSurfaceGroup, string> = {
   social_publishing: 'CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED',
   domains: 'CONVERSATIONAL_TOOLS_DOMAINS_ENABLED',
-  managed_service: 'CONVERSATIONAL_TOOLS_MANAGED_SERVICE_ENABLED',
 }
 
 const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]> = {
@@ -45,10 +43,6 @@ const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]
     'set_canonical_domain',
     'delete_domain',
     'sync_domain',
-  ],
-  managed_service: [
-    'list_work_requests',
-    'create_work_request',
   ],
 }
 

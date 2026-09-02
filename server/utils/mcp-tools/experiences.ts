@@ -71,7 +71,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'list_experience_bookings',
-      description: 'List bookings for one specific experience. Use list_all_experience_bookings instead when the user asks about bookings across the whole site, not just one experience.',
+      description: 'List bookings for one specific experience, including each guest\'s name, email, and phone number. Use list_all_experience_bookings instead when the user asks about bookings across the whole site, not just one experience.',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -85,7 +85,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'list_all_experience_bookings',
-      description: 'Use this when the user asks about bookings site-wide — "how many bookings do we have", "bookings from the past two days", "site-wide bookings" — without naming a specific experience. Returns bookings across every experience on the site plus a summary (total, counts by status, counts by experience). Optionally filter by location_id and/or days (e.g. days=2 for "the past two days", based on when the booking was made).',
+      description: 'Use this when the user asks about bookings site-wide — "how many bookings do we have", "bookings from the past two days", "site-wide bookings" — without naming a specific experience. Returns bookings across every experience on the site, including each guest\'s name, email, and phone number, plus a summary (total, counts by status, counts by experience). Optionally filter by location_id and/or days (e.g. days=2 for "the past two days", based on when the booking was made).',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -106,7 +106,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_experience_booking',
-      description: 'Update a booking status.',
+      description: 'Update a booking\'s status (pending, confirmed, or cancelled) and refresh its guest-inbox thread. Returns the full booking, including the guest\'s name, email, and phone number.',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,

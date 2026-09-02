@@ -4,7 +4,7 @@ import { siteTool } from './shared'
 export const INTEGRATIONS_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_facebook_connection',
-      description: 'Check whether a Facebook Page is connected to this site. If not connected, the response includes connectUrl — a deep link to the dashboard general settings page to connect (same link get_dashboard_link returns for destination "settings.general").',
+      description: 'Check whether a Facebook Page is connected to this site. If not connected, the response includes connectUrl — a deep link to the dashboard general settings page to connect.',
       domain: 'integrations',
       minimumRole: 'editor',
       confirmRequired: false,

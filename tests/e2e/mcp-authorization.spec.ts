@@ -68,9 +68,8 @@ test.describe('stateless MCP server', () => {
     const toolsBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(t => t.name)
     expect(toolNames).toContain('list_site_locales')
-    expect(toolNames).not.toContain('list_work_requests')
-    expect(toolNames).not.toContain('create_work_request')
-
+    expect(toolNames).not.toContain('get_site_domains')
+    expect(toolNames).not.toContain('publish_to_facebook')
   })
 
   // Grouped so siteA/siteB and the logged-in-as-site-B-owner session are

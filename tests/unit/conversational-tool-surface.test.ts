@@ -12,7 +12,6 @@ describe('conversational tool surface policy', () => {
   test('keeps manual locale tools visible while hiding gated groups', () => {
     assert.equal(isConversationalToolEnabled('list_site_locales'), true)
     assert.equal(isConversationalToolEnabled('get_site_domains'), false)
-    assert.equal(isConversationalToolEnabled('create_work_request'), false)
     assert.equal(isConversationalToolEnabled('publish_to_facebook'), false)
     assert.equal(isConversationalToolEnabled('update_product'), true)
   })

@@ -13,7 +13,7 @@ export type WorkRequestType =
   | 'other'
 
 export type WorkRequestPriority = 'low' | 'normal' | 'high' | 'urgent'
-export type WorkRequestSource = 'dashboard' | 'chowbot' | 'whatsapp'
+export type WorkRequestSource = 'dashboard' | 'whatsapp'
 
 export const VALID_WORK_REQUEST_TYPES: WorkRequestType[] = [
   'content_update',

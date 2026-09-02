@@ -19,12 +19,7 @@ export default defineHandler(async (event) => {
   const type = body.type ?? "";
   const title = body.title?.trim();
   const description = body.description?.trim() || null;
-  const source =
-    body.source === "chowbot"
-      ? "chowbot"
-      : body.source === "whatsapp"
-        ? "whatsapp"
-        : "dashboard";
+  const source = body.source === "whatsapp" ? "whatsapp" : "dashboard";
   const result = await createWorkRequest(db, organization.id, site?.id ?? null, {
     type, title: title ?? "", description, priority: body.priority, source, });
 
