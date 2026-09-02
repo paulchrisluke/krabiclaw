@@ -130,6 +130,7 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/qa`,
   title: `Questions and answers · ${location.value?.title || slug.value}`,
   description: `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`,
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
   },

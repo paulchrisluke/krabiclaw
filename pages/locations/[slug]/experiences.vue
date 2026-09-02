@@ -116,6 +116,7 @@ useSocialMetadata(() => ({
   description: location.value
     ? expCopy.value.seoExperiencesDescription(location.value.title || siteName.value)
     : expCopy.value.seoExperiencesDescription(siteName.value),
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
   },

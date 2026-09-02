@@ -63,6 +63,7 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/posts`,
   title: `Updates · ${location.value?.title || slug.value}`,
   description: `Latest news and updates from ${location.value?.title || slug.value} at ${siteName.value}.`,
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
   },

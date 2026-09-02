@@ -239,6 +239,7 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/contact`,
   title: `Plan a visit · ${location.value?.title || slug.value}`,
   description: `Hours, address and directions for ${location.value?.title || slug.value}.`,
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
   },

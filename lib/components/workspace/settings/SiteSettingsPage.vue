@@ -54,6 +54,9 @@
           <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
             <p class="text-base text-muted">Choose the image used as the source for generated social sharing cards.</p>
             <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="outline" :loading="regeneratingCards" @click="regenerateSocialCards">Regenerate social cards</UButton>
+            </div>
           </div>
 
           <div v-else-if="detailKey === 'description'" class="space-y-6">
@@ -255,6 +258,7 @@ watchEffect(() => {
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
+const regeneratingCards = ref(false)
 const connectingFacebook = ref(false)
 const notificationChannels = ref<string[]>([])
 const whatsappPhone = ref('')
@@ -462,6 +466,17 @@ async function patchSettings(body: Record<string, unknown>, successMessage: stri
   originalSignature.value = editorSignature(detailKey.value)
   toast.add({ description: successMessage, color: 'success' })
   await dashboard.refresh()
+}
+async function regenerateSocialCards() {
+  regeneratingCards.value = true
+  try {
+    await dashboardApi(`/api/editor/sites/${siteId}/social-cards/regenerate`, { method: 'POST', validate: isRecord })
+    toast.add({ description: 'Social cards regenerated', color: 'success' })
+  } catch (error) {
+    toast.add({ description: errorMessage(error, 'Failed to regenerate social cards'), color: 'error' })
+  } finally {
+    regeneratingCards.value = false
+  }
 }
 async function saveCurrentEditor() {
   if (saveDisabled.value || !detailKey.value) return

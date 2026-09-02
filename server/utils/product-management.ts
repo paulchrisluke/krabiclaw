@@ -411,7 +411,6 @@ export async function createProductsBatch(
   locationId: string,
   inputs: CreateProductInput[],
   actor: string,
-  _env?: CloudflareEnv,
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > PRODUCT_LIMITS.batchCreate) {
@@ -480,7 +479,6 @@ export async function syncProducts(
   inputs: SyncProductInput[],
   actor: string,
   setMissingUnavailable = false,
-  _env?: CloudflareEnv,
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length > PRODUCT_LIMITS.sync) throw new HTTPError({ statusCode: 400, statusMessage: `products may contain at most ${PRODUCT_LIMITS.sync} rows` })

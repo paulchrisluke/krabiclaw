@@ -240,6 +240,7 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/reviews`,
   title: `Reviews · ${location.value?.title || slug.value}`,
   description: `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`,
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
   },

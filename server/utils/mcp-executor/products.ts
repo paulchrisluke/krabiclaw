@@ -102,12 +102,12 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
     case 'batch_create_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { products: await createProductsBatch(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as CreateProductInput[], site.userId, site.env) }
+      return { products: await createProductsBatch(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as CreateProductInput[], site.userId) }
     }
     case 'sync_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { products: await syncProducts(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as SyncProductInput[], site.userId, args.set_missing_unavailable === true, site.env) }
+      return { products: await syncProducts(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as SyncProductInput[], site.userId, args.set_missing_unavailable === true) }
     }
     case 'import_products_from_media': {
       const locationId = requiredString(args, 'location_id')
