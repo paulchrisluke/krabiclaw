@@ -1,5 +1,5 @@
 import { queryFirst } from '~/server/db'
-import type { CreateProductInput, SyncProductInput, UpdateProductInput } from '~/server/types/products'
+import type { CreateProductInput, Product, SyncProductInput, UpdateProductInput } from '~/server/types/products'
 import { createProduct, createProductsBatch, deleteProduct, deleteProductCategory, getProduct, listLocationProducts, moveProductCategory, moveProducts, renameProductCategory, syncProducts, updateProduct } from '~/server/utils/product-management'
 import { extractProductsFromMediaAsset } from '~/server/utils/chowbot-media'
 import { assertResourceAccess } from '~/server/utils/member-access'
@@ -28,6 +28,28 @@ async function resolveStoredProduct(ctx: McpExecutorContext, productId: string) 
   return product
 }
 
+function productListItem(product: Product) {
+  return {
+    id: product.id,
+    location_id: product.location_id,
+    category: product.category,
+    name: product.name,
+    description: product.description,
+    price: product.price
+      ? {
+          amount_minor: product.price.amount_minor,
+          currency: product.price.currency,
+          unit: product.price.unit,
+          tax_behavior: product.price.tax_behavior,
+          compare_at_amount_minor: product.price.compare_at_amount_minor,
+        }
+      : null,
+    is_visible: product.is_visible,
+    available: product.available,
+    sort_order: product.sort_order,
+  }
+}
+
 export async function handleProductsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { args, site, toolName } = ctx
   switch (toolName) {
@@ -36,7 +58,7 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
       await authorizeLocation(ctx, locationId)
       const products = await listLocationProducts(site.db, site.organizationId, site.siteId, locationId)
       const page = paginateMcpCollection(products, args, { resource: `products:${site.siteId}:${locationId}` })
-      return { products: page.items, page_info: page.page_info }
+      return { products: page.items.map(productListItem), page_info: page.page_info }
     }
     case 'get_product': return { product: await resolveStoredProduct(ctx, requiredString(args, 'product_id')) }
     case 'create_product': {

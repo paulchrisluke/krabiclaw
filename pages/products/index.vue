@@ -1,5 +1,5 @@
 <template>
-  <ProductCollectionPage :products="products" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${brandName} Products`" />
+  <ProductCollectionPage :products="products" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${brandName} Products`" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
