@@ -402,7 +402,12 @@ export default defineNuxtConfig({
     },
     serverAssets: [{
       baseName: 'docs',
-      dir: './docs'
+      dir: './docs',
+      // Only .md files are ever read (server/api/docs.get.ts, server/api/docs/[slug].get.ts
+      // both filter/fetch by the .md extension) - without this, every binary file anywhere
+      // under docs/ (screenshots, PDFs, etc.) gets embedded into the SSR Worker bundle for
+      // nothing, which is what pushed the bundle over Cloudflare's 10 MiB script size limit.
+      pattern: '**/*.md'
     }, {
       baseName: 'platform',
       dir: '..',
