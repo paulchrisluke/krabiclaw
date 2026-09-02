@@ -19,9 +19,14 @@ async function expectPrimaryOrder(page: Page) {
 
 async function followPrimaryRoute(page: Page, start: string, label: string, expected: string) {
   await page.goto(start)
+  await page.waitForFunction(() => Boolean(
+    (document.querySelector('#__nuxt') as (Element & { __vue_app__?: unknown }) | null)?.__vue_app__,
+  ))
   await expectPrimaryOrder(page)
-  await visiblePrimaryNavigation(page).getByRole('link', { name: label, exact: true }).click()
+  const target = visiblePrimaryNavigation(page).getByRole('link', { name: label, exact: true })
+  await target.click()
   await expect(page).toHaveURL(new RegExp(`${expected}$`))
+  await expect(visiblePrimaryNavigation(page).getByRole('link', { name: label, exact: true })).toHaveAttribute('aria-current', 'page')
 }
 
 test.describe('authenticated dashboard navigation', () => {
