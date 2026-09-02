@@ -218,7 +218,7 @@ export async function loadDashboardLocationOverview(
   event: H3Event,
   siteId: string,
   locationId: string,
-  options: { includeProducts: boolean },
+  options: { includeProducts: boolean; includePosts: boolean; includeQa: boolean; includeExperiences: boolean },
 ) {
   const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
@@ -232,7 +232,7 @@ export async function loadDashboardLocationOverview(
     siteId,
     locationId,
   })
-  const [capabilities, products, threads] = await Promise.all([
+  const [capabilities, products, posts, qa, experiences, threads] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
@@ -241,6 +241,15 @@ export async function loadDashboardLocationOverview(
     ),
     options.includeProducts
       ? listLocationProducts(db, organization.id, siteId, locationId)
+      : Promise.resolve([]),
+    options.includePosts
+      ? listPosts(db, organization.id, siteId, env, undefined, locationId)
+      : Promise.resolve([]),
+    options.includeQa
+      ? listLocationQa(db, siteId, locationId)
+      : Promise.resolve([]),
+    options.includeExperiences
+      ? listExperiences(db, siteId, { locationId })
       : Promise.resolve([]),
     loadDashboardGuestThreads(event, siteId, { locationId }),
   ])
@@ -251,6 +260,9 @@ export async function loadDashboardLocationOverview(
       ...capabilities,
     },
     products: { success: true as const, products },
+    posts: { posts },
+    qa: { qa },
+    experiences: { experiences },
     threads: { summary: threads.summary },
   }
 }

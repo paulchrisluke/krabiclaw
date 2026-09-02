@@ -63,8 +63,7 @@
                     <div class="space-y-3 px-5 py-5 sm:px-6">
                       <div class="flex flex-wrap items-start justify-between gap-3">
                         <div class="min-w-0">
-                          <h2 class="text-xl font-semibold text-highlighted">{{ location.title }}</h2>
-                          <p class="mt-1 text-sm text-muted">{{ addressSummary }}</p>
+                          <p class="text-base font-semibold text-highlighted">{{ addressSummary }}</p>
                         </div>
                         <div class="flex flex-wrap gap-2">
                           <UBadge :color="location.status === 'active' ? 'success' : 'neutral'" variant="soft" class="capitalize">
@@ -164,6 +163,55 @@
                     </div>
                   </template>
 
+                  <template v-else-if="item.manager.id === 'posts'">
+                    <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                      <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                      <div v-if="posts.length" class="space-y-3">
+                        <article v-for="post in posts.slice(0, 3)" :key="post.id">
+                          <p class="text-sm font-medium text-highlighted">{{ post.title || post.body }}</p>
+                          <p v-if="post.title" class="mt-1 line-clamp-1 text-xs text-dimmed">{{ post.body }}</p>
+                        </article>
+                      </div>
+                      <p v-else class="text-sm text-muted">No posts yet</p>
+                    </div>
+                  </template>
+
+                  <template v-else-if="item.manager.id === 'qa'">
+                    <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                      <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                      <dl v-if="qa.length" class="space-y-3">
+                        <div v-for="entry in qa.slice(0, 3)" :key="entry.id">
+                          <dt class="text-sm font-medium text-highlighted">{{ entry.question }}</dt>
+                          <dd v-if="entry.answer" class="mt-1 line-clamp-1 text-xs text-dimmed">{{ entry.answer }}</dd>
+                        </div>
+                      </dl>
+                      <p v-else class="text-sm text-muted">No questions yet</p>
+                    </div>
+                  </template>
+
+                  <template v-else-if="item.manager.id === 'experiences'">
+                    <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                      <div>
+                        <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                        <p class="mt-1 text-sm text-muted">{{ inboxSummary.experienceBookings }} active bookings</p>
+                      </div>
+                      <div v-if="experiences.length" class="space-y-2">
+                        <div v-for="experience in experiences.slice(0, 3)" :key="experience.id">
+                          <p class="text-sm font-medium text-highlighted">{{ experience.title }}</p>
+                          <p v-if="experience.tagline" class="mt-1 line-clamp-1 text-xs text-dimmed">{{ experience.tagline }}</p>
+                        </div>
+                      </div>
+                      <p v-else class="text-sm text-muted">No experiences yet</p>
+                    </div>
+                  </template>
+
+                  <template v-else-if="item.manager.id === 'reservations'">
+                    <div class="flex items-baseline justify-between gap-4">
+                      <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                      <p class="text-sm text-muted">{{ inboxSummary.reservations }} active</p>
+                    </div>
+                  </template>
+
                   <template v-else>
                     <h2 class="py-2 text-xl font-semibold text-highlighted">{{ item.manager.label }}</h2>
                   </template>
@@ -205,6 +253,8 @@ interface LocationOverview {
 interface InboxSummary {
   openThreads: number
   unreadThreads: number
+  reservations: number
+  experienceBookings: number
 }
 
 interface LocationProductPreview {
@@ -212,9 +262,16 @@ interface LocationProductPreview {
   name: string
 }
 
+interface LocationPostPreview { id: string; title: string | null; body: string; status: string }
+interface LocationQaPreview { id: string; question: string; answer: string | null }
+interface LocationExperiencePreview { id: string; title: string; tagline: string | null; status: string }
+
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
   products: { success: boolean; products: LocationProductPreview[] }
+  posts: { posts: LocationPostPreview[] }
+  qa: { qa: LocationQaPreview[] }
+  experiences: { experiences: LocationExperiencePreview[] }
   threads: { summary: InboxSummary }
 }
 
@@ -237,7 +294,10 @@ const managerContext = computed<DashboardManagerRouteContext>(() => ({
 }))
 const location = ref<LocationOverview | null>(null)
 const products = ref<LocationProductPreview[]>([])
-const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
+const posts = ref<LocationPostPreview[]>([])
+const qa = ref<LocationQaPreview[]>([])
+const experiences = ref<LocationExperiencePreview[]>([])
+const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 })
 const loading = ref(true)
 const error = ref<string | null>(null)
 const activeTab = ref('location')
@@ -270,6 +330,9 @@ const settingsPath = computed(() => settingsManager.value
   ? resolveDashboardManagerRoute({ manager: settingsManager.value, context: managerContext.value })
   : null)
 const includeProducts = computed(() => locationManagers.value.some(manager => manager.id === 'products'))
+const includePosts = computed(() => locationManagers.value.some(manager => manager.id === 'posts'))
+const includeQa = computed(() => locationManagers.value.some(manager => manager.id === 'qa'))
+const includeExperiences = computed(() => locationManagers.value.some(manager => manager.id === 'experiences'))
 
 const currentOpeningState = computed(() => {
   const hours = location.value?.opening_hours
@@ -321,21 +384,43 @@ const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSumm
   && isRecord(value.summary)
   && typeof value.summary.openThreads === 'number'
   && typeof value.summary.unreadThreads === 'number'
+  && typeof value.summary.reservations === 'number'
+  && typeof value.summary.experienceBookings === 'number'
+
+const isPostsResponse = (value: unknown): value is { posts: LocationPostPreview[] } =>
+  isRecord(value) && Array.isArray(value.posts)
+  && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.body === 'string')
+
+const isQaResponse = (value: unknown): value is { qa: LocationQaPreview[] } =>
+  isRecord(value) && Array.isArray(value.qa)
+  && value.qa.every(entry => isRecord(entry) && typeof entry.id === 'string' && typeof entry.question === 'string')
+
+const isExperiencesResponse = (value: unknown): value is { experiences: LocationExperiencePreview[] } =>
+  isRecord(value) && Array.isArray(value.experiences)
+  && value.experiences.every(experience => isRecord(experience)
+    && typeof experience.id === 'string'
+    && typeof experience.title === 'string')
 
 const requestEvent = useRequestEvent()
-const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeProducts.value ? 'products' : 'no-products'}`)
+const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${locationManagers.value.map(manager => manager.id).join(',')}`)
 const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
+  const shouldIncludePosts = includePosts.value
+  const shouldIncludeQa = includeQa.value
+  const shouldIncludeExperiences = includeExperiences.value
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const { loadDashboardLocationOverview } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardLocationOverview(requestEvent, siteId, locationId.value, {
       includeProducts: shouldIncludeProducts,
+      includePosts: shouldIncludePosts,
+      includeQa: shouldIncludeQa,
+      includeExperiences: shouldIncludeExperiences,
     }) as LocationOverviewResource
   }
 
-  const [locationResponse, menuResponse, threadsResponse] = await Promise.all([
+  const [locationResponse, menuResponse, postsResponse, qaResponse, experiencesResponse, threadsResponse] = await Promise.all([
     dashboardApi<{ success: boolean; location: LocationOverview }>(
       `/api/dashboard/locations/${locationId.value}`,
       { validate: isLocationResponse },
@@ -346,6 +431,23 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
           { validate: isProductsResponse },
         )
       : Promise.resolve({ success: true, products: [] }),
+    shouldIncludePosts
+      ? dashboardApi<{ posts: LocationPostPreview[] }>(`/api/editor/sites/${siteId}/posts`, {
+          query: { location_id: locationId.value },
+          validate: isPostsResponse,
+        })
+      : Promise.resolve({ posts: [] }),
+    shouldIncludeQa
+      ? dashboardApi<{ qa: LocationQaPreview[] }>(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa`, {
+          validate: isQaResponse,
+        })
+      : Promise.resolve({ qa: [] }),
+    shouldIncludeExperiences
+      ? dashboardApi<{ experiences: LocationExperiencePreview[] }>(`/api/editor/sites/${siteId}/experiences`, {
+          query: { location_id: locationId.value },
+          validate: isExperiencesResponse,
+        })
+      : Promise.resolve({ experiences: [] }),
     dashboardApi<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
       query: { location_id: locationId.value },
       validate: isThreadsSummaryResponse,
@@ -354,6 +456,9 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
   return {
     location: locationResponse,
     products: menuResponse,
+    posts: postsResponse,
+    qa: qaResponse,
+    experiences: experiencesResponse,
     threads: threadsResponse,
   }
 }, { lazy: import.meta.client })
@@ -367,6 +472,9 @@ watch([overview, overviewPending, overviewError], ([resource, pending, cause]) =
   if (!resource) return
   location.value = resource.location.location
   products.value = resource.products.products
+  posts.value = resource.posts.posts
+  qa.value = resource.qa.qa
+  experiences.value = resource.experiences.experiences
   inboxSummary.value = resource.threads.summary
   error.value = null
 }, { immediate: true })

@@ -188,6 +188,70 @@
                 </div>
               </template>
 
+              <template v-else-if="item.manager.id === 'blog'">
+                <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                  <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                  <div v-if="overview.managerPreviews.blog.length" class="space-y-2">
+                    <p v-for="post in overview.managerPreviews.blog" :key="post.id" class="truncate text-sm font-medium text-highlighted">
+                      {{ post.title }} <span class="font-normal capitalize text-dimmed">{{ post.status }}</span>
+                    </p>
+                  </div>
+                  <p v-else class="text-sm text-muted">No posts yet</p>
+                </div>
+              </template>
+
+              <template v-else-if="item.manager.id === 'testimonials'">
+                <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                  <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                  <div v-if="overview.managerPreviews.testimonials.length" class="space-y-3">
+                    <blockquote v-for="testimonial in overview.managerPreviews.testimonials" :key="testimonial.id">
+                      <p class="line-clamp-2 text-sm leading-6 text-highlighted">“{{ testimonial.content }}”</p>
+                      <footer class="mt-1 text-xs text-dimmed">{{ testimonial.author_name }} · {{ testimonial.rating }}/5</footer>
+                    </blockquote>
+                  </div>
+                  <p v-else class="text-sm text-muted">No testimonials yet</p>
+                </div>
+              </template>
+
+              <template v-else-if="item.manager.id === 'qa'">
+                <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                  <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                  <dl v-if="overview.managerPreviews.qa.length" class="space-y-3">
+                    <div v-for="entry in overview.managerPreviews.qa" :key="entry.id">
+                      <dt class="text-sm font-medium text-highlighted">{{ entry.question }}</dt>
+                      <dd v-if="entry.answer" class="mt-1 line-clamp-1 text-sm text-muted">{{ entry.answer }}</dd>
+                    </div>
+                  </dl>
+                  <p v-else class="text-sm text-muted">No questions yet</p>
+                </div>
+              </template>
+
+              <template v-else-if="item.manager.id === 'ordering'">
+                <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                  <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                  <div v-if="orderingLocations.length" class="space-y-2">
+                    <div v-for="location in orderingLocations" :key="location.id" class="flex items-baseline justify-between gap-4">
+                      <p class="truncate text-sm font-medium text-highlighted">{{ location.title }}</p>
+                      <p class="shrink-0 text-xs text-dimmed">{{ location.providers.join(' · ') }}</p>
+                    </div>
+                  </div>
+                  <p v-else class="text-sm text-muted">No ordering links yet</p>
+                </div>
+              </template>
+
+              <template v-else-if="item.manager.id === 'services'">
+                <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                  <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                  <div v-if="overview.managerPreviews.services.length" class="space-y-2">
+                    <div v-for="service in overview.managerPreviews.services" :key="service.id">
+                      <p class="text-sm font-medium text-highlighted">{{ service.name }}</p>
+                      <p v-if="service.summary" class="mt-1 line-clamp-1 text-xs text-dimmed">{{ service.summary }}</p>
+                    </div>
+                  </div>
+                  <p v-else class="text-sm text-muted">No services yet</p>
+                </div>
+              </template>
+
               <template v-else>
                 <h2 class="py-2 text-xl font-semibold text-highlighted">{{ item.manager.label }}</h2>
               </template>
@@ -316,6 +380,14 @@ const pages = computed(() => overview.value.pages)
 const media = computed(() => overview.value.media)
 const activeLinks = computed(() => overview.value.links.filter(item => item.status === 'active'))
 const mediaPreviewUrls = computed(() => media.value.slice(0, 4).map(item => item.thumbnail_url || item.public_url))
+const orderingLocations = computed(() => locations.value.flatMap((location) => {
+  const providers = [
+    location.grab_url ? 'Grab' : null,
+    location.uber_eats_url ? 'Uber Eats' : null,
+    location.foodpanda_url ? 'Foodpanda' : null,
+  ].filter((provider): provider is string => Boolean(provider))
+  return providers.length ? [{ id: location.id, title: location.title, providers }] : []
+}))
 const siteDomain = computed(() => dashboard.site.value?.custom_domain || dashboard.site.value?.public_url || '')
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 const siteType = computed(() => `${vertical.value.replaceAll('_', ' ')}, ${template.value} theme`)

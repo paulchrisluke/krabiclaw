@@ -23,6 +23,9 @@ export interface DashboardHomeLocation {
   latitude: number | null
   longitude: number | null
   map_embed_url: string | null
+  grab_url: string | null
+  uber_eats_url: string | null
+  foodpanda_url: string | null
   media: Array<{ asset_id: string; slot: 'hero'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
@@ -50,6 +53,12 @@ export interface DashboardHomeData {
   pages: Awaited<ReturnType<typeof listTenantPages>>
   media: Array<Awaited<ReturnType<typeof listMediaAssets>>[number] & { public_url: string }>
   links: Awaited<ReturnType<typeof getLinksPage>>['items']
+  managerPreviews: {
+    blog: Array<{ id: string; title: string; status: string }>
+    testimonials: Array<{ id: string; author_name: string; content: string; rating: number }>
+    qa: Array<{ id: string; question: string; answer: string | null }>
+    services: Array<{ id: string; name: string; summary: string | null }>
+  }
 }
 
 function safeJsonParse(value: string): unknown {
@@ -95,18 +104,20 @@ export async function getDashboardHomeData(
     ? accessibleLocationIds.length > 0 ? `AND e.location_id IN (SELECT value FROM json_each(?))` : 'AND 0'
     : ''
   const scopedParams = accessibleLocationIds?.length ? [d1JsonStringSet(accessibleLocationIds)] : []
-  const [locations, events, operations, settings, pages, media, linksPage] = await Promise.all([
+  const [locations, events, operations, settings, pages, media, linksPage, blog, testimonials, qa, services] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
       address: string | null; maps_url: string | null
+      grab_url: string | null; uber_eats_url: string | null; foodpanda_url: string | null
       latitude: number | null; longitude: number | null
       hero_asset_id: string | null; hero_kind: string | null; hero_media_public_url: string | null
       hero_media_thumbnail_url: string | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
              bl.address, bl.maps_url, bl.latitude, bl.longitude,
+             bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
              bl.is_primary, bl.status, bl.updated_at,
              ma_hero.id AS hero_asset_id, ma_hero.kind AS hero_kind,
              ma_hero.public_url AS hero_media_public_url,
@@ -147,6 +158,24 @@ export async function getDashboardHomeData(
     listTenantPages(db, siteId),
     listMediaAssets(db, siteId, { kind: 'image', limit: 6, offset: 0 }),
     getLinksPage(db, siteId),
+    queryAll<{ id: string; title: string; status: string }>(db, `
+      SELECT id, title, status FROM blog_posts
+      WHERE site_id = ? ORDER BY updated_at DESC LIMIT 3
+    `, [siteId]),
+    queryAll<{ id: string; author_name: string; content: string; rating: number }>(db, `
+      SELECT id, author_name, content, rating FROM reviews
+      WHERE site_id = ? AND location_id IS NULL
+      ORDER BY created_at DESC LIMIT 2
+    `, [siteId]),
+    queryAll<{ id: string; question: string; answer: string | null }>(db, `
+      SELECT id, question, answer FROM location_qa
+      WHERE site_id = ? AND location_id IS NULL AND page_path IS NULL
+      ORDER BY sort_order ASC, created_at ASC LIMIT 3
+    `, [siteId]),
+    queryAll<{ id: string; name: string; summary: string | null }>(db, `
+      SELECT id, name, summary FROM offerings
+      WHERE site_id = ? ORDER BY sort_order ASC, name ASC LIMIT 3
+    `, [siteId]),
   ])
 
   return {
@@ -178,5 +207,6 @@ export async function getDashboardHomeData(
       return { ...asset, public_url: asset.public_url }
     }),
     links: linksPage.items,
+    managerPreviews: { blog, testimonials, qa, services },
   }
 }
