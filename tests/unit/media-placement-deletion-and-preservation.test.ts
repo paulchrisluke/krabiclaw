@@ -11,20 +11,18 @@ test('buildDeleteOwnerPlacementsQuery scopes strictly by owner_type and owner_id
   const query = buildDeleteOwnerPlacementsQuery({ ownerType: 'post', ownerId: 'post-1' })
   assert.equal(query.query, 'DELETE FROM media_placements WHERE owner_type = ? AND owner_id = ?')
   assert.deepEqual(query.params, ['post', 'post-1'])
-})
 
-test('buildDeleteOwnerPlacementsQuery adds organization/site scoping only when provided', () => {
-  const query = buildDeleteOwnerPlacementsQuery({
+  const scopedQuery = buildDeleteOwnerPlacementsQuery({
     ownerType: 'review',
     ownerId: 'review-1',
     organizationId: 'org-1',
     siteId: 'site-1',
   })
   assert.equal(
-    query.query,
+    scopedQuery.query,
     'DELETE FROM media_placements WHERE owner_type = ? AND organization_id = ? AND site_id = ? AND owner_id = ?',
   )
-  assert.deepEqual(query.params, ['review', 'org-1', 'site-1', 'review-1'])
+  assert.deepEqual(scopedQuery.params, ['review', 'org-1', 'site-1', 'review-1'])
 })
 
 // Regression coverage for the tenant-page block-media preservation boundary
@@ -57,9 +55,7 @@ test('preserveOmittedBlockMedia restores existing media only when the key is ent
   assert.deepEqual(explicitClear, [
     { id: 'hero-1', type: 'hero', data: { alt: 'Updated copy' }, media: [] },
   ])
-})
 
-test('preserveOmittedBlockMedia leaves a new block (no matching existing id) untouched', () => {
   const result = preserveOmittedBlockMedia(
     [{ id: 'new-block', type: 'markdown', data: { markdown: 'Hello' } }],
     [],

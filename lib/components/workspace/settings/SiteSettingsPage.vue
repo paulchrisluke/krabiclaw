@@ -182,6 +182,7 @@ import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { isSocialCardRegenerationResponse, socialCardRefreshNotice, type SocialCardRegenerationResponse } from '~/utils/social-card-refresh'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -241,7 +242,7 @@ const routeSegments = computed(() => {
 const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
-const validBrandKeys = new Set(['name', 'logo', 'description', 'color', 'contact', 'social'])
+const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'contact', 'social'])
 const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization'])
 const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
 const routeIsCanonical = computed(() => {
@@ -470,8 +471,12 @@ async function patchSettings(body: Record<string, unknown>, successMessage: stri
 async function regenerateSocialCards() {
   regeneratingCards.value = true
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/social-cards/regenerate`, { method: 'POST', validate: isRecord })
-    toast.add({ description: 'Social cards regenerated', color: 'success' })
+    const response = await dashboardApi<SocialCardRegenerationResponse>(`/api/editor/sites/${siteId}/social-cards/regenerate`, {
+      method: 'POST',
+      validate: isSocialCardRegenerationResponse,
+    })
+    const notice = socialCardRefreshNotice(response.summary)
+    toast.add({ description: notice.message, color: notice.color })
   } catch (error) {
     toast.add({ description: errorMessage(error, 'Failed to regenerate social cards'), color: 'error' })
   } finally {

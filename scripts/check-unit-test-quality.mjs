@@ -8,7 +8,7 @@ const unitDirectory = join(root, 'tests/unit')
 const limits = {
   files: 40,
   lines: 3500,
-  tests: 190,
+  tests: 180,
 }
 const violations = []
 let lineCount = 0

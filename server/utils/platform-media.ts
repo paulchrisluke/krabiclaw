@@ -57,7 +57,7 @@ export async function listPlatformMediaAssets(
   db: DbClient,
   options: { id?: string; kind?: 'image' | 'video' | 'file'; limit?: number } = {},
 ): Promise<PlatformMediaAssetRecord[]> {
-  const conditions = [`site_id = ?`, `status = 'active'`]
+  const conditions = [`site_id = ?`, `status = 'active'`, `generation_key IS NULL`]
   const params: Array<string | number> = [PLATFORM_SITE_ID]
 
   if (options.id) {

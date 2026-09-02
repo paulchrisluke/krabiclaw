@@ -312,6 +312,11 @@ function socialTemplate(site: SiteRecord): SocialTemplate {
   return resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).slug
 }
 
+/**
+ * Refreshes a derived social-card projection after the authoritative write commits.
+ * It returns failed or skipped outcomes for observability and never reclassifies the
+ * already-committed primary mutation as failed.
+ */
 export async function refreshSocialCard(input: {
   db: DbClient
   env: SocialCardEnv
@@ -425,12 +430,18 @@ export async function regenerateSiteSocialCards(input: {
     UNION ALL SELECT 'business_location', id FROM business_locations WHERE site_id = ? AND status = 'active'
     UNION ALL SELECT 'product', id FROM products WHERE site_id = ? AND is_visible = 1 AND product_type = 'standard'
     UNION ALL SELECT 'experience', id FROM experiences WHERE site_id = ?
-    UNION ALL SELECT 'post', id FROM posts WHERE site_id = ? AND status = 'published'
+    `, Array(4).fill(input.siteId))
+    const publishedOwners = await queryAll<{ owner_type: SocialCardOwner['owner_type']; owner_id: string }>(input.db, `
+    SELECT 'post' AS owner_type, id AS owner_id FROM posts WHERE site_id = ? AND status = 'published'
     UNION ALL SELECT 'blog_post', id FROM blog_posts WHERE site_id = ? AND status = 'published'
     UNION ALL SELECT 'offering', id FROM offerings WHERE site_id = ?
     UNION ALL SELECT 'review', id FROM reviews WHERE site_id = ? AND status = 'approved'
-    UNION ALL SELECT 'tenant_page', id FROM tenant_page_variants WHERE site_id = ? AND path != '/'
-    `, Array(9).fill(input.siteId))
+    `, Array(4).fill(input.siteId))
+    owners.push(...publishedOwners)
+    const tenantPages = await queryAll<{ owner_id: string }>(input.db, `
+      SELECT id AS owner_id FROM tenant_page_variants WHERE site_id = ? AND path != '/'
+    `, [input.siteId])
+    owners.push(...tenantPages.map((row): SocialCardOwner => ({ owner_type: 'tenant_page', owner_id: row.owner_id })))
     if (input.siteId === PLATFORM_SITE_ID) {
       const docs = await queryAll<{ owner_id: string }>(input.db, 'SELECT id AS owner_id FROM platform_docs')
       owners.push(...docs.map((row): SocialCardOwner => ({ owner_type: 'platform_doc', owner_id: row.owner_id })))

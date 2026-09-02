@@ -20,7 +20,7 @@ import { isPlatformPath } from "~/utils/platform-routes";
 import { getDraftMedia, parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
 import { resolvePublicTemplate } from "~/utils/template-registry";
 import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
-import { publicSocialMediaFromPlacements } from '~/utils/social-metadata'
+import { publicSocialMediaFromJson } from '~/server/utils/public-social-image'
 
 interface TenantSiteRow {
   id: string;
@@ -34,15 +34,6 @@ interface TenantSiteRow {
   vertical: string | null;
 }
 
-interface TenantSiteMedia {
-  asset_id: string
-  slot: string
-  public_url: string | null
-  thumbnail_url: string | null
-  kind: string
-  mime_type: string | null
-}
-
 const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
   'asset_id', ordered.asset_id, 'slot', ordered.slot, 'public_url', ordered.public_url,
   'thumbnail_url', ordered.thumbnail_url, 'kind', ordered.kind, 'mime_type', ordered.mime_type
@@ -53,13 +44,8 @@ const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
   ORDER BY mp.slot, mp.sort_order, mp.id
 ) ordered)`
 
-function tenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>): TenantSiteMedia[] {
-  return JSON.parse(site.media_json) as TenantSiteMedia[]
-}
-
 function publicTenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>) {
-  const placements = tenantSiteMedia(site)
-  return publicSocialMediaFromPlacements(placements, placements)
+  return publicSocialMediaFromJson(site.media_json)
 }
 
 export interface SpentSubdomainResolution {

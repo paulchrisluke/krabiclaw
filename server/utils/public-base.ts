@@ -5,7 +5,8 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import type { CurrencyCode } from '~/shared/currencies'
-import { publicSocialMediaFromPlacements, type SocialImageSource } from '~/utils/social-metadata'
+import { publicSocialMediaFromJson, type PublicMediaPlacement } from '~/server/utils/public-social-image'
+import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface PublicBase {
   site: {
@@ -20,7 +21,7 @@ export interface PublicBase {
     vertical: string | null
     theme_id: string
     feature_overrides: string | null
-    media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
+    media: PublicMediaPlacement[]
     social_image: SocialImageSource | null
     seo_title: string | null
     seo_description: string | null
@@ -79,10 +80,9 @@ export function loadPublicBase(
       )
       if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
       const { media_json: mediaJson, ...site } = row
-      const placements = JSON.parse(mediaJson || '[]') as PublicBase['site']['media']
       return { site: {
         ...site,
-        ...publicSocialMediaFromPlacements(placements, placements),
+        ...publicSocialMediaFromJson(mediaJson),
       } }
     } finally {
       recordRequestPhase(event, 'base', startedAt)

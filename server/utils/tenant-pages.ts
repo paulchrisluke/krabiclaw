@@ -558,7 +558,6 @@ export async function createTenantPagesBatch(
     organizationId: string
     siteId: string
     userId?: string | null
-    env?: CloudflareEnv
     pages: Array<{
       data: TenantPageEditorInput
       trustedSystemPage?: boolean
@@ -680,7 +679,6 @@ export async function applyOnboardingTenantPages(
     organizationId: string
     siteId: string
     userId: string | null
-    env?: CloudflareEnv
     pages: OnboardingTenantPageInput[]
   },
 ) {
@@ -820,7 +818,7 @@ export async function applyOnboardingTenantPages(
   return { updated, created }
 }
 
-export async function createTenantPage(db: DbClient, input: { organizationId: string; siteId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean; env?: CloudflareEnv }) {
+export async function createTenantPage(db: DbClient, input: { organizationId: string; siteId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean; env: CloudflareEnv }) {
   const locale = await resolveLocale(db, input.siteId, input.data.locale)
   const existingPage = input.data.pageId
     ? await queryFirst<{ id: string; organization_id: string; site_id: string; page_type: TenantPageType; recipe: string | null } | null>(db, `
@@ -882,18 +880,16 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       params: [now, input.userId, variantId],
     }, publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-create')],
   })
-  if (input.env) {
-    if (path === '/') {
-      // The homepage is represented by the site card. Refresh the site card only.
-      await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.siteId }, actorId: input.userId })
-    } else {
-      await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
-    }
+  if (path === '/') {
+    // The homepage is represented by the site card. Refresh the site card only.
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.siteId }, actorId: input.userId })
+  } else {
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId) }
 }
 
-export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope; env?: CloudflareEnv }) {
+export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope; env: CloudflareEnv }) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
   if (!row.document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
@@ -982,13 +978,11 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
     expected_document_updated_at: input.data.expectedDocumentUpdatedAt,
     additionalQueriesAfter: [...placementQueries, updateVariant, updatePage, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-update')],
   })
-  if (input.env) {
-    if (row.path === '/' || path === '/') {
-      // The homepage is represented by the site card. Refresh the site card only.
-      await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.scope.siteId }, actorId: input.userId })
-    } else {
-      await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
-    }
+  if (row.path === '/' || path === '/') {
+    // The homepage is represented by the site card. Refresh the site card only.
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.scope.siteId }, actorId: input.userId })
+  } else {
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }
 }

@@ -1,6 +1,7 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { parseSocialImageSource } from '~/utils/social-metadata'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
@@ -563,9 +564,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
       width: Number.isFinite(Number(item.width)) ? Number(item.width) : null,
       height: Number.isFinite(Number(item.height)) ? Number(item.height) : null,
     })),
-    social_image: row.social_image && typeof row.social_image === 'object'
-      ? row.social_image as import('~/utils/social-metadata').SocialImageSource
-      : null,
+    social_image: parseSocialImageSource(row.social_image),
   }
 }
 

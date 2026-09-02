@@ -326,19 +326,20 @@ export async function hydrateMediaAssetRefs(
     db,
     `SELECT * FROM media_assets
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
+        AND generation_key IS NULL
         AND id IN (SELECT value FROM json_each(?))`,
     [input.organizationId, input.siteId, d1JsonStringSet(ids)],
   )
   const byId = new Map((rows ?? []).map(row => [row.id, row]))
   const missing = ids.find(id => !byId.has(id))
   if (missing) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${missing}` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive, out-of-scope, or generated derivative media asset: ${missing}` })
   }
 
   const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null
   const resolved = ids.map((id) => {
     const row = byId.get(id)
-    if (!row) throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${id}` })
+    if (!row) throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive, out-of-scope, or generated derivative media asset: ${id}` })
     const asset = toResolvedMediaAsset(row)
     if (allowedKinds && !allowedKinds.has(asset.kind)) {
       throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} asset ${id} must be ${Array.from(allowedKinds).join(' or ')}` })
@@ -408,7 +409,7 @@ export async function listMediaAssets(
   siteId: string,
   opts: { kind?: string; search?: string; ownerType?: string; ownerId?: string; slot?: string; limit?: number; offset?: number } = {}
 ): Promise<MediaAsset[]> {
-  const conditions = [`ma.site_id = ?`, `ma.status = 'active'`]
+  const conditions = [`ma.site_id = ?`, `ma.status = 'active'`, `ma.generation_key IS NULL`]
   const params: SqlBindValue[] = [siteId]
   if (opts.kind) { conditions.push(`ma.kind = ?`); params.push(opts.kind) }
   if (opts.search) { conditions.push(`ma.file_name LIKE ? ESCAPE '\\'`); params.push(`%${opts.search.replace(/[\\%_]/g, '\\$&')}%`) }

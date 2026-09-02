@@ -31,6 +31,8 @@
 </template>
 
 <script setup lang="ts">
+import { isSocialCardRegenerationResponse, socialCardRefreshNotice, type SocialCardRegenerationResponse } from '~/utils/social-card-refresh'
+
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Content | KrabiClaw Admin', robots: 'noindex, nofollow' })
 
@@ -62,8 +64,12 @@ async function saveSocialShare() {
 async function regenerateCards() {
   regenerating.value = true
   try {
-    await applicationFetch('/api/admin/platform/social-cards/regenerate', { method: 'POST', validate: isMutationResponse })
-    toast.add({ title: 'Social cards regenerated', color: 'success' })
+    const response = await applicationFetch<SocialCardRegenerationResponse>('/api/admin/platform/social-cards/regenerate', {
+      method: 'POST',
+      validate: isSocialCardRegenerationResponse,
+    })
+    const notice = socialCardRefreshNotice(response.summary)
+    toast.add({ title: notice.message, color: notice.color })
   } finally {
     regenerating.value = false
   }

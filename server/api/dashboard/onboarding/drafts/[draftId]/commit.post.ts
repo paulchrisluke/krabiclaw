@@ -170,7 +170,7 @@ export default defineHandler(async (event) => {
       contentByPage.set(row.page, rows)
     }
     await applyOnboardingTenantPages(db, {
-      organizationId, siteId, userId: session.user.id, env, pages: [...contentByPage].map(([pageName, rows]) => {
+      organizationId, siteId, userId: session.user.id, pages: [...contentByPage].map(([pageName, rows]) => {
         const pageType = pageName === 'privacy' || pageName === 'terms' ? 'legal' : pageName === 'home' || pageName === 'about' || pageName === 'contact' ? 'system' : 'recipe'
         return {
           path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows), trustedSystemPage: pageType === 'system', }

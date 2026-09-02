@@ -456,7 +456,7 @@ export async function createExperience(
   siteId: string,
   input: CreateExperienceInput,
   userId: string,
-  env?: CloudflareEnv,
+  env: CloudflareEnv,
 ): Promise<Experience> {
   if (!input.location_id) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'location_id is required' })
@@ -571,7 +571,7 @@ export async function createExperience(
       status: created.status,
     },
   })
-  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id }, actorId: userId })
+  await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id }, actorId: userId })
   return created
 }
 
@@ -581,7 +581,7 @@ export async function updateExperience(
   siteId: string,
   idOrSlug: string,
   input: UpdateExperienceInput,
-  env?: CloudflareEnv,
+  env: CloudflareEnv,
 ): Promise<Experience | null> {
   const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
@@ -678,7 +678,7 @@ export async function updateExperience(
   if (!queries.length) return getExperienceById(db, siteId, id)
   await executeBatch(db, queries)
   const updated = await getExperienceById(db, siteId, id)
-  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id } })
+  await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id } })
   return updated
 }
 

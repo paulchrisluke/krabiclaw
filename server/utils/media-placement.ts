@@ -27,7 +27,7 @@ export interface MediaPlacementKey {
 interface PlacementAuthInput {
   organizationId: string
   siteId: string
-  env?: CloudflareEnv
+  env: CloudflareEnv
   memberId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
@@ -100,7 +100,6 @@ function allowedKindsFor(placement: MediaPlacementKey): Array<'image' | 'video' 
 async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput): Promise<void> {
   const locationId = await requirePlacementOwner(db, input)
   if (input.memberId && input.role) {
-    if (!input.env) throw new Error('Authenticated media placement requires the Better Auth environment')
     await assertResourceAccess(db, {
       env: input.env,
       memberId: input.memberId,
@@ -143,7 +142,7 @@ async function canonicalPlacementState(db: DbClient, input: {
 export async function setSingleMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
-  env?: CloudflareEnv
+  env: CloudflareEnv
   memberId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
@@ -173,15 +172,16 @@ export async function getMediaPlacements(db: DbClient, input: {
 }
 
 async function refreshSocialCardForPlacement(db: DbClient, input: {
-  env?: CloudflareEnv
+  env: CloudflareEnv
   siteId: string
   placement: MediaPlacementKey
 }) {
-  if (!input.env) return
   try {
     const owners = await socialCardRefreshOwnersForPlacement(db, input.placement)
     for (const owner of owners) await refreshSocialCard({ db, env: input.env, owner })
   } catch (error) {
+    // Placement writes are already committed; preserve their truthful response and
+    // report this derived-projection failure under the documented SEO contract.
     console.error('[social-card]', {
       stage: 'placement_refresh',
       ownerType: input.placement.owner_type,
@@ -202,7 +202,7 @@ async function refreshSocialCardForPlacement(db: DbClient, input: {
 export async function attachMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
-  env?: CloudflareEnv
+  env: CloudflareEnv
   memberId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
@@ -258,7 +258,7 @@ export async function attachMediaPlacement(db: DbClient, input: {
 export async function removeMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
-  env?: CloudflareEnv
+  env: CloudflareEnv
   memberId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
@@ -304,7 +304,7 @@ export interface MediaPlacementMove {
 export async function reorderMediaPlacements(db: DbClient, input: {
   organizationId: string
   siteId: string
-  env?: CloudflareEnv
+  env: CloudflareEnv
   memberId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey

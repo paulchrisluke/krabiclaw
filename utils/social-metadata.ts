@@ -32,6 +32,44 @@ export interface SocialImageSource {
   alt?: string
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function parseSocialImageSource(value: unknown): SocialImageSource | null {
+  if (value === null || value === undefined) return null
+  if (!isRecord(value) || typeof value.url !== 'string' || !value.url.trim()) {
+    throw new Error('Social image source requires a URL')
+  }
+  if (value.kind !== undefined && value.kind !== 'image' && value.kind !== 'video') {
+    throw new Error('Social image source kind must be image or video')
+  }
+  if (value.thumbnailUrl !== undefined && value.thumbnailUrl !== null && typeof value.thumbnailUrl !== 'string') {
+    throw new Error('Social image thumbnail URL must be a string or null')
+  }
+  if (value.width !== undefined && (typeof value.width !== 'number' || !Number.isFinite(value.width))) {
+    throw new Error('Social image width must be a finite number')
+  }
+  if (value.height !== undefined && (typeof value.height !== 'number' || !Number.isFinite(value.height))) {
+    throw new Error('Social image height must be a finite number')
+  }
+  if (value.type !== undefined && value.type !== 'image/jpeg' && value.type !== 'image/png' && value.type !== 'image/gif') {
+    throw new Error('Social image MIME type is invalid')
+  }
+  if (value.alt !== undefined && typeof value.alt !== 'string') {
+    throw new Error('Social image alt text must be a string')
+  }
+  return {
+    url: value.url,
+    ...(value.kind === undefined ? {} : { kind: value.kind }),
+    ...(value.thumbnailUrl === undefined ? {} : { thumbnailUrl: value.thumbnailUrl }),
+    ...(value.width === undefined ? {} : { width: value.width }),
+    ...(value.height === undefined ? {} : { height: value.height }),
+    ...(value.type === undefined ? {} : { type: value.type }),
+    ...(value.alt === undefined ? {} : { alt: value.alt }),
+  }
+}
+
 export interface SocialMediaSource {
   slot?: string
   kind?: string | null

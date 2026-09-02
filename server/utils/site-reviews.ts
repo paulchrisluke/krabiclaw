@@ -83,7 +83,7 @@ export async function attachReviewMedia<T extends Record<string, unknown>>(db: D
 
 export async function createOwnerEnteredSiteReview(
   db: DbClient,
-  scope: { organizationId: string; siteId: string; enteredByUserId: string; env?: CloudflareEnv },
+  scope: { organizationId: string; siteId: string; enteredByUserId: string; env: CloudflareEnv },
   input: OwnerEnteredReviewInput,
 ) {
   if (input.publication_authorized !== true) throw new Error('publication_authorized must be explicitly accepted')
@@ -116,13 +116,13 @@ export async function createOwnerEnteredSiteReview(
     now,
     now,
   ])
-  if (scope.env && status === 'approved') await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: id }, actorId: scope.enteredByUserId })
+  if (status === 'approved') await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: id }, actorId: scope.enteredByUserId })
   return { id, created: true, verified: false }
 }
 
 export async function updateOwnerEnteredSiteReview(
   db: DbClient,
-  scope: { organizationId: string; siteId: string; env?: CloudflareEnv },
+  scope: { organizationId: string; siteId: string; env: CloudflareEnv },
   reviewId: string,
   input: Partial<OwnerEnteredReviewInput>,
 ) {
@@ -159,7 +159,7 @@ export async function updateOwnerEnteredSiteReview(
     SELECT status FROM reviews
     WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id IS NULL AND source = 'owner_entered'
   `, [reviewId, scope.organizationId, scope.siteId])
-  if (scope.env && review?.status === 'approved') {
+  if (review?.status === 'approved') {
     await refreshSocialCard({ db, env: scope.env, owner: { owner_type: 'review', owner_id: reviewId } })
   }
   return { review_id: reviewId, updated: true, verified: false }
