@@ -649,22 +649,6 @@ async function executeTool(
     }
 
     case "create_experience": {
-      // ChowBot-only convenience: MCP's create_experience only falls back
-      // from explicit location_id to the site's primary_location_id. ChowBot
-      // additionally tries the dashboard's current-page location first, and
-      // (if the site has no primary set) the first location by is_primary/id
-      // order, before giving up — preserved here rather than narrowed to
-      // MCP's simpler fallback.
-      if (!toSqlText(input.location_id)) {
-        const verifiedCtxLocationId = ctx.locationId
-          ? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`, [ctx.locationId, orgId, siteId]))?.id
-          : null;
-        const fallbackLocationId = verifiedCtxLocationId
-          ?? (await queryFirst<{ primary_location_id: string | null }>(db, `SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`, [siteId, orgId]))?.primary_location_id
-          ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`, [siteId, orgId]))?.id
-          ?? null;
-        if (fallbackLocationId) input.location_id = fallbackLocationId;
-      }
       return runMcpExecutorToolForChowbot(executorSite, "create_experience", input);
     }
 

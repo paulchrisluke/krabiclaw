@@ -15,6 +15,20 @@
       "when": 1788007235972,
       "tag": "0001_product_order_index",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788375620642,
+      "tag": "0002_yielding_fenris",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788377806066,
+      "tag": "0003_price_overlap_guards",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,12 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 
 Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. Staging applies migrations but never sweeps, resets, reseeds customers, provisions E2E identities, or performs guest/MCP writes. Production is never seeded, reset, or mutated by test automation.
 
+`CLOUDFLARE_API_TOKEN` must grant account-level Workers Scripts Edit and D1 Edit permissions. It must also grant Zone Read and Workers Routes Edit for All Zones. A token limited to one named zone is not a release token.
+
+CI deploys through `scripts/deploy-worker-ci.mjs`. The script rejects Wrangler route fallbacks and warnings about routes that Wrangler cannot delete. After deployment, the script reads the zone route catalog and requires an exact match with the routes for that Worker in `wrangler.toml`. Missing, stale, or misassigned routes fail the job.
+
+Staging and production migration steps set `CI=true` and send an explicit `y` response to Wrangler. The jobs fail if Wrangler reports a permission fallback. Do not replace these checks with an interactive local migration command.
+
 A database-epoch cutover additionally uses the temporary maintenance deployment
 defined in [release-and-outage-prevention.md](release-and-outage-prevention.md).
 It is not part of an ordinary schema migration or application release.

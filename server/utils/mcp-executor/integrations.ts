@@ -131,21 +131,19 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
       }
 
       const pageInfo = await getPageInfo(pageToken, pageId);
-      const locationId = optionalString(args, "location_id");
-      if (locationId) {
-        await syncPageInfoToLocation(
-          site.env as never,
-          pageInfo,
-          connection.id,
-          site.organizationId,
-          site.siteId,
-          locationId,
-        );
-      }
+      const locationId = requiredString(args, "location_id");
+      await syncPageInfoToLocation(
+        site.env as never,
+        pageInfo,
+        connection.id,
+        site.organizationId,
+        site.siteId,
+        locationId,
+      );
 
       return {
         success: true,
-        synced_to_location: !!locationId,
+        synced_to_location: true,
         page: {
           id: pageInfo.id,
           name: pageInfo.name,

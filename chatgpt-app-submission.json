@@ -1,0 +1,1376 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "KrabiClaw",
+    "subtitle": "Manage your business website",
+    "description": "KrabiClaw helps business owners create and manage websites, locations, products, experiences, posts, media, localizations, domains, and customer inquiries through ChatGPT.",
+    "category": "BUSINESS"
+  },
+  "tools": {
+    "analyze_document": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Analyzes an attachment, consumes AI credits, and records usage in the tenant workspace.",
+        "open_world_justification": "Sends the attached document to the configured AI service for analysis.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "attach_media": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "batch_create_products": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "change_tenant_page_path": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "copy_location_batch": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "create_blog_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_domain": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_experience": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_location": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_location_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_owner_entered_site_review": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_product": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_site": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_site_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "create_tenant_page": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "delete_blog_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_domain": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_experience": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_location": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_location_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_media_asset": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_owner_entered_site_review": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_product": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_product_category": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_resource_localization": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "delete_site_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "get_blog_post": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_booking_policy": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_contact_inquiries": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_experience": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_facebook_connection": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_location": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_notification_settings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_post": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_product": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_product_catalog_localization": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_professional_service_content": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_reservation_inquiries": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_resource_localization": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_site": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_site_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_site_domains": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_site_media_assets": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_site_settings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_tenant_page": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "get_workspace_context": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "import_from_maps": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Reads Google Places and writes imported content that can appear on the tenant website.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "import_products_from_media": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_all_experience_bookings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_blog_posts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_experience_bookings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_experiences": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_location_products": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_location_qa": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_location_reviews": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_locations": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_posts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_site_locales": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_site_qa": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_site_reviews": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_sites": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "list_tenant_pages": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "move_product_category": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "move_products": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "preview_booking_policy": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "publish_blog_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "publish_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "publish_to_facebook": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "put_resource_localization": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "remove_media": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "rename_product_category": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "reorder_blog_posts": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "reorder_location_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "reorder_media": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "reorder_site_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "replace_blog_content": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "reply_to_review": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "save_generated_image": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "save_generated_image_file": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "set_brand_color": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "set_canonical_domain": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "set_default_currency": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "set_media": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "set_workspace_context": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "show_generated_images": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    },
+    "sync_domain": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "sync_facebook_page": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "sync_product_catalog_localization": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "sync_products": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_blog_metadata": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_blog_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_booking_policy": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_experience": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_experience_booking": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_location": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_location_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_media_asset": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_notification_settings": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_owner_entered_site_review": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_product": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_professional_service_content": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_site_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_site_settings": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "update_tenant_page": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
+      }
+    },
+    "upload_user_media": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
+        "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
+        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "List the sites and locations available to the signed-in business owner.",
+      "user_prompt": "Show me my business sites and the locations for my first site.",
+      "file_attachment_urls": null,
+      "tools_triggered": "list_sites, list_locations",
+      "expected_output": "Returns only the authenticated owner's sites and the locations for the selected site.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create a Product at an explicitly selected location.",
+      "user_prompt": "At my Ao Nang location, add a Sushi product named Chef's Choice with no numeric price and display the exact wording “Market Price.”",
+      "file_attachment_urls": null,
+      "tools_triggered": "create_product",
+      "expected_output": "Creates the Product at Ao Nang with no fixed Price and preserves “Market Price” as the customer-facing price wording.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Synchronize a complete Product list at one explicit location.",
+      "user_prompt": "Replace the intended product list for my Krabi Town location with these three products, and mark omitted products unavailable.",
+      "file_attachment_urls": null,
+      "tools_triggered": "sync_products",
+      "expected_output": "Updates only the Krabi Town catalog atomically and reports the resulting Products.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create and publish a site post.",
+      "user_prompt": "Create a post announcing our holiday hours, show me the draft, then publish it after I confirm.",
+      "file_attachment_urls": null,
+      "tools_triggered": "create_post, publish_post",
+      "expected_output": "Creates the draft and publishes it only after the required confirmation.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create an Experience at an explicitly selected location.",
+      "user_prompt": "At my Ao Nang location, create a two-hour Thai cooking class Experience priced at 1,500 THB per person, excluding tax.",
+      "file_attachment_urls": null,
+      "tools_triggered": "create_experience",
+      "expected_output": "Creates the Experience only at the explicitly selected Ao Nang location with the supplied duration and fixed Price semantics.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not invoke the app for personal calendar requests.",
+      "user_prompt": "What appointments are on my personal calendar tomorrow?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it does not manage personal calendars.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not invoke the app for medical diagnosis.",
+      "user_prompt": "Diagnose this rash and tell me which medicine to take.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because medical diagnosis is outside its business website workflows.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not invoke the app to execute a financial trade.",
+      "user_prompt": "Buy 20 shares of a technology stock for me.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it cannot trade securities or manage brokerage accounts.",
+      "expected_output_url": null
+    }
+  ]
+}

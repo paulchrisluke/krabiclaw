@@ -43,15 +43,16 @@ export const INTEGRATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'sync_facebook_page',
-      description: 'Pull business info (phone, hours, website, city, description, cover photo) from the connected Facebook Page and write it into the business location record, updating the tenant site. Available with Growth. Optionally pass location_id to target a specific location, and page_id to switch which Facebook Page is connected.',
+      description: 'Pull business info (phone, hours, website, city, description, cover photo) from the connected Facebook Page and write it into one explicit business location. Available with Growth. Pass location_id to select the location and page_id to switch which Facebook Page is connected.',
       domain: 'integrations',
       minimumRole: 'editor',
       confirmRequired: false,
       requiredEntitlement: 'managed_service',
       inputSchema: {
-        location_id: { type: 'string', description: 'Location to sync page info into. Required to actually update the tenant site.' },
+        location_id: { type: 'string', description: 'Location to sync page info into.' },
         page_id: { type: 'string', description: 'Switch to a different Facebook Page by ID. Omit to use the currently connected page.' },
       },
+      required: ['location_id'],
       outputSchema: {
         type: 'object',
         properties: {

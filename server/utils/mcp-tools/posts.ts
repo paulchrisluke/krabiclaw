@@ -39,7 +39,6 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: true,
-      strict: true,
       inputSchema: {
         body: { type: 'string' },
         title: { type: 'string' },
@@ -66,7 +65,6 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: false,
-      strict: true,
       inputSchema: {
         post_id: { type: 'string' },
         body: { type: 'string' },
@@ -94,7 +92,6 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: true,
-      strict: true,
       inputSchema: {
         post_id: { type: 'string' },
         channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram'] }, description: 'Channels to publish to. Defaults to ["site"].' },

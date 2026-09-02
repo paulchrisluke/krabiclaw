@@ -9,7 +9,8 @@ import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { localizationError } from '~/server/utils/localization-errors'
 import { queryFirst } from '~/server/db'
-import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { isCurrencyCode, SUPPORTED_CURRENCIES, type CurrencyCode } from '~/shared/currencies'
+import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
 import {
   MARKDOWN_MIME_TYPES,
   assertMarkdownSize,
@@ -19,7 +20,7 @@ import {
 } from '~/server/utils/markdown-document'
 
 const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
-const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, details, or order URLs. Set price to { amount_minor } in ${currency} when a fixed amount is clearly visible. Set price to null when the source has no fixed numeric amount. Copy explicit wording such as "Market Price" or "Ask Staff" into details as { key: "price-note", label: "Price", values: [the exact wording] }. Set price_unreadable to true when a price exists but is cropped, blurred, obscured, or otherwise unreadable. An unreadable price rejects the complete import, so never guess. Otherwise set price_unreadable to false. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, details, order URLs, currency, unit, or tax treatment. For each Product, return exactly one discriminated price result. Use { kind: "fixed", amount_minor, currency, unit, tax_behavior } only when every field is explicit in the source; ${currency} is the site's default currency but is context only and must not be assumed. Use { kind: "no-fixed-price", note } only when the source visibly gives exact customer-facing wording such as "Market Price" or "Ask Staff"; copy that wording verbatim into note. Use { kind: "unreadable" } when price information is missing, ambiguous, cropped, blurred, obscured, or otherwise cannot be read completely. Any unreadable result rejects the complete import, so never guess. Do not add a price-note entry to details; the server derives it from note. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -41,17 +42,16 @@ const PRODUCT_EXTRACTION_TOOL = {
             name: { type: 'string' },
             description: { type: ['string', 'null'] },
             price: {
-              type: ['object', 'null'],
-              description: 'Fixed numeric price as an integer amount_minor, or null when the source has no fixed amount. Never use zero as a placeholder.',
-              properties: { amount_minor: { type: 'integer', minimum: 0 } },
-              required: ['amount_minor'],
-              additionalProperties: false,
+              oneOf: [
+                { type: 'object', properties: { kind: { const: 'fixed' }, amount_minor: { type: 'integer', minimum: 0 }, currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] }, unit: { type: 'string', enum: [...PRICE_UNITS] }, tax_behavior: { type: 'string', enum: [...PRICE_TAX_BEHAVIORS] } }, required: ['kind', 'amount_minor', 'currency', 'unit', 'tax_behavior'], additionalProperties: false },
+                { type: 'object', properties: { kind: { const: 'no-fixed-price' }, note: { type: 'string', minLength: 1 } }, required: ['kind', 'note'], additionalProperties: false },
+                { type: 'object', properties: { kind: { const: 'unreadable' } }, required: ['kind'], additionalProperties: false },
+              ],
             },
-            price_unreadable: { type: 'boolean', description: 'True only when visible price text exists but cannot be read confidently. This rejects the complete import.' },
             details: PRODUCT_DETAILS_INPUT_SCHEMA,
             order_url: { type: ['string', 'null'] },
           },
-          required: ['category', 'name', 'description', 'price', 'price_unreadable', 'details', 'order_url'],
+          required: ['category', 'name', 'description', 'price', 'details', 'order_url'],
           additionalProperties: false,
         },
       },
@@ -61,7 +61,7 @@ const PRODUCT_EXTRACTION_TOOL = {
   },
 }
 
-export function parseProductExtraction(input: unknown, currency: CurrencyCode): CreateProductInput[] {
+export function parseProductExtraction(input: unknown): CreateProductInput[] {
   if (!isRecord(input)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
   }
@@ -85,7 +85,7 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
       continue
     }
     const item = value
-    const allowed = ['category', 'name', 'description', 'price', 'price_unreadable', 'details', 'order_url']
+    const allowed = ['category', 'name', 'description', 'price', 'details', 'order_url']
     const unknown = Object.keys(item).filter(key => !allowed.includes(key)).sort()
     const missing = allowed.filter(key => !Object.hasOwn(item, key))
     const category = typeof item.category === 'string' ? item.category.trim() : ''
@@ -95,20 +95,33 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
 
     const rawPrice = item.price
     let resolvedPrice: CreateProductInput['price'] = null
-    let priceValid = rawPrice === null
+    let priceValid = false
+    let priceNote: string | null = null
     if (isRecord(rawPrice)) {
-      const priceRecord = rawPrice
-      const priceKeys = Object.keys(priceRecord)
-      const amountMinor = priceRecord.amount_minor
-      priceValid = priceKeys.length === 1
-        && priceKeys[0] === 'amount_minor'
-        && typeof amountMinor === 'number'
-        && Number.isSafeInteger(amountMinor)
-        && amountMinor >= 0
-      if (priceValid && typeof amountMinor === 'number') resolvedPrice = { amount_minor: amountMinor, currency, unit: 'item', tax_behavior: 'unspecified' }
+      const keys = Object.keys(rawPrice).sort().join(',')
+      if (rawPrice.kind === 'fixed') {
+        const amountMinor = rawPrice.amount_minor
+        const currency = rawPrice.currency
+        const unit = rawPrice.unit
+        const taxBehavior = rawPrice.tax_behavior
+        priceValid = keys === 'amount_minor,currency,kind,tax_behavior,unit'
+          && typeof amountMinor === 'number' && Number.isSafeInteger(amountMinor) && amountMinor >= 0
+          && typeof currency === 'string' && isCurrencyCode(currency)
+          && typeof unit === 'string' && PRICE_UNITS.includes(unit as PriceUnit)
+          && typeof taxBehavior === 'string' && PRICE_TAX_BEHAVIORS.includes(taxBehavior as PriceTaxBehavior)
+        if (priceValid) {
+          resolvedPrice = {
+            amount_minor: amountMinor as number,
+            currency: currency as CurrencyCode,
+            unit: unit as PriceUnit,
+            tax_behavior: taxBehavior as PriceTaxBehavior,
+          }
+        }
+      } else if (rawPrice.kind === 'no-fixed-price') {
+        priceNote = typeof rawPrice.note === 'string' ? rawPrice.note : null
+        priceValid = keys === 'kind,note' && priceNote !== null && priceNote.length > 0 && priceNote === priceNote.trim()
+      }
     }
-    const priceUnreadable = item.price_unreadable === true
-    if (typeof item.price_unreadable !== 'boolean' || priceUnreadable) priceValid = false
     let details: Product['details'] = []
     let detailsValid = true
     try {
@@ -116,6 +129,7 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
     } catch {
       detailsValid = false
     }
+    if (details.some(detail => detail.key === 'price-note')) detailsValid = false
 
     const invalidFields = [
       ...unknown,
@@ -141,7 +155,7 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
       price: resolvedPrice,
       order_url: typeof item.order_url === 'string' ? item.order_url : null,
       tags: [],
-      details,
+      details: priceNote ? [...details, { key: 'price-note', label: 'Price', values: [priceNote] }] : details,
       source: 'ai',
     })
   }
@@ -193,10 +207,10 @@ export async function saveInboundMediaAsset(
     filename?: string
   }
 ): Promise<MediaAsset> {
-  // WhatsApp (and other generic upload paths) frequently report a generic
-  // or missing MIME type for plain-text attachments — fall back to the
-  // filename extension so a .md/.markdown upload is still recognized.
-  const normalizedMimeType = resolveMarkdownMimeType(opts.mimeType, opts.filename) ?? opts.mimeType
+  // Only explicit Markdown MIME metadata enables the Markdown pipeline.
+  // Generic or missing MIME types remain unchanged and are never inferred
+  // from a user-controlled filename.
+  const normalizedMimeType = resolveMarkdownMimeType(opts.mimeType) ?? opts.mimeType
 
   if (MARKDOWN_MIME_TYPES.has(normalizedMimeType)) {
     // Fail fast with a clear error instead of persisting a file the ChowBot
@@ -314,7 +328,7 @@ export async function extractProductsFromMediaAsset(
   ) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must return exactly one structured tool call')
   }
-  const accepted = parseProductExtraction(toolBlocks[0].input, site.default_currency)
+  const accepted = parseProductExtraction(toolBlocks[0].input)
   try {
     const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, {
       actorId: opts.userId,
@@ -369,7 +383,7 @@ export async function analyzeDocumentAsset(
   const asset = await getMediaAsset(db, opts.assetId, opts.siteId)
   if (!asset?.public_url || !asset.mime_type) throw new Error('Media asset not found')
 
-  const resolvedMimeType = resolveMarkdownMimeType(asset.mime_type, asset.file_name)
+  const resolvedMimeType = resolveMarkdownMimeType(asset.mime_type)
   if (!resolvedMimeType) {
     throw new Error(`Unsupported media type for document analysis: ${asset.mime_type}`)
   }

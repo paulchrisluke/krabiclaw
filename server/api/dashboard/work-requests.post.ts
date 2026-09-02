@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   const type = body.type;
   const title = body.title.trim();
   const description = body.description?.trim() || null;
-  const priority = body.priority;
+  const priority = body.priority ?? "normal";
   // This endpoint only serves the dashboard's own support form — source is
   // never client-controlled, unlike the removed request contract that let a
   // caller claim "whatsapp" for a request that never went through WhatsApp.
@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
 
   if (result.status === 201 && "id" in result.data) {
     await fireOrganizationEventSafe({
-      db, organizationId: organization.id, siteId: site?.id ?? null, actorId: userId, eventType: "work_request.created", entityType: "work_request", entityId: result.data.id, metadata: { type, priority: priority ?? "normal", source }, });
+    db, organizationId: organization.id, siteId: site?.id ?? null, actorId: userId, eventType: "work_request.created", entityType: "work_request", entityId: result.data.id, metadata: { type, priority, source }, });
   }
 
   return jsonResponse(result.data, { status: result.status });

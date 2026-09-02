@@ -77,7 +77,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         scheduled_for: { type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.' },
       },
       required: ['title', 'content_blocks'],
-      strict: true,
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
@@ -106,7 +105,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         reset_slug_override: { type: 'boolean' },
       },
       required: ['post_id'],
-      strict: true,
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
@@ -134,7 +132,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         reset_slug_override: { type: 'boolean' },
       },
       required: ['post_id'],
-      strict: true,
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
@@ -149,7 +146,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         expected_document_updated_at: { type: 'string', description: 'Concurrency token from the post document_updated_at (get_blog_post). A stale token is rejected with a conflict.' },
       },
       required: ['post_id', 'content_blocks', 'expected_document_updated_at'],
-      strict: true,
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
@@ -163,7 +159,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         scheduled_for: { type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.' },
       },
       required: ['post_id', 'expected_updated_at', 'expected_document_updated_at'],
-      strict: true,
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({

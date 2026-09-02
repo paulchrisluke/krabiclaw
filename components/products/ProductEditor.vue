@@ -47,7 +47,7 @@
       <label class="block text-sm">{{ presentation.categoryLabel }}<input v-model="editing.category" required maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="flex items-center gap-2 text-sm"><input v-model="editing.has_fixed_price" type="checkbox"> Fixed price</label>
       <label v-if="editing.has_fixed_price" class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
-      <label v-else class="block text-sm">Price wording (optional)<input v-model="editing.price_note" maxlength="500" placeholder="Market Price, Ask Staff, …" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span class="mt-1 block text-xs text-muted">Shown to customers instead of a number. Leave blank to show the generic no-price state.</span></label>
+      <label class="block text-sm">Price wording (optional)<input v-model="editing.price_note" maxlength="500" placeholder="Market Price, Ask Staff, …" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="editing.has_fixed_price && editing.price_note.trim()" class="mt-1 block text-xs text-red-700">Clear this wording before saving a fixed price. It will not be removed automatically.</span><span v-else-if="!editing.has_fixed_price" class="mt-1 block text-xs text-muted">Shown to customers instead of a number. Leave blank and no price is displayed.</span></label>
       <label class="block text-sm">Description<textarea v-model="editing.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
       <label class="block text-sm">Order URL<input v-model="editing.order_url" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="orderHostname" class="mt-1 block text-xs text-muted">Destination: {{ orderHostname }}</span></label>
       <label class="block text-sm">Tags<input v-model="editing.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
@@ -62,7 +62,7 @@
         <label><input v-model="editing.featured" type="checkbox"> Featured</label>
       </div>
       <div class="flex gap-3">
-        <button :disabled="saving" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit">{{ saving ? 'Saving…' : 'Save' }}</button>
+        <button :disabled="saving || Boolean(editing.has_fixed_price && editing.price_note.trim())" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit">{{ saving ? 'Saving…' : 'Save' }}</button>
         <button class="rounded-lg border border-default px-4 py-2 text-sm" type="button" @click="editing = null">Cancel</button>
         <button v-if="editing.id" class="ml-auto text-sm text-red-600" type="button" @click="remove">Delete</button>
       </div>
@@ -127,13 +127,11 @@ function payload(product: EditingProduct) {
   if (!Array.isArray(parsedDetails) || !parsedDetails.every(isProductDetail)) throw new Error('Details must be valid JSON')
   const details = parsedDetails
   if (details.some(detail => detail.key === 'price-note')) throw new Error('Use the "Price wording" field for price-note, not Details JSON')
+  if (product.has_fixed_price && product.price_note.trim()) throw new Error('Clear the price wording before saving a fixed price')
   const price = product.has_fixed_price
     ? { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }
     : null
-  // A fixed Price never carries a price-note, even if one was typed before
-  // the "Fixed price" toggle was enabled — the note field is simply not
-  // sent in that case, satisfying the same contradiction the server rejects.
-  const priceNote = !product.has_fixed_price ? product.price_note.trim() : ''
+  const priceNote = product.price_note.trim()
   const finalDetails = priceNote ? [...details, { key: 'price-note', label: 'Price', values: [priceNote] }] : details
   return { name: product.name, category: product.category, price, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details: finalDetails, is_visible: product.is_visible, available: product.available, featured: product.featured }
 }

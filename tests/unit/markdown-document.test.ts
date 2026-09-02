@@ -12,14 +12,14 @@ test('resolveMarkdownMimeType recognizes Markdown MIME types and rejects unrelat
   assert.equal(resolveMarkdownMimeType('text/markdown'), 'text/markdown')
   assert.equal(resolveMarkdownMimeType('text/x-markdown'), 'text/markdown')
   assert.equal(resolveMarkdownMimeType('TEXT/MARKDOWN'), 'text/markdown')
-  assert.equal(resolveMarkdownMimeType('application/pdf', 'file.pdf'), null)
+  assert.equal(resolveMarkdownMimeType('application/pdf'), null)
   assert.equal(resolveMarkdownMimeType('image/png'), null)
 })
 
-test('resolveMarkdownMimeType falls back to the .md/.markdown extension when the MIME type is generic', () => {
-  assert.equal(resolveMarkdownMimeType('application/octet-stream', 'notes.md'), 'text/markdown')
-  assert.equal(resolveMarkdownMimeType(undefined, 'README.MARKDOWN'), 'text/markdown')
-  assert.equal(resolveMarkdownMimeType(null, 'menu.txt'), null)
+test('resolveMarkdownMimeType rejects generic and missing MIME types', () => {
+  assert.equal(resolveMarkdownMimeType('application/octet-stream'), null)
+  assert.equal(resolveMarkdownMimeType(undefined), null)
+  assert.equal(resolveMarkdownMimeType(null), null)
 })
 
 test('assertMarkdownSize rejects files over the configured limit with a clear message', () => {

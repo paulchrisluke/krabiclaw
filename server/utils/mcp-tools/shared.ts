@@ -656,7 +656,7 @@ export const experienceWriteSchema = {
   sort_order: { type: 'number', description: 'Lower numbers sort earlier in lists.' },
   featured: { type: 'boolean', description: 'Whether this experience should be highlighted in featured placements.' },
   featured_sort_order: { type: 'number', description: 'Lower numbers sort earlier among featured experiences.' },
-  location_id: { type: 'string', description: 'Optional location id. If omitted, the site primary location is used when available. If the site has no primary location yet, create a location first or pass a valid location_id.' },
+  location_id: { type: 'string', description: 'Location id. Required when creating an experience; updates may omit it to keep the stored owning location.' },
   seo_title: { type: ['string', 'null'], description: 'Optional SEO title override.' },
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
   canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
@@ -947,10 +947,6 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>
-  // Opt-in: rejects unknown arguments (see validateArguments).
-  // Defaults to false (additionalProperties: true) to preserve existing behavior for
-  // tools that haven't been reviewed for this yet — enable per-tool as they're audited.
-  strict?: boolean
 }): McpToolDefinition {
   const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
@@ -973,7 +969,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
       type: 'object',
       properties,
       required,
-      additionalProperties: definition.strict ? false : true,
+      additionalProperties: false,
       ...combinators,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
@@ -991,7 +987,7 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
       // Re-validate even on this pre-built-definition path — a caller could
       // hand in annotations that never passed through withToolAnnotations.
       validateToolAnnotations(definition.name, definition.annotations, definition.confirmRequired)
-      return definition
+      return { ...definition, inputSchema: { ...definition.inputSchema, additionalProperties: false } }
     }
   }
 
@@ -1000,32 +996,14 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
 
 export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
-// openWorldHint/destructiveHint below are calibrated to OpenAI's ChatGPT Apps
-// submission-review definition — "openWorldHint: true if the tool can change
-// publicly visible internet state or external third-party systems" — not the
-// broader upstream MCP spec example ("a web search tool is open-world" even
-// though it's read-only). Concretely: import_from_maps and analyze_document
-// read from an external API (Google Places, the AI Gateway) but mutate
-// nothing external, so they're bounded/closed-world under this definition;
-// create_product/update_product/attach_media/etc. mutate content that
-// publishes to the tenant's live public website, so they're open-world even
-// though the write itself only touches this app's own database. Every
-// current READ_ONLY_TOOL_NAMES entry (verified: get_facebook_connection only
-// reads its own facebook_pages_connections table, and the rest are plain
-// internal-DB reads) is genuinely closed-world under either definition, so
-// this default holds — but the annotation guard (validateToolAnnotations)
-// does not forbid a future read-only tool from declaring openWorldHint:true
-// if one is ever added that genuinely reaches a live external system.
+// The explicit catalog table below is authoritative. These defaults are only
+// constructors for definitions whose reviewed table entry has the same shape.
 export const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
   openWorldHint: false,
   destructiveHint: false,
 })
-
-export function boundedWriteAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-}
 
 export function openWorldWriteAnnotations(): McpToolAnnotations {
   return { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
@@ -1039,147 +1017,125 @@ export function openWorldDestructiveAnnotations(): McpToolAnnotations {
   return { readOnlyHint: false, openWorldHint: true, destructiveHint: true }
 }
 
-export const READ_ONLY_TOOL_NAMES = [
-  'get_workspace_context',
-  'show_generated_images',
-  'list_sites',
-  'get_site',
-  'get_site_settings',
-  'list_locations',
-  'get_location',
-  'list_location_products',
-  'get_product',
-  'list_posts',
-  'get_post',
-  'list_blog_posts',
-  'get_blog_post',
-  'get_site_media_assets',
-  'get_facebook_connection',
-  'list_tenant_pages',
-  'get_tenant_page',
-  'get_professional_service_content',
-  'get_booking_policy',
-  'preview_booking_policy',
-  'list_location_qa',
-  'list_site_qa',
-  'list_location_reviews',
-  'list_site_reviews',
-  'list_experiences',
-  'get_experience',
-  'list_experience_bookings',
-  'list_all_experience_bookings',
-  'list_site_locales',
-  'get_resource_localization',
-  'get_product_catalog_localization',
-  'get_contact_inquiries',
-  'get_reservation_inquiries',
-  'get_notification_settings',
-  'get_site_domains',
-  'get_site_analytics',
-] as const
+const R = READ_ONLY_DEFAULT
+const W = Object.freeze(openWorldWriteAnnotations())
+const BD = Object.freeze(boundedDestructiveAnnotations())
+const D = Object.freeze(openWorldDestructiveAnnotations())
 
-export const BOUNDED_WRITE_TOOL_NAMES = [
-  'set_workspace_context',
-  'analyze_document',
-  'update_experience_booking',
-  'update_notification_settings',
-  'import_from_maps',
-] as const
-
-export const OPEN_WORLD_WRITE_TOOL_NAMES = [
-  'save_generated_image',
-  'save_generated_image_file',
-  'upload_user_media',
-  'create_site',
-  'import_products_from_media',
-  'set_brand_color',
-  'create_blog_post',
-  'update_blog_metadata',
-  'publish_blog_post',
-  'create_post',
-  'update_post',
-  'set_default_currency',
-  'update_site_settings',
-  'create_location',
-  'update_location',
-  'copy_location_batch',
-  'create_product',
-  'update_product',
-  'batch_create_products',
-  'rename_product_category',
-  'move_products',
-  'move_product_category',
-  'reorder_blog_posts',
-  'sync_facebook_page',
-  'create_tenant_page',
-  'change_tenant_page_path',
-  'update_professional_service_content',
-  'update_booking_policy',
-  'create_location_qa',
-  'update_location_qa',
-  'reorder_location_qa',
-  'create_site_qa',
-  'update_site_qa',
-  'reorder_site_qa',
-  'create_owner_entered_site_review',
-  'update_owner_entered_site_review',
-  'create_experience',
-  'update_experience',
-  'create_domain',
-  'set_canonical_domain',
-  'sync_domain',
-  'attach_media',
-  'reorder_media',
-  'update_media_asset',
-] as const
-
-export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [] as const
-
-export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
-  'delete_media_asset',
-  'remove_media',
-  'set_media',
-  'sync_products',
-  'update_blog_post',
-  'replace_blog_content',
-  'reply_to_review',
-  'publish_to_facebook',
-  'publish_post',
-  'update_tenant_page',
-  'put_resource_localization',
-  'sync_product_catalog_localization',
-  'delete_location',
-  'delete_product',
-  'delete_product_category',
-  'delete_post',
-  'delete_blog_post',
-  'delete_location_qa',
-  'delete_site_qa',
-  'delete_owner_entered_site_review',
-  'delete_experience',
-  'delete_resource_localization',
-  'delete_domain',
-] as const
+/** Submission-review contract. Every real public tool is listed explicitly. */
+export const EXPECTED_TOOL_ANNOTATIONS = {
+  analyze_document: W,
+  attach_media: W,
+  batch_create_products: W,
+  change_tenant_page_path: D,
+  copy_location_batch: D,
+  create_blog_post: W,
+  create_domain: W,
+  create_experience: W,
+  create_location: W,
+  create_location_qa: W,
+  create_owner_entered_site_review: W,
+  create_post: W,
+  create_product: W,
+  create_site: W,
+  create_site_qa: W,
+  create_tenant_page: W,
+  delete_blog_post: D,
+  delete_domain: D,
+  delete_experience: D,
+  delete_location: D,
+  delete_location_qa: D,
+  delete_media_asset: D,
+  delete_owner_entered_site_review: D,
+  delete_post: D,
+  delete_product: D,
+  delete_product_category: D,
+  delete_resource_localization: D,
+  delete_site_qa: D,
+  get_blog_post: R,
+  get_booking_policy: R,
+  get_contact_inquiries: R,
+  get_experience: R,
+  get_facebook_connection: R,
+  get_location: R,
+  get_notification_settings: R,
+  get_post: R,
+  get_product: R,
+  get_product_catalog_localization: R,
+  get_professional_service_content: R,
+  get_reservation_inquiries: R,
+  get_resource_localization: R,
+  get_site: R,
+  get_site_analytics: R,
+  get_site_domains: R,
+  get_site_media_assets: R,
+  get_site_settings: R,
+  get_tenant_page: R,
+  get_workspace_context: R,
+  import_from_maps: D,
+  import_products_from_media: W,
+  list_all_experience_bookings: R,
+  list_blog_posts: R,
+  list_experience_bookings: R,
+  list_experiences: R,
+  list_location_products: R,
+  list_location_qa: R,
+  list_location_reviews: R,
+  list_locations: R,
+  list_posts: R,
+  list_site_locales: R,
+  list_site_qa: R,
+  list_site_reviews: R,
+  list_sites: R,
+  list_tenant_pages: R,
+  move_product_category: D,
+  move_products: D,
+  preview_booking_policy: R,
+  publish_blog_post: D,
+  publish_post: D,
+  publish_to_facebook: D,
+  put_resource_localization: D,
+  remove_media: D,
+  rename_product_category: D,
+  reorder_blog_posts: D,
+  reorder_location_qa: D,
+  reorder_media: D,
+  reorder_site_qa: D,
+  replace_blog_content: D,
+  reply_to_review: D,
+  save_generated_image: W,
+  save_generated_image_file: W,
+  set_brand_color: D,
+  set_canonical_domain: D,
+  set_default_currency: D,
+  set_media: D,
+  set_workspace_context: BD,
+  show_generated_images: R,
+  sync_domain: D,
+  sync_facebook_page: D,
+  sync_product_catalog_localization: D,
+  sync_products: D,
+  update_blog_metadata: D,
+  update_blog_post: D,
+  update_booking_policy: D,
+  update_experience: D,
+  update_experience_booking: BD,
+  update_location: D,
+  update_location_qa: D,
+  update_media_asset: D,
+  update_notification_settings: BD,
+  update_owner_entered_site_review: D,
+  update_post: D,
+  update_product: D,
+  update_professional_service_content: D,
+  update_site_qa: D,
+  update_site_settings: D,
+  update_tenant_page: D,
+  upload_user_media: W,
+} as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {
-  const groups = [
-    { names: READ_ONLY_TOOL_NAMES, annotations: READ_ONLY_DEFAULT },
-    { names: BOUNDED_WRITE_TOOL_NAMES, annotations: boundedWriteAnnotations() },
-    { names: OPEN_WORLD_WRITE_TOOL_NAMES, annotations: openWorldWriteAnnotations() },
-    { names: BOUNDED_DESTRUCTIVE_TOOL_NAMES, annotations: boundedDestructiveAnnotations() },
-    { names: OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES, annotations: openWorldDestructiveAnnotations() },
-  ] as const
-
-  const map = new Map<string, McpToolAnnotations>()
-  for (const group of groups) {
-    for (const name of group.names) {
-      if (map.has(name)) {
-        throw new Error(`Duplicate MCP tool annotation classification for "${name}".`)
-      }
-      map.set(name, group.annotations)
-    }
-  }
-  return map
+  return new Map<string, McpToolAnnotations>(Object.entries(EXPECTED_TOOL_ANNOTATIONS))
 }
 
 export const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
@@ -1216,6 +1172,7 @@ export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDe
 
   return {
     ...definition,
+    inputSchema: { ...definition.inputSchema, additionalProperties: false },
     securitySchemes: MCP_TOOL_SECURITY_SCHEMES,
     annotations,
   }

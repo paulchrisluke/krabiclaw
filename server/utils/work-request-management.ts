@@ -37,15 +37,15 @@ export async function createWorkRequest(
     type: string
     title: string
     description?: string | null
-    priority?: string | null
-    source?: WorkRequestSource
+    priority: string
+    source: WorkRequestSource
   },
 ) {
   const type = input.type as WorkRequestType
   const title = input.title.trim()
   const description = input.description?.trim() || null
-  const priority = (input.priority as WorkRequestPriority | undefined) ?? 'normal'
-  const source = input.source ?? 'dashboard'
+  const priority = input.priority as WorkRequestPriority
+  const source = input.source
 
   const entitled = await hasOrganizationEntitlement(db, organizationId, 'managed_service')
   if (!entitled) {

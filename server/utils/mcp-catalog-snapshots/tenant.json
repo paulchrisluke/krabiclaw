@@ -1,11 +1,11 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1907fc2e92f4c1e92b4ee1d86fe69088caeabb79b4dd9b6b0f2b6171d6b865bd",
+  "fingerprint": "sha256:4b6cc8ff9825d7eae580ea07af3f122fa02e4e7833726d39b0b84eb01b1a30f5",
   "tools": [
     {
       "name": "analyze_document",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "asset_id": {
             "description": "Media asset ID of the uploaded Markdown document.",
@@ -844,7 +844,7 @@
     {
       "name": "change_tenant_page_path",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "expected_document_updated_at": {
             "type": "string"
@@ -882,7 +882,7 @@
     {
       "name": "copy_location_batch",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "oneOf": [
           {
             "required": [
@@ -1480,7 +1480,7 @@
     {
       "name": "create_domain",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "domain": {
             "description": "Custom domain to add, e.g. \"www.example.com\" or \"example.com\".",
@@ -1543,7 +1543,7 @@
     {
       "name": "create_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "available_note": {
             "description": "Short urgency or availability note, e.g. \"Last 2 spots\".",
@@ -1602,7 +1602,7 @@
             ]
           },
           "location_id": {
-            "description": "Optional location id. If omitted, the site primary location is used when available. If the site has no primary location yet, create a location first or pass a valid location_id.",
+            "description": "Location id. Required when creating an experience; updates may omit it to keep the stored owning location.",
             "type": "string"
           },
           "max_capacity": {
@@ -1811,7 +1811,8 @@
           }
         },
         "required": [
-          "title"
+          "title",
+          "location_id"
         ],
         "type": "object"
       },
@@ -1862,7 +1863,7 @@
     {
       "name": "create_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "canonical_url": {
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
@@ -2026,7 +2027,7 @@
     {
       "name": "create_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "description": "Optional answer text.",
@@ -2080,7 +2081,7 @@
     {
       "name": "create_owner_entered_site_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "author_name": {
             "type": "string"
@@ -2854,7 +2855,7 @@
     {
       "name": "create_site",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "name": {
             "type": "string"
@@ -2904,7 +2905,7 @@
     {
       "name": "create_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "type": [
@@ -2957,7 +2958,7 @@
     {
       "name": "create_tenant_page",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "blocks": {
             "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block's current placements; provide media explicitly to replace them, or call set_media with owner_type \"content_block\", the block id, and the intended slot.",
@@ -3106,7 +3107,7 @@
     {
       "name": "delete_blog_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "description": "Post id or slug.",
@@ -3142,7 +3143,7 @@
     {
       "name": "delete_domain",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "domain_id": {
             "description": "ID of the custom domain to delete.",
@@ -3177,7 +3178,7 @@
     {
       "name": "delete_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "experience_id": {
             "description": "Experience id or slug.",
@@ -3212,7 +3213,7 @@
     {
       "name": "delete_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "description": "Location id or slug.",
@@ -3243,7 +3244,7 @@
     {
       "name": "delete_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "type": "string"
@@ -3277,7 +3278,7 @@
     {
       "name": "delete_media_asset",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "asset_id": {
             "type": "string"
@@ -3307,7 +3308,7 @@
     {
       "name": "delete_owner_entered_site_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "review_id": {
             "type": "string"
@@ -3341,7 +3342,7 @@
     {
       "name": "delete_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "type": "string"
@@ -3489,7 +3490,7 @@
     {
       "name": "delete_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "page_path": {
             "type": [
@@ -3525,7 +3526,7 @@
     {
       "name": "get_blog_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "description": "Post id or slug.",
@@ -3901,7 +3902,7 @@
     {
       "name": "get_booking_policy",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "experience_id": {
             "description": "Optional experience id when editing an experience-specific policy override.",
@@ -4296,7 +4297,7 @@
     {
       "name": "get_contact_inquiries",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -4365,7 +4366,7 @@
     {
       "name": "get_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "experience_id": {
             "description": "Experience id, or its slug from the public URL (/experiences/<slug>).",
@@ -4428,7 +4429,7 @@
     {
       "name": "get_facebook_connection",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -4473,7 +4474,7 @@
     {
       "name": "get_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "description": "Location id or slug.",
@@ -4728,7 +4729,7 @@
     {
       "name": "get_notification_settings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -4775,7 +4776,7 @@
     {
       "name": "get_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "type": "string"
@@ -5477,7 +5478,7 @@
     {
       "name": "get_professional_service_content",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -5519,7 +5520,7 @@
     {
       "name": "get_reservation_inquiries",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "days": {
             "description": "Optional: only include reservations made in the last N days (max 90).",
@@ -5723,7 +5724,7 @@
     {
       "name": "get_site",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -5836,7 +5837,7 @@
     {
       "name": "get_site_analytics",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "end_date": {
             "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
@@ -6149,7 +6150,7 @@
     {
       "name": "get_site_domains",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -6208,7 +6209,7 @@
     {
       "name": "get_site_media_assets",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -6342,7 +6343,7 @@
     {
       "name": "get_site_settings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -6538,7 +6539,7 @@
     {
       "name": "get_tenant_page",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -6568,7 +6569,7 @@
     {
       "name": "get_workspace_context",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -7254,7 +7255,7 @@
     {
       "name": "list_all_experience_bookings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -7426,7 +7427,7 @@
     {
       "name": "list_blog_posts",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -7736,7 +7737,7 @@
     {
       "name": "list_experience_bookings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -7869,7 +7870,7 @@
     {
       "name": "list_experiences",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8434,7 +8435,7 @@
     {
       "name": "list_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8519,7 +8520,7 @@
     {
       "name": "list_location_reviews",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8655,7 +8656,7 @@
     {
       "name": "list_locations",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8747,7 +8748,7 @@
     {
       "name": "list_posts",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9088,7 +9089,7 @@
     {
       "name": "list_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9175,7 +9176,7 @@
     {
       "name": "list_site_reviews",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9306,7 +9307,7 @@
     {
       "name": "list_sites",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9426,7 +9427,7 @@
     {
       "name": "list_tenant_pages",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9576,7 +9577,7 @@
     {
       "name": "preview_booking_policy",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "accessibility_contact_required": {
             "type": "boolean"
@@ -10379,7 +10380,7 @@
     {
       "name": "publish_to_facebook",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "link": {
             "description": "Optional URL to attach to the post.",
@@ -10750,7 +10751,7 @@
     {
       "name": "reorder_blog_posts",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "items": {
             "items": {
@@ -11077,7 +11078,7 @@
     {
       "name": "reorder_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "type": "string"
@@ -11324,7 +11325,7 @@
     {
       "name": "reorder_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "page_path": {
             "type": [
@@ -11815,7 +11816,7 @@
     {
       "name": "reply_to_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "reply": {
             "type": [
@@ -11870,7 +11871,7 @@
     {
       "name": "save_generated_image",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "image_data_base64": {
             "description": "Base64-encoded image data from image_generation_call.result, or a base64 data URL.",
@@ -11912,7 +11913,7 @@
     {
       "name": "save_generated_image_file",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "attachment_id": {
             "description": "Authorized file reference supplied by ChatGPT for the generated image attachment.",
@@ -11972,7 +11973,7 @@
     {
       "name": "set_brand_color",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "color": {
             "description": "Color description in natural language (e.g., \"earthy\", \"warm terracotta\", \"ocean blue\") or hex format (e.g., #8F1D21).",
@@ -12013,7 +12014,7 @@
     {
       "name": "set_canonical_domain",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "domain_id": {
             "description": "ID of the domain to promote to canonical.",
@@ -12056,7 +12057,7 @@
     {
       "name": "set_default_currency",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "currency": {
             "description": "ISO 4217 currency code.",
@@ -12305,7 +12306,7 @@
     {
       "name": "set_workspace_context",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "anyOf": [
           {
             "required": [
@@ -12706,7 +12707,7 @@
     {
       "name": "sync_domain",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "domain_id": {
             "description": "ID of the domain to sync.",
@@ -12754,10 +12755,10 @@
     {
       "name": "sync_facebook_page",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
-            "description": "Location to sync page info into. Required to actually update the tenant site.",
+            "description": "Location to sync page info into.",
             "type": "string"
           },
           "page_id": {
@@ -12769,7 +12770,9 @@
             "type": "string"
           }
         },
-        "required": [],
+        "required": [
+          "location_id"
+        ],
         "type": "object"
       },
       "outputSchema": {
@@ -13065,6 +13068,7 @@
                   ]
                 },
                 "product_id": {
+                  "minLength": 1,
                   "type": "string"
                 },
                 "robots": {
@@ -14520,7 +14524,7 @@
     {
       "name": "update_booking_policy",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "accessibility_contact_required": {
             "type": "boolean"
@@ -14713,7 +14717,7 @@
     {
       "name": "update_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "available_note": {
             "description": "Short urgency or availability note, e.g. \"Last 2 spots\".",
@@ -15020,7 +15024,7 @@
     {
       "name": "update_experience_booking",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "booking_id": {
             "type": "string"
@@ -15134,7 +15138,7 @@
     {
       "name": "update_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "canonical_url": {
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
@@ -15317,7 +15321,7 @@
     {
       "name": "update_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "description": "Answer text. Pass null to clear it.",
@@ -15426,7 +15430,7 @@
     {
       "name": "update_notification_settings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "channels": {
             "description": "Owner alert channels. Use one or both of email and whatsapp.",
@@ -15491,7 +15495,7 @@
     {
       "name": "update_owner_entered_site_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "author_name": {
             "type": "string"
@@ -16274,7 +16278,7 @@
     {
       "name": "update_professional_service_content",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "compliance": {
             "description": "Canonical organization/compliance data used by every professional-service surface and its schema.org graph.",
@@ -16482,7 +16486,7 @@
     {
       "name": "update_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "type": [
@@ -16541,7 +16545,7 @@
     {
       "name": "update_site_settings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "brand_description": {
             "type": "string"
@@ -16696,7 +16700,7 @@
     {
       "name": "update_tenant_page",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "blocks": {
             "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block's current placements; provide media explicitly to replace them, or call set_media with owner_type \"content_block\", the block id, and the intended slot.",
