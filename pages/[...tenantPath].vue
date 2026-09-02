@@ -120,7 +120,7 @@ if (localizedRoute.value) {
   // reactive useState + watch bridge — this script setup fully resolves before
   // any descendant (header/footer, which call t()) renders, so this is the one
   // point guaranteed to run in time regardless of SSR watcher flush timing.
-  const { $setAppLocale } = useNuxtApp() as { $setAppLocale?: (locale: string, messages: Record<string, string> | null) => void }
+  const { $setAppLocale } = useNuxtApp() as { $setAppLocale?: (_locale: string, _messages: Record<string, string> | null) => void }
   if (!$setAppLocale) throw new Error('Application locale setter is unavailable')
   $setAppLocale(localizedRoute.value.locale, localizedRoute.value.platform_messages)
   useHead({
