@@ -390,6 +390,7 @@ const handleTenantContact = async () => {
 }
 
 // ── SEO ──────────────────────────────────────────────────
+await useReciprocalHreflang(() => '/contact')
 useSocialMetadata(() => ({
   path: '/contact',
   title: `Contact | ${businessName.value}`,
