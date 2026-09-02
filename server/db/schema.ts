@@ -735,6 +735,161 @@ export const prices = sqliteTable("prices", {
 	check("prices_validity_check", sql`${table.valid_until} IS NULL OR ${table.valid_until} > ${table.valid_from}`),
 ]);
 
+export const product_menu_placements = sqliteTable("product_menu_placements", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	product_id: text().notNull().references(() => products.id, { onDelete: "cascade" }),
+	section: text().notNull(),
+	sort_order: integer().notNull(),
+	is_published: integer({ mode: "boolean" }).default(true).notNull(),
+	featured: integer({ mode: "boolean" }).default(false).notNull(),
+	featured_sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.product_id],
+		foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id],
+		name: "product_menu_placements_product_scope_fk",
+	}).onDelete("cascade"),
+	unique("product_menu_placements_scope_product_unique").on(table.organization_id, table.site_id, table.location_id, table.product_id),
+	index("product_menu_placements_location_order_idx").on(table.site_id, table.location_id, table.is_published, table.sort_order),
+	check("product_menu_placements_section_not_blank_check", sql`trim(${table.section}) <> ''`),
+	check("product_menu_placements_order_check", sql`${table.sort_order} >= 0 AND ${table.featured_sort_order} >= 0`),
+	check("product_menu_placements_boolean_check", sql`${table.is_published} IN (0, 1) AND ${table.featured} IN (0, 1)`),
+]);
+
+export const product_channel_availability = sqliteTable("product_channel_availability", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	product_id: text().notNull().references(() => products.id, { onDelete: "cascade" }),
+	channel: text().$type<'seo' | 'ordering'>().notNull(),
+	is_available: integer({ mode: "boolean" }).default(true).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.product_id],
+		foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id],
+		name: "product_channel_availability_product_scope_fk",
+	}).onDelete("cascade"),
+	unique("product_channel_availability_scope_unique").on(table.organization_id, table.site_id, table.location_id, table.product_id, table.channel),
+	index("product_channel_availability_location_channel_idx").on(table.site_id, table.location_id, table.channel, table.is_available),
+	check("product_channel_availability_channel_check", sql`${table.channel} IN ('seo', 'ordering')`),
+	check("product_channel_availability_boolean_check", sql`${table.is_available} IN (0, 1)`),
+]);
+
+export const modifier_groups = sqliteTable("modifier_groups", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	name: text().notNull(),
+	minimum_selections: integer().default(0).notNull(),
+	maximum_selections: integer().default(1).notNull(),
+	sort_order: integer().default(0).notNull(),
+	is_active: integer({ mode: "boolean" }).default(true).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id],
+		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
+		name: "modifier_groups_location_scope_fk",
+	}).onDelete("cascade"),
+	unique("modifier_groups_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
+	index("modifier_groups_location_order_idx").on(table.site_id, table.location_id, table.sort_order),
+	check("modifier_groups_name_not_blank_check", sql`trim(${table.name}) <> ''`),
+	check("modifier_groups_selection_check", sql`${table.minimum_selections} >= 0 AND ${table.maximum_selections} >= 1 AND ${table.minimum_selections} <= ${table.maximum_selections}`),
+	check("modifier_groups_order_check", sql`${table.sort_order} >= 0`),
+	check("modifier_groups_active_check", sql`${table.is_active} IN (0, 1)`),
+]);
+
+export const modifier_options = sqliteTable("modifier_options", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	modifier_group_id: text().notNull().references(() => modifier_groups.id, { onDelete: "cascade" }),
+	name: text().notNull(),
+	price_delta_minor: integer().default(0).notNull(),
+	sort_order: integer().default(0).notNull(),
+	is_active: integer({ mode: "boolean" }).default(true).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.modifier_group_id],
+		foreignColumns: [modifier_groups.organization_id, modifier_groups.site_id, modifier_groups.location_id, modifier_groups.id],
+		name: "modifier_options_group_scope_fk",
+	}).onDelete("cascade"),
+	unique("modifier_options_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
+	index("modifier_options_group_order_idx").on(table.modifier_group_id, table.sort_order),
+	check("modifier_options_name_not_blank_check", sql`trim(${table.name}) <> ''`),
+	check("modifier_options_price_check", sql`${table.price_delta_minor} >= 0`),
+	check("modifier_options_order_check", sql`${table.sort_order} >= 0`),
+	check("modifier_options_active_check", sql`${table.is_active} IN (0, 1)`),
+]);
+
+export const product_modifier_groups = sqliteTable("product_modifier_groups", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	product_id: text().notNull().references(() => products.id, { onDelete: "cascade" }),
+	modifier_group_id: text().notNull().references(() => modifier_groups.id, { onDelete: "cascade" }),
+	sort_order: integer().default(0).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.product_id],
+		foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id],
+		name: "product_modifier_groups_product_scope_fk",
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.modifier_group_id],
+		foreignColumns: [modifier_groups.organization_id, modifier_groups.site_id, modifier_groups.location_id, modifier_groups.id],
+		name: "product_modifier_groups_group_scope_fk",
+	}).onDelete("cascade"),
+	unique("product_modifier_groups_product_group_unique").on(table.product_id, table.modifier_group_id),
+	index("product_modifier_groups_product_order_idx").on(table.product_id, table.sort_order),
+	check("product_modifier_groups_order_check", sql`${table.sort_order} >= 0`),
+]);
+
+export const catalog_provider_mappings = sqliteTable("catalog_provider_mappings", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	resource_type: text().$type<'product' | 'price' | 'modifier_group' | 'modifier_option'>().notNull(),
+	resource_id: text().notNull(),
+	provider: text().notNull(),
+	provider_account_reference: text(),
+	external_id: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id],
+		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
+		name: "catalog_provider_mappings_location_scope_fk",
+	}).onDelete("cascade"),
+	unique("catalog_provider_mappings_resource_provider_unique").on(table.organization_id, table.site_id, table.location_id, table.resource_type, table.resource_id, table.provider, table.provider_account_reference),
+	unique("catalog_provider_mappings_external_unique").on(table.organization_id, table.site_id, table.location_id, table.provider, table.provider_account_reference, table.external_id),
+	index("catalog_provider_mappings_resource_idx").on(table.site_id, table.resource_type, table.resource_id),
+	check("catalog_provider_mappings_resource_type_check", sql`${table.resource_type} IN ('product', 'price', 'modifier_group', 'modifier_option')`),
+	check("catalog_provider_mappings_provider_not_blank_check", sql`trim(${table.provider}) <> '' AND trim(${table.external_id}) <> ''`),
+]);
+
 export const notifications = sqliteTable("notifications", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),

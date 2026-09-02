@@ -142,6 +142,7 @@ function parseRow(row: ExperienceRow): Experience {
       tax_behavior: tax_behavior as Price['tax_behavior'], compare_at_amount_minor,
       valid_from: valid_from!, valid_until, provenance: provenance!,
       created_by: price_created_by!, created_at: price_created_at!,
+      provider_mappings: [],
     } : null,
     status: row.status as Experience['status'],
     highlights: parseStringArray(row.highlights),
@@ -253,6 +254,7 @@ async function attachScheduledPrices(db: DbClient, experience: Experience): Prom
       compare_at_amount_minor: row.compare_at_amount_minor == null ? null : Number(row.compare_at_amount_minor),
       valid_from: String(row.valid_from), valid_until: row.valid_until == null ? null : String(row.valid_until),
       provenance: String(row.provenance), created_by: String(row.created_by), created_at: String(row.created_at),
+      provider_mappings: [],
     })),
   }
 }

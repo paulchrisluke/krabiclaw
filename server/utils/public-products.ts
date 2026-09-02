@@ -45,6 +45,10 @@ export interface PublicProductDetail extends PublicProductCollection {
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
+export interface PublicOrderingCatalog extends PublicProductCollection {
+  products: Product[]
+}
+
 export interface PublicProductReview {
   id: string
   author: string
@@ -82,6 +86,7 @@ export async function loadPublicProductCollection(
   siteId: string,
   routeKind: 'menu' | 'products',
   locationSlug?: string | null,
+  options: { visibleOnly?: boolean } = {},
 ): Promise<PublicProductCollection | null> {
   const resolved = await loadProductSite(db, siteId, routeKind)
   if (!resolved) return null
@@ -95,8 +100,25 @@ export async function loadPublicProductCollection(
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows.filter(location => locationHasProducts(resolved.site, location))
   if (locationSlug && locations.length !== 1) return null
-  const products = await listPublicSiteProducts(db, siteId, locations.map(location => location.id))
+  const products = await listPublicSiteProducts(db, siteId, locations.map(location => location.id), options)
   return { ...resolved, locations, products }
+}
+
+export async function loadPublicOrderingCatalog(
+  db: DbClient,
+  siteId: string,
+): Promise<PublicOrderingCatalog | null> {
+  const collection = await loadPublicProductCollection(db, siteId, 'menu', undefined, { visibleOnly: false })
+  if (!collection) return null
+  const products = collection.products
+    .filter(product => product.menu_placement?.is_published)
+    .filter(product => product.channel_availability.some(channel => channel.channel === 'ordering' && channel.is_available))
+    .sort((left, right) => {
+      const location = left.location_id.localeCompare(right.location_id)
+      if (location !== 0) return location
+      return (left.menu_placement?.sort_order ?? 0) - (right.menu_placement?.sort_order ?? 0) || left.id.localeCompare(right.id)
+    })
+  return { ...collection, products }
 }
 
 export async function loadPublicProductDetail(

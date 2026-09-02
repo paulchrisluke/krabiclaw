@@ -50,14 +50,17 @@
       <label class="block text-sm">Order URL<input v-model="editing.order_url" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="orderHostname" class="mt-1 block text-xs text-muted">Destination: {{ orderHostname }}</span></label>
       <label class="block text-sm">Tags<input v-model="editing.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
       <label class="block text-sm">Details JSON<textarea v-model="editing.details_text" rows="5" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2 font-mono text-xs" /></label>
+      <label class="block text-sm">Ordering modifiers JSON<textarea v-model="editing.modifiers_text" rows="7" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2 font-mono text-xs" /><span class="mt-1 block text-xs text-muted">Each group sets a name, selection limits, and ordered options with integer price_delta_minor values.</span></label>
       <div v-if="editing.id">
         <p class="mb-1 text-sm">Primary image</p>
         <MediaPicker :site-id="siteId" :location-id="locationId" :model-value="editing.image_asset_id" accept="image" title="Product primary image" @update:model-value="setPrimaryImage" />
       </div>
-      <div class="grid grid-cols-3 gap-3 text-sm">
+      <div class="grid grid-cols-2 gap-3 text-sm">
         <label><input v-model="editing.is_visible" type="checkbox"> Visible</label>
         <label><input v-model="editing.available" type="checkbox"> Available</label>
         <label><input v-model="editing.featured" type="checkbox"> Featured</label>
+        <label><input v-model="editing.seo_available" type="checkbox"> SEO menu</label>
+        <label><input v-model="editing.ordering_available" type="checkbox"> Ordering menu</label>
       </div>
       <div class="flex gap-3">
         <button :disabled="saving" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit">{{ saving ? 'Saving…' : 'Save' }}</button>
@@ -72,11 +75,12 @@
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { Product, ProductDetail, ProductPresentation } from '~/server/types/products'
 import type { CurrencyCode } from '~/shared/currencies'
+import type { ModifierGroupInput } from '~/shared/ordering-catalog'
 import { formatProductMoney } from '~/utils/product-money'
-import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
+import { majorAmountToMinor, minorAmountToMajor, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
 
 const props = defineProps<{ siteId: string; locationId: string; locationTitle: string; currency: CurrencyCode; presentation: ProductPresentation }>()
-interface EditingProduct { id: string | null; name: string; category: string; price_major: string; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
+interface EditingProduct { id: string | null; name: string; category: string; price_major: string; price_unit: PriceUnit; tax_behavior: PriceTaxBehavior; compare_at_amount_minor: number | null; description: string; order_url: string; tags_text: string; details_text: string; modifiers_text: string; is_visible: boolean; available: boolean; featured: boolean; seo_available: boolean; ordering_available: boolean; image_asset_id: string | null }
 const products = ref<Product[]>([])
 const editing = ref<EditingProduct | null>(null)
 const loading = ref(true)
@@ -84,7 +88,7 @@ const saving = ref(false)
 const reordering = ref(false)
 const error = ref<string | null>(null)
 const dashboardApi = useDashboardApi()
-const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details)
+const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details) && Array.isArray(value.channel_availability) && Array.isArray(value.modifier_groups) && Array.isArray(value.provider_mappings)
 const isList = (value: unknown): value is { success: true; products: Product[] } => isRecord(value) && value.success === true && Array.isArray(value.products) && value.products.every(isProduct)
 const isOne = (value: unknown): value is { success: true; product: Product } => isRecord(value) && value.success === true && isProduct(value.product)
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
@@ -106,21 +110,32 @@ async function load() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Failed to load Products' }
   finally { loading.value = false }
 }
-function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
-function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null } }
+function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', price_unit: 'item', tax_behavior: 'unspecified', compare_at_amount_minor: null, description: '', order_url: '', tags_text: '', details_text: '[]', modifiers_text: '[]', is_visible: true, available: true, featured: false, seo_available: true, ordering_available: true, image_asset_id: null } }
+function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', price_unit: product.price?.unit ?? 'item', tax_behavior: product.price?.tax_behavior ?? 'unspecified', compare_at_amount_minor: product.price?.compare_at_amount_minor ?? null, description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), modifiers_text: JSON.stringify(product.modifier_groups.map(group => ({ id: group.id, name: group.name, minimum_selections: group.minimum_selections, maximum_selections: group.maximum_selections, is_active: group.is_active, options: group.options.map(option => ({ id: option.id, name: option.name, price_delta_minor: option.price_delta_minor, is_active: option.is_active })) })), null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, seo_available: product.channel_availability.find(channel => channel.channel === 'seo')?.is_available ?? product.is_visible, ordering_available: product.channel_availability.find(channel => channel.channel === 'ordering')?.is_available ?? product.available, image_asset_id: product.image?.asset_id ?? null } }
 function payload(product: EditingProduct) {
   let details: ProductDetail[]
+  let modifierGroups: ModifierGroupInput[]
   try { details = JSON.parse(product.details_text) as ProductDetail[] } catch { throw new Error('Details must be valid JSON') }
-  return { name: product.name, category: product.category, price: { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured }
+  try { modifierGroups = JSON.parse(product.modifiers_text) as ModifierGroupInput[] } catch { throw new Error('Ordering modifiers must be valid JSON') }
+  return { name: product.name, category: product.category, price: { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: product.price_unit, tax_behavior: product.tax_behavior, compare_at_amount_minor: product.compare_at_amount_minor }, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured, channel_availability: { seo: product.seo_available, ordering: product.ordering_available }, modifier_groups: modifierGroups }
 }
 async function save() {
   const product = editing.value
   if (!product) return
   saving.value = true; error.value = null
   try {
+    const body = payload(product)
+    const currentPrice = products.value.find(item => item.id === product.id)?.price
+    const priceUnchanged = currentPrice
+      && currentPrice.amount_minor === body.price.amount_minor
+      && currentPrice.currency === body.price.currency
+      && currentPrice.unit === body.price.unit
+      && currentPrice.tax_behavior === body.price.tax_behavior
+      && currentPrice.compare_at_amount_minor === body.price.compare_at_amount_minor
+    const requestBody = priceUnchanged ? { ...body, price: undefined } : body
     const response = product.id
-      ? await dashboardApi(`${endpoint}/${product.id}`, { method: 'PATCH', body: payload(product), validate: isOne })
-      : await dashboardApi(endpoint, { method: 'POST', body: payload(product), validate: isOne })
+      ? await dashboardApi(`${endpoint}/${product.id}`, { method: 'PATCH', body: requestBody, validate: isOne })
+      : await dashboardApi(endpoint, { method: 'POST', body, validate: isOne })
     await load()
     if (editing.value === product) editProduct(response.product)
   } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Failed to save Product' }

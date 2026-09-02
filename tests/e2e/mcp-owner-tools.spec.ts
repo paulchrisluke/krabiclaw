@@ -415,6 +415,11 @@ test.describe('stateless MCP server', () => {
           name: 'MCP Curry',
           price: { amount_minor: 1250, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
           order_url: 'https://orders.example.com/mcp-curry',
+          channel_availability: { seo: true, ordering: true },
+          modifier_groups: [{
+            name: 'Heat', minimum_selections: 1, maximum_selections: 1,
+            options: [{ name: 'Mild' }, { name: 'Hot', price_delta_minor: 100 }],
+          }],
         },
       })
       expect(product.status()).toBe(200)
@@ -444,13 +449,29 @@ test.describe('stateless MCP server', () => {
         args: { site_id: siteId, product_id: productId },
       })
       expect(productRead.status()).toBe(200)
-      expect(mcpData<{ product: { name: string; order_url: string } }>(await productRead.json()).product).toMatchObject({
+      const productReadData = mcpData<{ product: { name: string; order_url: string; price: { id: string }; modifier_groups: Array<{ id: string; options: Array<{ id: string }> }>; channel_availability: Array<{ channel: string; is_available: boolean }>; provider_mappings: unknown[] } }>(await productRead.json()).product
+      expect(productReadData).toMatchObject({
         name: 'MCP Curry',
         order_url: 'https://orders.example.com/mcp-curry',
       })
+      expect(productReadData.price.id).toEqual(expect.any(String))
+      expect(productReadData.modifier_groups[0]?.id).toEqual(expect.any(String))
+      expect(productReadData.modifier_groups[0]?.options[0]?.id).toEqual(expect.any(String))
+      expect(productReadData.channel_availability).toEqual(expect.arrayContaining([
+        expect.objectContaining({ channel: 'ordering', is_available: true }),
+      ]))
+      expect(productReadData.provider_mappings).toEqual([])
 
       const cmsUpdate = await request.patch(`/api/editor/sites/${siteId}/locations/${locationId}/products/${productId}`, {
-        data: { order_url: 'https://orders.example.com/cms-curry' },
+        data: {
+          order_url: 'https://orders.example.com/cms-curry',
+          channel_availability: { seo: true, ordering: false },
+          modifier_groups: [{
+            id: productReadData.modifier_groups[0]!.id,
+            name: 'Spice', minimum_selections: 0, maximum_selections: 1,
+            options: [{ name: 'Hot', price_delta_minor: 100 }],
+          }],
+        },
       })
       expect(cmsUpdate.status(), await cmsUpdate.text()).toBe(200)
 
@@ -460,7 +481,12 @@ test.describe('stateless MCP server', () => {
         args: { site_id: siteId, product_id: productId },
       })
       expect(cmsUpdatedProduct.status()).toBe(200)
-      expect(mcpData<{ product: { order_url: string } }>(await cmsUpdatedProduct.json()).product.order_url).toBe('https://orders.example.com/cms-curry')
+      const cmsUpdated = mcpData<{ product: { order_url: string; modifier_groups: Array<{ name: string }>; channel_availability: Array<{ channel: string; is_available: boolean }> } }>(await cmsUpdatedProduct.json()).product
+      expect(cmsUpdated.order_url).toBe('https://orders.example.com/cms-curry')
+      expect(cmsUpdated.modifier_groups[0]?.name).toBe('Spice')
+      expect(cmsUpdated.channel_availability).toEqual(expect.arrayContaining([
+        expect.objectContaining({ channel: 'ordering', is_available: false }),
+      ]))
 
       const productsList = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
@@ -481,6 +507,9 @@ test.describe('stateless MCP server', () => {
         },
       })
       expect(productUpdate.status()).toBe(200)
+      const repriced = mcpData<{ product: { price: { id: string; amount_minor: number } } }>(await productUpdate.json()).product
+      expect(repriced.price.id).not.toBe(productReadData.price.id)
+      expect(repriced.price.amount_minor).toBe(1300)
 
       const cmsRead = await request.get(`/api/editor/sites/${siteId}/locations/${locationId}/products`)
       expect(cmsRead.status(), await cmsRead.text()).toBe(200)

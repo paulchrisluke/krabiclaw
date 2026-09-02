@@ -1,4 +1,5 @@
 import { currencyFractionDigits, type CurrencyCode } from './currencies.ts'
+import type { CatalogProviderMapping } from './ordering-catalog.ts'
 
 export const PRICE_UNITS = ['item', 'person', 'table'] as const
 export type PriceUnit = typeof PRICE_UNITS[number]
@@ -21,6 +22,7 @@ export interface Price {
   provenance: string
   created_by: string
   created_at: string
+  provider_mappings: CatalogProviderMapping[]
 }
 
 export interface PriceInput {
@@ -88,7 +90,7 @@ export function priceAt(prices: readonly Price[], at = new Date().toISOString())
 
 export function replacePrice(
   current: Price,
-  replacement: Omit<Price, 'organization_id' | 'site_id' | 'location_id' | 'product_id' | 'valid_until'>,
+  replacement: Omit<Price, 'organization_id' | 'site_id' | 'location_id' | 'product_id' | 'valid_until' | 'provider_mappings'>,
 ): { closed: Price; replacement: Price } {
   assertInstant(replacement.valid_from, 'valid_from')
   if (current.valid_until !== null || replacement.valid_from <= current.valid_from) throw new Error('only an open price may be replaced at a later instant')
@@ -104,6 +106,7 @@ export function replacePrice(
       location_id: current.location_id,
       product_id: current.product_id,
       valid_until: null,
+      provider_mappings: [],
     },
   }
 }

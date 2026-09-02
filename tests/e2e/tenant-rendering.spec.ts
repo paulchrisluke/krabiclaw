@@ -138,6 +138,21 @@ test('Kikuzuki keeps customer identity, locations, and reservation entry point',
   await expect(page.locator('#reservation-booking-toggle').first()).toBeVisible()
 })
 
+test('Kikuzuki ordering menu uses the published catalog without replacing the SEO menu', async ({ page }) => {
+  const baseURL = kikuzukiTestBaseUrl()
+  await openTenantPage(page, `${baseURL}/order`, kikuzukiTestExtraHeaders())
+  await expect(page.getByRole('region', { name: 'Ordering menu' })).toBeVisible()
+  await expect(page.locator('main')).toContainText(/Tuna Sushi/i)
+  await page.getByRole('searchbox', { name: 'Find a dish' }).fill('Tuna Sushi')
+  await expect(page.locator('main')).toContainText(/Tuna Sushi/i)
+  await page.getByRole('searchbox', { name: 'Find a dish' }).fill('no matching dish')
+  await expect(page.locator('main')).toContainText('No dishes match this search.')
+
+  await page.goto(`${baseURL}/menu`, { waitUntil: 'load' })
+  await expect(page.locator('main')).toContainText(/Tuna Sushi/i)
+  await expect(page.getByRole('region', { name: 'Ordering menu' })).toHaveCount(0)
+})
+
 test('NCLS exposes header, footer, pricing, article, contact, taxonomy, and donation journeys', async ({ page, context }) => {
   await openTenantPage(page, `${blawbyBaseURL}/`, blawbyExtraHeaders)
   for (const label of ['Services', 'Pricing', 'About', 'Contact', 'Blog', 'Donate'])

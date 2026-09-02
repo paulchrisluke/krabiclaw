@@ -234,6 +234,14 @@ export default defineHandler(async (event) => {
           product.price.valid_until ?? null,
           session.user.id, now],
       })
+      batchQueries.push({
+        query: `INSERT INTO product_menu_placements (id, organization_id, site_id, location_id, product_id, section, sort_order, is_published, featured, featured_sort_order, created_at, updated_at, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id, product.category, product.sort_order, product.is_visible, product.featured, product.featured_sort_order, now, now, session.user.id, session.user.id],
+      })
+      batchQueries.push({
+        query: `INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, is_available, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 'seo', ?, ?, ?, ?), (?, ?, ?, ?, ?, 'ordering', ?, ?, ?, ?)`,
+        params: [crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id, product.is_visible, now, now, session.user.id, crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id, product.available, now, now, session.user.id],
+      })
     }
 
     batchQueries.push({ query: `DELETE FROM location_qa WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })

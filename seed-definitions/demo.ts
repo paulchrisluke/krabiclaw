@@ -1449,6 +1449,18 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue('seed:demo'), sqlValue('2026-01-01T00:00:00.000Z'),
     ].join(', ')})`)
     .join(',\n')
+  const productPlacementRows = compiledDemoSeed.products
+    .map(product => `  (${[
+      sqlValue(`menu-placement-${product.id}`), sqlValue(product.organizationId), sqlValue(product.siteId),
+      sqlValue(product.locationId), sqlValue(product.id), sqlValue(product.category), sqlValue(product.sortOrder),
+      sqlValue(true), sqlValue(false), sqlValue(0), sqlValue('seed:demo'), sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
+  const productChannelRows = compiledDemoSeed.products.flatMap(product => ['seo', 'ordering'].map(channel => `  (${[
+    sqlValue(`channel-${channel}-${product.id}`), sqlValue(product.organizationId), sqlValue(product.siteId),
+    sqlValue(product.locationId), sqlValue(product.id), sqlValue(channel), sqlValue(product.available), sqlValue('seed:demo'),
+  ].join(', ')})`))
+    .join(',\n')
   const productMediaRows = compiledDemoSeed.products.flatMap(product => {
     const gallery = product.media.map((media, index) => ({ ...media, slot: 'gallery', index }))
     const primary = product.media[0] ? [{ ...product.media[0], slot: 'image', index: 0 }] : []
@@ -1481,7 +1493,18 @@ INSERT OR REPLACE INTO prices
   (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior,
    compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
 VALUES
-${productPriceRows};${productMediaSql}
+${productPriceRows};
+
+INSERT OR REPLACE INTO product_menu_placements
+  (id, organization_id, site_id, location_id, product_id, section, sort_order,
+   is_published, featured, featured_sort_order, created_by, updated_by)
+VALUES
+${productPlacementRows};
+
+INSERT OR REPLACE INTO product_channel_availability
+  (id, organization_id, site_id, location_id, product_id, channel, is_available, updated_by)
+VALUES
+${productChannelRows};${productMediaSql}
 -- END GENERATED: demo_products`
 }
 

@@ -829,6 +829,18 @@ export function renderKikuzukiProductsBlock(): string {
       sqlValue('seed:kikuzuki'), sqlValue('2026-01-01T00:00:00.000Z'),
     ].join(', ')})`)
     .join(',\n')
+  const productPlacementRows = compiledKikuzukiSeed.products
+    .map(product => `  (${[
+      sqlValue(`menu-placement-${product.id}`), sqlValue(identity.organizationId), sqlValue(identity.siteId),
+      sqlValue(product.locationId), sqlValue(product.id), sqlValue(product.category), sqlValue(product.sortOrder),
+      sqlValue(true), sqlValue(false), sqlValue(0), sqlValue('seed:kikuzuki'), sqlValue('seed:kikuzuki'),
+    ].join(', ')})`)
+    .join(',\n')
+  const productChannelRows = compiledKikuzukiSeed.products.flatMap(product => ['seo', 'ordering'].map(channel => `  (${[
+    sqlValue(`channel-${channel}-${product.id}`), sqlValue(identity.organizationId), sqlValue(identity.siteId),
+    sqlValue(product.locationId), sqlValue(product.id), sqlValue(channel), sqlValue(product.available), sqlValue('seed:kikuzuki'),
+  ].join(', ')})`))
+    .join(',\n')
   const productMediaRows = compiledKikuzukiSeed.products.flatMap(product => {
     const gallery = product.media.map((media, index) => ({ ...media, slot: 'gallery', index }))
     const primary = product.media[0] ? [{ ...product.media[0], slot: 'image', index: 0 }] : []
@@ -862,7 +874,18 @@ INSERT OR REPLACE INTO prices
   (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior,
    compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
 VALUES
-${productPriceRows};${productMediaSql}
+${productPriceRows};
+
+INSERT OR REPLACE INTO product_menu_placements
+  (id, organization_id, site_id, location_id, product_id, section, sort_order,
+   is_published, featured, featured_sort_order, created_by, updated_by)
+VALUES
+${productPlacementRows};
+
+INSERT OR REPLACE INTO product_channel_availability
+  (id, organization_id, site_id, location_id, product_id, channel, is_available, updated_by)
+VALUES
+${productChannelRows};${productMediaSql}
 -- END GENERATED: kikuzuki_products`
 }
 

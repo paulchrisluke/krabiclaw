@@ -10,6 +10,13 @@ function baselineDatabase() {
   return database
 }
 
+function migratedDatabase() {
+  const database = baselineDatabase()
+  database.exec(readFileSync('migrations/0001_product_order_index.sql', 'utf8'))
+  database.exec(readFileSync('migrations/0002_busy_dust.sql', 'utf8'))
+  return database
+}
+
 test('epoch-3 baseline creates the complete schema from zero', () => {
   const database = baselineDatabase()
   try {
@@ -36,7 +43,7 @@ test('epoch-3 baseline creates the complete schema from zero', () => {
 })
 
 test('epoch-3 baseline enforces canonical cross-scope and value constraints', () => {
-  const database = baselineDatabase()
+  const database = migratedDatabase()
   try {
     database.prepare("INSERT INTO themes (id, name, slug) VALUES ('saya-theme-v1', 'Saya', 'saya')").run()
     database.prepare("INSERT INTO organization (id, name, slug) VALUES ('org', 'Org', 'org')").run()
@@ -73,6 +80,22 @@ test('epoch-3 baseline enforces canonical cross-scope and value constraints', ()
       /FOREIGN KEY constraint failed/,
     )
     database.prepare("INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, rating) VALUES ('review', 'org', 'site', 'location', 'product', 5)").run()
+
+    database.prepare("INSERT INTO product_menu_placements (id, organization_id, site_id, location_id, product_id, section, sort_order, created_by, updated_by) VALUES ('placement', 'org', 'site', 'location', 'product', 'Mains', 0, 'user', 'user')").run()
+    database.prepare("INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, updated_by) VALUES ('channel', 'org', 'site', 'location', 'product', 'ordering', 'user')").run()
+    database.prepare("INSERT INTO modifier_groups (id, organization_id, site_id, location_id, name, minimum_selections, maximum_selections, created_by, updated_by) VALUES ('group', 'org', 'site', 'location', 'Heat', 1, 1, 'user', 'user')").run()
+    database.prepare("INSERT INTO modifier_options (id, organization_id, site_id, location_id, modifier_group_id, name, price_delta_minor, created_by, updated_by) VALUES ('option', 'org', 'site', 'location', 'group', 'Hot', 100, 'user', 'user')").run()
+    database.prepare("INSERT INTO product_modifier_groups (id, organization_id, site_id, location_id, product_id, modifier_group_id) VALUES ('link', 'org', 'site', 'location', 'product', 'group')").run()
+    database.prepare("INSERT INTO catalog_provider_mappings (id, organization_id, site_id, location_id, resource_type, resource_id, provider, external_id) VALUES ('mapping', 'org', 'site', 'location', 'product', 'product', 'merchant', 'external-product')").run()
+
+    assert.throws(
+      () => database.prepare("INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, updated_by) VALUES ('cross-scope', 'org', 'site', 'other-location', 'product', 'seo', 'user')").run(),
+      /FOREIGN KEY constraint failed/,
+    )
+    assert.throws(
+      () => database.prepare("INSERT INTO modifier_options (id, organization_id, site_id, location_id, modifier_group_id, name, created_by, updated_by) VALUES ('cross-option', 'org', 'site', 'other-location', 'group', 'Invalid', 'user', 'user')").run(),
+      /FOREIGN KEY constraint failed/,
+    )
     assert.equal(database.pragma('foreign_key_check').length, 0)
   } finally {
     database.close()

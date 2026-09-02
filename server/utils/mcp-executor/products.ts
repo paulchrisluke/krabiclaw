@@ -37,6 +37,7 @@ function productListItem(product: Product) {
     description: product.description,
     price: product.price
       ? {
+          id: product.price.id,
           amount_minor: product.price.amount_minor,
           currency: product.price.currency,
           unit: product.price.unit,
@@ -47,6 +48,7 @@ function productListItem(product: Product) {
     is_visible: product.is_visible,
     available: product.available,
     sort_order: product.sort_order,
+    channel_availability: product.channel_availability,
   }
 }
 

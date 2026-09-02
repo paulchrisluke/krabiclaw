@@ -12,6 +12,7 @@ import type {
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
+import { hydrateOrderingCatalog, replaceProductModifierQueries } from '~/server/utils/ordering-catalog'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode } from '~/shared/currencies'
 import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput } from '~/shared/prices'
@@ -77,6 +78,10 @@ export function mapProduct(row: ProductRow): Product {
     updated_at: String(row.updated_at),
     created_by: String(row.created_by),
     updated_by: String(row.updated_by),
+    menu_placement: null,
+    channel_availability: [],
+    modifier_groups: [],
+    provider_mappings: [],
   }
 }
 
@@ -113,6 +118,7 @@ function mapPrice(row: ProductRow): Price {
     compare_at_amount_minor: row.compare_at_amount_minor === null ? null : Number(row.compare_at_amount_minor),
     valid_from: String(row.valid_from), valid_until: row.valid_until === null ? null : String(row.valid_until),
     provenance: String(row.provenance), created_by: String(row.price_created_by), created_at: String(row.price_created_at),
+    provider_mappings: [],
   }
 }
 
@@ -146,7 +152,7 @@ async function hydrateProductMedia(db: DbClient, siteId: string, products: Produ
   if (!products.length) return products
   const ownerIds = products.map(product => product.id)
   const placements = await loadPublicSocialMedia(db, siteId, 'product', ownerIds)
-  return products.map((product) => {
+  const withMedia = products.map((product) => {
     const socialMedia = placements.get(product.id) ?? { media: [], social_image: null }
     const media = socialMedia.media
     return {
@@ -157,6 +163,7 @@ async function hydrateProductMedia(db: DbClient, siteId: string, products: Produ
       social_image: socialMedia.social_image,
     }
   })
+  return hydrateOrderingCatalog(db, withMedia)
 }
 
 async function assertLocationOwnership(db: DbClient, organizationId: string, siteId: string, locationId: string): Promise<void> {
@@ -191,13 +198,14 @@ export async function listPublicSiteProducts(
   db: DbClient,
   siteId: string,
   locationIds?: string[],
+  options: { visibleOnly?: boolean } = {},
 ): Promise<Product[]> {
   const scoped = locationIds !== undefined
   if (scoped && locationIds.length === 0) return []
   const rows = await queryAll<ProductRow>(db, `
     SELECT ${PRODUCT_COLUMNS}
       FROM products p ${ACTIVE_PRICE_JOIN}
-     WHERE p.site_id = ? AND p.is_visible = 1
+     WHERE p.site_id = ? ${options.visibleOnly === false ? '' : 'AND p.is_visible = 1'}
        AND p.product_type = 'standard'
        ${scoped ? 'AND p.location_id IN (SELECT value FROM json_each(?))' : ''}
      ORDER BY p.location_id, p.sort_order, p.id
@@ -237,6 +245,7 @@ export async function getProduct(
     compare_at_amount_minor: row.compare_at_amount_minor == null ? null : Number(row.compare_at_amount_minor),
     valid_from: String(row.valid_from), valid_until: row.valid_until == null ? null : String(row.valid_until),
     provenance: String(row.provenance), created_by: String(row.price_created_by), created_at: String(row.price_created_at),
+    provider_mappings: [],
   })) }
 }
 
@@ -309,6 +318,21 @@ function validateOptionalBoolean(value: unknown, field: string, fallback: boolea
   return value
 }
 
+function validateChannelAvailability(
+  value: unknown,
+  field: string,
+  fallback: { seo: boolean; ordering: boolean },
+): { seo: boolean; ordering: boolean } {
+  if (value !== undefined && (value === null || typeof value !== 'object' || Array.isArray(value))) {
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an object` })
+  }
+  const channels = value as { seo?: unknown; ordering?: unknown } | undefined
+  return {
+    seo: validateOptionalBoolean(channels?.seo, `${field}.seo`, fallback.seo),
+    ordering: validateOptionalBoolean(channels?.ordering, `${field}.ordering`, fallback.ordering),
+  }
+}
+
 function productEvent(
   db: DbClient,
   eventType: OrganizationEventType,
@@ -363,6 +387,10 @@ export async function createProduct(
   const requestedOrder = input.sort_order === undefined ? productCount : validateNonNegativeInteger(input.sort_order, 'sort_order')
   if (requestedOrder > productCount) throw new HTTPError({ statusCode: 400, statusMessage: 'sort_order must be within the location Product range' })
   const featuredSortOrder = input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, 'featured_sort_order')
+  const isVisible = validateOptionalBoolean(input.is_visible, 'is_visible', true)
+  const isAvailable = validateOptionalBoolean(input.available, 'available', true)
+  const isFeatured = validateOptionalBoolean(input.featured, 'featured', false)
+  const channelAvailability = validateChannelAvailability(input.channel_availability, 'channel_availability', { seo: isVisible, ordering: isAvailable })
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const insert: BatchQuery = {
@@ -375,9 +403,9 @@ export async function createProduct(
     params: [
       id, organizationId, siteId, locationId, category, name, slug, description,
       orderUrl,
-      validateOptionalBoolean(input.is_visible, 'is_visible', true),
-      validateOptionalBoolean(input.available, 'available', true),
-      validateOptionalBoolean(input.featured, 'featured', false),
+      isVisible,
+      isAvailable,
+      isFeatured,
       featuredSortOrder, requestedOrder, JSON.stringify(tags), JSON.stringify(details),
       seoTitle, seoDescription, canonicalUrl, robots, source, now, now, actor, actor,
     ],
@@ -387,14 +415,27 @@ export async function createProduct(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
   }
+  const insertPlacement: BatchQuery = {
+    query: `INSERT INTO product_menu_placements (id, organization_id, site_id, location_id, product_id, section, sort_order, is_published, featured, featured_sort_order, created_at, updated_at, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [crypto.randomUUID(), organizationId, siteId, locationId, id, category, requestedOrder, isVisible, isFeatured, featuredSortOrder, now, now, actor, actor],
+  }
+  const insertChannels: BatchQuery = {
+    query: `INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, is_available, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 'seo', ?, ?, ?, ?), (?, ?, ?, ?, ?, 'ordering', ?, ?, ?, ?)`,
+    params: [crypto.randomUUID(), organizationId, siteId, locationId, id, channelAvailability.seo, now, now, actor, crypto.randomUUID(), organizationId, siteId, locationId, id, channelAvailability.ordering, now, now, actor],
+  }
   const queries: BatchQuery[] = requestedOrder === productCount
-    ? [insert, insertPrice]
+    ? [insert, insertPrice, insertPlacement, insertChannels]
     : [
         { query: `UPDATE products SET sort_order = sort_order + ? WHERE site_id = ? AND location_id = ? AND product_type = 'standard'`, params: [REORDER_OFFSET, siteId, locationId] },
         insert,
         insertPrice,
+        insertPlacement,
+        insertChannels,
         { query: `UPDATE products SET sort_order = (sort_order - ?) + CASE WHEN sort_order - ? >= ? THEN 1 ELSE 0 END WHERE site_id = ? AND location_id = ? AND product_type = 'standard' AND id <> ?`, params: [REORDER_OFFSET, REORDER_OFFSET, requestedOrder, siteId, locationId, id] },
       ]
+  if (input.modifier_groups) {
+    queries.push(...replaceProductModifierQueries({ organizationId, siteId, locationId, productId: id, modifierGroups: input.modifier_groups, actor, now }))
+  }
   queries.push(publicResourceCacheInvalidationQuery(siteId, 'product.created'))
   await executeBatch(db, queries, { operation: 'create Product' })
   await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, productId: id, metadata: { category, name } })
@@ -416,11 +457,16 @@ export async function createProductsBatch(
   if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > PRODUCT_LIMITS.batchCreate) {
     throw new HTTPError({ statusCode: 400, statusMessage: `products must contain between 1 and ${PRODUCT_LIMITS.batchCreate} rows` })
   }
+  if (inputs.some(input => input.modifier_groups !== undefined)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Use create_product or update_product to manage modifier groups' })
+  }
   const existing = await queryAll<{ slug: string }>(db, `SELECT slug FROM products WHERE site_id = ? AND location_id = ?`, [siteId, locationId])
   const usedSlugs = new Set(existing.map(row => row.slug))
   const now = new Date().toISOString()
   const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
   const ids: string[] = []
+  const placementRows: Array<Record<string, unknown>> = []
+  const channelRows: Array<Record<string, unknown>> = []
   const inserts: BatchQuery[] = inputs.flatMap((input, index) => {
     const category = requireTrimmedProductString(input.category, `products[${index}].category`, PRODUCT_LIMITS.category)
     const name = requireTrimmedProductString(input.name, `products[${index}].name`, PRODUCT_LIMITS.name)
@@ -439,6 +485,16 @@ export async function createProductsBatch(
     if (!slug) throw new HTTPError({ statusCode: 409, statusMessage: `Unable to create a unique Product slug for products[${index}]` })
     const id = crypto.randomUUID()
     ids.push(id)
+    const isVisible = validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, true)
+    const isAvailable = validateOptionalBoolean(input.available, `products[${index}].available`, true)
+    const isFeatured = validateOptionalBoolean(input.featured, `products[${index}].featured`, false)
+    const channelAvailability = validateChannelAvailability(input.channel_availability, `products[${index}].channel_availability`, { seo: isVisible, ordering: isAvailable })
+    const featuredSortOrder = input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`)
+    placementRows.push({ id: crypto.randomUUID(), product_id: id, section: category, sort_order: existing.length + index, is_published: isVisible, featured: isFeatured, featured_sort_order: featuredSortOrder })
+    channelRows.push(
+      { id: crypto.randomUUID(), product_id: id, channel: 'seo', is_available: channelAvailability.seo },
+      { id: crypto.randomUUID(), product_id: id, channel: 'ordering', is_available: channelAvailability.ordering },
+    )
     return [{
       query: `INSERT INTO products (
         id, organization_id, site_id, location_id, product_type, category, name, slug, description, order_url,
@@ -449,10 +505,10 @@ export async function createProductsBatch(
       params: [
         id, organizationId, siteId, locationId, category, name, slug, description,
         validateProductOrderUrl(input.order_url),
-        validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, true),
-        validateOptionalBoolean(input.available, `products[${index}].available`, true),
-        validateOptionalBoolean(input.featured, `products[${index}].featured`, false),
-        input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
+        isVisible,
+        isAvailable,
+        isFeatured,
+        featuredSortOrder,
         existing.length + index, JSON.stringify(validateProductTags(input.tags)), JSON.stringify(validateProductDetails(input.details)),
         normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
         normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
@@ -465,7 +521,16 @@ export async function createProductsBatch(
       params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
     }]
   })
-  await executeBatch(db, [...inserts, publicResourceCacheInvalidationQuery(siteId, 'product.batch_created')], { operation: 'batch create Products' })
+  const catalogInserts: BatchQuery[] = [{
+    query: `INSERT INTO product_menu_placements (id, organization_id, site_id, location_id, product_id, section, sort_order, is_published, featured, featured_sort_order, created_at, updated_at, created_by, updated_by)
+            SELECT json_extract(value, '$.id'), ?, ?, ?, json_extract(value, '$.product_id'), json_extract(value, '$.section'), json_extract(value, '$.sort_order'), json_extract(value, '$.is_published'), json_extract(value, '$.featured'), json_extract(value, '$.featured_sort_order'), ?, ?, ?, ? FROM json_each(?)`,
+    params: [organizationId, siteId, locationId, now, now, actor, actor, JSON.stringify(placementRows)],
+  }, {
+    query: `INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, is_available, created_at, updated_at, updated_by)
+            SELECT json_extract(value, '$.id'), ?, ?, ?, json_extract(value, '$.product_id'), json_extract(value, '$.channel'), json_extract(value, '$.is_available'), ?, ?, ? FROM json_each(?)`,
+    params: [organizationId, siteId, locationId, now, now, actor, JSON.stringify(channelRows)],
+  }]
+  await executeBatch(db, [...inserts, ...catalogInserts, publicResourceCacheInvalidationQuery(siteId, 'product.batch_created')], { operation: 'batch create Products' })
   await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, metadata: { product_count: ids.length } })
   const created = await queryAll<ProductRow>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p ${ACTIVE_PRICE_JOIN} WHERE p.site_id = ? AND p.location_id = ? AND p.product_type = 'standard' AND p.id IN (SELECT value FROM json_each(?)) ORDER BY p.sort_order, p.id`, [siteId, locationId, JSON.stringify(ids)])
   return hydrateProductMedia(db, siteId, created.map(mapProduct))
@@ -482,6 +547,9 @@ export async function syncProducts(
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length > PRODUCT_LIMITS.sync) throw new HTTPError({ statusCode: 400, statusMessage: `products may contain at most ${PRODUCT_LIMITS.sync} rows` })
+  if (inputs.some(input => input.modifier_groups !== undefined)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Use update_product to manage modifier groups' })
+  }
   const existing = await listLocationProducts(db, organizationId, siteId, locationId)
   const existingById = new Map(existing.map(product => [product.id, product]))
   const requestedIds = inputs.map(input => input.product_id).filter((id): id is string => typeof id === 'string' && id.length > 0)
@@ -495,6 +563,8 @@ export async function syncProducts(
   const usedSlugs = new Set(existing.map(product => product.slug))
   const orderedIds: string[] = []
   const writes: BatchQuery[] = []
+  const placementRows: Array<Record<string, unknown>> = []
+  const channelRows: Array<Record<string, unknown>> = []
   for (const [index, input] of inputs.entries()) {
     const category = requireTrimmedProductString(input.category, `products[${index}].category`, PRODUCT_LIMITS.category)
     const name = requireTrimmedProductString(input.name, `products[${index}].name`, PRODUCT_LIMITS.name)
@@ -508,15 +578,28 @@ export async function syncProducts(
     const current = input.product_id ? existingById.get(input.product_id)! : null
     const id = current?.id ?? crypto.randomUUID()
     orderedIds.push(id)
+    const isVisible = validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, current?.is_visible ?? true)
+    const isAvailable = validateOptionalBoolean(input.available, `products[${index}].available`, current?.available ?? true)
+    const isFeatured = validateOptionalBoolean(input.featured, `products[${index}].featured`, current?.featured ?? false)
+    const channelAvailability = validateChannelAvailability(input.channel_availability, `products[${index}].channel_availability`, {
+      seo: current?.channel_availability.find(row => row.channel === 'seo')?.is_available ?? isVisible,
+      ordering: current?.channel_availability.find(row => row.channel === 'ordering')?.is_available ?? isAvailable,
+    })
+    const featuredSortOrder = input.featured_sort_order === undefined ? current?.featured_sort_order ?? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`)
+    placementRows.push({ id: current?.menu_placement?.id ?? crypto.randomUUID(), product_id: id, section: category, sort_order: index, is_published: isVisible, featured: isFeatured, featured_sort_order: featuredSortOrder })
+    channelRows.push(
+      { id: crypto.randomUUID(), product_id: id, channel: 'seo', is_available: channelAvailability.seo },
+      { id: crypto.randomUUID(), product_id: id, channel: 'ordering', is_available: channelAvailability.ordering },
+    )
     if (current) {
       writes.push({
         query: `UPDATE products SET category=?, name=?, description=?, order_url=?, is_visible=?, available=?, featured=?, featured_sort_order=?, tags_json=?, details_json=?, seo_title=?, seo_description=?, canonical_url=?, robots=?, source='manual', updated_at=?, updated_by=? WHERE id=? AND organization_id=? AND site_id=? AND location_id=? AND product_type='standard'`,
         params: [category, name, input.description === undefined ? current.description : description,
           input.order_url === undefined ? current.order_url : orderUrl,
-          validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, current.is_visible),
-          validateOptionalBoolean(input.available, `products[${index}].available`, current.available),
-          validateOptionalBoolean(input.featured, `products[${index}].featured`, current.featured),
-          input.featured_sort_order === undefined ? current.featured_sort_order : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
+          isVisible,
+          isAvailable,
+          isFeatured,
+          featuredSortOrder,
           JSON.stringify(input.tags === undefined ? current.tags : tags),
           JSON.stringify(input.details === undefined ? current.details : details),
           input.seo_title === undefined ? current.seo_title : normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
@@ -556,10 +639,10 @@ export async function syncProducts(
     writes.push({
       query: `INSERT INTO products (id, organization_id, site_id, location_id, product_type, category, name, slug, description, order_url, is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json, seo_title, seo_description, canonical_url, robots, source, created_at, updated_at, created_by, updated_by) VALUES (?,?,?,?,'standard',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       params: [id, organizationId, siteId, locationId, category, name, slug, description, orderUrl,
-        validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, true),
-        validateOptionalBoolean(input.available, `products[${index}].available`, true),
-        validateOptionalBoolean(input.featured, `products[${index}].featured`, false),
-        input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
+        isVisible,
+        isAvailable,
+        isFeatured,
+        featuredSortOrder,
         index, JSON.stringify(tags), JSON.stringify(details),
         normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
         normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
@@ -580,6 +663,17 @@ export async function syncProducts(
       params: [now, actor, organizationId, siteId, locationId, d1JsonArray(intendedIds)],
     })
   }
+  writes.push({
+    query: `INSERT INTO product_menu_placements (id, organization_id, site_id, location_id, product_id, section, sort_order, is_published, featured, featured_sort_order, created_at, updated_at, created_by, updated_by)
+            SELECT json_extract(value, '$.id'), ?, ?, ?, json_extract(value, '$.product_id'), json_extract(value, '$.section'), json_extract(value, '$.sort_order'), json_extract(value, '$.is_published'), json_extract(value, '$.featured'), json_extract(value, '$.featured_sort_order'), ?, ?, ?, ? FROM json_each(?) WHERE true
+            ON CONFLICT (organization_id, site_id, location_id, product_id) DO UPDATE SET section = excluded.section, sort_order = excluded.sort_order, is_published = excluded.is_published, featured = excluded.featured, featured_sort_order = excluded.featured_sort_order, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    params: [organizationId, siteId, locationId, now, now, actor, actor, JSON.stringify(placementRows)],
+  }, {
+    query: `INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, is_available, created_at, updated_at, updated_by)
+            SELECT json_extract(value, '$.id'), ?, ?, ?, json_extract(value, '$.product_id'), json_extract(value, '$.channel'), json_extract(value, '$.is_available'), ?, ?, ? FROM json_each(?) WHERE true
+            ON CONFLICT (organization_id, site_id, location_id, product_id, channel) DO UPDATE SET is_available = excluded.is_available, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    params: [organizationId, siteId, locationId, now, now, actor, JSON.stringify(channelRows)],
+  })
   writes.push(denseProductOrderQuery({ organizationId, siteId, locationId, ids: orderedIds, actor, now }))
   writes.push(publicResourceCacheInvalidationQuery(siteId, 'product.synced'))
   await executeBatch(db, writes, { operation: 'sync Products' })
@@ -624,10 +718,11 @@ export async function updateProduct(
   if (input.seo_description !== undefined) add('seo_description', normalizeOptionalProductString(input.seo_description, 'seo_description', PRODUCT_LIMITS.seoDescription))
   if (input.canonical_url !== undefined) add('canonical_url', validateProductCanonicalUrl(input.canonical_url))
   if (input.robots !== undefined) add('robots', validateProductRobots(input.robots))
-  if (!sets.length && input.price === undefined) return existing
+  if (!sets.length && input.price === undefined && input.channel_availability === undefined && input.modifier_groups === undefined) return existing
   const contentChanged = input.price !== undefined || ['category', 'name', 'description', 'order_url', 'tags_json', 'details_json'].some(column => sets.some(set => set.startsWith(`${column} =`)))
   if (contentChanged) add('source', 'manual')
-  add('updated_at', new Date().toISOString())
+  const now = new Date().toISOString()
+  add('updated_at', now)
   add('updated_by', actor)
   const writes: BatchQuery[] = []
   if (sets.length) {
@@ -635,7 +730,7 @@ export async function updateProduct(
     writes.push({ query: `UPDATE products SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`, params })
   }
   if (input.price !== undefined) {
-    const at = input.price?.valid_from ?? new Date().toISOString()
+    const at = input.price?.valid_from ?? now
     if (existing.price && at <= existing.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: 'Replacement Price must start after the active Price' })
     if (input.price !== null) {
       const price = normalizePriceInput({ ...input.price, valid_from: at }, await siteDefaultCurrency(db, organizationId, siteId))
@@ -651,11 +746,42 @@ export async function updateProduct(
       writes.push({
         query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()],
+        params: [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
       })
     } else if (existing.price) {
       writes.push({ query: `UPDATE prices SET valid_until = ? WHERE id = ? AND valid_until IS NULL`, params: [at, existing.price.id] })
     }
+  }
+  const placementChanged = input.category !== undefined || input.is_visible !== undefined || input.featured !== undefined || input.featured_sort_order !== undefined
+  if (placementChanged || !existing.menu_placement) {
+    writes.push({
+      query: `INSERT INTO product_menu_placements (id, organization_id, site_id, location_id, product_id, section, sort_order, is_published, featured, featured_sort_order, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT (organization_id, site_id, location_id, product_id) DO UPDATE SET section = excluded.section, is_published = excluded.is_published, featured = excluded.featured, featured_sort_order = excluded.featured_sort_order, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+      params: [existing.menu_placement?.id ?? crypto.randomUUID(), organizationId, siteId, locationId, productId, input.category ?? existing.menu_placement?.section ?? existing.category, existing.menu_placement?.sort_order ?? existing.sort_order, input.is_visible ?? existing.menu_placement?.is_published ?? existing.is_visible, input.featured ?? existing.menu_placement?.featured ?? existing.featured, input.featured_sort_order ?? existing.menu_placement?.featured_sort_order ?? existing.featured_sort_order, now, now, actor, actor],
+    })
+  }
+  if (input.channel_availability !== undefined || input.is_visible !== undefined || input.available !== undefined || existing.channel_availability.length === 0) {
+    const currentSeo = existing.channel_availability.find(row => row.channel === 'seo')?.is_available ?? existing.is_visible
+    const currentOrdering = existing.channel_availability.find(row => row.channel === 'ordering')?.is_available ?? existing.available
+    const channelAvailability = validateChannelAvailability(input.channel_availability, 'channel_availability', {
+      seo: input.is_visible ?? currentSeo,
+      ordering: input.available ?? currentOrdering,
+    })
+    for (const [channel, available] of [
+      ['seo', channelAvailability.seo],
+      ['ordering', channelAvailability.ordering],
+    ] as const) {
+      writes.push({
+        query: `INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, is_available, created_at, updated_at, updated_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (organization_id, site_id, location_id, product_id, channel) DO UPDATE SET is_available = excluded.is_available, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+        params: [crypto.randomUUID(), organizationId, siteId, locationId, productId, channel, available, now, now, actor],
+      })
+    }
+  }
+  if (input.modifier_groups !== undefined) {
+    writes.push(...replaceProductModifierQueries({ organizationId, siteId, locationId, productId, modifierGroups: input.modifier_groups, actor, now }))
   }
   const [result] = await executeBatch(db, [
     ...writes,
@@ -853,10 +979,17 @@ function atomicProductCategoryMoveQuery({ organizationId, siteId, locationId, ca
   }
 }
 
-async function persistProductMove(db: DbClient, siteId: string, move: BatchQuery): Promise<void> {
-  await executeBatch(db, [
-    move,
-    publicResourceCacheInvalidationQuery(siteId, 'product.reordered'),
+async function persistProductMove(input: ProductOrderScope & { move: BatchQuery; now: string }): Promise<void> {
+  await executeBatch(input.db, [
+    input.move,
+    {
+      query: `UPDATE product_menu_placements
+                 SET sort_order = (SELECT sort_order FROM products WHERE products.id = product_menu_placements.product_id),
+                     updated_at = ?, updated_by = ?
+               WHERE organization_id = ? AND site_id = ? AND location_id = ?`,
+      params: [input.now, input.actor, input.organizationId, input.siteId, input.locationId],
+    },
+    publicResourceCacheInvalidationQuery(input.siteId, 'product.reordered'),
   ], { operation: 'reorder Products' })
 }
 
@@ -867,15 +1000,16 @@ export async function moveProducts({ db, organizationId, siteId, locationId, pro
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const existingIds = (await orderedProducts({ db, organizationId, siteId, locationId })).map(product => product.id)
   validateProductMove(existingIds, productIds, beforeProductId)
-  await persistProductMove(db, siteId, atomicProductMoveQuery({
+  const now = new Date().toISOString()
+  await persistProductMove({ db, organizationId, siteId, locationId, actor, now, move: atomicProductMoveQuery({
     organizationId,
     siteId,
     locationId,
     movedIds: productIds,
     beforeId: beforeProductId,
     actor,
-    now: new Date().toISOString(),
-  }))
+    now,
+  }) })
   await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { product_ids: productIds, before_product_id: beforeProductId } })
 }
 
@@ -905,15 +1039,16 @@ export async function moveProductCategory({ db, organizationId, siteId, location
     ? null
     : remainingProducts.find(product => product.category === normalizedBeforeCategory)?.id ?? null
   validateProductMove(products.map(product => product.id), movedIds, beforeProductId)
-  await persistProductMove(db, siteId, atomicProductCategoryMoveQuery({
+  const now = new Date().toISOString()
+  await persistProductMove({ db, organizationId, siteId, locationId, actor, now, move: atomicProductCategoryMoveQuery({
     organizationId,
     siteId,
     locationId,
     category: normalizedCategory,
     beforeCategory: normalizedBeforeCategory,
     actor,
-    now: new Date().toISOString(),
-  }))
+    now,
+  }) })
   await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { category: normalizedCategory, before_category: normalizedBeforeCategory, product_count: movedIds.length } })
 }
 
@@ -934,6 +1069,7 @@ export async function deleteProduct(
     { query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id = ? AND organization_id = ? AND site_id = ?`, params: [productId, organizationId, siteId] },
     { query: `DELETE FROM products WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`, params: [productId, organizationId, siteId, locationId] },
     denseProductOrderQuery({ organizationId, siteId, locationId, ids: remainingIds, actor, now }),
+    { query: `UPDATE product_menu_placements SET sort_order = (SELECT sort_order FROM products WHERE products.id = product_menu_placements.product_id), updated_at = ?, updated_by = ? WHERE organization_id = ? AND site_id = ? AND location_id = ?`, params: [now, actor, organizationId, siteId, locationId] },
     publicResourceCacheInvalidationQuery(siteId, 'product.deleted'),
   ], { operation: 'delete Product' })
   await productEvent(db, 'product.deleted', { organizationId, siteId, locationId, actor, productId, metadata: { category: existing.category } })
@@ -957,6 +1093,7 @@ export async function renameProductCategory(
   const now = new Date().toISOString()
   const [result] = await executeBatch(db, [
     { query: `UPDATE products SET category = ?, updated_at = ?, updated_by = ?, source = 'manual' WHERE organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard' AND category = ?`, params: [newCategory, now, actor, organizationId, siteId, locationId, oldCategory] },
+    { query: `UPDATE product_menu_placements SET section = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND site_id = ? AND location_id = ? AND section = ?`, params: [newCategory, now, actor, organizationId, siteId, locationId, oldCategory] },
     publicResourceCacheInvalidationQuery(siteId, 'product.category_renamed'),
   ], { operation: 'rename Product category' })
   const changes = Number(result?.meta?.changes ?? 0)
@@ -987,6 +1124,7 @@ export async function deleteProductCategory(
     { query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND site_id = ?`, params: [idJson, organizationId, siteId] },
     { query: `DELETE FROM products WHERE id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`, params: [idJson, organizationId, siteId, locationId] },
     denseProductOrderQuery({ organizationId, siteId, locationId, ids: remainingIds, actor, now }),
+    { query: `UPDATE product_menu_placements SET sort_order = (SELECT p.sort_order FROM products p WHERE p.id = product_menu_placements.product_id), updated_at = ?, updated_by = ? WHERE organization_id = ? AND site_id = ? AND location_id = ?`, params: [now, actor, organizationId, siteId, locationId] },
     publicResourceCacheInvalidationQuery(siteId, 'product.category_deleted'),
   ], { operation: 'delete Product category' })
   await productEvent(db, 'product.category_deleted', { organizationId, siteId, locationId, actor, metadata: { category, product_count: deletedIds.length } })

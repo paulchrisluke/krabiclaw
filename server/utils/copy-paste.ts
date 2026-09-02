@@ -310,6 +310,39 @@ async function copyProducts(
         SELECT ?, organization_id, site_id, ?, ?, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, 'copy', ?, ? FROM prices WHERE id = ?`,
       params: [crypto.randomUUID(), targetLocationId, newId, userId, now, price.id],
     })
+    statements.push({
+      query: `INSERT INTO product_menu_placements (id, organization_id, site_id, location_id, product_id, section, sort_order, is_published, featured, featured_sort_order, created_at, updated_at, created_by, updated_by)
+              SELECT ?, organization_id, site_id, ?, ?, section, ?, is_published, featured, featured_sort_order, ?, ?, ?, ? FROM product_menu_placements WHERE product_id = ?`,
+      params: [crypto.randomUUID(), targetLocationId, newId, targetCount + index, now, now, userId, userId, product.id],
+    })
+    const channels = await queryAll<{ channel: string }>(db, `SELECT channel FROM product_channel_availability WHERE product_id = ? ORDER BY channel`, [product.id])
+    for (const channel of channels) statements.push({
+      query: `INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, is_available, created_at, updated_at, updated_by)
+              SELECT ?, organization_id, site_id, ?, ?, channel, is_available, ?, ?, ? FROM product_channel_availability WHERE product_id = ? AND channel = ?`,
+      params: [crypto.randomUUID(), targetLocationId, newId, now, now, userId, product.id, channel.channel],
+    })
+    const modifierGroups = await queryAll<{ id: string }>(db, `
+      SELECT mg.id FROM modifier_groups mg
+      JOIN product_modifier_groups pmg ON pmg.modifier_group_id = mg.id
+      WHERE pmg.product_id = ? ORDER BY pmg.sort_order, mg.id
+    `, [product.id])
+    for (const [groupIndex, group] of modifierGroups.entries()) {
+      const newGroupId = crypto.randomUUID()
+      statements.push({
+        query: `INSERT INTO modifier_groups (id, organization_id, site_id, location_id, name, minimum_selections, maximum_selections, sort_order, is_active, created_at, updated_at, created_by, updated_by)
+                SELECT ?, organization_id, site_id, ?, name, minimum_selections, maximum_selections, ?, is_active, ?, ?, ?, ? FROM modifier_groups WHERE id = ?`,
+        params: [newGroupId, targetLocationId, groupIndex, now, now, userId, userId, group.id],
+      }, {
+        query: `INSERT INTO product_modifier_groups (id, organization_id, site_id, location_id, product_id, modifier_group_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        params: [crypto.randomUUID(), organizationId, siteId, targetLocationId, newId, newGroupId, groupIndex],
+      })
+      const options = await queryAll<{ id: string }>(db, `SELECT id FROM modifier_options WHERE modifier_group_id = ? ORDER BY sort_order, id`, [group.id])
+      for (const [optionIndex, option] of options.entries()) statements.push({
+        query: `INSERT INTO modifier_options (id, organization_id, site_id, location_id, modifier_group_id, name, price_delta_minor, sort_order, is_active, created_at, updated_at, created_by, updated_by)
+                SELECT ?, organization_id, site_id, ?, ?, name, price_delta_minor, ?, is_active, ?, ?, ?, ? FROM modifier_options WHERE id = ?`,
+        params: [crypto.randomUUID(), targetLocationId, newGroupId, optionIndex, now, now, userId, userId, option.id],
+      })
+    }
     const mediaRows = await queryAll<{ slot: string; asset_id: string; sort_order: number }>(
       db,
       `SELECT slot, asset_id, sort_order FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = 'product' AND owner_id = ? AND slot IN ('image','gallery') AND status = 'active' ORDER BY slot, sort_order`,

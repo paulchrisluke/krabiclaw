@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:c6605df8a7d09ab064e50a89768b11d6200bb83fd45935226b08ced28fc5c3ed",
+  "fingerprint": "sha256:1894c8d0f103adf0cf814e2a3429fa44918b1db023cd419915fda0e5340f6279",
   "tools": [
     {
       "name": "analyze_document",
@@ -287,6 +287,18 @@
                 "category": {
                   "type": "string"
                 },
+                "channel_availability": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "ordering": {
+                      "type": "boolean"
+                    },
+                    "seo": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                },
                 "description": {
                   "type": "string"
                 },
@@ -450,6 +462,41 @@
                 },
                 "category": {
                   "type": "string"
+                },
+                "channel_availability": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "seo",
+                          "ordering"
+                        ],
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_available": {
+                        "type": "boolean"
+                      },
+                      "location_id": {
+                        "type": "string"
+                      },
+                      "product_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "location_id",
+                      "product_id",
+                      "channel",
+                      "is_available"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "created_at": {
                   "type": "string"
@@ -647,6 +694,209 @@
                 "location_id": {
                   "type": "string"
                 },
+                "menu_placement": {
+                  "properties": {
+                    "featured": {
+                      "type": "boolean"
+                    },
+                    "featured_sort_order": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_published": {
+                      "type": "boolean"
+                    },
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    },
+                    "section": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "location_id",
+                    "product_id",
+                    "section",
+                    "sort_order",
+                    "is_published",
+                    "featured",
+                    "featured_sort_order"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "modifier_groups": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_active": {
+                        "type": "boolean"
+                      },
+                      "maximum_selections": {
+                        "type": "integer"
+                      },
+                      "minimum_selections": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "options": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "is_active": {
+                              "type": "boolean"
+                            },
+                            "modifier_group_id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "price_delta_minor": {
+                              "type": "integer"
+                            },
+                            "provider_mappings": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "external_id": {
+                                    "type": "string"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "provider_account_reference": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "resource_id": {
+                                    "type": "string"
+                                  },
+                                  "resource_type": {
+                                    "enum": [
+                                      "product",
+                                      "price",
+                                      "modifier_group",
+                                      "modifier_option"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "resource_type",
+                                  "resource_id",
+                                  "provider",
+                                  "provider_account_reference",
+                                  "external_id"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "sort_order": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "modifier_group_id",
+                            "name",
+                            "price_delta_minor",
+                            "sort_order",
+                            "is_active",
+                            "provider_mappings"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "provider_mappings": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "external_id": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "provider_account_reference": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "resource_id": {
+                              "type": "string"
+                            },
+                            "resource_type": {
+                              "enum": [
+                                "product",
+                                "price",
+                                "modifier_group",
+                                "modifier_option"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "resource_type",
+                            "resource_id",
+                            "provider",
+                            "provider_account_reference",
+                            "external_id"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "sort_order": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "minimum_selections",
+                      "maximum_selections",
+                      "sort_order",
+                      "is_active",
+                      "options",
+                      "provider_mappings"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "name": {
                   "type": "string"
                 },
@@ -675,6 +925,50 @@
                     },
                     "provenance": {
                       "type": "string"
+                    },
+                    "provider_mappings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "external_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "provider_account_reference": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "resource_id": {
+                            "type": "string"
+                          },
+                          "resource_type": {
+                            "enum": [
+                              "product",
+                              "price",
+                              "modifier_group",
+                              "modifier_option"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "resource_type",
+                          "resource_id",
+                          "provider",
+                          "provider_account_reference",
+                          "external_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "tax_behavior": {
                       "enum": [
@@ -711,12 +1005,57 @@
                     "compare_at_amount_minor",
                     "valid_from",
                     "valid_until",
-                    "provenance"
+                    "provenance",
+                    "provider_mappings"
                   ],
                   "type": [
                     "object",
                     "null"
                   ]
+                },
+                "provider_mappings": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "external_id": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "provider_account_reference": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "resource_id": {
+                        "type": "string"
+                      },
+                      "resource_type": {
+                        "enum": [
+                          "product",
+                          "price",
+                          "modifier_group",
+                          "modifier_option"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "resource_type",
+                      "resource_id",
+                      "provider",
+                      "provider_account_reference",
+                      "external_id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "robots": {
                   "type": [
@@ -786,7 +1125,11 @@
                 "created_at",
                 "updated_at",
                 "created_by",
-                "updated_by"
+                "updated_by",
+                "menu_placement",
+                "channel_availability",
+                "modifier_groups",
+                "provider_mappings"
               ],
               "type": "object"
             },
@@ -2265,6 +2608,18 @@
           "category": {
             "type": "string"
           },
+          "channel_availability": {
+            "additionalProperties": false,
+            "properties": {
+              "ordering": {
+                "type": "boolean"
+              },
+              "seo": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
           "description": {
             "type": "string"
           },
@@ -2305,6 +2660,63 @@
           },
           "location_id": {
             "type": "string"
+          },
+          "modifier_groups": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "is_active": {
+                  "type": "boolean"
+                },
+                "maximum_selections": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "minimum_selections": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "options": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_active": {
+                        "type": "boolean"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "price_delta_minor": {
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 50,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name",
+                "options"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "type": "array"
           },
           "name": {
             "type": "string"
@@ -2420,6 +2832,41 @@
               },
               "category": {
                 "type": "string"
+              },
+              "channel_availability": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "channel": {
+                      "enum": [
+                        "seo",
+                        "ordering"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_available": {
+                      "type": "boolean"
+                    },
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "location_id",
+                    "product_id",
+                    "channel",
+                    "is_available"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
               },
               "created_at": {
                 "type": "string"
@@ -2617,6 +3064,209 @@
               "location_id": {
                 "type": "string"
               },
+              "menu_placement": {
+                "properties": {
+                  "featured": {
+                    "type": "boolean"
+                  },
+                  "featured_sort_order": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "is_published": {
+                    "type": "boolean"
+                  },
+                  "location_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  },
+                  "section": {
+                    "type": "string"
+                  },
+                  "sort_order": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "location_id",
+                  "product_id",
+                  "section",
+                  "sort_order",
+                  "is_published",
+                  "featured",
+                  "featured_sort_order"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "modifier_groups": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_active": {
+                      "type": "boolean"
+                    },
+                    "maximum_selections": {
+                      "type": "integer"
+                    },
+                    "minimum_selections": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "options": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "is_active": {
+                            "type": "boolean"
+                          },
+                          "modifier_group_id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "price_delta_minor": {
+                            "type": "integer"
+                          },
+                          "provider_mappings": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "external_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "provider_account_reference": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "resource_id": {
+                                  "type": "string"
+                                },
+                                "resource_type": {
+                                  "enum": [
+                                    "product",
+                                    "price",
+                                    "modifier_group",
+                                    "modifier_option"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "resource_type",
+                                "resource_id",
+                                "provider",
+                                "provider_account_reference",
+                                "external_id"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "sort_order": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "modifier_group_id",
+                          "name",
+                          "price_delta_minor",
+                          "sort_order",
+                          "is_active",
+                          "provider_mappings"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "provider_mappings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "external_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "provider_account_reference": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "resource_id": {
+                            "type": "string"
+                          },
+                          "resource_type": {
+                            "enum": [
+                              "product",
+                              "price",
+                              "modifier_group",
+                              "modifier_option"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "resource_type",
+                          "resource_id",
+                          "provider",
+                          "provider_account_reference",
+                          "external_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sort_order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "minimum_selections",
+                    "maximum_selections",
+                    "sort_order",
+                    "is_active",
+                    "options",
+                    "provider_mappings"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "name": {
                 "type": "string"
               },
@@ -2645,6 +3295,50 @@
                   },
                   "provenance": {
                     "type": "string"
+                  },
+                  "provider_mappings": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "external_id": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "provider_account_reference": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "resource_id": {
+                          "type": "string"
+                        },
+                        "resource_type": {
+                          "enum": [
+                            "product",
+                            "price",
+                            "modifier_group",
+                            "modifier_option"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "resource_type",
+                        "resource_id",
+                        "provider",
+                        "provider_account_reference",
+                        "external_id"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "tax_behavior": {
                     "enum": [
@@ -2681,12 +3375,57 @@
                   "compare_at_amount_minor",
                   "valid_from",
                   "valid_until",
-                  "provenance"
+                  "provenance",
+                  "provider_mappings"
                 ],
                 "type": [
                   "object",
                   "null"
                 ]
+              },
+              "provider_mappings": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "external_id": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "provider_account_reference": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "resource_id": {
+                      "type": "string"
+                    },
+                    "resource_type": {
+                      "enum": [
+                        "product",
+                        "price",
+                        "modifier_group",
+                        "modifier_option"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "resource_type",
+                    "resource_id",
+                    "provider",
+                    "provider_account_reference",
+                    "external_id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
               },
               "robots": {
                 "type": [
@@ -2756,7 +3495,11 @@
               "created_at",
               "updated_at",
               "created_by",
-              "updated_by"
+              "updated_by",
+              "menu_placement",
+              "channel_availability",
+              "modifier_groups",
+              "provider_mappings"
             ],
             "type": "object"
           }
@@ -5181,6 +5924,41 @@
               "category": {
                 "type": "string"
               },
+              "channel_availability": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "channel": {
+                      "enum": [
+                        "seo",
+                        "ordering"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_available": {
+                      "type": "boolean"
+                    },
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "location_id",
+                    "product_id",
+                    "channel",
+                    "is_available"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "created_at": {
                 "type": "string"
               },
@@ -5377,6 +6155,209 @@
               "location_id": {
                 "type": "string"
               },
+              "menu_placement": {
+                "properties": {
+                  "featured": {
+                    "type": "boolean"
+                  },
+                  "featured_sort_order": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "is_published": {
+                    "type": "boolean"
+                  },
+                  "location_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  },
+                  "section": {
+                    "type": "string"
+                  },
+                  "sort_order": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "location_id",
+                  "product_id",
+                  "section",
+                  "sort_order",
+                  "is_published",
+                  "featured",
+                  "featured_sort_order"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "modifier_groups": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_active": {
+                      "type": "boolean"
+                    },
+                    "maximum_selections": {
+                      "type": "integer"
+                    },
+                    "minimum_selections": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "options": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "is_active": {
+                            "type": "boolean"
+                          },
+                          "modifier_group_id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "price_delta_minor": {
+                            "type": "integer"
+                          },
+                          "provider_mappings": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "external_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "provider_account_reference": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "resource_id": {
+                                  "type": "string"
+                                },
+                                "resource_type": {
+                                  "enum": [
+                                    "product",
+                                    "price",
+                                    "modifier_group",
+                                    "modifier_option"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "resource_type",
+                                "resource_id",
+                                "provider",
+                                "provider_account_reference",
+                                "external_id"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "sort_order": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "modifier_group_id",
+                          "name",
+                          "price_delta_minor",
+                          "sort_order",
+                          "is_active",
+                          "provider_mappings"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "provider_mappings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "external_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "provider_account_reference": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "resource_id": {
+                            "type": "string"
+                          },
+                          "resource_type": {
+                            "enum": [
+                              "product",
+                              "price",
+                              "modifier_group",
+                              "modifier_option"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "resource_type",
+                          "resource_id",
+                          "provider",
+                          "provider_account_reference",
+                          "external_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sort_order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "minimum_selections",
+                    "maximum_selections",
+                    "sort_order",
+                    "is_active",
+                    "options",
+                    "provider_mappings"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "name": {
                 "type": "string"
               },
@@ -5405,6 +6386,50 @@
                   },
                   "provenance": {
                     "type": "string"
+                  },
+                  "provider_mappings": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "external_id": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "provider_account_reference": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "resource_id": {
+                          "type": "string"
+                        },
+                        "resource_type": {
+                          "enum": [
+                            "product",
+                            "price",
+                            "modifier_group",
+                            "modifier_option"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "resource_type",
+                        "resource_id",
+                        "provider",
+                        "provider_account_reference",
+                        "external_id"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "tax_behavior": {
                     "enum": [
@@ -5441,12 +6466,57 @@
                   "compare_at_amount_minor",
                   "valid_from",
                   "valid_until",
-                  "provenance"
+                  "provenance",
+                  "provider_mappings"
                 ],
                 "type": [
                   "object",
                   "null"
                 ]
+              },
+              "provider_mappings": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "external_id": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "provider_account_reference": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "resource_id": {
+                      "type": "string"
+                    },
+                    "resource_type": {
+                      "enum": [
+                        "product",
+                        "price",
+                        "modifier_group",
+                        "modifier_option"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "resource_type",
+                    "resource_id",
+                    "provider",
+                    "provider_account_reference",
+                    "external_id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
               },
               "robots": {
                 "type": [
@@ -5516,7 +6586,11 @@
               "created_at",
               "updated_at",
               "created_by",
-              "updated_by"
+              "updated_by",
+              "menu_placement",
+              "channel_availability",
+              "modifier_groups",
+              "provider_mappings"
             ],
             "type": "object"
           }
@@ -6984,6 +8058,41 @@
                 "category": {
                   "type": "string"
                 },
+                "channel_availability": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "seo",
+                          "ordering"
+                        ],
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_available": {
+                        "type": "boolean"
+                      },
+                      "location_id": {
+                        "type": "string"
+                      },
+                      "product_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "location_id",
+                      "product_id",
+                      "channel",
+                      "is_available"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "created_at": {
                   "type": "string"
                 },
@@ -7180,6 +8289,209 @@
                 "location_id": {
                   "type": "string"
                 },
+                "menu_placement": {
+                  "properties": {
+                    "featured": {
+                      "type": "boolean"
+                    },
+                    "featured_sort_order": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_published": {
+                      "type": "boolean"
+                    },
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    },
+                    "section": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "location_id",
+                    "product_id",
+                    "section",
+                    "sort_order",
+                    "is_published",
+                    "featured",
+                    "featured_sort_order"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "modifier_groups": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_active": {
+                        "type": "boolean"
+                      },
+                      "maximum_selections": {
+                        "type": "integer"
+                      },
+                      "minimum_selections": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "options": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "is_active": {
+                              "type": "boolean"
+                            },
+                            "modifier_group_id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "price_delta_minor": {
+                              "type": "integer"
+                            },
+                            "provider_mappings": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "external_id": {
+                                    "type": "string"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "provider_account_reference": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "resource_id": {
+                                    "type": "string"
+                                  },
+                                  "resource_type": {
+                                    "enum": [
+                                      "product",
+                                      "price",
+                                      "modifier_group",
+                                      "modifier_option"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "resource_type",
+                                  "resource_id",
+                                  "provider",
+                                  "provider_account_reference",
+                                  "external_id"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "sort_order": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "modifier_group_id",
+                            "name",
+                            "price_delta_minor",
+                            "sort_order",
+                            "is_active",
+                            "provider_mappings"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "provider_mappings": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "external_id": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "provider_account_reference": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "resource_id": {
+                              "type": "string"
+                            },
+                            "resource_type": {
+                              "enum": [
+                                "product",
+                                "price",
+                                "modifier_group",
+                                "modifier_option"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "resource_type",
+                            "resource_id",
+                            "provider",
+                            "provider_account_reference",
+                            "external_id"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "sort_order": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "minimum_selections",
+                      "maximum_selections",
+                      "sort_order",
+                      "is_active",
+                      "options",
+                      "provider_mappings"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "name": {
                   "type": "string"
                 },
@@ -7208,6 +8520,50 @@
                     },
                     "provenance": {
                       "type": "string"
+                    },
+                    "provider_mappings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "external_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "provider_account_reference": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "resource_id": {
+                            "type": "string"
+                          },
+                          "resource_type": {
+                            "enum": [
+                              "product",
+                              "price",
+                              "modifier_group",
+                              "modifier_option"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "resource_type",
+                          "resource_id",
+                          "provider",
+                          "provider_account_reference",
+                          "external_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "tax_behavior": {
                       "enum": [
@@ -7244,12 +8600,57 @@
                     "compare_at_amount_minor",
                     "valid_from",
                     "valid_until",
-                    "provenance"
+                    "provenance",
+                    "provider_mappings"
                   ],
                   "type": [
                     "object",
                     "null"
                   ]
+                },
+                "provider_mappings": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "external_id": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "provider_account_reference": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "resource_id": {
+                        "type": "string"
+                      },
+                      "resource_type": {
+                        "enum": [
+                          "product",
+                          "price",
+                          "modifier_group",
+                          "modifier_option"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "resource_type",
+                      "resource_id",
+                      "provider",
+                      "provider_account_reference",
+                      "external_id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "robots": {
                   "type": [
@@ -7319,7 +8720,11 @@
                 "created_at",
                 "updated_at",
                 "created_by",
-                "updated_by"
+                "updated_by",
+                "menu_placement",
+                "channel_availability",
+                "modifier_groups",
+                "provider_mappings"
               ],
               "type": "object"
             },
@@ -8428,6 +9833,41 @@
                 "category": {
                   "type": "string"
                 },
+                "channel_availability": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "seo",
+                          "ordering"
+                        ],
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_available": {
+                        "type": "boolean"
+                      },
+                      "location_id": {
+                        "type": "string"
+                      },
+                      "product_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "location_id",
+                      "product_id",
+                      "channel",
+                      "is_available"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "description": {
                   "type": "string"
                 },
@@ -8457,6 +9897,9 @@
                     "currency": {
                       "type": "string"
                     },
+                    "id": {
+                      "type": "string"
+                    },
                     "tax_behavior": {
                       "enum": [
                         "unspecified",
@@ -8475,6 +9918,7 @@
                     }
                   },
                   "required": [
+                    "id",
                     "amount_minor",
                     "currency",
                     "unit",
@@ -8499,7 +9943,8 @@
                 "price",
                 "is_visible",
                 "available",
-                "sort_order"
+                "sort_order",
+                "channel_availability"
               ],
               "type": "object"
             },
@@ -13715,6 +15160,18 @@
                 "category": {
                   "type": "string"
                 },
+                "channel_availability": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "ordering": {
+                      "type": "boolean"
+                    },
+                    "seo": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                },
                 "description": {
                   "type": "string"
                 },
@@ -13884,6 +15341,41 @@
                 },
                 "category": {
                   "type": "string"
+                },
+                "channel_availability": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "seo",
+                          "ordering"
+                        ],
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_available": {
+                        "type": "boolean"
+                      },
+                      "location_id": {
+                        "type": "string"
+                      },
+                      "product_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "location_id",
+                      "product_id",
+                      "channel",
+                      "is_available"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "created_at": {
                   "type": "string"
@@ -14081,6 +15573,209 @@
                 "location_id": {
                   "type": "string"
                 },
+                "menu_placement": {
+                  "properties": {
+                    "featured": {
+                      "type": "boolean"
+                    },
+                    "featured_sort_order": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_published": {
+                      "type": "boolean"
+                    },
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    },
+                    "section": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "location_id",
+                    "product_id",
+                    "section",
+                    "sort_order",
+                    "is_published",
+                    "featured",
+                    "featured_sort_order"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "modifier_groups": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_active": {
+                        "type": "boolean"
+                      },
+                      "maximum_selections": {
+                        "type": "integer"
+                      },
+                      "minimum_selections": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "options": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "is_active": {
+                              "type": "boolean"
+                            },
+                            "modifier_group_id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "price_delta_minor": {
+                              "type": "integer"
+                            },
+                            "provider_mappings": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "external_id": {
+                                    "type": "string"
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "provider_account_reference": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "resource_id": {
+                                    "type": "string"
+                                  },
+                                  "resource_type": {
+                                    "enum": [
+                                      "product",
+                                      "price",
+                                      "modifier_group",
+                                      "modifier_option"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "resource_type",
+                                  "resource_id",
+                                  "provider",
+                                  "provider_account_reference",
+                                  "external_id"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "sort_order": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "modifier_group_id",
+                            "name",
+                            "price_delta_minor",
+                            "sort_order",
+                            "is_active",
+                            "provider_mappings"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "provider_mappings": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "external_id": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "provider_account_reference": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "resource_id": {
+                              "type": "string"
+                            },
+                            "resource_type": {
+                              "enum": [
+                                "product",
+                                "price",
+                                "modifier_group",
+                                "modifier_option"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "resource_type",
+                            "resource_id",
+                            "provider",
+                            "provider_account_reference",
+                            "external_id"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "sort_order": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "minimum_selections",
+                      "maximum_selections",
+                      "sort_order",
+                      "is_active",
+                      "options",
+                      "provider_mappings"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "name": {
                   "type": "string"
                 },
@@ -14109,6 +15804,50 @@
                     },
                     "provenance": {
                       "type": "string"
+                    },
+                    "provider_mappings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "external_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "provider_account_reference": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "resource_id": {
+                            "type": "string"
+                          },
+                          "resource_type": {
+                            "enum": [
+                              "product",
+                              "price",
+                              "modifier_group",
+                              "modifier_option"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "resource_type",
+                          "resource_id",
+                          "provider",
+                          "provider_account_reference",
+                          "external_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "tax_behavior": {
                       "enum": [
@@ -14145,12 +15884,57 @@
                     "compare_at_amount_minor",
                     "valid_from",
                     "valid_until",
-                    "provenance"
+                    "provenance",
+                    "provider_mappings"
                   ],
                   "type": [
                     "object",
                     "null"
                   ]
+                },
+                "provider_mappings": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "external_id": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "provider_account_reference": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "resource_id": {
+                        "type": "string"
+                      },
+                      "resource_type": {
+                        "enum": [
+                          "product",
+                          "price",
+                          "modifier_group",
+                          "modifier_option"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "resource_type",
+                      "resource_id",
+                      "provider",
+                      "provider_account_reference",
+                      "external_id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "robots": {
                   "type": [
@@ -14220,7 +16004,11 @@
                 "created_at",
                 "updated_at",
                 "created_by",
-                "updated_by"
+                "updated_by",
+                "menu_placement",
+                "channel_availability",
+                "modifier_groups",
+                "provider_mappings"
               ],
               "type": "object"
             },
@@ -16471,6 +18259,18 @@
           "category": {
             "type": "string"
           },
+          "channel_availability": {
+            "additionalProperties": false,
+            "properties": {
+              "ordering": {
+                "type": "boolean"
+              },
+              "seo": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
           "description": {
             "type": "string"
           },
@@ -16508,6 +18308,63 @@
           },
           "is_visible": {
             "type": "boolean"
+          },
+          "modifier_groups": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "is_active": {
+                  "type": "boolean"
+                },
+                "maximum_selections": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "minimum_selections": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "options": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "is_active": {
+                        "type": "boolean"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "price_delta_minor": {
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 50,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name",
+                "options"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "type": "array"
           },
           "name": {
             "type": "string"
@@ -16623,6 +18480,41 @@
               },
               "category": {
                 "type": "string"
+              },
+              "channel_availability": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "channel": {
+                      "enum": [
+                        "seo",
+                        "ordering"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_available": {
+                      "type": "boolean"
+                    },
+                    "location_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "location_id",
+                    "product_id",
+                    "channel",
+                    "is_available"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
               },
               "created_at": {
                 "type": "string"
@@ -16820,6 +18712,209 @@
               "location_id": {
                 "type": "string"
               },
+              "menu_placement": {
+                "properties": {
+                  "featured": {
+                    "type": "boolean"
+                  },
+                  "featured_sort_order": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "is_published": {
+                    "type": "boolean"
+                  },
+                  "location_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  },
+                  "section": {
+                    "type": "string"
+                  },
+                  "sort_order": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "location_id",
+                  "product_id",
+                  "section",
+                  "sort_order",
+                  "is_published",
+                  "featured",
+                  "featured_sort_order"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "modifier_groups": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "is_active": {
+                      "type": "boolean"
+                    },
+                    "maximum_selections": {
+                      "type": "integer"
+                    },
+                    "minimum_selections": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "options": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "is_active": {
+                            "type": "boolean"
+                          },
+                          "modifier_group_id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "price_delta_minor": {
+                            "type": "integer"
+                          },
+                          "provider_mappings": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "external_id": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "provider": {
+                                  "type": "string"
+                                },
+                                "provider_account_reference": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "resource_id": {
+                                  "type": "string"
+                                },
+                                "resource_type": {
+                                  "enum": [
+                                    "product",
+                                    "price",
+                                    "modifier_group",
+                                    "modifier_option"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "resource_type",
+                                "resource_id",
+                                "provider",
+                                "provider_account_reference",
+                                "external_id"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "sort_order": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "modifier_group_id",
+                          "name",
+                          "price_delta_minor",
+                          "sort_order",
+                          "is_active",
+                          "provider_mappings"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "provider_mappings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "external_id": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "provider_account_reference": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "resource_id": {
+                            "type": "string"
+                          },
+                          "resource_type": {
+                            "enum": [
+                              "product",
+                              "price",
+                              "modifier_group",
+                              "modifier_option"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "resource_type",
+                          "resource_id",
+                          "provider",
+                          "provider_account_reference",
+                          "external_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sort_order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "minimum_selections",
+                    "maximum_selections",
+                    "sort_order",
+                    "is_active",
+                    "options",
+                    "provider_mappings"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "name": {
                 "type": "string"
               },
@@ -16848,6 +18943,50 @@
                   },
                   "provenance": {
                     "type": "string"
+                  },
+                  "provider_mappings": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "external_id": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "provider_account_reference": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "resource_id": {
+                          "type": "string"
+                        },
+                        "resource_type": {
+                          "enum": [
+                            "product",
+                            "price",
+                            "modifier_group",
+                            "modifier_option"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "resource_type",
+                        "resource_id",
+                        "provider",
+                        "provider_account_reference",
+                        "external_id"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "tax_behavior": {
                     "enum": [
@@ -16884,12 +19023,57 @@
                   "compare_at_amount_minor",
                   "valid_from",
                   "valid_until",
-                  "provenance"
+                  "provenance",
+                  "provider_mappings"
                 ],
                 "type": [
                   "object",
                   "null"
                 ]
+              },
+              "provider_mappings": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "external_id": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "provider_account_reference": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "resource_id": {
+                      "type": "string"
+                    },
+                    "resource_type": {
+                      "enum": [
+                        "product",
+                        "price",
+                        "modifier_group",
+                        "modifier_option"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "resource_type",
+                    "resource_id",
+                    "provider",
+                    "provider_account_reference",
+                    "external_id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
               },
               "robots": {
                 "type": [
@@ -16959,7 +19143,11 @@
               "created_at",
               "updated_at",
               "created_by",
-              "updated_by"
+              "updated_by",
+              "menu_placement",
+              "channel_availability",
+              "modifier_groups",
+              "provider_mappings"
             ],
             "type": "object"
           }

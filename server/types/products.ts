@@ -1,5 +1,13 @@
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import type { Price, PriceInput } from '~/shared/prices'
+import type {
+  CatalogAvailabilityInput,
+  CatalogProviderMapping,
+  MenuPlacement,
+  ModifierGroup,
+  ModifierGroupInput,
+  ProductChannelAvailability,
+} from '~/shared/ordering-catalog'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface ProductDetail {
@@ -43,6 +51,10 @@ export interface Product {
   updated_at: string
   created_by: string
   updated_by: string
+  menu_placement: MenuPlacement | null
+  channel_availability: ProductChannelAvailability[]
+  modifier_groups: ModifierGroup[]
+  provider_mappings: CatalogProviderMapping[]
 }
 
 export interface CreateProductInput {
@@ -63,6 +75,8 @@ export interface CreateProductInput {
   canonical_url?: string | null
   robots?: string | null
   source?: ProductSource
+  channel_availability?: CatalogAvailabilityInput
+  modifier_groups?: ModifierGroupInput[]
 }
 
 export interface UpdateProductInput {
@@ -82,6 +96,8 @@ export interface UpdateProductInput {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
+  channel_availability?: CatalogAvailabilityInput
+  modifier_groups?: ModifierGroupInput[]
 }
 
 export interface MoveProductsInput {
