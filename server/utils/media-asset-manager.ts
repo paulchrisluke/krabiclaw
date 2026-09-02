@@ -350,6 +350,33 @@ export async function hydrateMediaAssetRefs(
   return resolved
 }
 
+export async function hydrateMediaPlacementRefs(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    refs: Array<MediaAssetRefInput & { slot: string }>
+    allowedKinds?: Array<ResolvedMediaAsset['kind']>
+    fieldName?: string
+  },
+): Promise<void> {
+  const refsBySlot = new Map<string, MediaAssetRefInput[]>()
+  for (const ref of input.refs) {
+    const refs = refsBySlot.get(ref.slot) ?? []
+    refs.push({ asset_id: ref.asset_id })
+    refsBySlot.set(ref.slot, refs)
+  }
+  for (const [slot, refs] of refsBySlot) {
+    await hydrateMediaAssetRefs(db, {
+      organizationId: input.organizationId,
+      siteId: input.siteId,
+      refs,
+      allowedKinds: input.allowedKinds,
+      fieldName: `${input.fieldName ?? 'media'}.${slot}`,
+    })
+  }
+}
+
 export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().toISOString()): BatchQuery {
   if (data.kind === 'video' && !data.thumbnail_url?.trim()) {
     throw new Error(`Video asset ${data.id} requires a thumbnail URL`)

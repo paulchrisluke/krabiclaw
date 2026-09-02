@@ -3,7 +3,7 @@ import { cleanString } from '~/server/utils/api-response'
 import { getPublicBlawbyData } from '~/server/utils/professional-services'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
-import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs, hydrateMediaPlacementRefs, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { assertNoEmbeddedMediaFields } from '~/utils/tenant-page-blocks'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -104,7 +104,6 @@ function validateOfferingContent(item: ApiRecord, slug: string) {
       validationError(`offerings.${slug}.faqs[${index}] must be an object.`)
     }
   })
-  strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
 }
 
 async function listEditableOfferings(db: DbClient, siteId: string) {
@@ -272,6 +271,13 @@ export async function upsertProfessionalServiceContent(
     writtenOfferingIds.push(id)
     validateOfferingContent(item, slug)
     const offeringMedia = strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
+    await hydrateMediaPlacementRefs(db, {
+      organizationId,
+      siteId,
+      refs: offeringMedia,
+      allowedKinds: ['image', 'video'],
+      fieldName: `offerings.${slug}.media`,
+    })
     statements.push({
       query: `
       INSERT INTO offerings
@@ -401,6 +407,12 @@ export async function upsertProfessionalServiceContent(
       validationError('compliance.media cannot replace an existing placement; use attach/remove/reorder media operations')
     }
     const complianceMedia = existingCompliance ? [] : strictMediaRefs(item.media, 'compliance.media', ['document'])
+    await hydrateMediaAssetRefs(db, {
+      organizationId,
+      siteId,
+      refs: complianceMedia,
+      fieldName: 'compliance.media',
+    })
 
     statements.push({
       query: `
