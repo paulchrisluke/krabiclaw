@@ -57,8 +57,25 @@ defineEmits<{ action: [] }>()
 
 const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
 const organizationParent = inject(dashboardOrganizationParentKey, null)
+const route = useRoute()
+const scopeOverview = computed(() => {
+  const organizationSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+  const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+  const locationSlug = typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null
+  if (!organizationSlug || !siteSlug) return null
+  const sitePath = `/dashboard/${encodeURIComponent(organizationSlug)}/sites/${encodeURIComponent(siteSlug)}`
+  if (scopeHeaderModel?.value.scope === 'location' && locationSlug) {
+    return { label: 'Location overview', to: `${sitePath}/locations/${encodeURIComponent(locationSlug)}` }
+  }
+  if (scopeHeaderModel?.value.scope === 'site') return { label: 'Site overview', to: sitePath }
+  return null
+})
 const detailParent = computed(() => props.detailTo
   ? { label: props.detailLabel, to: props.detailTo }
   : props.backToOrganization ? organizationParent?.value ?? null : null)
-const scopeParent = computed(() => scopeHeaderModel?.value.parent ?? null)
+const scopeParent = computed(() => {
+  const overview = scopeOverview.value
+  if (overview && route.path !== overview.to) return overview
+  return scopeHeaderModel?.value.parent ?? null
+})
 </script>

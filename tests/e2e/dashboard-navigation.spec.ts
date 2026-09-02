@@ -70,6 +70,13 @@ test.describe('authenticated dashboard navigation', () => {
     }
     await expect(page.getByRole('link', { name: /Blog posts/ })).toHaveCount(0)
 
+    await page.getByRole('link', { name: /Photos/ }).click()
+    await expect(page).toHaveURL(new RegExp(`${locationBase}/photos$`))
+    const backToLocation = page.getByRole('link', { name: 'Back to Location overview' })
+    await expect(backToLocation).toHaveAttribute('href', locationBase)
+    await backToLocation.click()
+    await expect(page).toHaveURL(new RegExp(`${locationBase}$`))
+
     await page.goto(siteBase)
     await page.getByRole('tab', { name: 'Website', exact: true }).click()
     await expect(page.getByRole('link', { name: /Blog posts/ })).toBeVisible()
@@ -78,6 +85,14 @@ test.describe('authenticated dashboard navigation', () => {
       await expect(page.getByTestId(`manager-preview-${manager}`).locator('p, dl, blockquote').first()).toBeVisible()
     }
     await expect(page.getByRole('link', { name: /Photos/ })).toHaveCount(0)
+
+    await page.getByRole('link', { name: /Blog posts/ }).click()
+    await expect(page).toHaveURL(new RegExp(`${siteBase}/blog$`))
+    const backToSiteOverview = page.getByRole('link', { name: 'Back to Site overview' })
+    await expect(backToSiteOverview).toHaveAttribute('href', siteBase)
+    await backToSiteOverview.click()
+    await expect(page).toHaveURL(new RegExp(`${siteBase}$`))
+    await page.getByRole('tab', { name: 'Website', exact: true }).click()
 
     const tabs = page.getByRole('tablist')
     const previewAction = page.getByRole('link', { name: 'View site' })
