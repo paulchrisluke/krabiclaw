@@ -12,7 +12,7 @@
   />
   <UButton
     v-else-if="detailParent"
-    class="min-h-11 min-w-11 shrink-0 lg:hidden"
+    class="min-h-11 min-w-11 shrink-0"
     color="neutral"
     variant="ghost"
     size="sm"
@@ -23,7 +23,7 @@
   />
   <UButton
     v-else-if="scopeParent"
-    class="min-h-11 min-w-11 shrink-0 lg:hidden"
+    class="min-h-11 min-w-11 shrink-0"
     color="neutral"
     variant="ghost"
     size="sm"

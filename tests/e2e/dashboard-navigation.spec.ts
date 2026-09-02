@@ -31,6 +31,7 @@ test.describe('authenticated dashboard navigation', () => {
   test('keeps contextual targets and active state exclusive on desktop', async ({ page }) => {
     await page.goto(organizationBase)
     await expectPrimaryOrder(page)
+    await expect(page.getByRole('link', { name: /Back to/ })).toHaveCount(0)
     await expect(visiblePrimaryNavigation(page).locator('[aria-current="page"]')).toHaveCount(1)
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page')
 
@@ -50,6 +51,9 @@ test.describe('authenticated dashboard navigation', () => {
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Inbox', exact: true })).toHaveAttribute('aria-current', 'page')
 
     await page.goto(locationBase)
+    const desktopBack = page.getByRole('link', { name: 'Back to Site overview' })
+    await expect(desktopBack).toBeVisible()
+    await expect(desktopBack).toHaveAttribute('href', siteBase)
     await expect(page.getByRole('button', {
       name: 'Switch context. Current context: Kikuzuki Japanese Robatayaki & Izakaya',
     })).toBeVisible()
