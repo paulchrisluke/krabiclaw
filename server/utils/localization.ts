@@ -23,6 +23,7 @@ import {
   type LocalizedResourceType,
   type LocalizedValues,
 } from '~/server/utils/localization-registry'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export type PlatformLocaleDirection = 'ltr' | 'rtl'
 export type PlatformLocaleStatus = 'unavailable' | 'available'
@@ -64,6 +65,7 @@ export interface LocalizedPublicRoute {
   locale: string
   route_path: string
   platform_messages: Record<string, string>
+  locale_representations: PublicLocaleRepresentation[]
   site: ResourceLocalizationRecord
   representation:
     | { kind: 'tenant_page'; resource_type: 'tenant_page'; resource_id: string }
@@ -478,6 +480,13 @@ export async function resolveLocalizedPublicRoute(
   `, [organizationId, siteId, siteId, locale])
   if (!siteRow) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: 'site', resource_id: siteId, locale })
   const site = mapLocalization(siteRow)
+  const sourceLocale = await queryFirst<{ label: string | null }>(db, `
+    SELECT label FROM site_locales
+     WHERE organization_id = ? AND site_id = ? AND is_source = 1
+     LIMIT 1
+  `, [organizationId, siteId])
+  const sourceLabel = sourceLocale?.label ?? 'English'
+  const { listPublicLocaleRepresentations, listPublicResourceLocaleRepresentations } = await import('~/server/utils/public-locale-representations')
   const resource = await queryFirst<ResourceLocalizationRow>(db, `
     SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
            document_id, created_at, created_by_user_id, updated_at, updated_by_user_id
@@ -492,6 +501,12 @@ export async function resolveLocalizedPublicRoute(
       locale,
       route_path: routePath,
       platform_messages: entitlement.platform_messages ?? {},
+      locale_representations: await listPublicResourceLocaleRepresentations(db, {
+        organizationId,
+        siteId,
+        sourceLabel,
+        resource: { type: localization.resource_type, id: localization.resource_id },
+      }),
       site,
       representation: {
         kind: 'resource',
@@ -506,8 +521,8 @@ export async function resolveLocalizedPublicRoute(
   // whose route_path column stores the full '/locale/...' path. Strip the
   // locale segment back off before matching.
   const tenantPagePath = routePath.slice(locale.length + 1) || '/'
-  const page = await queryFirst<{ id: string }>(db, `
-    SELECT v.id
+  const page = await queryFirst<{ id: string; page_id: string }>(db, `
+    SELECT v.id, v.page_id
       FROM tenant_page_variants v
       JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
      WHERE v.organization_id = ? AND v.site_id = ? AND v.locale = ? AND v.path = ?
@@ -518,8 +533,15 @@ export async function resolveLocalizedPublicRoute(
     locale,
     route_path: routePath,
     platform_messages: entitlement.platform_messages ?? {},
+    locale_representations: await listPublicLocaleRepresentations(db, {
+      organizationId,
+      siteId,
+      sourcePath: tenantPagePath,
+      sourceLabel,
+      pageId: page.page_id,
+    }),
     site,
-    representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.id },
+    representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.page_id },
   }
 }
 

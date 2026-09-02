@@ -14,6 +14,7 @@ import {
   type ExactPublicLocalization,
 } from '~/server/utils/public-localization'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
+import { listPublicLocaleRepresentations, listPublicResourceLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import {
   getPublicTenantPageForPath,
@@ -522,6 +523,31 @@ export async function getPublicBlawbyDocumentData(
     getPublicBlawbyShellData(db, siteId, { locale, localizations }),
     getPublicBlawbyRouteData(db, siteId, recipe, { ...options, locale, localizations }, env),
   ])
+  const sourceLabel = (await queryFirst<{ label: string | null }>(db, `
+    SELECT label FROM site_locales
+     WHERE organization_id = ? AND site_id = ? AND is_source = 1
+     LIMIT 1
+  `, [site.organization_id, siteId]))?.label ?? 'English'
+  const pagePath = ROUTE_PAGE_PATHS[recipe]
+  const resource = recipe === 'offering' && route.offering
+    ? { type: 'offering' as const, id: route.offering.id }
+    : recipe === 'article' && route.post
+      ? { type: 'tenant_blog_post' as const, id: route.post.id }
+      : undefined
+  route.localeRepresentations = resource
+    ? await listPublicResourceLocaleRepresentations(db, {
+        organizationId: site.organization_id,
+        siteId,
+        sourceLabel,
+        resource,
+      })
+    : await listPublicLocaleRepresentations(db, {
+        organizationId: site.organization_id,
+        siteId,
+        sourcePath: pagePath ?? '/',
+        sourceLabel,
+        pageId: route.page?.page_id,
+      })
   return { shell, route }
 }
 
@@ -742,6 +768,7 @@ export async function getPublicBlawbyRouteData(
   const resolvedPost = mapPublicBlogPost(postRow)
   return {
     recipe,
+    localeRepresentations: [],
     page,
     offerings,
     offering: resolvedOffering,

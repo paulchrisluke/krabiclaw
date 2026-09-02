@@ -1,7 +1,7 @@
 export const PUBLIC_SOURCE_ROUTE_ROOTS = new Set([
   'about', 'article', 'blog', 'contact', 'experiences', 'help', 'links', 'locations',
-  'menu', 'order', 'photos', 'posts', 'privacy', 'products', 'qa', 'reservations',
-  'reviews', 'services', 'terms',
+  'donate', 'menu', 'order', 'photos', 'policies', 'posts', 'pricing', 'privacy', 'products',
+  'qa', 'reservations', 'reviews', 'schedule', 'services', 'terms', 'third-party-notices',
 ])
 
 export const RESERVED_PUBLIC_ROUTE_ROOTS = new Set(['admin', 'api', 'dashboard', 'preview'])
