@@ -44,5 +44,20 @@ export default withNuxt(
       'vue/no-v-text-v-html-on-component': 'error',
       'vue/require-default-prop': 'off'
     }
+  },
+  {
+    files: ['components/dashboard/Editor*.vue'],
+    rules: {
+      'no-restricted-globals': ['error', {
+        name: 'useDashboardApi',
+        message: 'Shared editor UI emits intent. The workspace owner calls useDashboardApi.'
+      }],
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['~/lib/components/workspace/**', '~/server/**', '#server/**'],
+          message: 'Shared editor UI cannot depend on workspace owners or server modules.'
+        }]
+      }]
+    }
   }
 )

@@ -164,3 +164,129 @@ export function tenantPageBlockSummary(block: TenantPageBlock): string {
   if (summary) return text(summary).slice(0, 120)
   return TENANT_PAGE_BLOCK_REGISTRY[block.type]?.label ?? 'Block'
 }
+
+export type TenantPageBlockPreview =
+  | { kind: 'hero', eyebrow: string, title: string, body: string, imageUrl: string | null, imageAlt: string }
+  | { kind: 'action', label: string, title: string, body: string }
+  | { kind: 'media', label: string, imageUrls: string[], imageAlt: string, caption: string }
+  | { kind: 'text', label: string, title: string, body: string }
+  | { kind: 'list', label: string, title: string, items: string[], source: string }
+  | { kind: 'divider', label: string }
+
+function mediaUrl(block: TenantPageBlock): string | null {
+  const media = block.media[0]
+  return media?.thumbnail_url ?? media?.public_url ?? null
+}
+
+function objectItemLabels(data: EditorData, key: string): string[] {
+  return objectArray(data, key)
+    .map(item => itemText(item, 'title', ['name', 'question', 'label', 'amount']))
+    .filter(Boolean)
+    .slice(0, 4)
+}
+
+/**
+ * The page-block owner supplies the outline preview for every supported type.
+ * Adding a block type makes this switch fail typechecking until its preview is
+ * defined beside the block's editor and validation behavior.
+ */
+export function tenantPageBlockPreview(block: TenantPageBlock): TenantPageBlockPreview {
+  const data = block.data
+  const definition = TENANT_PAGE_BLOCK_REGISTRY[block.type]
+  const label = definition.label
+  switch (block.type) {
+    case 'hero':
+      return {
+        kind: 'hero',
+        eyebrow: text(data.eyebrow),
+        title: text(data.title) || label,
+        body: text(data.subtitle),
+        imageUrl: mediaUrl(block),
+        imageAlt: text(data.alt) || block.media[0]?.alt_text?.trim() || label,
+      }
+    case 'cta':
+    case 'contact_cta':
+    case 'booking_cta':
+      return {
+        kind: 'action',
+        label,
+        title: text(data.label) || text(data.title) || label,
+        body: text(data.description),
+      }
+    case 'button_group':
+      return {
+        kind: 'action',
+        label,
+        title: objectItemLabels(data, 'buttons').join(' · ') || label,
+        body: '',
+      }
+    case 'donation_choices':
+      return {
+        kind: 'action',
+        label,
+        title: text(data.title) || objectItemLabels(data, 'tiers').join(' · ') || label,
+        body: text(data.description),
+      }
+    case 'image': {
+      const imageUrl = mediaUrl(block)
+      return {
+        kind: 'media',
+        label,
+        imageUrls: imageUrl ? [imageUrl] : [],
+        imageAlt: text(data.alt) || block.media[0]?.alt_text?.trim() || label,
+        caption: text(data.caption),
+      }
+    }
+    case 'gallery':
+      return {
+        kind: 'media',
+        label,
+        imageUrls: block.media.flatMap((item) => {
+          const url = item.thumbnail_url ?? item.public_url
+          return url ? [url] : []
+        }).slice(0, 4),
+        imageAlt: block.media[0]?.alt_text?.trim() || label,
+        caption: text(data.caption),
+      }
+    case 'heading':
+      return { kind: 'text', label, title: text(data.text) || label, body: `Heading level ${String(data.level ?? 2)}` }
+    case 'markdown':
+      return { kind: 'text', label, title: '', body: text(data.markdown) || label }
+    case 'callout':
+      return { kind: 'text', label, title: text(data.title) || label, body: text(data.body) }
+    case 'faq':
+      return {
+        kind: 'list',
+        label,
+        title: text(data.title) || label,
+        items: objectItemLabels(data, 'items'),
+        source: text(data.source) === 'page_qa' ? 'Published site Q&A' : '',
+      }
+    case 'feature_grid':
+    case 'testimonial_grid':
+    case 'offering_grid':
+    case 'location_grid': {
+      const references = block.type === 'offering_grid'
+        ? stringArray(data, 'offering_ids')
+        : block.type === 'location_grid' ? stringArray(data, 'location_ids') : []
+      const items = objectItemLabels(data, 'items')
+      if (!items.length && references.length) {
+        const noun = block.type === 'offering_grid' ? 'offering' : 'location'
+        items.push(`${references.length} ${noun}${references.length === 1 ? '' : 's'} selected`)
+      }
+      return {
+        kind: 'list',
+        label,
+        title: text(data.title) || label,
+        items,
+        source: text(data.source).replaceAll('_', ' '),
+      }
+    }
+    case 'divider':
+      return { kind: 'divider', label }
+    default: {
+      const exhaustive: never = block.type
+      return exhaustive
+    }
+  }
+}

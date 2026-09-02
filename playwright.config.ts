@@ -7,6 +7,7 @@ const baseURL = previewUrl || 'http://localhost:3000'
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
 const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
+const localPreviewSecret = previewUrl ? '' : randomBytes(32).toString('hex')
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`
 const optionalWorkerVars = ['CF_ACCOUNT_ID', 'CLOUDFLARE_IMAGES_API_TOKEN', 'CLOUDFLARE_IMAGES_VARIANT_BASE']
   .flatMap(name => process.env[name] ? ['--var', `${name}:${shellQuote(process.env[name]!)}`] : [])
@@ -23,6 +24,7 @@ const localWorkerEnvironment = [
   'EMAIL_DELIVERY_MODE=log_only',
   'WHATSAPP_DELIVERY_MODE=log_only',
   'DISCORD_DELIVERY_MODE=log_only',
+  `PREVIEW_SECRET=${localPreviewSecret}`,
   `BETTER_AUTH_URL=http://localhost:${port}`,
   `NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:${port}`,
   `NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:${port}`,
@@ -42,6 +44,7 @@ const localWorkerCommand = [
   '--var EMAIL_DELIVERY_MODE:log_only',
   '--var WHATSAPP_DELIVERY_MODE:log_only',
   '--var DISCORD_DELIVERY_MODE:log_only',
+  `--var PREVIEW_SECRET:${localPreviewSecret}`,
   `--var BETTER_AUTH_URL:http://localhost:${port}`,
   `--var NUXT_PUBLIC_PLATFORM_DOMAIN:http://localhost:${port}`,
   `--var NUXT_PUBLIC_FREE_SITE_DOMAIN:http://localhost:${port}`,

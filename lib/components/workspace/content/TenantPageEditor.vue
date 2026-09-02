@@ -1,119 +1,167 @@
 <template>
-  <UDashboardPanel id="tenant-page-editor">
+  <UDashboardSidebar
+    v-if="selected && !loading"
+    id="tenant-page-outline"
+    resizable
+    :default-size="30"
+    :min-size="27"
+    :max-size="34"
+    class="hidden bg-default lg:flex"
+    :ui="{
+      root: 'h-full min-h-0 max-h-full border-r border-default bg-default',
+      header: 'h-auto min-h-24 border-b border-default px-6 py-5',
+      body: 'min-h-0 overflow-y-auto px-6 py-8',
+      footer: 'border-t border-default px-6 py-4',
+      content: 'bg-default',
+    }"
+  >
     <template #header>
-      <UDashboardNavbar :toggle="false" :title="editorTitle">
-        <template #leading><DashboardNavbarLeading :detail-to="pagesPath" detail-label="Pages" /></template>
+      <div class="mx-auto flex w-full max-w-sm items-center gap-4">
+        <UButton :to="pagesPath" icon="i-lucide-arrow-left" color="neutral" variant="soft" square aria-label="Back to pages" class="rounded-full" />
+        <h1 class="min-w-0 flex-1 truncate text-2xl font-bold tracking-tight text-highlighted">Page editor</h1>
+      </div>
+    </template>
+
+    <TenantPageOutline
+      :title="selected.title"
+      :summary="selected.summary"
+      :locale="selected.locale"
+      :path="selected.path"
+      :blocks="selected.blocks"
+      :selected-id="desktopSelectedId"
+      :block-type-options="blockTypeOptions"
+      :disabled="busy !== null"
+      @select="openSection"
+      @add="addBlock"
+      @move="moveBlock"
+      @duplicate="duplicateBlock"
+      @remove="removeBlock"
+    />
+
+    <template #footer>
+      <div class="flex w-full flex-col items-center gap-2">
+        <UButton :to="navigablePreviewUrl" target="_blank" icon="i-lucide-eye" label="Preview page" color="neutral" variant="solid" :disabled="busy !== null || !navigablePreviewUrl" class="min-w-44 justify-center rounded-full" />
+        <span v-if="dirty" class="text-xs text-warning">Unsaved changes</span>
+      </div>
+    </template>
+  </UDashboardSidebar>
+
+  <UDashboardPanel id="tenant-page-editor" class="min-w-0 bg-default" :ui="{ root: 'h-full min-h-0', body: 'min-h-0 overflow-y-auto p-0' }">
+    <template #header>
+      <UDashboardNavbar :toggle="false" :title="mobileTitle" class="bg-default lg:hidden" :ui="{ root: 'border-b border-default' }">
+        <template #leading>
+          <UButton v-if="selectedSectionId" icon="i-lucide-arrow-left" color="neutral" variant="ghost" square aria-label="Back to page outline" @click="returnToOutline" />
+          <UButton v-else :to="pagesPath" icon="i-lucide-arrow-left" color="neutral" variant="ghost" square aria-label="Back to pages" />
+        </template>
         <template #right>
-          <UButton
-            v-if="selected?.id"
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-external-link"
-            label="Preview"
-            :to="navigablePreviewUrl"
-            target="_blank"
-            :disabled="busy !== null || !navigablePreviewUrl"
-          />
-          <UButton icon="i-lucide-check" label="Save" :loading="busy === 'save'" :disabled="busy !== null || !selected" @click="save" />
+          <UButton v-if="dirty" label="Save" :loading="busy === 'save'" :disabled="busy !== null" @click="saveCurrentPage" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-5xl space-y-6">
-        <div v-if="loading" class="space-y-4">
-          <USkeleton class="h-32 rounded-2xl" />
-          <USkeleton class="h-80 rounded-2xl" />
-        </div>
+      <div v-if="loading" class="mx-auto w-full max-w-2xl space-y-4 px-5 py-8">
+        <USkeleton class="h-32 rounded-2xl" />
+        <USkeleton class="h-80 rounded-2xl" />
+      </div>
 
-        <template v-else-if="selected">
-          <UAlert v-if="pageLoadError" color="error" variant="soft" title="Page could not be loaded" :description="pageLoadError" />
-          <UAlert v-if="editorError" color="error" variant="soft" title="Page could not be saved" :description="editorError" />
-          <UAlert v-if="dirty" color="warning" variant="soft" title="Unsaved changes" description="Save before leaving this page or opening Preview." />
+      <div v-else-if="!selected" class="mx-auto w-full max-w-2xl px-5 py-8">
+        <UAlert color="error" variant="soft" title="Page unavailable" :description="pageLoadError || 'This page could not be loaded.'" />
+      </div>
 
-          <UCard>
-            <div class="space-y-5">
-              <div v-if="!isNew && localeOptions.length > 1" class="flex justify-end">
-                <USelect v-model="locale" :items="localeOptions" class="w-28" aria-label="Page language" :disabled="busy !== null" />
+      <template v-else>
+        <section v-if="!selectedSectionId" class="mx-auto max-w-xl px-5 pb-28 pt-6 lg:hidden">
+          <UAlert v-if="pageLoadError" class="mb-5" color="error" variant="soft" title="Page could not be loaded" :description="pageLoadError" />
+          <UAlert v-if="editorError" class="mb-5" color="error" variant="soft" title="Page could not be saved" :description="editorError" />
+          <TenantPageOutline
+            :title="selected.title"
+            :summary="selected.summary"
+            :locale="selected.locale"
+            :path="selected.path"
+            :blocks="selected.blocks"
+            selected-id=""
+            :block-type-options="blockTypeOptions"
+            :disabled="busy !== null"
+            @select="openSection"
+            @add="addBlock"
+            @move="moveBlock"
+            @duplicate="duplicateBlock"
+            @remove="removeBlock"
+          />
+        </section>
+
+        <main class="min-h-full px-5 pb-28 pt-3 sm:px-10 lg:px-16 lg:pb-16 lg:pt-8" :class="selectedSectionId ? 'block' : 'hidden lg:block'">
+          <div class="mx-auto max-w-xl">
+            <div class="mb-8 hidden items-start justify-between gap-5 lg:flex">
+              <div class="min-w-0">
+                <h2 class="text-4xl font-bold tracking-tight text-highlighted">{{ readTitle }}</h2>
+                <p v-if="dirty" class="mt-2 text-sm text-warning">Unsaved changes</p>
               </div>
-              <UFormField label="Page title">
-                <UInput v-model="selected.title" size="xl" :disabled="busy !== null" />
-              </UFormField>
-              <UFormField label="Short description" description="A concise introduction used when the page needs a summary.">
-                <UTextarea v-model="selected.summary" :rows="3" autoresize :disabled="busy !== null" />
-              </UFormField>
+              <UButton v-if="dirty" label="Save changes" :loading="busy === 'save'" :disabled="busy !== null" @click="saveCurrentPage" />
             </div>
-          </UCard>
 
-          <UCard>
-            <template #header>
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 class="font-semibold text-highlighted">Page sections</h2>
-                  <p class="text-sm text-muted">Add and arrange the content shown on this page.</p>
+            <UAlert v-if="pageLoadError" class="mb-5" color="error" variant="soft" title="Page could not be loaded" :description="pageLoadError" />
+            <UAlert v-if="editorError && !focusedField" class="mb-5" color="error" variant="soft" title="Page could not be saved" :description="editorError" />
+
+            <template v-if="readSection.kind === 'details'">
+              <div class="space-y-3 lg:divide-y lg:divide-default lg:space-y-0 lg:border-y lg:border-default">
+                <button v-for="field in pageFields" :key="field.id" type="button" class="w-full rounded-[1.25rem] bg-white p-5 text-left shadow-sm transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:rounded-none lg:bg-transparent lg:px-0 lg:py-6 lg:shadow-none lg:hover:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent" @click="openPageField(field.id, $event.currentTarget)">
+                  <span class="block text-sm font-semibold text-highlighted lg:text-muted">{{ field.label }}</span>
+                  <span class="mt-2 line-clamp-4 block text-lg leading-7 text-toned lg:text-highlighted">{{ field.value || 'Not set' }}</span>
+                </button>
+                <div v-for="field in readonlyPageFields" :key="field.label" class="rounded-[1.25rem] bg-white p-5 shadow-sm lg:rounded-none lg:bg-transparent lg:px-0 lg:py-6 lg:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent">
+                  <p class="text-sm font-semibold text-highlighted lg:text-muted">{{ field.label }}</p>
+                  <p class="mt-2 break-words text-lg leading-7 text-toned lg:text-highlighted">{{ field.value || 'Not set' }}</p>
                 </div>
-                <div class="flex items-center gap-2">
-                  <USelect v-model="newBlockType" :items="blockTypeOptions" size="sm" aria-label="Section type" :disabled="busy !== null" />
-                  <UButton size="sm" icon="i-lucide-plus" label="Add section" :disabled="busy !== null" @click="addBlock" />
+                <div v-if="!isNew && localeOptions.length > 1" class="rounded-[1.25rem] bg-white p-5 shadow-sm lg:rounded-none lg:bg-transparent lg:px-0 lg:py-6 lg:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent">
+                  <label for="tenant-page-language" class="block text-sm font-semibold text-highlighted lg:text-muted">Language</label>
+                  <USelect id="tenant-page-language" v-model="locale" :items="localeOptions" class="mt-2 w-full" :disabled="busy !== null" />
+                </div>
+                <div v-else class="rounded-[1.25rem] bg-white p-5 shadow-sm lg:rounded-none lg:bg-transparent lg:px-0 lg:py-6 lg:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent">
+                  <p class="text-sm font-semibold text-highlighted lg:text-muted">Language</p>
+                  <p class="mt-2 text-lg leading-7 text-toned lg:text-highlighted">{{ selected.locale.toUpperCase() }}</p>
                 </div>
               </div>
             </template>
 
-            <div class="space-y-3">
-              <div
-                v-for="(block, index) in selected.blocks"
-                :key="block.id"
-                class="rounded-xl border p-4 transition-colors"
-                :class="selectedBlockIndex === index ? 'border-primary bg-primary/5' : 'border-default bg-default hover:bg-elevated'"
-                :data-block-index="index"
-                @click="selectedBlockIndex = index"
-              >
-                <div
-                  class="flex cursor-grab flex-wrap items-center justify-between gap-3 active:cursor-grabbing"
-                  draggable="true"
-                  :aria-label="`Reorder ${blockTypeLabel(block.type)} section`"
-                  @dragstart="busy === null && startDragging(index, $event)"
-                  @dragover.prevent
-                  @drop="busy === null && dropBlock(index)"
-                  @dragend="finishDragging"
-                >
-                  <div class="flex min-w-0 items-center gap-2">
-                    <UIcon name="i-lucide-grip-vertical" class="size-4 shrink-0 text-muted" />
-                    <div class="min-w-0">
-                      <p class="truncate font-medium text-highlighted">{{ blockTypeLabel(block.type) }}</p>
-                      <p v-if="selectedBlockIndex !== index" class="truncate text-xs text-muted">{{ blockSummary(block) }}</p>
-                    </div>
-                  </div>
-                  <div class="flex gap-1">
-                    <UButton icon="i-lucide-chevron-up" color="neutral" variant="ghost" size="xs" :disabled="busy !== null || index === 0" aria-label="Move section up" @click.stop="moveBlock(index, -1)" />
-                    <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" size="xs" :disabled="busy !== null || index === selected.blocks.length - 1" aria-label="Move section down" @click.stop="moveBlock(index, 1)" />
-                    <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" aria-label="Duplicate section" :disabled="busy !== null" @click.stop="duplicateBlock(index)" />
-                    <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Delete section" :disabled="busy !== null" @click.stop="removeBlock(index)" />
-                  </div>
-                </div>
-                <div v-if="selectedBlockIndex === index" class="mt-4 border-t border-default pt-4" @click.stop>
-                  <fieldset :disabled="busy !== null" class="contents">
-                    <TenantPageBlockEditor :block="block" :site-id="resolvedSiteId" :is-persisted="savedBlockIds.has(block.id)" :page-recipe="selected.recipe" :page-type="selected.page_type" @update:block="updateBlock(index, $event)" />
-                  </fieldset>
-                </div>
+            <template v-else-if="activeBlock">
+              <div class="overflow-hidden rounded-[1.25rem] bg-white shadow-sm lg:rounded-none lg:bg-transparent lg:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent">
+                <TenantPageSectionPreview :block="activeBlock" />
               </div>
-              <div v-if="!selected.blocks.length" class="rounded-xl border border-dashed border-default py-12 text-center">
-                <p class="font-medium text-highlighted">This page has no sections yet.</p>
-                <p class="mt-1 text-sm text-muted">Choose a section type above to start adding content.</p>
-              </div>
-            </div>
-          </UCard>
-        </template>
-
-        <UAlert v-else color="error" variant="soft" title="Page unavailable" :description="pageLoadError || 'This page could not be loaded.'" />
-      </div>
+              <button v-if="activeBlock.type !== 'divider'" type="button" class="mt-6 w-full rounded-[1.25rem] bg-white p-5 text-left shadow-sm transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:rounded-none lg:border-y lg:border-default lg:bg-transparent lg:px-0 lg:py-6 lg:shadow-none lg:hover:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent" @click="openBlockField($event.currentTarget)">
+                <span class="block text-sm font-semibold text-highlighted lg:text-muted">Content</span>
+                <span class="mt-2 line-clamp-4 block text-lg leading-7 text-toned lg:text-highlighted">{{ blockSummary(activeBlock) }}</span>
+              </button>
+            </template>
+          </div>
+        </main>
+      </template>
     </template>
   </UDashboardPanel>
+
+  <EditorFocusedField
+    :open="Boolean(focusedField)"
+    :title="focusedTitle"
+    :saving="busy === 'save'"
+    :save-disabled="!fieldDraft"
+    :error="editorError"
+    @close="closeFocusedField"
+    @cancel="cancelFocusedField"
+    @save="saveFocusedField"
+    @restore-focus="restoreFieldFocus"
+  >
+    <UInput v-if="fieldDraft?.kind === 'title'" v-model="fieldDraft.value" size="xl" aria-label="Page title" :disabled="busy !== null" class="w-full" />
+    <UTextarea v-else-if="fieldDraft?.kind === 'summary'" v-model="fieldDraft.value" :rows="8" autoresize aria-label="Short description" :disabled="busy !== null" class="w-full" />
+    <fieldset v-else-if="fieldDraft?.kind === 'block'" :disabled="busy !== null" class="contents">
+      <TenantPageBlockEditor :block="fieldDraft.block" :site-id="resolvedSiteId" :is-persisted="false" :page-recipe="selected?.recipe" :page-type="selected?.page_type ?? 'custom'" @update:block="updateDraftBlock" />
+    </fieldset>
+  </EditorFocusedField>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, type LocationQueryRaw } from 'vue-router'
+import EditorFocusedField from '~/components/dashboard/EditorFocusedField.vue'
 import { slugifyTitle } from '~/utils/post-slugs'
 import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
@@ -124,6 +172,9 @@ const props = defineProps<{ pageId?: string }>()
 interface PageSummary { id: string, page_id: string, title: string, path: string, page_type: TenantPageType, recipe: string | null, locale: string, sort_order: number, updated_at: string }
 interface PageDetailResponse extends PageSummary { site_id: string, organization_id: string, summary: string | null, seo_title: string | null, seo_description: string | null, canonical_url: string | null, robots: string | null, blocks: TenantPageBlock[], document: { updated_at: string } }
 interface PageDetail extends Omit<PageDetailResponse, 'recipe' | 'summary' | 'seo_title' | 'seo_description' | 'canonical_url' | 'robots'> { recipe: string, summary: string, seo_title: string, seo_description: string, canonical_url: string, robots: string }
+type PageFieldId = 'title' | 'summary'
+type ReadSection = { kind: 'details' } | { kind: 'block', blockId: string }
+type FieldDraft = { kind: 'title', value: string } | { kind: 'summary', value: string } | { kind: 'block', block: TenantPageBlock }
 
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
@@ -132,6 +183,7 @@ if (!siteId) throw createError({ statusCode: 503, statusMessage: 'Dashboard site
 const resolvedSiteId = siteId
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 const toast = useToast()
 const platformOrigin = useRequestURL().origin
@@ -143,37 +195,63 @@ const locales = ref<string[]>([locale.value])
 const loading = ref(true)
 const pageLoadError = ref<string | null>(null)
 const editorError = ref<string | null>(null)
-const busy = ref<string | null>(null)
+const busy = ref<'save' | null>(null)
 const previewToken = ref('')
 const dirty = ref(false)
 const hydrating = ref(false)
 const requestGate = createTenantPageRequestGate()
 const localeRevertGuard = createTenantPageLocaleRevertGuard()
-const selectedBlockIndex = ref(0)
-const draggedBlockIndex = ref<number | null>(null)
-const newBlockType = ref<TenantPageBlockType>('markdown')
-// A block only exists as a content_blocks row once this page has been saved
-// with it present — before that, its gallery (if any) has nothing to attach
-// to and TenantPageBlockEditor edits it locally instead of calling the
-// generic media routes. Refreshed after every successful load/save.
-const savedBlockIds = ref<Set<string>>(new Set())
+const fieldDraft = ref<FieldDraft | null>(null)
+const fieldTrigger = ref<HTMLElement | null>(null)
+const allowFieldExit = ref(false)
+const initialFieldSnapshot = ref('')
 
-const editorTitle = computed(() => isNew.value ? 'New page' : selected.value?.title || 'Page')
-const localeOptions = computed(() => locales.value.map(value => ({ label: value, value })))
 const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY)
   .filter(definition => !selected.value || isTenantPageBlockAllowed(definition, selected.value.recipe, selected.value.page_type))
   .map(definition => ({ label: definition.label, value: definition.type })))
-const blockErrors = computed(() => selected.value?.blocks.map(block => validateTenantPageBlock(block)) ?? [])
+const localeOptions = computed(() => locales.value.map(value => ({ label: value.toUpperCase(), value })))
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
   const path = selected.value.path === '/' ? '' : selected.value.path
   return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&token=${encodeURIComponent(previewToken.value)}&locale=${encodeURIComponent(locale.value)}`
 })
-const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
+const requestedSectionId = computed(() => singleQueryValue(route.query.section))
+const selectedSectionId = computed(() => {
+  const requested = requestedSectionId.value
+  if (requested === 'details') return requested
+  return selected.value?.blocks.some(block => block.id === requested) ? requested : ''
+})
+const desktopSelectedId = computed(() => selectedSectionId.value || 'details')
+const readSection = computed<ReadSection>(() => selectedSectionId.value && selectedSectionId.value !== 'details'
+  ? { kind: 'block', blockId: selectedSectionId.value }
+  : { kind: 'details' })
+const activeBlock = computed(() => {
+  const section = readSection.value
+  return section.kind === 'block' ? selected.value?.blocks.find(block => block.id === section.blockId) ?? null : null
+})
+const readTitle = computed(() => readSection.value.kind === 'details' ? 'Page details' : activeBlock.value ? TENANT_PAGE_BLOCK_REGISTRY[activeBlock.value.type].label : 'Page editor')
+const mobileTitle = computed(() => selectedSectionId.value ? readTitle.value : 'Page editor')
+const requestedFieldId = computed(() => singleQueryValue(route.query.field))
+const focusedField = computed(() => {
+  if (!selectedSectionId.value || !requestedFieldId.value) return null
+  if (readSection.value.kind === 'details' && (requestedFieldId.value === 'title' || requestedFieldId.value === 'summary')) return requestedFieldId.value
+  if (readSection.value.kind === 'block' && requestedFieldId.value === 'content' && activeBlock.value?.type !== 'divider') return 'content'
+  return null
+})
+const focusedTitle = computed(() => focusedField.value === 'title' ? 'Page title' : focusedField.value === 'summary' ? 'Short description' : readTitle.value)
+const fieldDraftDirty = computed(() => fieldDraft.value !== null && JSON.stringify(fieldDraft.value) !== initialFieldSnapshot.value)
+const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value || fieldDraftDirty.value, previewUrl.value))
+const pageFields = computed(() => [
+  { id: 'title' as const, label: 'Title', value: selected.value?.title ?? '' },
+  { id: 'summary' as const, label: 'Description', value: selected.value?.summary ?? '' },
+])
+const readonlyPageFields = computed(() => [
+  { label: 'URL', value: selected.value?.path || 'Not set' },
+])
 
-watch(blockTypeOptions, (options) => {
-  if (!options.some(option => option.value === newBlockType.value)) newBlockType.value = options[0]?.value ?? 'markdown'
-}, { immediate: true })
+function singleQueryValue(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
 
 function validateList(value: unknown): value is { pages: PageSummary[] } {
   return isRecord(value) && Array.isArray(value.pages) && value.pages.every(page => isRecord(page) && typeof page.id === 'string' && typeof page.page_id === 'string')
@@ -192,15 +270,7 @@ function validateLocales(value: unknown): value is { languages: Array<{ locale: 
 }
 
 function toEditorPage(page: PageDetailResponse): PageDetail {
-  return {
-    ...page,
-    recipe: page.recipe ?? '',
-    summary: page.summary ?? '',
-    seo_title: page.seo_title ?? '',
-    seo_description: page.seo_description ?? '',
-    canonical_url: page.canonical_url ?? '',
-    robots: page.robots ?? '',
-  }
+  return { ...page, recipe: page.recipe ?? '', summary: page.summary ?? '', seo_title: page.seo_title ?? '', seo_description: page.seo_description ?? '', canonical_url: page.canonical_url ?? '', robots: page.robots ?? '' }
 }
 
 function canDiscardUnsavedChanges(message = 'Discard unsaved page changes?') {
@@ -225,16 +295,13 @@ async function loadEditor() {
     if (pageResponse) {
       selected.value = toEditorPage(pageResponse.page)
       locale.value = pageResponse.page.locale
-      savedBlockIds.value = new Set(pageResponse.page.blocks.map(block => block.id))
     } else {
       locale.value = 'en'
-      savedBlockIds.value = new Set()
       selected.value = {
         id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '', title: '', page_type: 'custom', recipe: '', sort_order: pagesResponse?.pages.length ?? 0, updated_at: '',
         summary: '', seo_title: '', seo_description: '', canonical_url: '', robots: '', blocks: [], document: { updated_at: '' },
       }
     }
-    selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1
     dirty.value = false
   } catch (error) {
     pageLoadError.value = error instanceof Error ? error.message : 'Unable to load page'
@@ -247,128 +314,215 @@ async function loadEditor() {
   }
 }
 
-function addBlock() {
+function openSection(id: string, trigger: EventTarget | null) {
+  if (trigger instanceof HTMLElement) fieldTrigger.value = trigger
+  const query: LocationQueryRaw = { ...route.query, section: id }
+  delete query.field
+  void router.push({ query })
+}
+
+function returnToOutline() {
+  const query: LocationQueryRaw = { ...route.query }
+  delete query.section
+  delete query.field
+  if (canReturnWithinEditor()) void router.back()
+  else void router.replace({ query })
+}
+
+function openPageField(field: PageFieldId, trigger: EventTarget | null) {
+  if (trigger instanceof HTMLElement) fieldTrigger.value = trigger
+  void router.push({ query: { ...route.query, section: 'details', field } })
+}
+
+function openBlockField(trigger: EventTarget | null) {
+  if (!activeBlock.value || activeBlock.value.type === 'divider') return
+  if (trigger instanceof HTMLElement) fieldTrigger.value = trigger
+  void router.push({ query: { ...route.query, section: activeBlock.value.id, field: 'content' } })
+}
+
+function closeFocusedField() {
+  if (!busy.value) leaveFocusedField()
+}
+
+function cancelFocusedField() {
+  if (busy.value) return
+  allowFieldExit.value = true
+  leaveFocusedField()
+}
+
+function leaveFocusedField() {
+  const query: LocationQueryRaw = { ...route.query }
+  delete query.field
+  if (canReturnWithinEditor()) void router.back()
+  else void router.replace({ query })
+}
+
+function canReturnWithinEditor(): boolean {
+  if (!import.meta.client) return false
+  const previousUrl = window.history.state?.back
+  if (typeof previousUrl !== 'string') return false
+  return new URL(previousUrl, window.location.href).pathname === route.path
+}
+
+function restoreFieldFocus() {
+  void nextTick(() => fieldTrigger.value?.focus())
+}
+
+function addBlock(type: TenantPageBlockType) {
   if (!selected.value) return
-  const definition = TENANT_PAGE_BLOCK_REGISTRY[newBlockType.value]
+  const definition = TENANT_PAGE_BLOCK_REGISTRY[type]
   if (!definition || !isTenantPageBlockAllowed(definition, selected.value.recipe, selected.value.page_type)) return
   const position = selected.value.blocks.length
-  selected.value.blocks.push(createTenantPageBlock(newBlockType.value, createTenantPageEditorData(newBlockType.value), position))
-  selectedBlockIndex.value = position
+  const block = createTenantPageBlock(type, createTenantPageEditorData(type), position)
+  selected.value.blocks.push(block)
+  openSection(block.id, null)
 }
 
 function moveBlock(index: number, delta: number) {
   if (!selected.value) return
   const next = index + delta
   if (next < 0 || next >= selected.value.blocks.length) return
-  const block = selected.value.blocks.splice(index, 1)[0]!
+  const block = selected.value.blocks[index]
+  if (!block) return
+  selected.value.blocks.splice(index, 1)
   selected.value.blocks.splice(next, 0, block)
   selected.value.blocks.forEach((item, position) => { item.position = position })
-  if (selectedBlockIndex.value === index) selectedBlockIndex.value = next
-  else if (selectedBlockIndex.value === next) selectedBlockIndex.value = index
 }
 
 function duplicateBlock(index: number) {
   if (!selected.value) return
   const original = selected.value.blocks[index]
   if (!original) return
-  const copy: TenantPageBlock = { ...original, id: crypto.randomUUID(), data: structuredClone(toRaw(original.data)), position: index + 1 }
+  const copy: TenantPageBlock = { ...original, id: crypto.randomUUID(), data: structuredClone(toRaw(original.data)), media: structuredClone(toRaw(original.media)), position: index + 1 }
   selected.value.blocks.splice(index + 1, 0, copy)
   selected.value.blocks.forEach((block, position) => { block.position = position })
-  selectedBlockIndex.value = index + 1
-}
-
-function updateBlock(index: number, block: TenantPageBlock) {
-  if (!selected.value || !selected.value.blocks[index]) return
-  selected.value.blocks[index] = { ...block, position: index }
 }
 
 function removeBlock(index: number) {
   if (!selected.value) return
+  const removed = selected.value.blocks[index]
   selected.value.blocks.splice(index, 1)
   selected.value.blocks.forEach((block, position) => { block.position = position })
-  if (!selected.value.blocks.length) selectedBlockIndex.value = -1
-  else selectedBlockIndex.value = Math.min(index, selected.value.blocks.length - 1)
+  if (removed?.id === selectedSectionId.value) returnToOutline()
 }
 
-function startDragging(index: number, event: DragEvent) {
-  draggedBlockIndex.value = index
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', String(index))
-  }
-}
-
-function dropBlock(targetIndex: number) {
-  const sourceIndex = draggedBlockIndex.value
-  draggedBlockIndex.value = null
-  if (sourceIndex == null || sourceIndex === targetIndex || !selected.value) return
-  const block = selected.value.blocks.splice(sourceIndex, 1)[0]
-  if (!block) return
-  selected.value.blocks.splice(targetIndex, 0, block)
-  selected.value.blocks.forEach((item, position) => { item.position = position })
-  selectedBlockIndex.value = targetIndex
-}
-
-function finishDragging() {
-  draggedBlockIndex.value = null
-}
-
-function blockTypeLabel(type: string) {
-  return TENANT_PAGE_BLOCK_REGISTRY[type as TenantPageBlockType]?.label ?? type
-}
-
-function blockSummary(block: TenantPageBlock) {
+function blockSummary(block: TenantPageBlock): string {
   return tenantPageBlockSummary(block)
 }
 
-async function save() {
-  if (!selected.value) return
+function updateDraftBlock(block: TenantPageBlock) {
+  if (fieldDraft.value?.kind === 'block') fieldDraft.value = { kind: 'block', block }
+}
+
+async function saveCurrentPage() {
+  if (selected.value) await persistPage(structuredClone(toRaw(selected.value)))
+}
+
+async function saveFocusedField() {
+  const draft = fieldDraft.value
+  if (!selected.value || !draft) return
+  editorError.value = null
+  const candidate = structuredClone(toRaw(selected.value))
+  if (draft.kind === 'title') {
+    if (!draft.value.trim()) {
+      editorError.value = 'Add a page title before saving.'
+      return
+    }
+    candidate.title = draft.value
+  } else if (draft.kind === 'summary') {
+    candidate.summary = draft.value
+  } else {
+    const invalid = validateTenantPageBlock(draft.block)
+    if (invalid.length) {
+      editorError.value = invalid.join(' ')
+      return
+    }
+    const blockIndex = candidate.blocks.findIndex(block => block.id === draft.block.id)
+    if (blockIndex < 0) {
+      editorError.value = 'This section is no longer available.'
+      return
+    }
+    candidate.blocks[blockIndex] = structuredClone(toRaw(draft.block))
+  }
+  if (await persistPage(candidate) && focusedField.value) {
+    allowFieldExit.value = true
+    leaveFocusedField()
+  }
+}
+
+async function persistPage(candidate: PageDetail): Promise<boolean> {
   busy.value = 'save'
   editorError.value = null
   try {
-    const title = selected.value.title.trim()
+    const title = candidate.title.trim()
     if (!title) throw new Error('Add a page title before saving.')
-    const invalidIndex = blockErrors.value.findIndex(errors => errors.length > 0)
-    if (invalidIndex >= 0) {
-      selectedBlockIndex.value = invalidIndex
-      throw new Error(`Resolve the highlighted fields in section ${invalidIndex + 1} before saving.`)
-    }
-    selected.value.blocks.forEach((block, index) => { block.position = index })
-    const path = selected.value.id ? selected.value.path : `/${slugifyTitle(title)}`
-    if (!selected.value.id && path === '/') throw new Error('Choose a more specific page title.')
+    const invalidIndex = candidate.blocks.findIndex(block => validateTenantPageBlock(block).length > 0)
+    if (invalidIndex >= 0) throw new Error(`Resolve the highlighted fields in section ${invalidIndex + 1} before saving.`)
+    candidate.blocks.forEach((block, index) => { block.position = index })
+    const path = candidate.id ? candidate.path : `/${slugifyTitle(title)}`
+    if (!candidate.id && path === '/') throw new Error('Choose a more specific page title.')
     const body = {
-      id: selected.value.id || undefined,
-      pageId: selected.value.page_id || undefined,
-      locale: selected.value.locale,
+      id: candidate.id || undefined,
+      pageId: candidate.page_id || undefined,
+      locale: candidate.locale,
       path,
       title,
-      summary: selected.value.summary,
-      seoTitle: selected.value.seo_title || null,
-      seoDescription: selected.value.seo_description || null,
-      canonicalUrl: selected.value.canonical_url || null,
-      robots: selected.value.robots || null,
-      pageType: selected.value.page_type,
-      recipe: selected.value.recipe || null,
-      sortOrder: selected.value.sort_order,
-      blocks: selected.value.blocks,
-      expectedDocumentUpdatedAt: selected.value.id ? selected.value.document.updated_at : undefined,
+      summary: candidate.summary,
+      seoTitle: candidate.seo_title || null,
+      seoDescription: candidate.seo_description || null,
+      canonicalUrl: candidate.canonical_url || null,
+      robots: candidate.robots || null,
+      pageType: candidate.page_type,
+      recipe: candidate.recipe || null,
+      sortOrder: candidate.sort_order,
+      blocks: candidate.blocks,
+      expectedDocumentUpdatedAt: candidate.id ? candidate.document.updated_at : undefined,
     }
-    const response = selected.value.id
-      ? await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${selected.value.id}`, { method: 'PATCH', body, validate: validatePage })
+    const response = candidate.id
+      ? await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${candidate.id}`, { method: 'PATCH', body, validate: validatePage })
       : await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: validatePage })
     hydrating.value = true
     selected.value = toEditorPage(response.page)
-    savedBlockIds.value = new Set(response.page.blocks.map(block => block.id))
+    locale.value = response.page.locale
     dirty.value = false
     hydrating.value = false
     toast.add({ title: 'Saved', description: 'Page saved.', color: 'success' })
-    if (isNew.value) await navigateTo(`${pagesPath.value}/${response.page.id}`)
+    if (isNew.value) {
+      allowFieldExit.value = true
+      await navigateTo(`${pagesPath.value}/${response.page.id}`)
+    }
+    return true
   } catch (error) {
     editorError.value = error instanceof Error ? error.message : 'Unable to save page'
+    return false
   } finally {
     busy.value = null
   }
 }
+
+watch(focusedField, (field) => {
+  editorError.value = null
+  if (field === 'title') fieldDraft.value = { kind: 'title', value: selected.value?.title ?? '' }
+  else if (field === 'summary') fieldDraft.value = { kind: 'summary', value: selected.value?.summary ?? '' }
+  else if (field === 'content' && activeBlock.value) fieldDraft.value = { kind: 'block', block: structuredClone(toRaw(activeBlock.value)) }
+  else fieldDraft.value = null
+  initialFieldSnapshot.value = JSON.stringify(fieldDraft.value)
+  if (!field) allowFieldExit.value = false
+}, { immediate: true })
+
+watch([requestedSectionId, requestedFieldId, selected, loading], () => {
+  if (loading.value || !selected.value) return
+  if (requestedSectionId.value && !selectedSectionId.value) {
+    const query: LocationQueryRaw = { ...route.query }
+    delete query.section
+    delete query.field
+    void router.replace({ query })
+  } else if (requestedFieldId.value && !focusedField.value) {
+    const query: LocationQueryRaw = { ...route.query }
+    delete query.field
+    void router.replace({ query })
+  }
+}, { immediate: true })
 
 watch(selected, () => {
   if (hydrating.value) {
@@ -400,12 +554,18 @@ watch(locale, async (nextLocale, previousLocale) => {
 })
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
-  if (!dirty.value) return
+  if (!dirty.value && !fieldDraftDirty.value) return
   event.preventDefault()
   event.returnValue = ''
 }
 
+onBeforeRouteUpdate((to) => {
+  const leavesField = Boolean(focusedField.value) && singleQueryValue(to.query.field) !== requestedFieldId.value
+  if (!leavesField || !fieldDraftDirty.value || allowFieldExit.value) return
+  if (!window.confirm('Discard this field change?')) return false
+})
 onBeforeRouteLeave(() => {
+  if (fieldDraftDirty.value && !allowFieldExit.value && !window.confirm('Discard this field change?')) return false
   if (!canDiscardUnsavedChanges()) return false
 })
 onMounted(() => {
