@@ -420,17 +420,26 @@ export async function regenerateSiteSocialCards(input: {
 }): Promise<SocialCardRefreshResult[]> {
   let owners: Array<{ owner_type: SocialCardOwner['owner_type']; owner_id: string }>
   try {
-    owners = await queryAll<{ owner_type: SocialCardOwner['owner_type']; owner_id: string }>(input.db, `
-    SELECT 'site' AS owner_type, id AS owner_id FROM sites WHERE id = ?
-    UNION ALL SELECT 'business_location', id FROM business_locations WHERE site_id = ? AND status = 'active'
-    UNION ALL SELECT 'product', id FROM products WHERE site_id = ? AND is_visible = 1 AND product_type = 'standard'
-    UNION ALL SELECT 'experience', id FROM experiences WHERE site_id = ?
-    UNION ALL SELECT 'post', id FROM posts WHERE site_id = ? AND status = 'published'
-    UNION ALL SELECT 'blog_post', id FROM blog_posts WHERE site_id = ? AND status = 'published'
-    UNION ALL SELECT 'offering', id FROM offerings WHERE site_id = ?
-    UNION ALL SELECT 'review', id FROM reviews WHERE site_id = ? AND status = 'approved'
-    UNION ALL SELECT 'tenant_page', id FROM tenant_page_variants WHERE site_id = ? AND path != '/'
-    `, Array(9).fill(input.siteId))
+    // D1 rejects large compound SELECTs ("too many terms in compound SELECT"),
+    // so owners are collected with one query per owner type. The order of the
+    // list is the deterministic refresh order and matches the documented
+    // owner precedence.
+    const ownerQueries: Array<[SocialCardOwner['owner_type'], string, string[]]> = [
+      ['site', `SELECT id AS owner_id FROM sites WHERE id = ?`, [input.siteId]],
+      ['business_location', `SELECT id AS owner_id FROM business_locations WHERE site_id = ? AND status = 'active'`, [input.siteId]],
+      ['product', `SELECT id AS owner_id FROM products WHERE site_id = ? AND is_visible = 1 AND product_type = 'standard'`, [input.siteId]],
+      ['experience', `SELECT id AS owner_id FROM experiences WHERE site_id = ?`, [input.siteId]],
+      ['post', `SELECT id AS owner_id FROM posts WHERE site_id = ? AND status = 'published'`, [input.siteId]],
+      ['blog_post', `SELECT id AS owner_id FROM blog_posts WHERE site_id = ? AND status = 'published'`, [input.siteId]],
+      ['offering', `SELECT id AS owner_id FROM offerings WHERE site_id = ?`, [input.siteId]],
+      ['review', `SELECT id AS owner_id FROM reviews WHERE site_id = ? AND status = 'approved'`, [input.siteId]],
+      ['tenant_page', `SELECT id AS owner_id FROM tenant_page_variants WHERE site_id = ? AND path != '/'`, [input.siteId]],
+    ]
+    owners = []
+    for (const [ownerType, query, params] of ownerQueries) {
+      const rows = await queryAll<{ owner_id: string }>(input.db, query, params)
+      owners.push(...rows.map(row => ({ owner_type: ownerType, owner_id: row.owner_id })))
+    }
     if (input.siteId === PLATFORM_SITE_ID) {
       const docs = await queryAll<{ owner_id: string }>(input.db, 'SELECT id AS owner_id FROM platform_docs')
       owners.push(...docs.map((row): SocialCardOwner => ({ owner_type: 'platform_doc', owner_id: row.owner_id })))
