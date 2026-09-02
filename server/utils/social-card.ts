@@ -93,9 +93,11 @@ export async function socialCardRefreshOwnersForPlacement(db: DbClient, placemen
          LIMIT 1
       `, [placement.owner_id])
       if (!page) return []
-      const owners: SocialCardOwner[] = [{ owner_type: 'tenant_page', owner_id: page.variant_id }]
-      if (page.path === '/') owners.push({ owner_type: 'site', owner_id: page.site_id })
-      return owners
+      // The homepage is represented by the site card. A homepage content-block
+      // change refreshes the site card only — no second tenant_page card for `/`.
+      return page.path === '/'
+        ? [{ owner_type: 'site', owner_id: page.site_id }]
+        : [{ owner_type: 'tenant_page', owner_id: page.variant_id }]
     }
     case 'business_location':
     case 'product':
@@ -427,7 +429,7 @@ export async function regenerateSiteSocialCards(input: {
     UNION ALL SELECT 'blog_post', id FROM blog_posts WHERE site_id = ? AND status = 'published'
     UNION ALL SELECT 'offering', id FROM offerings WHERE site_id = ?
     UNION ALL SELECT 'review', id FROM reviews WHERE site_id = ? AND status = 'approved'
-    UNION ALL SELECT 'tenant_page', id FROM tenant_page_variants WHERE site_id = ?
+    UNION ALL SELECT 'tenant_page', id FROM tenant_page_variants WHERE site_id = ? AND path != '/'
     `, Array(9).fill(input.siteId))
     if (input.siteId === PLATFORM_SITE_ID) {
       const docs = await queryAll<{ owner_id: string }>(input.db, 'SELECT id AS owner_id FROM platform_docs')

@@ -131,6 +131,7 @@ export function buildPublicDraftBlawbyDocument(
       recipe: 'home',
       page: {
         id: 'draft-home',
+        page_id: 'draft-home',
         path: '/',
         title: payload.preview.brandName,
         page_type: 'recipe',

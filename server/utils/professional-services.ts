@@ -237,6 +237,7 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
   const pages = await listCanonicalTenantPages(db, siteId)
   return pages.map(page => ({
     id: page.id,
+    page_id: page.page_id,
     path: page.path,
     title: page.title,
     page_type: page.page_type,
@@ -264,6 +265,7 @@ export async function getPublicTenantPageByPath(
   if (!page) return null
   return {
     id: page.id,
+    page_id: page.page_id,
     path: page.path,
     title: page.title,
     page_type: page.page_type,

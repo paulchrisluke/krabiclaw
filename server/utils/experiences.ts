@@ -156,7 +156,7 @@ function parseRow(row: ExperienceRow): Experience {
   }
 }
 
-async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
+export async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
   const mediaByExperience = await loadPublicSocialMedia(db, siteId, 'experience', experiences.map(experience => experience.id))
   return experiences.map(experience => ({
     ...experience,
