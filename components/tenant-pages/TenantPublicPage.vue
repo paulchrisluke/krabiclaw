@@ -118,6 +118,7 @@ useProfessionalServiceSchema(() => {
     donationUrl,
   }
 })
+await useReciprocalHreflang(() => page.value.path)
 useSocialMetadata(() => ({
   path: page.value.canonical_url || page.value.path,
   // Fallback order: this page's own SEO override, then the site-level

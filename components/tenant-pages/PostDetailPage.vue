@@ -101,6 +101,7 @@ const coverMedia = computed(() => post.value?.media.find(item => item.slot === '
 const pagePath = computed(() => post.value?.public_path || `/posts/${slug.value}`)
 const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)
 const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${siteName.value}.`)
+await useReciprocalHreflang(() => `/posts/${slug.value}`)
 const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   path: post.value?.canonical_url || pagePath.value,
   title: seoTitle.value,

@@ -215,6 +215,7 @@ const resolvedSeo = computed(() => resolveBlogSeo({
   robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
 }))
 
+await useReciprocalHreflang(() => postPath.value)
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: resolvedSeo.value.canonicalUrl,
   title: resolvedSeo.value.title,

@@ -24,5 +24,6 @@ const siteId = resolved.siteId
 const detail = computed(() => resolved.detail.value)
 const presentation = requireProductPresentation(detail.value.vertical)
 if (presentation.locationCollectionSegment !== props.routeKind) throw createError({ statusCode: 404 })
+await useReciprocalHreflang(() => presentation.productPath(detail.value.location.slug, detail.value.product.slug))
 useSocialMetadata(() => ({ path: presentation.productPath(detail.value.location.slug, detail.value.product.slug), title: detail.value.product.seo_title || detail.value.product.name, description: detail.value.product.seo_description || detail.value.product.description, robots: detail.value.product.robots, heroImage: detail.value.product.image?.public_url ? { url: detail.value.product.image.public_url } : null, location: detail.value.location.title, brand: { siteName: detail.value.brandName } }))
 </script>

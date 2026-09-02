@@ -95,7 +95,7 @@ const localizedRoute = computed(() => localizedData?.data.value?.route ?? null)
 const productRouteParts = computed(() => {
   const match = tenantPagePath.value.match(/^\/locations\/([^/]+)\/(menu|products)\/([^/]+)$/)
   if (!match) return null
-  return { locationSlug: match[1], routeKind: match[2] as 'menu' | 'products', productSlug: match[3] }
+  return { locationSlug: match[1]!, routeKind: match[2] as 'menu' | 'products', productSlug: match[3]! }
 })
 // site_post (/posts/{slug}) and tenant_blog_post (/blog/{slug}) route_paths
 // are a single trailing slug segment — the resource's canonical slug isn't

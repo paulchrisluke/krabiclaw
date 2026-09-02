@@ -545,6 +545,7 @@ const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.v
 
 const runtimeConfig = useRuntimeConfig()
 const siteUrl = runtimeConfig.public.siteUrl
+await useReciprocalHreflang(() => `/locations/${slug.value}`)
 useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
   title: location.value?.seo_title || (location.value ? `${location.value.title} | Locations` : 'Location'),
