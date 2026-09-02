@@ -404,6 +404,7 @@ const hero = computed(() => getHero({
 
 // SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
 if (siteId) {
+  await useReciprocalHreflang(() => '/')
   const seoTitle = computed(() => {
     if (pageConfig.value?.seo_title) return pageConfig.value.seo_title
     const primary = (restaurantName.value || '').trim()

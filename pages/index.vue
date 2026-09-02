@@ -18,6 +18,4 @@ if (!isPlatform && !siteId && !draftId) {
     statusMessage: 'Site not found'
   })
 }
-
-await useReciprocalHreflang(() => (isPlatform ? null : '/'))
 </script>

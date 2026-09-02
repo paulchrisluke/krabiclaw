@@ -33,6 +33,15 @@
     <LocationPhotosPage
       v-else-if="localizedRoute?.representation.kind === 'location_subpage' && localizedRoute.representation.sub_page === 'photos'"
     />
+    <!-- Home and Contact are functional, hardcoded Saya pages
+         (SayaHomePage/SayaContactPage - the same components the bare English
+         routes use, see pages/index.vue and pages/contact/index.vue), not
+         CMS tenant_page blocks. Route both locales through the one real
+         component instead of falling through to the sparser CMS content
+         tenant_page_variants happens to also have stored for these paths -
+         that content was never reachable from English to begin with. -->
+    <SayaContactPage v-else-if="!isBlawby && tenantPagePath === '/contact'" />
+    <SayaHomePage v-else-if="!isBlawby && tenantPagePath === '/'" />
     <TenantPublicPage
       v-else
       :path="tenantPagePath"
