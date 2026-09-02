@@ -21,7 +21,6 @@ COLUMNS = [
     "stored_image_dimensions", "exclusion_reason", "blocker", "validation",
 ]
 VALID_STATUSES = {"captured", "excluded", "redirect-only", "not-applicable", "blocked"}
-DISALLOWED_VALIDATION_VALUES = {"pending", "unverified", "missing", ""}
 
 
 def fail(msg: str, failures: list[str]) -> None:
@@ -146,13 +145,6 @@ def main() -> int:
             if not any(p.endswith(suffix) for p in on_disk_list):
                 fail(f"{readme.relative_to(PACKET_ROOT)} references a .jpg path with no matching file on disk (by suffix): {ref}", failures)
 
-    # ---- Write back validation column (only meaningful if we're about to pass) ----
-    with open(AUDIT_PATH, "w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=COLUMNS, delimiter="\t")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
     # ---- A clean pass requires zero rows left in an unresolved state. "blocked" is a
     # legitimate, disclosed status for reporting purposes, but per the acceptance
     # criteria this script enforces, its mere presence fails the gate — the packet
@@ -169,6 +161,15 @@ def main() -> int:
             print(f"  - {f}")
         print("\nRESULT: FAIL")
         return 1
+
+    # This is a check, not a mutator: only touch AUDIT.tsv once every check above has
+    # actually passed, so a failing run never leaves the working tree dirty and two
+    # runs of a failing manifest always produce identical output.
+    with open(AUDIT_PATH, "w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=COLUMNS, delimiter="\t")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
 
     print("\nRESULT: PASS")
     return 0
