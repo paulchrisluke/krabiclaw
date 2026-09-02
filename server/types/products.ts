@@ -1,5 +1,6 @@
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import type { Price, PriceInput } from '~/shared/prices'
+import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface ProductDetail {
   key: string
@@ -31,6 +32,8 @@ export interface Product {
   details: ProductDetail[]
   image: ResolvedMediaAsset | null
   gallery: ResolvedMediaAsset[]
+  media: ResolvedMediaAsset[]
+  social_image: SocialImageSource | null
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null

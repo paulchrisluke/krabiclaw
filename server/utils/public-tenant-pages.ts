@@ -5,7 +5,9 @@ import { listPageQa, type LocationQaRow } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
+import type { MediaPlacementItem } from '~/server/utils/media-placement'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
+import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface PublicTenantPage {
   id: string
@@ -21,7 +23,8 @@ export interface PublicTenantPage {
   recipe: string | null
   locale: string
   blocks: TenantPageBlock[]
-  
+  media: MediaPlacementItem[]
+  social_image: SocialImageSource | null
   updated_at: string
 }
 
@@ -58,8 +61,8 @@ export async function listPublicTenantPageOfferingRows(
        ${offeringIds ? `AND o.id IN (SELECT value FROM json_each(?))` : ''}
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId, ...(offeringIds ? [d1JsonStringSet(offeringIds)] : [])])
-  const placements = await getMediaPlacements(db, { siteId, ownerType: 'offering', ownerIds: rows.map(row => row.id) })
-  return rows.map(row => ({ ...row, media: placements.get(row.id) ?? [] }))
+  const placements = await loadPublicSocialMedia(db, siteId, 'offering', rows.map(row => row.id))
+  return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
 }
 
 export function selectPublicTenantPageBlocks(blocks: TenantPageBlock[]): TenantPageBlock[] {
@@ -121,7 +124,7 @@ async function hydrateBlocks(
   if ([...selectedOfferings.values()].some(offering => !offering)) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
   const locationById = new Map(locations.map(item => [item.id, item]))
   const qaItems = qaRows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
-  const reviewItems = (reviewRows as Array<Record<string, unknown>>).map(row => ({
+  const reviewItems = (reviewRows as unknown as Array<Record<string, unknown>>).map(row => ({
     id: String(row.id),
     title: typeof row.author_name === 'string' ? row.author_name : 'Client',
     description: typeof row.content === 'string' ? row.content : undefined,
@@ -187,7 +190,7 @@ async function hydrateBlocks(
   })
 }
 
-function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPage {
+function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], socialMedia: { media: MediaPlacementItem[]; social_image: SocialImageSource | null }): PublicTenantPage {
   return {
     id: page.id,
     page_id: page.page_id,
@@ -202,6 +205,7 @@ function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPa
     recipe: page.recipe,
     locale: page.locale,
     blocks,
+    ...socialMedia,
     updated_at: page.updated_at,
   }
 }
@@ -232,7 +236,11 @@ export async function getPublicTenantPageForPath(
       throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized embedded content is unavailable' })
     }
   }
-  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources))
+  const [blocks, media] = await Promise.all([
+    hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources),
+    loadPublicSocialMedia(db, siteId, 'tenant_page', [page.id]),
+  ])
+  return mapPage(page, blocks, media.get(page.id) ?? { media: [], social_image: null })
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {

@@ -20,5 +20,5 @@ const currency = rawCurrency
 const brandName = site.value?.brand_name
 if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
 const productLocations = computed(() => locations.value.map(location => ({ id: location.id, slug: location.slug, title: location.title })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, label: presentation.collectionLabel, brand: { siteName: brandName } }))
+useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, brand: { siteName: brandName } }))
 </script>

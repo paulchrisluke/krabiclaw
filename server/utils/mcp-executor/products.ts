@@ -64,11 +64,11 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
     case 'create_product': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { product: await createProduct(site.db, site.organizationId, site.siteId, locationId, omit(args, ['location_id']) as unknown as CreateProductInput, site.userId) }
+      return { product: await createProduct(site.db, site.organizationId, site.siteId, locationId, omit(args, ['location_id']) as unknown as CreateProductInput, site.userId, site.env) }
     }
     case 'update_product': {
       const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
-      return { product: await updateProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, omit(args, ['product_id']) as UpdateProductInput, site.userId) }
+      return { product: await updateProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, omit(args, ['product_id']) as UpdateProductInput, site.userId, site.env) }
     }
     case 'delete_product': {
       const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))

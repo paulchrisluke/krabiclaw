@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
 
   try {
     const result = await createPlatformDoc(db, session.user.id, {
-      title: body.title ?? '', content_blocks: body.content_blocks ?? [], excerpt: body.excerpt ?? null, category: body.category ?? null, ...platformContentNavInput(body, { defaultHideFromNav: false }), seo_description: body.seo_description ?? null, seo_keywords: body.seo_keywords ?? null, canonical_url: body.canonical_url ?? null, robots: body.robots ?? null, difficulty_level: body.difficulty_level ?? null, sort_order: body.sort_order ?? 0, media: body.media, })
+      title: body.title ?? '', content_blocks: body.content_blocks ?? [], excerpt: body.excerpt ?? null, category: body.category ?? null, ...platformContentNavInput(body, { defaultHideFromNav: false }), seo_description: body.seo_description ?? null, seo_keywords: body.seo_keywords ?? null, canonical_url: body.canonical_url ?? null, robots: body.robots ?? null, difficulty_level: body.difficulty_level ?? null, sort_order: body.sort_order ?? 0, media: body.media, }, env)
     schedulePlatformKnowledgeIndexRebuild(event, env, 'doc create')
     return jsonResponse(result)
   } catch (err) {

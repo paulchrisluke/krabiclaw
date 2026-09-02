@@ -4,6 +4,7 @@ import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isCurrencyCode } from '~/shared/currencies'
+import { resolvePublicSocialImage } from '~/utils/social-metadata'
 
 type BatchResult = { results?: unknown[] }
 
@@ -13,6 +14,8 @@ const requireLocationString = (value: unknown, field: string): string => {
   }
   return value
 }
+
+const optionalLocationString = (value: unknown): string | null => typeof value === 'string' ? value : null
 
 export interface PublicShellQueryIndexes {
   locations: number
@@ -41,13 +44,22 @@ export function appendPublicShellQueries(
                      bl.foodpanda_url, bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
                      bl.canonical_url, bl.robots, bl.feature_overrides, mp.asset_id AS asset_id,
-                     ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind
+                     ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind,
+                     social_mp.asset_id AS social_asset_id, social_ma.public_url AS social_public_url,
+                     social_ma.thumbnail_url AS social_thumbnail_url, social_ma.kind AS social_kind
                 FROM business_locations bl
                 LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
                 LEFT JOIN media_assets ma ON mp.asset_id = ma.id
                   AND ma.status = 'active'
                   AND ma.organization_id = bl.organization_id
                   AND ma.site_id = bl.site_id
+                LEFT JOIN media_placements social_mp ON social_mp.site_id = bl.site_id
+                  AND social_mp.owner_type = 'business_location' AND social_mp.owner_id = bl.id
+                  AND social_mp.slot = 'social_card' AND social_mp.sort_order = 0 AND social_mp.status = 'active'
+                LEFT JOIN media_assets social_ma ON social_mp.asset_id = social_ma.id
+                  AND social_ma.status = 'active'
+                  AND social_ma.organization_id = bl.organization_id
+                  AND social_ma.site_id = bl.site_id
                WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
                ORDER BY bl.is_primary DESC, bl.title ASC`, [organizationId, siteId]),
     config: push(`SELECT key, value
@@ -76,7 +88,8 @@ export function buildPublicShellPayload(
 ): PublicShellPayload {
   const rawLocations = (results[indexes.locations]?.results ?? []) as Record<string, unknown>[]
   const locations = rawLocations.map(location => {
-    const publicUrl = location.media_public_url as string | null
+    const publicUrl = optionalLocationString(location.media_public_url)
+    const socialUrl = optionalLocationString(location.social_public_url)
     return {
       id: requireLocationString(location.id, 'id'),
       slug: requireLocationString(location.slug, 'slug'),
@@ -103,7 +116,13 @@ export function buildPublicShellPayload(
       review_count: location.review_count,
       is_primary: Boolean(location.is_primary),
       status: location.status,
-      media: publicUrl ? [{ asset_id: location.asset_id, slot: 'hero', public_url: publicUrl, thumbnail_url: location.media_thumbnail_url, kind: location.media_kind }] : [],
+      media: [
+        ...(publicUrl ? [{ asset_id: location.asset_id, slot: 'hero', public_url: publicUrl, thumbnail_url: location.media_thumbnail_url, kind: location.media_kind }] : []),
+      ],
+      social_image: resolvePublicSocialImage(
+        socialUrl ? { url: socialUrl, width: 1200, height: 630, type: 'image/png' as const } : null,
+        site.social_image,
+      ),
       city: location.city,
       neighborhood: location.neighborhood ?? null,
       short_description: location.short_description ?? null,
@@ -160,6 +179,7 @@ export function buildPublicShellPayload(
       brand_description: site.brand_description,
       vertical: site.vertical,
       media: site.media,
+      social_image: site.social_image,
       config: { phone: site.contact_phone },
     },
     locations,

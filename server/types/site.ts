@@ -49,7 +49,7 @@ export interface UpdateSiteSettingsRequest {
   social_facebook_url?: string | null
   social_instagram_url?: string | null
   social_tiktok_url?: string | null
-  media?: Array<{ asset_id: string; slot: 'logo' | 'favicon' }>
+  media?: Array<{ asset_id: string | null; slot: 'logo' | 'favicon' | 'social_share' }>
   // Additive/subtractive delta on top of the vertical's own module defaults (config/cms-registry.ts
   // ProductFeature ids) — null clears the override back to defaults.
   feature_overrides?: { enabled?: string[]; disabled?: string[] } | null

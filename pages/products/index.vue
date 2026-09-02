@@ -19,5 +19,5 @@ if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMes
 const currency = rawCurrency
 const brandName = String(site.value?.brand_name ?? '').trim()
 const productLocations = computed(() => locations.value.map(location => ({ id: String(location.id), slug: String(location.slug), title: String(location.title) })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Products`, description: `Products from ${brandName}.`, label: presentation.collectionLabel, brand: { siteName: brandName } }))
+useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Products`, description: `Products from ${brandName}.`, brand: { siteName: brandName } }))
 </script>

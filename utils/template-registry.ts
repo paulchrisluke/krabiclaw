@@ -175,10 +175,7 @@ export interface TemplateMarketingMetadata {
   /**
    * Root-relative path to a real screenshot of this template's live demo site,
    * shown as the /templates index card's visual (see pages/templates/index.vue).
-   * Null falls back to a letter-avatar placeholder — do not route this through
-   * the OG-image pipeline (server/utils/og-image/pipeline.ts generates
-   * title/description social-share cards, not gallery thumbnails; see the
-   * `seo` field below for that pipeline's actual use on this template).
+   * Null falls back to a letter-avatar placeholder.
    */
   previewImageUrl: string | null
   /**
@@ -200,14 +197,6 @@ export interface TemplateMarketingMetadata {
    * useSocialMetadata (the shared public-page metadata composer, itself a thin
    * adapter over the #259 composeSocialMetadata contract) — this is data,
    * not a new metadata/OG pipeline.
-   *
-   * No `ogImage` override is set on the /templates/[slug] page, so each
-   * detail page gets a real per-template 1200x630 card generated on the
-   * fly by the shared `platform` renderer (server/utils/og-image/renderers/
-   * platform.ts) from this title/description through the shared resolveSocialOgImage
-   * composer. This is the same pattern
-   * pages/index.vue and pages/about.vue already use for their platform
-   * branch; do not build a bespoke image pipeline here.
    */
   seo: TemplateMarketingSeo
 }

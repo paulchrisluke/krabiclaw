@@ -7,6 +7,7 @@ import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
 import { ensureLocationTeam } from "~/server/utils/member-access";
 import type { CloudflareEnv } from "~/server/utils/auth";
+import { refreshSocialCard } from '~/server/utils/social-card'
 
 // Require format-valid E.164 at the shared location write boundary (issue
 // #293 Section D/I) — this is the one place createLocation/updateLocation
@@ -441,6 +442,7 @@ export async function createLocation(
   siteId: string,
   input: CreateLocationInput,
   userId: string,
+  options: { refreshSocialCardAfterCreate?: boolean } = {},
 ) {
   const title = input.title.trim();
   if (!title) {
@@ -680,6 +682,9 @@ export async function createLocation(
           is_primary: isPrimary,
         },
       })
+      if (options.refreshSocialCardAfterCreate !== false) {
+        await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: id }, actorId: userId })
+      }
       return { status: 201, data: { success: true, location } };
     } catch (error) {
       if (isUniqueConstraintError(error)) continue;
@@ -705,6 +710,7 @@ export async function updateLocation(
   locationIdOrSlug: string,
   input: UpdateLocationInput,
   userId: string,
+  env?: CloudflareEnv,
 ) {
   const existing = await loadLocation(db, organizationId, siteId, locationIdOrSlug);
   if (!existing) {
@@ -998,6 +1004,7 @@ export async function updateLocation(
             title: location?.title ?? null,
           },
         })
+        if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
         return { status: 200, data: { success: true, location } };
       } catch (error) {
         if (isUniqueConstraintError(error)) continue;
@@ -1032,6 +1039,7 @@ export async function updateLocation(
       title: location?.title ?? null,
     },
   })
+  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
   return { status: 200, data: { success: true, location } };
 }
 

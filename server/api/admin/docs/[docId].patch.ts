@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await updatePlatformDoc(db, docId, body)
+    const result = await updatePlatformDoc(db, docId, body, env)
     schedulePlatformKnowledgeIndexRebuild(event, env, 'doc update')
     return jsonResponse(result)
   } catch (err) {

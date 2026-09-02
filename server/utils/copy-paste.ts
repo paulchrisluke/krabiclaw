@@ -3,6 +3,7 @@ import { createLocation, deleteLocation, updateLocation, type CreateLocationInpu
 import { uniqueSlug } from '~/server/utils/experiences'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { buildMediaPlacementInsertQuery } from '~/server/utils/media-asset-manager'
+import { refreshSocialCard, type SocialCardOwner } from '~/server/utils/social-card'
 
 type SetupEnv = CloudflareEnv
 
@@ -110,7 +111,15 @@ export async function copyLocationBatch(
     targetLocationId = targetLocation.id
     targetLocationSlug = targetLocation.slug
   } else if (new_location) {
-    const createResult = await createLocation(env, rawClient(db), organizationId, siteId, new_location, userId)
+    const createResult = await createLocation(
+      env,
+      rawClient(db),
+      organizationId,
+      siteId,
+      new_location,
+      userId,
+      { refreshSocialCardAfterCreate: false },
+    )
     
     if (createResult.status !== 201) {
       return { 
@@ -224,6 +233,38 @@ export async function copyLocationBatch(
         error: error instanceof Error ? error.message : 'Failed to execute copy batch',
       })
     }
+  }
+
+  try {
+    const refreshOwners: SocialCardOwner[] = [{ owner_type: 'business_location', owner_id: targetLocationId }]
+    const copiedProductIds = manifest.entities.products.new_ids
+    if (copiedProductIds.length) {
+      const publicProducts = await queryAll<{ id: string }>(db, `
+        SELECT id FROM products
+         WHERE site_id = ? AND product_type = 'standard' AND is_visible = 1
+           AND id IN (SELECT value FROM json_each(?))
+      `, [siteId, JSON.stringify(copiedProductIds)])
+      refreshOwners.push(...publicProducts.map(row => ({ owner_type: 'product' as const, owner_id: row.id })))
+    }
+    refreshOwners.push(...manifest.entities.experiences.new_ids.map(owner_id => ({ owner_type: 'experience' as const, owner_id })))
+    const copiedReviewIds = manifest.entities.reviews.new_ids
+    if (copiedReviewIds.length) {
+      const publicReviews = await queryAll<{ id: string }>(db, `
+        SELECT id FROM reviews
+         WHERE site_id = ? AND status = 'approved' AND id IN (SELECT value FROM json_each(?))
+      `, [siteId, JSON.stringify(copiedReviewIds)])
+      refreshOwners.push(...publicReviews.map(row => ({ owner_type: 'review' as const, owner_id: row.id })))
+    }
+    for (const owner of refreshOwners) {
+      await refreshSocialCard({ db, env, owner, actorId: userId })
+    }
+  } catch (error) {
+    console.error('[social-card]', {
+      stage: 'copy_refresh',
+      siteId,
+      targetLocationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   return { success: true, manifest }
@@ -406,7 +447,7 @@ async function copyReviews(
 
     const media = await queryAll<{ slot: string; asset_id: string; sort_order: number }>(db, `
       SELECT slot, asset_id, sort_order FROM media_placements
-       WHERE organization_id = ? AND site_id = ? AND owner_type = 'review' AND owner_id = ? AND status = 'active'
+       WHERE organization_id = ? AND site_id = ? AND owner_type = 'review' AND owner_id = ? AND slot <> 'social_card' AND status = 'active'
        ORDER BY slot, sort_order
     `, [organizationId, siteId, review.id])
     for (const placement of media) {

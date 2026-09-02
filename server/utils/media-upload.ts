@@ -9,17 +9,22 @@ interface UploadResolvedMediaInputBase {
   env: Parameters<typeof uploadImageBuffer>[0];
   siteId: string;
   organizationId: string;
-  userId: string;
   buffer: ArrayBuffer | Uint8Array<ArrayBuffer>;
   contentType: string;
   filename: string;
-  source: MediaAsset["source"];
   category?: MediaAsset["category"] | null;
   altText?: string | null;
   fileSize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  generationKey?: string | null;
 }
 
-export type UploadResolvedMediaInput = UploadResolvedMediaInputBase & (
+type UploadResolvedMediaActor =
+  | { source: 'generated'; userId: string | null }
+  | { source: 'uploaded' | 'external'; userId: string }
+
+export type UploadResolvedMediaInput = UploadResolvedMediaInputBase & UploadResolvedMediaActor & (
   | { kind: 'image'; provider?: 'cloudflare_images' | 'cloudflare_r2'; poster?: never }
   | { kind: 'file'; provider?: 'cloudflare_r2'; poster?: never }
   | {
@@ -57,16 +62,19 @@ export async function uploadResolvedMediaToAssetStore(
         kind: input.kind,
         provider: "cloudflare_images",
         source: input.source,
+        generation_key: input.generationKey ?? null,
         cloudflare_image_id: uploaded.imageId,
         public_url: uploaded.publicUrl,
         thumbnail_url: uploaded.thumbnailUrl,
         mime_type: input.contentType,
         file_name: input.filename,
         file_size: input.fileSize ?? null,
+        width: input.width ?? null,
+        height: input.height ?? null,
         alt_text: input.altText ?? null,
         category: input.category ?? null,
         status: "active",
-        created_by_user_id: input.userId,
+        created_by_user_id: input.userId ?? null,
       });
     } catch (persistError) {
       try {
@@ -108,6 +116,7 @@ export async function uploadResolvedMediaToAssetStore(
       kind: input.kind,
       provider: "cloudflare_r2",
       source: input.source,
+      generation_key: input.generationKey ?? null,
       cloudflare_image_id: posterImageId,
       r2_key: r2Key,
       public_url: publicUrl,
@@ -115,10 +124,12 @@ export async function uploadResolvedMediaToAssetStore(
       mime_type: input.contentType,
       file_name: input.filename,
       file_size: input.fileSize ?? null,
+      width: input.width ?? null,
+      height: input.height ?? null,
       alt_text: input.altText ?? null,
       category: input.category ?? null,
       status: "active",
-      created_by_user_id: input.userId,
+      created_by_user_id: input.userId ?? null,
     });
   } catch (persistError) {
     const cleanupErrors: Error[] = [];

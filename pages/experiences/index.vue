@@ -38,7 +38,7 @@ const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').tri
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experiencesList, pending: pagePending, getField, config, site: publicSite } = await usePublicPageData()
+const { experiencesList, pending: pagePending, getField } = await usePublicPageData()
 
 const pending = computed(() => pagePending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
@@ -56,20 +56,9 @@ useSocialMetadata(() => ({
   path: '/experiences',
   title: `Experiences | ${siteName.value}`,
   description: expCopy.value.seoExperiencesDescription(siteName.value),
-  label: 'Experiences',
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
-  heroImage: experienceSocialImage(experiences.value[0]) ? { url: experienceSocialImage(experiences.value[0])! } : null,
 }))
 
-function experienceSocialImage(experience: Experience | undefined): string | null {
-  const cover = experience?.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url || null
-  if (cover?.kind === 'video') return cover.thumbnail_url || null
-  return null
-}
 </script>

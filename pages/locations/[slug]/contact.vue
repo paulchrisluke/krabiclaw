@@ -185,7 +185,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 
 // Bootstrap: location data + page content (parking/notes) — 1 SSR call
-const { location, getField: getContentField, pending, config, site: publicSite } = await usePublicPageData()
+const { location, getField: getContentField, pending } = await usePublicPageData()
 
 const formattedAddress = computed(() => {
   const loc = location.value
@@ -239,12 +239,9 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/contact`,
   title: `Plan a visit · ${location.value?.title || slug.value}`,
   description: `Hours, address and directions for ${location.value?.title || slug.value}.`,
-  location: location.value?.title || null,
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 

@@ -8,10 +8,10 @@ export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const variantId = getRouterParam(event, 'variantId')
   if (!siteId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
-  const { db, site, userId } = await requireTenantPageWriteAccess(event, siteId)
+  const { env, db, site, userId } = await requireTenantPageWriteAccess(event, siteId)
   try {
     const payload = await updateTenantPage(db, variantId, {
-      userId, scope: { siteId, organizationId: site.organization_id }, data: await readRequiredBody<TenantPageEditorInput>(event), })
+      userId, scope: { siteId, organizationId: site.organization_id }, data: await readRequiredBody<TenantPageEditorInput>(event), env, })
     return jsonResponse(finalizeRequestMetrics(event, 'editor-tenant-page-update', payload))
   } catch (error) {
     rethrowHttpError(error)

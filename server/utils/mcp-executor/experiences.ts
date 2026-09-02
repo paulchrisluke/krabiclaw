@@ -67,6 +67,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
             location_id: locationId,
           },
           site.userId,
+          site.env,
         );
       const hydrated = attachExperienceViewUrl(experience, site);
       const context = await mutationContextPayload(site, { locationId });
@@ -93,6 +94,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           {
             ...(ueArgs as unknown as UpdateExperienceInput),
           },
+          site.env,
         );
       if (!experience) {
         return renderStructuredResponse(

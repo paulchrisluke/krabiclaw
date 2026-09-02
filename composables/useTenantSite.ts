@@ -1,5 +1,6 @@
 import type { TenantType } from '~/utils/tenant-routing'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
+import type { SocialImageSource } from '~/utils/social-metadata'
 
 interface TenantSiteState {
   tenantType: TenantType
@@ -14,6 +15,7 @@ interface TenantSiteInfo {
   brand_name?: string | null
   brand_description?: string | null
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string; mime_type: string | null }>
+  social_image?: SocialImageSource | null
   vertical?: string | null
   config?: {
     phone?: string | null
