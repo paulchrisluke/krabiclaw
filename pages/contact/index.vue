@@ -269,7 +269,7 @@ const businessName = computed(() => site?.brand_name?.trim() ?? '')
 const isDraftPreview = computed(() => Boolean(draftId && !siteId))
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig, site: publicSite, tenantPage } = await usePublicPageData()
+const { locations, config: siteConfig, tenantPage } = await usePublicPageData()
 const contactHero = computed(() => tenantPage.value?.blocks.find(block => block.type === 'hero') ?? null)
 const contactHeroEyebrow = computed(() => String(contactHero.value?.data.eyebrow || ''))
 const contactHeroTitle = computed(() => String(contactHero.value?.data.title || tenantPage.value?.title || ''))
@@ -404,9 +404,6 @@ useSocialMetadata(() => ({
   description: tenantPage.value?.seo_description || tenantPage.value?.summary || '',
   brand: {
     siteName: businessName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: siteConfig.value?.brand_color || null,
   },
 }))
 </script>

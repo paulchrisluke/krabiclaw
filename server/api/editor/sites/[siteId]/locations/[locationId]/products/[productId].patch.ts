@@ -12,10 +12,10 @@ export default defineHandler(async (event) => {
   if (!siteId || !locationId || !productId) return jsonResponse({ error: 'Site ID, location ID, and Product ID are required' }, { status: 400 })
 
   try {
-    const { db, session, site } = await requireLocationAccess(event, siteId, locationId)
+    const { env, db, session, site } = await requireLocationAccess(event, siteId, locationId)
     const body = await readRequiredBody<UpdateProductInput>(event)
     if (!Object.keys(body).length) return jsonResponse({ error: 'No update fields provided' }, { status: 400 })
-    const product = await updateProduct(db, site.organization_id, siteId, locationId, productId, body, session.user.id)
+    const product = await updateProduct(db, site.organization_id, siteId, locationId, productId, body, session.user.id, env)
     return jsonResponse({ success: true, product, site_id: siteId, location_id: locationId })
   } catch (error) {
     rethrowHttpError(error)

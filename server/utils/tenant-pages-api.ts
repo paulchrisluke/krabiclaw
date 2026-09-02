@@ -11,5 +11,5 @@ export async function requireTenantPageWriteAccess(event: H3Event, siteId: strin
     organizationId: site.organization_id,
     siteId,
   })
-  return { db, site, userId: session.user.id }
+  return { env, db, site, userId: session.user.id }
 }

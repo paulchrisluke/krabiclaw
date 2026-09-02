@@ -142,21 +142,12 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
   pageType: 'article',
-  label: 'Article',
   author: post.value.author?.name || null,
   publishedAt: post.value.published_at || null,
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
-  heroImage: articleSocialImage.value
-    ? {
-        url: articleSocialImage.value,
-        width: articleSocialMedia.value?.width || undefined,
-        height: articleSocialMedia.value?.height || undefined,
-      }
-    : null,
+  socialImage: post.value.social_image,
   robots: resolvedSeo.value.robots,
 }))
 

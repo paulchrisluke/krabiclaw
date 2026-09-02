@@ -8,6 +8,7 @@ import {
   isSingleMediaPlacement,
   isSupportedMediaPlacement,
   MAX_ORDERED_MEDIA_ASSETS,
+  type MediaPlacementOwnerType,
 } from '~/shared/media-placement-contract'
 
 export { isSingleMediaPlacement, isSupportedMediaPlacement, MAX_ORDERED_MEDIA_ASSETS } from '~/shared/media-placement-contract'
@@ -27,6 +28,7 @@ export interface MediaAsset {
   kind: 'image' | 'video' | 'file'
   provider: 'cloudflare_images' | 'cloudflare_r2'
   source: 'uploaded' | 'generated' | 'external'
+  generation_key: string | null
   cloudflare_image_id: string | null
   r2_key: string | null
   public_url: string | null
@@ -63,6 +65,14 @@ export type ResolvedMediaAsset = ResolvedMediaAssetBase & (
   | { kind: 'video'; thumbnail_url: string }
   | { kind: 'file'; thumbnail_url: null }
 )
+
+export type StoredMediaPlacementItem = ResolvedMediaAsset & Pick<MediaAsset, 'source' | 'generation_key' | 'updated_at'> & {
+  placement_id: string
+  owner_type: MediaPlacementOwnerType
+  owner_id: string
+  slot: string
+  sort_order: number
+}
 
 export interface MediaAssetRefInput {
   asset_id: string
@@ -245,6 +255,50 @@ export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   return { ...base, kind: 'file', thumbnail_url: null }
 }
 
+type MediaPlacementRow = MediaAsset & {
+  placement_id: string
+  owner_type: MediaPlacementOwnerType
+  owner_id: string
+  slot: string
+  sort_order: number
+}
+
+export async function readMediaPlacements(db: DbClient, input: {
+  siteId: string
+  ownerType: MediaPlacementOwnerType
+  ownerIds: string[]
+  slot?: string
+}): Promise<Map<string, StoredMediaPlacementItem[]>> {
+  const ownerIds = [...new Set(input.ownerIds)].filter(Boolean)
+  const result = new Map(ownerIds.map(id => [id, [] as StoredMediaPlacementItem[]]))
+  if (!ownerIds.length) return result
+  const rows = await queryAll<MediaPlacementRow>(db, `
+    SELECT mp.id AS placement_id, mp.owner_type, mp.owner_id, mp.slot, mp.sort_order,
+           ma.*
+      FROM media_placements mp
+      JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id AND ma.site_id = mp.site_id
+     WHERE mp.site_id = ? AND mp.owner_type = ?
+       AND mp.owner_id IN (SELECT value FROM json_each(?))
+       ${input.slot ? 'AND mp.slot = ?' : ''}
+       AND mp.status = 'active' AND ma.status = 'active'
+     ORDER BY mp.owner_id, mp.slot, mp.sort_order
+  `, [input.siteId, input.ownerType, d1JsonStringSet(ownerIds), ...(input.slot ? [input.slot] : [])])
+  for (const row of rows) {
+    result.get(row.owner_id)?.push({
+      ...toResolvedMediaAsset(row),
+      source: row.source,
+      generation_key: row.generation_key,
+      updated_at: row.updated_at,
+      placement_id: row.placement_id,
+      owner_type: row.owner_type,
+      owner_id: row.owner_id,
+      slot: row.slot,
+      sort_order: row.sort_order,
+    })
+  }
+  return result
+}
+
 export async function hydrateMediaAssetRefs(
   db: DbClient,
   input: {
@@ -272,19 +326,20 @@ export async function hydrateMediaAssetRefs(
     db,
     `SELECT * FROM media_assets
       WHERE organization_id = ? AND site_id = ? AND status = 'active'
+        AND generation_key IS NULL
         AND id IN (SELECT value FROM json_each(?))`,
     [input.organizationId, input.siteId, d1JsonStringSet(ids)],
   )
   const byId = new Map((rows ?? []).map(row => [row.id, row]))
   const missing = ids.find(id => !byId.has(id))
   if (missing) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${missing}` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive, out-of-scope, or generated derivative media asset: ${missing}` })
   }
 
   const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null
   const resolved = ids.map((id) => {
     const row = byId.get(id)
-    if (!row) throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${id}` })
+    if (!row) throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive, out-of-scope, or generated derivative media asset: ${id}` })
     const asset = toResolvedMediaAsset(row)
     if (allowedKinds && !allowedKinds.has(asset.kind)) {
       throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} asset ${id} must be ${Array.from(allowedKinds).join(' or ')}` })
@@ -295,19 +350,47 @@ export async function hydrateMediaAssetRefs(
   return resolved
 }
 
+export async function hydrateMediaPlacementRefs(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    refs: Array<MediaAssetRefInput & { slot: string }>
+    allowedKinds?: Array<ResolvedMediaAsset['kind']>
+    fieldName?: string
+  },
+): Promise<void> {
+  const refsBySlot = new Map<string, MediaAssetRefInput[]>()
+  for (const ref of input.refs) {
+    const refs = refsBySlot.get(ref.slot) ?? []
+    refs.push({ asset_id: ref.asset_id })
+    refsBySlot.set(ref.slot, refs)
+  }
+  for (const [slot, refs] of refsBySlot) {
+    await hydrateMediaAssetRefs(db, {
+      organizationId: input.organizationId,
+      siteId: input.siteId,
+      refs,
+      allowedKinds: input.allowedKinds,
+      fieldName: `${input.fieldName ?? 'media'}.${slot}`,
+    })
+  }
+}
+
 export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().toISOString()): BatchQuery {
   if (data.kind === 'video' && !data.thumbnail_url?.trim()) {
     throw new Error(`Video asset ${data.id} requires a thumbnail URL`)
   }
   return {
     query: `INSERT INTO media_assets (
-      id, organization_id, site_id, kind, provider, source,
+      id, organization_id, site_id, kind, provider, source, generation_key,
       cloudflare_image_id, r2_key,
       public_url, thumbnail_url, mime_type, file_name, file_size,
       width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       data.id, data.organization_id, data.site_id, data.kind, data.provider, data.source,
+      data.generation_key ?? null,
       data.cloudflare_image_id ?? null, data.r2_key ?? null,
       data.public_url ?? null, data.thumbnail_url ?? null,
       data.mime_type ?? null, data.file_name ?? null, data.file_size ?? null,
@@ -353,7 +436,7 @@ export async function listMediaAssets(
   siteId: string,
   opts: { kind?: string; search?: string; ownerType?: string; ownerId?: string; slot?: string; limit?: number; offset?: number } = {}
 ): Promise<MediaAsset[]> {
-  const conditions = [`ma.site_id = ?`, `ma.status = 'active'`]
+  const conditions = [`ma.site_id = ?`, `ma.status = 'active'`, `ma.generation_key IS NULL`]
   const params: SqlBindValue[] = [siteId]
   if (opts.kind) { conditions.push(`ma.kind = ?`); params.push(opts.kind) }
   if (opts.search) { conditions.push(`ma.file_name LIKE ? ESCAPE '\\'`); params.push(`%${opts.search.replace(/[\\%_]/g, '\\$&')}%`) }

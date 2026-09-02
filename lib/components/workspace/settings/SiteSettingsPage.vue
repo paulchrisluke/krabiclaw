@@ -51,6 +51,14 @@
             <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
           </div>
 
+          <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
+            <p class="text-base text-muted">Choose the image used as the source for generated social sharing cards.</p>
+            <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="outline" :loading="regeneratingCards" @click="regenerateSocialCards">Regenerate social cards</UButton>
+            </div>
+          </div>
+
           <div v-else-if="detailKey === 'description'" class="space-y-6">
             <p class="text-base text-muted">A concise description shared across the site and its public metadata.</p>
             <div>
@@ -193,6 +201,7 @@ import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { isSocialCardRegenerationResponse, socialCardRefreshNotice, type SocialCardRegenerationResponse } from '~/utils/social-card-refresh'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -252,7 +261,7 @@ const routeSegments = computed(() => {
 const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
-const validBrandKeys = new Set(['name', 'logo', 'description', 'color', 'contact', 'social'])
+const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'contact', 'social'])
 const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization', 'site-translations'])
 const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
 const routeIsCanonical = computed(() => {
@@ -269,6 +278,7 @@ watchEffect(() => {
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
+const regeneratingCards = ref(false)
 const connectingFacebook = ref(false)
 const notificationChannels = ref<string[]>([])
 const whatsappPhone = ref('')
@@ -282,9 +292,23 @@ const newLocale = ref('')
 const loadedSettings = ref<SiteSettingsResponse | null>(null)
 const loadedNotifications = ref<{ whatsapp_phone: string | null; channels: string[] } | null>(null)
 const originalSignature = ref('')
-const form = reactive({
-  brand_name: '', brand_description: '', logoAssetId: null as string | null, contact_email: '', brand_color: '',
-  default_currency: DEFAULT_CURRENCY as CurrencyCode, google_analytics_measurement_id: '', google_site_verification: '',
+interface SiteSettingsForm {
+  brand_name: string
+  brand_description: string
+  logoAssetId: string | null
+  socialShareAssetId: string | null
+  contact_email: string
+  brand_color: string
+  default_currency: CurrencyCode
+  google_analytics_measurement_id: string
+  google_site_verification: string
+  social_facebook_url: string
+  social_instagram_url: string
+  social_tiktok_url: string
+}
+const form = reactive<SiteSettingsForm>({
+  brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '',
+  default_currency: DEFAULT_CURRENCY, google_analytics_measurement_id: '', google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
@@ -310,6 +334,7 @@ const domainSummary = computed(() => dashboard.site.value?.custom_domain || dash
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.brand_name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
+  { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Uses the site logo', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
@@ -339,7 +364,7 @@ const navigationGroups = computed(() => {
 })
 const activeNavigationId = computed(() => surface.value === 'brand' ? detailKey.value : firstSegment.value === 'search' && secondSegment.value ? detailKey.value : firstSegment.value)
 const hasDetail = computed(() => detailKey.value !== null)
-const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization', 'site-translations': 'Translations' }
+const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization', 'site-translations': 'Translations' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
 const navbarTitle = computed(() => detailTitle.value ?? (surface.value === 'brand' ? 'Brand' : 'Site Settings'))
 const navbarActionIcon = computed(() => hasDetail.value && !secondSegment.value ? 'i-lucide-x' : 'i-lucide-arrow-left')
@@ -358,6 +383,7 @@ function editorSignature(key: string | null) {
   switch (key) {
     case 'name': return JSON.stringify(form.brand_name)
     case 'logo': return JSON.stringify(form.logoAssetId)
+    case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
     case 'color': return JSON.stringify(form.brand_color)
     case 'contact': return JSON.stringify(form.contact_email)
@@ -469,6 +495,7 @@ function fillForm(settings: SiteSettingsResponse) {
   form.brand_name = settings.brand_name ?? ''
   form.brand_description = settings.brand_description ?? ''
   form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
+  form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : DEFAULT_CURRENCY
@@ -534,6 +561,21 @@ async function patchSettings(body: Record<string, unknown>, successMessage: stri
   toast.add({ description: successMessage, color: 'success' })
   await dashboard.refresh()
 }
+async function regenerateSocialCards() {
+  regeneratingCards.value = true
+  try {
+    const response = await dashboardApi<SocialCardRegenerationResponse>(`/api/editor/sites/${siteId}/social-cards/regenerate`, {
+      method: 'POST',
+      validate: isSocialCardRegenerationResponse,
+    })
+    const notice = socialCardRefreshNotice(response.summary)
+    toast.add({ description: notice.message, color: notice.color })
+  } catch (error) {
+    toast.add({ description: errorMessage(error, 'Failed to regenerate social cards'), color: 'error' })
+  } finally {
+    regeneratingCards.value = false
+  }
+}
 async function saveCurrentEditor() {
   if (saveDisabled.value || !detailKey.value) return
   if (detailKey.value === 'site-translations') { await saveSiteTranslation(); return }
@@ -541,7 +583,8 @@ async function saveCurrentEditor() {
   try {
     switch (detailKey.value) {
       case 'name': await patchSettings({ brand_name: form.brand_name.trim() }, 'Brand name saved'); break
-      case 'logo': await patchSettings({ media: form.logoAssetId ? [{ asset_id: form.logoAssetId, slot: 'logo' }] : [] }, 'Logo saved'); break
+      case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }, 'Logo saved'); break
+      case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }, 'Social sharing image saved'); break
       case 'description': await patchSettings({ brand_description: form.brand_description }, 'Description saved'); break
       case 'color': await patchSettings({ brand_color: form.brand_color }, 'Brand color saved'); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }, 'Contact details saved'); break

@@ -1,17 +1,18 @@
 export const MEDIA_PLACEMENT_SLOTS = {
-  site: ['logo', 'logo_dark', 'favicon'],
-  business_location: ['hero', 'gallery'],
-  product: ['image', 'gallery'],
-  post: ['cover', 'gallery'],
-  blog_post: ['featured'],
-  experience: ['gallery'],
-  offering: ['thumbnail', 'hero', 'gallery'],
+  site: ['logo', 'logo_dark', 'favicon', 'social_share', 'social_card'],
+  business_location: ['hero', 'gallery', 'social_card'],
+  product: ['image', 'gallery', 'social_card'],
+  post: ['cover', 'gallery', 'social_card'],
+  blog_post: ['featured', 'social_card'],
+  experience: ['gallery', 'social_card'],
+  offering: ['thumbnail', 'hero', 'gallery', 'social_card'],
   content_block: ['media', 'gallery', 'background', 'featured', 'decoration'],
-  platform_doc: ['featured'],
-  review: ['portrait', 'gallery'],
+  platform_doc: ['featured', 'social_card'],
+  review: ['portrait', 'gallery', 'social_card'],
   review_request: ['gallery'],
   tenant_compliance: ['document'],
   chowbot_message: ['attachment'],
+  tenant_page: ['social_card'],
 } as const
 
 export type MediaPlacementOwnerType = keyof typeof MEDIA_PLACEMENT_SLOTS
@@ -22,6 +23,14 @@ export const EDITABLE_MEDIA_PLACEMENT_OWNERS = [
 ] as const satisfies readonly MediaPlacementOwnerType[]
 
 export type EditableMediaPlacementOwnerType = typeof EDITABLE_MEDIA_PLACEMENT_OWNERS[number]
+
+export function isMediaPlacementOwnerType(value: string): value is MediaPlacementOwnerType {
+  return Object.hasOwn(MEDIA_PLACEMENT_SLOTS, value)
+}
+
+export function isEditableMediaPlacementOwnerType(value: string): value is EditableMediaPlacementOwnerType {
+  return EDITABLE_MEDIA_PLACEMENT_OWNERS.some(ownerType => ownerType === value)
+}
 
 const INDEXED_SLOTS = [
   { ownerType: 'offering', runtime: /^features\.\d+\.image$/, sqlGlob: 'features.[0-9]*.image' },
@@ -40,9 +49,17 @@ const ORDERED_PLACEMENTS = new Set([
 export const MAX_ORDERED_MEDIA_ASSETS = 50
 
 export function isSupportedMediaPlacement(placement: { owner_type: string; slot: string }) {
-  const slots = (MEDIA_PLACEMENT_SLOTS as Record<string, readonly string[]>)[placement.owner_type]
-  return slots?.includes(placement.slot) === true
+  const slots = isMediaPlacementOwnerType(placement.owner_type)
+    ? MEDIA_PLACEMENT_SLOTS[placement.owner_type]
+    : undefined
+  return slots?.some(slot => slot === placement.slot) === true
     || INDEXED_SLOTS.some(pattern => pattern.ownerType === placement.owner_type && pattern.runtime.test(placement.slot))
+}
+
+export function isEditableMediaPlacement(placement: { owner_type: string; slot: string }) {
+  return placement.slot !== 'social_card'
+    && isEditableMediaPlacementOwnerType(placement.owner_type)
+    && isSupportedMediaPlacement(placement)
 }
 
 export function isSingleMediaPlacement(placement: { owner_type: string; slot: string }) {

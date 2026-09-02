@@ -58,7 +58,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
-const { googleBusiness, locations, config, site: publicSite } = await usePublicPageData()
+const { googleBusiness, locations } = await usePublicPageData()
 const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
 const googleReviewRating = r => starRatingMap[r.starRating] ?? Number(r.starRating ?? r.rating ?? 0)
@@ -92,9 +92,6 @@ useSocialMetadata(() => ({
   label: t('saya.footer.reviews'),
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 

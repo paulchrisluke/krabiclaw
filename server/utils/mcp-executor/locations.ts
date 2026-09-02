@@ -86,6 +86,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         locationId,
         updateFields as never,
         site.userId,
+        site.env,
       );
       assertDomainSuccess(result);
       const updatedLocation = (result.data as { location: LocationRecord }).location;

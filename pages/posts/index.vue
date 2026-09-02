@@ -44,7 +44,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { locale } = useI18n()
 const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
-const { googleBusiness, locations, config, site: publicSite } = await usePublicPageData()
+const { googleBusiness, locations } = await usePublicPageData()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
@@ -60,12 +60,8 @@ useSocialMetadata(() => ({
   path: '/posts',
   title: `Updates | ${siteName.value}`,
   description: `Latest news and updates from ${siteName.value}.`,
-  label: 'Updates',
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 </script>

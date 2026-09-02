@@ -136,6 +136,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : null,
             blocks: args.blocks,
           },
+          env: site.env,
         });
         return tenantPageLifecycleResponse("Created", created);
       } catch (error) {
@@ -153,6 +154,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           userId: site.userId,
           scope: { siteId: site.siteId, organizationId: site.organizationId },
           data: tenantPageDocumentData(args, page),
+          env: site.env,
         });
         return tenantPageLifecycleResponse("Updated", updated);
       } catch (error) {
@@ -169,6 +171,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           userId: site.userId,
           scope: { siteId: site.siteId, organizationId: site.organizationId },
           data: tenantPageDocumentData({ ...args, path: requiredString(args, "new_path") }, page),
+          env: site.env,
         });
         return tenantPageLifecycleResponse("Changed path for", updated);
       } catch (error) {
@@ -192,6 +195,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             ...(Object.hasOwn(args, 'themeTokens') ? { themeTokens: args.themeTokens } : {}),
           },
           updatedBy: site.userId,
+          env: site.env,
         });
         const context = await mutationContextPayload(site);
         return renderStructuredResponse(

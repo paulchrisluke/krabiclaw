@@ -29,7 +29,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
-const { googleBusiness, qaList, locations, config, site: publicSite } = await usePublicPageData()
+const { googleBusiness, qaList, locations } = await usePublicPageData()
 const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
@@ -39,9 +39,6 @@ useSocialMetadata(() => ({
   label: t('saya.qa.title'),
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 </script>

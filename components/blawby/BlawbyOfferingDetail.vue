@@ -191,13 +191,10 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   path: offering.value.canonical_path,
   title: offering.value.seo_title || `${offering.value.name} | ${identity.value.brand_name}`,
   description: offering.value.seo_description || offering.value.summary || '',
-  label: 'Service',
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
-  heroImage: heroMedia.value ? { url: heroMedia.value.public_url } : null,
+  socialImage: offering.value.social_image,
 }))
 
 useProfessionalServiceSchema(() => ({

@@ -85,6 +85,12 @@ Tenant pages receive a canonical link from `layouts/saya.vue`. The canonical str
 
 Do not use `runtimeConfig.public.siteUrl` for tenant canonical, Open Graph, breadcrumb, structured-data, or sitemap URLs. That value is the platform origin.
 
+## Generated-card consistency
+
+Content and media writes are authoritative. Automatic social-card refresh runs after commit as a best-effort derived projection. A refresh failure leaves the last generated card in place, emits structured `[social-card]` telemetry, and does not change the successful primary-write response.
+
+Operators retry failed projections through the tenant or platform regeneration action. Manual regeneration reports generated, reused, skipped, and failed counts instead of converting a partial failure into an unconditional success.
+
 ## Route behavior
 
 Tenant-only routes return an intentional 404 on the platform host through `server/middleware/zz-seo-route-boundaries.ts`. They must never render generic `Our Site`, loading, or empty-state content on `krabiclaw.com`.
@@ -104,7 +110,7 @@ Confirmation, cancellation, invitation, password, OAuth, admin, dashboard, previ
 ## Adding a tenant route
 
 1. Ensure the route requires a resolved tenant/site.
-2. Add page-specific canonical and social metadata through `useSocialMetadata()`; every social image is rendered by `/og-image-render.png`, with that page's media used only as its background input.
+2. Add page-specific canonical and social metadata through `useSocialMetadata()`. The composer uses the persisted owner card, site card, social sharing image, or logo supplied by the public payload.
 3. Add the platform-host route classification when the path is tenant-only.
 4. Add the route to `server/plugins/sitemap.ts` only when it has durable public search value and can avoid empty/thin output.
 5. Query and filter tenant-owned records explicitly.

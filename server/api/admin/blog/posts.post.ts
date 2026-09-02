@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await createPlatformBlogPost(db, session.user.id, platformBlogCreateInput(body))
+    const result = await createPlatformBlogPost(db, session.user.id, platformBlogCreateInput(body), {}, env)
     schedulePlatformKnowledgeIndexRebuild(event, env, 'blog post create')
     return jsonResponse(result)
   } catch (err) {
