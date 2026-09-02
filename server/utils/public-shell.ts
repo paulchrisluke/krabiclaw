@@ -12,7 +12,7 @@ import { verifyPreviewToken } from '~/server/utils/preview-token'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPublicShellPayload } from '~/utils/public-resource-contracts'
-import { assertExactCanonicalLocale, assertSiteLanguageEntitlement, getResourceLocalization } from '~/server/utils/localization'
+import { assertExactCanonicalLocale, assertPublicSiteLanguageEntitlement, getResourceLocalization } from '~/server/utils/localization'
 
 export interface PublicShellLoadOptions {
   mutateResponseHeaders?: boolean
@@ -101,7 +101,7 @@ export async function loadPublicShellSource(
     platformMessages: null as Record<string, string> | null,
   }
   if (locale && locale !== 'en') {
-    const entitlement = await assertSiteLanguageEntitlement(db, site.organization_id, siteId, locale)
+    const entitlement = await assertPublicSiteLanguageEntitlement(db, site.organization_id, siteId, locale)
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
     payload.platformMessages = entitlement.platform_messages ?? {}
     const siteLocalization = await getResourceLocalization(db, site.organization_id, siteId, 'site', siteId, locale)

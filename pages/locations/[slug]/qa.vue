@@ -10,7 +10,7 @@
 
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
-        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+        <NuxtLink :to="localePath(`/locations/${slug}`)" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
           ← {{ t('saya.qa_page.back_to', { title: location?.title }) }}
         </NuxtLink>
         
@@ -96,7 +96,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'saya' })
 
-const { t } = useI18n()
+const { localePath, t } = useI18n()
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()

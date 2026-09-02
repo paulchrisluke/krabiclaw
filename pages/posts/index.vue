@@ -11,7 +11,7 @@
         <NuxtLink
           v-for="loc in locations"
           :key="loc.id"
-          :to="`/locations/${loc.slug}/posts`"
+          :to="localePath(`/locations/${loc.slug}/posts`)"
           class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
         >
           <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
@@ -41,7 +41,7 @@ definePageMeta({ layout: 'saya' })
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
-const { locale } = useI18n()
+const { locale, localePath } = useI18n()
 const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 const { googleBusiness, locations } = await usePublicPageData()

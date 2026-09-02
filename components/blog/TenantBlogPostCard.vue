@@ -1,5 +1,5 @@
 <template>
-  <NuxtLink :to="`${basePath}/${post.slug}`" class="group block h-full no-underline">
+  <NuxtLink :to="postPath" class="group block h-full no-underline">
     <div
       v-if="featured"
       :class="[
@@ -14,16 +14,16 @@
             class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide"
             :class="variant === 'blawby' ? 'bg-[var(--blawby-accent-100)] text-[var(--blawby-accent-strong)]' : 'bg-muted text-muted'"
           >
-            Featured
+            {{ t('saya.posts.title') }}
           </span>
           <span v-if="post.category" class="rounded-full px-2.5 py-1 text-xs font-medium" :class="categoryClass">{{ post.category }}</span>
         </div>
         <p class="mb-3 text-sm" :class="metaTextClass">
-          <NuxtTime v-if="post.published_at" :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+          <NuxtTime v-if="post.published_at" :datetime="post.published_at" :locale="locale" year="numeric" month="long" day="numeric" time-zone="UTC" />
         </p>
         <h2 class="mb-4 text-2xl font-bold sm:text-3xl" :class="titleClass">{{ post.title }}</h2>
         <p v-if="post.excerpt" class="mb-6 leading-relaxed" :class="excerptClass">{{ post.excerpt }}</p>
-        <span class="text-sm font-semibold" :class="linkClass">Read article →</span>
+        <span class="text-sm font-semibold" :class="linkClass">{{ t('saya.posts.read_full_story') }} →</span>
       </div>
       <div v-if="featuredMedia?.public_url" class="min-h-64 overflow-hidden">
         <video
@@ -61,11 +61,11 @@
       <div class="p-6">
         <div class="mb-3 flex flex-wrap items-center gap-3 text-sm" :class="metaTextClass">
           <span v-if="post.category" class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="categoryClass">{{ post.category }}</span>
-          <span v-if="post.published_at"><NuxtTime :datetime="post.published_at" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" /></span>
+          <span v-if="post.published_at"><NuxtTime :datetime="post.published_at" :locale="locale" year="numeric" month="long" day="numeric" time-zone="UTC" /></span>
         </div>
         <h3 class="mb-2 text-xl font-bold" :class="titleClass">{{ post.title }}</h3>
         <p v-if="post.excerpt" class="mb-4 line-clamp-3 text-sm" :class="excerptClass">{{ post.excerpt }}</p>
-        <span class="text-sm font-semibold" :class="linkClass">Read more →</span>
+        <span class="text-sm font-semibold" :class="linkClass">{{ t('saya.posts.read_full_story') }} →</span>
       </div>
     </div>
   </NuxtLink>
@@ -78,6 +78,7 @@ export interface TenantBlogCardPost {
   title: string
   excerpt?: string | null
   category?: string | null
+  canonical_url?: string | null
   published_at?: string | null
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url?: string | null; kind?: string | null; width?: number | null; height?: number | null }>
 }
@@ -92,6 +93,8 @@ const props = withDefaults(defineProps<{
   featured: false,
 })
 
+const { locale, localePath, t } = useI18n()
+const postPath = computed(() => localePath(props.post.canonical_url || `${props.basePath}/${props.post.slug}`))
 const isBlawby = computed(() => props.variant === 'blawby')
 const featuredMedia = computed(() => props.post.media?.find(item => item.slot === 'featured') ?? null)
 const metaTextClass = computed(() => isBlawby.value ? 'text-gray-500' : 'text-dimmed')

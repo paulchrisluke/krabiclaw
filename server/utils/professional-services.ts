@@ -272,6 +272,7 @@ export async function getPublicTenantPageByPath(
   options: {
     locale?: string | null
     hydrationResources?: PublicTenantPageHydrationResources
+    localizations?: readonly ExactPublicLocalization[] | null
   } = {},
 ): Promise<PublicTenantPage | null> {
   const page = await getPublicTenantPageForPath(db, siteId, path, options)
@@ -695,6 +696,7 @@ export async function getPublicBlawbyRouteData(
     pagePath
       ? getPublicTenantPageByPath(db, siteId, pagePath, {
           locale: options.locale,
+          localizations: localized ? options.localizations ?? [] : null,
           hydrationResources: {
             offerings: needsOfferings ? offeringRowsPromise : undefined,
             qaRows: needsQa ? qaRowsPromise : undefined,

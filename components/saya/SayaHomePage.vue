@@ -69,7 +69,7 @@
             >
               <!-- Navigate to the canonical post detail page. -->
               <NuxtLink
-                :to="post.path"
+                :to="localePath(post.path)"
                 class="group block overflow-hidden bg-default text-default no-underline transition hover:opacity-90"
                 :class="post.wide ? 'sm:col-span-2' : ''"
               >
@@ -196,11 +196,11 @@
       <AppSection v-if="recentBlogPosts.length" bg="black" padding="xl">
         <div class="mb-16 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-2xl">
-            <p class="saya-kicker mb-6 text-inverted/60">From the blog</p>
-            <h2 class="saya-display-md text-inverted">Planning ideas, updates, and stories from the studio.</h2>
+            <p class="saya-kicker mb-6 text-inverted/60">{{ t('saya.footer.blog') }}</p>
+            <h2 class="saya-display-md text-inverted">{{ t('saya.posts.title') }}</h2>
           </div>
           <NuxtLink :to="localePath('/blog')" class="inline-flex text-sm font-medium text-inverted no-underline hover:underline">
-            Visit the blog
+            {{ t('saya.footer.visit_page') }}
           </NuxtLink>
         </div>
 
@@ -226,12 +226,12 @@
                   {{ post.category }}
                 </span>
                 <span v-if="post.publishedAt" class="text-sm text-inverted/40">
-                  <NuxtTime :datetime="post.publishedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+                  <NuxtTime :datetime="post.publishedAt" :locale="locale" year="numeric" month="long" day="numeric" time-zone="UTC" />
                 </span>
               </div>
               <h3 class="text-2xl font-semibold leading-tight text-inverted">{{ post.title }}</h3>
               <p v-if="post.excerpt" class="mt-3 text-sm leading-relaxed text-inverted/60">{{ post.excerpt }}</p>
-              <p class="mt-4 text-sm font-medium text-inverted">Read article</p>
+              <p class="mt-4 text-sm font-medium text-inverted">{{ t('saya.posts.read_full_story') }}</p>
             </div>
           </NuxtLink>
         </div>
@@ -293,7 +293,7 @@ import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
 import { ApiClientError } from '~/utils/api-clients'
 
 const { siteId, draftId, site } = useTenantSite()
-const { locale, localePath } = useI18n()
+const { locale, localePath, t } = useI18n()
 
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { resolveMedia } = useMedia()

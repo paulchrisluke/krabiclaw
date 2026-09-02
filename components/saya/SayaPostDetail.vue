@@ -2,7 +2,7 @@
   <article class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
     <div class="mb-5 flex items-center justify-between gap-4">
       <NuxtLink
-        :to="backTo"
+        :to="localePath(backTo)"
         class="inline-flex items-center gap-2 text-sm font-medium text-muted no-underline transition hover:text-default"
       >
         <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
@@ -155,7 +155,7 @@
               <p class="truncate font-semibold text-default">{{ brand.name }}</p>
               <NuxtLink
                 v-if="post.location?.slug"
-                :to="locationPath"
+                :to="localePath(locationPath)"
                 class="mt-0.5 block truncate text-sm text-muted no-underline transition hover:text-default"
               >
                 {{ post.location.title }}
@@ -235,7 +235,7 @@
           <slot name="cta" :cta="post.cta_url ? { actionType: post.cta_type, url: post.cta_url } : null" :label="post.cta_url ? formatCta(post.cta_type) : null">
             <NuxtLink
               v-if="post.cta_url"
-              :to="post.cta_url"
+              :to="localePath(post.cta_url)"
               class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--saya-surface-dark)] px-5 py-3.5 text-sm font-bold text-[var(--saya-on-surface-dark)] no-underline transition hover:opacity-90"
             >
               {{ formatCta(post.cta_type) }}
@@ -248,7 +248,7 @@
           <p class="text-xs font-bold uppercase tracking-widest text-muted">{{ t('saya.location.address') }}</p>
           <NuxtLink
             v-if="post.location.slug"
-            :to="locationPath"
+            :to="localePath(locationPath)"
             class="mt-2 inline-flex items-center gap-2 font-semibold text-default no-underline transition hover:text-muted"
           >
             <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -320,7 +320,7 @@ defineSlots<{
   cta(_slotProps: { cta: { actionType: string | null; url: string } | null; label: string | null }): unknown
 }>()
 
-const { t } = useI18n()
+const { localePath, t } = useI18n()
 const { formatDate } = useLocaleDate()
 
 const brand = computed(() => ({

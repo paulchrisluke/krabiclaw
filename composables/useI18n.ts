@@ -5,6 +5,7 @@ import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 
 export function useI18n() {
   const composer = useVueI18n()
+  const publicLocale = useState<string>('public-locale', () => 'en')
   const representations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
   const locales = computed(() => representations.value.map(item => ({ code: item.locale, name: item.label })))
 
@@ -13,7 +14,7 @@ export function useI18n() {
     if (!representation) return
     return navigateTo(representation.route_path)
   }
-  const localePath = (path: string) => formatTenantLocalePath(path, composer.locale.value)
+  const localePath = (path: string) => formatTenantLocalePath(path, publicLocale.value)
 
   return Object.assign(composer, { locales, setLocale, localePath })
 }

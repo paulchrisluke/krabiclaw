@@ -8,6 +8,12 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import type { MediaPlacementItem } from '~/server/utils/media-placement'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import type { SocialImageSource } from '~/utils/social-metadata'
+import {
+  loadExactPublicLocalizations,
+  projectExactLocalizedCollection,
+  projectLocalizedMediaAlt,
+  type ExactPublicLocalization,
+} from '~/server/utils/public-localization'
 
 export interface PublicTenantPage {
   id: string
@@ -75,6 +81,7 @@ async function hydrateBlocks(
   pagePath: string,
   blocks: TenantPageBlock[],
   resources: PublicTenantPageHydrationResources = {},
+  localizations: readonly ExactPublicLocalization[] | null = null,
 ): Promise<TenantPageBlock[]> {
   const publicBlocks = selectPublicTenantPageBlocks(blocks)
   const offeringIds = new Set<string>()
@@ -91,27 +98,44 @@ async function hydrateBlocks(
       for (const value of block.data.location_ids) if (typeof value === 'string' && value.trim()) locationIds.add(value)
     }
   }
-  const offerings = offeringIds.size || hasOfferingSource
+  const sourceOfferings = offeringIds.size || hasOfferingSource
     ? resources.offerings
       ? (await resources.offerings).filter(offering => hasOfferingSource || offeringIds.has(offering.id))
       : await listPublicTenantPageOfferingRows(db, siteId, hasOfferingSource ? undefined : [...offeringIds])
     : []
-  const locations = locationIds.size
-    ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null }>(db, `
-        SELECT bl.id, bl.title, bl.slug, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind
+  const offerings = localizations
+    ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).flatMap((offering) => {
+        const representation = localizations.find(item => item.resourceType === 'offering' && item.resourceId === offering.id)
+        return representation?.routePath ? [{
+          ...offering,
+          canonical_path: representation.routePath,
+          media: projectLocalizedMediaAlt(offering.media, localizations),
+        }] : []
+      })
+    : sourceOfferings
+  const sourceLocations = locationIds.size
+    ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
+        SELECT bl.id, bl.title, bl.slug, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
           FROM business_locations bl
           LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
           LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
          WHERE bl.site_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
       `, [siteId, d1JsonStringSet([...locationIds])])
     : []
+  const locations = localizations
+    ? projectExactLocalizedCollection('business_location', sourceLocations, localizations).flatMap((location) => {
+        const representation = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
+        const slug = representation?.routePath?.split('/').filter(Boolean).at(-1)
+        return slug ? [{ ...location, slug }] : []
+      })
+    : sourceLocations
   const distinctLocationIds = new Set(locations.map(l => l.id))
   if (distinctLocationIds.size !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
-  const [qaRows, reviewRows, postRows] = await Promise.all([
+  const [sourceQaRows, sourceReviewRows, sourcePostRows] = await Promise.all([
     hasQaSource ? (resources.qaRows ?? listPageQa(db, siteId, pagePath, true)) : Promise.resolve([]),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
-    hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null }>(db, `
-      SELECT p.id, p.title, p.slug, p.excerpt, p.canonical_url, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind
+    hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
+      SELECT p.id, p.title, p.slug, p.excerpt, p.canonical_url, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
         FROM blog_posts p
         LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0 AND mp.status = 'active'
         LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
@@ -119,6 +143,15 @@ async function hydrateBlocks(
        ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
     `, [siteId]) : Promise.resolve([]),
   ])
+  const qaRows = localizations ? projectExactLocalizedCollection('location_qa', sourceQaRows, localizations) : sourceQaRows
+  const reviewRows = localizations ? [] : sourceReviewRows
+  const postRows = localizations
+    ? projectExactLocalizedCollection('tenant_blog_post', sourcePostRows, localizations).flatMap((post) => {
+        const representation = localizations.find(item => item.resourceType === 'tenant_blog_post' && item.resourceId === post.id)
+        const slug = representation?.routePath?.split('/').filter(Boolean).at(-1)
+        return representation?.routePath && slug ? [{ ...post, slug, canonical_url: representation.routePath }] : []
+      })
+    : sourcePostRows
   const offeringById = new Map(offerings.map(item => [item.id, item]))
   const selectedOfferings = new Map(Array.from(offeringIds).map(id => [id, offeringById.get(id)] as const))
   if ([...selectedOfferings.values()].some(offering => !offering)) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
@@ -126,7 +159,7 @@ async function hydrateBlocks(
   const qaItems = qaRows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
   const reviewItems = (reviewRows as unknown as Array<Record<string, unknown>>).map(row => ({
     id: String(row.id),
-    title: typeof row.author_name === 'string' ? row.author_name : 'Client',
+    title: typeof row.author_name === 'string' ? row.author_name : '',
     description: typeof row.content === 'string' ? row.content : undefined,
     value: row.rating == null ? undefined : String(row.rating),
   }))
@@ -135,8 +168,10 @@ async function hydrateBlocks(
     title: post.title,
     description: post.excerpt || undefined,
     url: post.canonical_url || `/article/${post.slug}`,
-    label: 'Read more',
-    media: post.asset_id ? [{ asset_id: post.asset_id, slot: 'featured', public_url: post.public_url, thumbnail_url: post.thumbnail_url, kind: post.kind }] : [],
+    label: localizations ? undefined : 'Read more',
+    media: post.asset_id
+      ? projectLocalizedMediaAlt([{ asset_id: post.asset_id, slot: 'featured', public_url: post.public_url, thumbnail_url: post.thumbnail_url, kind: post.kind, alt_text: post.alt_text }], localizations ?? [])
+      : [],
   }))
   return publicBlocks.map(block => {
     const data = { ...block.data }
@@ -149,7 +184,7 @@ async function hydrateBlocks(
           title: offering.label || offering.name,
           description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
-          label: offering.label ? 'Learn more' : undefined,
+          label: localizations ? undefined : offering.label ? 'Learn more' : undefined,
           media: offering.media,
         }
       })
@@ -163,8 +198,10 @@ async function hydrateBlocks(
           title: location.title,
           description: location.short_description || location.description || undefined,
           url: `/locations/${location.slug}`,
-          label: 'View location',
-          media: location.asset_id ? [{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind }] : [],
+          label: localizations ? undefined : 'View location',
+          media: location.asset_id
+            ? projectLocalizedMediaAlt([{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind, alt_text: location.alt_text }], localizations ?? [])
+            : [],
         }
       })
     }
@@ -175,7 +212,7 @@ async function hydrateBlocks(
           title: offering.label || offering.name,
           description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
-          label: 'Learn more',
+          label: localizations ? undefined : 'Learn more',
           media: offering.media,
         }
       })
@@ -218,34 +255,35 @@ export async function getPublicTenantPageForPath(
     locale?: string | null
     preview?: boolean
     hydrationResources?: PublicTenantPageHydrationResources
+    localizations?: readonly ExactPublicLocalization[] | null
   } = {},
 ): Promise<PublicTenantPage | null> {
   const page = options.preview
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
-  if (page.locale !== 'en') {
-    const canonicalHydration = page.blocks.some(block =>
-      (block.type === 'offering_grid' && (block.data.source === 'site_offerings' || Array.isArray(block.data.offering_ids)))
-      || (block.type === 'location_grid' && Array.isArray(block.data.location_ids))
-      || (block.type === 'faq' && block.data.source === 'page_qa')
-      || (block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
-      || (block.type === 'feature_grid' && block.data.source === 'site_posts'),
-    )
-    if (canonicalHydration) {
-      throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized embedded content is unavailable' })
-    }
-  }
+  const localizations = page.locale === 'en'
+    ? null
+    : options.localizations ?? await loadExactPublicLocalizations(db, page.organization_id, siteId, page.locale)
   const [blocks, media] = await Promise.all([
-    hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources),
+    hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources, localizations),
     loadPublicSocialMedia(db, siteId, 'tenant_page', [page.id]),
   ])
+  const localizedMedia = page.locale === 'en'
+    ? media.get(page.id) ?? { media: [], social_image: null }
+    : {
+        ...(media.get(page.id) ?? { media: [], social_image: null }),
+        media: projectLocalizedMediaAlt(media.get(page.id)?.media ?? [], localizations ?? []),
+      }
   if (page.locale !== 'en') {
     for (const block of blocks) {
-      block.media = block.media.map(item => ({ ...item, alt_text: null }))
+      block.media = projectLocalizedMediaAlt(
+        block.media.map(item => ({ ...item, alt_text: item.alt_text ?? null })),
+        localizations ?? [],
+      )
     }
   }
-  return mapPage(page, blocks, media.get(page.id) ?? { media: [], social_image: null })
+  return mapPage(page, blocks, localizedMedia)
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {

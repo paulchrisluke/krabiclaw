@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
     const locale = assertExactCanonicalLocale(getQuery(event).locale ?? 'en')
     const result = await loadPublicProductApiDetail(db, siteId, locationSlug, productSlug, locale)
     if (!result) return jsonResponse({ error: 'Product not found' }, { status: 404 })
-    const reviews = await loadPublicProductReviews(db, result)
+    const reviews = locale === 'en' ? await loadPublicProductReviews(db, result) : []
     return jsonResponse({
       product: result.product,
       location: { id: result.location.id, slug: result.location.slug, title: result.location.title },

@@ -31,7 +31,7 @@
           <h2 class="blawby-display text-3xl font-bold text-[var(--blawby-primary-dark)]">{{ stringValue(supportBlock.data.title) }}</h2>
           <p class="mt-4 text-lg leading-8 text-gray-600">{{ stringValue(supportBlock.data.body) }}</p>
           <div class="mt-8 flex flex-wrap gap-3">
-            <BlawbyButton v-for="button in supportButtons" :key="button.url" :to="button.url">{{ button.label }}</BlawbyButton>
+            <BlawbyButton v-for="button in supportButtons" :key="button.url" :to="localePath(button.url)">{{ button.label }}</BlawbyButton>
           </div>
         </div>
       </section>
@@ -56,6 +56,7 @@ import type { BlawbyShieldVariant, PublicOfferingSummary, PublicSiteQa, PublicSi
 type RecordValue = Record<string, unknown>
 
 const props = defineProps<{ page: PublicTenantPage }>()
+const { localePath } = useI18n()
 const { trackDonationClick } = useSiteConversionTracking()
 
 function trackDonation(choice: { label: string; amount: number | null }) {
@@ -196,14 +197,17 @@ const supportBlock = computed(() => block('callout', data => Boolean(data.title 
 const supportButtons = computed(() => arrayRecords(supportBlock.value?.data.buttons).map(button => ({ label: stringValue(button.label), url: stringValue(button.url) })).filter(button => button.label && button.url))
 
 const ctaBlock = computed(() => block('contact_cta'))
-const ctaProps = computed(() => ({
-  title: stringValue(ctaBlock.value?.data.title),
-  description: stringValue(ctaBlock.value?.data.description) || null,
-  label: stringValue(ctaBlock.value?.data.label),
-  destination: stringValue(ctaBlock.value?.data.url),
-  backgroundUrl: mediaUrl(ctaBlock.value, 'background'),
-  featuredUrl: mediaUrl(ctaBlock.value, 'featured'),
-}))
+const ctaProps = computed(() => {
+  const destination = stringValue(ctaBlock.value?.data.url)
+  return {
+    title: stringValue(ctaBlock.value?.data.title),
+    description: stringValue(ctaBlock.value?.data.description) || null,
+    label: stringValue(ctaBlock.value?.data.label),
+    destination: destination ? localePath(destination) : '',
+    backgroundUrl: mediaUrl(ctaBlock.value, 'background'),
+    featuredUrl: mediaUrl(ctaBlock.value, 'featured'),
+  }
+})
 
 const legalVariant = computed<BlawbyShieldVariant>(() => {
   if (props.page.path === '/policies/privacy') return 'privacy'

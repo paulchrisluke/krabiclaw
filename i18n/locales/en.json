@@ -31,6 +31,16 @@
       "view_all": "View all",
       "temporarily_unavailable": "Temporarily unavailable"
     },
+    "search": {
+      "dialog_title": "Search {surface}",
+      "searching": "Searching {surface}...",
+      "no_results": "No results found",
+      "placeholder": "Search posts...",
+      "hint": "Search by title, category, or keyword.",
+      "no_results_hint": "Try a different title, category, or keyword.",
+      "article": "Article",
+      "articles": "Articles"
+    },
     "home": {
       "locations_heading": "Our Locations",
       "visit_location": "Visit this location →",

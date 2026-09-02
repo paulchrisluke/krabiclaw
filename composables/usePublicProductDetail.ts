@@ -91,13 +91,13 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
           currency: detail.currency,
           vertical: detail.site.vertical,
           brandName: detail.site.brand_name,
-          reviews: await loadPublicProductReviews(db, detail),
+          reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
           localeRepresentations: detail.localeRepresentations,
         }
       }
       return publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}?locale=${encodeURIComponent(locale)}`, {
         signal,
-        coalesceKey: `public-product-${siteId}-${locationSlug}-${productSlug}`,
+        coalesceKey: `public-product-${siteId}-${locale}-${locationSlug}-${productSlug}`,
         validate: isPublicProductDetailPayload,
       })
     },

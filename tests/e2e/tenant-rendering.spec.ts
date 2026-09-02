@@ -130,11 +130,11 @@ test('Pottery House preserves dark-theme hydration and booking context', async (
 test('an English-only tenant does not classify one-segment CMS paths as locales', async ({ page }) => {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport)
-    for (const path of ['/th', '/faq', '/app', '/art']) {
-      const response = await openTenantPage(page, `${blawbyBaseURL}${path}`, blawbyExtraHeaders)
+    for (const path of ['/th', '/th/about', '/th/experiences', '/th/links']) {
+      const response = await openTenantPage(page, `${potteryHouseBaseURL}${path}`, potteryHouseExtraHeaders)
       expect(response?.status()).toBe(404)
       await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-      await expect(page.locator('body')).not.toContainText(/ดินเผา ความสงบ/)
+      await expect(page.locator('body')).not.toContainText(/เนื้อหาภาษาไทย/)
     }
   }
 })

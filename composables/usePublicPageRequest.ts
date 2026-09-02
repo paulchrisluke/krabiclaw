@@ -105,7 +105,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "blog",
       location: null,
       experience: null,
-      datasets: ['blogPost'],
+      datasets: ['blog', 'blogPost'],
       blogSlug: blogMatch[1] ?? null,
     };
   }
@@ -116,7 +116,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "blog",
       location: null,
       experience: null,
-      datasets: ['blogPost'],
+      datasets: ['blog', 'blogPost'],
       blogSlug: articleMatch[1] ?? null,
     };
   }
@@ -267,12 +267,9 @@ export const usePublicPageRequest = () => {
       ? route.query.token
       : null
     const request = getPublicPageRequest(localePath.sourcePath)
-    const translatedSystemPage = request.page === 'home' || request.page === 'about' || request.page === 'contact'
     return {
       ...request,
-      datasets: localePath.localeSegment && !translatedSystemPage
-        ? request.datasets.filter(dataset => dataset !== 'content')
-        : request.datasets,
+      datasets: request.datasets,
       locale: localePath.localeSegment ?? locale.value,
       token,
     }

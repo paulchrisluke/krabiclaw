@@ -56,36 +56,38 @@
             </div>
           </UCard>
 
-          <UCard v-if="translationLocales.length">
+          <UCard v-if="translationLocales.length || translationLocaleError">
             <template #header>
               <div class="flex items-center justify-between gap-4">
                 <h2 class="text-base font-semibold text-highlighted">Translations</h2>
-                <select v-model="translationLocale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
+                <select v-model="translationLocale" data-testid="links-translation-locale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
                   <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
                 </select>
               </div>
             </template>
             <div class="grid gap-4 md:grid-cols-2">
               <UFormField :label="`Title (${translationLocale})`">
-                <UInput v-model="translationFields.title" />
+                <UInput v-model="translationFields.title" data-testid="links-translation-title" />
               </UFormField>
               <UFormField :label="`SEO title (${translationLocale})`">
-                <UInput v-model="translationFields.seo_title" />
+                <UInput v-model="translationFields.seo_title" data-testid="links-translation-seo-title" />
               </UFormField>
               <UFormField class="md:col-span-2" :label="`SEO description (${translationLocale})`">
-                <UInput v-model="translationFields.seo_description" />
+                <UInput v-model="translationFields.seo_description" data-testid="links-translation-seo-description" />
               </UFormField>
             </div>
-            <p v-if="translationError" class="mt-2 text-sm text-error">{{ translationError }}</p>
-            <UButton class="mt-3" size="sm" :loading="translationSaving" @click="saveTranslation">Save translation</UButton>
+            <p v-if="translationLocaleError || translationError" class="mt-2 text-sm text-error">{{ translationLocaleError || translationError }}</p>
+            <UButton data-testid="links-save-page-translation" class="mt-3" size="sm" :loading="translationSaving" :disabled="translationUnavailable || !translationLocale" @click="saveTranslation">Save translation</UButton>
 
-            <div v-if="items[0]" class="mt-6 border-t border-default pt-4">
-              <p class="text-sm text-muted">First link item ({{ items[0].label || 'untitled' }})</p>
-              <UFormField :label="`Label (${translationLocale})`" class="mt-2">
-                <UInput v-model="itemTranslationLabel" />
-              </UFormField>
-              <p v-if="itemTranslationError" class="mt-2 text-sm text-error">{{ itemTranslationError }}</p>
-              <UButton class="mt-3" size="sm" variant="soft" :loading="itemTranslationSaving" @click="saveItemTranslation">Save translation</UButton>
+            <div v-if="items.length" class="mt-6 space-y-4 border-t border-default pt-4">
+              <div v-for="item in items" :key="item.id" :data-testid="`links-item-translation-${item.id}`">
+                <p class="text-sm text-muted">{{ item.label || 'Untitled link' }}</p>
+                <UFormField :label="`Label (${translationLocale})`" class="mt-2">
+                  <UInput v-model="itemTranslationLabels[item.id]" data-testid="links-item-translation-label" />
+                </UFormField>
+                <UButton data-testid="links-save-item-translation" class="mt-3" size="sm" variant="soft" :loading="itemTranslationSavingId === item.id" :disabled="translationUnavailable" @click="saveItemTranslation(item)">Save translation</UButton>
+              </div>
+              <p v-if="itemTranslationError" class="text-sm text-error">{{ itemTranslationError }}</p>
             </div>
           </UCard>
 
@@ -367,17 +369,20 @@ onBeforeRouteLeave(() => {
 // ── Translations (resource_localizations, same API as the editor CRUD) ──
 const translationLocale = ref('')
 const translationLocales = ref<string[]>([])
+const translationLocaleError = ref<string | null>(null)
 const translationFields = reactive({ title: '', seo_title: '', seo_description: '' })
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
-const itemTranslationLabel = ref('')
+const itemTranslationLabels = reactive<Record<string, string>>({})
 const itemTranslationError = ref<string | null>(null)
-const itemTranslationSaving = ref(false)
+const itemTranslationSavingId = ref<string | null>(null)
+const translationUnavailable = computed(() => Boolean(translationLocaleError.value || translationError.value || itemTranslationError.value))
 
 function isLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
   return isRecord(value) && Array.isArray(value.languages)
 }
 async function loadTranslationLocales() {
+  translationLocaleError.value = null
   try {
     const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
       `/api/editor/sites/${siteId}/locales`,
@@ -388,7 +393,7 @@ async function loadTranslationLocales() {
   } catch (cause) {
     translationLocales.value = []
     translationLocale.value = ''
-    translationError.value = cause instanceof Error ? cause.message : 'Failed to load site languages'
+    translationLocaleError.value = cause instanceof Error ? cause.message : 'Failed to load site languages'
   }
 }
 function isTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
@@ -412,25 +417,38 @@ async function loadTranslationFields() {
     if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
   }
 }
-async function loadItemTranslation() {
+async function loadItemTranslations() {
   itemTranslationError.value = null
-  itemTranslationLabel.value = ''
-  const item = items.value[0]
-  if (!item || !translationLocale.value) return
-  try {
-    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
-      `/api/editor/sites/${siteId}/localization/site_link_item/${item.id}/${encodeURIComponent(translationLocale.value)}`,
-      { validate: isTranslationResponse },
-    )
-    const value = response.localization.values.label
-    itemTranslationLabel.value = typeof value === 'string' ? value : ''
-  } catch (cause) {
-    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
-    if (statusCode !== 404) itemTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+  for (const key of Object.keys(itemTranslationLabels)) itemTranslationLabels[key] = ''
+  if (!translationLocale.value) return
+  for (const item of items.value) {
+    itemTranslationLabels[item.id] = ''
+    try {
+      const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+        `/api/editor/sites/${siteId}/localization/site_link_item/${item.id}/${encodeURIComponent(translationLocale.value)}`,
+        { validate: isTranslationResponse },
+      )
+      const value = response.localization.values.label
+      itemTranslationLabels[item.id] = typeof value === 'string' ? value : ''
+    } catch (cause) {
+      const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+      if (statusCode !== 404) {
+        itemTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load link translations'
+        return
+      }
+    }
   }
 }
-watch(translationLocale, () => { void loadTranslationFields(); void loadItemTranslation() })
-watch(() => form.id, () => { if (form.id) void loadTranslationLocales().then(() => { void loadTranslationFields(); void loadItemTranslation() }) })
+watch(translationLocale, () => { void loadTranslationFields(); void loadItemTranslations() })
+watch(() => form.id, () => {
+  if (!form.id) return
+  void loadTranslationLocales().then(() => {
+    if (!translationLocale.value) return
+    void loadTranslationFields()
+    void loadItemTranslations()
+  })
+})
+watch(() => items.value.map(item => item.id).join(','), () => { if (translationLocale.value) void loadItemTranslations() })
 
 async function saveTranslation() {
   if (!form.id || !translationLocale.value) return
@@ -454,22 +472,22 @@ async function saveTranslation() {
   }
 }
 
-async function saveItemTranslation() {
-  const item = items.value[0]
-  if (!item || !translationLocale.value || !itemTranslationLabel.value.trim()) return
-  itemTranslationSaving.value = true
+async function saveItemTranslation(item: LinkItem) {
+  const label = itemTranslationLabels[item.id]?.trim()
+  if (!translationLocale.value || !label) return
+  itemTranslationSavingId.value = item.id
   itemTranslationError.value = null
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/localization/site_link_item/${item.id}/${encodeURIComponent(translationLocale.value)}`, {
       method: 'PUT',
-      body: { values: { label: itemTranslationLabel.value.trim() } },
+      body: { values: { label } },
       validate: isRecord,
     })
     toast.add({ description: 'Translation saved', color: 'success' })
   } catch (cause) {
     itemTranslationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
   } finally {
-    itemTranslationSaving.value = false
+    itemTranslationSavingId.value = null
   }
 }
 </script>

@@ -737,7 +737,11 @@ async function loadPublicPageSource(
   const sourceLocale = 'en';
   const canonicalPath = requestedDatasets.has('content') ? canonicalTenantPagePath(page) : null
   const tenantPage = canonicalPath
-    ? await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale, preview: isPreviewAuthorized })
+    ? await getPublicTenantPageForPath(db, siteId, canonicalPath, {
+        locale,
+        preview: isPreviewAuthorized,
+        localizations: localizedLocale ? publicLocalizations : null,
+      })
     : null
   if (canonicalPath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized) {
     // This paid localization feature never falls back to English content -
@@ -1091,10 +1095,10 @@ async function loadPublicPageSource(
     content_blocks: groupContentBlocks(contentRows),
     tenant_page: tenantPage,
     products,
-    locationReviews: locationReviewRows?.results ?? [],
-    globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
+    locationReviews: localizedLocale ? [] : locationReviewRows?.results ?? [],
+    globalReviews: localizedLocale ? [] : needsGlobalReviews ? reviewRows.results ?? [] : [],
     reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
-    reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
+    reviewsList: localizedLocale ? [] : requestedDatasets.has("reviews") ? fullReviews : [],
     media: requestedDatasets.has("photos") ? media : [],
     qaList,
     blogList: requestedDatasets.has("blog") ? blogList : [],

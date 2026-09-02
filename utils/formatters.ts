@@ -200,13 +200,20 @@ export const formatClosureMessage = (closure: GoogleSpecialPeriod | null | undef
   return `Temporarily closed — reopening ${formatGoogleDate(reopenDate)}`
 }
 
-export const formatGoogleHours = (regularHours: GoogleRegularHours | GoogleRegularPeriod[] | null | undefined) => {
+export const formatGoogleHours = (
+  regularHours: GoogleRegularHours | GoogleRegularPeriod[] | string[] | null | undefined,
+  locale = 'en',
+  closedLabel = 'Closed',
+) => {
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 
+  const descriptions: string[] | undefined = Array.isArray(regularHours) && regularHours.every((value): value is string => typeof value === 'string')
+    ? regularHours as string[]
+    : !Array.isArray(regularHours) ? regularHours?.weekdayDescriptions : undefined
+
   // Handle weekdayDescriptions format (ChowBot plain-text storage)
-  if (regularHours && !Array.isArray(regularHours) && (regularHours as GoogleRegularHours).weekdayDescriptions?.length) {
-    const descs = (regularHours as GoogleRegularHours).weekdayDescriptions!
-    return descs.map(line => {
+  if (descriptions?.length) {
+    return descriptions.map(line => {
       const [dayPart, ...rest] = line.split(/:\s*/)
       return { day: (dayPart ?? line).trim(), hours: rest.join(': ').trim() || line }
     })
@@ -223,11 +230,12 @@ export const formatGoogleHours = (regularHours: GoogleRegularHours | GoogleRegul
   return days.map(day => {
     const period = periods.find((p) => p.openDay === day)
     return {
-      day: day.charAt(0) + day.slice(1).toLowerCase(),
+      day: new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' })
+        .format(new Date(Date.UTC(2024, 0, 1 + days.indexOf(day)))),
       today: days[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1] === day,
       hours: period
         ? `${formatGoogleTime(parseTimeStr(period.openTime))} – ${formatGoogleTime(parseTimeStr(period.closeTime))}`
-        : 'Closed'
+        : closedLabel
     }
   })
 }

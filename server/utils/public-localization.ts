@@ -7,7 +7,7 @@ import {
 } from '~/server/utils/localization-registry'
 import { HTTPError } from 'nitro'
 import { queryAll, type DbClient } from '~/server/db'
-import { assertSiteLanguageEntitlement } from '~/server/utils/localization'
+import { assertPublicSiteLanguageEntitlement } from '~/server/utils/localization'
 
 export interface StoredPublicLocalizationRow {
   resource_type: string
@@ -33,7 +33,7 @@ export async function loadExactPublicLocalizations(
   siteId: string,
   locale: string,
 ): Promise<ExactPublicLocalization[]> {
-  const entitlement = await assertSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(db, organizationId, siteId, locale)
   if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
     SELECT resource_type, resource_id, locale, values_json, route_path, document_id

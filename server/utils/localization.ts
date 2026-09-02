@@ -24,6 +24,7 @@ import {
   type LocalizedValues,
 } from '~/server/utils/localization-registry'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 export type PlatformLocaleDirection = 'ltr' | 'rtl'
 export type PlatformLocaleStatus = 'unavailable' | 'available'
@@ -376,6 +377,36 @@ export async function assertSiteLanguageEntitlement(
   return { locale, source: false, platform_messages: Object.fromEntries(messages.map(message => [message.message_key, message.message_value])) }
 }
 
+export async function assertPublicSiteLanguageEntitlement(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  locale: string,
+) {
+  try {
+    return await assertSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  } catch (error) {
+    const status = error && typeof error === 'object' && 'status' in error
+      ? error.status
+      : null
+    const data = error && typeof error === 'object' && 'data' in error
+      ? error.data
+      : null
+    const code = data && typeof data === 'object' && 'code' in data
+      ? data.code
+      : null
+    if (
+      status === 402
+      || code === 'LANGUAGE_LICENSE_REQUIRED'
+      || code === 'LANGUAGE_LICENSE_SYNCING'
+      || code === 'PLATFORM_LOCALE_UNAVAILABLE'
+    ) {
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Localized route was not found' })
+    }
+    throw error
+  }
+}
+
 function mapLocalization(row: ResourceLocalizationRow): ResourceLocalizationRecord {
   const parsed = JSON.parse(row.values_json) as unknown
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -465,7 +496,7 @@ export async function resolveLocalizedPublicRoute(
   const routePath = routePathInput.length > 1 ? routePathInput.replace(/\/+$/, '') : routePathInput
   const firstSegment = routePath.split('/')[1]
   const locale = assertExactCanonicalLocale(firstSegment)
-  const entitlement = await assertSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(db, organizationId, siteId, locale)
   if (entitlement.source) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'English source routes are unprefixed', { locale, route_path: routePath })
   }
@@ -613,6 +644,7 @@ export async function putResourceLocalization(
     params: [id, input.organizationId, input.siteId, resourceType, input.resourceId, locale, JSON.stringify(values), routePath,
       existing?.created_at ?? now, existing?.created_by_user_id ?? input.userId, now, input.userId],
   })
+  statements.push(publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-put'))
   try {
     await executeBatch(db, statements, { operation: 'replace resource localization' })
   } catch (error) {
@@ -713,13 +745,13 @@ export async function putResourceLocalizationForAuthoring(
       await replaceContentDocumentBlocks(db, document.owner_type, document.owner_id, prepared.blocks, {
         expected_document_updated_at: input.expectedDocumentUpdatedAt,
         additionalQueriesBefore: statements,
-        additionalQueriesAfter: prepared.placementQueries,
+        additionalQueriesAfter: [...prepared.placementQueries, publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-blog-put')],
       })
     } else {
       await createContentDocumentWithBlocks(db, 'tenant_blog', id, prepared.blocks, {
         documentId,
         additionalQueriesBefore: statements,
-        additionalQueriesAfter: prepared.placementQueries,
+        additionalQueriesAfter: [...prepared.placementQueries, publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-blog-put')],
       })
     }
   } catch (error) {
@@ -756,6 +788,7 @@ export async function deleteResourceLocalization(
     })
     statements.push({ query: 'DELETE FROM content_documents WHERE id = ?', params: [row.document_id] })
   }
+  statements.push(publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-delete'))
   await executeBatch(db, statements, { operation: 'delete resource localization' })
   return { deleted: true, resource_type: resourceType, resource_id: input.resourceId, locale }
 }

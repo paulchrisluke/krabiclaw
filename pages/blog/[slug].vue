@@ -9,7 +9,7 @@
 
   <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
     <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
-      <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" label="Search stories..." aria-label="Open story search" class="mb-6" />
+      <PlatformCommandSearchTrigger v-if="locale === 'en'" surface="tenant_blog" variant="saya" :label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" :aria-label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" class="mb-6" />
       <BlogCategoryNav :categories="categories" :base-path="blogBasePath" :active-slug="post?.slug" />
     </aside>
 
@@ -20,19 +20,19 @@
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
         <p v-if="authorName" class="text-sm font-semibold text-default">{{ authorName }}</p>
-        <p class="text-sm text-dimmed">More stories and updates from {{ siteName }}</p>
+        <p class="text-sm text-dimmed">{{ t('saya.posts.subtitle') }} · {{ siteName }}</p>
       </div>
-      <PlatformButton :to="blogBasePath" variant="outline" size="sm">More Posts</PlatformButton>
+      <PlatformButton :to="blogBasePath" variant="outline" size="sm">{{ t('saya.posts.view_all') }}</PlatformButton>
     </div>
     </div>
 
     <div v-if="relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
-      <h2 class="mb-6 text-xl font-bold text-default">More from {{ siteName }}</h2>
+      <h2 class="mb-6 text-xl font-bold text-default">{{ t('saya.posts.title') }} · {{ siteName }}</h2>
       <div class="grid gap-6 sm:grid-cols-2">
         <NuxtLink
           v-for="relatedPost in relatedPosts"
           :key="relatedPost.id"
-          :to="`${blogBasePath}/${relatedPost.slug}`"
+          :to="localePath(`${sourceBlogBasePath}/${relatedPost.slug}`)"
           class="block rounded-xl border border-default bg-elevated p-5 no-underline transition-shadow hover:shadow-md"
         >
           <h3 class="text-base font-semibold text-default">{{ relatedPost.title }}</h3>
@@ -44,12 +44,12 @@
   </div>
 
   <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
-    <h1 class="text-2xl font-bold text-default">Post not found</h1>
-    <p class="mt-3 text-muted">This post may have been moved or removed.</p>
-    <PlatformButton :to="blogBasePath" variant="outline" size="sm" class="mt-6">More Posts</PlatformButton>
+    <h1 class="text-2xl font-bold text-default">{{ t('saya.posts.empty_title') }}</h1>
+    <p class="mt-3 text-muted">{{ t('saya.posts.empty_desc') }}</p>
+    <PlatformButton :to="blogBasePath" variant="outline" size="sm" class="mt-6">{{ t('saya.posts.view_all') }}</PlatformButton>
   </div>
 
-  <PlatformCommandSearchModal surface="tenant_blog" variant="saya" />
+  <PlatformCommandSearchModal v-if="locale === 'en'" surface="tenant_blog" variant="saya" />
 </template>
 
 <script setup lang="ts">
@@ -65,6 +65,7 @@ if (!isTenant || !siteId) throw createError({ statusCode: 404 })
 definePageMeta({ layout: 'saya', middleware: 'tenant-blog-canonical' })
 
 const { resolveMedia } = useMedia()
+const { localePath, t } = useI18n()
 
 interface TenantBlogPost {
   id: string

@@ -39,7 +39,7 @@ async function putLocalization(
 
 async function createPageVariant(
   request: APIRequestContext,
-  input: { pageId: string; path: string; title: string; summary: string },
+  input: { pageId: string; path: string; title: string; summary: string; blocks?: Array<Record<string, unknown>> },
 ) {
   const response = await request.post(`/api/editor/sites/${siteId}/pages`, {
     data: {
@@ -50,7 +50,7 @@ async function createPageVariant(
       summary: input.summary,
       seoTitle: input.title,
       seoDescription: input.summary,
-      blocks: [{
+      blocks: input.blocks ?? [{
         type: 'hero',
         position: 0,
         data: { section: 'hero', eyebrow: 'เนื้อหาภาษาไทย', title: input.title, subtitle: input.summary },
@@ -78,9 +78,7 @@ async function expectExactThaiPage(
   await expect(page.locator('link[rel="alternate"][hreflang="en"]')).toHaveAttribute('href', new RegExp(`${sourcePath.replaceAll('/', '\\/')}$`))
 }
 
-test('published Thai home, offering, and article render exact CMS content', async ({ page, playwright }) => {
-  test.skip(Boolean(process.env.PLAYWRIGHT_PREVIEW_URL), 'localization authoring uses disposable local D1 only')
-
+test('published Thai content saves through the CMS and renders without English fallback', async ({ page, playwright, browser }) => {
   const baseURL = testBaseUrl()
   const admin = await playwright.request.newContext({ baseURL })
   const owner = await playwright.request.newContext({ baseURL })
@@ -102,6 +100,27 @@ test('published Thai home, offering, and article render exact CMS content', asyn
       data: { label: 'ไทย' },
     }), 200)
 
+    const linksResponse = await owner.patch(`/api/editor/sites/${siteId}/links-page`, {
+      data: {
+        page: {
+          title: 'Helpful links',
+          robots: 'noindex,follow',
+          seo_title: 'Helpful links',
+          seo_description: 'Helpful links from North Carolina Legal Services',
+        },
+        items: [
+          { id: 'tmp_family', label: 'Family law services', destination: '/services/family', sort_order: 0, status: 'active' },
+          { id: 'tmp_contact', label: 'Contact our team', destination: '/contact', sort_order: 1, status: 'active' },
+        ],
+      },
+    })
+    await expectStatus(linksResponse, 200)
+    const links = await linksResponse.json() as {
+      page: { id: string }
+      items: Array<{ id: string; label: string }>
+    }
+    expect(links.items).toHaveLength(2)
+
     await putLocalization(owner, 'site', siteId, {
       values: {
         brand_name: 'บริการกฎหมายไทยเพื่อทุกคน',
@@ -120,6 +139,20 @@ test('published Thai home, offering, and article render exact CMS content', asyn
         path: '/services',
         title: 'บริการกฎหมายของเรา',
         summary: 'เลือกบริการที่ตรงกับความต้องการของคุณ',
+        blocks: [
+          {
+            type: 'hero',
+            position: 0,
+            data: { section: 'hero', eyebrow: 'เนื้อหาภาษาไทย', title: 'บริการกฎหมายของเรา', subtitle: 'เลือกบริการที่ตรงกับความต้องการของคุณ' },
+            media: [],
+          },
+          {
+            type: 'offering_grid',
+            position: 1,
+            data: { section: 'services', source: 'site_offerings' },
+            media: [],
+          },
+        ],
       }),
       createPageVariant(owner, {
         pageId: 'page_ncls_blog',
@@ -150,10 +183,73 @@ test('published Thai home, offering, and article render exact CMS content', asyn
       }],
     })
 
+    const localizedServicesResponse = await owner.get(`/api/public/sites/${siteId}/localized-pages/${locale}?path=${encodeURIComponent('/services')}`)
+    await expectStatus(localizedServicesResponse, 200)
+    const localizedServices = await localizedServicesResponse.json() as { page: { blocks: unknown[] } }
+    expect(JSON.stringify(localizedServices.page.blocks)).toContain('กฎหมายครอบครัวภาษาไทย')
+
+    await putLocalization(owner, 'site_link_page', links.page.id, {
+      route_path: '/th/links',
+      values: {
+        title: 'ลิงก์ที่มีประโยชน์',
+        seo_title: 'ลิงก์ที่มีประโยชน์',
+        seo_description: 'ลิงก์กฎหมายภาษาไทย',
+      },
+    })
+    await Promise.all(links.items.map((item, index) => putLocalization(owner, 'site_link_item', item.id, {
+      values: { label: index === 0 ? 'บริการกฎหมายครอบครัวเก่า' : 'ติดต่อทีมงานเก่า' },
+    })))
+
+    const primedLinks = await openTenantPage(page, `${blawbyBaseURL}/th/links`, blawbyExtraHeaders)
+    expect(primedLinks?.status()).toBeLessThan(400)
+    await expect(page.locator('main')).toContainText('บริการกฎหมายครอบครัวเก่า')
+
+    const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
+    try {
+      const cms = await dashboardContext.newPage()
+      await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`)
+      await expect(cms.getByTestId('links-translation-locale')).toHaveValue(locale)
+      await cms.getByTestId('links-translation-title').fill('ลิงก์กฎหมายภาษาไทย')
+      await cms.getByTestId('links-translation-seo-title').fill('ลิงก์กฎหมายภาษาไทย')
+      await cms.getByTestId('links-translation-seo-description').fill('ลิงก์ที่ผ่านการตรวจสอบสำหรับผู้อ่านภาษาไทย')
+      await Promise.all([
+        cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/localization/site_link_page/${links.page.id}/th`)),
+        cms.getByTestId('links-save-page-translation').click(),
+      ])
+
+      const translatedLabels = ['บริการกฎหมายครอบครัว', 'ติดต่อทีมงานของเรา']
+      for (const [index, item] of links.items.entries()) {
+        const editor = cms.getByTestId(`links-item-translation-${item.id}`)
+        await editor.getByTestId('links-item-translation-label').fill(translatedLabels[index]!)
+        await Promise.all([
+          cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/localization/site_link_item/${item.id}/th`)),
+          editor.getByTestId('links-save-item-translation').click(),
+        ])
+      }
+
+      await cms.reload()
+      await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
+      for (const [index, item] of links.items.entries()) {
+        await expect(cms.getByTestId(`links-item-translation-${item.id}`).getByTestId('links-item-translation-label')).toHaveValue(translatedLabels[index]!)
+      }
+    } finally {
+      await dashboardContext.close()
+    }
+
+    await page.reload()
+    await expect(page.locator('main')).toContainText('ลิงก์กฎหมายภาษาไทย')
+    await expect(page.locator('main')).toContainText('บริการกฎหมายครอบครัว')
+    await expect(page.locator('main')).toContainText('ติดต่อทีมงานของเรา')
+    await expect(page.locator('a[href="/th/contact"]')).toBeVisible()
+    await expect(page.locator('body')).not.toContainText(/Family law services|Contact our team/i)
+
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport)
       await expectExactThaiPage(page, '/th', '/', 'ความยุติธรรมสำหรับทุกคน', /Access to Justice for All/i)
       await expectExactThaiPage(page, '/th/services/family-th', '/services/family', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
+      await expectExactThaiPage(page, '/th/services', '/services', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
+      await expectExactThaiPage(page, '/th/blog', '/blog', 'บทความกฎหมาย', /Our Blog|Legal insights/i)
+      await expect(page.locator('a[href="/th/article/will-th"]')).toBeVisible()
       await expectExactThaiPage(page, '/th/article/will-th', '/article/writing-your-own-will-how-it-works', 'คู่มือพินัยกรรมภาษาไทย', /Last Will and Testament in North Carolina/i)
     }
   } finally {
