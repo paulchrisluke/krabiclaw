@@ -1,11 +1,13 @@
 import type { RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import type { Experience } from '~/server/utils/experiences'
 import type { Product } from '~/server/types/products'
+import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface PublicShellSite {
   brand_name: string | null
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
+  social_image: SocialImageSource | null
   vertical: string | null
   config: { phone: string | null } | null
 }
@@ -17,6 +19,7 @@ export interface PublicShellLocation {
   title: string
   address?: ApiValue
   city?: ApiValue
+  social_image?: SocialImageSource | null
 }
 
 export interface PublicShellPayload {
@@ -39,6 +42,7 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
   if (!Array.isArray(value.site.media) || !value.site.media.every(item => isRecord(item)
     && typeof item.asset_id === 'string' && typeof item.slot === 'string'
     && nullableString(item.public_url) && nullableString(item.thumbnail_url) && nullableString(item.kind))) return false
+  if (value.site.social_image !== null && (!isRecord(value.site.social_image) || typeof value.site.social_image.url !== 'string')) return false
   if (!nullableString(value.site.vertical)) return false
   if (value.site.config !== null && !isRecord(value.site.config)) return false
   if (isRecord(value.site.config) && !nullableString(value.site.config.phone)) return false

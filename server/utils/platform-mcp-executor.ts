@@ -984,7 +984,7 @@ export async function executePlatformMcpToolCall(
         difficulty_level: optionalString(rawArguments, 'difficulty_level') ?? null,
         sort_order: optionalNumber(rawArguments, 'sort_order') ?? 0,
         media: platformMediaInput(rawArguments) ?? [],
-      })
+      }, user.env)
     case 'update_platform_doc':
       return await updatePlatformDoc(user.db, requiredString(rawArguments, 'doc_id'), {
         title: optionalString(rawArguments, 'title'),
@@ -1002,7 +1002,7 @@ export async function executePlatformMcpToolCall(
         difficulty_level: optionalString(rawArguments, 'difficulty_level'),
         sort_order: optionalNumber(rawArguments, 'sort_order'),
         media: platformMediaInput(rawArguments),
-      })
+      }, user.env)
     case 'reorder_platform_docs':
       return await reorderPlatformDocs(user.db, reorderItems(rawArguments, 'doc_id', { navGroup: true }) as Array<{ doc_id: string; nav_section?: string | null; nav_title?: string | null; nav_order: number; nav_section_order?: number | null; nav_group?: string | null; nav_group_order?: number | null; hide_from_nav?: boolean | null }>)
     case 'delete_platform_doc':

@@ -1,11 +1,8 @@
-import type { OgImageRenderPayload } from '~/utils/social-metadata'
+import type { SocialCardRenderPayload } from '~/utils/social-metadata'
 import { node, type SatoriNode } from '../satori-node.ts'
 import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT } from '~/utils/social-metadata'
 
 export interface OgImageCardVariant {
-  /** Default background gradient stops when there's no hero image to composite. */
-  defaultPrimary: string
-  defaultSecondary: string
   /** Label/badge accent color. */
   accentColor: string
 }
@@ -19,13 +16,11 @@ function clip(text: string | null | undefined, max: number): string {
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1).trimEnd()}…`
 }
 
-export interface RenderInputs extends OgImageRenderPayload {
-  /** Already-resolved data: URIs — fetching/inlining happens in server/utils/og-image/pipeline.ts. */
-  backgroundImageDataUri?: string | null
+export interface RenderInputs extends SocialCardRenderPayload {
+  backgroundImageDataUri: string
   logoDataUri?: string | null
   /** Square icon, preferred over logoDataUri for the small brand mark below — logoDataUri
    * is often a non-square wordmark that distorts when forced into a square slot. */
-  faviconDataUri?: string | null
 }
 
 /**
@@ -36,30 +31,15 @@ export interface RenderInputs extends OgImageRenderPayload {
  * (not per-page) rendering approach.
  */
 export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVariant): SatoriNode {
-  const primary = payload.primaryColor || variant.defaultPrimary
-  const secondary = payload.secondaryColor || variant.defaultSecondary
+  const background = node('img', {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: OG_IMAGE_WIDTH,
+    height: OG_IMAGE_HEIGHT,
+    objectFit: 'cover',
+  }, undefined, { src: payload.backgroundImageDataUri })
 
-  const background: SatoriNode = payload.backgroundImageDataUri
-    ? node('img', {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: OG_IMAGE_WIDTH,
-        height: OG_IMAGE_HEIGHT,
-        objectFit: 'cover',
-      }, undefined, { src: payload.backgroundImageDataUri })
-    : node('div', {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: OG_IMAGE_WIDTH,
-        height: OG_IMAGE_HEIGHT,
-        backgroundImage: `linear-gradient(135deg, ${primary}, ${secondary})`,
-        display: 'flex',
-      })
-
-  // Legibility overlay: always present so title/description text stays readable whether
-  // the background is a photo or a flat gradient.
   const overlay = node('div', {
     position: 'absolute',
     top: 0,
@@ -128,12 +108,12 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
     'div',
     { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 36 },
     [
-      payload.faviconDataUri || payload.logoDataUri
+      payload.logoDataUri
         ? node(
             'img',
             { width: 44, height: 44, borderRadius: 8, objectFit: 'contain' },
             undefined,
-            { src: payload.faviconDataUri || payload.logoDataUri!, width: 44, height: 44 },
+            { src: payload.logoDataUri!, width: 44, height: 44 },
           )
         : node('div', {
             display: 'flex',

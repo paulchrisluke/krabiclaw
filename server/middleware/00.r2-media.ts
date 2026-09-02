@@ -11,23 +11,20 @@ import { isPreviewContext } from '~/server/utils/tenant-hosts'
 const MEDIA_HOST = 'media.krabiclaw.com'
 const WORKER_MEDIA_PREFIX = '/__media/'
 
-// Local single-origin quick-tunnel harnesses (no separate media.krabiclaw.com
-// host available) need media served from the same origin as the app. Gated
-// the same way cloudflareEnv()'s E2E delivery-mode override is: dev mode, or
-// an explicit opt-in env flag plus a matching shared secret from an
-// allowed host — never host-agnostic, or any production tenant domain could
-// hit /__media/* and read straight from the R2 bucket.
+// Non-production environments have no separate media.krabiclaw.com host, so
+// their canonical public media URLs use /__media on the app origin. The host
+// boundary is the authorization boundary here: preview, staging, local, and
+// workers.dev hosts may serve public media, while production tenant/platform
+// hosts cannot use this path and continue through media.krabiclaw.com.
 function isWorkerMediaPathAllowed(event: Parameters<typeof getHeader>[0]): boolean {
   if (import.meta.dev) return true
-  const runtimeEnv = event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined
-  if (runtimeEnv?.E2E_ALLOW_DEV_ROUTES !== 'true') return false
-  const expectedSecret = typeof runtimeEnv.E2E_DEV_ROUTE_SECRET === 'string'
-    ? runtimeEnv.E2E_DEV_ROUTE_SECRET
-    : ''
-  const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
-  if (!expectedSecret || expectedSecret !== providedSecret) return false
   const hostname = ((event.req.headers.get('host')) || '').split(':')[0] ?? ''
-  return hostname === 'localhost' || hostname === '127.0.0.1' || isPreviewContext(hostname)
+  return isPreviewContext(hostname)
+}
+
+function isolateWorkerMediaResponse(event: Parameters<typeof getHeader>[0]): void {
+  setHeader(event, 'content-security-policy', "sandbox; default-src 'none'")
+  setHeader(event, 'x-content-type-options', 'nosniff')
 }
 
 export default defineHandler(async (event) => {
@@ -36,6 +33,7 @@ export default defineHandler(async (event) => {
   const isMediaHost = host === MEDIA_HOST
   const isWorkerMediaPath = url.pathname.startsWith(WORKER_MEDIA_PREFIX) && isWorkerMediaPathAllowed(event)
   if (!isMediaHost && !isWorkerMediaPath) return
+  if (isWorkerMediaPath) isolateWorkerMediaResponse(event)
 
   const env = cloudflareEnv(event)
   const bucket = env.MEDIA_BUCKET

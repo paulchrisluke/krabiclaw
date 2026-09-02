@@ -1,9 +1,10 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { parseSocialImageSource } from '~/utils/social-metadata'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
-import { getMediaPlacements } from '~/server/utils/media-placement'
+import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import {
@@ -69,14 +70,11 @@ export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise
 }
 
 async function getOfferingMedia(db: DbClient, siteId: string, offeringIds: string[]) {
-  return await getMediaPlacements(db, {
-    siteId,
-    ownerType: 'offering',
-    ownerIds: offeringIds,
-  })
+  return await loadPublicSocialMedia(db, siteId, 'offering', offeringIds)
 }
 
-function mapOfferingRow(row: OfferingRow, media: ApiRecord[]): PublicOffering {
+function mapOfferingRow(row: OfferingRow, socialMedia: PublicSocialMedia): PublicOffering {
+  const media = socialMedia.media
   const rawFeatures = row.features ? JSON.parse(row.features) as ApiRecord[] : []
   const features: PublicOfferingFeature[] = rawFeatures.map((feature, index) => {
     if (!feature || typeof feature !== 'object' || Array.isArray(feature)) {
@@ -112,6 +110,7 @@ function mapOfferingRow(row: OfferingRow, media: ApiRecord[]): PublicOffering {
       width: Number.isFinite(Number(asset.width)) ? Number(asset.width) : null,
       height: Number.isFinite(Number(asset.height)) ? Number(asset.height) : null,
     })),
+    social_image: socialMedia.social_image,
     schema_type: typeof row.schema_type === 'string' ? row.schema_type : null,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
@@ -139,7 +138,7 @@ export async function listPublicOfferings(db: DbClient, siteId: string): Promise
   `, [siteId])
 
   const media = await getOfferingMedia(db, siteId, rows.map(row => String(row.id)))
-  return rows.map(row => mapOfferingRow(row, media.get(String(row.id)) ?? []))
+  return rows.map(row => mapOfferingRow(row, media.get(String(row.id)) ?? { media: [], social_image: null }))
 }
 
 export async function listPublicOfferingLinks(db: DbClient, siteId: string): Promise<PublicOfferingLink[]> {
@@ -195,6 +194,7 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
      ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
      LIMIT ?
   `, [siteId, Math.max(1, Math.min(50, Math.trunc(limit)))])
+  const socialMedia = await loadPublicSocialMedia(db, siteId, 'blog_post', rows.map(row => String(row.id)))
   return rows.map(row => ({
     id: String(row.id),
     title: String(row.title),
@@ -216,6 +216,7 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
           height: Number.isFinite(Number(row.height)) ? Number(row.height) : null,
         }]
       : [],
+    social_image: socialMedia.get(String(row.id))?.social_image ?? null,
   }))
 }
 
@@ -230,13 +231,14 @@ export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug
   `, [siteId, slug])
   if (!row) return null
   const media = await getOfferingMedia(db, siteId, [String(row.id)])
-  return mapOfferingRow(row, media.get(String(row.id)) ?? [])
+  return mapOfferingRow(row, media.get(String(row.id)) ?? { media: [], social_image: null })
 }
 
 export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
   const pages = await listCanonicalTenantPages(db, siteId)
   return pages.map(page => ({
     id: page.id,
+    page_id: page.page_id,
     path: page.path,
     title: page.title,
     page_type: page.page_type,
@@ -248,6 +250,8 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
+    media: page.media,
+    social_image: page.social_image,
     updated_at: page.updated_at,
   }))
 }
@@ -262,6 +266,7 @@ export async function getPublicTenantPageByPath(
   if (!page) return null
   return {
     id: page.id,
+    page_id: page.page_id,
     path: page.path,
     title: page.title,
     page_type: page.page_type,
@@ -273,6 +278,8 @@ export async function getPublicTenantPageByPath(
     canonical_url: page.canonical_url,
     robots: page.robots,
     blocks: page.blocks,
+    media: page.media,
+    social_image: page.social_image,
     updated_at: page.updated_at,
   }
 }
@@ -391,12 +398,13 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
      WHERE s.id = ?
      LIMIT 1
   `, [siteId])
-  const media = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
+  const socialMedia = (await loadPublicSocialMedia(db, siteId, 'site', [siteId])).get(siteId)
 
   return {
     brand_name: requiredText(row?.brand_name, `site ${siteId}.brand_name`),
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
-    media: (media.get(siteId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
+    media: (socialMedia?.media ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
+    social_image: socialMedia?.social_image ?? null,
     phone: typeof row?.contact_phone === 'string' ? row.contact_phone : null,
     banner_content: null,
     banner_dismissible: false,
@@ -556,6 +564,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
       width: Number.isFinite(Number(item.width)) ? Number(item.width) : null,
       height: Number.isFinite(Number(item.height)) ? Number(item.height) : null,
     })),
+    social_image: parseSocialImageSource(row.social_image),
   }
 }
 
@@ -612,7 +621,7 @@ export async function getPublicBlawbyRouteData(
     offerings,
     offering,
     qa: mapPublicQa(qaRows),
-    reviews: mapPublicReviews(reviewRows),
+    reviews: mapPublicReviews(reviewRows as unknown as Array<Record<string, unknown>>),
     posts,
     post: mapPublicBlogPost(postRow),
   }

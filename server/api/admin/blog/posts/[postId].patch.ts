@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await updatePlatformBlogPost(db, postId, body)
+    const result = await updatePlatformBlogPost(db, postId, body, null, env)
     schedulePlatformKnowledgeIndexRebuild(event, env, 'blog post update')
     return jsonResponse(result)
   } catch (err) {

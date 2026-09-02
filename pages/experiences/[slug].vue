@@ -359,7 +359,7 @@ const siteUrl = config.public.siteUrl
 const { locale, t } = useI18n()
 const experienceCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById, site: publicSite } = await usePublicPageData()
+const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = await usePublicPageData()
 
 const experiencePrice = computed(() => experience.value?.price
   ? formatMinorAmount(experience.value.price.amount_minor, experience.value.price.currency, locale.value)
@@ -609,21 +609,15 @@ const seoDescription = computed(() =>
 )
 
 const { canonicalUrl } = useSocialMetadata(() => {
-  const cover = experience.value?.media?.[0]
-  const heroImageUrl = cover?.kind === 'video' ? cover.thumbnail_url : cover?.public_url
   return {
     path: experience.value?.canonical_url || `/experiences/${slug}`,
     title: seoTitle.value,
     description: seoDescription.value,
-    label: 'Experience',
     robots: experience.value?.robots || null,
     brand: {
       siteName: siteName.value,
-      logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-      faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-      primaryColor: siteConfig.value?.brand_color || null,
     },
-    heroImage: heroImageUrl ? { url: heroImageUrl } : null,
+    socialImage: experience.value?.social_image ?? null,
   }
 })
 const resolvedCanonicalUrl = computed(() => canonicalUrl.value || `${siteUrl}/experiences/${slug}`)

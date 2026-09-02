@@ -178,7 +178,7 @@ const { site, siteId } = useTenantSite()
 const route = useRoute()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { locations, config, getField, reservationPolicyByLocation, site: publicSite } = await usePublicPageData()
+const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Pure experience-vertical sites book per-experience on /experiences/[slug].
@@ -444,24 +444,13 @@ useBreadcrumbSchema([
 ])
 
 const brandName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
-const primaryLocationSocialImage = computed(() => {
-  const primary = locations.value[0]
-  if (!primary) return null
-  if (getLocationMediaKind(primary) === 'video') return getLocationPoster(primary)
-  return getLocationMediaUrl(primary)
-})
-
 useSocialMetadata(() => ({
   path: '/reservations',
   title: `${brandName.value} | ${resCopy.value.reserveCta}`,
   description: resCopy.value.seoReservationDescription(brandName.value),
   brand: {
     siteName: brandName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
-  heroImage: primaryLocationSocialImage.value ? { url: primaryLocationSocialImage.value } : null,
 }))
 
 useSchemaOrg([

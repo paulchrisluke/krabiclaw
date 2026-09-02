@@ -3,9 +3,11 @@ import { cleanString } from '~/server/utils/api-response'
 import { getPublicBlawbyData } from '~/server/utils/professional-services'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { normalizeNonprofitStatus } from '~/utils/professional-service-schema'
-import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs, hydrateMediaPlacementRefs, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { assertNoEmbeddedMediaFields } from '~/utils/tenant-page-blocks'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { refreshSocialCard } from '~/server/utils/social-card'
 
 export class ProfessionalServiceValidationError extends Error {
   constructor(message: string) {
@@ -102,7 +104,6 @@ function validateOfferingContent(item: ApiRecord, slug: string) {
       validationError(`offerings.${slug}.faqs[${index}] must be an object.`)
     }
   })
-  strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
 }
 
 async function listEditableOfferings(db: DbClient, siteId: string) {
@@ -236,14 +237,16 @@ export async function upsertProfessionalServiceContent(
     siteId: string
     data: ApiRecord
     updatedBy?: string | null
+    env?: CloudflareEnv
   },
 ) {
   validateProfessionalServicePayload(input.data)
-  const { organizationId, siteId, data, updatedBy = null } = input
+  const { organizationId, siteId, data, updatedBy = null, env } = input
   const written: Record<string, number> = {}
   const statements: BatchQuery[] = []
   const existingOfferings = await queryAll<{ id: string; slug: string }>(db, 'SELECT id, slug FROM offerings WHERE site_id = ?', [siteId])
   const offeringIdBySlug = new Map(existingOfferings.map(offering => [offering.slug, offering.id]))
+  const writtenOfferingIds: string[] = []
   const existingOfferingMedia = await getMediaPlacements(db, {
     siteId,
     ownerType: 'offering',
@@ -265,8 +268,16 @@ export async function upsertProfessionalServiceContent(
     incomingOfferingSlugs.add(slug)
     const existingOfferingId = offeringIdBySlug.get(slug)
     const id = existingOfferingId ?? cleanString(item.id, 80) ?? idWith('offering')
+    writtenOfferingIds.push(id)
     validateOfferingContent(item, slug)
     const offeringMedia = strictMediaRefs(item.media, `offerings.${slug}.media`, ['thumbnail', 'hero', 'gallery'])
+    await hydrateMediaPlacementRefs(db, {
+      organizationId,
+      siteId,
+      refs: offeringMedia,
+      allowedKinds: ['image', 'video'],
+      fieldName: `offerings.${slug}.media`,
+    })
     statements.push({
       query: `
       INSERT INTO offerings
@@ -396,6 +407,12 @@ export async function upsertProfessionalServiceContent(
       validationError('compliance.media cannot replace an existing placement; use attach/remove/reorder media operations')
     }
     const complianceMedia = existingCompliance ? [] : strictMediaRefs(item.media, 'compliance.media', ['document'])
+    await hydrateMediaAssetRefs(db, {
+      organizationId,
+      siteId,
+      refs: complianceMedia,
+      fieldName: 'compliance.media',
+    })
 
     statements.push({
       query: `
@@ -502,6 +519,11 @@ export async function upsertProfessionalServiceContent(
 
   if (statements.length) {
     await executeBatch(db, statements)
+  }
+  if (env) {
+    for (const ownerId of writtenOfferingIds) {
+      await refreshSocialCard({ db, env, owner: { owner_type: 'offering', owner_id: ownerId }, actorId: updatedBy })
+    }
   }
 
   return { success: true, written }

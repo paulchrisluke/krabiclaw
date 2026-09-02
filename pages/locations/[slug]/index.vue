@@ -340,7 +340,6 @@ const {
   locationReviews,
   pending,
   config: pageConfig,
-  site: publicSite,
   experiencesList,
   contentBlocks,
   postsList,
@@ -479,6 +478,7 @@ const heroMedia = computed(() => {
   if (contentHero.value.image) return resolveMedia({ public_url: contentHero.value.image, kind: contentHero.value.imageKind || 'image' })
   return resolveMedia(location.value ? locationMedia(location.value as ApiRecord) : null)
 })
+const locationSocialCard = computed(() => location.value?.social_image ?? null)
 const heroTitle = computed(() => contentHero.value.title || null)
 const heroSubtitle = computed(() => contentHero.value.subtitle || null)
 
@@ -523,21 +523,11 @@ useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
   title: location.value?.seo_title || (location.value ? `${location.value.title} | Locations` : 'Location'),
   description: location.value?.seo_description || (location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : ''),
-  location: location.value?.title || null,
   robots: location.value?.robots || null,
+  socialImage: locationSocialCard.value,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: heroMedia.value.url
-    ? {
-        url: heroMedia.value.url,
-        kind: heroMedia.value.kind === 'video' ? 'video' : 'image',
-        thumbnailUrl: heroMedia.value.thumb,
-      }
-    : null,
 }))
 
 useSchemaOrg([

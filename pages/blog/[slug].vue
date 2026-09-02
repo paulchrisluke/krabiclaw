@@ -85,6 +85,7 @@ interface TenantBlogPost {
   featured_order?: number | null
   author?: { id: string; name: string | null; image: string | null } | null
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null }>
+  social_image?: import('~/utils/social-metadata').SocialImageSource | null
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
   localeRepresentations: PublicLocaleRepresentation[]
@@ -172,7 +173,7 @@ if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_bl
 useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = data.value.post.localeRepresentations
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList, config, site: publicSite } = await usePublicPageData()
+const { blogList, site: publicSite } = await usePublicPageData()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
@@ -223,17 +224,13 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
   pageType: 'article',
-  label: post.value?.category || null,
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
   robots: resolvedSeo.value.robots,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
-  heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
+  socialImage: post.value?.social_image ?? null,
 }))
 
 useHead(() => ({
