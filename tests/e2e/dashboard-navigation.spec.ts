@@ -42,6 +42,11 @@ test.describe('authenticated dashboard navigation', () => {
     await followPrimaryRoute(page, `${organizationBase}/calendar`, 'Home', organizationBase)
 
     await page.goto(siteBase)
+    const backToWebsite = page.getByRole('link', { name: 'Back to Website' })
+    await expect(backToWebsite).toHaveAttribute('href', `${organizationBase}/sites`)
+    await backToWebsite.click()
+    await expect(page).toHaveURL(new RegExp(`${organizationBase}/sites$`))
+    await page.goto(siteBase)
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Website', exact: true })).toHaveAttribute('href', siteBase)
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Website', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Inbox', exact: true })).toHaveAttribute('href', `${siteBase}/inbox`)

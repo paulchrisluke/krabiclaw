@@ -2,7 +2,7 @@
   <UDashboardPanel id="site-overview">
     <template #header>
       <UDashboardNavbar :title="siteName" :toggle="false">
-        <template #leading><DashboardNavbarLeading /></template>
+        <template #leading><DashboardNavbarLeading :detail-to="websitePath" detail-label="Website" /></template>
         <template v-if="siteSettingsPath" #right>
           <UButton
             :to="siteSettingsPath"
@@ -300,6 +300,7 @@ const tabs = [
 const organizationSlug = computed(() => String(route.params.orgSlug))
 const siteSlug = computed(() => String(route.params.siteSlug))
 const siteDashboardPath = computed(() => `/dashboard/${encodeURIComponent(organizationSlug.value)}/sites/${encodeURIComponent(siteSlug.value)}`)
+const websitePath = computed(() => `/dashboard/${encodeURIComponent(organizationSlug.value)}/sites`)
 const managerContext = computed<DashboardManagerRouteContext>(() => ({
   scope: 'site',
   organizationSlug: organizationSlug.value,
