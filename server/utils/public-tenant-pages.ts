@@ -71,6 +71,7 @@ async function hydrateBlocks(
   pagePath: string,
   blocks: TenantPageBlock[],
   resources: PublicTenantPageHydrationResources = {},
+  locale?: string | null,
 ): Promise<TenantPageBlock[]> {
   const publicBlocks = selectPublicTenantPageBlocks(blocks)
   const offeringIds = new Set<string>()
@@ -103,6 +104,27 @@ async function hydrateBlocks(
     : []
   const distinctLocationIds = new Set(locations.map(l => l.id))
   if (distinctLocationIds.size !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
+  // location_grid is the one canonical-hydration source that's safe to render
+  // on a localized page: business_location.title/short_description/description
+  // are registered, translatable fields (see server/utils/localization-registry.ts),
+  // so overlay the stored translation here the same way the location detail
+  // page itself does, instead of leaving every referenced location in English.
+  if (locale && locale !== 'en' && locationIds.size) {
+    const localizedRows = await queryAll<{ resource_id: string; values_json: string }>(db, `
+      SELECT resource_id, values_json FROM resource_localizations
+       WHERE site_id = ? AND resource_type = 'business_location' AND locale = ? AND resource_id IN (SELECT value FROM json_each(?))
+    `, [siteId, locale, d1JsonStringSet([...locationIds])])
+    const localizedById = new Map(localizedRows.map(row => [row.resource_id, JSON.parse(row.values_json) as Record<string, unknown>]))
+    for (const location of locations) {
+      const values = localizedById.get(location.id)
+      if (!values) continue
+      if (typeof values.title === 'string' && values.title.trim()) location.title = values.title
+      const description = typeof values.short_description === 'string' && values.short_description.trim()
+        ? values.short_description
+        : typeof values.description === 'string' && values.description.trim() ? values.description : null
+      if (description) { location.short_description = description; location.description = description }
+    }
+  }
   const [qaRows, reviewRows, postRows] = await Promise.all([
     hasQaSource ? (resources.qaRows ?? listPageQa(db, siteId, pagePath, true)) : Promise.resolve([]),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
@@ -219,9 +241,13 @@ export async function getPublicTenantPageForPath(
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
   if (page.locale !== 'en') {
+    // location_grid is excluded from this gate: its referenced
+    // business_locations are now overlaid with their stored translation in
+    // hydrateBlocks below, so it's no longer at risk of leaking untranslated
+    // canonical content onto a localized page the way the other sources
+    // (offerings/QA/reviews/posts) still are.
     const canonicalHydration = page.blocks.some(block =>
       (block.type === 'offering_grid' && (block.data.source === 'site_offerings' || Array.isArray(block.data.offering_ids)))
-      || (block.type === 'location_grid' && Array.isArray(block.data.location_ids))
       || (block.type === 'faq' && block.data.source === 'page_qa')
       || (block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
       || (block.type === 'feature_grid' && block.data.source === 'site_posts'),
@@ -230,7 +256,7 @@ export async function getPublicTenantPageForPath(
       throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized embedded content is unavailable' })
     }
   }
-  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources))
+  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources, page.locale))
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {
