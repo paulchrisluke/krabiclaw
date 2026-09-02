@@ -36,9 +36,13 @@ The prototype uses Home, Calendar, Website, and Inbox as the shared primary rout
 - Prefer spacing and dividers to nested cards and repeated borders.
 - Do not place explanatory copy beside self-explanatory controls.
 - Show counts, limits, and metadata only when they affect the current decision.
+- Show a route title once per viewport. On mobile, the navbar replaces the body heading after drill-in.
+- Do not preselect a card on the mobile outline; selection begins when the user opens a route.
+- Make mobile field routes content-first cards, while desktop read views remain flat and divided.
+- Preserve navigation history across outline, read view, and field editor states so browser Back follows the same hierarchy as the visible back controls.
 
 ## Prototype
 
 Run `yarn prototype:cms-visual`, then open the existing Page editor route with `?variant=A`.
 
-The prototype uses real local tenant data, accepts local-only field edits, and never calls a write endpoint. Options B and C remain in the throwaway branch only as comparison artifacts; they are not implementation targets.
+The prototype uses real local tenant data, accepts local-only field edits, and never calls a write endpoint. Options B and C remain directly addressable through the route query as comparison artifacts, but the selected Option A no longer carries an on-screen variant switcher.

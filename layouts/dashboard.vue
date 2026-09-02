@@ -44,12 +44,12 @@
     </div>
 
     <template v-else>
-      <div v-if="prototypeSiteShell" class="flex min-h-dvh flex-col bg-[#fbfbfa] dark:bg-[#090b12]">
+      <div v-if="prototypeSiteShell" class="flex min-h-dvh flex-col bg-[#fbfbfa] [--ui-header-height:4.25rem] lg:[--ui-header-height:5rem] dark:bg-[#090b12]">
         <UHeader
           :toggle="false"
           :to="prototypeOrganizationBase"
           class="hidden shrink-0 border-default bg-[#fbfbfa] lg:block dark:bg-[#090b12]"
-          :ui="{ container: 'max-w-none px-7 xl:px-10', center: 'justify-center', title: 'text-lg font-bold tracking-tight text-highlighted' }"
+          :ui="{ container: 'max-w-none px-8 xl:px-12', center: 'justify-center', title: 'text-xl font-bold tracking-tight text-highlighted' }"
         >
           <template #title>KrabiClaw</template>
 
@@ -59,7 +59,7 @@
             color="neutral"
             variant="link"
             highlight
-            :ui="{ link: 'px-4 py-5 font-semibold', linkLabel: 'text-sm' }"
+            :ui="{ link: 'px-5 py-6 font-semibold', linkLabel: 'text-sm' }"
           />
 
           <template #right>

@@ -66,7 +66,11 @@ content-specific route previews. The main panel shows the selected read view.
 Selecting a field opens its focused editor. Mobile uses the same route outline,
 read view, and single-field editor sequence. Do not replace this model with
 generic icon rows, nested editor cards, decorative helper copy, gradients, or
-boxed inputs.
+boxed inputs. A route title appears once per viewport: the mobile navbar owns
+the title after drill-in, while the desktop main panel owns it. Do not repeat
+page names, status labels, section types, or editing verbs when the surrounding
+navigation already supplies that context. Outline cards must preview the real
+content type; mobile field navigation uses the same content-first card language.
 
 ## Agent skills
 
