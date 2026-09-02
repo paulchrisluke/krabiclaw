@@ -3,6 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { ensurePlatformMediaScope } from '~/server/utils/platform-media'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { regenerateSiteSocialCards } from '~/server/utils/social-card'
+import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
 import { defineHandler } from 'nitro'
 
@@ -14,7 +15,15 @@ export default defineHandler(async (event) => {
   if (denied) return denied
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  await ensurePlatformMediaScope(env, db)
-  const results = await regenerateSiteSocialCards({ db, env, siteId: PLATFORM_SITE_ID, actorId: session.user.id })
+    await ensurePlatformMediaScope(env, db)
+  const sweep = regenerateSiteSocialCards({ db, env, siteId: PLATFORM_SITE_ID, actorId: session.user.id }).catch((error: unknown) => {
+    console.error('[social-card] platform regeneration failed', { error: error instanceof Error ? error.message : String(error) })
+  })
+  const waitUntil = getCloudflareWaitUntil(event)
+  if (waitUntil) {
+    waitUntil(sweep)
+    return jsonResponse({ backgrounded: true, siteId: PLATFORM_SITE_ID })
+  }
+  const results = await sweep
   return jsonResponse({ results })
 })
