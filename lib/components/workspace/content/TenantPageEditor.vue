@@ -1,5 +1,17 @@
 <template>
-  <UDashboardPanel id="tenant-page-editor" :class="showVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : undefined">
+  <TenantPageEditorPrototype
+    v-if="showVisualPrototype && selected && !loading"
+    :title="selected.title"
+    :summary="selected.summary"
+    :locale="selected.locale"
+    :path="selected.path"
+    :dirty="dirty"
+    :blocks="selected.blocks"
+    :back-to="pagesPath"
+    :preview-to="navigablePreviewUrl"
+  />
+
+  <UDashboardPanel v-else id="tenant-page-editor" :class="showVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : undefined">
     <template #header>
       <UDashboardNavbar :title="showVisualPrototype ? 'Page' : editorTitle" :class="showVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : undefined">
         <template #leading><DashboardNavbarLeading :detail-to="pagesPath" detail-label="Pages" /></template>
@@ -21,17 +33,7 @@
     </template>
 
     <template #body>
-      <TenantPageEditorPrototype
-        v-if="showVisualPrototype && selected && !loading"
-        :title="selected.title"
-        :summary="selected.summary"
-        :locale="selected.locale"
-        :path="selected.path"
-        :dirty="dirty"
-        :blocks="selected.blocks"
-      />
-
-      <div v-else class="mx-auto w-full max-w-5xl space-y-6">
+      <div class="mx-auto w-full max-w-5xl space-y-6">
         <div v-if="loading" class="space-y-4">
           <USkeleton class="h-32 rounded-2xl" />
           <USkeleton class="h-80 rounded-2xl" />

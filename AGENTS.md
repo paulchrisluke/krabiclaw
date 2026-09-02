@@ -59,10 +59,14 @@ Use the approved client onboarding and import pipeline. Never manually seed or p
 
 Tenant CMS work must follow the selected visual language in
 [docs/design/cms-redesign-packet/prototype-decision.md](docs/design/cms-redesign-packet/prototype-decision.md).
-Desktop editors use content-specific visual outline cards at left and a flat
-selected-content editor at right. Mobile uses outline, read view, then a
-single-field editor sheet. Do not replace this model with generic icon rows,
-nested editor cards, decorative helper copy, gradients, or boxed inputs.
+Global primary navigation uses one route model: a top bar on desktop and a
+bottom bar on mobile. Do not add a persistent global sidebar beside the CMS
+editor. The desktop Page Editor owns its Nuxt UI sidebar, which contains
+content-specific route previews. The main panel shows the selected read view.
+Selecting a field opens its focused editor. Mobile uses the same route outline,
+read view, and single-field editor sequence. Do not replace this model with
+generic icon rows, nested editor cards, decorative helper copy, gradients, or
+boxed inputs.
 
 ## Agent skills
 

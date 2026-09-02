@@ -43,57 +43,127 @@
       </UCard>
     </div>
 
-    <UDashboardGroup v-else unit="rem" :min-size="14" :default-size="18" :max-size="24">
-      <UDashboardSidebar
-        v-model:collapsed="sidebarCollapsed"
-        resizable
-        collapsible
-        class="hidden lg:flex"
-        :class="showCmsVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : 'bg-elevated'"
-        :menu="{ close: false }"
-        :ui="{ root: showCmsVisualPrototype ? 'h-dvh min-h-0 max-h-dvh bg-[#fbfbfa] dark:bg-[#090b12]' : 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: showCmsVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : 'bg-elevated' }"
-      >
-        <template #header="{ collapsed }">
-          <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
-        </template>
+    <template v-else>
+      <div v-if="prototypeSiteShell" class="flex min-h-dvh flex-col bg-[#fbfbfa] dark:bg-[#090b12]">
+        <UHeader
+          :toggle="false"
+          :to="prototypeOrganizationBase"
+          class="hidden shrink-0 border-default bg-[#fbfbfa] lg:block dark:bg-[#090b12]"
+          :ui="{ container: 'max-w-none px-7 xl:px-10', center: 'justify-center', title: 'text-lg font-bold tracking-tight text-highlighted' }"
+        >
+          <template #title>KrabiClaw</template>
 
-        <template #default="{ collapsed }">
-          <div class="flex flex-col gap-2">
-            <UDashboardSearchButton
-              :collapsed="collapsed"
-              label="Search dashboard, docs, help..."
-              :kbds="[]"
-              class="w-full"
+          <UNavigationMenu
+            :items="prototypeTopNavigationItems"
+            orientation="horizontal"
+            color="neutral"
+            variant="link"
+            highlight
+            :ui="{ link: 'px-4 py-5 font-semibold', linkLabel: 'text-sm' }"
+          />
+
+          <template #right>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-circle-user-round"
+              :to="{ path: '/dashboard/account', query: accountRouteQuery }"
+              aria-label="Account"
             />
-            <UNavigationMenu
-              :collapsed="collapsed"
-              :items="navigationItems"
-              orientation="vertical"
-              :ui="{ link: 'hover:before:bg-accented/80 hover:text-highlighted before:transition-colors' }"
+            <UButton
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-menu"
+              :to="{ path: '/dashboard/account', query: accountRouteQuery }"
+              aria-label="Menu"
+              class="rounded-full"
             />
-          </div>
-        </template>
+          </template>
+        </UHeader>
 
-        <template #footer="{ collapsed }">
-          <div class="flex flex-col w-full gap-1.5">
-            <DashboardAccountMenu :collapsed="collapsed" />
-          </div>
-        </template>
-      </UDashboardSidebar>
+        <UDashboardGroup unit="rem" class="!static !inset-auto h-[calc(100dvh-var(--ui-header-height))] min-h-0 flex-none" :persistent="false">
+          <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
+          <slot />
+          <ChowBot v-if="showChowBot" />
+        </UDashboardGroup>
+      </div>
 
-      <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
+      <UDashboardGroup v-else unit="rem" :min-size="14" :default-size="18" :max-size="24">
+        <UDashboardSidebar
+          v-model:collapsed="sidebarCollapsed"
+          resizable
+          collapsible
+          class="hidden bg-elevated lg:flex"
+          :menu="{ close: false }"
+          :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
+        >
+          <template #header="{ collapsed }">
+            <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
+          </template>
 
-      <slot />
+          <template #default="{ collapsed }">
+            <div class="flex flex-col gap-2">
+              <UDashboardSearchButton
+                :collapsed="collapsed"
+                label="Search dashboard, docs, help..."
+                :kbds="[]"
+                class="w-full"
+              />
+              <UNavigationMenu
+                :collapsed="collapsed"
+                :items="navigationItems"
+                orientation="vertical"
+                :ui="{ link: 'hover:before:bg-accented/80 hover:text-highlighted before:transition-colors' }"
+              />
+            </div>
+          </template>
 
-      <ChowBot v-if="showChowBot" />
-    </UDashboardGroup>
+          <template #footer="{ collapsed }">
+            <div class="flex w-full flex-col gap-1.5">
+              <DashboardAccountMenu :collapsed="collapsed" />
+            </div>
+          </template>
+        </UDashboardSidebar>
+
+        <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
+        <slot />
+        <ChowBot v-if="showChowBot" />
+      </UDashboardGroup>
+    </template>
 
     <div
       v-if="mobileNavItems.length && !isAccountRoute"
-      class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden"
+      class="fixed inset-x-0 bottom-0 z-40 lg:hidden"
       data-testid="dashboard-mobile-nav"
     >
+      <nav v-if="prototypeSiteShell" class="grid h-[68px] w-full grid-cols-5 border-t border-default bg-[#fbfbfa] px-2 pb-[env(safe-area-inset-bottom)] dark:bg-[#090b12]">
+        <UButton
+          v-for="item in mobileNavItems"
+          :key="item.key"
+          :to="item.to"
+          :icon="item.icon"
+          :label="item.label"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          :aria-label="item.label"
+          :class="item.active ? 'text-primary' : 'text-dimmed'"
+          :ui="{ base: 'h-full flex-col justify-center gap-1 rounded-none px-1 py-1', leadingIcon: 'size-5', label: 'text-[11px] font-medium' }"
+        />
+        <UButton
+          :to="{ path: '/dashboard/account', query: accountRouteQuery }"
+          icon="i-lucide-menu"
+          label="Menu"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          aria-label="Menu"
+          class="text-dimmed"
+          :ui="{ base: 'h-full flex-col justify-center gap-1 rounded-none px-1 py-1', leadingIcon: 'size-5', label: 'text-[11px] font-medium' }"
+        />
+      </nav>
       <nav
+        v-else
         class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]"
         :class="showCmsVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : 'bg-elevated'"
       >
@@ -168,6 +238,10 @@ interface AuthOrganization {
 const route = useRoute()
 const _config = useRuntimeConfig()
 const showCmsVisualPrototype = import.meta.dev || import.meta.env.VITE_KC_CMS_VISUAL_PROTOTYPE === '1'
+const prototypeOrganizationBase = computed(() => {
+  const routeOrgSlug = route.params.orgSlug
+  return typeof routeOrgSlug === 'string' ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
+})
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
 const { data: sessionData, refreshSession, signOut: _signOut } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
@@ -353,6 +427,7 @@ const scope = computed<'organization' | 'site' | 'location'>(() => {
   if (activeSiteSlug.value) return 'site'
   return 'organization'
 })
+const prototypeSiteShell = computed(() => showCmsVisualPrototype && scope.value === 'site')
 
 // One reusable scope-header model feeds both the desktop sidebar and the mobile
 // navbar leading control. Detail pages may override it with an explicit index
@@ -623,32 +698,9 @@ const adminGroup = computed(() => [
   { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
 ])
 
-const prototypeSiteNavigationItems = computed(() => {
-  if (!orgBase.value || !siteBase.value) return []
-  const secondaryItems = [
-    { label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
-    { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsNavTarget.value ?? `${siteBase.value}/locations/new` },
-    ...(canManageSite.value
-      ? [
-          { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
-          { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${siteBase.value}/analytics` },
-          { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
-          { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
-        ]
-      : []),
-  ]
-  return [
-    { label: 'Home', icon: 'i-lucide-house', to: orgBase.value },
-    { label: 'Website', icon: 'i-lucide-panels-top-left', to: `${siteBase.value}/pages` },
-    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${siteBase.value}/inbox` },
-    { label: 'More', icon: 'i-lucide-ellipsis', children: secondaryItems },
-  ]
-})
-
 const navigationItems = computed(() => {
   if (isAdminRoute.value) return [adminGroup.value]
   if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
-  if (showCmsVisualPrototype && scope.value === 'site') return [prototypeSiteNavigationItems.value]
   return [
     mobileNavItems.value
       .filter(item => !(scope.value === 'site' && ['children', 'inbox'].includes(item.key))
@@ -705,6 +757,7 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   if (showCmsVisualPrototype && routeSiteBase && scope.value === 'site') {
     const prototypeItems: DashboardMobileNavItem[] = [
       { key: 'home', label: 'Home', icon: 'i-lucide-house', to: routeOrgBase, exact: true },
+      { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
       { key: 'website', label: 'Website', icon: 'i-lucide-panels-top-left', to: `${routeSiteBase}/pages` },
       { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${routeSiteBase}/inbox` },
     ]
@@ -718,6 +771,8 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   ]
   return items.map(item => ({ ...item, active: isActivePath(item.to, item.exact) }))
 })
+
+const prototypeTopNavigationItems = computed(() => mobileNavItems.value.map(({ key: _key, exact: _exact, icon: _icon, ...item }) => item))
 
 watch(
   () => dashboard.contextKey.value,

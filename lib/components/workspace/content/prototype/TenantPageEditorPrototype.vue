@@ -1,6 +1,6 @@
 <!-- Three Page editor directions, switchable through ?variant=A|B|C on the existing route. -->
 <template>
-  <TenantPagePrototypeFocused v-if="variant === 'A'" :page="page" />
+  <TenantPagePrototypeFocused v-if="variant === 'A'" :page="page" :back-to="backTo" :preview-to="previewTo" />
   <TenantPagePrototypeCanvas v-else-if="variant === 'B'" :page="page" />
   <TenantPagePrototypeStoryboard v-else :page="page" />
   <PrototypeVariantSwitcher :variants="PROTOTYPE_VARIANTS" :current-key="variant" @select="selectVariant" />
@@ -22,6 +22,8 @@ const props = defineProps<{
   path: string
   dirty: boolean
   blocks: TenantPageBlock[]
+  backTo: string
+  previewTo?: string
 }>()
 
 const route = useRoute()
