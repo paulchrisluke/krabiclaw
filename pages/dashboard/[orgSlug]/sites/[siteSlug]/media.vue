@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="site-media">
     <template #header>
-      <UDashboardNavbar title="Media library">
+      <UDashboardNavbar :toggle="false" title="Media library">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

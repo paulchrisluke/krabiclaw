@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="admin-docs-new">
     <template #header>
-      <UDashboardNavbar title="New Documentation">
+      <UDashboardNavbar :toggle="false" title="New Documentation">
         <template #leading>
           <DashboardNavbarLeading detail-to="/admin/docs" detail-label="Docs" />
         </template>

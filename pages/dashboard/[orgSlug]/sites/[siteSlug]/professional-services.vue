@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="site-professional-services">
     <template #header>
-      <UDashboardNavbar title="Services">
+      <UDashboardNavbar :toggle="false" title="Services">
         <template #leading><DashboardNavbarLeading /></template>
         <template #right><UButton :to="pagesPath" color="neutral" variant="soft">Pages</UButton></template>
       </UDashboardNavbar>

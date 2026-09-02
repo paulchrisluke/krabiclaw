@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="tenant-pages-manager">
     <template #header>
-      <UDashboardNavbar title="Pages">
+      <UDashboardNavbar :toggle="false" title="Pages">
         <template #leading><DashboardNavbarLeading /></template>
         <template #right>
           <UButton :to="`${pagesPath}/new`" icon="i-lucide-plus" label="New page" />

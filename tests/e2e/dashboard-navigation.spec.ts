@@ -93,7 +93,27 @@ test.describe('authenticated dashboard navigation', () => {
     const navigation = visiblePrimaryNavigation(page)
     await expect(navigation.getByRole('button', { name: 'Open dashboard menu' })).toHaveText(/Menu/)
     await expect(page.getByRole('button', { name: /Switch context/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Search dashboard/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Open sidebar' })).toHaveCount(0)
+
+    const searchButton = page.getByRole('button', { name: /Search dashboard/ })
+    await expect(searchButton).toBeVisible()
+    await searchButton.click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(searchButton).toBeFocused()
+    await page.keyboard.press('Tab')
+    const focusStyle = await page.evaluate(() => {
+      const activeElement = document.activeElement
+      if (!(activeElement instanceof HTMLElement)) return null
+      const style = getComputedStyle(activeElement)
+      return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, boxShadow: style.boxShadow }
+    })
+    expect(focusStyle).not.toBeNull()
+    expect(focusStyle?.outlineStyle !== 'none' || focusStyle?.outlineWidth !== '0px' || focusStyle?.boxShadow !== 'none').toBe(true)
+
+    const initialBackBox = await page.getByRole('link', { name: 'Back to Site overview' }).boundingBox()
+    expect(initialBackBox?.width).toBeGreaterThanOrEqual(44)
+    expect(initialBackBox?.height).toBeGreaterThanOrEqual(44)
 
     await followPrimaryRoute(page, locationBase, 'Home', organizationBase)
     await followPrimaryRoute(page, locationBase, 'Calendar', `${organizationBase}/calendar`)
@@ -105,6 +125,9 @@ test.describe('authenticated dashboard navigation', () => {
     await expect(backToSite).toBeVisible()
     await backToSite.click()
     await expect(page).toHaveURL(new RegExp(`${siteBase}$`))
+    const siteSettingsBox = await page.getByRole('link', { name: 'Site settings' }).boundingBox()
+    expect(siteSettingsBox?.width).toBeGreaterThanOrEqual(44)
+    expect(siteSettingsBox?.height).toBeGreaterThanOrEqual(44)
     await page.goto(locationBase)
 
     for (const target of await navigation.getByRole('link').all()) {

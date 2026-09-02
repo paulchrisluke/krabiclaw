@@ -43,7 +43,7 @@
         </UCard>
       </div>
 
-      <div v-else class="dashboard-shell flex min-h-dvh flex-col bg-default">
+      <UDashboardGroup v-else class="dashboard-shell flex min-h-dvh flex-col bg-default" unit="rem" :min-size="14" :default-size="18" :max-size="24">
         <header class="dashboard-shell-header shrink-0 border-b border-default bg-default">
           <div class="mx-auto flex min-h-16 w-full items-center gap-2 px-3 sm:px-5 lg:grid lg:grid-cols-[minmax(12rem,1fr)_auto_minmax(12rem,1fr)] lg:gap-6 lg:px-6">
             <DashboardScopeHeader :model="scopeHeaderModel" class="min-w-0 flex-1 lg:w-full lg:max-w-64" />
@@ -74,11 +74,11 @@
           </div>
         </header>
 
-        <UDashboardGroup class="dashboard-shell-content min-h-0 flex-1" unit="rem" :min-size="14" :default-size="18" :max-size="24">
+        <div class="dashboard-shell-content flex min-h-0 flex-1 overflow-hidden">
           <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
           <slot />
           <ChowBot v-if="showChowBot" />
-        </UDashboardGroup>
+        </div>
 
         <nav
           class="dashboard-mobile-navigation fixed inset-x-0 bottom-0 z-40 border-t border-default bg-default lg:hidden"
@@ -100,7 +100,7 @@
             <DashboardAccountMenu placement="mobile-bottom" class="min-w-11 flex-1" />
           </div>
         </nav>
-      </div>
+      </UDashboardGroup>
 
       <BillingServiceUpsellModal />
     </div>

@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="conversations-index">
     <template #header>
-      <UDashboardNavbar title="Assistant">
+      <UDashboardNavbar :toggle="false" title="Assistant">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

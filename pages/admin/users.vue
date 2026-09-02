@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="admin-users">
     <template #header>
-      <UDashboardNavbar title="Users">
+      <UDashboardNavbar :toggle="false" title="Users">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

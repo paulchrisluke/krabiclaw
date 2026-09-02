@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="location-photos">
     <template #header>
-      <UDashboardNavbar title="Photos">
+      <UDashboardNavbar :toggle="false" title="Photos">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

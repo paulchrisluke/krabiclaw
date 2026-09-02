@@ -15,6 +15,11 @@
   min-width: 0;
 }
 
+.dashboard-shell {
+  position: relative;
+  inset: auto;
+}
+
 .dashboard-shell-header {
   position: relative;
   z-index: 30;

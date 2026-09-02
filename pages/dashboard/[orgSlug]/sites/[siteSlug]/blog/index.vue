@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="site-blog">
     <template #header>
-      <UDashboardNavbar title="Blog Posts">
+      <UDashboardNavbar :toggle="false" title="Blog Posts">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

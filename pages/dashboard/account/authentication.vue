@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="account-authentication">
     <template #header>
-      <UDashboardNavbar title="Authentication">
+      <UDashboardNavbar :toggle="false" title="Authentication">
         <template #leading>
           <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>

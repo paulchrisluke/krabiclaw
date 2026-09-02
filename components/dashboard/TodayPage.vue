@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="org-today">
     <template #header>
-      <UDashboardNavbar title="Today">
+      <UDashboardNavbar :toggle="false" title="Today">
         <template #leading>
           <DashboardNavbarLeading :detail-to="orgBase" :detail-label="organizationName" />
         </template>

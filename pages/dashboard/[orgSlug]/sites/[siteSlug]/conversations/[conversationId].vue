@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="conversation-detail">
     <template #header>
-      <UDashboardNavbar :title="conversationTitle">
+      <UDashboardNavbar :toggle="false" :title="conversationTitle">
         <template #leading>
           <DashboardNavbarLeading :detail-to="assistantPath" detail-label="Assistant" />
         </template>

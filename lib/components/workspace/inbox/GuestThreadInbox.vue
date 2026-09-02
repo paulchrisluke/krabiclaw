@@ -4,7 +4,7 @@
     :data-guest-thread-inbox-hydrated="inboxHydrated ? 'true' : 'false'"
   >
     <template #header>
-      <UDashboardNavbar :title="navbarTitle">
+      <UDashboardNavbar :toggle="false" :title="navbarTitle">
         <template #leading>
           <DashboardNavbarLeading
             :detail-to="isDetailMode ? listRoute : null"

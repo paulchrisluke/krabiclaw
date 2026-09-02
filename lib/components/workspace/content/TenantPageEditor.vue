@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="tenant-page-editor">
     <template #header>
-      <UDashboardNavbar :title="editorTitle">
+      <UDashboardNavbar :toggle="false" :title="editorTitle">
         <template #leading><DashboardNavbarLeading :detail-to="pagesPath" detail-label="Pages" /></template>
         <template #right>
           <UButton

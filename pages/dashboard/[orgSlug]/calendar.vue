@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="org-calendar">
     <template #header>
-      <UDashboardNavbar title="Calendar">
+      <UDashboardNavbar :toggle="false" title="Calendar">
         <template #leading>
           <DashboardNavbarLeading :detail-to="orgBase" :detail-label="organizationName" />
         </template>

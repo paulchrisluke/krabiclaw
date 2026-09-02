@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="location-experiences">
     <template #header>
-      <UDashboardNavbar title="Experiences">
+      <UDashboardNavbar :toggle="false" title="Experiences">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

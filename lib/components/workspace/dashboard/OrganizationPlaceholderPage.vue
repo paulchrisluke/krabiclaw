@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel :id="`org-${slug}`">
     <template #header>
-      <UDashboardNavbar :title="title">
+      <UDashboardNavbar :toggle="false" :title="title">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

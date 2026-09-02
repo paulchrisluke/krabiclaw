@@ -1,9 +1,7 @@
 <template>
   <UDashboardPanel id="admin-localization">
     <template #header>
-      <UDashboardNavbar title="Localization">
-        <template #leading><UDashboardSidebarCollapse /></template>
-      </UDashboardNavbar>
+      <UDashboardNavbar :toggle="false" title="Localization" />
     </template>
     <template #body>
       <div class="mx-auto grid w-full max-w-6xl gap-8 p-5 lg:grid-cols-[20rem_1fr] sm:p-8">

@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="admin-organizations">
     <template #header>
-      <UDashboardNavbar title="Organizations">
+      <UDashboardNavbar :toggle="false" title="Organizations">
         <template #leading><DashboardNavbarLeading /></template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" aria-label="Refresh organizations" color="neutral" variant="ghost" size="xs" :loading="loading" @click="loadOrganizations" />

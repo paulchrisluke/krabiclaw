@@ -1,6 +1,6 @@
 <template>
   <UDashboardPanel id="location-products">
-    <template #header><UDashboardNavbar :title="presentation.collectionLabel"><template #leading><DashboardNavbarLeading /></template></UDashboardNavbar></template>
+    <template #header><UDashboardNavbar :toggle="false" :title="presentation.collectionLabel"><template #leading><DashboardNavbarLeading /></template></UDashboardNavbar></template>
     <template #body><UPage><UPageBody><ProductEditor v-if="location" :site-id="siteId" :location-id="location.id" :location-title="location.title" :currency="currency" :presentation="presentation" /></UPageBody></UPage></template>
   </UDashboardPanel>
 </template>

@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="org-activity">
     <template #header>
-      <UDashboardNavbar title="Activity">
+      <UDashboardNavbar :toggle="false" title="Activity">
         <template #leading>
           <DashboardNavbarLeading />
         </template>

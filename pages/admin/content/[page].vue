@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="admin-content-page">
     <template #header>
-      <UDashboardNavbar :title="`Edit ${page}`">
+      <UDashboardNavbar :toggle="false" :title="`Edit ${page}`">
         <template #leading>
           <DashboardNavbarLeading detail-to="/admin/content" detail-label="Content" />
         </template>

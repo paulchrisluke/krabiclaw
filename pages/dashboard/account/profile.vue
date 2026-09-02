@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="account-profile">
     <template #header>
-      <UDashboardNavbar title="Profile">
+      <UDashboardNavbar :toggle="false" title="Profile">
         <template #leading>
           <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>

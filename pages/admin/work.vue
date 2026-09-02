@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="admin-work">
     <template #header>
-      <UDashboardNavbar title="Work Queue">
+      <UDashboardNavbar :toggle="false" title="Work Queue">
         <template #leading>
           <DashboardNavbarLeading />
         </template>
