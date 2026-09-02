@@ -138,7 +138,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 const LOCATION_FEATURE_LABELS = {
-  menu: 'Menu',
+  products: 'Menu',
   reservations: 'Reservations',
   ordering: 'Online ordering',
   experiences: 'Experiences',
