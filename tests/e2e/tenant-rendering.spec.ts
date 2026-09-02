@@ -60,6 +60,12 @@ function collectFirstPartyFailures(page: Page, baseURL: string) {
   return failures
 }
 
+async function waitForNuxtHydration(page: Page) {
+  await page.waitForFunction(() => Boolean(
+    (document.querySelector('#__nuxt') as (Element & { __vue_app__?: unknown }) | null)?.__vue_app__,
+  ))
+}
+
 async function expectTenantDocument(page: Page, tenant: Tenant) {
   await expect(page.locator(tenant.shell)).toBeVisible()
   await expect(page.locator('header').getByRole('link', { name: tenant.identity }).first()).toBeVisible()
@@ -78,9 +84,7 @@ async function expectTenantDocument(page: Page, tenant: Tenant) {
   await expect(canonical).toHaveCount(1)
   expect(new URL(await canonical.getAttribute('href') ?? tenant.baseURL).origin).toBe(new URL(tenant.baseURL).origin)
   await expect(page.locator('link[rel~="icon"]')).not.toHaveCount(0)
-  await page.waitForFunction(() => Boolean(
-    (document.querySelector('#__nuxt') as (Element & { __vue_app__?: unknown }) | null)?.__vue_app__,
-  ))
+  await waitForNuxtHydration(page)
 }
 
 for (const tenant of tenants) {
@@ -143,6 +147,7 @@ test('Kikuzuki ordering menu uses the published catalog without replacing the SE
   await openTenantPage(page, `${baseURL}/order`, kikuzukiTestExtraHeaders())
   await expect(page.getByRole('region', { name: 'Ordering menu' })).toBeVisible()
   await expect(page.locator('main')).toContainText(/Tuna Sushi/i)
+  await waitForNuxtHydration(page)
   await page.getByRole('searchbox', { name: 'Find a dish' }).fill('Tuna Sushi')
   await expect(page.locator('main')).toContainText(/Tuna Sushi/i)
   await page.getByRole('searchbox', { name: 'Find a dish' }).fill('no matching dish')
