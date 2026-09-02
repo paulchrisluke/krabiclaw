@@ -40,6 +40,7 @@
     "test:e2e:ui": "playwright test --ui",
     "cloudflare:resources": "node scripts/check-cloudflare-resources.mjs",
     "dev": "nuxt dev",
+    "prototype:cms-visual": "cross-env VITE_KC_CMS_VISUAL_PROTOTYPE=1 NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3100 NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3100 NUXT_PUBLIC_APP_NAME=KrabiClaw yarn build && wrangler dev .output/server/index.mjs --assets .output/public --local --port 3100 --live-reload --var BETTER_AUTH_URL:http://localhost:3100 --var NUXT_PUBLIC_PLATFORM_DOMAIN:http://localhost:3100 --var NUXT_PUBLIC_FREE_SITE_DOMAIN:http://localhost:3000 --var E2E_ALLOW_DEV_ROUTES:true --var PORT:3100 --var PREVIEW_SECRET:cms-visual-prototype-local-only",
     "dev:worker": "yarn build && yarn dev:worker:start",
     "dev:worker:start": "wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000 --live-reload",
     "auth:e2e:local:provision": "node --experimental-strip-types scripts/provision-e2e-auth.ts",

@@ -163,6 +163,7 @@ interface AuthOrganization {
 
 const route = useRoute()
 const _config = useRuntimeConfig()
+const showCmsVisualPrototype = import.meta.dev || import.meta.env.VITE_KC_CMS_VISUAL_PROTOTYPE === '1'
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
 const { data: sessionData, refreshSession, signOut: _signOut } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
@@ -618,9 +619,32 @@ const adminGroup = computed(() => [
   { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
 ])
 
+const prototypeSiteNavigationItems = computed(() => {
+  if (!orgBase.value || !siteBase.value) return []
+  const secondaryItems = [
+    { label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
+    { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsNavTarget.value ?? `${siteBase.value}/locations/new` },
+    ...(canManageSite.value
+      ? [
+          { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
+          { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${siteBase.value}/analytics` },
+          { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
+          { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
+        ]
+      : []),
+  ]
+  return [
+    { label: 'Home', icon: 'i-lucide-house', to: orgBase.value },
+    { label: 'Website', icon: 'i-lucide-panels-top-left', to: `${siteBase.value}/pages` },
+    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${siteBase.value}/inbox` },
+    { label: 'More', icon: 'i-lucide-ellipsis', children: secondaryItems },
+  ]
+})
+
 const navigationItems = computed(() => {
   if (isAdminRoute.value) return [adminGroup.value]
   if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
+  if (showCmsVisualPrototype && scope.value === 'site') return [prototypeSiteNavigationItems.value]
   return [
     mobileNavItems.value
       .filter(item => !(scope.value === 'site' && ['children', 'inbox'].includes(item.key))
@@ -674,6 +698,14 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
     : scope.value === 'location' && routeLocationBase
       ? `${routeLocationBase}/inbox`
       : routeSiteBase ? `${routeSiteBase}/inbox` : undefined
+  if (showCmsVisualPrototype && routeSiteBase && scope.value === 'site') {
+    const prototypeItems: DashboardMobileNavItem[] = [
+      { key: 'home', label: 'Home', icon: 'i-lucide-house', to: routeOrgBase, exact: true },
+      { key: 'website', label: 'Website', icon: 'i-lucide-panels-top-left', to: `${routeSiteBase}/pages` },
+      { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${routeSiteBase}/inbox` },
+    ]
+    return prototypeItems.map(item => ({ ...item, active: isActivePath(item.to, item.exact) }))
+  }
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },

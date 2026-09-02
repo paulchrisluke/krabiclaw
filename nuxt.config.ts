@@ -68,7 +68,7 @@ export default defineNuxtConfig({
     '@nuxt/scripts',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',
-    'nuxt-schema-org',
+    ...(process.env.VITE_KC_CMS_VISUAL_PROTOTYPE === '1' ? [] : ['nuxt-schema-org']),
     '@nuxt/ui',
   ],
 

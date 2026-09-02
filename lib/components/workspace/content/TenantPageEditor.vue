@@ -1,11 +1,12 @@
 <template>
   <UDashboardPanel id="tenant-page-editor">
     <template #header>
-      <UDashboardNavbar :title="editorTitle">
+      <UDashboardNavbar :title="showVisualPrototype ? 'Page' : editorTitle">
         <template #leading><DashboardNavbarLeading :detail-to="pagesPath" detail-label="Pages" /></template>
         <template #right>
+          <UBadge v-if="showVisualPrototype" color="warning" variant="soft" label="Read-only prototype" />
           <UButton
-            v-if="selected?.id"
+            v-if="selected?.id && !showVisualPrototype"
             color="neutral"
             variant="outline"
             icon="i-lucide-external-link"
@@ -14,13 +15,23 @@
             target="_blank"
             :disabled="busy !== null || !navigablePreviewUrl"
           />
-          <UButton icon="i-lucide-check" label="Save" :loading="busy === 'save'" :disabled="busy !== null || !selected" @click="save" />
+          <UButton v-if="!showVisualPrototype" icon="i-lucide-check" label="Save" :loading="busy === 'save'" :disabled="busy !== null || !selected" @click="save" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-5xl space-y-6">
+      <TenantPageEditorPrototype
+        v-if="showVisualPrototype && selected && !loading"
+        :title="selected.title"
+        :summary="selected.summary"
+        :locale="selected.locale"
+        :path="selected.path"
+        :dirty="dirty"
+        :blocks="selected.blocks"
+      />
+
+      <div v-else class="mx-auto w-full max-w-5xl space-y-6">
         <div v-if="loading" class="space-y-4">
           <USkeleton class="h-32 rounded-2xl" />
           <USkeleton class="h-80 rounded-2xl" />
@@ -152,6 +163,7 @@ const localeRevertGuard = createTenantPageLocaleRevertGuard()
 const selectedBlockIndex = ref(0)
 const draggedBlockIndex = ref<number | null>(null)
 const newBlockType = ref<TenantPageBlockType>('markdown')
+const showVisualPrototype = import.meta.dev || import.meta.env.VITE_KC_CMS_VISUAL_PROTOTYPE === '1'
 // A block only exists as a content_blocks row once this page has been saved
 // with it present — before that, its gallery (if any) has nothing to attach
 // to and TenantPageBlockEditor edits it locally instead of calling the
