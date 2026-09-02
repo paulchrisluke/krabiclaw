@@ -19,6 +19,7 @@
         <div v-else class="flex aspect-[40/21] items-center justify-center rounded-2xl border border-default bg-elevated text-muted">
           <UIcon name="i-lucide-image-off" class="size-8" />
         </div>
+        <p class="truncate px-1 pt-3 font-semibold text-highlighted">{{ item.label }}</p>
       </UCard>
     </NuxtLink>
 
@@ -34,6 +35,7 @@
             <UIcon name="i-lucide-plus" class="size-6 text-muted transition group-hover:text-primary" />
           </div>
         </div>
+        <p class="px-1 pt-3 font-semibold text-muted">{{ addAction.label }}</p>
       </UCard>
     </NuxtLink>
   </div>

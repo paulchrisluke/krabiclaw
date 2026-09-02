@@ -189,10 +189,7 @@
               </template>
 
               <template v-else>
-                <div class="grid gap-2 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)] sm:gap-6">
-                  <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
-                  <p class="max-w-xl text-sm leading-6 text-muted">{{ siteManagerSummary(item.manager) }}</p>
-                </div>
+                <h2 class="py-2 text-xl font-semibold text-highlighted">{{ item.manager.label }}</h2>
               </template>
             </NuxtLink>
           </section>
@@ -213,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
 import { resolveDashboardManagerRoute, type DashboardManagerRouteContext } from '~/utils/dashboard-navigation'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -332,17 +329,6 @@ const tenantPageRows = computed(() => pages.value.map((page) => {
     to: `${siteDashboardPath.value}/pages/${encodeURIComponent(page.id)}`,
   }
 }))
-
-function siteManagerSummary(manager: CmsManagerCapability): string {
-  switch (manager.id) {
-    case 'blog': return 'Write and publish articles for your website'
-    case 'testimonials': return 'Review and publish customer stories'
-    case 'qa': return 'Answer common questions from visitors'
-    case 'ordering': return 'Review orders and fulfillment'
-    case 'services': return 'Describe services, pricing, and scheduling'
-    default: return `Manage ${manager.label.toLowerCase()}`
-  }
-}
 
 const siteManagerItems = computed(() => siteManagers.value
     .filter(manager => manager.id !== 'locations' && manager.id !== 'settings')

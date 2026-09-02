@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="org-overview">
     <template #header>
-      <UDashboardNavbar title="Sites">
+      <UDashboardNavbar title="Website">
         <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
     </template>

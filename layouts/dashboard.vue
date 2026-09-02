@@ -287,11 +287,12 @@ const scope = computed<'organization' | 'site' | 'location'>(() => {
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   if (scope.value === 'location') {
     const currentLocation = dashboardLocation.currentLocation.value
+    if (!currentLocation) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
     const currentLocationAvatar = locationAvatar(currentLocation)
     return {
       scope: 'location',
       current: {
-        label: currentLocation?.title ?? currentLocationSlug.value ?? 'Location',
+        label: currentLocation.title,
         avatar: currentLocationAvatar,
         icon: currentLocationAvatar ? undefined : 'i-lucide-map-pin',
       },

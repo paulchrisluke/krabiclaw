@@ -38,6 +38,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 import { dashboardFetch } from '~/composables/dashboardFetch'
+import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 
 type DashboardAccountMenuPlacement = 'desktop-top' | 'mobile-bottom'
 
@@ -49,6 +50,7 @@ const route = useRoute()
 const dashboard = useDashboardSite()
 const config = useRuntimeConfig()
 const renderedUser = computed(() => sessionData.value?.user ?? null)
+const canAccessAdmin = computed(() => hasPlatformAdminPermission(renderedUser.value?.role))
 const displayName = computed(() => renderedUser.value?.name || renderedUser.value?.email || 'User')
 const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed((): Record<string, string> => {
   const organization = dashboard.organization.value
@@ -203,7 +205,7 @@ const items = computed<DropdownMenuItem[][]>(() => {
     accountItems.value,
   ]
   if (siteItems.value.length) groups.push(siteItems.value)
-  if (route.name?.toString().startsWith('admin')) groups.push(adminItems.value)
+  if (canAccessAdmin.value) groups.push(adminItems.value)
   groups.push([
     ...(usageLabel.value ? [{ label: 'Usage', icon: 'i-lucide-gauge', disabled: true, slot: 'usage' }] : []),
     ...(organizationSettingsTo.value ? [{ label: 'Organization settings', icon: 'i-lucide-settings', to: organizationSettingsTo.value }] : []),

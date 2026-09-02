@@ -63,7 +63,7 @@
                     <div class="space-y-3 px-5 py-5 sm:px-6">
                       <div class="flex flex-wrap items-start justify-between gap-3">
                         <div class="min-w-0">
-                          <h1 class="text-xl font-semibold text-highlighted">{{ location.title }}</h1>
+                          <h2 class="text-xl font-semibold text-highlighted">{{ location.title }}</h2>
                           <p class="mt-1 text-sm text-muted">{{ addressSummary }}</p>
                         </div>
                         <div class="flex flex-wrap gap-2">
@@ -165,10 +165,7 @@
                   </template>
 
                   <template v-else>
-                    <div class="grid gap-2 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)] sm:gap-6">
-                      <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
-                      <p class="max-w-xl text-sm leading-6 text-muted">{{ locationManagerSummary(item.manager) }}</p>
-                    </div>
+                    <h2 class="py-2 text-xl font-semibold text-highlighted">{{ item.manager.label }}</h2>
                   </template>
                 </NuxtLink>
               </section>
@@ -181,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolveDashboardManagerRoute, type DashboardManagerRouteContext } from '~/utils/dashboard-navigation'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayGoogleHours } from '~/utils/formatters'
@@ -295,16 +292,6 @@ const locationStatusSummary = computed(() => {
   parts.push(`${inboxSummary.value.unreadThreads} unread`)
   return parts.join(' · ')
 })
-
-function locationManagerSummary(manager: CmsManagerCapability): string {
-  switch (manager.id) {
-    case 'posts': return 'Publish updates and stories from this location'
-    case 'qa': return 'Answer common questions from visitors'
-    case 'experiences': return 'Manage bookable experiences at this location'
-    case 'reservations': return 'Manage reservation settings and requests'
-    default: return `Manage ${manager.label.toLowerCase()}`
-  }
-}
 
 const locationManagerItems = computed(() => locationManagers.value
     .filter(manager => manager.id !== 'settings')
