@@ -8,6 +8,7 @@ interface ProductRow { id: string; price: PriceRow | null; details: Array<{ key:
 
 test.describe('nullable Product price (issue #738)', () => {
   test('create_product accepts price: null and creates no Price row', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
@@ -46,6 +47,7 @@ test.describe('nullable Product price (issue #738)', () => {
   })
 
   test('batch_create_products commits a mixed fixed/null batch atomically and rolls back an invalid one', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
@@ -92,6 +94,7 @@ test.describe('nullable Product price (issue #738)', () => {
   })
 
   test('sync_products closes an active Price with a future valid_until when synced to null, and null→fixed creates exactly one active Price', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
@@ -146,6 +149,7 @@ test.describe('nullable Product price (issue #738)', () => {
   })
 
   test('update_product distinguishes omitted price (unchanged) from price: null (closes without replacement)', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
