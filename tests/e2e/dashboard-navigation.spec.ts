@@ -16,6 +16,13 @@ async function expectPrimaryOrder(page: Page) {
   }).toEqual(['Home', 'Calendar', 'Website', 'Inbox'])
 }
 
+async function followPrimaryRoute(page: Page, start: string, label: string, expected: string) {
+  await page.goto(start)
+  await expectPrimaryOrder(page)
+  await visiblePrimaryNavigation(page).getByRole('link', { name: label, exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`${expected}$`))
+}
+
 test.describe('authenticated dashboard navigation', () => {
   test.beforeEach(async ({ page, baseURL }) => {
     await loginAs(page.context().request, baseURL!, 'user-e2e-kikuzuki-owner')
@@ -27,9 +34,11 @@ test.describe('authenticated dashboard navigation', () => {
     await expect(visiblePrimaryNavigation(page).locator('[aria-current="page"]')).toHaveCount(1)
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page')
 
-    await visiblePrimaryNavigation(page).getByRole('link', { name: 'Calendar', exact: true }).click()
-    await expect(page).toHaveURL(new RegExp(`${organizationBase}/calendar$`))
+    await followPrimaryRoute(page, organizationBase, 'Calendar', `${organizationBase}/calendar`)
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Calendar', exact: true })).toHaveAttribute('aria-current', 'page')
+    await followPrimaryRoute(page, organizationBase, 'Website', `${organizationBase}/sites`)
+    await followPrimaryRoute(page, organizationBase, 'Inbox', `${organizationBase}/inbox`)
+    await followPrimaryRoute(page, `${organizationBase}/calendar`, 'Home', organizationBase)
 
     await page.goto(siteBase)
     await expect(visiblePrimaryNavigation(page).getByRole('link', { name: 'Website', exact: true })).toHaveAttribute('href', siteBase)
@@ -64,6 +73,10 @@ test.describe('authenticated dashboard navigation', () => {
     const previewAction = page.getByRole('link', { name: 'View site' })
     const [tabsBox, previewBox] = await Promise.all([tabs.boundingBox(), previewAction.boundingBox()])
     expect(tabsBox && previewBox && previewBox.y >= tabsBox.y + tabsBox.height).toBe(true)
+
+    await page.getByTestId('dashboard-account-menu-button').click()
+    await page.getByRole('menuitem', { name: 'Profile' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/account\/profile(?:\?.*)?$/)
   })
 
   test('renders the same primary order with a separate mobile Menu', async ({ page }) => {
@@ -75,6 +88,13 @@ test.describe('authenticated dashboard navigation', () => {
     await expect(navigation.getByRole('button', { name: 'Open dashboard menu' })).toHaveText(/Menu/)
     await expect(page.getByRole('button', { name: /Switch context/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Search dashboard/ })).toBeVisible()
+
+    await followPrimaryRoute(page, locationBase, 'Home', organizationBase)
+    await followPrimaryRoute(page, locationBase, 'Calendar', `${organizationBase}/calendar`)
+    await followPrimaryRoute(page, locationBase, 'Website', siteBase)
+    await followPrimaryRoute(page, locationBase, 'Inbox', `${locationBase}/inbox`)
+    await page.goto(locationBase)
+
     const backToSite = page.getByRole('link', { name: 'Back to Site overview' })
     await expect(backToSite).toBeVisible()
     await backToSite.click()
@@ -110,5 +130,8 @@ test.describe('authenticated dashboard navigation', () => {
     })
     expect(layoutMetrics.noHorizontalOverflow).toBe(true)
     expect(layoutMetrics.contentPaddingBottom).toBeGreaterThanOrEqual(layoutMetrics.navigationHeight)
+
+    await page.getByRole('menuitem', { name: 'Profile' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/account\/profile(?:\?.*)?$/)
   })
 })
