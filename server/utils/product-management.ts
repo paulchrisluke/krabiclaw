@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { d1JsonArray, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import type {
   CreateProductInput,
@@ -8,7 +9,8 @@ import type {
   SyncProductInput,
   UpdateProductInput,
 } from '~/server/types/products'
-import { getMediaPlacements } from '~/server/utils/media-placement'
+import { refreshSocialCard } from '~/server/utils/social-card'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode } from '~/shared/currencies'
@@ -64,6 +66,8 @@ export function mapProduct(row: ProductRow): Product {
     details: parseJsonArray<ProductDetail>(row.details_json, 'details_json'),
     image: null,
     gallery: [],
+    media: [],
+    social_image: null,
     seo_title: row.seo_title === null ? null : String(row.seo_title),
     seo_description: row.seo_description === null ? null : String(row.seo_description),
     canonical_url: row.canonical_url === null ? null : String(row.canonical_url),
@@ -141,13 +145,16 @@ async function siteDefaultCurrency(db: DbClient, organizationId: string, siteId:
 async function hydrateProductMedia(db: DbClient, siteId: string, products: Product[]): Promise<Product[]> {
   if (!products.length) return products
   const ownerIds = products.map(product => product.id)
-  const placements = await getMediaPlacements(db, { siteId, ownerType: 'product', ownerIds })
+  const placements = await loadPublicSocialMedia(db, siteId, 'product', ownerIds)
   return products.map((product) => {
-    const media = placements.get(product.id) ?? []
+    const socialMedia = placements.get(product.id) ?? { media: [], social_image: null }
+    const media = socialMedia.media
     return {
       ...product,
       image: media.find(item => item.slot === 'image') ?? null,
       gallery: media.filter(item => item.slot === 'gallery'),
+      media,
+      social_image: socialMedia.social_image,
     }
   })
 }
@@ -327,6 +334,7 @@ export async function createProduct(
   locationId: string,
   input: CreateProductInput,
   actor: string,
+  env: CloudflareEnv,
 ): Promise<Product> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const category = requireTrimmedProductString(input.category, 'category', PRODUCT_LIMITS.category)
@@ -392,6 +400,7 @@ export async function createProduct(
   await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, productId: id, metadata: { category, name } })
   const created = await getProduct(db, organizationId, siteId, locationId, id)
   if (!created) throw new Error('Product not found after create')
+  await refreshSocialCard({ db, env, owner: { owner_type: 'product', owner_id: id }, actorId: actor })
   return created
 }
 
@@ -586,6 +595,7 @@ export async function updateProduct(
   productId: string,
   input: UpdateProductInput,
   actor: string,
+  env: CloudflareEnv,
 ): Promise<Product> {
   const existing = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!existing) notFound()
@@ -655,6 +665,7 @@ export async function updateProduct(
   await productEvent(db, 'product.updated', { organizationId, siteId, locationId, actor, productId })
   const updated = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!updated) throw new Error('Product not found after update')
+  await refreshSocialCard({ db, env, owner: { owner_type: 'product', owner_id: productId }, actorId: actor })
   return updated
 }
 

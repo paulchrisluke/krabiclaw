@@ -15,7 +15,7 @@ import {
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
 import { mapProduct } from '~/server/utils/product-management'
 import { verifyPreviewToken } from "~/server/utils/preview-token";
-import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
+import { attachAvailabilitySummaries, attachExperienceMedia, type Experience } from "~/server/utils/experiences";
 import {
   toResolvedMediaAsset,
   type MediaAsset,
@@ -799,23 +799,7 @@ async function loadPublicPageSource(
     ? projectExactLocalizedCollection('experience', sourceExperiencesList, publicLocalizations)
     : sourceExperiencesList
   options.signal?.throwIfAborted();
-  const mediaByExperience = await getMediaPlacements(db, {
-    siteId,
-    ownerType: 'experience',
-    ownerIds: [
-      ...experiencesListRaw.map(experience => experience.id),
-      ...(idxExperienceDetail >= 0
-        ? ((batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results ?? [])
-            .map(row => String(row.id ?? ""))
-        : []),
-    ],
-    slot: 'gallery',
-  });
-  const attachExperienceMedia = <T extends Experience>(experience: T): T => ({
-    ...experience,
-    media: mediaByExperience.get(experience.id) ?? [],
-  });
-  const experiencesWithMedia = experiencesListRaw.map(attachExperienceMedia);
+  const experiencesWithMedia = await attachExperienceMedia(db, siteId, experiencesListRaw);
   options.signal?.throwIfAborted();
   const availabilityContext = {
     locations: (locRows.results ?? []).map(location => ({
@@ -858,7 +842,7 @@ async function loadPublicPageSource(
           db,
           orgId,
           siteId,
-          [attachExperienceMedia(experienceDetailRaw)],
+          await attachExperienceMedia(db, siteId, [experienceDetailRaw]),
           availabilityContext,
         ))[0]
       : null;

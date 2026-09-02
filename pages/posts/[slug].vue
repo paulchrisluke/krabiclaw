@@ -32,6 +32,7 @@ interface PublicPost {
   seo_title?: string | null
   seo_description?: string | null
   media: PublicPostMedia[]
+  social_image: import('~/utils/social-metadata').SocialImageSource | null
   cta_type: string | null
   cta_url: string | null
   event_title: string | null
@@ -101,7 +102,6 @@ if (error.value) throw error.value
 useState<PublicPost['localeRepresentations']>('public-locale-representations', () => []).value = data.value?.post.localeRepresentations ?? []
 
 const post = computed(() => data.value?.post ?? null)
-const coverMedia = computed(() => post.value?.media.find(item => item.slot === 'cover') || post.value?.media[0] || null)
 const pagePath = computed(() => post.value?.public_path || `/posts/${slug.value}`)
 const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)
 const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${siteName.value}.`)
@@ -110,10 +110,8 @@ const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   title: seoTitle.value,
   description: seoDescription.value,
   pageType: 'article',
-  brand: { siteName: siteName.value, logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null },
-  heroImage: coverMedia.value
-    ? { url: coverMedia.value.public_url, kind: coverMedia.value.kind, thumbnailUrl: coverMedia.value.thumbnail_url }
-    : null,
+  brand: { siteName: siteName.value },
+  socialImage: post.value?.social_image ?? null,
   publishedAt: post.value?.published_at || null,
 }))
 

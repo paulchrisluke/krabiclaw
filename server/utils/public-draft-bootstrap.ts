@@ -69,6 +69,7 @@ export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDr
       business: null,
       reviews: [],
       media: [],
+      social_image: null,
       posts: [],
       syncedAt: null,
     },
@@ -103,6 +104,7 @@ export function buildPublicDraftBlawbyDocument(
         brand_name: payload.preview.brandName,
         brand_description: heroDescription,
         media: logoUrl ? [{ asset_id: logoMedia!.draftAssetId, slot: 'logo', public_url: logoUrl, thumbnail_url: logoMedia!.thumbnailUrl, kind: 'image' }] : [],
+        social_image: logoUrl ? { url: logoUrl } : null,
         phone: payload.source.details.phone ?? primaryLocation?.phone ?? null,
         banner_content: null,
         banner_dismissible: false,
@@ -129,6 +131,7 @@ export function buildPublicDraftBlawbyDocument(
       recipe: 'home',
       page: {
         id: 'draft-home',
+        page_id: 'draft-home',
         path: '/',
         title: payload.preview.brandName,
         page_type: 'recipe',
@@ -139,6 +142,8 @@ export function buildPublicDraftBlawbyDocument(
         seo_description: heroDescription,
         canonical_url: null,
         robots: 'noindex',
+        media: [],
+        social_image: null,
         blocks: [{
           id: 'draft-home-hero',
           type: 'hero',

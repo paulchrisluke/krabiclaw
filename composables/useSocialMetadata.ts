@@ -3,7 +3,6 @@ import { resolveSeoUrl } from '~/composables/useSeoUrls'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import {
   composeSocialMetadata,
-  resolveSocialOgImage,
   type SocialBrand,
   type SocialPageMetadataInput,
   type SocialPageType,
@@ -70,9 +69,6 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const brand = value.brand ?? (template === 'platform'
       ? {
           siteName: PLATFORM_NAME,
-          logoUrl: resolveSeoUrl('/krabi-claw-logo.png', origin),
-          primaryColor: '#1e1b4b',
-          secondaryColor: '#4338ca',
         }
       : null)
     if (!brand?.siteName.trim()) throw new Error('Page social metadata requires a site name')
@@ -83,7 +79,12 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       pageType: value.socialType || value.pageType || 'website',
       canonicalUrl,
     }
-    const resolvedImage = resolveSocialOgImage(socialInput, origin)
+    const sourceImage = Object.hasOwn(value, 'socialImage')
+      ? value.socialImage ?? null
+      : tenant.site?.social_image ?? null
+    const resolvedImage = sourceImage
+      ? { ...sourceImage, url: resolveSeoUrl(sourceImage.url, origin), alt: sourceImage.alt || value.title }
+      : null
     return { value, origin, template, tags: composeSocialMetadata(socialInput, resolvedImage) }
   })
 

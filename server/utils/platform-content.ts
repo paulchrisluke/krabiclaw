@@ -29,12 +29,14 @@ import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { normalizeBlogSlug, parseScheduledFor, resolveBlogPublicPath, resolveSlugMutation } from '~/utils/blog-editor'
 import { createBlogRedirect } from '~/server/utils/blog-publishing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs, hydrateMediaPlacementRefs, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
+import { refreshSocialCard } from '~/server/utils/social-card'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
@@ -329,24 +331,6 @@ function assertValidCanonicalUrl(value: string | null | undefined) {
   }
 }
 
-async function ensureRenderableMediaAssetExists(
-  db: D1Database,
-  assetId: string,
-  field = 'media.asset_id',
-  siteId: string | null = null,
-) {
-  const scopedSiteId = siteId ?? PLATFORM_SITE_ID
-  const conditions = ['id = ?', 'status = ?', "kind IN ('image', 'video')"]
-  const params: ApiValue[] = [assetId, 'active']
-  conditions.push('site_id = ?')
-  params.push(scopedSiteId)
-
-  const asset = await queryFirst(db, `SELECT id FROM media_assets WHERE ${conditions.join(' AND ')} LIMIT 1`, params)
-  if (!asset) {
-    badRequest(!isPlatformSite(siteId ?? PLATFORM_SITE_ID) ? `${field} must reference active visual media from this site` : `${field} must reference active platform visual media`)
-  }
-}
-
 async function mediaPlacementScope(db: DbClient, siteId: string | null, organizationId: string | null) {
   if (siteId && organizationId) return { siteId, organizationId }
   // A siteId without its organizationId is a caller bug (every real tenant caller
@@ -361,7 +345,11 @@ async function mediaPlacementScope(db: DbClient, siteId: string | null, organiza
 
 type NormalizedEditorBlock = ContentBlockInput & { id: string; placement_media: Array<{ asset_id: string; slot: string }> }
 
-async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<ContentBlockInput & { id?: string }>, siteId: string | null): Promise<NormalizedEditorBlock[]> {
+async function normalizeEditorContentBlocks(
+  db: D1Database,
+  blocks: Array<ContentBlockInput & { id?: string }>,
+  scope: { organizationId: string; siteId: string },
+): Promise<NormalizedEditorBlock[]> {
   return await Promise.all(blocks.map(async (block): Promise<NormalizedEditorBlock> => {
     if (!block || typeof block !== 'object' || !block.data || typeof block.data !== 'object' || Array.isArray(block.data)) badRequest('Every content block requires an object data payload')
     if (block.type === 'heading' && (typeof block.data.text !== 'string' || !block.data.text.trim())) badRequest('Heading blocks require non-empty data.text')
@@ -375,12 +363,17 @@ async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<Conten
     const id = block.id ?? crypto.randomUUID()
     const media = Array.isArray(block.media) ? block.media : []
     if (block.type === 'image' && media.length > 1) badRequest('Image blocks accept one media asset')
-    const placementMedia = await Promise.all(media.map(async (item, index) => {
+    const placementMedia = media.map((item, index) => {
       const assetId = typeof item?.asset_id === 'string' ? item.asset_id.trim() : ''
       if (!assetId) badRequest(`content_blocks media[${index}].asset_id is required`)
-      await ensureRenderableMediaAssetExists(db, assetId, `content block media[${index}].asset_id`, siteId)
       return { asset_id: assetId, slot: typeof item.slot === 'string' && item.slot.trim() ? item.slot.trim() : block.type === 'gallery' ? 'gallery' : 'media' }
-    }))
+    })
+    await hydrateMediaPlacementRefs(db, {
+      ...scope,
+      refs: placementMedia,
+      allowedKinds: ['image', 'video'],
+      fieldName: `content_blocks.${id}.media`,
+    })
     const data = { ...block.data }
     if (block.type === 'image' && !placementMedia.length) return { ...block, id, data, media: [], placement_media: [] }
     return { ...block, id, data, media: placementMedia, placement_media: placementMedia }
@@ -461,10 +454,10 @@ function attachPublished(record: ApiRecord, published: boolean) {
 async function normalizeCanonicalBlogBlocks(
   db: D1Database,
   input: Pick<PlatformBlogCreateInput, 'content_blocks'>,
-  siteId: string | null,
+  scope: { organizationId: string; siteId: string },
 ) {
   if (!Array.isArray(input.content_blocks) || !input.content_blocks.length) badRequest('content_blocks are required')
-  return await normalizeEditorContentBlocks(db, input.content_blocks, siteId)
+  return await normalizeEditorContentBlocks(db, input.content_blocks, scope)
 }
 
 function normalizeNavVisibility<T extends Record<string, unknown>>(record: T) {
@@ -614,11 +607,14 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_blog', String(post.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+  const socialMedia = (await loadPublicSocialMedia(db, PLATFORM_SITE_ID, 'blog_post', [String(post.id)])).get(String(post.id))
   const { author_id: authorId, ...postRecord } = post
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks }),
+    media: socialMedia?.media ?? [],
+    social_image: socialMedia?.social_image ?? null,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -649,11 +645,14 @@ export async function getPublishedPlatformDoc(db: DbClient, category: string, sl
 
   const contentBlocks = await getContentBlocksForOwner(db, 'platform_doc', String(doc.id))
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Documentation content document is missing' })
+  const socialMedia = (await loadPublicSocialMedia(db, PLATFORM_SITE_ID, 'platform_doc', [String(doc.id)])).get(String(doc.id))
   const { author_id: authorId, ...docRecord } = doc
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...docRecord, content_blocks: contentBlocks }),
+    media: socialMedia?.media ?? [],
+    social_image: socialMedia?.social_image ?? null,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -861,11 +860,14 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
     getContentBlocksForOwner(db, 'tenant_blog', String(post.id)),
     listBlocksForDocument(db, contentDocument.id),
   ])
+  const socialMedia = (await loadPublicSocialMedia(db, siteId, 'blog_post', [String(post.id)])).get(String(post.id))
   const { author_id: authorId, ...postRecord } = post
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
     ...attachFeaturedMediaFromBareJoin({ ...postRecord, content_blocks: contentBlocks ?? [], body: renderContentBlocksToMarkdown(rawBlocks) }),
+    media: socialMedia?.media ?? [],
+    social_image: socialMedia?.social_image ?? null,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
   }
 }
@@ -955,10 +957,17 @@ export async function createPlatformBlogPost(
     assertValidBlogCategory(input.category)
   }
   const featuredId = featuredAssetId(input)
-  if (featuredId) await ensureRenderableMediaAssetExists(db, featuredId, 'media', scope.site_id ?? null)
-
   const siteId = scope.site_id ?? PLATFORM_SITE_ID
   const organizationId = scope.organization_id ?? PLATFORM_ORGANIZATION_ID
+  const placementScope = await mediaPlacementScope(db, siteId, organizationId)
+  if (featuredId) {
+    await hydrateMediaAssetRefs(db, {
+      ...placementScope,
+      refs: [{ asset_id: featuredId }],
+      allowedKinds: ['image', 'video'],
+      fieldName: 'media',
+    })
+  }
   const id = crypto.randomUUID()
   const customSlug = typeof input.slug === 'string' && input.slug.trim()
     ? normalizeBlogSlug(input.slug)
@@ -971,9 +980,8 @@ export async function createPlatformBlogPost(
   const status = scheduledFor ? 'scheduled' : 'published'
   const publishedAt = scheduledFor ? null : now
   if (input.visibility && !['public', 'unlisted'].includes(input.visibility)) badRequest('visibility must be public or unlisted')
-  const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, input, siteId)
+  const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, input, placementScope)
   const canonicalBody = renderCanonicalBlogBody(canonicalBlocks)
-  const placementScope = await mediaPlacementScope(db, siteId, organizationId)
 
   const slugAttempts = customSlug ? 1 : MAX_SLUG_ATTEMPTS
   for (let attempt = 0; attempt < slugAttempts; attempt++) {
@@ -1025,6 +1033,7 @@ export async function createPlatformBlogPost(
         ],
       })
       const post = await getPlatformBlogPost(db, id, siteId, env)
+      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'blog_post', owner_id: id }, actorId: authorId })
       return {
         success: true,
         id,
@@ -1189,6 +1198,7 @@ export async function updatePlatformBlogPost(
   validateBlogCommon(input, isTenant)
   const current = await queryFirst<{ organization_id: string | null; category: string | null; title: string; slug: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, 'SELECT organization_id, category, title, slug, published_at, first_published_at, slug_manually_overridden, updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
   if (!current) notFound('Post not found')
+  const placementScope = await mediaPlacementScope(db, resolvedSiteId, current.organization_id)
   if (input.expected_updated_at && current.updated_at !== input.expected_updated_at) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
   }
@@ -1200,7 +1210,7 @@ export async function updatePlatformBlogPost(
     if (!contentDocument || contentDocument.document.updated_at !== input.expected_document_updated_at) {
       throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
     }
-    normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, resolvedSiteId)
+    normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, placementScope)
   }
   const effectiveCategory = input.category !== undefined ? input.category : current?.category ?? null
   if (!isTenant) {
@@ -1250,7 +1260,12 @@ export async function updatePlatformBlogPost(
 
   const featuredId = featuredAssetId(input)
   if (featuredId) {
-    await ensureRenderableMediaAssetExists(db, featuredId, 'media', resolvedSiteId)
+    await hydrateMediaAssetRefs(db, {
+      ...placementScope,
+      refs: [{ asset_id: featuredId }],
+      allowedKinds: ['image', 'video'],
+      fieldName: 'media',
+    })
   }
   const fields: Array<keyof Omit<PlatformBlogUpdateInput,
     | 'title'
@@ -1305,7 +1320,6 @@ export async function updatePlatformBlogPost(
         query: 'INSERT INTO blog_posts SELECT * FROM blog_posts WHERE id = ? AND updated_at != ?',
         params: [postId, input.expected_updated_at],
       }, rowUpdate] : [rowUpdate]
-      const placementScope = await mediaPlacementScope(db, siteId, current.organization_id)
       await replaceContentDocumentBlocks(db, blogContentOwnerType(siteId), postId, normalizedBlocks, {
         expected_document_updated_at: input.expected_document_updated_at ?? contentDocument.document.updated_at,
         additionalQueriesBefore: before,
@@ -1319,7 +1333,6 @@ export async function updatePlatformBlogPost(
     blogMutationApplied = true
 
     if (featuredId !== undefined) {
-      const placementScope = await mediaPlacementScope(db, siteId, current.organization_id)
       await executeBatch(db, buildSingleMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'blog_post', owner_id: postId, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [] }))
     }
 
@@ -1328,6 +1341,7 @@ export async function updatePlatformBlogPost(
     }
 
     const updatedPost = await getPlatformBlogPost(db, postId, siteId, env)
+    if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'blog_post', owner_id: postId } })
     return {
       success: true,
       admin_edit_url: updatedPost.admin_edit_url,
@@ -1477,18 +1491,26 @@ export async function createPlatformDoc(
   db: D1Database,
   authorId: string,
   input: PlatformDocCreateInput,
+  env?: CloudflareEnv,
 ) {
   if (!input.title || !input.content_blocks?.length) badRequest('title and content_blocks are required')
   validateDocCommon(input)
-  const normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, null)
+  const placementScope = await mediaPlacementScope(db, null, null)
+  const normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, placementScope)
   const canonicalBody = renderCanonicalBlogBody(normalizedBlocks)
   const featuredId = featuredAssetId(input)
-  if (featuredId) await ensureRenderableMediaAssetExists(db, featuredId, 'media')
+  if (featuredId) {
+    await hydrateMediaAssetRefs(db, {
+      ...placementScope,
+      refs: [{ asset_id: featuredId }],
+      allowedKinds: ['image', 'video'],
+      fieldName: 'media',
+    })
+  }
 
   const id = crypto.randomUUID()
   const slugBase = normalizeSlugFromTitle(input.title, 'doc')
   const now = new Date().toISOString()
-  const placementScope = await mediaPlacementScope(db, null, null)
 
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
@@ -1529,6 +1551,7 @@ export async function createPlatformDoc(
       })
 
       const doc = await getPlatformDoc(db, id)
+      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'platform_doc', owner_id: id }, actorId: authorId })
       return {
         success: true,
         id,
@@ -1550,6 +1573,7 @@ export async function updatePlatformDoc(
   db: D1Database,
   docIdOrSlug: string,
   input: PlatformDocUpdateInput,
+  env?: CloudflareEnv,
 ) {
   const docId = await resolvePlatformContentId(db, 'platform_docs', docIdOrSlug, 'Doc not found')
   validateDocCommon(input)
@@ -1567,8 +1591,14 @@ export async function updatePlatformDoc(
   }
 
   const featuredId = featuredAssetId(input)
+  const placementScope = await mediaPlacementScope(db, null, null)
   if (featuredId) {
-    await ensureRenderableMediaAssetExists(db, featuredId, 'media')
+    await hydrateMediaAssetRefs(db, {
+      ...placementScope,
+      refs: [{ asset_id: featuredId }],
+      allowedKinds: ['image', 'video'],
+      fieldName: 'media',
+    })
   }
 
   const fields: Array<keyof PlatformDocUpdateInput> = [
@@ -1601,7 +1631,7 @@ export async function updatePlatformDoc(
 
   const normalizedBlocks = input.content_blocks === undefined
     ? null
-    : await normalizeEditorContentBlocks(db, input.content_blocks, null)
+    : await normalizeEditorContentBlocks(db, input.content_blocks, placementScope)
   if (normalizedBlocks) {
     if (!normalizedBlocks.length) badRequest('content_blocks cannot be empty')
     if (!input.expected_document_updated_at) badRequest('expected_document_updated_at is required with content_blocks')
@@ -1612,14 +1642,11 @@ export async function updatePlatformDoc(
     params: [...params, docId],
   }
   const mutationQueries: BatchQuery[] = [rowUpdate]
-  const placementScope = featuredId !== undefined || normalizedBlocks
-    ? await mediaPlacementScope(db, null, null)
-    : null
-  if (featuredId !== undefined && placementScope) {
+  if (featuredId !== undefined) {
     mutationQueries.push(...buildSingleMediaPlacementQueries({ organizationId: placementScope.organizationId, siteId: placementScope.siteId, placement: { owner_type: 'platform_doc', owner_id: docId, slot: 'featured' }, media: featuredId ? [{ asset_id: featuredId }] : [], now }))
   }
   try {
-    if (normalizedBlocks && placementScope) {
+    if (normalizedBlocks) {
       await replaceContentDocumentBlocks(db, 'platform_doc', docId, normalizedBlocks, {
         expected_document_updated_at: input.expected_document_updated_at!,
         additionalQueriesBefore: [rowUpdate],
@@ -1633,6 +1660,7 @@ export async function updatePlatformDoc(
     }
 
     const updatedDoc = await getPlatformDoc(db, docId)
+    if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'platform_doc', owner_id: docId } })
     return {
       success: true,
       admin_edit_url: updatedDoc.admin_edit_url,
