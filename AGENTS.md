@@ -54,3 +54,13 @@ Use the approved client onboarding and import pipeline. Never manually seed or p
 ## Agent documentation
 
 - Domain context and ADRs: root `CONTEXT.md` and `docs/adr/`
+
+## Tenant CMS interface
+
+Tenant CMS work must follow
+[docs/design/cms-redesign-packet/prototype-decision.md](docs/design/cms-redesign-packet/prototype-decision.md).
+Use one global primary route model in a desktop top bar and mobile bottom bar.
+Do not add a persistent global sidebar beside route-owned CMS navigation.
+Route owners must preview real content types rather than reducing every
+destination to an icon row. Keep read views separate from focused field editors.
+Avoid gradients, decorative helper copy, repeated titles, and nested card chrome.
