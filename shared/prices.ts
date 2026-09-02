@@ -45,7 +45,11 @@ const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/
 // `format: "date-time"` keyword on those same fields, rather than the looser
 // grammar Date.parse alone accepts (e.g. a bare date, or a non-UTC offset).
 export function isIsoInstant(value: string): boolean {
-  return ISO_INSTANT.test(value) && !Number.isNaN(Date.parse(value))
+  if (!ISO_INSTANT.test(value)) return false
+  const timestamp = Date.parse(value)
+  if (Number.isNaN(timestamp)) return false
+  const canonical = new Date(timestamp).toISOString()
+  return canonical === value || (!value.includes('.') && canonical.replace('.000Z', 'Z') === value)
 }
 
 function assertInstant(value: string, field: string): void {

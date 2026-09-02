@@ -717,7 +717,7 @@ export async function updateProduct(
         LIMIT 1
       `, [productId, existing.price?.id ?? null, price.validUntil, price.validFrom])
       if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: 'Scheduled Price overlaps an existing Price' })
-      if (existing.price) {
+      if (existing.price && (existing.price.valid_until === null || existing.price.valid_until > at)) {
         closeWriteIndex = writes.length
         writes.push(closeActivePriceQuery(existing.price.id, at))
       }
@@ -726,7 +726,7 @@ export async function updateProduct(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()],
       })
-    } else if (existing.price) {
+    } else if (existing.price && (existing.price.valid_until === null || existing.price.valid_until > at)) {
       closeWriteIndex = writes.length
       writes.push(closeActivePriceQuery(existing.price.id, at))
     }

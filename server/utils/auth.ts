@@ -39,6 +39,7 @@ const LEGACY_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
 
 function sameExactSet(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false
+  if (new Set(a).size !== a.length || new Set(b).size !== b.length) return false
   const setB = new Set(b)
   return a.every(item => setB.has(item))
 }

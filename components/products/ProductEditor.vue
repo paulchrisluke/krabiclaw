@@ -86,7 +86,8 @@ const saving = ref(false)
 const reordering = ref(false)
 const error = ref<string | null>(null)
 const dashboardApi = useDashboardApi()
-const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details)
+const isProductDetail = (value: unknown): value is ProductDetail => isRecord(value) && typeof value.key === 'string' && typeof value.label === 'string' && Array.isArray(value.values) && value.values.every(item => typeof item === 'string')
+const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details) && value.details.every(isProductDetail)
 const isList = (value: unknown): value is { success: true; products: Product[] } => isRecord(value) && value.success === true && Array.isArray(value.products) && value.products.every(isProduct)
 const isOne = (value: unknown): value is { success: true; product: Product } => isRecord(value) && value.success === true && isProduct(value.product)
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
@@ -110,13 +111,21 @@ async function load() {
 }
 function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', has_fixed_price: true, price_note: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
 function editProduct(product: Product) {
-  const priceNote = product.details.find(detail => detail.key === 'price-note')?.values[0] ?? ''
+  const priceNoteDetails = product.details.filter(detail => detail.key === 'price-note')
+  if (priceNoteDetails.length > 1 || priceNoteDetails.some(detail => detail.values.length > 1)) {
+    editing.value = null
+    error.value = 'Price wording must contain a single value'
+    return
+  }
+  const priceNote = priceNoteDetails[0]?.values[0] ?? ''
   const otherDetails = product.details.filter(detail => detail.key !== 'price-note')
   editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', has_fixed_price: product.price !== null, price_note: priceNote, description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(otherDetails, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null }
 }
 function payload(product: EditingProduct) {
-  let details: ProductDetail[]
-  try { details = JSON.parse(product.details_text) as ProductDetail[] } catch { throw new Error('Details must be valid JSON') }
+  let parsedDetails: unknown
+  try { parsedDetails = JSON.parse(product.details_text) } catch { throw new Error('Details must be valid JSON') }
+  if (!Array.isArray(parsedDetails) || !parsedDetails.every(isProductDetail)) throw new Error('Details must be valid JSON')
+  const details = parsedDetails
   if (details.some(detail => detail.key === 'price-note')) throw new Error('Use the "Price wording" field for price-note, not Details JSON')
   const price = product.has_fixed_price
     ? { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }

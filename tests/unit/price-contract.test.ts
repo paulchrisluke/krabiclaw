@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   assertNonOverlappingPrices,
   formatMinorAmount,
+  isIsoInstant,
   majorAmountToMinor,
   priceAt,
   replacePrice,
@@ -27,6 +28,10 @@ test('currency precision converts and formats canonical integer minor amounts', 
 })
 
 test('priceAt selects one active interval and rejects overlapping schedules', () => {
+  assert.equal(isIsoInstant('2026-02-28T12:34:56Z'), true)
+  assert.equal(isIsoInstant('2026-02-28T12:34:56.789Z'), true)
+  assert.equal(isIsoInstant('2026-02-30T12:34:56Z'), false)
+  assert.equal(isIsoInstant('2026-04-31T12:34:56.000Z'), false)
   const future = { ...base, id: 'price-2', amount_minor: 1500, valid_from: '2026-06-01T00:00:00.000Z' }
   const closed = { ...base, valid_until: future.valid_from }
   assert.equal(priceAt([closed, future], '2026-05-01T00:00:00.000Z')?.id, 'price-1')

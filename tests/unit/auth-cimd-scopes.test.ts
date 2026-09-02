@@ -26,6 +26,14 @@ test('nextCimdTenantScopes rejects a tenant client with an unrecognized scope co
     () => nextCimdTenantScopes(['openid', 'tenant', 'unexpected_scope'], false),
     /Unrecognized persisted CIMD scope state/,
   )
+  assert.throws(
+    () => nextCimdTenantScopes(['openid', 'email', 'tenant', 'tenant'], false),
+    /Unrecognized persisted CIMD scope state/,
+  )
+  assert.throws(
+    () => nextCimdTenantScopes(['openid', 'tenant', 'tenant'], false),
+    /Unrecognized persisted CIMD scope state/,
+  )
 })
 
 test('nextCimdTenantScopes rejects a malformed persisted scopes value', () => {
