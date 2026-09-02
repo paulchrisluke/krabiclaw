@@ -831,6 +831,16 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     SELECT is_source FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1
   `, [input.siteId, locale])
   if (!existingPage && !localeRow?.is_source) badRequest('Translated tenant-page variants must reference an existing source page')
+  const sourceVariant = existingPage
+    ? await queryFirst<{ path: string } | null>(db, `
+        SELECT v.path
+          FROM tenant_page_variants v
+          JOIN site_locales l ON l.site_id = v.site_id AND l.locale = v.locale AND l.is_source = 1
+         WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ?
+         LIMIT 1
+      `, [existingPage.id, input.organizationId, input.siteId])
+    : null
+  if (existingPage && !sourceVariant) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page source variant is missing' })
   const existingIdentity = existingPage
     ? await canonicalTenantPageIdentity(db, {
         site_id: input.siteId,
@@ -849,8 +859,15 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       recipe: existingIdentity?.recipe ?? existingPage.recipe,
     } : {}),
   }
-  if (effectiveData.pageType === 'system' && !input.trustedSystemPage) badRequest('System pages are managed by the site template')
-  const path = await assertTenantPagePathAvailable(db, { siteId: input.siteId, locale, path: input.data.path, allowSystemPath: input.trustedSystemPage === true })
+  const existingSystemPage = existingPage?.page_type === 'system'
+  if (effectiveData.pageType === 'system' && !input.trustedSystemPage && !existingSystemPage) badRequest('System pages are managed by the site template')
+  const requestedPath = existingPage ? sourceVariant!.path : input.data.path
+  const path = await assertTenantPagePathAvailable(db, {
+    siteId: input.siteId,
+    locale,
+    path: requestedPath,
+    allowSystemPath: input.trustedSystemPage === true || existingSystemPage,
+  })
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
   await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)

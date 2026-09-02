@@ -48,26 +48,27 @@ const route = useRoute()
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
-const isHome = computed(() => route.path === '/' || getPreviewSubpath(route.path) === '/')
+const isHome = computed(() => route.path === '/'
+  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`)
+  || getPreviewSubpath(route.path) === '/')
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
 const sayaStylesheetForRoute = computed(() => {
   return sayaStylesheetHref
 })
 
 useHead(() => {
-  const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
   return {
     htmlAttrs: { lang: activeLocale.value },
     link: [
       { rel: 'preconnect', href: 'https://imagedelivery.net' },
       { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
       {
-        key: isHome ? 'saya-home-stylesheet' : 'saya-surface-stylesheet',
+        key: isHome.value ? 'saya-home-stylesheet' : 'saya-surface-stylesheet',
         rel: 'stylesheet',
         href: sayaStylesheetForRoute.value,
       },
     ],
-    style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
+    style: isHome.value ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }
 })
 

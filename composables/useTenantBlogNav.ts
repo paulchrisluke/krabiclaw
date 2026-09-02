@@ -11,6 +11,7 @@ export interface TenantBlogNavPost {
   id: string
   slug: string
   title: string
+  nav_title?: string | null
   category?: string | null
   excerpt?: string | null
   published_at?: string | null

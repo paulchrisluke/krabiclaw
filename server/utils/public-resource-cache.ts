@@ -105,14 +105,16 @@ export function buildPublicBlawbyDocumentCacheKey(
   siteId: string,
   recipe: string,
   slug?: string | null,
+  locale = 'en',
 ): string {
   return [
     'public',
     encodeKeyField(siteId),
-    'v2',
+    'v3',
     'blawby-document',
     encodeKeyField(recipe),
     encodeKeyField(slug),
+    encodeKeyField(locale),
   ].join('~')
 }
 

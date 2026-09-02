@@ -266,8 +266,13 @@ export const usePublicPageRequest = () => {
     const token = previewSubpath !== null && typeof route.query.token === 'string'
       ? route.query.token
       : null
+    const request = getPublicPageRequest(localePath.sourcePath)
+    const translatedSystemPage = request.page === 'home' || request.page === 'about' || request.page === 'contact'
     return {
-      ...getPublicPageRequest(localePath.sourcePath),
+      ...request,
+      datasets: localePath.localeSegment && !translatedSystemPage
+        ? request.datasets.filter(dataset => dataset !== 'content')
+        : request.datasets,
       locale: localePath.localeSegment ?? locale.value,
       token,
     }

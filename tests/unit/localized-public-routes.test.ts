@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-
 import { validateLocaleCatalog } from '../../shared/platform-locale-catalog.ts'
 import { projectExactLocalizedResource } from '../../server/utils/public-localization.ts'
 import { resolveTenantLocalePath } from '../../utils/tenant-locale-path.ts'

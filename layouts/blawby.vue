@@ -27,7 +27,10 @@ import blawbyCriticalCss from '~/assets/css/blawby-critical.css?raw'
 import '~/assets/css/blawby-entry.css'
 
 const route = useRoute()
-const isHome = computed(() => route.path === '/' || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
+const { locale: activeLocale } = useI18n()
+const isHome = computed(() => route.path === '/'
+  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`)
+  || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
 const blawbyStylesheetHref = '/_nuxt/surfaces/blawby.css'
 const blawbyStylesheetForRoute = computed(() => {
   return blawbyStylesheetHref
@@ -47,7 +50,11 @@ useHead(() => ({
     : [],
 }))
 
-const target = resolveBlawbyRouteTarget(route.path, route.params)
+const blawbyRoutePath = computed(() => resolveTenantLocalePath(
+  route.path,
+  activeLocale.value === 'en' ? [] : [activeLocale.value],
+).sourcePath)
+const target = resolveBlawbyRouteTarget(blawbyRoutePath.value, route.params)
 const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
 provide('blawby-document', document)
 const identity = computed(() => document.value.shell.identity)

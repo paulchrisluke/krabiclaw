@@ -8,7 +8,7 @@
       :storage-key="`blawby-banner:${site.brand_name}:${site.banner_content}`"
     />
     <div class="blawby-container">
-      <nav class="relative z-50 flex justify-between py-2" aria-label="Main navigation">
+      <nav class="relative z-50 flex justify-between py-2" :aria-label="t('blawby.navigation.main')">
         <div class="flex items-center md:gap-x-12">
           <NuxtLink :to="localePath('/')" class="no-underline" :aria-label="`${brandName} home`">
             <img
@@ -33,11 +33,12 @@
               :to="localePath(item.path)"
               class="inline-block rounded-lg px-2 py-1 text-sm no-underline transition hover:text-[var(--blawby-accent-strong)]"
             >
-              {{ item.label }}
+              {{ item.title }}
             </NuxtLink>
           </div>
 
           <BlawbyButton
+            v-if="headerCtaLabel"
             :to="localePath(consultation.schedule_path)"
             @click="trackConsultation"
           >
@@ -50,7 +51,7 @@
           <details ref="mobileNavDetails" class="relative -mr-1 md:hidden" @toggle="syncMobileNavState">
             <summary
               class="relative z-10 flex size-8 list-none items-center justify-center text-[var(--blawby-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] [&::-webkit-details-marker]:hidden"
-              aria-label="Toggle navigation"
+              :aria-label="t('blawby.navigation.toggle')"
             >
               <svg class="size-4 overflow-visible stroke-current" viewBox="0 0 14 14" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <path :class="mobileOpen ? 'scale-90 opacity-0' : ''" class="origin-center transition" d="M0 1H14M0 7H14M0 13H14" />
@@ -65,7 +66,7 @@
                 class="block w-full p-2 no-underline"
                 @click="closeMobileNav"
               >
-                {{ item.label }}
+                {{ item.title }}
               </NuxtLink>
             </div>
           </details>
@@ -86,25 +87,19 @@ const props = defineProps<{
   pageLinks: PublicBlawbyPageLink[]
 }>()
 
-const { localePath } = useI18n()
+const { localePath, t } = useI18n()
 
 const { trackConsultationClick } = useSiteConversionTracking(() => props.consultation)
 const route = useRoute()
 const brandName = computed(() => props.site.brand_name || '')
 const logoUrl = computed(() => props.site.media.find(item => item.slot === 'logo')?.public_url || null)
-const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
-  ? props.consultation.metadata.header_cta_label
-  : 'Get Started')
-const navLabels: Record<string, string> = {
-  '/services': 'Services', '/pricing': 'Pricing', '/about': 'About',
-  '/contact': 'Contact', '/blog': 'Blog', '/donate': 'Donate',
-}
-const headerOrder = Object.keys(navLabels)
+const headerCtaLabel = computed(() => props.consultation.cta_label)
+const headerOrder = ['/services', '/pricing', '/about', '/contact', '/blog', '/donate']
 const headerItems = computed(() => {
   const byPath = new Map(props.pageLinks.map(item => [item.path, item]))
   return headerOrder.flatMap(path => {
     const item = byPath.get(path)
-    return item ? [{ ...item, label: navLabels[path]! }] : []
+    return item ? [item] : []
   })
 })
 const mobileOpen = ref(false)

@@ -135,7 +135,7 @@
           <button
             type="button"
             class="flex items-center justify-center text-inverted/70 transition hover:text-inverted"
-            :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+            :aria-label="isDark ? t('saya.footer.switch_to_light_mode') : t('saya.footer.switch_to_dark_mode')"
             @click="toggleColorMode"
           >
             <svg v-if="isDark" viewBox="0 0 20 20" fill="currentColor" class="size-4"><path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2ZM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15ZM10 7a3 3 0 100 6 3 3 0 000-6ZM15.657 5.404a.75.75 0 10-1.06-1.06l-1.061 1.06a.75.75 0 001.06 1.06l1.06-1.06ZM6.464 14.596a.75.75 0 10-1.06-1.06l-1.06 1.06a.75.75 0 001.06 1.06l1.06-1.06ZM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5a.75.75 0 01.75.75ZM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10ZM14.596 15.657a.75.75 0 001.06-1.06l-1.06-1.061a.75.75 0 10-1.06 1.06l1.06 1.06ZM5.404 6.464a.75.75 0 001.06-1.06l-1.06-1.06a.75.75 0 10-1.061 1.06l1.06 1.06Z"/></svg>
@@ -306,7 +306,7 @@ const locations = computed(() =>
     const closure = getActiveSpecialClosure(loc.special_hours, loc.timezone)
     return {
       ...loc,
-      hoursToday: closure ? 'Temporarily closed' : (loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null)
+      hoursToday: closure ? t('saya.footer.temporarily_closed') : (loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null)
     }
   })
 )

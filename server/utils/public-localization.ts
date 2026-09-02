@@ -15,6 +15,7 @@ export interface StoredPublicLocalizationRow {
   locale: string
   values_json: string
   route_path: string | null
+  document_id: string | null
 }
 
 export interface ExactPublicLocalization {
@@ -23,6 +24,7 @@ export interface ExactPublicLocalization {
   locale: string
   values: LocalizedValues
   routePath: string | null
+  documentId: string | null
 }
 
 export async function loadExactPublicLocalizations(
@@ -34,7 +36,7 @@ export async function loadExactPublicLocalizations(
   const entitlement = await assertSiteLanguageEntitlement(db, organizationId, siteId, locale)
   if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
-    SELECT resource_type, resource_id, locale, values_json, route_path
+    SELECT resource_type, resource_id, locale, values_json, route_path, document_id
       FROM resource_localizations
      WHERE organization_id = ? AND site_id = ? AND locale = ?
      ORDER BY resource_type, resource_id
@@ -85,6 +87,7 @@ export function indexStoredPublicLocalizations(rows: readonly StoredPublicLocali
       locale: row.locale,
       values: validateLocalizedValues(resourceType, parsedValues),
       routePath: row.route_path,
+      documentId: row.document_id,
     }
   })
 }

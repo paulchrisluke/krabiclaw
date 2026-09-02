@@ -605,7 +605,7 @@ async function loadPublicPageSource(
 
   if (requestedDatasets.has("blog"))
     idxBlogList = push(
-      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.nav_title, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.updated_at, p.featured_order,
               mp.asset_id AS asset_id,
               ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height,
@@ -626,7 +626,7 @@ async function loadPublicPageSource(
 
   if (requestedDatasets.has("blogPost") && blogSlug)
     idxBlogPost = push(
-      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.nav_title, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.created_at, p.updated_at,
               mp.asset_id AS asset_id,
               ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height

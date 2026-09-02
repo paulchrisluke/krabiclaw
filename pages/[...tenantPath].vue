@@ -1,7 +1,11 @@
 <template>
   <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
+    <template v-if="localizedRoute && tenantPagePath === '/'">
+      <LazyBlawbyHome v-if="isBlawby" />
+      <LazySayaHomePage v-else />
+    </template>
     <LocalizedResourcePage
-      v-if="localizedRoute?.representation.kind === 'resource'"
+      v-else-if="localizedRoute?.representation.kind === 'resource'"
       :route="localizedRoute"
     />
     <TenantPublicPage

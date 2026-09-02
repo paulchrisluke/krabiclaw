@@ -115,11 +115,13 @@ export const usePublicPageData = async (options: {
   }
   const { data, error, pending, refresh } = asyncData
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
-  watch(
-    () => data.value?.localeRepresentations,
-    representations => { localeRepresentations.value = representations ?? [] },
-    { immediate: true },
-  )
+  if (options.routeOwned !== false) {
+    watch(
+      () => data.value?.localeRepresentations,
+      representations => { localeRepresentations.value = representations ?? [] },
+      { immediate: true },
+    )
+  }
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.

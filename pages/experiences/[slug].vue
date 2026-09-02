@@ -16,8 +16,8 @@
 
     <!-- Not found -->
     <div v-else-if="!experience" class="mx-auto max-w-7xl px-4 py-32 text-center">
-      <h1 class="text-2xl font-semibold text-default">Experience not found</h1>
-      <p class="mt-3 text-muted">This experience may no longer be available.</p>
+      <h1 class="text-2xl font-semibold text-default">{{ t('saya.experience_detail.not_found') }}</h1>
+      <p class="mt-3 text-muted">{{ t('saya.experience_detail.not_found_description') }}</p>
       <NuxtLink :to="localePath('/experiences')" class="mt-6 inline-flex items-center rounded-full bg-muted px-5 py-2.5 text-sm font-medium text-default no-underline transition hover:bg-elevated">{{ experienceCopy.viewExperienceCta }}</NuxtLink>
     </div>
 
@@ -33,7 +33,7 @@
         <div v-if="experienceCta.action === 'book' && experiencePrice" class="min-w-0">
           <p v-if="experienceIsOnSale" class="text-xs text-muted line-through">{{ experienceCompareAtPrice }}</p>
           <p class="font-semibold text-default leading-tight">{{ experiencePrice }}</p>
-          <p class="text-xs text-muted">per person</p>
+          <p class="text-xs text-muted">{{ t('saya.experience_detail.per_person') }}</p>
         </div>
         <SayaButton
           class="shrink-0"
@@ -50,7 +50,7 @@
 
         <!-- Breadcrumb -->
         <nav class="mb-8 flex items-center gap-2 text-xs text-muted">
-          <NuxtLink :to="localePath('/')" class="hover:text-default transition-colors">Home</NuxtLink>
+          <NuxtLink :to="localePath('/')" class="hover:text-default transition-colors">{{ t('saya.experience_detail.home') }}</NuxtLink>
           <SayaIcon name="chevron-right" class="size-3.5" />
           <NuxtLink :to="localePath('/experiences')" class="hover:text-default transition-colors">{{ experienceCopy.experiencesPageTitle }}</NuxtLink>
           <SayaIcon name="chevron-right" class="size-3.5" />
@@ -71,7 +71,7 @@
             <!-- Mobile: title + key facts (hidden on desktop) -->
             <div class="mt-7 lg:hidden space-y-4">
               <div>
-                <p class="saya-kicker mb-2">Experience</p>
+                <p class="saya-kicker mb-2">{{ t('saya.experience_detail.experience') }}</p>
                 <h1 class="text-2xl font-bold leading-tight text-default">{{ experience.title }}</h1>
                 <p v-if="experience.tagline" class="mt-2 text-muted">{{ experience.tagline }}</p>
               </div>
@@ -88,7 +88,7 @@
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
                 >
                   <SayaIcon name="user-group" class="size-3.5" />
-                  Up to {{ experience.max_capacity }} guests
+                  {{ t('saya.experience_detail.capacity', { count: experience.max_capacity }) }}
                 </span>
                 <span
                   v-if="experience.available_note"
@@ -102,14 +102,14 @@
 
             <!-- What you'll do (body) -->
             <div v-if="experience.body" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-6">What you'll do</h2>
+              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.what_youll_do') }}</h2>
               <!-- eslint-disable vue/no-v-html -->
               <div class="prose prose-lg max-w-none text-default" v-html="sanitizedBody" />
               <!-- eslint-enable vue/no-v-html -->
             </div>
 
             <div v-if="experience.highlights?.length" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-6">Highlights</h2>
+              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.highlights') }}</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.highlights" :key="item" class="flex items-start gap-3">
                   <SayaIcon name="sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
@@ -119,7 +119,7 @@
             </div>
 
             <div v-if="experience.included_items?.length" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-6">What's included</h2>
+              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.included') }}</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.included_items" :key="item" class="flex items-start gap-3">
                   <SayaIcon name="check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
@@ -129,7 +129,7 @@
             </div>
 
             <div v-if="experience.what_to_bring?.length" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-6">What to bring</h2>
+              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.what_to_bring') }}</h2>
               <ul class="space-y-3 text-default">
                 <li v-for="item in experience.what_to_bring" :key="item" class="flex items-start gap-3">
                   <SayaIcon name="briefcase" class="mt-0.5 size-4 shrink-0 text-primary" />
@@ -139,7 +139,7 @@
             </div>
 
             <div v-if="experience.meeting_point" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-5">Meeting point</h2>
+              <h2 class="text-xl font-semibold text-default mb-5">{{ t('saya.experience_detail.meeting_point') }}</h2>
               <p class="whitespace-pre-line text-default leading-7">{{ experience.meeting_point }}</p>
             </div>
 
@@ -159,7 +159,7 @@
 
             <!-- Where you'll meet -->
             <div v-if="experienceLocation" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-5">Where you'll meet</h2>
+              <h2 class="text-xl font-semibold text-default mb-5">{{ t('saya.experience_detail.where_youll_meet') }}</h2>
               <div class="rounded-xl border border-default bg-elevated overflow-hidden">
                 <div class="p-6 flex items-start gap-4">
                   <SayaIcon name="map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
@@ -179,7 +179,7 @@
                       rel="noopener noreferrer"
                       class="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
-                      Open in Maps
+                      {{ t('saya.experience_detail.open_in_maps') }}
                       <SayaIcon name="arrow-top-right-on-square" class="size-3" />
                     </a>
                   </div>
@@ -208,7 +208,7 @@
 
               <!-- Title + tagline (desktop only) -->
               <div class="hidden lg:block">
-                <p class="saya-kicker mb-2">Experience</p>
+                <p class="saya-kicker mb-2">{{ t('saya.experience_detail.experience') }}</p>
                 <h1 class="text-2xl font-bold leading-tight text-default">{{ experience.title }}</h1>
                 <p v-if="experience.tagline" class="mt-1.5 text-sm text-muted">{{ experience.tagline }}</p>
               </div>
@@ -217,7 +217,7 @@
               <div v-if="experiencePrice" class="hidden lg:flex items-baseline gap-1.5">
                 <span v-if="experienceIsOnSale" class="text-lg text-muted line-through">{{ experienceCompareAtPrice }}</span>
                 <span class="text-2xl font-bold text-default">{{ experiencePrice }}</span>
-                <span class="text-sm text-muted">per person</span>
+                <span class="text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</span>
               </div>
 
               <!-- Key facts (desktop only) -->
@@ -234,7 +234,7 @@
                   class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
                 >
                   <SayaIcon name="user-group" class="size-3.5" />
-                  Up to {{ experience.max_capacity }} guests
+                  {{ t('saya.experience_detail.capacity', { count: experience.max_capacity }) }}
                 </span>
                 <span
                   v-if="experience.available_note"
@@ -300,7 +300,11 @@
               :loading="availabilityLoading || !isHydrated"
               :guests="form.party_size_num"
               :guests-max="experience.max_capacity ?? 8"
-              guests-label="Guests"
+              :guests-label="t('saya.experience_detail.guests')"
+              :guest-singular="t('saya.experience_detail.guest')"
+              :guest-plural="t('saya.experience_detail.guests')"
+              :continue-label="t('saya.experience_detail.continue')"
+              :choose-seating-label="t('saya.experience_detail.choose_time')"
               @update:guests="form.party_size_num = $event"
               @next="nextStep"
             />
@@ -314,7 +318,8 @@
             <BookingRecap
               v-if="timeSelection"
               :main-line="`${timeSelection.label.split(',')[0]} · ${fmt12Hour(timeSelection.time)}`"
-              :meta-line="`${form.party_size_num} ${form.party_size_num === 1 ? 'guest' : 'guests'}`"
+              :meta-line="t('saya.experience_detail.guest_count', { count: form.party_size_num })"
+              :edit-label="t('saya.experience_detail.change')"
               @edit="bookingStep = 1"
             />
             <div v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
@@ -323,7 +328,7 @@
             <BookingContactForm
               :initial-state="{ name: form.guest_name, email: form.guest_email, phone: form.guest_phone, notes: form.notes }"
               :loading="submitting"
-              submit-text="Confirm booking"
+              :submit-text="t('saya.experience_detail.confirm_booking')"
               @submit="handleContactSubmit"
             />
           </div>
@@ -448,10 +453,12 @@ const mediaItems = computed(() => {
 })
 
 function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`
+  if (minutes < 60) return t('saya.experience_detail.minutes', { count: minutes })
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m ? `${h} hr ${m} min` : `${h} hr`
+  return m
+    ? t('saya.experience_detail.hours_minutes', { hours: h, minutes: m })
+    : t('saya.experience_detail.hours', { count: h })
 }
 
 import BookingModal from '@/components/booking/BookingModal.vue'
@@ -483,7 +490,7 @@ function prevStep() {
   if (bookingStep.value > 1) bookingStep.value--
 }
 
-const modalTitle = computed(() => bookingStep.value === 1 ? 'Select a time' : 'Your details')
+const modalTitle = computed(() => bookingStep.value === 1 ? t('saya.experience_detail.select_time') : t('saya.experience_detail.your_details'))
 
 function handleContactSubmit(contactData: ContactFormState) {
   form.guest_name = contactData.name
@@ -588,7 +595,7 @@ async function submitBooking() {
     await navigateTo(localePath('/experiences/confirmed'))
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    bookingError.value = typeof errorData?.error === 'string' ? errorData.error : 'Something went wrong. Please try again.'
+    bookingError.value = typeof errorData?.error === 'string' ? errorData.error : t('saya.experience_detail.booking_failed')
     // Availability can go stale between load and submit (another guest books the
     // last spot) — send the guest back to the time step rather than leaving them
     // stuck on the contact form with no way to see the now-invalid slot.
@@ -603,9 +610,9 @@ async function submitBooking() {
 }
 
 // SEO + structured data
-const seoTitle = computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | Experiences` : 'Experience'))
+const seoTitle = computed(() => experience.value?.seo_title ?? (experience.value ? `${experience.value.title} | ${experienceCopy.value.experiencesPageTitle}` : t('saya.experience_detail.experience')))
 const seoDescription = computed(() =>
-  truncateForSeo(experience.value?.seo_description ?? experience.value?.tagline ?? `Book the ${experience.value?.title} experience.`, 160)
+  truncateForSeo(experience.value?.seo_description ?? experience.value?.tagline ?? t('saya.experience_detail.meta_description', { title: experience.value?.title ?? '' }), 160)
 )
 
 const { canonicalUrl } = useSocialMetadata(() => {
@@ -615,7 +622,7 @@ const { canonicalUrl } = useSocialMetadata(() => {
     path: experience.value?.canonical_url || `/experiences/${slug}`,
     title: seoTitle.value,
     description: seoDescription.value,
-    label: 'Experience',
+    label: t('saya.experience_detail.experience'),
     robots: experience.value?.robots || null,
     brand: {
       siteName: siteName.value,
@@ -629,8 +636,8 @@ const { canonicalUrl } = useSocialMetadata(() => {
 const resolvedCanonicalUrl = computed(() => canonicalUrl.value || `${siteUrl}/experiences/${slug}`)
 
 useBreadcrumbSchema([
-  { name: 'Home', url: `${siteUrl}/` },
-  { name: 'Experiences', url: `${siteUrl}/experiences` },
+  { name: t('saya.experience_detail.home'), url: `${siteUrl}/` },
+  { name: experienceCopy.value.experiencesPageTitle, url: `${siteUrl}/experiences` },
   { name: experience.value?.title ?? slug, url: resolvedCanonicalUrl.value },
 ])
 
@@ -667,8 +674,8 @@ useHead({
           : undefined
 
         const additionalProperty = [
-          ...(duration ? [{ '@type': 'PropertyValue', name: 'Duration', value: duration }] : []),
-          ...(val.max_capacity ? [{ '@type': 'PropertyValue', name: 'Capacity', value: `${val.max_capacity} guests max` }] : []),
+          ...(duration ? [{ '@type': 'PropertyValue', name: t('saya.experience_detail.duration'), value: duration }] : []),
+          ...(val.max_capacity ? [{ '@type': 'PropertyValue', name: t('saya.experience_detail.capacity_label'), value: t('saya.experience_detail.capacity_max', { count: val.max_capacity }) }] : []),
         ]
 
         const offerNode = priceNum !== null
@@ -695,7 +702,7 @@ useHead({
                 eligibleQuantity: {
                   '@type': 'QuantitativeValue',
                   maxValue: val.max_capacity,
-                  unitText: 'guests',
+                  unitText: t('saya.experience_detail.guests'),
                 },
               } : {}),
             }
@@ -710,7 +717,7 @@ useHead({
               url: experienceUrl,
               name: val.seo_title ?? `${val.title} | ${siteName.value}`,
               description: val.seo_description ?? val.tagline ?? undefined,
-              inLanguage: 'en',
+              inLanguage: locale.value,
               mainEntity: { '@id': experienceId },
             },
             {

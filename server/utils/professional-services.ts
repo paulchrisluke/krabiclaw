@@ -4,7 +4,15 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getMediaPlacements } from '~/server/utils/media-placement'
-import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
+import { getPublishedLocalizedSiteBlogPost, getPublishedSiteBlogPost } from '~/server/utils/platform-content'
+import {
+  loadExactPublicLocalizations,
+  projectExactLocalizedCollection,
+  projectExactLocalizedResource,
+  projectLocalizedMediaAlt,
+  resolveLocalizedRouteResourceId,
+  type ExactPublicLocalization,
+} from '~/server/utils/public-localization'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import {
   getPublicTenantPageForPath,
@@ -55,9 +63,9 @@ type OfferingRow = ApiRecord & {
   location_city: string | null
 }
 
-export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise<{ vertical: string; theme_id: string } | null> {
-  const site = await queryFirst<{ vertical: string; theme_id: string }>(db, `
-    SELECT vertical, theme_id
+export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {
+  const site = await queryFirst<{ organization_id: string; vertical: string; theme_id: string }>(db, `
+    SELECT organization_id, vertical, theme_id
       FROM sites
      WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
      LIMIT 1
@@ -256,9 +264,12 @@ export async function getPublicTenantPageByPath(
   db: DbClient,
   siteId: string,
   path: string,
-  hydrationResources?: PublicTenantPageHydrationResources,
+  options: {
+    locale?: string | null
+    hydrationResources?: PublicTenantPageHydrationResources
+  } = {},
 ): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(db, siteId, path, { hydrationResources })
+  const page = await getPublicTenantPageForPath(db, siteId, path, options)
   if (!page) return null
   return {
     id: page.id,
@@ -408,15 +419,68 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
   }
 }
 
-export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Promise<PublicBlawbyShellData> {
-  const [identity, consultation, compliance, themeTokens, offeringLinks, pageLinks] = await Promise.all([
+export async function getPublicBlawbyShellData(
+  db: DbClient,
+  siteId: string,
+  options: { locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
+): Promise<PublicBlawbyShellData> {
+  const locale = options.locale?.trim() || 'en'
+  const localizations = options.localizations ?? []
+  const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId) ?? null
+  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, sourceOfferingLinks, pageLinks, primaryLocation] = await Promise.all([
     getPublicBlawbyIdentity(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicThemeTokens(db, siteId),
     listPublicOfferingLinks(db, siteId),
-    listPublishedTenantPagePaths(db, siteId),
+    listPublishedTenantPagePaths(db, siteId, locale),
+    locale === 'en'
+      ? Promise.resolve(null)
+      : queryFirst<{ primary_location_id: string | null }>(db, 'SELECT primary_location_id FROM sites WHERE id = ? LIMIT 1', [siteId]),
   ])
+  const primaryLocationLocalization = primaryLocation?.primary_location_id
+    ? localizations.find(item => item.resourceType === 'business_location' && item.resourceId === primaryLocation.primary_location_id)
+    : null
+  const identity = siteLocalization
+    ? {
+        ...sourceIdentity,
+        brand_name: typeof siteLocalization.values.brand_name === 'string' ? siteLocalization.values.brand_name : '',
+        brand_description: typeof siteLocalization.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
+        primary_location_address_street: typeof primaryLocationLocalization?.values.address === 'string' ? primaryLocationLocalization.values.address : null,
+        primary_location_address_locality: typeof primaryLocationLocalization?.values.city === 'string' ? primaryLocationLocalization.values.city : null,
+      }
+    : sourceIdentity
+  let consultation = sourceConsultation
+  let compliance = sourceCompliance
+  let offeringLinks = sourceOfferingLinks
+  if (siteLocalization) {
+    const consultationValues = localizations.find(row => row.resourceType === 'site_consultation_settings')?.values
+    consultation = {
+      ...sourceConsultation,
+      cta_label: typeof consultationValues?.cta_label === 'string' ? consultationValues.cta_label : '',
+      metadata: { ...sourceConsultation.metadata, header_cta_label: null },
+    }
+    const complianceValues = localizations.find(row => row.resourceType === 'tenant_compliance')?.values
+    compliance = sourceCompliance
+      ? {
+          ...sourceCompliance,
+          service_area: typeof complianceValues?.service_area === 'string' ? complianceValues.service_area : null,
+          disclaimer: typeof complianceValues?.disclaimer === 'string' ? complianceValues.disclaimer : null,
+          footer_disclaimer: typeof complianceValues?.footer_disclaimer === 'string' ? complianceValues.footer_disclaimer : null,
+          metadata: { ...sourceCompliance.metadata, header: null },
+          media: sourceCompliance.media.map(item => ({ ...item, alt_text: null, file_name: null })),
+        }
+      : null
+    const offeringById = new Map(sourceOfferingLinks.map(offering => [offering.id, offering]))
+    offeringLinks = localizations
+      .filter(row => row.resourceType === 'offering')
+      .flatMap(row => {
+        const source = offeringById.get(row.resourceId)
+        const name = row.values.name
+        if (!source || typeof name !== 'string' || !name.trim() || !row.routePath) return []
+        return [{ ...source, name, canonical_path: row.routePath }]
+      })
+  }
   const header = compliance?.metadata?.header
   if (header && typeof header === 'object') {
     identity.banner_content = typeof (header as ApiRecord).banner_content === 'string' ? String((header as ApiRecord).banner_content) : null
@@ -436,15 +500,19 @@ export async function getPublicBlawbyDocumentData(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { slug?: string | null } = {},
+  options: { slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
   const site = await getActiveBlawbySite(db, siteId)
   if (!site) return null
+  const locale = options.locale?.trim() || 'en'
+  const localizations = locale === 'en'
+    ? []
+    : await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
 
   const [shell, route] = await Promise.all([
-    getPublicBlawbyShellData(db, siteId),
-    getPublicBlawbyRouteData(db, siteId, recipe, options, env),
+    getPublicBlawbyShellData(db, siteId, { locale, localizations }),
+    getPublicBlawbyRouteData(db, siteId, recipe, { ...options, locale, localizations }, env),
   ])
   return { shell, route }
 }
@@ -453,7 +521,7 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { slug?: string | null } = {},
+  options: { slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
   const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options, env)
@@ -563,7 +631,7 @@ export async function getPublicBlawbyRouteData(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { slug?: string | null } = {},
+  options: { slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
   env: CloudflareEnv,
 ): Promise<PublicBlawbyRouteData> {
   const needsOfferings = ['home', 'services', 'offering', 'about', 'pricing'].includes(recipe)
@@ -577,44 +645,99 @@ export async function getPublicBlawbyRouteData(
   const qaRowsPromise = needsQa && pagePath
     ? listPageQa(db, siteId, pagePath, true)
     : Promise.resolve([])
+  const localized = options.locale !== undefined && options.locale !== 'en'
+  const localizedOfferingId = localized && recipe === 'offering' && options.slug
+    ? resolveLocalizedRouteResourceId(options.localizations ?? [], 'offering', `/${options.locale}/services/${options.slug}`)
+    : null
+  const localizedOfferingSource = localizedOfferingId
+    ? await queryFirst<{ slug: string; location_id: string | null }>(db, 'SELECT slug, location_id FROM offerings WHERE id = ? AND site_id = ? LIMIT 1', [localizedOfferingId, siteId])
+    : null
+  const offeringSlug = localized ? localizedOfferingSource?.slug ?? null : options.slug
 
   const [page, offeringRows, offering, qaRows, reviewRows, initialPosts, postRow] = await Promise.all([
     pagePath
       ? getPublicTenantPageByPath(db, siteId, pagePath, {
-          offerings: needsOfferings ? offeringRowsPromise : undefined,
-          qaRows: needsQa ? qaRowsPromise : undefined,
+          locale: options.locale,
+          hydrationResources: {
+            offerings: needsOfferings ? offeringRowsPromise : undefined,
+            qaRows: needsQa ? qaRowsPromise : undefined,
+          },
         })
       : Promise.resolve(null),
     offeringRowsPromise,
-    recipe === 'offering' && options.slug
-      ? getPublicOfferingBySlug(db, siteId, options.slug)
+    recipe === 'offering' && offeringSlug
+      ? getPublicOfferingBySlug(db, siteId, offeringSlug)
       : Promise.resolve(null),
     qaRowsPromise,
     needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, siteId, postLimit) : Promise.resolve([]),
     recipe === 'article' && options.slug
-      ? getPublishedSiteBlogPost(db, siteId, options.slug, env)
+      ? options.locale && options.locale !== 'en'
+        ? getPublishedLocalizedSiteBlogPost(db, siteId, options.slug, options.locale, env)
+        : getPublishedSiteBlogPost(db, siteId, options.slug, env)
       : Promise.resolve(null),
   ])
-  const offerings = mapPublicOfferingSummaries(offeringRows)
+  const localizations = options.localizations ?? []
+  const sourceOfferings = mapPublicOfferingSummaries(offeringRows)
+  const offerings = localized
+    ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).flatMap(item => {
+        const representation = localizations.find(value => value.resourceType === 'offering' && value.resourceId === item.id)
+        return representation?.routePath ? [{
+          ...item,
+          canonical_path: representation.routePath,
+          media: projectLocalizedMediaAlt(item.media, localizations),
+        }] : []
+      })
+    : sourceOfferings
+  const sourceOffering = offering
+  const offeringLocalization = sourceOffering
+    ? localizations.find(item => item.resourceType === 'offering' && item.resourceId === sourceOffering.id)
+    : null
+  const offeringLocationLocalization = localizedOfferingSource?.location_id
+    ? localizations.find(item => item.resourceType === 'business_location' && item.resourceId === localizedOfferingSource.location_id)
+    : null
+  const resolvedOffering = localized
+    ? sourceOffering && offeringLocalization?.routePath
+      ? {
+          ...projectExactLocalizedResource('offering', sourceOffering, offeringLocalization),
+          canonical_path: offeringLocalization.routePath,
+          media: projectLocalizedMediaAlt(sourceOffering.media, localizations),
+          location_address_street: typeof offeringLocationLocalization?.values.address === 'string' ? offeringLocationLocalization.values.address : null,
+          location_address_locality: typeof offeringLocationLocalization?.values.city === 'string' ? offeringLocationLocalization.values.city : null,
+        }
+      : null
+    : sourceOffering
   let posts = initialPosts
   if (recipe === 'article' && postRow) {
+    if (localized) posts = []
+    else {
     const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
     const summaries = await listPublicBlogSummaries(db, siteId, 50)
     posts = summaries
-      .filter(summary => summary.slug !== options.slug && summary.tags.some(tag => postTags.includes(tag)))
+      .filter(summary => summary.id !== postRow.id && summary.tags.some(tag => postTags.includes(tag)))
       .slice(0, 3)
+    }
   }
 
+  const sourceQa = mapPublicQa(qaRows)
+  const qa = localized ? projectExactLocalizedCollection('location_qa', sourceQa, localizations) : sourceQa
+  const sourcePosts = posts
+  const resolvedPosts = localized
+    ? projectExactLocalizedCollection('tenant_blog_post', sourcePosts, localizations).flatMap(item => {
+        const representation = localizations.find(value => value.resourceType === 'tenant_blog_post' && value.resourceId === item.id)
+        return representation?.routePath ? [{ ...item, canonical_url: representation.routePath }] : []
+      })
+    : sourcePosts
+  const resolvedPost = mapPublicBlogPost(postRow)
   return {
     recipe,
     page,
     offerings,
-    offering,
-    qa: mapPublicQa(qaRows),
-    reviews: mapPublicReviews(reviewRows),
-    posts,
-    post: mapPublicBlogPost(postRow),
+    offering: resolvedOffering,
+    qa,
+    reviews: localized ? [] : mapPublicReviews(reviewRows),
+    posts: resolvedPosts,
+    post: resolvedPost,
   }
 }
 
