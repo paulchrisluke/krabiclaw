@@ -49,8 +49,9 @@
         resizable
         collapsible
         class="hidden lg:flex"
+        :class="showCmsVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : 'bg-elevated'"
         :menu="{ close: false }"
-        :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
+        :ui="{ root: showCmsVisualPrototype ? 'h-dvh min-h-0 max-h-dvh bg-[#fbfbfa] dark:bg-[#090b12]' : 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: showCmsVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : 'bg-elevated' }"
       >
         <template #header="{ collapsed }">
           <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
@@ -92,7 +93,10 @@
       class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden"
       data-testid="dashboard-mobile-nav"
     >
-      <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
+      <nav
+        class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]"
+        :class="showCmsVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : 'bg-elevated'"
+      >
         <UButton
           v-for="item in mobileNavItems"
           :key="item.key"

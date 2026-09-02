@@ -29,8 +29,17 @@ export interface PrototypePageView {
   sections: PrototypeSection[]
 }
 
+export type PrototypeEditorKind = 'text' | 'textarea' | 'readonly'
+
+export interface PrototypeEditorField {
+  key: string
+  label: string
+  value: string
+  kind: PrototypeEditorKind
+}
+
 export const PROTOTYPE_VARIANTS: readonly PrototypeVariant[] = [
-  { key: 'A', name: 'Progressive detail' },
+  { key: 'A', name: 'Visual outline' },
   { key: 'B', name: 'Editorial canvas' },
   { key: 'C', name: 'Visual storyboard' },
 ]

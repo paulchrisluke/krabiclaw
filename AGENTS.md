@@ -54,3 +54,18 @@ Use the approved client onboarding and import pipeline. Never manually seed or p
 ## Agent documentation
 
 - Domain context and ADRs: root `CONTEXT.md` and `docs/adr/`
+
+## Tenant CMS interface
+
+Tenant CMS work must follow the selected visual language in
+[docs/design/cms-redesign-packet/prototype-decision.md](docs/design/cms-redesign-packet/prototype-decision.md).
+Desktop editors use content-specific visual outline cards at left and a flat
+selected-content editor at right. Mobile uses outline, read view, then a
+single-field editor sheet. Do not replace this model with generic icon rows,
+nested editor cards, decorative helper copy, gradients, or boxed inputs.
+
+## Agent skills
+
+### Issue tracker
+
+Issues, specs, and Wayfinder maps live in the canonical `paulchrisluke/krabiclaw` GitHub repository. See `docs/agents/issue-tracker.md`.

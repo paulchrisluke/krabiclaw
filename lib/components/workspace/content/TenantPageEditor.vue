@@ -1,7 +1,7 @@
 <template>
-  <UDashboardPanel id="tenant-page-editor">
+  <UDashboardPanel id="tenant-page-editor" :class="showVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : undefined">
     <template #header>
-      <UDashboardNavbar :title="showVisualPrototype ? 'Page' : editorTitle">
+      <UDashboardNavbar :title="showVisualPrototype ? 'Page' : editorTitle" :class="showVisualPrototype ? 'bg-[#fbfbfa] dark:bg-[#090b12]' : undefined">
         <template #leading><DashboardNavbarLeading :detail-to="pagesPath" detail-label="Pages" /></template>
         <template #right>
           <UBadge v-if="showVisualPrototype" color="warning" variant="soft" label="Read-only prototype" />
