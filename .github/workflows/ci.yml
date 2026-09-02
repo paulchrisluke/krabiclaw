@@ -32,6 +32,7 @@ jobs:
       - run: yarn install --frozen-lockfile
       - run: yarn quality
       - run: yarn test:unit
+      - run: yarn test:merchant-handoff
       - run: yarn mcp:catalog
       - run: yarn lint:seeds
       - run: yarn lint:migrations

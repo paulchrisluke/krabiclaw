@@ -17,7 +17,7 @@ function providerOptions(signingPolicy?: typeof OAUTH_SIGNING_POLICY) {
   return {
     loginPage: '/login',
     consentPage: '/consent',
-    scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'] as const,
+    scopes: ['openid', 'offline_access', 'tenant', 'platform_admin', 'merchant_handoff'] as const,
     ...(signingPolicy
       ? oauthSigningConfig(BASE_URL)
       : {
@@ -163,6 +163,10 @@ test('OAuth restart reconciles an existing EdDSA deployment to RS256', async () 
       'SELECT signingAlgorithm FROM oauthResource WHERE identifier = ?',
     ).get(RESOURCE) as { signingAlgorithm: string | null } | undefined
     assert.equal(reconciledResource?.signingAlgorithm, 'RS256')
+    const merchantResource = database.prepare(
+      'SELECT signingAlgorithm FROM oauthResource WHERE identifier = ?',
+    ).get(`${BASE_URL}/api/integrations/merchant-handoff`) as { signingAlgorithm: string | null } | undefined
+    assert.equal(merchantResource?.signingAlgorithm, 'RS256')
     const tokens = await issueOpenIdTokens(reconciled)
 
     assert.equal(decodeProtectedHeader(tokens.access_token).alg, 'RS256')

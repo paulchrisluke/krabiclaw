@@ -39,6 +39,12 @@ test.describe('OAuth discovery endpoints', () => {
     expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
     expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
     expect((body.bearer_methods_supported as string[])).toContain('header')
+
+    const merchantRes = await request.get(`${baseURL}/.well-known/oauth-protected-resource/merchant-handoff`)
+    expect(merchantRes.status()).toBe(200)
+    const merchant = await merchantRes.json() as Record<string, unknown>
+    expect(merchant.resource).toBe(`${oauthMetadataBaseURL(baseURL!)}/api/integrations/merchant-handoff`)
+    expect(merchant.scopes_supported).toEqual(expect.arrayContaining(['offline_access', 'merchant_handoff']))
   })
 
   test('/.well-known/openid-configuration returns valid document', async ({ request, baseURL }) => {

@@ -191,6 +191,12 @@ async function checkMcpResourceBoundary() {
     ['server/utils/auth.ts', "allowedScopes: ['openid', 'offline_access', 'tenant']", 'tenant OAuth resource scopes'],
     ['server/utils/auth.ts', "identifier: `${authBaseUrl}/api/mcp/platform`", 'platform OAuth resource registration'],
     ['server/utils/auth.ts', "allowedScopes: ['openid', 'offline_access', 'platform_admin']", 'platform OAuth resource scopes'],
+    ['server/routes/.well-known/oauth-protected-resource/merchant-handoff.get.ts', 'resource: `${baseUrl}/api/integrations/merchant-handoff`', 'merchant handoff protected resource metadata'],
+    ['server/routes/.well-known/oauth-protected-resource/merchant-handoff.get.ts', "scopes_supported: ['offline_access', 'merchant_handoff']", 'merchant handoff protected resource scopes'],
+    ['server/utils/auth.ts', 'identifier: `${authBaseUrl}/api/integrations/merchant-handoff`', 'merchant handoff OAuth resource registration'],
+    ['server/utils/auth.ts', "allowedScopes: ['openid', 'offline_access', 'merchant_handoff']", 'merchant handoff OAuth resource scopes'],
+    ['server/utils/merchant-handoff-auth.ts', "requiredScopes: ['merchant_handoff']", 'merchant handoff OAuth scope enforcement'],
+    ['server/utils/merchant-handoff-auth.ts', 'allowSession: false', 'merchant handoff bearer-only enforcement'],
   ]) {
     const failure = await assertContains(file, expected, label)
     if (failure) failures.push(failure)

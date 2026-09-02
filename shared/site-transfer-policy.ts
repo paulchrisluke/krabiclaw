@@ -68,6 +68,10 @@ export const SITE_TRANSFER_REVOKE_TABLES = [
   'google_analytics_connections',
   'mcp_workspace_preferences',
   'site_language_licenses',
+  'merchant_handoff_commands',
+  'merchant_handoff_deliveries',
+  'merchant_handoff_orders',
+  'merchant_handoff_destinations',
 ] as const
 
 // Epoch 3 inherits access directly from the destination organization. No billing,

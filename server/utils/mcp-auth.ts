@@ -55,6 +55,7 @@ export interface RequireMcpUserOptions {
   requiredScopes?: string[]
   requirePlatformAdmin?: boolean
   forbiddenScopes?: string[]
+  allowSession?: boolean
 }
 
 export async function requireMcpUser(
@@ -82,6 +83,10 @@ export async function requireMcpUser(
       throw new HTTPError({ statusCode: 403, statusMessage: 'Platform admin access required' })
     }
     return user
+  }
+
+  if (normalizedOptions.allowSession === false) {
+    throw new HTTPError({ statusCode: 401, statusMessage: 'Bearer authentication required' })
   }
 
   const session = await getAuthSession(event, env)
