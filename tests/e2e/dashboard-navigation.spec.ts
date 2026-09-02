@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openTenantPage } from './helpers'
 import { loginAs } from './helpers/auth'
 
 const organizationBase = '/dashboard/kikuzuki-krabi-thailand'
@@ -28,8 +29,8 @@ test.describe('authenticated dashboard navigation', () => {
     await loginAs(page.context().request, baseURL!, 'user-e2e-kikuzuki-owner')
   })
 
-  test('keeps contextual targets and active state exclusive on desktop', async ({ page }) => {
-    await page.goto(organizationBase)
+  test('keeps contextual targets and active state exclusive on desktop', async ({ page, baseURL }) => {
+    await openTenantPage(page, new URL(organizationBase, baseURL!).toString(), {})
     await expectPrimaryOrder(page)
     await expect(page.getByRole('link', { name: /Back to/ })).toHaveCount(0)
     await expect(visiblePrimaryNavigation(page).locator('[aria-current="page"]')).toHaveCount(1)
@@ -109,9 +110,9 @@ test.describe('authenticated dashboard navigation', () => {
     await expect(page).toHaveURL(/\/dashboard\/account\/profile(?:\?.*)?$/)
   })
 
-  test('renders the same primary order with a separate mobile Menu', async ({ page }) => {
+  test('renders the same primary order with a separate mobile Menu', async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.goto(locationBase)
+    await openTenantPage(page, new URL(locationBase, baseURL!).toString(), {})
 
     await expectPrimaryOrder(page)
     const navigation = visiblePrimaryNavigation(page)
@@ -194,8 +195,8 @@ test.describe('site manager previews', () => {
     await loginAs(page.context().request, baseURL!, 'user-e2e-ncls-owner')
   })
 
-  test('renders seeded site content through the production worker', async ({ page }) => {
-    await page.goto('/dashboard/north-carolina-legal-services/sites/ncls')
+  test('renders seeded site content through the production worker', async ({ page, baseURL }) => {
+    await openTenantPage(page, new URL('/dashboard/north-carolina-legal-services/sites/ncls', baseURL!).toString(), {})
     await page.getByRole('tab', { name: 'Website', exact: true }).click()
 
     await expect(page.getByTestId('manager-preview-blog')).toContainText('IEP Violations in North Carolina')
