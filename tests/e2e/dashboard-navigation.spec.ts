@@ -61,12 +61,18 @@ test.describe('authenticated dashboard navigation', () => {
     await expect(page.getByTestId('manager-preview-products')).toContainText(/Tuna Sushi/i)
     await expect(page.getByTestId('manager-preview-product-count')).toHaveText(/\d+ items?/)
     await expect(page.getByTestId('manager-preview-photos').locator('img')).toBeVisible()
+    for (const manager of ['posts', 'qa', 'reservations']) {
+      await expect(page.getByTestId(`manager-preview-${manager}`).locator('p, dl, article').first()).toBeVisible()
+    }
     await expect(page.getByRole('link', { name: /Blog posts/ })).toHaveCount(0)
 
     await page.goto(siteBase)
     await page.getByRole('tab', { name: 'Website', exact: true }).click()
     await expect(page.getByRole('link', { name: /Blog posts/ })).toBeVisible()
     await expect(page.getByTestId('manager-preview-media').locator('img').first()).toBeVisible()
+    for (const manager of ['blog', 'testimonials', 'qa', 'ordering']) {
+      await expect(page.getByTestId(`manager-preview-${manager}`).locator('p, dl, blockquote').first()).toBeVisible()
+    }
     await expect(page.getByRole('link', { name: /Photos/ })).toHaveCount(0)
 
     const tabs = page.getByRole('tablist')
