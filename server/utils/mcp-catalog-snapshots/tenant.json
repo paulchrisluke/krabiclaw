@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:43068edecc94d18f83e997a805937f1d6d1ccddad9f11df49646d2e8dd091ee3",
+  "fingerprint": "sha256:7b066be141ef4e47241b736f3c8524190014e1ed878e2753e896ed5d9f517434",
   "tools": [
     {
       "name": "analyze_document",
@@ -397,9 +397,11 @@
                       "type": "string"
                     },
                     "valid_from": {
+                      "format": "date-time",
                       "type": "string"
                     },
                     "valid_until": {
+                      "format": "date-time",
                       "type": [
                         "string",
                         "null"
@@ -1667,9 +1669,11 @@
                 "type": "string"
               },
               "valid_from": {
+                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
+                "format": "date-time",
                 "type": [
                   "string",
                   "null"
@@ -2418,9 +2422,11 @@
                 "type": "string"
               },
               "valid_from": {
+                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
+                "format": "date-time",
                 "type": [
                   "string",
                   "null"
@@ -13038,9 +13044,11 @@
                       "type": "string"
                     },
                     "valid_from": {
+                      "format": "date-time",
                       "type": "string"
                     },
                     "valid_until": {
+                      "format": "date-time",
                       "type": [
                         "string",
                         "null"
@@ -14821,9 +14829,11 @@
                 "type": "string"
               },
               "valid_from": {
+                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
+                "format": "date-time",
                 "type": [
                   "string",
                   "null"
@@ -15834,9 +15844,11 @@
                 "type": "string"
               },
               "valid_from": {
+                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
+                "format": "date-time",
                 "type": [
                   "string",
                   "null"
