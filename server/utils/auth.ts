@@ -34,6 +34,22 @@ type InvitationRow = InferSelectModel<typeof schema.invitation>
 
 const CIMD_TENANT_SCOPES = ['openid', 'email', 'offline_access', 'tenant'] as const
 
+// Pure decision extracted for direct unit testing (see auth-cimd-scopes.test.ts)
+// — the surrounding hook is deeply coupled to Better Auth's adapter/context
+// types. Returns the scopes to persist, or null when no update is needed.
+export function nextCimdTenantScopes(existingScopes: readonly string[]): string[] | null {
+  if (existingScopes.length === 0) return [...CIMD_TENANT_SCOPES]
+  // A tenant CIMD client persisted before the `email` scope was added would
+  // otherwise keep its old scope set forever, since a non-empty scopes array
+  // previously short-circuited any update — it could then never successfully
+  // request `email`, since Better Auth validates authorize requests against
+  // the client's own persisted `scopes` and rejects anything outside it.
+  if (existingScopes.includes('tenant') && !existingScopes.includes('email')) {
+    return [...new Set([...existingScopes, 'email'])]
+  }
+  return null
+}
+
 export const OAUTH_SIGNING_POLICY = {
   algorithm: 'RS256',
   resourceSeedMode: 'merge',
@@ -82,9 +98,9 @@ async function normalizeCimdClientAuthentication(data: {
     && jwksUri.length > 0
 
   const update: Record<string, unknown> = {}
-  if (!Array.isArray(client.scopes) || client.scopes.length === 0) {
-    update.scopes = [...CIMD_TENANT_SCOPES]
-  }
+  const existingScopes = Array.isArray(client.scopes) ? client.scopes as string[] : []
+  const nextScopes = nextCimdTenantScopes(existingScopes)
+  if (nextScopes) update.scopes = nextScopes
   if (supportsPrivateKeyJwt) {
     // @better-auth/cimd@1.7.0-beta.10's convertDocToClient only reads the
     // singular doc.token_endpoint_auth_method (node_modules/@better-auth/cimd/

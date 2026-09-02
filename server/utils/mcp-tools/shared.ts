@@ -997,6 +997,22 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
 
 export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
+// openWorldHint/destructiveHint below are calibrated to OpenAI's ChatGPT Apps
+// submission-review definition — "openWorldHint: true if the tool can change
+// publicly visible internet state or external third-party systems" — not the
+// broader upstream MCP spec example ("a web search tool is open-world" even
+// though it's read-only). Concretely: import_from_maps and analyze_document
+// read from an external API (Google Places, the AI Gateway) but mutate
+// nothing external, so they're bounded/closed-world under this definition;
+// create_product/update_product/attach_media/etc. mutate content that
+// publishes to the tenant's live public website, so they're open-world even
+// though the write itself only touches this app's own database. Every
+// current READ_ONLY_TOOL_NAMES entry (verified: get_facebook_connection only
+// reads its own facebook_pages_connections table, and the rest are plain
+// internal-DB reads) is genuinely closed-world under either definition, so
+// this default holds — but the annotation guard (validateToolAnnotations)
+// does not forbid a future read-only tool from declaring openWorldHint:true
+// if one is ever added that genuinely reaches a live external system.
 export const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
@@ -1165,29 +1181,39 @@ export function buildToolAnnotationsByName() {
 
 export const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
 
-export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDefinition {
-  const annotations = TOOL_ANNOTATIONS_BY_NAME.get(definition.name)
-  if (!annotations) {
-    throw new Error(`Missing MCP tool annotation classification for "${definition.name}".`)
-  }
-
+// Exported so this validation can be unit-tested directly against arbitrary
+// hint combinations, independent of the fixed tool-name classification map.
+export function validateToolAnnotations(name: string, annotations: McpToolAnnotations, confirmRequired: boolean): void {
   // ChatGPT Apps submission review requires every tool to declare all three
   // hints explicitly — required for every tool, not just write tools, so a
   // future read-only classification that forgets openWorldHint/destructiveHint
   // (they're optional on McpToolAnnotations) fails loudly at module load
   // instead of silently shipping an incomplete submission.
   if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
-    throw new Error(`Tool "${definition.name}" must declare openWorldHint and destructiveHint explicitly.`)
+    throw new Error(`Tool "${name}" must declare openWorldHint and destructiveHint explicitly.`)
   }
 
   if (annotations.readOnlyHint === true) {
-    if (annotations.openWorldHint || annotations.destructiveHint) {
-      throw new Error(`Read-only tool "${definition.name}" cannot declare openWorldHint or destructiveHint as true.`)
+    // openWorldHint is independent of readOnlyHint — a read-only tool (e.g. a
+    // web search) can legitimately be open-world. destructiveHint is the one
+    // that's genuinely incompatible with read-only: a tool that only reads
+    // cannot also delete, overwrite, or otherwise mutate state.
+    if (annotations.destructiveHint) {
+      throw new Error(`Read-only tool "${name}" cannot declare destructiveHint as true.`)
     }
-    if (definition.confirmRequired) {
-      throw new Error(`Read-only MCP tool "${definition.name}" cannot require confirmation.`)
+    if (confirmRequired) {
+      throw new Error(`Read-only MCP tool "${name}" cannot require confirmation.`)
     }
   }
+}
+
+export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDefinition {
+  const annotations = TOOL_ANNOTATIONS_BY_NAME.get(definition.name)
+  if (!annotations) {
+    throw new Error(`Missing MCP tool annotation classification for "${definition.name}".`)
+  }
+
+  validateToolAnnotations(definition.name, annotations, definition.confirmRequired)
 
   return {
     ...definition,

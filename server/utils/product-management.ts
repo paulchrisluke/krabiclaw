@@ -150,8 +150,14 @@ export function normalizePriceInput(input: PriceInput | null | undefined, defaul
 // anything itself, or the two writes would no longer be atomic.
 function closeActivePriceQuery(priceId: string, at: string): BatchQuery {
   return {
-    query: `UPDATE prices SET valid_until = ? WHERE id = ? AND valid_until IS NULL`,
-    params: [at, priceId],
+    query: `
+      UPDATE prices
+         SET valid_until = ?
+       WHERE id = ?
+         AND valid_from < ?
+         AND (valid_until IS NULL OR valid_until > ?)
+    `,
+    params: [at, priceId, at, at],
   }
 }
 
