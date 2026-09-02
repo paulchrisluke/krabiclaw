@@ -18,7 +18,7 @@
     <div v-else-if="!experience" class="mx-auto max-w-7xl px-4 py-32 text-center">
       <h1 class="text-2xl font-semibold text-default">Experience not found</h1>
       <p class="mt-3 text-muted">This experience may no longer be available.</p>
-      <NuxtLink to="/experiences" class="mt-6 inline-flex items-center rounded-full bg-muted px-5 py-2.5 text-sm font-medium text-default no-underline transition hover:bg-elevated">View all experiences</NuxtLink>
+      <NuxtLink :to="localePath('/experiences')" class="mt-6 inline-flex items-center rounded-full bg-muted px-5 py-2.5 text-sm font-medium text-default no-underline transition hover:bg-elevated">{{ experienceCopy.viewExperienceCta }}</NuxtLink>
     </div>
 
     <div v-else>
@@ -50,9 +50,9 @@
 
         <!-- Breadcrumb -->
         <nav class="mb-8 flex items-center gap-2 text-xs text-muted">
-          <NuxtLink to="/" class="hover:text-default transition-colors">Home</NuxtLink>
+          <NuxtLink :to="localePath('/')" class="hover:text-default transition-colors">Home</NuxtLink>
           <SayaIcon name="chevron-right" class="size-3.5" />
-          <NuxtLink to="/experiences" class="hover:text-default transition-colors">Experiences</NuxtLink>
+          <NuxtLink :to="localePath('/experiences')" class="hover:text-default transition-colors">{{ experienceCopy.experiencesPageTitle }}</NuxtLink>
           <SayaIcon name="chevron-right" class="size-3.5" />
           <span class="text-default">{{ experience.title }}</span>
         </nav>
@@ -356,7 +356,7 @@ const { siteId, site } = useTenantSite()
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
-const { locale, t } = useI18n()
+const { locale, localePath, t } = useI18n()
 const experienceCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
 const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById, site: publicSite } = await usePublicPageData()
@@ -397,7 +397,7 @@ const noBookableSlotsMessage = computed(() => {
 
 const contactUrl = computed(() => {
   const exp = experience.value as ApiValue
-  return buildExperienceContactUrl(exp?.id, exp?.title)
+  return localePath(buildExperienceContactUrl(exp?.id, exp?.title))
 })
 
 const experienceCta = computed(() => resolveExperienceDetailCta({
@@ -585,7 +585,7 @@ async function submitBooking() {
       message: res.message,
     })
     mirrorSubmission('experience_booking_submit', (experienceLocation.value as ApiRecord | null)?.id ? String((experienceLocation.value as ApiRecord).id) : null)
-    await navigateTo('/experiences/confirmed')
+    await navigateTo(localePath('/experiences/confirmed'))
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
     bookingError.value = typeof errorData?.error === 'string' ? errorData.error : 'Something went wrong. Please try again.'

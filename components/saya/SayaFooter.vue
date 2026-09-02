@@ -6,7 +6,7 @@
       <div class="grid gap-16 border-b border-inverted/10 pb-14 lg:grid-cols-[1fr_1.4fr]">
         <!-- Brand column -->
         <div>
-          <NuxtLink to="/" class="block no-underline leading-none">
+          <NuxtLink :to="localePath('/')" class="block no-underline leading-none">
             <div v-if="logoUrl" class="size-14 rounded-full overflow-hidden">
               <img :src="logoUrl" :alt="restaurantName" loading="lazy" decoding="async" class="h-full w-full object-cover" />
             </div>
@@ -58,7 +58,7 @@
             <div v-if="loc.phone" class="mt-1 text-sm text-inverted/60">{{ loc.phone }}</div>
             <div v-if="loc.hoursToday" class="mt-2 text-xs text-inverted/40">{{ loc.hoursToday }}</div>
             <NuxtLink
-              :to="`/locations/${loc.slug}`"
+              :to="localePath(`/locations/${loc.slug}`)"
               class="mt-3 inline-block border-b border-inverted pb-0.5 text-xs uppercase tracking-widest text-inverted transition hover:opacity-70"
             >
               {{ t('saya.footer.visit_page') }}
@@ -72,27 +72,27 @@
         <div>
           <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_experience') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li v-if="showProducts"><NuxtLink :to="productPresentation!.collectionPath" class="text-inverted/60 no-underline transition hover:text-inverted">{{ productPresentation!.collectionLabel }}</NuxtLink></li>
-            <li v-if="hasExperiences"><NuxtLink to="/experiences" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
-            <li v-if="!isExperienceSite"><NuxtLink to="/reservations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
-            <li v-if="!isExperienceSite"><NuxtLink to="/photos" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
-            <li><NuxtLink to="/about" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
+            <li v-if="showProducts"><NuxtLink :to="localePath(productPresentation!.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ productPresentation!.collectionLabel }}</NuxtLink></li>
+            <li v-if="hasExperiences"><NuxtLink :to="localePath('/experiences')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
+            <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/reservations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
+            <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/photos')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/about')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
           </ul>
         </div>
         <div>
           <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_discover') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/blog" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.blog') }}</NuxtLink></li>
-            <li><NuxtLink to="/reviews" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.reviews') }}</NuxtLink></li>
-            <li><NuxtLink to="/posts" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.latest_updates') }}</NuxtLink></li>
-            <li><NuxtLink to="/qa" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.qa') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/blog')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.blog') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/reviews')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.reviews') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/posts')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.latest_updates') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/qa')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.qa') }}</NuxtLink></li>
           </ul>
         </div>
         <div>
           <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_connect') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink to="/locations" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.all_locations') }}</NuxtLink></li>
-            <li><NuxtLink to="/contact" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.contact_us') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/locations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.all_locations') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/contact')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.contact_us') }}</NuxtLink></li>
           </ul>
         </div>
       </div>
@@ -141,8 +141,8 @@
             <svg v-if="isDark" viewBox="0 0 20 20" fill="currentColor" class="size-4"><path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2ZM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15ZM10 7a3 3 0 100 6 3 3 0 000-6ZM15.657 5.404a.75.75 0 10-1.06-1.06l-1.061 1.06a.75.75 0 001.06 1.06l1.06-1.06ZM6.464 14.596a.75.75 0 10-1.06-1.06l-1.06 1.06a.75.75 0 001.06 1.06l1.06-1.06ZM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5a.75.75 0 01.75.75ZM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10ZM14.596 15.657a.75.75 0 001.06-1.06l-1.06-1.061a.75.75 0 10-1.06 1.06l1.06 1.06ZM5.404 6.464a.75.75 0 001.06-1.06l-1.06-1.06a.75.75 0 10-1.061 1.06l1.06 1.06Z"/></svg>
             <svg v-else viewBox="0 0 20 20" fill="currentColor" class="size-4"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
           </button>
-          <NuxtLink to="/privacy" class="transition hover:text-inverted">{{ t('legal.privacy') }}</NuxtLink>
-          <NuxtLink to="/terms" class="transition hover:text-inverted">{{ t('legal.terms') }}</NuxtLink>
+          <NuxtLink :to="localePath('/privacy')" class="transition hover:text-inverted">{{ t('legal.privacy') }}</NuxtLink>
+          <NuxtLink :to="localePath('/terms')" class="transition hover:text-inverted">{{ t('legal.terms') }}</NuxtLink>
           <a
             v-if="showBrandingCredit"
             href="https://krabiclaw.com"
@@ -176,6 +176,7 @@ interface I18nComposable {
   locale: Ref<string>
   locales: Ref<Array<{ code: string; name: string }>>
   setLocale: (_code: string) => void
+  localePath: (_path: string) => string
   t: (_key: string, _named?: Record<string, unknown>) => string
 }
 
@@ -228,16 +229,14 @@ const copy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
 const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
 const i18n = useI18n() as ApiValue as I18nComposable
-const { t } = i18n
+const { t, localePath } = i18n
 const currentLocale = computed(() => i18n.locale.value)
 const getLocaleFlag = (code: string) =>
   ({ en: '🇺🇸', th: '🇹🇭', fr: '🇫🇷', ja: '🇯🇵', 'zh-CN': '🇨🇳', ko: '🇰🇷', es: '🇪🇸', de: '🇩🇪', it: '🇮🇹', ar: '🇸🇦' }[code] ?? '🌐')
 const getCurrentLocaleFlag = () => getLocaleFlag(currentLocale.value)
 
 const availableLocales = computed(() =>
-  props.locales.length
-    ? props.locales.map(l => ({ code: l.code, name: l.label || l.code }))
-    : (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({ code: l.code, name: l.name }))
+  (i18n.locales?.value ?? []).map((l: { code: string; name: string }) => ({ code: l.code, name: l.name }))
 )
 
 const languageItems = computed(() =>

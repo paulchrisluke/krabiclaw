@@ -232,7 +232,13 @@ export async function getPublicTenantPageForPath(
       throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized embedded content is unavailable' })
     }
   }
-  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources))
+  const blocks = await hydrateBlocks(db, siteId, page.path, page.blocks, options.hydrationResources)
+  if (page.locale !== 'en') {
+    for (const block of blocks) {
+      block.media = block.media.map(item => ({ ...item, alt_text: null }))
+    }
+  }
+  return mapPage(page, blocks)
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {

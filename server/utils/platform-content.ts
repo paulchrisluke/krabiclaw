@@ -444,6 +444,21 @@ async function contentBlockPlacementQueries(
   return queries
 }
 
+export async function prepareTenantBlogContentBlocks(
+  db: D1Database,
+  blocks: Array<ContentBlockInput & { id?: string }>,
+  siteId: string,
+  organizationId: string,
+  now = new Date().toISOString(),
+) {
+  const normalizedBlocks = await normalizeEditorContentBlocks(db, blocks, siteId)
+  const placementScope = await mediaPlacementScope(db, siteId, organizationId)
+  return {
+    blocks: normalizedBlocks,
+    placementQueries: await contentBlockPlacementQueries(db, normalizedBlocks, placementScope, now),
+  }
+}
+
 function renderCanonicalBlogBody(blocks: Array<ContentBlockInput & { id?: string }>) {
   return renderContentBlocksToMarkdown(blocks.map((block, position) => ({
     id: block.id ?? `pending-${position}`,
@@ -920,6 +935,10 @@ export async function getPublishedLocalizedSiteBlogPost(
     getContentOutline(db, row.document_id),
     listBlocksForDocument(db, row.document_id),
   ])
+  const localizedContentBlocks = contentBlocks.map(block => ({
+    ...block,
+    media: block.media.map(({ alt_text: _sourceAlt, ...item }) => ({ ...item, alt_text: null })),
+  }))
   const localized = projectExactLocalizedResource('tenant_blog_post', canonical, postLocalization)
   const media = Array.isArray(localized.media)
     ? projectLocalizedMediaAlt(localized.media, localizations)
@@ -927,7 +946,7 @@ export async function getPublishedLocalizedSiteBlogPost(
   return {
     ...localized,
     body: renderContentBlocksToMarkdown(rawBlocks),
-    content_blocks: contentBlocks,
+    content_blocks: localizedContentBlocks,
     media,
     localeRepresentations: await listPublicLocaleRepresentations(db, {
       organizationId: site.organization_id,

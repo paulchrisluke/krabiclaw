@@ -24,8 +24,6 @@ export type PublicPageDataset =
   | 'reservationPolicies'
   | 'experiencePolicies'
 
-import { splitLocalePrefix } from '~/utils/tenant-locale-path'
-
 export interface PublicPageRequest {
   page: string | null;
   location: string | null;
@@ -253,7 +251,18 @@ export const usePublicPageRequest = () => {
   return computed<PublicPageRequest>(() => {
     const previewSubpath = getPreviewSubpath(route.path)
     const effectivePath = previewSubpath ?? route.path
-    const localePath = splitLocalePrefix(effectivePath)
+    const explicitLocale = typeof route.params.locale === 'string'
+      ? route.params.locale
+      : locale.value !== 'en' && effectivePath.startsWith(`/${locale.value}`)
+        ? locale.value
+        : null
+    const localePath = explicitLocale
+      ? {
+          localeSegment: explicitLocale,
+          sourcePath: effectivePath.slice(explicitLocale.length + 1) || '/',
+          publicPath: effectivePath,
+        }
+      : { localeSegment: null, sourcePath: effectivePath, publicPath: effectivePath }
     const token = previewSubpath !== null && typeof route.query.token === 'string'
       ? route.query.token
       : null

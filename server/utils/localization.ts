@@ -7,6 +7,13 @@ import {
 } from '~/shared/platform-locale-catalog'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import {
+  createContentDocumentWithBlocks,
+  getContentDocumentById,
+  getContentEditorSnapshotForDocument,
+  replaceContentDocumentBlocks,
+  type ContentBlockInput,
+} from '~/server/utils/content-documents'
 import { localizationError } from '~/server/utils/localization-errors'
 import {
   RESOURCE_LOCALIZATION_REGISTRY,
@@ -47,6 +54,10 @@ export interface ResourceLocalizationRecord {
   created_by_user_id: string
   updated_at: number
   updated_by_user_id: string
+}
+
+export interface ResourceLocalizationAuthoringRecord extends ResourceLocalizationRecord {
+  content_document?: Awaited<ReturnType<typeof getContentEditorSnapshotForDocument>>
 }
 
 export interface LocalizedPublicRoute {
@@ -416,6 +427,30 @@ export async function getResourceLocalization(
   return mapLocalization(row)
 }
 
+export async function getResourceLocalizationForAuthoring(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  resourceTypeInput: unknown,
+  resourceId: string,
+  localeInput: unknown,
+): Promise<ResourceLocalizationAuthoringRecord> {
+  const localization = await getResourceLocalization(
+    db,
+    organizationId,
+    siteId,
+    resourceTypeInput,
+    resourceId,
+    localeInput,
+  )
+  if (localization.resource_type !== 'tenant_blog_post' || !localization.document_id) return localization
+  const document = await getContentDocumentById(db, localization.document_id)
+  if (!document) {
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Localized blog content document is missing' })
+  }
+  return { ...localization, content_document: await getContentEditorSnapshotForDocument(db, document) }
+}
+
 export async function resolveLocalizedPublicRoute(
   db: DbClient,
   organizationId: string,
@@ -567,6 +602,113 @@ export async function putResourceLocalization(
   return await getResourceLocalization(db, input.organizationId, input.siteId, resourceType, input.resourceId, locale)
 }
 
+function remapNewLocalizedBlockIds(blocks: ContentBlockInput[]): ContentBlockInput[] {
+  const ids = new Map<string, string>()
+  for (const block of blocks) {
+    if (block.id) ids.set(block.id, crypto.randomUUID())
+  }
+  return blocks.map(block => ({
+    ...block,
+    id: block.id ? ids.get(block.id) : crypto.randomUUID(),
+    parent_block_id: block.parent_block_id ? ids.get(block.parent_block_id) ?? null : null,
+  }))
+}
+
+export async function putResourceLocalizationForAuthoring(
+  db: D1Database,
+  input: Parameters<typeof putResourceLocalization>[1] & {
+    contentBlocks?: unknown
+    expectedDocumentUpdatedAt?: unknown
+  },
+): Promise<ResourceLocalizationAuthoringRecord> {
+  const resourceType = parseLocalizedResourceType(input.resourceType)
+  if (resourceType !== 'tenant_blog_post' || input.contentBlocks === undefined) {
+    return await putResourceLocalization(db, input)
+  }
+  if (!Array.isArray(input.contentBlocks) || input.contentBlocks.length === 0) {
+    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Translated blog content blocks are required')
+  }
+  if (input.expectedDocumentUpdatedAt !== undefined && typeof input.expectedDocumentUpdatedAt !== 'string') {
+    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'expected_document_updated_at must be a string')
+  }
+
+  const { locale, source } = await assertSiteLanguageEntitlement(db, input.organizationId, input.siteId, input.locale)
+  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
+  await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
+  const values = validateLocalizedValues(resourceType, input.values)
+  const vertical = await getSiteVertical(db, input.organizationId, input.siteId)
+  const routePath = validateLocalizedRoutePath(resourceType, locale, input.routePath, vertical)
+  const existing = await queryFirst<{
+    id: string
+    route_path: string | null
+    document_id: string | null
+    created_at: number
+    created_by_user_id: string
+  }>(db, `
+    SELECT id, route_path, document_id, created_at, created_by_user_id
+      FROM resource_localizations
+     WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ?
+     LIMIT 1
+  `, [input.organizationId, input.siteId, resourceType, input.resourceId, locale])
+  const id = existing?.id ?? crypto.randomUUID()
+  const now = Math.floor(Date.now() / 1000)
+  const nowIso = new Date().toISOString()
+  const rawBlocks = input.contentBlocks as ContentBlockInput[]
+  const requestedBlocks = existing?.document_id ? rawBlocks : remapNewLocalizedBlockIds(rawBlocks)
+  const { prepareTenantBlogContentBlocks } = await import('~/server/utils/platform-content')
+  const prepared = await prepareTenantBlogContentBlocks(db, requestedBlocks, input.siteId, input.organizationId, nowIso)
+  const documentId = existing?.document_id ?? crypto.randomUUID()
+  const statements: BatchQuery[] = []
+  if (existing?.route_path && existing.route_path !== routePath && routePath) {
+    statements.push({
+      query: `INSERT INTO site_redirects
+        (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'resource_localization', ?, ?, ?, 301, 'redirect', 'localized_route_change', 'localization', ?, ?)
+        ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
+          to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
+      params: [crypto.randomUUID(), input.organizationId, input.siteId, locale, id, existing.route_path, routePath, nowIso, nowIso],
+    })
+  }
+  statements.push({
+    query: `INSERT INTO resource_localizations
+      (id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path, document_id,
+       created_at, created_by_user_id, updated_at, updated_by_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, site_id, resource_type, resource_id, locale) DO UPDATE SET
+        values_json = excluded.values_json, route_path = excluded.route_path, document_id = excluded.document_id,
+        updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id`,
+    params: [id, input.organizationId, input.siteId, resourceType, input.resourceId, locale, JSON.stringify(values), routePath,
+      documentId, existing?.created_at ?? now, existing?.created_by_user_id ?? input.userId, now, input.userId],
+  })
+
+  try {
+    if (existing?.document_id) {
+      if (!input.expectedDocumentUpdatedAt) {
+        localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'expected_document_updated_at is required')
+      }
+      const document = await getContentDocumentById(db, existing.document_id)
+      if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Localized blog content document is missing' })
+      await replaceContentDocumentBlocks(db, document.owner_type, document.owner_id, prepared.blocks, {
+        expected_document_updated_at: input.expectedDocumentUpdatedAt,
+        additionalQueriesBefore: statements,
+        additionalQueriesAfter: prepared.placementQueries,
+      })
+    } else {
+      await createContentDocumentWithBlocks(db, 'tenant_blog', id, prepared.blocks, {
+        documentId,
+        additionalQueriesBefore: statements,
+        additionalQueriesAfter: prepared.placementQueries,
+      })
+    }
+  } catch (error) {
+    if (error instanceof Error && /resource_localizations_site_locale_route_unique|UNIQUE constraint failed: resource_localizations\.site_id/.test(error.message)) {
+      localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'Localized route path is already owned by another resource', { route_path: routePath })
+    }
+    throw error
+  }
+  return await getResourceLocalizationForAuthoring(db, input.organizationId, input.siteId, resourceType, input.resourceId, locale)
+}
+
 export async function deleteResourceLocalization(
   db: DbClient,
   input: { organizationId: string; siteId: string; resourceType: unknown; resourceId: string; locale: unknown },
@@ -583,7 +725,15 @@ export async function deleteResourceLocalization(
     { query: `DELETE FROM site_redirects WHERE owner_type = 'resource_localization' AND owner_id = ?`, params: [row.id] },
     { query: 'DELETE FROM resource_localizations WHERE id = ?', params: [row.id] },
   ]
-  if (row.document_id) statements.push({ query: 'DELETE FROM content_documents WHERE id = ?', params: [row.document_id] })
+  if (row.document_id) {
+    statements.push({
+      query: `DELETE FROM media_placements
+        WHERE owner_type = 'content_block'
+          AND owner_id IN (SELECT id FROM content_blocks WHERE document_id = ?)`,
+      params: [row.document_id],
+    })
+    statements.push({ query: 'DELETE FROM content_documents WHERE id = ?', params: [row.document_id] })
+  }
   await executeBatch(db, statements, { operation: 'delete resource localization' })
   return { deleted: true, resource_type: resourceType, resource_id: input.resourceId, locale }
 }

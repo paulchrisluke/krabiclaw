@@ -2,7 +2,6 @@ import type { Product } from '~/server/types/products'
 import type { PublicProductReview } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { publicApiRequest } from '~/utils/api-clients'
-import { splitLocalePrefix } from '~/utils/tenant-locale-path'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicProductDetailPayload {
@@ -69,7 +68,7 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
   const { siteId } = useTenantSite()
   const locationSlug = String(route.params.slug ?? '')
   const productSlug = String(route.params.productSlug ?? '')
-  const locale = splitLocalePrefix(route.path).localeSegment ?? 'en'
+  const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
   if (!siteId || !locationSlug || !productSlug) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
 

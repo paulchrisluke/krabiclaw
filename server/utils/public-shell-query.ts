@@ -155,6 +155,7 @@ export function buildPublicShellPayload(
     : null
 
   return {
+    platformMessages: null,
     site: {
       brand_name: site.brand_name,
       brand_description: site.brand_description,

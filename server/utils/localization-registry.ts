@@ -1,4 +1,5 @@
 import { localizationError } from '~/server/utils/localization-errors'
+import { isBlawbyBlogTemplate } from '~/utils/tenant-blog-route'
 
 export const LOCALIZED_RESOURCE_TYPES = [
   'site',
@@ -179,7 +180,7 @@ export function validateLocalizedRoutePath(
   else if (definition.route === 'offering') pattern = new RegExp(`^/${escapedLocale}/services/${SEGMENT}$`)
   else if (definition.route === 'site_post') pattern = new RegExp(`^/${escapedLocale}/posts/${SEGMENT}$`)
   else if (definition.route === 'tenant_blog_post') {
-    pattern = new RegExp(`^/${escapedLocale}/${vertical === 'service' ? 'article' : 'blog'}/${SEGMENT}$`)
+    pattern = new RegExp(`^/${escapedLocale}/${isBlawbyBlogTemplate({ vertical }) ? 'article' : 'blog'}/${SEGMENT}$`)
   } else pattern = new RegExp(`^/${escapedLocale}/${SEGMENT}$`)
   if (!pattern.test(path) || path.includes('//')) {
     localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `route_path is invalid for ${resourceType}`, { route_path: path })

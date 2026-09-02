@@ -202,7 +202,10 @@ async function loadTranslationLocales() {
       { validate: isQaLocalesResponse },
     )
     translationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
-  } catch { translationLocales.value = [] }
+  } catch (cause) {
+    translationLocales.value = []
+    translationError.value = cause instanceof Error ? cause.message : 'Failed to load site languages'
+  }
 }
 function isQaTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
   return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)

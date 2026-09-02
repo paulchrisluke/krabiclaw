@@ -4,7 +4,7 @@
     <div class="mx-auto max-w-7xl px-6 pb-8 pt-8 sm:pt-12 lg:px-8 lg:pt-16">
       <div class="xl:grid xl:grid-cols-3 xl:gap-8">
         <div class="space-y-8">
-          <NuxtLink v-if="brandName || footerLogo" to="/" class="inline-flex no-underline" :aria-label="`${brandName} home`">
+          <NuxtLink v-if="brandName || footerLogo" :to="localePath('/')" class="inline-flex no-underline" :aria-label="`${brandName} home`">
             <img v-if="footerLogo" :src="footerLogo" :alt="brandName" loading="lazy" decoding="async" class="max-h-16 w-auto max-w-[248px]">
             <span v-else class="blawby-display text-2xl text-white">{{ brandName }}</span>
           </NuxtLink>
@@ -25,7 +25,7 @@
             <h3 class="text-sm font-semibold leading-6 text-white">Services</h3>
             <ul class="mt-6 space-y-4" role="list">
               <li v-for="offering in offeringLinks" :key="offering.id">
-                <NuxtLink :to="offering.canonical_path" class="blawby-footer-link text-sm leading-6 no-underline">
+                <NuxtLink :to="localePath(offering.canonical_path)" class="blawby-footer-link text-sm leading-6 no-underline">
                   {{ offering.name }}
                 </NuxtLink>
               </li>
@@ -35,7 +35,7 @@
             <h3 class="text-sm font-semibold leading-6 text-white">{{ group.label }}</h3>
             <ul class="mt-6 space-y-4" role="list">
               <li v-for="item in group.items" :key="item.id">
-                <NuxtLink :to="item.path" class="blawby-footer-link text-sm leading-6 no-underline">{{ item.label }}</NuxtLink>
+                <NuxtLink :to="localePath(item.path)" class="blawby-footer-link text-sm leading-6 no-underline">{{ item.label }}</NuxtLink>
               </li>
             </ul>
           </div>
@@ -61,6 +61,8 @@ const props = defineProps<{
   offeringLinks: PublicOfferingLink[]
   pageLinks: PublicBlawbyPageLink[]
 }>()
+
+const { localePath } = useI18n()
 
 const year = new Date().getFullYear()
 const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || '')

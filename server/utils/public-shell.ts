@@ -98,10 +98,12 @@ export async function loadPublicShellSource(
     success: true,
     ...buildPublicShellPayload(site, shellResults, shellIndexes),
     count: shellResults[shellIndexes.locations]?.results?.length ?? 0,
+    platformMessages: null as Record<string, string> | null,
   }
   if (locale && locale !== 'en') {
     const entitlement = await assertSiteLanguageEntitlement(db, site.organization_id, siteId, locale)
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
+    payload.platformMessages = entitlement.platform_messages ?? {}
     const siteLocalization = await getResourceLocalization(db, site.organization_id, siteId, 'site', siteId, locale)
     const localizedLocations = await queryAll<{ resource_id: string; values_json: string; route_path: string }>(db, `
       SELECT resource_id, values_json, route_path

@@ -115,7 +115,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { slugifyTitle } from '~/utils/post-slugs'
-import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
+import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, createTenantPageTranslationBlocks, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import { canProceedWithTenantPageTransition, createTenantPageLocaleRevertGuard, createTenantPageRequestGate, previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 
@@ -149,12 +149,7 @@ const dirty = ref(false)
 const hydrating = ref(false)
 const requestGate = createTenantPageRequestGate()
 const localeRevertGuard = createTenantPageLocaleRevertGuard()
-// Set while the editor holds an in-progress "create a translation of this
-// page" draft (selected.value.id === '' but props.pageId still points at the
-// source-locale page) - isNew only reflects whether this route is
-// pages/new.vue, so save() needs this to know it must navigate to the new
-// variant's own URL after creating it, same as the pages/new.vue flow does.
-const creatingVariantFor = ref<string | null>(null)
+const newVariantLocale = ref<string | null>(null)
 const selectedBlockIndex = ref(0)
 const draggedBlockIndex = ref<number | null>(null)
 const newBlockType = ref<TenantPageBlockType>('markdown')
@@ -340,11 +335,8 @@ async function save() {
       throw new Error(`Resolve the highlighted fields in section ${invalidIndex + 1} before saving.`)
     }
     selected.value.blocks.forEach((block, index) => { block.position = index })
-    // A translation-in-progress carries its path over from the source-locale
-    // page (e.g. Home must stay '/', not re-slugify to '/home') rather than
-    // deriving a fresh one from the title, the way an actually-new page does.
-    const path = selected.value.id || creatingVariantFor.value ? selected.value.path : `/${slugifyTitle(title)}`
-    if (!selected.value.id && !creatingVariantFor.value && path === '/') throw new Error('Choose a more specific page title.')
+    const path = selected.value.id || newVariantLocale.value ? selected.value.path : `/${slugifyTitle(title)}`
+    if (!selected.value.id && !newVariantLocale.value && path === '/') throw new Error('Choose a more specific page title.')
     const body = {
       id: selected.value.id || undefined,
       pageId: selected.value.page_id || undefined,
@@ -365,15 +357,15 @@ async function save() {
     const response = selected.value.id
       ? await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${selected.value.id}`, { method: 'PATCH', body, validate: validatePage })
       : await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: validatePage })
-    const wasCreate = !selected.value.id
+    const createdVariant = !selected.value.id && Boolean(newVariantLocale.value)
     hydrating.value = true
     selected.value = toEditorPage(response.page)
     savedBlockIds.value = new Set(response.page.blocks.map(block => block.id))
     dirty.value = false
     hydrating.value = false
     toast.add({ title: 'Saved', description: 'Page saved.', color: 'success' })
-    if (isNew.value || (wasCreate && creatingVariantFor.value)) {
-      creatingVariantFor.value = null
+    if (isNew.value || createdVariant) {
+      newVariantLocale.value = null
       await navigateTo(`${pagesPath.value}/${response.page.id}`)
     }
   } catch (error) {
@@ -407,26 +399,24 @@ watch(locale, async (nextLocale, previousLocale) => {
       await navigateTo(`${pagesPath.value}/${translatedPage.id}`)
       return
     }
-    // No variant exists yet in the target locale - offer to create one from
-    // the current page's content instead of only reporting it's missing.
-    // Reuses the same POST /pages the "New page" flow already uses; passing
-    // pageId links the new variant to this page's existing translation group
-    // (see save()'s body.pageId and the page_id match above) instead of
-    // creating an unrelated page that happens to share a title.
-    if (!window.confirm(`No ${nextLocale} version of this page exists yet. Create one now, starting from the current English content?`)) {
+    if (!window.confirm(`No ${nextLocale} version exists. Create it with the same layout and media?`)) {
       localeRevertGuard.arm(previousLocale)
       locale.value = previousLocale
       return
     }
-    if (!selected.value) return
-    creatingVariantFor.value = nextLocale
-    // Blocks need fresh ids - carrying over the source page's own ids would
-    // try to INSERT content_blocks rows that already exist for the English
-    // page, colliding on the primary key.
-    const blocks = selected.value.blocks.map((block, position) => ({
-      ...block, id: crypto.randomUUID(), data: structuredClone(toRaw(block.data)), position,
-    }))
-    selected.value = { ...selected.value, id: '', document: { updated_at: '' }, locale: nextLocale, blocks }
+    newVariantLocale.value = nextLocale
+    selected.value = {
+      ...selected.value,
+      id: '',
+      document: { updated_at: '' },
+      locale: nextLocale,
+      title: '',
+      summary: '',
+      seo_title: '',
+      seo_description: '',
+      canonical_url: '',
+      blocks: createTenantPageTranslationBlocks(toRaw(selected.value.blocks)),
+    }
     savedBlockIds.value = new Set()
     dirty.value = true
   } catch (error) {

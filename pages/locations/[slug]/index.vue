@@ -44,7 +44,7 @@
         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
         <div class="relative flex min-h-160 items-end">
           <div class="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-            <NuxtLink to="/locations" class="saya-kicker mb-8 inline-block text-white/60 no-underline hover:text-white">
+            <NuxtLink :to="localePath('/locations')" class="saya-kicker mb-8 inline-block text-white/60 no-underline hover:text-white">
               ← All locations
             </NuxtLink>
             <p class="saya-eyebrow mb-5 text-white/80">{{ location.neighborhood || location.city }}</p>
@@ -232,7 +232,7 @@
               </h2>
             </div>
             <NuxtLink
-              to="/locations"
+              :to="localePath('/locations')"
               class="border-b border-inverted/40 pb-1 text-xs uppercase tracking-widest text-inverted no-underline transition hover:opacity-70"
             >
               All locations →
@@ -242,7 +242,7 @@
             <NuxtLink
               v-for="loc in otherLocations"
               :key="loc.id"
-              :to="`/locations/${loc.slug}`"
+              :to="localePath(`/locations/${loc.slug}`)"
               class="block overflow-hidden border border-inverted/10 bg-inverted/5 no-underline transition hover:border-inverted/20"
             >
               <div class="aspect-video overflow-hidden bg-inverted/10">
@@ -278,7 +278,7 @@
               {{ primaryCtaLabel }}
             </SayaButton>
             <NuxtLink
-              :to="`/locations/${slug}/contact`"
+              :to="localePath(`/locations/${slug}/contact`)"
               class="inline-flex items-center rounded-full border border-default px-6 py-2.5 text-xs font-medium uppercase tracking-widest text-default transition hover:bg-muted"
             >
               Plan a visit →
@@ -303,7 +303,7 @@
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
       <SayaIcon name="map-pin" class="mx-auto mb-4 size-12 text-muted" />
       <h1 class="saya-display-sm text-default">Location Not Found</h1>
-      <SayaButton to="/locations" class="mt-8">View all locations</SayaButton>
+      <SayaButton :to="localePath('/locations')" class="mt-8">{{ t('saya.location.view_all_locations') }}</SayaButton>
     </div>
   </div>
 </template>
@@ -324,7 +324,7 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
-const { locale } = useI18n()
+const { locale, localePath, t } = useI18n()
 const locationIndexCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 if (!siteId) throw createError({ statusCode: 404 })
 

@@ -57,7 +57,6 @@ import PlatformCommandSearchModal from '~/components/platform/search/PlatformCom
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
-import { splitLocalePrefix } from '~/utils/tenant-locale-path'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 const { isTenant, siteId, site } = useTenantSite()
@@ -91,10 +90,9 @@ interface TenantBlogPost {
 }
 
 const route = useRoute()
-const parsedRoute = splitLocalePrefix(route.path)
-const locale = parsedRoute.localeSegment ?? 'en'
+const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
 useState<string>('public-locale', () => 'en').value = locale
-const blogSection = parsedRoute.sourcePath.startsWith('/article/') ? 'article' : 'blog'
+const blogSection = route.path.includes('/article/') ? 'article' : 'blog'
 const sourceBlogBasePath = `/${blogSection}`
 const blogBasePath = locale === 'en' ? sourceBlogBasePath : `/${locale}${sourceBlogBasePath}`
 const requestEvent = useRequestEvent()

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:c6605df8a7d09ab064e50a89768b11d6200bb83fd45935226b08ced28fc5c3ed",
+  "fingerprint": "sha256:480f2384e11f70137b5e9218effbadf2923fc102f2886c00abda4d4fb53d53a6",
   "tools": [
     {
       "name": "analyze_document",
@@ -5764,6 +5764,13 @@
           "localization": {
             "additionalProperties": false,
             "properties": {
+              "content_document": {
+                "additionalProperties": true,
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "document_id": {
                 "type": [
                   "string",
@@ -5801,7 +5808,8 @@
               "locale",
               "values",
               "route_path",
-              "document_id"
+              "document_id",
+              "content_document"
             ],
             "type": "object"
           }
@@ -10612,6 +10620,22 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "content_blocks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "expected_document_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "locale": {
             "type": "string"
           },
@@ -10651,6 +10675,13 @@
           "localization": {
             "additionalProperties": false,
             "properties": {
+              "content_document": {
+                "additionalProperties": true,
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "document_id": {
                 "type": [
                   "string",
@@ -10688,7 +10719,8 @@
               "locale",
               "values",
               "route_path",
-              "document_id"
+              "document_id",
+              "content_document"
             ],
             "type": "object"
           }

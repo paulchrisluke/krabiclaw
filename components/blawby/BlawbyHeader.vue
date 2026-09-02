@@ -10,7 +10,7 @@
     <div class="blawby-container">
       <nav class="relative z-50 flex justify-between py-2" aria-label="Main navigation">
         <div class="flex items-center md:gap-x-12">
-          <NuxtLink to="/" class="no-underline" :aria-label="`${brandName} home`">
+          <NuxtLink :to="localePath('/')" class="no-underline" :aria-label="`${brandName} home`">
             <img
               v-if="logoUrl"
               :src="logoUrl"
@@ -30,7 +30,7 @@
             <NuxtLink
               v-for="item in headerItems"
               :key="item.id"
-              :to="item.path"
+              :to="localePath(item.path)"
               class="inline-block rounded-lg px-2 py-1 text-sm no-underline transition hover:text-[var(--blawby-accent-strong)]"
             >
               {{ item.label }}
@@ -38,7 +38,7 @@
           </div>
 
           <BlawbyButton
-            :to="consultation.schedule_path"
+            :to="localePath(consultation.schedule_path)"
             @click="trackConsultation"
           >
             <svg class="-ml-0.5 mr-2 size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -61,7 +61,7 @@
               <NuxtLink
                 v-for="item in headerItems"
                 :key="item.id"
-                :to="item.path"
+                :to="localePath(item.path)"
                 class="block w-full p-2 no-underline"
                 @click="closeMobileNav"
               >
@@ -85,6 +85,8 @@ const props = defineProps<{
   consultation: PublicConsultationSettings
   pageLinks: PublicBlawbyPageLink[]
 }>()
+
+const { localePath } = useI18n()
 
 const { trackConsultationClick } = useSiteConversionTracking(() => props.consultation)
 const route = useRoute()

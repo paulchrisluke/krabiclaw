@@ -174,7 +174,7 @@
           <NuxtLink
             v-for="loc in locations"
             :key="loc.id"
-            :to="`/locations/${loc.slug}/reviews`"
+            :to="localePath(`/locations/${loc.slug}/reviews`)"
             class="rounded-full border border-default bg-default px-4 py-2 text-xs font-medium uppercase tracking-widest text-muted no-underline transition hover:border-muted hover:text-default"
           >
             {{ loc.title }}
@@ -199,7 +199,7 @@
             <p class="saya-kicker mb-6 text-inverted/60">From the blog</p>
             <h2 class="saya-display-md text-inverted">Planning ideas, updates, and stories from the studio.</h2>
           </div>
-          <NuxtLink to="/blog" class="inline-flex text-sm font-medium text-inverted no-underline hover:underline">
+          <NuxtLink :to="localePath('/blog')" class="inline-flex text-sm font-medium text-inverted no-underline hover:underline">
             Visit the blog
           </NuxtLink>
         </div>
@@ -208,7 +208,7 @@
           <NuxtLink
             v-for="post in recentBlogPosts"
             :key="post.slug"
-            :to="`/blog/${post.slug}`"
+            :to="localePath(`/blog/${post.slug}`)"
             class="group block overflow-hidden rounded-xl border border-inverted/10 bg-inverted/5 no-underline transition hover:-translate-y-0.5 hover:border-inverted/20"
           >
             <div v-if="post.image" class="aspect-4/3 overflow-hidden bg-inverted/10">
@@ -293,7 +293,7 @@ import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
 import { ApiClientError } from '~/utils/api-clients'
 
 const { siteId, draftId, site } = useTenantSite()
-const { locale } = useI18n()
+const { locale, localePath } = useI18n()
 
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { resolveMedia } = useMedia()

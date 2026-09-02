@@ -155,6 +155,7 @@ export const usePublicPageData = async (options: {
   const postsList = computed(() => (data.value?.postsList ?? []) as ApiRecord[]);
   const blogList = computed(() => (data.value?.blogList ?? []) as ApiRecord[]);
   const blogPost = computed(() => (data.value?.blogPost ?? null) as ApiRecord | null);
+  const tenantPage = computed(() => data.value?.tenant_page ?? null);
 
   const reservationPolicyByLocation = computed(() => data.value?.reservationPolicyByLocation ?? {});
   const experiencePolicySiteDefault = computed(() => data.value?.experiencePolicySiteDefault ?? null);
@@ -297,6 +298,7 @@ export const usePublicPageData = async (options: {
     postsList,
     blogList,
     blogPost,
+    tenantPage,
     locales,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,

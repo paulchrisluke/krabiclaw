@@ -17,8 +17,9 @@ const localizationObject = {
     values: localizedValuesSchema,
     route_path: { type: ['string', 'null'] },
     document_id: { type: ['string', 'null'] },
+    content_document: { type: ['object', 'null'], additionalProperties: true },
   },
-  required: ['id', 'resource_type', 'resource_id', 'locale', 'values', 'route_path', 'document_id'],
+  required: ['id', 'resource_type', 'resource_id', 'locale', 'values', 'route_path', 'document_id', 'content_document'],
   additionalProperties: false,
 } as const
 
@@ -68,6 +69,8 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       locale: { type: 'string' },
       values: localizedValuesSchema,
       route_path: { type: ['string', 'null'] },
+      content_blocks: { type: ['array', 'null'], items: { type: 'object', additionalProperties: true } },
+      expected_document_updated_at: { type: ['string', 'null'] },
     },
     required: ['resource_type', 'resource_id', 'locale', 'values'],
     outputSchema: { type: 'object', properties: { localization: localizationObject }, required: ['localization'], additionalProperties: false },

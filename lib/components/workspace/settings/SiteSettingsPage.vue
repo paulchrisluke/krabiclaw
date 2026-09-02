@@ -412,7 +412,10 @@ async function loadSiteTranslationLocales() {
     )
     siteTranslationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
     if (siteTranslationLocales.value.length && !siteTranslationLocale.value) siteTranslationLocale.value = siteTranslationLocales.value[0]!
-  } catch { siteTranslationLocales.value = [] }
+  } catch (cause) {
+    siteTranslationLocales.value = []
+    siteTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load site languages'
+  }
 }
 function isSiteTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
   return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)

@@ -1,6 +1,7 @@
 import type { RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import type { Experience } from '~/server/utils/experiences'
 import type { Product } from '~/server/types/products'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 
 export interface PublicShellSite {
   brand_name: string | null
@@ -27,6 +28,7 @@ export interface PublicShellPayload {
   locales: { code: string; label: string; is_source: boolean }[]
   hasExperiences: boolean
   hasProducts: boolean
+  platformMessages: Record<string, string> | null
 }
 
 const nullableString = (value: unknown): value is string | null =>
@@ -61,6 +63,8 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
       && typeof locale.code === 'string'
       && typeof locale.label === 'string'
       && typeof locale.is_source === 'boolean')) return false
+  if (value.platformMessages !== null && (!isRecord(value.platformMessages)
+    || !Object.values(value.platformMessages).every(message => typeof message === 'string'))) return false
   return typeof value.hasExperiences === 'boolean' && typeof value.hasProducts === 'boolean'
 }
 
@@ -68,6 +72,8 @@ export interface PublicPagePayload {
   kind: string
   shell: PublicShellPayload
   content: ApiRecord[]
+  content_blocks: ApiRecord[]
+  tenant_page: PublicTenantPage | null
   locationReviews: ApiRecord[]
   globalReviews: ApiRecord[]
   reviewsAggregate: ApiRecord | null
@@ -104,6 +110,12 @@ export const isPublicPagePayload = (
   && (!expectedKind || value.kind === expectedKind)
   && Array.isArray(value.content)
   && value.content.every(item => isRecord(item) && typeof item.field === 'string')
+  && Array.isArray(value.content_blocks)
+  && (value.tenant_page === null || (isRecord(value.tenant_page)
+    && typeof value.tenant_page.id === 'string'
+    && typeof value.tenant_page.path === 'string'
+    && typeof value.tenant_page.title === 'string'
+    && Array.isArray(value.tenant_page.blocks)))
   && Array.isArray(value.locationReviews)
   && Array.isArray(value.globalReviews)
   && value.globalReviews.every(item => isRecord(item) && typeof item.rating === 'number')

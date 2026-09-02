@@ -14,10 +14,10 @@
         </div>
       </div>
       <div class="flex flex-wrap gap-4">
-        <NuxtLink v-if="hasOrderLinks" to="/order" class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90">{{ t('saya.cta.order_now') }}</NuxtLink>
+        <NuxtLink v-if="hasOrderLinks" :to="localePath('/order')" class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90">{{ t('saya.cta.order_now') }}</NuxtLink>
         <NuxtLink
           v-if="ctaRoute && reserveCta"
-          :to="ctaRoute"
+          :to="localePath(ctaRoute)"
           class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
           :class="hasOrderLinks ? 'ring-1 ring-inset ring-(--brand-color) text-(--brand-color) hover:bg-(--brand-color)/10' : 'bg-(--brand-color) text-(--brand-color-foreground) hover:opacity-90'"
         >
@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-const { t } = useI18n()
+const { localePath, t } = useI18n()
 
 defineProps({
   title: String,

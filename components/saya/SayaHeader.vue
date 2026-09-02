@@ -3,7 +3,7 @@
     <header ref="headerRef" data-saya-critical-header class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
       <div data-saya-critical-header-inner class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
         <!-- Brand logo / name -->
-          <NuxtLink to="/" data-saya-critical-logo-link class="w-fit shrink-0 justify-self-start no-underline">
+          <NuxtLink :to="localePath('/')" data-saya-critical-logo-link class="w-fit shrink-0 justify-self-start no-underline">
           <div v-if="logoUrl" class="size-10 shrink-0 rounded-full overflow-hidden">
             <img :src="logoUrl" :alt="restaurantName" loading="eager" decoding="async" class="h-full w-full object-cover" />
           </div>
@@ -16,7 +16,7 @@
         <nav data-saya-critical-nav class="hidden items-center gap-1 lg:flex" :aria-label="t('saya.header.nav_aria')">
           <NuxtLink
             v-if="showProducts"
-            :to="productPresentation!.collectionPath"
+            :to="localePath(productPresentation!.collectionPath)"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             {{ productPresentation!.collectionLabel }}
@@ -24,14 +24,14 @@
 
           <NuxtLink
             v-if="!isExperienceSite"
-            to="/reservations"
+            :to="localePath('/reservations')"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             {{ t('saya.header.reservations') }}
           </NuxtLink>
           <NuxtLink
             v-if="hasExperiences"
-            to="/experiences"
+            :to="localePath('/experiences')"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             {{ t('saya.header.experiences') }}
@@ -39,7 +39,7 @@
 
           <NuxtLink
             v-if="locations.length > 1"
-            to="/locations"
+            :to="localePath('/locations')"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
             {{ t('saya.header.locations') }}
@@ -50,7 +50,7 @@
           <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <NuxtLink
             v-if="primaryCtaPath"
-            :to="primaryCtaPath"
+            :to="localePath(primaryCtaPath)"
             data-saya-critical-cta
             class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-3 py-1.5 text-xs sm:text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
           >
@@ -68,23 +68,23 @@
             </summary>
             <div class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden">
               <nav class="grid gap-1" :aria-label="t('saya.header.mobile_nav_aria')">
-                <NuxtLink v-if="showProducts" :to="productPresentation!.collectionPath" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink v-if="showProducts" :to="localePath(productPresentation!.collectionPath)" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
                   {{ productPresentation!.collectionLabel }}
                 </NuxtLink>
-                <NuxtLink v-if="locations.length > 1" to="/locations" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink v-if="locations.length > 1" :to="localePath('/locations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.locations') }}
                 </NuxtLink>
                 <div class="my-1 border-t border-default" />
-                <NuxtLink v-if="hasOrderLinks && !isExperienceSite" to="/order" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink v-if="hasOrderLinks && !isExperienceSite" :to="localePath('/order')" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.order_now') }}
                 </NuxtLink>
-                <NuxtLink v-if="!isExperienceSite" to="/reservations" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink v-if="!isExperienceSite" :to="localePath('/reservations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.reservations') }}
                 </NuxtLink>
-                <NuxtLink v-if="hasExperiences" to="/experiences" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink v-if="hasExperiences" :to="localePath('/experiences')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.experiences') }}
                 </NuxtLink>
-                <NuxtLink to="/contact" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink :to="localePath('/contact')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.contact') }}
                 </NuxtLink>
               </nav>
@@ -110,6 +110,7 @@ interface I18nComposable {
   locale: Ref<string>
   locales: Ref<Array<{ code: string; name: string }>>
   setLocale: (_code: string) => void
+  localePath: (_path: string) => string
   t: (_key: string, _named?: Record<string, unknown>) => string
 }
 
@@ -128,7 +129,7 @@ const props = defineProps<{
 }>()
 
 const i18n = useI18n() as ApiValue as I18nComposable
-const { locale, t } = i18n
+const { locale, localePath, t } = i18n
 const verticalCopy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
 const mobileMenuOpen = ref(false)
 const mobileNavDetails = ref<HTMLDetailsElement | null>(null)

@@ -9,12 +9,12 @@
       <div>
         <!-- Page header -->
         <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-          <p class="saya-kicker mb-6">{{ t('saya.contact_page.title') }}</p>
+          <p v-if="contactHeroEyebrow" class="saya-kicker mb-6">{{ contactHeroEyebrow }}</p>
           <h1 class="saya-display-md text-default">
-            {{ t('saya.contact_page.headline') }}
+            {{ contactHeroTitle }}
           </h1>
-          <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">
-            {{ vertCopy.contactSubtitle }}
+          <p v-if="contactHeroSummary" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">
+            {{ contactHeroSummary }}
           </p>
         </header>
 
@@ -210,20 +210,20 @@
 
                   <div class="flex flex-wrap items-center gap-3">
                     <NuxtLink
-                      :to="`/locations/${loc.slug}/contact`"
+                      :to="localePath(`/locations/${loc.slug}/contact`)"
                       class="inline-flex items-center rounded-full bg-inverted px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
                     >
                       {{ t('saya.contact_page.plan_visit') }}
                     </NuxtLink>
                     <NuxtLink
-                      :to="`/locations/${loc.slug}`"
+                      :to="localePath(`/locations/${loc.slug}`)"
                       class="inline-flex items-center rounded-full border border-default px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
                     >
                       {{ t('saya.contact_page.directions') }}
                     </NuxtLink>
                     <NuxtLink
                       v-if="vertCopy.ctaRoute && vertCopy.reservationExploreLabel"
-                      :to="vertCopy.ctaRoute"
+                      :to="localePath(vertCopy.ctaRoute)"
                       class="inline-flex items-center rounded-full border border-default px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
                     >
                       {{ vertCopy.reservationExploreLabel }}
@@ -234,6 +234,12 @@
             </div>
           </div>
         </section>
+
+        <TenantPageRenderer
+          v-if="contactAdditionalPage?.blocks.length"
+          :page="contactAdditionalPage"
+          template="saya"
+        />
       </div>
     </div>
 
@@ -249,9 +255,8 @@ const { isPlatform, siteId, draftId, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 if (isPlatform || (!siteId && !draftId)) throw createError({ statusCode: 404 })
 
-const { locale } = useI18n()
+const { locale, localePath, t } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const { t } = useI18n()
 const route = useRoute()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -264,7 +269,14 @@ const businessName = computed(() => site?.brand_name?.trim() ?? '')
 const isDraftPreview = computed(() => Boolean(draftId && !siteId))
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig, site: publicSite } = await usePublicPageData()
+const { locations, config: siteConfig, site: publicSite, tenantPage } = await usePublicPageData()
+const contactHero = computed(() => tenantPage.value?.blocks.find(block => block.type === 'hero') ?? null)
+const contactHeroEyebrow = computed(() => String(contactHero.value?.data.eyebrow || ''))
+const contactHeroTitle = computed(() => String(contactHero.value?.data.title || tenantPage.value?.title || ''))
+const contactHeroSummary = computed(() => String(contactHero.value?.data.subtitle || contactHero.value?.data.description || tenantPage.value?.summary || ''))
+const contactAdditionalPage = computed(() => tenantPage.value
+  ? { ...tenantPage.value, blocks: tenantPage.value.blocks.filter(block => block.type !== 'hero') }
+  : null)
 
 interface ContactLocation {
   address?: string | {
@@ -323,15 +335,11 @@ const subjectOptions = computed(() => [
 ])
 
 const inquiryExperienceId = typeof route.query.experienceId === 'string' ? route.query.experienceId : null
-const inquiryExperienceTitle = typeof route.query.experienceTitle === 'string' ? route.query.experienceTitle : null
-
 const tenantForm = ref<TenantContactForm>({
   name: '',
   email: '',
   subject: 'general',
-  message: inquiryExperienceTitle
-    ? `Interested in a group booking for "${inquiryExperienceTitle}". Please send me pricing and availability.`
-    : '',
+  message: '',
 })
 const tenantSubmitting = ref(false)
 const { mirrorSubmission } = useSiteConversionTracking()
@@ -385,15 +393,15 @@ const handleTenantContact = async () => {
   } catch {
     // ignore — /contact/confirmed shows a generic success state either way
   }
-  await navigateTo('/contact/confirmed')
+  await navigateTo(localePath('/contact/confirmed'))
   tenantSubmitting.value = false
 }
 
 // ── SEO ──────────────────────────────────────────────────
 useSocialMetadata(() => ({
   path: '/contact',
-  title: `Contact | ${businessName.value}`,
-  description: siteConfig.value?.brand_description || '',
+  title: tenantPage.value?.seo_title || tenantPage.value?.title || businessName.value,
+  description: tenantPage.value?.seo_description || tenantPage.value?.summary || '',
   brand: {
     siteName: businessName.value,
     logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
