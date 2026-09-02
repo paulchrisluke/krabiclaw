@@ -10,6 +10,10 @@ import {
   replacePrice,
   type Price,
 } from '../../shared/prices.ts'
+import { normalizePriceInput } from '../../server/utils/product-management.ts'
+import { assertNoPriceNoteContradiction } from '../../server/utils/product-validation.ts'
+import { parseProductExtraction } from '../../server/utils/chowbot-media.ts'
+import { formatProductPriceLabel } from '../../utils/product-money.ts'
 
 const base: Price = {
   id: 'price-1', organization_id: 'org', site_id: 'site', location_id: 'location', product_id: 'product',
@@ -18,13 +22,42 @@ const base: Price = {
   provenance: 'manual', created_by: 'user', created_at: '2026-01-01T00:00:00.000Z',
 }
 
-test('currency precision converts and formats canonical integer minor amounts', () => {
+test('Product price input and display preserve canonical integer amounts and explicit no-price metadata', () => {
   assert.equal(majorAmountToMinor('12.50', 'THB'), 1250)
   assert.equal(majorAmountToMinor('1250', 'JPY'), 1250)
   assert.equal(majorAmountToMinor('1250', 'VND'), 1250)
   assert.throws(() => majorAmountToMinor('12.5', 'JPY'), /fraction digits/)
   assert.throws(() => majorAmountToMinor('12.345', 'USD'), /fraction digits/)
   assert.equal(formatMinorAmount(1250, 'THB', 'th-TH'), '฿12.50')
+
+  assert.throws(() => normalizePriceInput(undefined, 'manual'), /price is required/)
+  assert.equal(normalizePriceInput(null, 'manual'), null)
+  const normalized = normalizePriceInput({ amount_minor: 500, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' }, 'manual')
+  assert.ok(normalized)
+  assert.equal(normalized.amountMinor, 500)
+  assert.equal(normalized.provenance, 'manual')
+  assert.throws(() => normalizePriceInput({ amount_minor: 500 }, 'manual'), /currency is required/)
+  assert.throws(() => normalizePriceInput({ amount_minor: 500, currency: 'USD', unit: 'item', tax_behavior: 'unspecified', provenance: 'caller' }, 'manual'), /assigned by the server/)
+
+  const note = [{ key: 'price-note', label: 'Price', values: ['Market Price'] }]
+  assert.throws(() => assertNoPriceNoteContradiction(true, note), /price-note.*fixed amount/)
+  assert.equal(formatProductPriceLabel({ price: null, details: note }), 'Market Price')
+  assert.equal(formatProductPriceLabel({ price: null, details: [] }), null)
+
+  const [extracted] = parseProductExtraction({
+    items: [{
+      category: 'Sushi', name: 'Chef\'s Choice', description: null, order_url: null,
+      price: null, price_unreadable: false, details: note,
+    }],
+  }, 'USD')
+  assert.equal(extracted?.price, null)
+  assert.deepEqual(extracted?.details, note)
+  assert.throws(() => parseProductExtraction({
+    items: [{
+      category: 'Sushi', name: 'Cropped Price Roll', description: null, order_url: null,
+      price: null, price_unreadable: true, details: [],
+    }],
+  }, 'USD'), /complete Product import batch was rejected/)
 })
 
 test('priceAt selects one active interval and rejects overlapping schedules', () => {

@@ -544,10 +544,10 @@ export const priceWriteObject = {
     amount_minor: { type: 'integer', minimum: 0 }, currency: { type: 'string' },
     unit: { type: 'string', enum: ['item', 'person', 'table'] },
     tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: { type: 'string', format: 'date-time' },
-    valid_until: { type: ['string', 'null'], format: 'date-time' },
+    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: { type: 'string' },
+    valid_until: { type: ['string', 'null'] }, provenance: { type: 'string' },
   },
-  required: ['amount_minor', 'currency', 'unit', 'tax_behavior'],
+  required: ['amount_minor'],
   additionalProperties: false,
 }
 
@@ -1184,14 +1184,10 @@ export function buildToolAnnotationsByName() {
 
 export const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
 
-// Exported so this validation can be unit-tested directly against arbitrary
-// hint combinations, independent of the fixed tool-name classification map.
-export function validateToolAnnotations(name: string, annotations: McpToolAnnotations, confirmRequired: boolean): void {
+function validateToolAnnotations(name: string, annotations: McpToolAnnotations, confirmRequired: boolean): void {
   // ChatGPT Apps submission review requires every tool to declare all three
-  // hints explicitly — required for every tool, not just write tools, so a
-  // future read-only classification that forgets openWorldHint/destructiveHint
-  // (they're optional on McpToolAnnotations) fails loudly at module load
-  // instead of silently shipping an incomplete submission.
+  // hints explicitly. A future classification that forgets openWorldHint or
+  // destructiveHint must fail at module load.
   if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
     throw new Error(`Tool "${name}" must declare openWorldHint and destructiveHint explicitly.`)
   }

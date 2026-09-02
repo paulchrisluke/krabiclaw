@@ -7,7 +7,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import type { Price, PriceInput } from '~/shared/prices'
-import { isIsoInstant, PRICE_TAX_BEHAVIORS, PRICE_UNITS } from '~/shared/prices'
+import { PRICE_TAX_BEHAVIORS, PRICE_UNITS } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import {
@@ -341,23 +341,23 @@ async function normalizeExperiencePrice(
     SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
   `, [siteId, organizationId])
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  const currency = input.currency
-  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.currency is required and must be a supported currency' })
-  const unit = input.unit
-  if (!(PRICE_UNITS as readonly string[]).includes(unit)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.unit is required and must be supported' })
-  const taxBehavior = input.tax_behavior
-  if (!(PRICE_TAX_BEHAVIORS as readonly string[]).includes(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.tax_behavior is required and must be supported' })
+  const currency = input.currency ?? site.default_currency
+  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.currency is unsupported' })
+  const unit = input.unit ?? 'person'
+  if (!(PRICE_UNITS as readonly string[]).includes(unit)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.unit is unsupported' })
+  const taxBehavior = input.tax_behavior ?? 'unspecified'
+  if (!(PRICE_TAX_BEHAVIORS as readonly string[]).includes(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.tax_behavior is unsupported' })
   const compareAt = input.compare_at_amount_minor ?? null
   if (compareAt !== null && (!Number.isSafeInteger(compareAt) || compareAt <= input.amount_minor)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'price.compare_at_amount_minor must exceed amount_minor' })
   }
   const validFrom = input.valid_from ?? new Date().toISOString()
-  if (!isIsoInstant(validFrom)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.valid_from must be an ISO UTC instant (YYYY-MM-DDTHH:mm:ss[.SSS]Z)' })
+  if (Number.isNaN(Date.parse(validFrom))) throw new HTTPError({ statusCode: 400, statusMessage: 'price.valid_from must be an ISO instant' })
   const validUntil = input.valid_until ?? null
-  if (validUntil !== null && (!isIsoInstant(validUntil) || validUntil <= validFrom)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'price.valid_until must be an ISO UTC instant after valid_from' })
+  if (validUntil !== null && (Number.isNaN(Date.parse(validUntil)) || validUntil <= validFrom)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'price.valid_until must be an ISO instant after valid_from' })
   }
-  return { amountMinor: input.amount_minor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance: 'manual' }
+  return { amountMinor: input.amount_minor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance: input.provenance ?? 'manual' }
 }
 
 

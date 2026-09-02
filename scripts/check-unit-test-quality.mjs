@@ -6,9 +6,9 @@ import ts from 'typescript'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const unitDirectory = join(root, 'tests/unit')
 const limits = {
-  files: 45,
+  files: 40,
   lines: 3500,
-  tests: 200,
+  tests: 180,
 }
 const violations = []
 let lineCount = 0

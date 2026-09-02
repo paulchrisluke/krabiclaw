@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:7b066be141ef4e47241b736f3c8524190014e1ed878e2753e896ed5d9f517434",
+  "fingerprint": "sha256:1907fc2e92f4c1e92b4ee1d86fe69088caeabb79b4dd9b6b0f2b6171d6b865bd",
   "tools": [
     {
       "name": "analyze_document",
@@ -1652,6 +1652,9 @@
               "currency": {
                 "type": "string"
               },
+              "provenance": {
+                "type": "string"
+              },
               "tax_behavior": {
                 "enum": [
                   "unspecified",
@@ -1669,11 +1672,9 @@
                 "type": "string"
               },
               "valid_from": {
-                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
-                "format": "date-time",
                 "type": [
                   "string",
                   "null"
@@ -1681,10 +1682,7 @@
               }
             },
             "required": [
-              "amount_minor",
-              "currency",
-              "unit",
-              "tax_behavior"
+              "amount_minor"
             ],
             "type": [
               "object",
@@ -14812,6 +14810,9 @@
               "currency": {
                 "type": "string"
               },
+              "provenance": {
+                "type": "string"
+              },
               "tax_behavior": {
                 "enum": [
                   "unspecified",
@@ -14829,11 +14830,9 @@
                 "type": "string"
               },
               "valid_from": {
-                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
-                "format": "date-time",
                 "type": [
                   "string",
                   "null"
@@ -14841,10 +14840,7 @@
               }
             },
             "required": [
-              "amount_minor",
-              "currency",
-              "unit",
-              "tax_behavior"
+              "amount_minor"
             ],
             "type": [
               "object",

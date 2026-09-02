@@ -25,16 +25,13 @@ export interface Price {
 
 export interface PriceInput {
   amount_minor: number
-  // currency/unit/tax_behavior are required inputs, not silently defaulted —
-  // the caller must state them explicitly rather than have the server guess.
-  currency: CurrencyCode
-  unit: PriceUnit
-  tax_behavior: PriceTaxBehavior
+  currency?: CurrencyCode
+  unit?: PriceUnit
+  tax_behavior?: PriceTaxBehavior
   compare_at_amount_minor?: number | null
   valid_from?: string
   valid_until?: string | null
-  // provenance is not accepted from callers — it's derived server-side from
-  // which operation is writing (see provenanceForActor in product-management.ts).
+  provenance?: string
 }
 
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/

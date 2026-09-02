@@ -1,7 +1,7 @@
 import { callAiGateway, documentBlock, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { chargeCredits, hasCredits } from '~/server/utils/ai-credits'
 import { createProductsBatch } from '~/server/utils/product-management'
-import { validateProductDetails } from '~/server/utils/product-validation'
+import { PRODUCT_DETAILS_INPUT_SCHEMA, validateProductDetails } from '~/server/utils/product-validation'
 import type { CreateProductInput, Product } from '~/server/types/products'
 import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
@@ -19,7 +19,11 @@ import {
 } from '~/server/utils/markdown-document'
 
 const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
-const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions or order URLs. For price, return a discriminated state: kind "fixed" with the integer amount_minor in ${currency} when a fixed amount is clearly, fully visible; kind "no-fixed-price" with the exact visible wording (e.g. "Market Price", "Ask Staff") as note when the source explicitly states there is no fixed amount; kind "unreadable" when a price exists but is cropped, blurred, obscured, or otherwise not confidently readable — never guess a value or invent wording for that case. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, details, or order URLs. Set price to { amount_minor } in ${currency} when a fixed amount is clearly visible. Set price to null when the source has no fixed numeric amount. Copy explicit wording such as "Market Price" or "Ask Staff" into details as { key: "price-note", label: "Price", values: [the exact wording] }. Set price_unreadable to true when a price exists but is cropped, blurred, obscured, or otherwise unreadable. An unreadable price rejects the complete import, so never guess. Otherwise set price_unreadable to false. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 
 const PRODUCT_EXTRACTION_TOOL = {
   name: PRODUCT_EXTRACTION_TOOL_NAME,
@@ -37,19 +41,17 @@ const PRODUCT_EXTRACTION_TOOL = {
             name: { type: 'string' },
             description: { type: ['string', 'null'] },
             price: {
-              type: 'object',
-              description: 'Discriminated pricing state. kind "fixed": amount_minor is the integer amount, note is null. kind "no-fixed-price": note is the exact visible wording (e.g. "Market Price"), amount_minor is null. kind "unreadable": both amount_minor and note are null — use this when a price exists but cannot be confidently read; it aborts the whole import rather than guessing.',
-              properties: {
-                kind: { type: 'string', enum: ['fixed', 'no-fixed-price', 'unreadable'] },
-                amount_minor: { type: ['integer', 'null'], minimum: 0 },
-                note: { type: ['string', 'null'] },
-              },
-              required: ['kind', 'amount_minor', 'note'],
+              type: ['object', 'null'],
+              description: 'Fixed numeric price as an integer amount_minor, or null when the source has no fixed amount. Never use zero as a placeholder.',
+              properties: { amount_minor: { type: 'integer', minimum: 0 } },
+              required: ['amount_minor'],
               additionalProperties: false,
             },
+            price_unreadable: { type: 'boolean', description: 'True only when visible price text exists but cannot be read confidently. This rejects the complete import.' },
+            details: PRODUCT_DETAILS_INPUT_SCHEMA,
             order_url: { type: ['string', 'null'] },
           },
-          required: ['category', 'name', 'description', 'price', 'order_url'],
+          required: ['category', 'name', 'description', 'price', 'price_unreadable', 'details', 'order_url'],
           additionalProperties: false,
         },
       },
@@ -60,10 +62,10 @@ const PRODUCT_EXTRACTION_TOOL = {
 }
 
 export function parseProductExtraction(input: unknown, currency: CurrencyCode): CreateProductInput[] {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+  if (!isRecord(input)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
   }
-  const payload = input as Record<string, unknown>
+  const payload = input
   const payloadKeys = Object.keys(payload)
   if (payloadKeys.length !== 1 || payloadKeys[0] !== 'items' || !Array.isArray(payload.items)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must contain exactly one items array')
@@ -78,12 +80,12 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
   const products: CreateProductInput[] = []
   const duplicateKeys = new Set<string>()
   for (const [index, value] of payload.items.entries()) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    if (!isRecord(value)) {
       errors.push({ index, fields: [], message: 'item must be an object' })
       continue
     }
-    const item = value as Record<string, unknown>
-    const allowed = ['category', 'name', 'description', 'price', 'order_url']
+    const item = value
+    const allowed = ['category', 'name', 'description', 'price', 'price_unreadable', 'details', 'order_url']
     const unknown = Object.keys(item).filter(key => !allowed.includes(key)).sort()
     const missing = allowed.filter(key => !Object.hasOwn(item, key))
     const category = typeof item.category === 'string' ? item.category.trim() : ''
@@ -91,38 +93,28 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
     const descriptionValid = item.description === null || typeof item.description === 'string'
     const orderUrlValid = item.order_url === null || typeof item.order_url === 'string'
 
-    // Discriminated pricing state — "unreadable" is never silently coerced
-    // into price: null. It's marked invalid like any other malformed field,
-    // which the existing all-or-nothing batch check below already turns
-    // into a full import abort.
     const rawPrice = item.price
     let resolvedPrice: CreateProductInput['price'] = null
-    let details: Product['details'] = []
-    let priceValid = false
-    if (rawPrice && typeof rawPrice === 'object' && !Array.isArray(rawPrice)) {
-      const priceRecord = rawPrice as Record<string, unknown>
+    let priceValid = rawPrice === null
+    if (isRecord(rawPrice)) {
+      const priceRecord = rawPrice
       const priceKeys = Object.keys(priceRecord)
-      const hasExactKeys = priceKeys.length === 3 && ['kind', 'amount_minor', 'note'].every(key => priceKeys.includes(key))
-      if (hasExactKeys && priceRecord.kind === 'fixed') {
-        priceValid = Number.isSafeInteger(priceRecord.amount_minor)
-          && Number(priceRecord.amount_minor) >= 0
-          && priceRecord.note === null
-        // provenance is not part of PriceInput — the write path derives it
-        // from the actor ("ai:" prefix) that createProductsBatch is called
-        // with, not from anything constructed here.
-        if (priceValid) resolvedPrice = { amount_minor: Number(priceRecord.amount_minor), currency, unit: 'item', tax_behavior: 'unspecified' }
-      } else if (hasExactKeys && priceRecord.kind === 'no-fixed-price') {
-        const note = typeof priceRecord.note === 'string' ? priceRecord.note.trim() : ''
-        priceValid = note.length > 0 && priceRecord.amount_minor === null
-        if (priceValid) {
-          try {
-            details = validateProductDetails([{ key: 'price-note', label: 'Price', values: [note] }])
-          } catch {
-            priceValid = false
-          }
-        }
-      }
-      // kind === 'unreadable' (or anything else) leaves priceValid false.
+      const amountMinor = priceRecord.amount_minor
+      priceValid = priceKeys.length === 1
+        && priceKeys[0] === 'amount_minor'
+        && typeof amountMinor === 'number'
+        && Number.isSafeInteger(amountMinor)
+        && amountMinor >= 0
+      if (priceValid && typeof amountMinor === 'number') resolvedPrice = { amount_minor: amountMinor, currency, unit: 'item', tax_behavior: 'unspecified' }
+    }
+    const priceUnreadable = item.price_unreadable === true
+    if (typeof item.price_unreadable !== 'boolean' || priceUnreadable) priceValid = false
+    let details: Product['details'] = []
+    let detailsValid = true
+    try {
+      details = validateProductDetails(item.details)
+    } catch {
+      detailsValid = false
     }
 
     const invalidFields = [
@@ -131,6 +123,7 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
       ...(!category ? ['category'] : []),
       ...(!name ? ['name'] : []),
       ...(!priceValid ? ['price'] : []),
+      ...(!detailsValid ? ['details'] : []),
       ...(!descriptionValid ? ['description'] : []),
       ...(!orderUrlValid ? ['order_url'] : []),
     ]
@@ -144,9 +137,9 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
     products.push({
       category,
       name,
-      description: item.description === null ? '' : item.description as string,
+      description: typeof item.description === 'string' ? item.description : '',
       price: resolvedPrice,
-      order_url: item.order_url as string | null,
+      order_url: typeof item.order_url === 'string' ? item.order_url : null,
       tags: [],
       details,
       source: 'ai',
@@ -323,7 +316,7 @@ export async function extractProductsFromMediaAsset(
   }
   const accepted = parseProductExtraction(toolBlocks[0].input, site.default_currency)
   try {
-    const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, `ai:${opts.userId}`)
+    const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, opts.userId, 'ai-import')
     return { products, creditsRemaining: charged.newBalance }
   } catch (error) {
     if (error && typeof error === 'object' && 'statusCode' in error) {

@@ -1,20 +1,7 @@
 import type { McpToolDefinition } from './shared'
 import { pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, siteTool } from './shared'
-import { PRODUCT_LIMITS } from '~/server/utils/product-validation'
+import { PRODUCT_DETAILS_INPUT_SCHEMA, PRODUCT_LIMITS } from '~/server/utils/product-validation'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
-
-const productDetailObject = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    key: { type: 'string', minLength: 1, maxLength: PRODUCT_LIMITS.detailKey, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
-    label: { type: 'string', minLength: 1, maxLength: PRODUCT_LIMITS.detailLabel },
-    values: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.detailValues, items: { type: 'string', minLength: 1, maxLength: PRODUCT_LIMITS.detailValue } },
-  },
-  required: ['key', 'label', 'values'],
-} as const
-
-const productDetailsArray = { type: 'array', maxItems: PRODUCT_LIMITS.detailGroups, items: productDetailObject } as const
 
 const priceObject = {
   type: ['object', 'null'],
@@ -47,7 +34,7 @@ const productObject = {
     id: { type: 'string' }, location_id: { type: 'string' }, category: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' },
     description: { type: 'string' }, price: priceObject, order_url: { type: ['string', 'null'] },
     is_visible: { type: 'boolean' }, available: { type: 'boolean' }, featured: { type: 'boolean' }, featured_sort_order: { type: 'number' }, sort_order: { type: 'number' },
-    tags: { type: 'array', items: { type: 'string' } }, details: productDetailsArray,
+    tags: { type: 'array', items: { type: 'string' } }, details: PRODUCT_DETAILS_INPUT_SCHEMA,
     image: { ...resolvedMediaAssetObject, type: ['object', 'null'] }, gallery: { type: 'array', items: resolvedMediaAssetObject },
     seo_title: { type: ['string', 'null'] }, seo_description: { type: ['string', 'null'] }, canonical_url: { type: ['string', 'null'] }, robots: { type: ['string', 'null'] },
     source: { type: 'string', enum: ['manual', 'template', 'ai', 'import', 'copy'] },
@@ -87,7 +74,7 @@ const productListItemObject = {
 const productWrite = {
   category: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, price: priceWrite,
   order_url: { type: ['string', 'null'] }, is_visible: { type: 'boolean' }, available: { type: 'boolean' }, featured: { type: 'boolean' },
-  featured_sort_order: { type: 'number' }, tags: { type: 'array', items: { type: 'string' } }, details: productDetailsArray,
+  featured_sort_order: { type: 'number' }, tags: { type: 'array', items: { type: 'string' } }, details: PRODUCT_DETAILS_INPUT_SCHEMA,
   seo_title: { type: ['string', 'null'] }, seo_description: { type: ['string', 'null'] }, canonical_url: { type: ['string', 'null'] }, robots: { type: ['string', 'null'] },
 } as const
 

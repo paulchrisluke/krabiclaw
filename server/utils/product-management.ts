@@ -14,7 +14,7 @@ import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
-import { isIsoInstant, PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
+import { isIsoInstant, PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
 import {
   PRODUCT_LIMITS,
   assertNoPriceNoteContradiction,
@@ -125,38 +125,54 @@ interface NormalizedPriceInput {
   compareAt: number | null
   validFrom: string
   validUntil: string | null
-  provenance: string
+  provenance: ProductPriceProvenance
+  validFromProvided: boolean
+  validUntilProvided: boolean
 }
 
-// Provenance is never taken from caller-supplied price fields — a model
-// echoing back an arbitrary `provenance` string would let it fake authoritative
-// sourcing metadata. It's derived instead from which operation is writing:
-// chowbot-media's AI-import path marks its actor with an "ai:" prefix
-// (see server/utils/chowbot-media.ts), every other write path is 'manual'.
-export function provenanceForActor(actor: string): string {
-  return actor.startsWith('ai:') ? 'ai-import' : 'manual'
+export type ProductPriceProvenance = 'manual' | 'ai-import'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-export function normalizePriceInput(input: PriceInput | null | undefined, provenance: string, field = 'price'): NormalizedPriceInput | null {
-  if (input === undefined) throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
-  if (input === null) return null
-  if (typeof input !== 'object' || Array.isArray(input)) throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an object or null` })
-  if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor < 0) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.amount_minor must be a non-negative integer` })
+function isPriceUnit(value: unknown): value is PriceUnit {
+  return typeof value === 'string' && PRICE_UNITS.some(candidate => candidate === value)
+}
+
+function isPriceTaxBehavior(value: unknown): value is PriceTaxBehavior {
+  return typeof value === 'string' && PRICE_TAX_BEHAVIORS.some(candidate => candidate === value)
+}
+
+function normalizeFixedPriceInput(input: unknown, provenance: ProductPriceProvenance, field: string): NormalizedPriceInput {
+  if (!isRecord(input)) throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an object or null` })
+  if (Object.hasOwn(input, 'provenance')) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.provenance is assigned by the server` })
+  const amountMinor = input.amount_minor
+  if (typeof amountMinor !== 'number' || !Number.isSafeInteger(amountMinor) || amountMinor < 0) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.amount_minor must be a non-negative integer` })
   const currency = input.currency
   if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.currency is required and must be a supported currency` })
   const unit = input.unit
-  if (!(PRICE_UNITS as readonly string[]).includes(unit)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.unit is required and must be supported` })
+  if (!isPriceUnit(unit)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.unit is required and must be supported` })
   const taxBehavior = input.tax_behavior
-  if (!(PRICE_TAX_BEHAVIORS as readonly string[]).includes(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.tax_behavior is required and must be supported` })
+  if (!isPriceTaxBehavior(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.tax_behavior is required and must be supported` })
   const compareAt = input.compare_at_amount_minor ?? null
-  if (compareAt !== null && (!Number.isSafeInteger(compareAt) || compareAt <= input.amount_minor)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.compare_at_amount_minor must exceed amount_minor` })
-  const validFrom = input.valid_from ?? new Date().toISOString()
+  if (compareAt !== null && (typeof compareAt !== 'number' || !Number.isSafeInteger(compareAt) || compareAt <= amountMinor)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.compare_at_amount_minor must exceed amount_minor` })
+  const validFromProvided = input.valid_from !== undefined
+  const validFrom = validFromProvided ? input.valid_from : new Date().toISOString()
+  if (typeof validFrom !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_from must be an ISO UTC instant (YYYY-MM-DDTHH:mm:ss[.SSS]Z)` })
   if (!isIsoInstant(validFrom)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_from must be an ISO UTC instant (YYYY-MM-DDTHH:mm:ss[.SSS]Z)` })
+  const validUntilProvided = input.valid_until !== undefined
   const validUntil = input.valid_until ?? null
-  if (validUntil !== null && (!isIsoInstant(validUntil) || validUntil <= validFrom)) {
+  if (validUntil !== null && (typeof validUntil !== 'string' || !isIsoInstant(validUntil) || validUntil <= validFrom)) {
     throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_until must be an ISO UTC instant after valid_from` })
   }
-  return { amountMinor: input.amount_minor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance }
+  return { amountMinor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance, validFromProvided, validUntilProvided }
+}
+
+export function normalizePriceInput(input: unknown, provenance: ProductPriceProvenance, field = 'price'): NormalizedPriceInput | null {
+  if (input === undefined) throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
+  if (input === null) return null
+  return normalizeFixedPriceInput(input, provenance, field)
 }
 
 // Shared by updateProduct and syncProducts, which both batch their writes
@@ -172,6 +188,18 @@ function closeActivePriceQuery(priceId: string, at: string): BatchQuery {
          AND (valid_until IS NULL OR valid_until > ?)
     `,
     params: [at, priceId, at, at],
+  }
+}
+
+function activePriceSnapshotPredicate(priceId: string, at: string): { sql: string; params: SqlValue[] } {
+  return {
+    sql: `EXISTS (
+      SELECT 1 FROM prices
+       WHERE id = ?
+         AND valid_from < ?
+         AND (valid_until IS NULL OR valid_until > ?)
+    )`,
+    params: [priceId, at, at],
   }
 }
 
@@ -368,6 +396,7 @@ export async function createProduct(
   input: CreateProductInput,
   actor: string,
   env: CloudflareEnv,
+  priceProvenance: ProductPriceProvenance = 'manual',
 ): Promise<Product> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const category = requireTrimmedProductString(input.category, 'category', PRODUCT_LIMITS.category)
@@ -379,7 +408,7 @@ export async function createProduct(
   if (description.length > PRODUCT_LIMITS.description) {
     throw new HTTPError({ statusCode: 400, statusMessage: `description must be at most ${PRODUCT_LIMITS.description} characters` })
   }
-  const price = normalizePriceInput(input.price, provenanceForActor(actor))
+  const price = normalizePriceInput(input.price, priceProvenance)
   const orderUrl = validateProductOrderUrl(input.order_url)
   const tags = validateProductTags(input.tags)
   const details = validateProductDetails(input.details)
@@ -446,6 +475,7 @@ export async function createProductsBatch(
   locationId: string,
   inputs: CreateProductInput[],
   actor: string,
+  priceProvenance: ProductPriceProvenance = 'manual',
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > PRODUCT_LIMITS.batchCreate) {
@@ -454,7 +484,6 @@ export async function createProductsBatch(
   const existing = await queryAll<{ slug: string }>(db, `SELECT slug FROM products WHERE site_id = ? AND location_id = ?`, [siteId, locationId])
   const usedSlugs = new Set(existing.map(row => row.slug))
   const now = new Date().toISOString()
-  const provenance = provenanceForActor(actor)
   const ids: string[] = []
   const inserts: BatchQuery[] = inputs.flatMap((input, index) => {
     const category = requireTrimmedProductString(input.category, `products[${index}].category`, PRODUCT_LIMITS.category)
@@ -462,7 +491,7 @@ export async function createProductsBatch(
     if (input.description !== undefined && typeof input.description !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description must be a string` })
     const description = input.description?.trim() ?? ''
     if (description.length > PRODUCT_LIMITS.description) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description is too long` })
-    const price = normalizePriceInput(input.price, provenance, `products[${index}].price`)
+    const price = normalizePriceInput(input.price, priceProvenance, `products[${index}].price`)
     const details = validateProductDetails(input.details)
     assertNoPriceNoteContradiction(price !== null, details)
     const base = slugifyProductName(name)
@@ -518,6 +547,7 @@ export async function syncProducts(
   inputs: SyncProductInput[],
   actor: string,
   setMissingUnavailable = false,
+  priceProvenance: ProductPriceProvenance = 'manual',
 ): Promise<Product[]> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length > PRODUCT_LIMITS.sync) throw new HTTPError({ statusCode: 400, statusMessage: `products may contain at most ${PRODUCT_LIMITS.sync} rows` })
@@ -530,7 +560,6 @@ export async function syncProducts(
     throw new HTTPError({ statusCode: 404, statusMessage: `Product IDs not found at this location: ${unknownIds.join(', ')}` })
   }
   const now = new Date().toISOString()
-  const provenance = provenanceForActor(actor)
   const usedSlugs = new Set(existing.map(product => product.slug))
   const orderedIds: string[] = []
   const writes: BatchQuery[] = []
@@ -543,7 +572,7 @@ export async function syncProducts(
     const orderUrl = validateProductOrderUrl(input.order_url)
     const tags = validateProductTags(input.tags)
     const details = validateProductDetails(input.details)
-    const price = normalizePriceInput(input.price, provenance, `products[${index}].price`)
+    const price = normalizePriceInput(input.price, priceProvenance, `products[${index}].price`)
     const current = input.product_id ? existingById.get(input.product_id)! : null
     const id = current?.id ?? crypto.randomUUID()
     orderedIds.push(id)
@@ -576,9 +605,8 @@ export async function syncProducts(
         }
         continue
       }
-      const rawPrice = input.price!
       const samePrice = current.price
-        && rawPrice.valid_from === undefined && rawPrice.valid_until === undefined
+        && !price.validFromProvided && !price.validUntilProvided
         && current.price.amount_minor === price.amountMinor
         && current.price.currency === price.currency
         && current.price.unit === price.unit
@@ -652,6 +680,7 @@ export async function updateProduct(
   input: UpdateProductInput,
   actor: string,
   env: CloudflareEnv,
+  priceProvenance: ProductPriceProvenance = 'manual',
 ): Promise<Product> {
   const existing = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!existing) notFound()
@@ -692,23 +721,14 @@ export async function updateProduct(
   if (contentChanged) add('source', 'manual')
   add('updated_at', new Date().toISOString())
   add('updated_by', actor)
-  const writes: BatchQuery[] = []
-  if (sets.length) {
-    params.push(productId, organizationId, siteId, locationId)
-    writes.push({ query: `UPDATE products SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`, params })
-  }
-  // Tracks the index of the close-price write within `writes` (-1 when this
-  // update doesn't close one) so its D1 batch result can be checked below —
-  // D1's batch is atomic across statements, but a matched-0-rows UPDATE is a
-  // successful no-op, not a batch failure, so a concurrent request that
-  // already closed/replaced this Price would otherwise be silently ignored.
-  let closeWriteIndex = -1
+  let priceInsert: BatchQuery | null = null
+  let priceSnapshot: { sql: string; params: SqlValue[] } | null = null
+  let priceClose: BatchQuery | null = null
   if (input.price !== undefined) {
     const at = input.price?.valid_from ?? new Date().toISOString()
     if (existing.price && at <= existing.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: 'Replacement Price must start after the active Price' })
     if (input.price !== null) {
-      const price = normalizePriceInput({ ...input.price, valid_from: at }, provenanceForActor(actor))
-      if (!price) throw new Error('normalizePriceInput returned null for a non-null input')
+      const price = normalizeFixedPriceInput({ ...input.price, valid_from: at }, priceProvenance, 'price')
       const conflict = await queryFirst<{ id: string }>(db, `
         SELECT id FROM prices
         WHERE product_id = ? AND id <> COALESCE(?, '')
@@ -718,32 +738,49 @@ export async function updateProduct(
       `, [productId, existing.price?.id ?? null, price.validUntil, price.validFrom])
       if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: 'Scheduled Price overlaps an existing Price' })
       if (existing.price && (existing.price.valid_until === null || existing.price.valid_until > at)) {
-        closeWriteIndex = writes.length
-        writes.push(closeActivePriceQuery(existing.price.id, at))
+        priceSnapshot = activePriceSnapshotPredicate(existing.price.id, at)
+        priceClose = closeActivePriceQuery(existing.price.id, at)
       }
-      writes.push({
-        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()],
-      })
+      const insertParams: SqlValue[] = [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()]
+      priceInsert = priceSnapshot
+        ? {
+            query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
+                    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                     WHERE ${priceSnapshot.sql}`,
+            params: [...insertParams, ...priceSnapshot.params],
+          }
+        : {
+            query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            params: insertParams,
+          }
     } else if (existing.price && (existing.price.valid_until === null || existing.price.valid_until > at)) {
-      closeWriteIndex = writes.length
-      writes.push(closeActivePriceQuery(existing.price.id, at))
+      priceSnapshot = activePriceSnapshotPredicate(existing.price.id, at)
+      priceClose = closeActivePriceQuery(existing.price.id, at)
     }
   }
+  const writes: BatchQuery[] = []
+  let productWriteIndex = -1
+  if (sets.length) {
+    productWriteIndex = writes.length
+    params.push(productId, organizationId, siteId, locationId)
+    if (priceSnapshot) params.push(...priceSnapshot.params)
+    writes.push({
+      query: `UPDATE products SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'${priceSnapshot ? ` AND ${priceSnapshot.sql}` : ''}`,
+      params,
+    })
+  }
+  if (priceInsert) writes.push(priceInsert)
+  const closeWriteIndex = priceClose ? writes.length : -1
+  if (priceClose) writes.push(priceClose)
   const results = await executeBatch(db, [
     ...writes,
     publicResourceCacheInvalidationQuery(siteId, 'product.updated'),
   ], { operation: 'update Product' })
-  if (sets.length && Number(results[0]?.meta?.changes ?? 0) !== 1) notFound()
   if (closeWriteIndex >= 0 && Number(results[closeWriteIndex]?.meta?.changes ?? 0) !== 1) {
-    // The close matched 0 rows: a concurrent request already closed or
-    // replaced this Price between our read and this write. The insert above
-    // (if any) already committed atomically alongside it, so this cannot
-    // undo the write — it surfaces the race loudly instead of returning 200
-    // over what may now be an overlapping-Price state.
     throw new HTTPError({ statusCode: 409, statusMessage: 'Active Price was modified by a concurrent request; re-read the Product and retry' })
   }
+  if (productWriteIndex >= 0 && Number(results[productWriteIndex]?.meta?.changes ?? 0) !== 1) notFound()
   await productEvent(db, 'product.updated', { organizationId, siteId, locationId, actor, productId })
   const updated = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!updated) throw new Error('Product not found after update')

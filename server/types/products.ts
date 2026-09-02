@@ -1,5 +1,6 @@
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
-import type { Price, PriceInput } from '~/shared/prices'
+import type { Price, PriceInput, PriceTaxBehavior, PriceUnit } from '~/shared/prices'
+import type { CurrencyCode } from '~/shared/currencies'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface ProductDetail {
@@ -9,6 +10,13 @@ export interface ProductDetail {
 }
 
 export type ProductSource = 'manual' | 'template' | 'ai' | 'import' | 'copy'
+
+export type ProductPriceInput = Omit<PriceInput, 'currency' | 'unit' | 'tax_behavior' | 'provenance'> & {
+  currency: CurrencyCode
+  unit: PriceUnit
+  tax_behavior: PriceTaxBehavior
+  provenance?: never
+}
 
 export interface Product {
   id: string
@@ -49,7 +57,7 @@ export interface CreateProductInput {
   category: string
   name: string
   description?: string
-  price: PriceInput | null
+  price: ProductPriceInput | null
   order_url?: string | null
   is_visible?: boolean
   available?: boolean
@@ -69,7 +77,7 @@ export interface UpdateProductInput {
   category?: string
   name?: string
   description?: string
-  price?: PriceInput | null
+  price?: ProductPriceInput | null
   order_url?: string | null
   is_visible?: boolean
   available?: boolean
