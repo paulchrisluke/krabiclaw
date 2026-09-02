@@ -50,3 +50,37 @@ test('validateToolAnnotations rejects missing openWorldHint or destructiveHint',
 test('the MCP tool catalog loads without an annotation classification error', async () => {
   await import('../../server/utils/mcp-tools/index.ts')
 })
+
+// Table-driven check against real executor behavior for tools that update
+// (not create/delete) tenant state — a regression here (e.g. someone marking
+// an update tool destructive, or a public-content update as closed-world)
+// would otherwise only surface during a ChatGPT Apps submission review.
+test('specific update tools declare the annotations that match their real behavior', async () => {
+  const { MCP_TOOLS } = await import('../../server/utils/mcp-tools/index.ts')
+  const byName = new Map(MCP_TOOLS.map(tool => [tool.name, tool]))
+
+  const expectations: Record<string, { openWorldHint: boolean, destructiveHint: boolean }> = {
+    // Mutates a Product's fixed Price / other fields rendered on the public
+    // site — publicly visible, but never irreversibly destroys the Product.
+    update_product: { openWorldHint: true, destructiveHint: false },
+    // Notification settings are internal to the tenant dashboard, not
+    // rendered on any public surface.
+    update_notification_settings: { openWorldHint: false, destructiveHint: false },
+    // Media asset metadata (alt text, etc.) can be rendered on public pages.
+    update_media_asset: { openWorldHint: true, destructiveHint: false },
+    reorder_media: { openWorldHint: true, destructiveHint: false },
+    rename_product_category: { openWorldHint: true, destructiveHint: false },
+    move_products: { openWorldHint: true, destructiveHint: false },
+    move_product_category: { openWorldHint: true, destructiveHint: false },
+    set_brand_color: { openWorldHint: true, destructiveHint: false },
+    update_site_settings: { openWorldHint: true, destructiveHint: false },
+  }
+
+  for (const [name, expected] of Object.entries(expectations)) {
+    const tool = byName.get(name)
+    assert.ok(tool, `expected MCP_TOOLS to contain a tool named "${name}"`)
+    assert.equal(tool!.annotations.openWorldHint, expected.openWorldHint, `${name}.openWorldHint`)
+    assert.equal(tool!.annotations.destructiveHint, expected.destructiveHint, `${name}.destructiveHint`)
+    assert.equal(tool!.annotations.readOnlyHint, false, `${name}.readOnlyHint`)
+  }
+})

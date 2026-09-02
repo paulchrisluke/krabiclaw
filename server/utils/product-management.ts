@@ -14,9 +14,10 @@ import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
-import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
+import { isIsoInstant, PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
 import {
   PRODUCT_LIMITS,
+  assertNoPriceNoteContradiction,
   normalizeOptionalProductString,
   requireTrimmedProductString,
   validateProductCanonicalUrl,
@@ -127,26 +128,35 @@ interface NormalizedPriceInput {
   provenance: string
 }
 
-export function normalizePriceInput(input: PriceInput | null | undefined, defaultCurrency: string, field = 'price'): NormalizedPriceInput | null {
+// Provenance is never taken from caller-supplied price fields — a model
+// echoing back an arbitrary `provenance` string would let it fake authoritative
+// sourcing metadata. It's derived instead from which operation is writing:
+// chowbot-media's AI-import path marks its actor with an "ai:" prefix
+// (see server/utils/chowbot-media.ts), every other write path is 'manual'.
+export function provenanceForActor(actor: string): string {
+  return actor.startsWith('ai:') ? 'ai-import' : 'manual'
+}
+
+export function normalizePriceInput(input: PriceInput | null | undefined, provenance: string, field = 'price'): NormalizedPriceInput | null {
   if (input === undefined) throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
   if (input === null) return null
   if (typeof input !== 'object' || Array.isArray(input)) throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an object or null` })
   if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor < 0) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.amount_minor must be a non-negative integer` })
-  const currency = input.currency ?? defaultCurrency
-  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.currency is unsupported` })
-  const unit = input.unit ?? 'item'
-  if (!(PRICE_UNITS as readonly string[]).includes(unit)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.unit is unsupported` })
-  const taxBehavior = input.tax_behavior ?? 'unspecified'
-  if (!(PRICE_TAX_BEHAVIORS as readonly string[]).includes(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.tax_behavior is unsupported` })
+  const currency = input.currency
+  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.currency is required and must be a supported currency` })
+  const unit = input.unit
+  if (!(PRICE_UNITS as readonly string[]).includes(unit)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.unit is required and must be supported` })
+  const taxBehavior = input.tax_behavior
+  if (!(PRICE_TAX_BEHAVIORS as readonly string[]).includes(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.tax_behavior is required and must be supported` })
   const compareAt = input.compare_at_amount_minor ?? null
   if (compareAt !== null && (!Number.isSafeInteger(compareAt) || compareAt <= input.amount_minor)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.compare_at_amount_minor must exceed amount_minor` })
   const validFrom = input.valid_from ?? new Date().toISOString()
-  if (Number.isNaN(Date.parse(validFrom))) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_from must be an ISO instant` })
+  if (!isIsoInstant(validFrom)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_from must be an ISO UTC instant (YYYY-MM-DDTHH:mm:ss[.SSS]Z)` })
   const validUntil = input.valid_until ?? null
-  if (validUntil !== null && (Number.isNaN(Date.parse(validUntil)) || validUntil <= validFrom)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_until must be an ISO instant after valid_from` })
+  if (validUntil !== null && (!isIsoInstant(validUntil) || validUntil <= validFrom)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_until must be an ISO UTC instant after valid_from` })
   }
-  return { amountMinor: input.amount_minor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance: input.provenance ?? 'manual' }
+  return { amountMinor: input.amount_minor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance }
 }
 
 // Shared by updateProduct and syncProducts, which both batch their writes
@@ -163,12 +173,6 @@ function closeActivePriceQuery(priceId: string, at: string): BatchQuery {
     `,
     params: [at, priceId, at, at],
   }
-}
-
-async function siteDefaultCurrency(db: DbClient, organizationId: string, siteId: string): Promise<string> {
-  const site = await queryFirst<{ default_currency: string }>(db, `SELECT default_currency FROM sites WHERE id = ? AND organization_id = ?`, [siteId, organizationId])
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  return site.default_currency
 }
 
 async function hydrateProductMedia(db: DbClient, siteId: string, products: Product[]): Promise<Product[]> {
@@ -375,10 +379,11 @@ export async function createProduct(
   if (description.length > PRODUCT_LIMITS.description) {
     throw new HTTPError({ statusCode: 400, statusMessage: `description must be at most ${PRODUCT_LIMITS.description} characters` })
   }
-  const price = normalizePriceInput(input.price, await siteDefaultCurrency(db, organizationId, siteId))
+  const price = normalizePriceInput(input.price, provenanceForActor(actor))
   const orderUrl = validateProductOrderUrl(input.order_url)
   const tags = validateProductTags(input.tags)
   const details = validateProductDetails(input.details)
+  assertNoPriceNoteContradiction(price !== null, details)
   const seoTitle = normalizeOptionalProductString(input.seo_title, 'seo_title', PRODUCT_LIMITS.seoTitle)
   const seoDescription = normalizeOptionalProductString(input.seo_description, 'seo_description', PRODUCT_LIMITS.seoDescription)
   const canonicalUrl = validateProductCanonicalUrl(input.canonical_url)
@@ -449,7 +454,7 @@ export async function createProductsBatch(
   const existing = await queryAll<{ slug: string }>(db, `SELECT slug FROM products WHERE site_id = ? AND location_id = ?`, [siteId, locationId])
   const usedSlugs = new Set(existing.map(row => row.slug))
   const now = new Date().toISOString()
-  const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
+  const provenance = provenanceForActor(actor)
   const ids: string[] = []
   const inserts: BatchQuery[] = inputs.flatMap((input, index) => {
     const category = requireTrimmedProductString(input.category, `products[${index}].category`, PRODUCT_LIMITS.category)
@@ -457,7 +462,9 @@ export async function createProductsBatch(
     if (input.description !== undefined && typeof input.description !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description must be a string` })
     const description = input.description?.trim() ?? ''
     if (description.length > PRODUCT_LIMITS.description) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description is too long` })
-    const price = normalizePriceInput(input.price, defaultCurrency, `products[${index}].price`)
+    const price = normalizePriceInput(input.price, provenance, `products[${index}].price`)
+    const details = validateProductDetails(input.details)
+    assertNoPriceNoteContradiction(price !== null, details)
     const base = slugifyProductName(name)
     if (!base) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].name must produce a non-empty ASCII slug` })
     let slug = ''
@@ -483,7 +490,7 @@ export async function createProductsBatch(
         validateOptionalBoolean(input.available, `products[${index}].available`, true),
         validateOptionalBoolean(input.featured, `products[${index}].featured`, false),
         input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
-        existing.length + index, JSON.stringify(validateProductTags(input.tags)), JSON.stringify(validateProductDetails(input.details)),
+        existing.length + index, JSON.stringify(validateProductTags(input.tags)), JSON.stringify(details),
         normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
         normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
         validateProductCanonicalUrl(input.canonical_url), validateProductRobots(input.robots), validateSource(input.source),
@@ -523,7 +530,7 @@ export async function syncProducts(
     throw new HTTPError({ statusCode: 404, statusMessage: `Product IDs not found at this location: ${unknownIds.join(', ')}` })
   }
   const now = new Date().toISOString()
-  const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
+  const provenance = provenanceForActor(actor)
   const usedSlugs = new Set(existing.map(product => product.slug))
   const orderedIds: string[] = []
   const writes: BatchQuery[] = []
@@ -536,11 +543,16 @@ export async function syncProducts(
     const orderUrl = validateProductOrderUrl(input.order_url)
     const tags = validateProductTags(input.tags)
     const details = validateProductDetails(input.details)
-    const price = normalizePriceInput(input.price, defaultCurrency, `products[${index}].price`)
+    const price = normalizePriceInput(input.price, provenance, `products[${index}].price`)
     const current = input.product_id ? existingById.get(input.product_id)! : null
     const id = current?.id ?? crypto.randomUUID()
     orderedIds.push(id)
     if (current) {
+      const effectiveDetails = input.details === undefined ? current.details : details
+      // A row that previously had no Price and a price-note transitioning
+      // to a fixed Price must explicitly clear the note in the same call —
+      // omitting `details` keeps it, which this correctly rejects.
+      assertNoPriceNoteContradiction(price !== null, effectiveDetails)
       writes.push({
         query: `UPDATE products SET category=?, name=?, description=?, order_url=?, is_visible=?, available=?, featured=?, featured_sort_order=?, tags_json=?, details_json=?, seo_title=?, seo_description=?, canonical_url=?, robots=?, source='manual', updated_at=?, updated_by=? WHERE id=? AND organization_id=? AND site_id=? AND location_id=? AND product_type='standard'`,
         params: [category, name, input.description === undefined ? current.description : description,
@@ -584,6 +596,7 @@ export async function syncProducts(
       }
       continue
     }
+    assertNoPriceNoteContradiction(price !== null, details)
     const base = slugifyProductName(name)
     if (!base) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].name must produce a non-empty ASCII slug` })
     let slug = ''
@@ -662,12 +675,19 @@ export async function updateProduct(
   if (input.featured !== undefined) add('featured', validateOptionalBoolean(input.featured, 'featured', existing.featured))
   if (input.featured_sort_order !== undefined) add('featured_sort_order', validateNonNegativeInteger(input.featured_sort_order, 'featured_sort_order'))
   if (input.tags !== undefined) add('tags_json', JSON.stringify(validateProductTags(input.tags)))
-  if (input.details !== undefined) add('details_json', JSON.stringify(validateProductDetails(input.details)))
+  const newDetails = input.details !== undefined ? validateProductDetails(input.details) : null
+  if (newDetails !== null) add('details_json', JSON.stringify(newDetails))
   if (input.seo_title !== undefined) add('seo_title', normalizeOptionalProductString(input.seo_title, 'seo_title', PRODUCT_LIMITS.seoTitle))
   if (input.seo_description !== undefined) add('seo_description', normalizeOptionalProductString(input.seo_description, 'seo_description', PRODUCT_LIMITS.seoDescription))
   if (input.canonical_url !== undefined) add('canonical_url', validateProductCanonicalUrl(input.canonical_url))
   if (input.robots !== undefined) add('robots', validateProductRobots(input.robots))
   if (!sets.length && input.price === undefined) return existing
+  // Validate the final intended {price, details} state together — omitting
+  // either field means "keep the existing value" per this tool's patch
+  // semantics, so both must be resolved before checking for contradiction.
+  const effectiveDetails = newDetails ?? existing.details
+  const effectiveHasFixedPrice = input.price === undefined ? existing.price !== null : input.price !== null
+  assertNoPriceNoteContradiction(effectiveHasFixedPrice, effectiveDetails)
   const contentChanged = input.price !== undefined || ['category', 'name', 'description', 'order_url', 'tags_json', 'details_json'].some(column => sets.some(set => set.startsWith(`${column} =`)))
   if (contentChanged) add('source', 'manual')
   add('updated_at', new Date().toISOString())
@@ -677,11 +697,17 @@ export async function updateProduct(
     params.push(productId, organizationId, siteId, locationId)
     writes.push({ query: `UPDATE products SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`, params })
   }
+  // Tracks the index of the close-price write within `writes` (-1 when this
+  // update doesn't close one) so its D1 batch result can be checked below —
+  // D1's batch is atomic across statements, but a matched-0-rows UPDATE is a
+  // successful no-op, not a batch failure, so a concurrent request that
+  // already closed/replaced this Price would otherwise be silently ignored.
+  let closeWriteIndex = -1
   if (input.price !== undefined) {
     const at = input.price?.valid_from ?? new Date().toISOString()
     if (existing.price && at <= existing.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: 'Replacement Price must start after the active Price' })
     if (input.price !== null) {
-      const price = normalizePriceInput({ ...input.price, valid_from: at }, await siteDefaultCurrency(db, organizationId, siteId))
+      const price = normalizePriceInput({ ...input.price, valid_from: at }, provenanceForActor(actor))
       if (!price) throw new Error('normalizePriceInput returned null for a non-null input')
       const conflict = await queryFirst<{ id: string }>(db, `
         SELECT id FROM prices
@@ -691,21 +717,33 @@ export async function updateProduct(
         LIMIT 1
       `, [productId, existing.price?.id ?? null, price.validUntil, price.validFrom])
       if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: 'Scheduled Price overlaps an existing Price' })
-      if (existing.price) writes.push(closeActivePriceQuery(existing.price.id, at))
+      if (existing.price) {
+        closeWriteIndex = writes.length
+        writes.push(closeActivePriceQuery(existing.price.id, at))
+      }
       writes.push({
         query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()],
       })
     } else if (existing.price) {
+      closeWriteIndex = writes.length
       writes.push(closeActivePriceQuery(existing.price.id, at))
     }
   }
-  const [result] = await executeBatch(db, [
+  const results = await executeBatch(db, [
     ...writes,
     publicResourceCacheInvalidationQuery(siteId, 'product.updated'),
   ], { operation: 'update Product' })
-  if (sets.length && Number(result?.meta?.changes ?? 0) !== 1) notFound()
+  if (sets.length && Number(results[0]?.meta?.changes ?? 0) !== 1) notFound()
+  if (closeWriteIndex >= 0 && Number(results[closeWriteIndex]?.meta?.changes ?? 0) !== 1) {
+    // The close matched 0 rows: a concurrent request already closed or
+    // replaced this Price between our read and this write. The insert above
+    // (if any) already committed atomically alongside it, so this cannot
+    // undo the write — it surfaces the race loudly instead of returning 200
+    // over what may now be an overlapping-Price state.
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Active Price was modified by a concurrent request; re-read the Product and retry' })
+  }
   await productEvent(db, 'product.updated', { organizationId, siteId, locationId, actor, productId })
   const updated = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!updated) throw new Error('Product not found after update')

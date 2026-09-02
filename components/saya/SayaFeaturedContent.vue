@@ -72,8 +72,8 @@ interface Props {
       image?: string | null
       imageKind?: string
       alt?: string
-      price?: string
-      compareAtPrice?: string
+      price?: string | null
+      compareAtPrice?: string | null
       href?: string
       unavailable?: boolean
     }>

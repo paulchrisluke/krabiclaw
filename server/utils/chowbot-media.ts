@@ -19,7 +19,7 @@ import {
 } from '~/server/utils/markdown-document'
 
 const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
-const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, order URLs, or a fixed price. Prices must be returned as integer amount_minor values in ${currency} when a fixed amount is visible, or price: null when it is not. Only populate details with a price-note entry when the source explicitly shows wording such as "Market Price" or "Ask Staff" — never fabricate one. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions or order URLs. For price, return a discriminated state: kind "fixed" with the integer amount_minor in ${currency} when a fixed amount is clearly, fully visible; kind "no-fixed-price" with the exact visible wording (e.g. "Market Price", "Ask Staff") as note when the source explicitly states there is no fixed amount; kind "unreadable" when a price exists but is cropped, blurred, obscured, or otherwise not confidently readable — never guess a value or invent wording for that case. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
 
 const PRODUCT_EXTRACTION_TOOL = {
   name: PRODUCT_EXTRACTION_TOOL_NAME,
@@ -37,28 +37,19 @@ const PRODUCT_EXTRACTION_TOOL = {
             name: { type: 'string' },
             description: { type: ['string', 'null'] },
             price: {
-              type: ['object', 'null'],
-              properties: { amount_minor: { type: 'integer', minimum: 0 } },
-              required: ['amount_minor'],
+              type: 'object',
+              description: 'Discriminated pricing state. kind "fixed": amount_minor is the integer amount, note is null. kind "no-fixed-price": note is the exact visible wording (e.g. "Market Price"), amount_minor is null. kind "unreadable": both amount_minor and note are null — use this when a price exists but cannot be confidently read; it aborts the whole import rather than guessing.',
+              properties: {
+                kind: { type: 'string', enum: ['fixed', 'no-fixed-price', 'unreadable'] },
+                amount_minor: { type: ['integer', 'null'], minimum: 0 },
+                note: { type: ['string', 'null'] },
+              },
+              required: ['kind', 'amount_minor', 'note'],
               additionalProperties: false,
             },
             order_url: { type: ['string', 'null'] },
-            details: {
-              type: 'array',
-              description: 'Explicit structured customer-facing wording found in the source, e.g. a price-note entry for "Market Price". Empty when nothing explicit is present.',
-              items: {
-                type: 'object',
-                properties: {
-                  key: { type: 'string' },
-                  label: { type: 'string' },
-                  values: { type: 'array', items: { type: 'string' } },
-                },
-                required: ['key', 'label', 'values'],
-                additionalProperties: false,
-              },
-            },
           },
-          required: ['category', 'name', 'description', 'price', 'order_url', 'details'],
+          required: ['category', 'name', 'description', 'price', 'order_url'],
           additionalProperties: false,
         },
       },
@@ -92,26 +83,48 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
       continue
     }
     const item = value as Record<string, unknown>
-    const allowed = ['category', 'name', 'description', 'price', 'order_url', 'details']
+    const allowed = ['category', 'name', 'description', 'price', 'order_url']
     const unknown = Object.keys(item).filter(key => !allowed.includes(key)).sort()
     const missing = allowed.filter(key => !Object.hasOwn(item, key))
     const category = typeof item.category === 'string' ? item.category.trim() : ''
     const name = typeof item.name === 'string' ? item.name.trim() : ''
-    const rawPrice = item.price
-    const priceValid = rawPrice === null
-      || (typeof rawPrice === 'object' && !Array.isArray(rawPrice)
-          && Object.keys(rawPrice).length === 1
-          && Number.isSafeInteger((rawPrice as Record<string, unknown>).amount_minor)
-          && Number((rawPrice as Record<string, unknown>).amount_minor) >= 0)
     const descriptionValid = item.description === null || typeof item.description === 'string'
     const orderUrlValid = item.order_url === null || typeof item.order_url === 'string'
+
+    // Discriminated pricing state — "unreadable" is never silently coerced
+    // into price: null. It's marked invalid like any other malformed field,
+    // which the existing all-or-nothing batch check below already turns
+    // into a full import abort.
+    const rawPrice = item.price
+    let resolvedPrice: CreateProductInput['price'] = null
     let details: Product['details'] = []
-    let detailsValid = true
-    try {
-      details = validateProductDetails(item.details)
-    } catch {
-      detailsValid = false
+    let priceValid = false
+    if (rawPrice && typeof rawPrice === 'object' && !Array.isArray(rawPrice)) {
+      const priceRecord = rawPrice as Record<string, unknown>
+      const priceKeys = Object.keys(priceRecord)
+      const hasExactKeys = priceKeys.length === 3 && ['kind', 'amount_minor', 'note'].every(key => priceKeys.includes(key))
+      if (hasExactKeys && priceRecord.kind === 'fixed') {
+        priceValid = Number.isSafeInteger(priceRecord.amount_minor)
+          && Number(priceRecord.amount_minor) >= 0
+          && priceRecord.note === null
+        // provenance is not part of PriceInput — the write path derives it
+        // from the actor ("ai:" prefix) that createProductsBatch is called
+        // with, not from anything constructed here.
+        if (priceValid) resolvedPrice = { amount_minor: Number(priceRecord.amount_minor), currency, unit: 'item', tax_behavior: 'unspecified' }
+      } else if (hasExactKeys && priceRecord.kind === 'no-fixed-price') {
+        const note = typeof priceRecord.note === 'string' ? priceRecord.note.trim() : ''
+        priceValid = note.length > 0 && priceRecord.amount_minor === null
+        if (priceValid) {
+          try {
+            details = validateProductDetails([{ key: 'price-note', label: 'Price', values: [note] }])
+          } catch {
+            priceValid = false
+          }
+        }
+      }
+      // kind === 'unreadable' (or anything else) leaves priceValid false.
     }
+
     const invalidFields = [
       ...unknown,
       ...missing,
@@ -120,7 +133,6 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
       ...(!priceValid ? ['price'] : []),
       ...(!descriptionValid ? ['description'] : []),
       ...(!orderUrlValid ? ['order_url'] : []),
-      ...(!detailsValid ? ['details'] : []),
     ]
     const duplicateKey = `${category.toLocaleLowerCase()}\0${name.toLocaleLowerCase()}`
     if (category && name && duplicateKeys.has(duplicateKey)) invalidFields.push('duplicate')
@@ -133,7 +145,7 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
       category,
       name,
       description: item.description === null ? '' : item.description as string,
-      price: rawPrice === null ? null : { amount_minor: Number((rawPrice as Record<string, unknown>).amount_minor), currency, unit: 'item', tax_behavior: 'unspecified', provenance: 'ai-import' },
+      price: resolvedPrice,
       order_url: item.order_url as string | null,
       tags: [],
       details,

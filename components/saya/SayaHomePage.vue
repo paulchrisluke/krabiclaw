@@ -563,7 +563,7 @@ const featuredProductCards = computed(() => {
       price: formatProductPriceLabel(item),
       compareAtPrice: item.price?.compare_at_amount_minor
         ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
-        : '',
+        : null,
       image: item.image?.public_url || null,
       imageKind: 'image',
       alt: item.image?.alt_text || item.name,

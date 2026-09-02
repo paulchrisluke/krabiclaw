@@ -129,7 +129,7 @@
                   <div class="saya-dotted-leader" />
                   <div class="flex shrink-0 items-baseline gap-1.5 tabular-nums text-base text-default">
                     <span v-if="compareAtPrice(product)" class="text-sm text-muted line-through">{{ compareAtPrice(product) }}</span>
-                    <span>{{ formatProductPriceLabel(product) }}</span>
+                    <span v-if="formatProductPriceLabel(product)">{{ formatProductPriceLabel(product) }}</span>
                   </div>
                 </div>
                 <p v-if="product.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
@@ -176,7 +176,7 @@
               <div class="mt-5">
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-semibold transition-colors group-hover:text-primary">{{ product.name }}</h3>
-                  <span class="shrink-0 tabular-nums">{{ formatProductPriceLabel(product) }}</span>
+                  <span v-if="formatProductPriceLabel(product)" class="shrink-0 tabular-nums">{{ formatProductPriceLabel(product) }}</span>
                 </div>
                 <p v-if="showLocations" class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">{{ locationTitle(product.location_id) }}</p>
                 <p v-if="product.description" class="mt-1 line-clamp-2 text-sm leading-6 text-muted">{{ product.description }}</p>

@@ -8,7 +8,9 @@ interface ProductRow { id: string; price: PriceRow | null; details: Array<{ key:
 
 test.describe('nullable Product price (issue #738)', () => {
   test('create_product accepts price: null and creates no Price row', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    // 5 sequential mcpRequest round-trips against the remote preview Worker;
+    // ~9s/call observed under CI network latency exceeds Playwright's 30s default.
+    test.setTimeout(45_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
@@ -47,7 +49,8 @@ test.describe('nullable Product price (issue #738)', () => {
   })
 
   test('batch_create_products commits a mixed fixed/null batch atomically and rolls back an invalid one', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    // 5 sequential mcpRequest round-trips against the remote preview Worker.
+    test.setTimeout(45_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
@@ -61,8 +64,8 @@ test.describe('nullable Product price (issue #738)', () => {
       args: {
         site_id: siteId, location_id: locationId,
         products: [
-          { category: 'Sushi', name: 'Fixed One', price: { amount_minor: 50000, currency: 'USD' } },
-          { category: 'Sushi', name: 'Broken One', price: { amount_minor: -1, currency: 'USD' } },
+          { category: 'Sushi', name: 'Fixed One', price: { amount_minor: 50000, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
+          { category: 'Sushi', name: 'Broken One', price: { amount_minor: -1, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
         ],
       },
     })
@@ -79,7 +82,7 @@ test.describe('nullable Product price (issue #738)', () => {
       args: {
         site_id: siteId, location_id: locationId,
         products: [
-          { category: 'Sushi', name: 'Fixed Roll', price: { amount_minor: 50000, currency: 'USD' } },
+          { category: 'Sushi', name: 'Fixed Roll', price: { amount_minor: 50000, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
           { category: 'Sushi', name: 'Market Price Roll', price: null },
         ],
       },
@@ -94,7 +97,9 @@ test.describe('nullable Product price (issue #738)', () => {
   })
 
   test('sync_products closes an active Price with a future valid_until when synced to null, and null→fixed creates exactly one active Price', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    // 6 sequential mcpRequest round-trips (create + 2 syncs + 2 rereads) against
+    // the remote preview Worker — one more than the 45s-budget tests above.
+    test.setTimeout(50_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
@@ -112,7 +117,7 @@ test.describe('nullable Product price (issue #738)', () => {
       method: 'tools/call', toolName: 'create_product',
       args: {
         site_id: siteId, location_id: locationId, category: 'Sushi', name: 'Scheduled End Roll',
-        price: { amount_minor: 60000, currency: 'USD', valid_until: futureValidUntil },
+        price: { amount_minor: 60000, currency: 'USD', unit: 'item', tax_behavior: 'unspecified', valid_until: futureValidUntil },
       },
     })
     const productId = mcpData<{ product: ProductRow }>(await create.json()).product.id
@@ -133,7 +138,7 @@ test.describe('nullable Product price (issue #738)', () => {
       method: 'tools/call', toolName: 'sync_products',
       args: {
         site_id: siteId, location_id: locationId,
-        products: [{ product_id: productId, category: 'Sushi', name: 'Scheduled End Roll', price: { amount_minor: 70000, currency: 'USD' } }],
+        products: [{ product_id: productId, category: 'Sushi', name: 'Scheduled End Roll', price: { amount_minor: 70000, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } }],
       },
     })
     expect(syncToFixed.status()).toBe(200)
@@ -149,7 +154,8 @@ test.describe('nullable Product price (issue #738)', () => {
   })
 
   test('update_product distinguishes omitted price (unchanged) from price: null (closes without replacement)', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    // 5 sequential mcpRequest round-trips against the remote preview Worker.
+    test.setTimeout(45_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const locationResponse = await mcpRequest(request, baseURL!, {
@@ -160,7 +166,7 @@ test.describe('nullable Product price (issue #738)', () => {
 
     const create = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'create_product',
-      args: { site_id: siteId, location_id: locationId, category: 'Sushi', name: 'Update Roll', price: { amount_minor: 45000, currency: 'USD' } },
+      args: { site_id: siteId, location_id: locationId, category: 'Sushi', name: 'Update Roll', price: { amount_minor: 45000, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
     })
     const productId = mcpData<{ product: ProductRow }>(await create.json()).product.id
 

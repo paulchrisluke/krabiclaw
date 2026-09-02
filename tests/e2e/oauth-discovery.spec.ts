@@ -203,11 +203,9 @@ test.describe('OAuth discovery endpoints', () => {
       headers: { Authorization: `Bearer ${tokenBody.access_token}` },
     })
     expect(userinfo.status()).toBe(200)
-    const userinfoBody = await userinfo.json() as { email?: string, email_verified?: boolean | number }
+    const userinfoBody = await userinfo.json() as { email?: string, email_verified?: boolean }
     expect(userinfoBody.email).toBeTruthy()
-    // Better Auth's UserInfo returns email_verified as a SQLite-style 1/0,
-    // not a JSON boolean (same shape seen on the session's emailVerified).
-    expect(userinfoBody.email_verified).toBeTruthy()
+    expect(userinfoBody.email_verified).toBe(true)
   })
 
   test('ChatGPT-shaped CIMD uses private_key_jwt and rejects assertion replay', async ({ request, baseURL }) => {

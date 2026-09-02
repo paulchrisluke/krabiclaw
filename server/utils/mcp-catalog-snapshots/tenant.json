@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:af53a0c1f2b4a6c96a12032251a4a7690c65609a61a84b707df955ee8c12cc0c",
+  "fingerprint": "sha256:43068edecc94d18f83e997a805937f1d6d1ccddad9f11df49646d2e8dd091ee3",
   "tools": [
     {
       "name": "analyze_document",
@@ -346,7 +346,7 @@
                 },
                 "price": {
                   "additionalProperties": false,
-                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
                   "properties": {
                     "amount_minor": {
                       "maximum": 9007199254740991,
@@ -380,9 +380,6 @@
                       ],
                       "type": "string"
                     },
-                    "provenance": {
-                      "type": "string"
-                    },
                     "tax_behavior": {
                       "enum": [
                         "unspecified",
@@ -410,7 +407,10 @@
                     }
                   },
                   "required": [
-                    "amount_minor"
+                    "amount_minor",
+                    "currency",
+                    "unit",
+                    "tax_behavior"
                   ],
                   "type": [
                     "object",
@@ -1650,9 +1650,6 @@
               "currency": {
                 "type": "string"
               },
-              "provenance": {
-                "type": "string"
-              },
               "tax_behavior": {
                 "enum": [
                   "unspecified",
@@ -1680,7 +1677,10 @@
               }
             },
             "required": [
-              "amount_minor"
+              "amount_minor",
+              "currency",
+              "unit",
+              "tax_behavior"
             ],
             "type": [
               "object",
@@ -2367,7 +2367,7 @@
           },
           "price": {
             "additionalProperties": false,
-            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
             "properties": {
               "amount_minor": {
                 "maximum": 9007199254740991,
@@ -2401,9 +2401,6 @@
                 ],
                 "type": "string"
               },
-              "provenance": {
-                "type": "string"
-              },
               "tax_behavior": {
                 "enum": [
                   "unspecified",
@@ -2431,7 +2428,10 @@
               }
             },
             "required": [
-              "amount_minor"
+              "amount_minor",
+              "currency",
+              "unit",
+              "tax_behavior"
             ],
             "type": [
               "object",
@@ -12987,7 +12987,7 @@
                 },
                 "price": {
                   "additionalProperties": false,
-                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
                   "properties": {
                     "amount_minor": {
                       "maximum": 9007199254740991,
@@ -13021,9 +13021,6 @@
                       ],
                       "type": "string"
                     },
-                    "provenance": {
-                      "type": "string"
-                    },
                     "tax_behavior": {
                       "enum": [
                         "unspecified",
@@ -13051,7 +13048,10 @@
                     }
                   },
                   "required": [
-                    "amount_minor"
+                    "amount_minor",
+                    "currency",
+                    "unit",
+                    "tax_behavior"
                   ],
                   "type": [
                     "object",
@@ -14804,9 +14804,6 @@
               "currency": {
                 "type": "string"
               },
-              "provenance": {
-                "type": "string"
-              },
               "tax_behavior": {
                 "enum": [
                   "unspecified",
@@ -14834,7 +14831,10 @@
               }
             },
             "required": [
-              "amount_minor"
+              "amount_minor",
+              "currency",
+              "unit",
+              "tax_behavior"
             ],
             "type": [
               "object",
@@ -15783,7 +15783,7 @@
           },
           "price": {
             "additionalProperties": false,
-            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
             "properties": {
               "amount_minor": {
                 "maximum": 9007199254740991,
@@ -15817,9 +15817,6 @@
                 ],
                 "type": "string"
               },
-              "provenance": {
-                "type": "string"
-              },
               "tax_behavior": {
                 "enum": [
                   "unspecified",
@@ -15847,7 +15844,10 @@
               }
             },
             "required": [
-              "amount_minor"
+              "amount_minor",
+              "currency",
+              "unit",
+              "tax_behavior"
             ],
             "type": [
               "object",

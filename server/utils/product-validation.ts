@@ -97,6 +97,17 @@ export function validateProductDetails(value: unknown): ProductDetail[] {
   return details
 }
 
+// A Product must not carry a "price-note" detail while it also has an
+// active fixed Price — that's contradictory state a renderer would
+// otherwise have to silently choose between (or worse, resurface the note
+// as live text once the Price is later cleared). Call this with the final
+// intended {price, details} state for every write path.
+export function assertNoPriceNoteContradiction(hasFixedPrice: boolean, details: readonly ProductDetail[]): void {
+  if (hasFixedPrice && details.some(detail => detail.key === 'price-note')) {
+    invalid('details cannot contain a "price-note" entry while price is a fixed amount — remove the note or clear the price first')
+  }
+}
+
 export function validateProductOrderUrl(value: unknown): string | null {
   const normalized = normalizeOptionalProductString(value, 'order_url', PRODUCT_LIMITS.orderUrl)
   if (normalized === null) return null

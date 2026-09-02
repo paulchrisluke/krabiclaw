@@ -22,8 +22,8 @@ export interface McpToolDefinition {
 
 export interface McpToolAnnotations {
   readOnlyHint: boolean
-  openWorldHint?: boolean
-  destructiveHint?: boolean
+  openWorldHint: boolean
+  destructiveHint: boolean
   idempotentHint?: boolean
 }
 
@@ -544,10 +544,10 @@ export const priceWriteObject = {
     amount_minor: { type: 'integer', minimum: 0 }, currency: { type: 'string' },
     unit: { type: 'string', enum: ['item', 'person', 'table'] },
     tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: { type: 'string' },
-    valid_until: { type: ['string', 'null'] }, provenance: { type: 'string' },
+    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: { type: 'string', format: 'date-time' },
+    valid_until: { type: ['string', 'null'], format: 'date-time' },
   },
-  required: ['amount_minor'],
+  required: ['amount_minor', 'currency', 'unit', 'tax_behavior'],
   additionalProperties: false,
 }
 
@@ -988,6 +988,9 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
     const hasValidAnnotations = definition.annotations && typeof definition.annotations === 'object'
     const hasValidSecuritySchemes = definition.securitySchemes && Array.isArray(definition.securitySchemes) && definition.securitySchemes.length > 0
     if (hasValidAnnotations && hasValidSecuritySchemes) {
+      // Re-validate even on this pre-built-definition path — a caller could
+      // hand in annotations that never passed through withToolAnnotations.
+      validateToolAnnotations(definition.name, definition.annotations, definition.confirmRequired)
       return definition
     }
   }

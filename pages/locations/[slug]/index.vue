@@ -437,7 +437,7 @@ const featuredProductItems = computed(() => {
       price: formatProductPriceLabel(product),
       compareAtPrice: product.price?.compare_at_amount_minor
         ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })
-        : '',
+        : null,
       image: product.image?.public_url || null,
       imageKind: 'image',
       alt: product.image?.alt_text || product.name,
@@ -455,7 +455,7 @@ const featuredExperienceItems = computed(() => {
     price: formatProductMoney(experience.price),
     compareAtPrice: experience.price?.compare_at_amount_minor
       ? formatProductMoney({ ...experience.price, amount_minor: experience.price.compare_at_amount_minor, compare_at_amount_minor: null })
-      : '',
+      : null,
     image: experienceCoverImage(experience),
     imageKind: 'image',
     alt: experience.title ? `${experience.title} experience` : 'Featured experience image',

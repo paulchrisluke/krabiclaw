@@ -25,19 +25,31 @@ export interface Price {
 
 export interface PriceInput {
   amount_minor: number
-  currency?: CurrencyCode
-  unit?: PriceUnit
-  tax_behavior?: PriceTaxBehavior
+  // currency/unit/tax_behavior are required inputs, not silently defaulted —
+  // the caller must state them explicitly rather than have the server guess.
+  currency: CurrencyCode
+  unit: PriceUnit
+  tax_behavior: PriceTaxBehavior
   compare_at_amount_minor?: number | null
   valid_from?: string
   valid_until?: string | null
-  provenance?: string
+  // provenance is not accepted from callers — it's derived server-side from
+  // which operation is writing (see provenanceForActor in product-management.ts).
 }
 
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/
 
+// Exported so callers validating a Price input field (e.g. normalizePriceInput
+// in product-management.ts) enforce the exact same strict UTC-instant shape
+// this module already requires internally — matching the JSON Schema
+// `format: "date-time"` keyword on those same fields, rather than the looser
+// grammar Date.parse alone accepts (e.g. a bare date, or a non-UTC offset).
+export function isIsoInstant(value: string): boolean {
+  return ISO_INSTANT.test(value) && !Number.isNaN(Date.parse(value))
+}
+
 function assertInstant(value: string, field: string): void {
-  if (!ISO_INSTANT.test(value) || Number.isNaN(Date.parse(value))) throw new Error(`${field} must be an ISO UTC instant`)
+  if (!isIsoInstant(value)) throw new Error(`${field} must be an ISO UTC instant`)
 }
 
 export function majorAmountToMinor(value: string, currency: CurrencyCode): number {
