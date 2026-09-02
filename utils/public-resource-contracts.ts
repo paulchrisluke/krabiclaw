@@ -84,6 +84,14 @@ export interface PublicPagePayload {
   experienceDetail: Experience | null
   experiencesList: Experience[]
   products: Product[]
+  localeRepresentations: PublicLocaleRepresentation[]
+}
+
+export interface PublicLocaleRepresentation {
+  locale: string
+  label: string
+  route_path: string
+  source: 'source' | 'localized'
 }
 
 export const isPublicPagePayload = (
@@ -119,4 +127,10 @@ export const isPublicPagePayload = (
   && Array.isArray(value.products)
   && value.products.every(item => isRecord(item) && typeof item.id === 'string'
     && typeof item.location_id === 'string' && typeof item.category === 'string'
-    && typeof item.slug === 'string' && typeof item.price_amount === 'string')
+    && typeof item.slug === 'string' && (item.price === null || isRecord(item.price)))
+  && Array.isArray(value.localeRepresentations)
+  && value.localeRepresentations.every(item => isRecord(item)
+    && typeof item.locale === 'string'
+    && typeof item.label === 'string'
+    && typeof item.route_path === 'string'
+    && (item.source === 'source' || item.source === 'localized'))

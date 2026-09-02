@@ -135,11 +135,6 @@ export interface OrganizationReconciliationProviderInvoice {
 }
 
 export interface OrganizationReconciliationLocalEvidence {
-  organizationEntitlements: Array<{
-    key: string
-    value: string | null
-    source: string | null
-  }>
   invoices: Array<{
     stripeInvoiceId: string
     stripeSubscriptionId: string
@@ -160,26 +155,6 @@ export interface OrganizationReconciliationLocalEvidence {
     status: string | null
     attemptCount: number | null
     deadLetteredAt: string | null
-  }>
-  sites: Array<{
-    id: string
-    plan: string | null
-    status: string | null
-  }>
-  siteBilling: Array<{
-    siteId: string
-    stripeCustomerId: string | null
-    stripeSubscriptionId: string | null
-    plan: string | null
-    status: string | null
-    currentPeriodEnd: string | null
-    cancelAtPeriodEnd: boolean | null
-  }>
-  siteEntitlements: Array<{
-    siteId: string
-    key: string
-    value: string | null
-    source: string | null
   }>
 }
 
@@ -896,13 +871,11 @@ function normalizeProjectionRow(row: OrganizationBillingProjectionRow | null): O
     organization_id: nullableString(row.organization_id),
     stripe_customer_id: nullableString(row.stripe_customer_id),
     stripe_subscription_id: nullableString(row.stripe_subscription_id),
-    plan: nullableString(row.plan),
-    status: nullableString(row.status),
     payment_status: nullableString(row.payment_status),
     paid_through: nullableString(row.paid_through),
     past_due_since: nullableString(row.past_due_since),
-    current_period_end: nullableString(row.current_period_end),
-    cancel_at_period_end: nullableBoolean(row.cancel_at_period_end),
+    access_plan: nullableString(row.access_plan),
+    access_expires_at: nullableString(row.access_expires_at),
     updated_at: nullableString(row.updated_at),
   }
 }
@@ -950,13 +923,9 @@ function escapeSearchValue(value: string): string {
 
 function emptyLocalEvidence(): OrganizationReconciliationLocalEvidence {
   return {
-    organizationEntitlements: [],
     invoices: [],
     subscriptionVersions: [],
     webhookEvents: [],
-    sites: [],
-    siteBilling: [],
-    siteEntitlements: [],
   }
 }
 
@@ -1008,18 +977,6 @@ function compareSubscriptionPair(
 }
 
 async function readLocalEvidence(db: DbClient, organizationId: string, subscriptionIds: string[]): Promise<OrganizationReconciliationLocalEvidence> {
-  const organizationEntitlements = await queryAll<{
-    key: string
-    value: string | null
-    source: string | null
-  }>(db, `
-     SELECT key, value, source
-      FROM organization_entitlements
-     WHERE organization_id = ? ORDER BY key, source LIMIT ?
-  `, [organizationId, MAX_LOCAL_EVIDENCE_ROWS + 1])
-  if (organizationEntitlements.length > MAX_LOCAL_EVIDENCE_ROWS) {
-    throw new ReconciliationLocalEvidenceBoundError('organization_entitlements', MAX_LOCAL_EVIDENCE_ROWS)
-  }
   const invoices = await queryAll<{
     stripe_invoice_id: string
     stripe_subscription_id: string
@@ -1071,48 +1028,7 @@ async function readLocalEvidence(db: DbClient, organizationId: string, subscript
   if (webhooks.length > MAX_LOCAL_EVIDENCE_ROWS) {
     throw new ReconciliationLocalEvidenceBoundError('stripe_webhook_events', MAX_LOCAL_EVIDENCE_ROWS)
   }
-  const sites = await queryAll<{ id: string; plan: string | null; status: string | null }>(db, `
-    SELECT id, plan, status FROM sites WHERE organization_id = ? ORDER BY id LIMIT ?
-  `, [organizationId, MAX_LOCAL_EVIDENCE_ROWS + 1])
-  if (sites.length > MAX_LOCAL_EVIDENCE_ROWS) {
-    throw new ReconciliationLocalEvidenceBoundError('sites', MAX_LOCAL_EVIDENCE_ROWS)
-  }
-  const siteBilling = await queryAll<{
-    site_id: string
-    stripe_customer_id: string | null
-    stripe_subscription_id: string | null
-    plan: string | null
-    status: string | null
-    current_period_end: string | null
-    cancel_at_period_end: unknown
-  }>(db, `
-    SELECT site_id, stripe_customer_id, stripe_subscription_id, plan, status,
-           current_period_end, cancel_at_period_end
-      FROM site_billing
-     WHERE organization_id = ? ORDER BY site_id LIMIT ?
-  `, [organizationId, MAX_LOCAL_EVIDENCE_ROWS + 1])
-  if (siteBilling.length > MAX_LOCAL_EVIDENCE_ROWS) {
-    throw new ReconciliationLocalEvidenceBoundError('site_billing', MAX_LOCAL_EVIDENCE_ROWS)
-  }
-  const siteEntitlements = await queryAll<{
-    site_id: string
-    key: string
-    value: string | null
-    source: string | null
-  }>(db, `
-    SELECT site_id, key, value, source
-      FROM site_entitlements
-     WHERE organization_id = ? ORDER BY site_id, key LIMIT ?
-  `, [organizationId, MAX_LOCAL_EVIDENCE_ROWS + 1])
-  if (siteEntitlements.length > MAX_LOCAL_EVIDENCE_ROWS) {
-    throw new ReconciliationLocalEvidenceBoundError('site_entitlements', MAX_LOCAL_EVIDENCE_ROWS)
-  }
   return {
-    organizationEntitlements: organizationEntitlements.map(row => ({
-      key: row.key,
-      value: row.value ?? null,
-      source: row.source ?? null,
-    })),
     invoices: invoices.map(invoice => ({
       stripeInvoiceId: invoice.stripe_invoice_id,
       stripeSubscriptionId: invoice.stripe_subscription_id,
@@ -1133,22 +1049,6 @@ async function readLocalEvidence(db: DbClient, organizationId: string, subscript
       status: webhook.status ?? null,
       attemptCount: nullableNumber(webhook.attempt_count),
       deadLetteredAt: webhook.dead_lettered_at ?? null,
-    })),
-    sites: sites.map(site => ({ id: site.id, plan: site.plan ?? null, status: site.status ?? null })),
-    siteBilling: siteBilling.map(row => ({
-      siteId: row.site_id,
-      stripeCustomerId: row.stripe_customer_id ?? null,
-      stripeSubscriptionId: row.stripe_subscription_id ?? null,
-      plan: row.plan ?? null,
-      status: row.status ?? null,
-      currentPeriodEnd: row.current_period_end ?? null,
-      cancelAtPeriodEnd: nullableBoolean(row.cancel_at_period_end),
-    })),
-    siteEntitlements: siteEntitlements.map(row => ({
-      siteId: row.site_id,
-      key: row.key,
-      value: row.value ?? null,
-      source: row.source ?? null,
     })),
   }
 }
@@ -1176,84 +1076,10 @@ function compareAppProjection(
   }
   compareValue(drifts, 'app_customer_mismatch', 'organization_billing.stripeCustomerId', projection.stripeCustomerId, ba.stripeCustomerId)
   compareValue(drifts, 'app_subscription_mismatch', 'organization_billing.stripeSubscriptionId', projection.stripeSubscriptionId, ba.stripeSubscriptionId)
-  compareValue(drifts, 'app_plan_mismatch', 'organization_billing.plan', projection.plan, ba.plan)
-  compareValue(drifts, 'app_status_mismatch', 'organization_billing.status', projection.status, ba.status)
-  compareValue(drifts, 'app_period_end_mismatch', 'organization_billing.currentPeriodEnd', projection.currentPeriodEnd, ba.periodEnd)
-  compareValue(drifts, 'app_cancel_mismatch', 'organization_billing.cancelAtPeriodEnd', projection.cancelAtPeriodEnd, ba.cancelAtPeriodEnd)
-  compareValue(drifts, 'app_provider_plan_mismatch', 'organization_billing.plan', projection.plan, provider.canonicalPlan)
-  compareValue(drifts, 'app_provider_status_mismatch', 'organization_billing.status', projection.status, provider.status)
-  compareValue(drifts, 'app_provider_period_end_mismatch', 'organization_billing.currentPeriodEnd', projection.currentPeriodEnd, provider.periodEnd)
-  compareValue(drifts, 'app_provider_cancel_mismatch', 'organization_billing.cancelAtPeriodEnd', projection.cancelAtPeriodEnd, provider.cancelAtPeriodEnd)
-}
-
-function compareSiteProjection(
-  drifts: OrganizationReconciliationDrift[],
-  local: OrganizationReconciliationLocalEvidence,
-  projection: OrganizationBillingProjection | null,
-): void {
-  if (!projection) return
-  for (const site of local.sites) {
-    compareValue(drifts, 'site_plan_mismatch', `site:${site.id}.plan`, site.plan, projection.effectivePlan)
-  }
-  for (const billing of local.siteBilling) {
-    compareValue(drifts, 'site_billing_customer_mismatch', `site:${billing.siteId}.stripeCustomerId`, billing.stripeCustomerId, projection.stripeCustomerId)
-    if (billing.stripeSubscriptionId !== null) {
-      addDrift(drifts, 'site_billing_legacy_subscription_id', 'drift', `site:${billing.siteId}.stripeSubscriptionId`, 'Site billing must not retain an organization subscription id.')
-    }
-    compareValue(drifts, 'site_billing_plan_mismatch', `site:${billing.siteId}.plan`, billing.plan, projection.effectivePlan)
-    compareValue(drifts, 'site_billing_status_mismatch', `site:${billing.siteId}.status`, billing.status, projection.status)
-    compareValue(drifts, 'site_billing_period_mismatch', `site:${billing.siteId}.currentPeriodEnd`, billing.currentPeriodEnd, projection.currentPeriodEnd)
-    compareValue(drifts, 'site_billing_cancel_mismatch', `site:${billing.siteId}.cancelAtPeriodEnd`, billing.cancelAtPeriodEnd, projection.cancelAtPeriodEnd)
-  }
-}
-
-function compareExactEntitlements(
-  drifts: OrganizationReconciliationDrift[],
-  local: OrganizationReconciliationLocalEvidence,
-  projection: OrganizationBillingProjection | null,
-  projectionMaterialized: boolean,
-): void {
-  if (!projection || !projectionMaterialized) return
-  const expected = getPlanEntitlements(projection.effectivePlan)
-  const expectedEntries = Object.entries(expected)
-  const organizationRows = local.organizationEntitlements.filter(row => row.source === 'better-auth-stripe')
-  const organizationByKey = new Map(organizationRows.map(row => [row.key, row]))
-  for (const [key, expectedValue] of expectedEntries) {
-    const row = organizationByKey.get(key)
-    if (!row) {
-      addDrift(drifts, 'organization_entitlement_missing', 'drift', `organization.entitlement:${key}`, 'Expected Better Auth organization entitlement is missing.')
-    } else if (String(expectedValue) !== String(row.value)) {
-      addDrift(drifts, 'organization_entitlement_mismatch', 'drift', `organization.entitlement:${key}`, 'Better Auth organization entitlement differs from the canonical projection.')
-    }
-  }
-  for (const row of organizationRows) {
-    if (!(row.key in expected)) {
-      addDrift(drifts, 'organization_entitlement_stale', 'drift', `organization.entitlement:${row.key}`, 'Stale Better Auth organization entitlement is materialized.')
-    }
-  }
-
-  const siteIds = new Set([
-    ...local.sites.map(site => site.id),
-    ...local.siteBilling.map(site => site.siteId),
-    ...local.siteEntitlements.map(site => site.siteId),
-  ])
-  for (const siteId of siteIds) {
-    const siteRows = local.siteEntitlements.filter(row => row.siteId === siteId && row.source === 'better-auth-stripe')
-    const siteByKey = new Map(siteRows.map(row => [row.key, row]))
-    for (const [key, expectedValue] of expectedEntries) {
-      const row = siteByKey.get(key)
-      if (!row) {
-        addDrift(drifts, 'site_entitlement_missing', 'drift', `site:${siteId}.entitlement:${key}`, 'Expected Better Auth site entitlement is missing.')
-      } else if (String(expectedValue) !== String(row.value)) {
-        addDrift(drifts, 'site_entitlement_mismatch', 'drift', `site:${siteId}.entitlement:${key}`, 'Better Auth site entitlement differs from the canonical projection.')
-      }
-    }
-    for (const row of siteRows) {
-      if (!(row.key in expected)) {
-        addDrift(drifts, 'site_entitlement_stale', 'drift', `site:${siteId}.entitlement:${row.key}`, 'Stale Better Auth site entitlement is materialized.')
-      }
-    }
-  }
+  compareValue(drifts, 'app_plan_mismatch', 'organization_billing.accessPlan', projection.plan, ba.plan)
+  compareValue(drifts, 'app_provider_plan_mismatch', 'organization_billing.accessPlan', projection.plan, provider.canonicalPlan)
+  compareValue(drifts, 'app_period_end_mismatch', 'organization_billing.accessExpiresAt', projection.currentPeriodEnd, ba.periodEnd)
+  compareValue(drifts, 'app_provider_period_end_mismatch', 'organization_billing.accessExpiresAt', projection.currentPeriodEnd, provider.periodEnd)
 }
 
 function comparePaymentEvidence(
@@ -1386,9 +1212,10 @@ export async function reconcileOrganizationSubscription(
   let appProjectionRow: OrganizationBillingProjectionRow | null = null
   try {
     appProjectionRow = await queryFirst<OrganizationBillingProjectionRow>(options.db, `
-      SELECT organization_id, stripe_customer_id, stripe_subscription_id, plan, status,
-             payment_status, paid_through, past_due_since, current_period_end,
-             cancel_at_period_end, updated_at
+      SELECT organization_id, stripe_customer_id, stripe_subscription_id,
+             payment_status, paid_through, past_due_since,
+             last_paid_invoice_id, last_payment_event_created, last_payment_event_id,
+             access_plan, access_expires_at, updated_at
         FROM organization_billing
        WHERE organization_id = ? LIMIT 1
     `, [request.organizationId])
@@ -1759,8 +1586,6 @@ export async function reconcileOrganizationSubscription(
     authoritativePair?.provider ?? null,
     normalizedRow !== null,
   )
-  compareSiteProjection(drifts, readEvidence, projection)
-  compareExactEntitlements(drifts, readEvidence, projection, normalizedRow !== null)
   comparePaymentEvidence(drifts, readEvidence, authoritativePair?.provider ?? null)
   const effectiveEntitlements = projection?.entitlements ?? getPlanEntitlements('free')
   const sortedDrifts = sortDrifts(drifts)

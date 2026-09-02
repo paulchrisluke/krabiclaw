@@ -2,6 +2,8 @@ import { HTTPError } from 'nitro'
 import type { ProductDetail } from '~/server/types/products'
 
 export const PRODUCT_LIMITS = {
+  batchCreate: 400,
+  sync: 200,
   category: 120,
   name: 240,
   description: 10_000,
@@ -21,8 +23,6 @@ export const PRODUCT_LIMITS = {
 } as const
 
 const PRODUCT_DETAIL_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
-const DECIMAL_AMOUNT = /^(?:0|[1-9]\d*)(?:\.\d+)?$/
 const PRODUCT_ROBOTS_DIRECTIVES = new Set([
   'index,follow',
   'noindex,follow',
@@ -49,55 +49,6 @@ export function normalizeOptionalProductString(value: unknown, field: string, ma
   if (!normalized) return null
   if (normalized.length > maxLength) invalid(`${field} must be at most ${maxLength} characters`)
   return normalized
-}
-
-export function normalizeRequiredProductPrice(value: unknown, field = 'price_amount'): string {
-  if (typeof value !== 'string' && typeof value !== 'number') {
-    invalid(`${field} must be a non-negative decimal amount`)
-  }
-  const raw = String(value).trim()
-  if (!DECIMAL_AMOUNT.test(raw)) invalid(`${field} must be a non-negative decimal amount`)
-  const [whole, fraction] = raw.split('.')
-  const normalizedFraction = fraction?.replace(/0+$/, '') ?? ''
-  return normalizedFraction ? `${whole}.${normalizedFraction}` : whole!
-}
-
-export function normalizeOptionalProductPrice(value: unknown, field = 'compare_at_price_amount'): string | null {
-  if (value === null || value === undefined || value === '') return null
-  return normalizeRequiredProductPrice(value, field)
-}
-
-function normalizeDateOnly(value: unknown, field: string): string | null {
-  if (value === null || value === undefined || value === '') return null
-  if (typeof value !== 'string' || !DATE_ONLY.test(value)) invalid(`${field} must use YYYY-MM-DD`)
-  const [year, month, day] = value.split('-').map(Number)
-  const date = new Date(Date.UTC(year!, month! - 1, day!))
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month! - 1 || date.getUTCDate() !== day) {
-    invalid(`${field} must be a valid calendar date`)
-  }
-  return value
-}
-
-export function validateProductSale(input: {
-  price_amount: unknown
-  compare_at_price_amount?: unknown
-  sale_starts_at?: unknown
-  sale_ends_at?: unknown
-}) {
-  const priceAmount = normalizeRequiredProductPrice(input.price_amount)
-  const compareAtPriceAmount = normalizeOptionalProductPrice(input.compare_at_price_amount)
-  const saleStartsAt = normalizeDateOnly(input.sale_starts_at, 'sale_starts_at')
-  const saleEndsAt = normalizeDateOnly(input.sale_ends_at, 'sale_ends_at')
-  if (compareAtPriceAmount !== null && Number(compareAtPriceAmount) <= Number(priceAmount)) {
-    invalid('compare_at_price_amount must be greater than price_amount')
-  }
-  if ((saleStartsAt || saleEndsAt) && compareAtPriceAmount === null) {
-    invalid('sale dates require compare_at_price_amount')
-  }
-  if (saleStartsAt && saleEndsAt && saleEndsAt < saleStartsAt) {
-    invalid('sale_ends_at cannot precede sale_starts_at')
-  }
-  return { priceAmount, compareAtPriceAmount, saleStartsAt, saleEndsAt }
 }
 
 export function validateProductTags(value: unknown): string[] {

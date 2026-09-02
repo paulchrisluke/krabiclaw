@@ -18,6 +18,25 @@ is deployed, start the relevant browser and MCP checks while the remaining CI
 jobs continue. Automated E2E and manual browser evidence are independent gates;
 neither must wait for the other to begin.
 
+### Release-owner emergency override
+
+The release owner may explicitly waive waiting for an incomplete qualification
+check for one named release when production already has a material
+customer-facing regression and delay would prolong the incident. The owner must
+acknowledge the incomplete gate and authorize the promotion directly. Do not
+infer an override from urgency, prior releases, or general deployment access.
+
+Before promotion, record the customer impact, the exact checks being waived or
+left incomplete, and the required post-deploy verification in the promotion
+pull request or merge record. Begin production verification as soon as the
+deployment converges. If the affected journey is not restored, use Cloudflare's
+ordinary deployment history to restore the last known-good Worker and continue
+incident recovery through the normal release flow.
+
+This override cannot waive a known reproducible first-party failure,
+database-epoch or migration safeguards, production data protections, or the
+restriction on production writes and notifications without an explicit canary.
+
 Validation follows product risk:
 
 1. Test the affected tenant journey first.
@@ -100,20 +119,11 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
+For the canonical migration workflow, see [docs/database/migrations.md](../database/migrations.md).
+
 Never rewrite migration history for an active D1 database resource. Rebaselining schema history requires a new database epoch: provision new D1 resources, apply one generated baseline, transfer and verify data explicitly, cut bindings over under the documented write freeze, and retain the old production resource for rollback.
 
-The database-epoch write freeze is the only exception to the normal one-deploy
-release path. Deploy the exact release candidate once with the old production
-D1 binding and `DB_WRITE_FROZEN = "true"`. That flag returns HTTP 503 before
-Nitro routes or middleware can reach D1, defers queue batches with an explicit
-retry, and skips scheduled work. Wait at least 60 seconds for requests already
-running on the prior Worker version to drain before taking the final export.
-After the import and invariant checks pass, the ordinary `main` deployment must
-bind the new D1 resource and omit the flag, which restores HTTP, queue, and cron
-processing. If cutover cannot finish promptly, restore the prior Worker version
-instead of allowing queued messages to exhaust their retry limit.
-
-`server/db/schema.ts` is the source of truth for schema changes. Staging and production use native `wrangler d1 migrations apply`. Before applying migrations, ensure `yarn lint:migrations` passes.
+The database-epoch write freeze is the only exception to the normal one-deploy release path. Deploy the exact release candidate once with the old production D1 binding and `DB_WRITE_FROZEN = "true"`. That flag returns HTTP 503 before Nitro routes or middleware can reach D1, defers queue batches with an explicit retry, and skips scheduled work. Wait at least 60 seconds for requests already running on the prior Worker version to drain before taking the final export. After the import and invariant checks pass, the ordinary `main` deployment must bind the new D1 resource and omit the flag, which restores HTTP, queue, and cron processing. If cutover cannot finish promptly, restore the prior Worker version instead of allowing queued messages to exhaust their retry limit.
 
 Before dropping or retiring a legacy table or writer:
 

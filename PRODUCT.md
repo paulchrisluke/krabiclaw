@@ -49,7 +49,7 @@ KrabiClaw supports multiple business verticals. ChatGPT asks the user directly d
 
 `professional_service` is the one canonical app-level value; `service` is its DB-storage alias, not a second vertical — see `CONTEXT.md`'s "Tenant vertical (canonical contract)" entry for the full normalization-boundary explanation (`toStoredVertical()` / `normalizeVertical()`).
 
-Experiences have their own data model: `experiences` table, `experience_bookings`, experience-specific MCP tools (`list_experiences`, `create_experience`, `list_experience_bookings`, etc.) and Saya theme routes at `/experiences/[slug]`.
+Experiences are one-to-one booking extensions of canonical Products and retain the same stable ID. Product owns shared title/slug/content/visibility/order/SEO/Price fields; `experiences`, `experience_bookings`, experience-specific MCP tools (`list_experiences`, `create_experience`, `list_experience_bookings`, etc.), and Saya routes at `/experiences/[slug]` own the booking-specific behavior.
 
 Professional-service tenants render through the Blawby template (see "Public Templates" below) rather than Saya, and don't yet have a first-class offerings/practice-areas content model in the dashboard CMS — that's tracked separately (issue #278).
 
@@ -68,8 +68,9 @@ billing surfaces load the canonical plan details from `GET /api/billing/plans`.
 
 One Better Auth organization subscription covers every site in the organization. AI
 usage is measured in the append-only `usage_events` ledger and provisioned by
-append-only `usage_quota_grants`; the `ai_credits` row is a derived enforcement
-balance, not a purchasable wallet. One-time credit purchases, service add-ons,
+append-only `usage_quota_grants`; current allowance is computed from indexed
+period grants and usage rather than a mutable balance row. It is not a purchasable
+wallet. One-time credit purchases, service add-ons,
 and automatic top-ups are retired. The 2026-08-09 production/provider census
 found no customer purchase, fulfillment, or outstanding-obligation history for
 those products. The active schema removes their unused tables and columns;
@@ -97,7 +98,7 @@ domain markers.
 
 ### WhatsApp / Google Places cost recovery
 
-WhatsApp Business API sends and Google Places API calls cost real per-use money with no dedicated billing surface — rather than build new metered Stripe billing pre-launch, they draw from the existing `ai_credits` balance (`server/utils/ai-credits.ts`) via `chargeFlatCredits()`, alongside the token-based charging already enforced on `/api/ai/*`.
+WhatsApp Business API sends and Google Places API calls cost real per-use money with no dedicated billing surface. Rather than build new metered Stripe billing pre-launch, they consume the canonical organization quota computed from `usage_quota_grants` and `usage_events` (through `server/utils/ai-credits.ts`), alongside token-based charging already enforced on `/api/ai/*`.
 
 - Charged: WhatsApp notifications (`sendWhatsAppNotification`), ChowBot free-text WhatsApp replies, and on-demand Google Places search/details calls (dashboard autocomplete, onboarding maps import, manual re-sync, the MCP `import_from_maps` tool).
 - Never charged: WhatsApp OTP (`sendWhatsAppOtp`) — auth-critical, must always send — and the background `google-places-sync` cron task, which is infrastructure upkeep a customer didn't explicitly trigger.
@@ -213,8 +214,8 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 
 - **Organization** is the site/brand workspace and billing/team boundary — vertical-neutral: an org can hold a restaurant, an experience business, or a professional-service firm, and (per "One org can have multiple sites" below) can even hold a mix.
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
-- One Better Auth organization subscription and shared weekly quota cover every site in the organization. A new site inherits the organization's effective plan without another checkout. `organization_billing` is the application projection of that organization-level authority.
-- `sites.plan`, `site_billing`, and `site_entitlements` are compatibility and reporting projections for site-scoped consumers. They do not authorize checkout, paid access, transfer acceptance, or quota, and must be reconciled from the owning organization's effective plan rather than treated as independent subscriptions.
+- One Better Auth organization subscription and shared weekly quota cover every site in the organization. A new site inherits the organization's effective plan without another checkout. `organization_billing` is the slim sessionless access/payment reconciliation projection of that organization-level authority; authenticated billing management reads Better Auth's documented subscription API.
+- Capabilities are computed only from `getPlanEntitlements(effectivePlan)`. There are no site plan, site billing, site entitlement, or organization entitlement projections.
 - **Sites** are the primary day-to-day dashboard context and selector. A location becomes the working context only inside that site's location workspace. For Saya (restaurant/experience) sites this is a physical location; Blawby's offerings are site-level by default and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
 - Public tenant routes are template-specific: Saya remains location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`; Blawby is offering-centric under `/services/[slug]` (see "Public Templates" above).
 - Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
@@ -225,5 +226,5 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
   - `/dashboard/{orgSlug}/settings/billing` — the organization's subscription, shared quota, invoices, and plan management
   - `/dashboard/account/settings` — personal account settings
 - App-facing dashboard APIs use `/api/dashboard/*`; the active org/site are resolved server-side from explicit `org`/`site` query params (attached by `dashboardFetch` in `composables/dashboardFetch.ts` based on the route's `orgSlug`/`siteSlug`), not by guessing the org's oldest site.
-- **Site transfers move only the site and its tenant data.** Neither organization's subscription, quota ledger, grants, nor billing customer moves. After acceptance, the recipient organization's effective plan governs the transferred site and any site-scoped compatibility projections are reconciled from that organization authority.
+- **Site transfers move only the site and its tenant data.** Neither organization's subscription, quota ledger, grants, nor billing customer moves. After acceptance, the recipient organization's effective plan immediately governs the transferred site; the transfer does not rebuild billing projections.
 - Dashboard is home for: billing, org settings, unified inbox (contact inquiries, reservations, bookings, reviews), analytics.

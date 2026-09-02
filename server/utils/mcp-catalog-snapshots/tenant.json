@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:ad811a20d146199beb6d2b4bde5dbcaac9a27b385a6491bf2bac30db04bb8906",
+  "fingerprint": "sha256:c6605df8a7d09ab064e50a89768b11d6200bb83fd45935226b08ced28fc5c3ed",
   "tools": [
     {
       "name": "analyze_document",
@@ -287,13 +287,6 @@
                 "category": {
                   "type": "string"
                 },
-                "compare_at_price_amount": {
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
-                  ]
-                },
                 "description": {
                   "type": "string"
                 },
@@ -341,25 +334,60 @@
                     "null"
                   ]
                 },
-                "price_amount": {
+                "price": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount_minor": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "compare_at_amount_minor": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string"
+                    },
+                    "tax_behavior": {
+                      "enum": [
+                        "unspecified",
+                        "inclusive",
+                        "exclusive"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "enum": [
+                        "item",
+                        "person",
+                        "table"
+                      ],
+                      "type": "string"
+                    },
+                    "valid_from": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "amount_minor"
+                  ],
                   "type": [
-                    "string",
-                    "number"
+                    "object",
+                    "null"
                   ]
                 },
                 "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_ends_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
                   "type": [
                     "string",
                     "null"
@@ -387,11 +415,11 @@
               "required": [
                 "category",
                 "name",
-                "price_amount"
+                "price"
               ],
               "type": "object"
             },
-            "maxItems": 100,
+            "maxItems": 400,
             "minItems": 1,
             "type": "array"
           },
@@ -422,12 +450,6 @@
                 },
                 "category": {
                   "type": "string"
-                },
-                "compare_at_price_amount": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
                 },
                 "created_at": {
                   "type": "string"
@@ -634,22 +656,69 @@
                     "null"
                   ]
                 },
-                "price_amount": {
-                  "type": "string"
+                "price": {
+                  "properties": {
+                    "amount_minor": {
+                      "type": "integer"
+                    },
+                    "compare_at_amount_minor": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string"
+                    },
+                    "tax_behavior": {
+                      "enum": [
+                        "unspecified",
+                        "inclusive",
+                        "exclusive"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "enum": [
+                        "item",
+                        "person",
+                        "table"
+                      ],
+                      "type": "string"
+                    },
+                    "valid_from": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "amount_minor",
+                    "currency",
+                    "unit",
+                    "tax_behavior",
+                    "compare_at_amount_minor",
+                    "valid_from",
+                    "valid_until",
+                    "provenance"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
                 },
                 "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_ends_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
                   "type": [
                     "string",
                     "null"
@@ -703,7 +772,7 @@
                 "name",
                 "slug",
                 "description",
-                "price_amount",
+                "price",
                 "is_visible",
                 "available",
                 "featured",
@@ -1455,13 +1524,6 @@
               "null"
             ]
           },
-          "compare_at_price_amount": {
-            "description": "Regular/pre-sale price. Set alongside price_amount to run a sale.",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
           "duration_minutes": {
             "description": "Expected duration in minutes.",
             "type": [
@@ -1532,16 +1594,63 @@
             ]
           },
           "price": {
-            "description": "Optional display override for pricing text, e.g. \"Ask us\" or \"Free\". Leave both price and price_amount unset entirely (not \"Ask us\") for group/custom-quote experiences — that triggers the public page's \"Contact us\" inquiry flow instead of a Reserve Now button; setting price to text like \"Ask us\" instead just shows that text as the price label with normal booking still enabled.",
+            "additionalProperties": false,
+            "description": "Canonical immutable Price. Use null for inquiry-only experiences.",
+            "properties": {
+              "amount_minor": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "compare_at_amount_minor": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "string"
+              },
+              "tax_behavior": {
+                "enum": [
+                  "unspecified",
+                  "inclusive",
+                  "exclusive"
+                ],
+                "type": "string"
+              },
+              "unit": {
+                "enum": [
+                  "item",
+                  "person",
+                  "table"
+                ],
+                "type": "string"
+              },
+              "valid_from": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "amount_minor"
+            ],
             "type": [
-              "string",
+              "object",
               "null"
             ]
           },
-          "price_amount": {
-            "description": "Numeric price amount when the experience has a concrete price.",
+          "pricing_note": {
+            "description": "Concise pricing context for an inquiry-only experience.",
             "type": [
-              "number",
+              "string",
               "null"
             ]
           },
@@ -1567,20 +1676,6 @@
               "noindex,nofollow",
               null
             ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_ends_at": {
-            "description": "ISO 8601 date/time the sale ends. Optional.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_starts_at": {
-            "description": "ISO 8601 date/time the sale becomes active. Optional.",
             "type": [
               "string",
               "null"
@@ -2170,13 +2265,6 @@
           "category": {
             "type": "string"
           },
-          "compare_at_price_amount": {
-            "type": [
-              "string",
-              "number",
-              "null"
-            ]
-          },
           "description": {
             "type": "string"
           },
@@ -2227,25 +2315,60 @@
               "null"
             ]
           },
-          "price_amount": {
+          "price": {
+            "additionalProperties": false,
+            "properties": {
+              "amount_minor": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "compare_at_amount_minor": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "string"
+              },
+              "tax_behavior": {
+                "enum": [
+                  "unspecified",
+                  "inclusive",
+                  "exclusive"
+                ],
+                "type": "string"
+              },
+              "unit": {
+                "enum": [
+                  "item",
+                  "person",
+                  "table"
+                ],
+                "type": "string"
+              },
+              "valid_from": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "amount_minor"
+            ],
             "type": [
-              "string",
-              "number"
+              "object",
+              "null"
             ]
           },
           "robots": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_ends_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_starts_at": {
             "type": [
               "string",
               "null"
@@ -2278,7 +2401,7 @@
           "location_id",
           "category",
           "name",
-          "price_amount"
+          "price"
         ],
         "type": "object"
       },
@@ -2297,12 +2420,6 @@
               },
               "category": {
                 "type": "string"
-              },
-              "compare_at_price_amount": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "created_at": {
                 "type": "string"
@@ -2509,22 +2626,69 @@
                   "null"
                 ]
               },
-              "price_amount": {
-                "type": "string"
+              "price": {
+                "properties": {
+                  "amount_minor": {
+                    "type": "integer"
+                  },
+                  "compare_at_amount_minor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "string"
+                  },
+                  "tax_behavior": {
+                    "enum": [
+                      "unspecified",
+                      "inclusive",
+                      "exclusive"
+                    ],
+                    "type": "string"
+                  },
+                  "unit": {
+                    "enum": [
+                      "item",
+                      "person",
+                      "table"
+                    ],
+                    "type": "string"
+                  },
+                  "valid_from": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "amount_minor",
+                  "currency",
+                  "unit",
+                  "tax_behavior",
+                  "compare_at_amount_minor",
+                  "valid_from",
+                  "valid_until",
+                  "provenance"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "sale_ends_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "sale_starts_at": {
                 "type": [
                   "string",
                   "null"
@@ -2578,7 +2742,7 @@
               "name",
               "slug",
               "description",
-              "price_amount",
+              "price",
               "is_visible",
               "available",
               "featured",
@@ -5017,12 +5181,6 @@
               "category": {
                 "type": "string"
               },
-              "compare_at_price_amount": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "created_at": {
                 "type": "string"
               },
@@ -5228,22 +5386,69 @@
                   "null"
                 ]
               },
-              "price_amount": {
-                "type": "string"
+              "price": {
+                "properties": {
+                  "amount_minor": {
+                    "type": "integer"
+                  },
+                  "compare_at_amount_minor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "string"
+                  },
+                  "tax_behavior": {
+                    "enum": [
+                      "unspecified",
+                      "inclusive",
+                      "exclusive"
+                    ],
+                    "type": "string"
+                  },
+                  "unit": {
+                    "enum": [
+                      "item",
+                      "person",
+                      "table"
+                    ],
+                    "type": "string"
+                  },
+                  "valid_from": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "amount_minor",
+                  "currency",
+                  "unit",
+                  "tax_behavior",
+                  "compare_at_amount_minor",
+                  "valid_from",
+                  "valid_until",
+                  "provenance"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "sale_ends_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "sale_starts_at": {
                 "type": [
                   "string",
                   "null"
@@ -5297,7 +5502,7 @@
               "name",
               "slug",
               "description",
-              "price_amount",
+              "price",
               "is_visible",
               "available",
               "featured",
@@ -6779,12 +6984,6 @@
                 "category": {
                   "type": "string"
                 },
-                "compare_at_price_amount": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "created_at": {
                   "type": "string"
                 },
@@ -6990,22 +7189,69 @@
                     "null"
                   ]
                 },
-                "price_amount": {
-                  "type": "string"
+                "price": {
+                  "properties": {
+                    "amount_minor": {
+                      "type": "integer"
+                    },
+                    "compare_at_amount_minor": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string"
+                    },
+                    "tax_behavior": {
+                      "enum": [
+                        "unspecified",
+                        "inclusive",
+                        "exclusive"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "enum": [
+                        "item",
+                        "person",
+                        "table"
+                      ],
+                      "type": "string"
+                    },
+                    "valid_from": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "amount_minor",
+                    "currency",
+                    "unit",
+                    "tax_behavior",
+                    "compare_at_amount_minor",
+                    "valid_from",
+                    "valid_until",
+                    "provenance"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
                 },
                 "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_ends_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
                   "type": [
                     "string",
                     "null"
@@ -7059,7 +7305,7 @@
                 "name",
                 "slug",
                 "description",
-                "price_amount",
+                "price",
                 "is_visible",
                 "available",
                 "featured",
@@ -7751,12 +7997,6 @@
                     "null"
                   ]
                 },
-                "compare_at_price_amount": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
                 "created_at": {
                   "type": "string"
                 },
@@ -7879,14 +8119,70 @@
                   ]
                 },
                 "price": {
+                  "properties": {
+                    "amount_minor": {
+                      "type": "integer"
+                    },
+                    "compare_at_amount_minor": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string"
+                    },
+                    "tax_behavior": {
+                      "enum": [
+                        "unspecified",
+                        "inclusive",
+                        "exclusive"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "enum": [
+                        "item",
+                        "person",
+                        "table"
+                      ],
+                      "type": "string"
+                    },
+                    "valid_from": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "amount_minor",
+                    "currency",
+                    "unit",
+                    "tax_behavior",
+                    "compare_at_amount_minor",
+                    "valid_from",
+                    "valid_until",
+                    "provenance"
+                  ],
                   "type": [
-                    "string",
+                    "object",
                     "null"
                   ]
                 },
-                "price_amount": {
+                "pricing_note": {
                   "type": [
-                    "number",
+                    "string",
                     "null"
                   ]
                 },
@@ -7920,17 +8216,70 @@
                     "null"
                   ]
                 },
-                "sale_ends_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                "scheduled_prices": {
+                  "items": {
+                    "properties": {
+                      "amount_minor": {
+                        "type": "integer"
+                      },
+                      "compare_at_amount_minor": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "provenance": {
+                        "type": "string"
+                      },
+                      "tax_behavior": {
+                        "enum": [
+                          "unspecified",
+                          "inclusive",
+                          "exclusive"
+                        ],
+                        "type": "string"
+                      },
+                      "unit": {
+                        "enum": [
+                          "item",
+                          "person",
+                          "table"
+                        ],
+                        "type": "string"
+                      },
+                      "valid_from": {
+                        "type": "string"
+                      },
+                      "valid_until": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "amount_minor",
+                      "currency",
+                      "unit",
+                      "tax_behavior",
+                      "compare_at_amount_minor",
+                      "valid_from",
+                      "valid_until",
+                      "provenance"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "type": "array"
                 },
                 "seo_description": {
                   "type": [
@@ -8076,210 +8425,14 @@
                 "available": {
                   "type": "boolean"
                 },
-                "canonical_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "category": {
-                  "type": "string"
-                },
-                "compare_at_price_amount": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "created_at": {
-                  "type": "string"
-                },
-                "created_by": {
                   "type": "string"
                 },
                 "description": {
                   "type": "string"
                 },
-                "details": {
-                  "items": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "key": {
-                        "type": "string"
-                      },
-                      "label": {
-                        "type": "string"
-                      },
-                      "values": {
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "required": [
-                      "key",
-                      "label",
-                      "values"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "featured": {
-                  "type": "boolean"
-                },
-                "featured_sort_order": {
-                  "type": "number"
-                },
-                "gallery": {
-                  "items": {
-                    "properties": {
-                      "alt_text": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "asset_id": {
-                        "type": "string"
-                      },
-                      "duration": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "height": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "kind": {
-                        "enum": [
-                          "image",
-                          "video",
-                          "file"
-                        ],
-                        "type": "string"
-                      },
-                      "mime_type": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "provider": {
-                        "type": "string"
-                      },
-                      "public_url": {
-                        "type": "string"
-                      },
-                      "status": {
-                        "enum": [
-                          "active"
-                        ],
-                        "type": "string"
-                      },
-                      "thumbnail_url": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "width": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "asset_id",
-                      "kind",
-                      "public_url",
-                      "status"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
                 "id": {
                   "type": "string"
-                },
-                "image": {
-                  "properties": {
-                    "alt_text": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "asset_id": {
-                      "type": "string"
-                    },
-                    "duration": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "height": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "kind": {
-                      "enum": [
-                        "image",
-                        "video",
-                        "file"
-                      ],
-                      "type": "string"
-                    },
-                    "mime_type": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "provider": {
-                      "type": "string"
-                    },
-                    "public_url": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "enum": [
-                        "active"
-                      ],
-                      "type": "string"
-                    },
-                    "thumbnail_url": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "width": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "asset_id",
-                    "kind",
-                    "public_url",
-                    "status"
-                  ],
-                  "type": [
-                    "object",
-                    "null"
-                  ]
                 },
                 "is_visible": {
                   "type": "boolean"
@@ -8290,72 +8443,51 @@
                 "name": {
                   "type": "string"
                 },
-                "order_url": {
+                "price": {
+                  "properties": {
+                    "amount_minor": {
+                      "type": "integer"
+                    },
+                    "compare_at_amount_minor": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "tax_behavior": {
+                      "enum": [
+                        "unspecified",
+                        "inclusive",
+                        "exclusive"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "enum": [
+                        "item",
+                        "person",
+                        "table"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount_minor",
+                    "currency",
+                    "unit",
+                    "tax_behavior",
+                    "compare_at_amount_minor"
+                  ],
                   "type": [
-                    "string",
+                    "object",
                     "null"
                   ]
-                },
-                "price_amount": {
-                  "type": "string"
-                },
-                "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_ends_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "slug": {
-                  "type": "string"
                 },
                 "sort_order": {
-                  "type": "number"
-                },
-                "source": {
-                  "enum": [
-                    "manual",
-                    "template",
-                    "ai",
-                    "import",
-                    "copy"
-                  ],
-                  "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "updated_at": {
-                  "type": "string"
-                },
-                "updated_by": {
-                  "type": "string"
+                  "type": "integer"
                 }
               },
               "required": [
@@ -8363,23 +8495,11 @@
                 "location_id",
                 "category",
                 "name",
-                "slug",
                 "description",
-                "price_amount",
+                "price",
                 "is_visible",
                 "available",
-                "featured",
-                "featured_sort_order",
-                "sort_order",
-                "tags",
-                "details",
-                "image",
-                "gallery",
-                "source",
-                "created_at",
-                "updated_at",
-                "created_by",
-                "updated_by"
+                "sort_order"
               ],
               "type": "object"
             },
@@ -9547,6 +9667,93 @@
         "required": [
           "requests",
           "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "move_product_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "before_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "category",
+          "before_category"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "moved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "moved"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "move_products",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "before_product_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "product_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "product_ids",
+          "before_product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "moved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "moved"
         ],
         "type": "object"
       }
@@ -11295,56 +11502,6 @@
           "asset_ids",
           "media",
           "cleared"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "reorder_products",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "location_id": {
-            "type": "string"
-          },
-          "products": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "sort_order": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "id",
-                "sort_order"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id",
-          "products"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "reordered": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "reordered"
         ],
         "type": "object"
       }
@@ -13558,13 +13715,6 @@
                 "category": {
                   "type": "string"
                 },
-                "compare_at_price_amount": {
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
-                  ]
-                },
                 "description": {
                   "type": "string"
                 },
@@ -13612,28 +13762,63 @@
                     "null"
                   ]
                 },
-                "price_amount": {
+                "price": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount_minor": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "compare_at_amount_minor": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string"
+                    },
+                    "tax_behavior": {
+                      "enum": [
+                        "unspecified",
+                        "inclusive",
+                        "exclusive"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "enum": [
+                        "item",
+                        "person",
+                        "table"
+                      ],
+                      "type": "string"
+                    },
+                    "valid_from": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "amount_minor"
+                  ],
                   "type": [
-                    "string",
-                    "number"
+                    "object",
+                    "null"
                   ]
                 },
                 "product_id": {
                   "type": "string"
                 },
                 "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_ends_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
                   "type": [
                     "string",
                     "null"
@@ -13661,15 +13846,15 @@
               "required": [
                 "category",
                 "name",
-                "price_amount"
+                "price"
               ],
               "type": "object"
             },
-            "maxItems": 100,
+            "maxItems": 200,
             "type": "array"
           },
           "set_missing_unavailable": {
-            "description": "When true, mark stored Products omitted from this complete request unavailable. At most 100 intended rows may be supplied.",
+            "description": "When true, mark stored Products omitted from this complete request unavailable. At most 200 intended rows may be supplied.",
             "type": "boolean"
           },
           "site_id": {
@@ -13699,12 +13884,6 @@
                 },
                 "category": {
                   "type": "string"
-                },
-                "compare_at_price_amount": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
                 },
                 "created_at": {
                   "type": "string"
@@ -13911,22 +14090,69 @@
                     "null"
                   ]
                 },
-                "price_amount": {
-                  "type": "string"
+                "price": {
+                  "properties": {
+                    "amount_minor": {
+                      "type": "integer"
+                    },
+                    "compare_at_amount_minor": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "string"
+                    },
+                    "tax_behavior": {
+                      "enum": [
+                        "unspecified",
+                        "inclusive",
+                        "exclusive"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "enum": [
+                        "item",
+                        "person",
+                        "table"
+                      ],
+                      "type": "string"
+                    },
+                    "valid_from": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "amount_minor",
+                    "currency",
+                    "unit",
+                    "tax_behavior",
+                    "compare_at_amount_minor",
+                    "valid_from",
+                    "valid_until",
+                    "provenance"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
                 },
                 "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_ends_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sale_starts_at": {
                   "type": [
                     "string",
                     "null"
@@ -13980,7 +14206,7 @@
                 "name",
                 "slug",
                 "description",
-                "price_amount",
+                "price",
                 "is_visible",
                 "available",
                 "featured",
@@ -15251,13 +15477,6 @@
               "null"
             ]
           },
-          "compare_at_price_amount": {
-            "description": "Regular/pre-sale price. Set alongside price_amount to run a sale.",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
           "duration_minutes": {
             "description": "Expected duration in minutes.",
             "type": [
@@ -15316,16 +15535,63 @@
             ]
           },
           "price": {
-            "description": "Optional display override for pricing text, e.g. \"Ask us\" or \"Free\". Leave both price and price_amount unset entirely (not \"Ask us\") for group/custom-quote experiences — that triggers the public page's \"Contact us\" inquiry flow instead of a Reserve Now button; setting price to text like \"Ask us\" instead just shows that text as the price label with normal booking still enabled.",
+            "additionalProperties": false,
+            "description": "Canonical immutable Price. Use null for inquiry-only experiences.",
+            "properties": {
+              "amount_minor": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "compare_at_amount_minor": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "string"
+              },
+              "tax_behavior": {
+                "enum": [
+                  "unspecified",
+                  "inclusive",
+                  "exclusive"
+                ],
+                "type": "string"
+              },
+              "unit": {
+                "enum": [
+                  "item",
+                  "person",
+                  "table"
+                ],
+                "type": "string"
+              },
+              "valid_from": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "amount_minor"
+            ],
             "type": [
-              "string",
+              "object",
               "null"
             ]
           },
-          "price_amount": {
-            "description": "Numeric price amount when the experience has a concrete price.",
+          "pricing_note": {
+            "description": "Concise pricing context for an inquiry-only experience.",
             "type": [
-              "number",
+              "string",
               "null"
             ]
           },
@@ -15351,20 +15617,6 @@
               "noindex,nofollow",
               null
             ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_ends_at": {
-            "description": "ISO 8601 date/time the sale ends. Optional.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_starts_at": {
-            "description": "ISO 8601 date/time the sale becomes active. Optional.",
             "type": [
               "string",
               "null"
@@ -16219,13 +16471,6 @@
           "category": {
             "type": "string"
           },
-          "compare_at_price_amount": {
-            "type": [
-              "string",
-              "number",
-              "null"
-            ]
-          },
           "description": {
             "type": "string"
           },
@@ -16273,28 +16518,63 @@
               "null"
             ]
           },
-          "price_amount": {
+          "price": {
+            "additionalProperties": false,
+            "properties": {
+              "amount_minor": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "compare_at_amount_minor": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "string"
+              },
+              "tax_behavior": {
+                "enum": [
+                  "unspecified",
+                  "inclusive",
+                  "exclusive"
+                ],
+                "type": "string"
+              },
+              "unit": {
+                "enum": [
+                  "item",
+                  "person",
+                  "table"
+                ],
+                "type": "string"
+              },
+              "valid_from": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "amount_minor"
+            ],
             "type": [
-              "string",
-              "number"
+              "object",
+              "null"
             ]
           },
           "product_id": {
             "type": "string"
           },
           "robots": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_ends_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sale_starts_at": {
             "type": [
               "string",
               "null"
@@ -16343,12 +16623,6 @@
               },
               "category": {
                 "type": "string"
-              },
-              "compare_at_price_amount": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "created_at": {
                 "type": "string"
@@ -16555,22 +16829,69 @@
                   "null"
                 ]
               },
-              "price_amount": {
-                "type": "string"
+              "price": {
+                "properties": {
+                  "amount_minor": {
+                    "type": "integer"
+                  },
+                  "compare_at_amount_minor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "string"
+                  },
+                  "tax_behavior": {
+                    "enum": [
+                      "unspecified",
+                      "inclusive",
+                      "exclusive"
+                    ],
+                    "type": "string"
+                  },
+                  "unit": {
+                    "enum": [
+                      "item",
+                      "person",
+                      "table"
+                    ],
+                    "type": "string"
+                  },
+                  "valid_from": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "amount_minor",
+                  "currency",
+                  "unit",
+                  "tax_behavior",
+                  "compare_at_amount_minor",
+                  "valid_from",
+                  "valid_until",
+                  "provenance"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "sale_ends_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "sale_starts_at": {
                 "type": [
                   "string",
                   "null"
@@ -16624,7 +16945,7 @@
               "name",
               "slug",
               "description",
-              "price_amount",
+              "price",
               "is_visible",
               "available",
               "featured",

@@ -22,7 +22,7 @@ export type TransferOnboardingContext = TransferPaymentPendingContext | {
     brand_name: string | null
     vertical?: string | null
     subdomain: string | null
-    plan: string | null
+    effective_plan: string
   }
   locations: Array<{
     id: string

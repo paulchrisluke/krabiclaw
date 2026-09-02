@@ -41,6 +41,18 @@ import { getPublishedPosts } from "~/server/utils/post-management";
 import { loadPublicBase } from "~/server/utils/public-base";
 import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
 import { isPublicPagePayload } from '~/utils/public-resource-contracts'
+import type { LocalizedResourceType } from '~/server/utils/localization-registry'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
+import { normalizeVertical } from '~/utils/vertical-copy'
+import { isPublicSourceRouteRoot } from '~/shared/public-locale-routes'
+import {
+  loadExactPublicLocalizations,
+  projectExactLocalizedCollection,
+  projectExactLocalizedResource,
+  projectLocalizedMediaAlt,
+  resolveLocalizedRouteResourceId,
+  type ExactPublicLocalization,
+} from '~/server/utils/public-localization'
 
 interface SiteContent {
   id: string
@@ -118,7 +130,7 @@ function canonicalTenantPagePath(page: string | null): string | null {
   // and their route datasets. They are not tenant-page variants, so do not
   // require a CMS page record for a valid location.
   if (page === 'locations') return '/locations'
-  if (['about', 'contact', 'reservations', 'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'products', 'blog'].includes(page)) return `/${page}`
+  if (isPublicSourceRouteRoot(page)) return `/${page}`
   return null
 }
 
@@ -208,8 +220,21 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     recurring_slots = parsed as Partial<Record<string, string[]>>
   }
 
+  const {
+    price_id, amount_minor, currency, price_unit, tax_behavior, compare_at_amount_minor,
+    valid_from, valid_until, provenance, price_created_by, price_created_at,
+    ...experienceRow
+  } = row
   return {
-    ...(row as unknown as Experience),
+    ...(experienceRow as unknown as Experience),
+    price: price_id == null ? null : {
+      id: String(price_id), organization_id: String(row.organization_id), site_id: String(row.site_id),
+      location_id: row.location_id == null ? null : String(row.location_id), product_id: String(row.id), amount_minor: Number(amount_minor),
+      currency: String(currency), unit: String(price_unit), tax_behavior: String(tax_behavior),
+      compare_at_amount_minor: compare_at_amount_minor == null ? null : Number(compare_at_amount_minor),
+      valid_from: String(valid_from), valid_until: valid_until == null ? null : String(valid_until),
+      provenance: String(provenance), created_by: String(price_created_by), created_at: String(price_created_at),
+    } as Experience['price'],
     status: row.status as Experience["status"],
     highlights: parseStringArr(row.highlights),
     included_items: parseStringArr(row.included_items),
@@ -218,7 +243,7 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     time_slots,
     recurring_slots,
     featured: Boolean(row.featured),
-  } as Experience;
+  } as Experience
 }
 
 async function loadPublicPageSource(
@@ -352,20 +377,50 @@ async function loadPublicPageSource(
     if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "SKIP");
   }
 
-  const [{ site }, locationRow] = await Promise.all([
-    loadPublicBase(event, siteId, { previewAuthorized: isPreviewAuthorized }),
-    locationSlug
-      ? queryFirst<{ id: string }>(
-          db,
-          `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
-          [siteId, locationSlug],
-        )
-      : Promise.resolve(null),
-  ]);
+  const { site } = await loadPublicBase(event, siteId, { previewAuthorized: isPreviewAuthorized });
   options.signal?.throwIfAborted();
 
   const orgId = site.organization_id;
+  const localizedLocale = locale && locale !== 'en' ? locale : null
+  let publicLocalizations: ExactPublicLocalization[] = []
+  if (localizedLocale) {
+    publicLocalizations = await loadExactPublicLocalizations(db, orgId, siteId, localizedLocale)
+  }
+
+  const localizedLocationId = localizedLocale && locationSlug
+    ? resolveLocalizedRouteResourceId(publicLocalizations, 'business_location', `/${localizedLocale}/locations/${locationSlug}`)
+    : null
+  if (localizedLocale && locationSlug && !localizedLocationId) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized location was not found' })
+  }
+  const locationRow = locationSlug
+    ? await queryFirst<{ id: string }>(
+        db,
+        localizedLocationId
+          ? `SELECT id FROM business_locations WHERE site_id = ? AND id = ? AND status = 'active' LIMIT 1`
+          : `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
+        [siteId, localizedLocationId ?? locationSlug],
+      )
+    : null
   const locationId = locationRow?.id;
+
+  const localizedExperienceId = localizedLocale && experienceSlug
+    ? resolveLocalizedRouteResourceId(publicLocalizations, 'experience', `/${localizedLocale}/experiences/${experienceSlug}`)
+    : null
+  if (localizedLocale && experienceSlug && !localizedExperienceId) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized Experience was not found' })
+  }
+  const normalizedVertical = normalizeVertical(site.vertical)
+  const localizedBlogPostId = localizedLocale && blogSlug
+    ? resolveLocalizedRouteResourceId(
+        publicLocalizations,
+        'tenant_blog_post',
+        `/${localizedLocale}/${normalizedVertical === 'professional_service' ? 'article' : 'blog'}/${blogSlug}`,
+      )
+    : null
+  if (localizedLocale && blogSlug && !localizedBlogPostId) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized blog post was not found' })
+  }
 
   // Pages that render the sitewide reviews list
   const needsGlobalReviews =
@@ -412,14 +467,18 @@ async function loadPublicPageSource(
       ? [orgId, siteId, locationId ?? '__missing-location__']
       : [orgId, siteId]
     idxProducts = push(
-      `SELECT id, organization_id, site_id, location_id, category, name, slug, description,
-              price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, order_url,
-              is_visible, available, featured, featured_sort_order, sort_order, tags_json,
-              details_json, seo_title, seo_description, canonical_url, robots, source,
-              created_at, updated_at, created_by, updated_by
-         FROM products
-        WHERE organization_id = ? AND site_id = ? AND is_visible = 1 ${locationClause}
-        ORDER BY location_id, sort_order, id`,
+      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category, p.name, p.slug, p.description,
+              p.order_url, p.is_visible, p.available, p.featured, p.featured_sort_order, p.sort_order, p.tags_json,
+              p.details_json, p.seo_title, p.seo_description, p.canonical_url, p.robots, p.source,
+              p.created_at, p.updated_at, p.created_by, p.updated_by,
+              pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
+              pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
+              pr.created_by AS price_created_by, pr.created_at AS price_created_at
+         FROM products p
+         LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+           AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard' AND p.is_visible = 1 ${locationClause.replace('location_id', 'p.location_id')}
+        ORDER BY p.location_id, p.sort_order, p.id`,
       productParams,
     )
 
@@ -447,33 +506,46 @@ async function loadPublicPageSource(
   if (needsExperiencesList) {
     const expParams: unknown[] = [orgId, siteId];
     let expSql = `SELECT e.id, e.organization_id, e.site_id, e.location_id,
-                         e.title, e.slug, e.tagline, e.body,
-                         e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+                         p.name AS title, p.slug, e.tagline, p.description AS body, e.pricing_note,
+                         pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
+                         pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
+                         pr.created_by AS price_created_by, pr.created_at AS price_created_at,
+                         e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
-                         e.status, e.sort_order, e.featured, e.featured_sort_order,
-                         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
+                         CASE WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
+                         p.sort_order, p.featured, p.featured_sort_order,
+                         p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
                   FROM experiences e
-                  WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
+                  JOIN products p ON p.id = e.id
+                  LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                  WHERE e.organization_id = ? AND e.site_id = ? AND p.is_visible = 1`;
     if (locationId) {
       expSql += ` AND e.location_id = ?`;
       expParams.push(locationId);
     }
-    expSql += ` ORDER BY e.sort_order ASC, e.created_at ASC`;
+    expSql += ` ORDER BY p.sort_order ASC, p.created_at ASC`;
     idxExperiencesList = push(expSql, expParams);
   }
 
   if (requestedDatasets.has("experienceDetail") && experienceSlug) {
+    const experienceWhere = localizedExperienceId ? 'p.id = ?' : 'p.slug = ?'
     idxExperienceDetail = push(
       `SELECT e.id, e.organization_id, e.site_id, e.location_id,
-              e.title, e.slug, e.tagline, e.body,
-              e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+              p.name AS title, p.slug, e.tagline, p.description AS body, e.pricing_note,
+              pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
+              pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
+              pr.created_by AS price_created_by, pr.created_at AS price_created_at,
+              e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
-              e.status, e.sort_order, e.featured, e.featured_sort_order,
-              e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
+              CASE WHEN p.is_visible = 0 THEN 'inactive' WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
+              p.sort_order, p.featured, p.featured_sort_order,
+              p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
        FROM experiences e
-       WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
+       JOIN products p ON p.id = e.id
+       LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+       WHERE e.organization_id = ? AND e.site_id = ? AND ${experienceWhere}
        LIMIT 1`,
-      [orgId, siteId, experienceSlug],
+      [orgId, siteId, localizedExperienceId ?? experienceSlug],
     );
   }
 
@@ -561,9 +633,9 @@ async function loadPublicPageSource(
        FROM blog_posts p
        LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0 AND mp.status = 'active'
        LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-       WHERE p.slug = ? AND p.site_id = ? AND (p.scheduled_for IS NULL OR p.scheduled_for <= datetime('now'))
+       WHERE ${localizedBlogPostId ? 'p.id' : 'p.slug'} = ? AND p.site_id = ? AND (p.scheduled_for IS NULL OR p.scheduled_for <= datetime('now'))
        LIMIT 1`,
-      [blogSlug, siteId],
+      [localizedBlogPostId ?? blogSlug, siteId],
     );
 
   if (requestedDatasets.has("qa"))
@@ -591,7 +663,48 @@ async function loadPublicPageSource(
     : [];
   options.signal?.throwIfAborted();
 
-  const shell = buildPublicShellPayload(site, batchResults, shellIndexes)
+  const sourceShell = buildPublicShellPayload(site, batchResults, shellIndexes)
+  const shell = (() => {
+    if (!localizedLocale) return sourceShell
+    const siteLocalization = publicLocalizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
+    if (!siteLocalization) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized site representation was not found' })
+    const localizedSite = projectExactLocalizedResource('site', site, siteLocalization)
+    const locations = projectExactLocalizedCollection('business_location', sourceShell.locations, publicLocalizations)
+    const primary = locations.find(location => location.is_primary) ?? locations[0] ?? null
+    const {
+      brand_name: _sourceBrandName,
+      brand_description: _sourceBrandDescription,
+      seo_title: _sourceSeoTitle,
+      seo_description: _sourceSeoDescription,
+      ...config
+    } = sourceShell.config
+    if (localizedSite.brand_name) config.brand_name = localizedSite.brand_name
+    if (localizedSite.brand_description) config.brand_description = localizedSite.brand_description
+    if (localizedSite.seo_title) config.seo_title = localizedSite.seo_title
+    if (localizedSite.seo_description) config.seo_description = localizedSite.seo_description
+    return {
+      ...sourceShell,
+      site: {
+        ...sourceShell.site,
+        brand_name: localizedSite.brand_name,
+        brand_description: localizedSite.brand_description,
+      },
+      locations,
+      config,
+      googleBusiness: {
+        ...sourceShell.googleBusiness,
+        business: primary && sourceShell.googleBusiness.business
+          ? {
+              ...sourceShell.googleBusiness.business,
+              title: primary.title,
+              city: primary.city,
+              storefrontAddress: primary.address,
+              profile: { description: primary.description },
+            }
+          : null,
+      },
+    }
+  })()
 
   // Extract batch results by tracked index
   const locRows = idxLoc >= 0
@@ -663,15 +776,28 @@ async function loadPublicPageSource(
         gallery: media.filter(item => item.slot === 'gallery').map(toResolvedMediaAsset),
       }
     })
+    if (localizedLocale) {
+      products = projectExactLocalizedCollection('product', products, publicLocalizations)
+        .map(product => ({
+          ...product,
+          image: product.image
+            ? projectLocalizedMediaAlt([product.image], publicLocalizations)[0] ?? null
+            : null,
+          gallery: projectLocalizedMediaAlt(product.gallery, publicLocalizations),
+        }))
+    }
   }
 
   // Build experiences
-  const experiencesListRaw: Experience[] =
+  const sourceExperiencesList: Experience[] =
     idxExperiencesList >= 0
       ? (
           (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
         ).map(parseExperienceRow)
       : [];
+  const experiencesListRaw = localizedLocale
+    ? projectExactLocalizedCollection('experience', sourceExperiencesList, publicLocalizations)
+    : sourceExperiencesList
   options.signal?.throwIfAborted();
   const mediaByExperience = await getMediaPlacements(db, {
     siteId,
@@ -703,7 +829,7 @@ async function loadPublicPageSource(
     ? await attachAvailabilitySummaries(db, orgId, siteId, experiencesWithMedia, availabilityContext)
     : experiencesWithMedia;
 
-  const experienceDetailRaw: Experience | null =
+  const sourceExperienceDetail: Experience | null =
     idxExperienceDetail >= 0
       ? (
           (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results[0] ?? null
@@ -713,6 +839,16 @@ async function loadPublicPageSource(
           )
         : null
       : null;
+  const experienceDetailRaw = sourceExperienceDetail && localizedLocale
+    ? (() => {
+        const localization = publicLocalizations.find(item =>
+          item.resourceType === 'experience' && item.resourceId === sourceExperienceDetail.id,
+        )
+        return localization
+          ? projectExactLocalizedResource('experience', sourceExperienceDetail, localization)
+          : null
+      })()
+    : sourceExperienceDetail
   // inactive experiences are never public, at any route — sold_out stays visible
   // with its own messaging (see server/utils/experiences.ts listExperiences).
   options.signal?.throwIfAborted();
@@ -728,12 +864,18 @@ async function loadPublicPageSource(
       : null;
 
   options.signal?.throwIfAborted();
-  const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
+  let [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
     needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
     locationId && requestedDatasets.has("posts")
       ? getPublishedPosts(db, siteId, env, 50, locationId)
       : Promise.resolve([]),
   ]);
+  if (localizedLocale) {
+    globalPublishedPosts = projectExactLocalizedCollection('site_post', globalPublishedPosts, publicLocalizations)
+      .map(post => ({ ...post, media: projectLocalizedMediaAlt(post.media, publicLocalizations) }))
+    locationPublishedPosts = projectExactLocalizedCollection('site_post', locationPublishedPosts, publicLocalizations)
+      .map(post => ({ ...post, media: projectLocalizedMediaAlt(post.media, publicLocalizations) }))
+  }
 
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {
@@ -825,19 +967,25 @@ async function loadPublicPageSource(
   ]);
   options.signal?.throwIfAborted();
   const policyLocale = locale ?? sourceLocale!;
+  const localizePolicy = <T extends { id: string | null; weather_policy: string | null; additional_notes_html: string | null }>(policy: T): T => {
+    if (!localizedLocale || !policy.id) return policy
+    const localization = publicLocalizations.find(item => item.resourceType === 'booking_policy' && item.resourceId === policy.id)
+    if (!localization) return { ...policy, weather_policy: null, additional_notes_html: null }
+    return projectExactLocalizedResource('booking_policy', { ...policy, id: policy.id }, localization)
+  }
   const reservationPolicyByLocation = Object.fromEntries(
     Array.from(reservationPolicies?.byLocation ?? [], ([locationId, policy]) => [
       locationId,
-      policy.id ? renderBookingPolicySummary(policy, policyLocale) : null,
+      policy.id ? renderBookingPolicySummary(localizePolicy(policy), policyLocale) : null,
     ]),
   );
   const experiencePolicySiteDefault = experiencePolicies?.site
-    ? renderBookingPolicySummary(experiencePolicies.site, policyLocale)
+    ? renderBookingPolicySummary(localizePolicy(experiencePolicies.site), policyLocale)
     : null;
   const experiencePolicyById = Object.fromEntries(
     Array.from(experiencePolicies?.byExperience ?? [], ([experienceId, policy]) => [
       experienceId,
-      renderBookingPolicySummary(policy, policyLocale),
+      renderBookingPolicySummary(localizePolicy(policy), policyLocale),
     ]),
   );
 
@@ -863,40 +1011,93 @@ async function loadPublicPageSource(
   );
 
   // Shape photos (type E)
-  const media = (photoRows?.results ?? []).map(asset => ({
-    placement_id: asset.placement_id,
-    owner_type: asset.owner_type,
-    owner_id: asset.owner_id,
-    slot: asset.slot,
-    asset_id: asset.id,
-    public_url: asset.public_url,
-    thumbnail_url: asset.thumbnail_url,
-    kind: asset.kind,
-    alt_text: asset.alt_text,
-    category:
-      PUBLIC_PHOTO_CATEGORY[String(asset.category || "other")] ?? "OTHER",
-    sort_order: asset.sort_order,
-  }));
+  const sourceMedia = (photoRows?.results ?? []).map((asset) => {
+    if (typeof asset.id !== 'string' || (asset.alt_text !== null && typeof asset.alt_text !== 'string')) {
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Stored public media is invalid' })
+    }
+    return {
+      placement_id: asset.placement_id,
+      owner_type: asset.owner_type,
+      owner_id: asset.owner_id,
+      slot: asset.slot,
+      asset_id: asset.id,
+      public_url: asset.public_url,
+      thumbnail_url: asset.thumbnail_url,
+      kind: asset.kind,
+      alt_text: asset.alt_text,
+      category: PUBLIC_PHOTO_CATEGORY[String(asset.category || "other")] ?? "OTHER",
+      sort_order: asset.sort_order,
+    }
+  });
+  const media = localizedLocale
+    ? projectLocalizedMediaAlt(sourceMedia, publicLocalizations)
+    : sourceMedia
 
   // Shape blog list
-  const blogList =
+  const sourceBlogList =
     idxBlogList >= 0
       ? (
           (batchResults[idxBlogList] as { results: ApiRecord[] })?.results ?? []
         ).map(attachFeaturedMediaFromBareJoin)
       : [];
+  const blogList = localizedLocale
+    ? projectExactLocalizedCollection('tenant_blog_post', sourceBlogList, publicLocalizations)
+    : sourceBlogList
 
   let blogPost: ApiRecord | null = null;
+  let sourceBlogPostIdentity: { id: string; slug: string } | null = null
   if (idxBlogPost >= 0) {
     const postRow = (batchResults[idxBlogPost] as { results: ApiRecord[] })
       ?.results?.[0];
     if (postRow) {
-      options.signal?.throwIfAborted();
-      const contentBlocks = await getContentBlocksForOwner(db, 'tenant_blog', String(postRow.id));
-      if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-      blogPost = attachFeaturedMediaFromBareJoin({ ...postRow, content_blocks: contentBlocks });
+      if (typeof postRow.id !== 'string' || typeof postRow.slug !== 'string') {
+        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored public blog post is invalid' })
+      }
+      sourceBlogPostIdentity = { id: postRow.id, slug: postRow.slug }
+      if (!localizedLocale) {
+        options.signal?.throwIfAborted();
+        const contentBlocks = await getContentBlocksForOwner(db, 'tenant_blog', String(postRow.id));
+        if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+        blogPost = attachFeaturedMediaFromBareJoin({ ...postRow, content_blocks: contentBlocks });
+      }
     }
   }
+
+  const sourceQaList = (requestedDatasets.has("qa") ? qaRows?.results ?? [] : []).map((row) => {
+    if (typeof row.id !== 'string') throw new HTTPError({ statusCode: 500, statusMessage: 'Stored public Q&A is invalid' })
+    return { ...row, id: row.id }
+  })
+  const qaList = localizedLocale
+    ? projectExactLocalizedCollection('location_qa', sourceQaList, publicLocalizations)
+    : sourceQaList
+
+  const sourceLabel = shell.locales.find(item => item.code === 'en')?.label ?? 'English'
+  const sourceLocationRow = locationId
+    ? (locRows.results ?? []).find(row => row.id === locationId)
+    : null
+  const sourceLocationSlug = typeof sourceLocationRow?.slug === 'string' ? sourceLocationRow.slug : null
+  let representationSourcePath = canonicalPath ?? '/'
+  let representationResource: { type: LocalizedResourceType; id: string; routeSuffix?: string } | undefined
+  if (sourceExperienceDetail) {
+    representationSourcePath = `/experiences/${sourceExperienceDetail.slug}`
+    representationResource = { type: 'experience', id: sourceExperienceDetail.id }
+  } else if (sourceBlogPostIdentity) {
+    const prefix = normalizedVertical === 'professional_service' ? 'article' : 'blog'
+    representationSourcePath = `/${prefix}/${sourceBlogPostIdentity.slug}`
+    representationResource = { type: 'tenant_blog_post', id: sourceBlogPostIdentity.id }
+  } else if (locationId && sourceLocationSlug) {
+    const routeSuffix = page && page !== 'location' ? `/${page}` : ''
+    representationSourcePath = `/locations/${sourceLocationSlug}${routeSuffix}`
+    representationResource = { type: 'business_location', id: locationId, routeSuffix }
+  }
+  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+    organizationId: orgId,
+    siteId,
+    sourcePath: representationSourcePath,
+    sourceLabel,
+    resource: representationResource,
+    pageId: representationResource ? undefined : tenantPage?.page_id,
+  })
 
   const pagePayload = {
     kind: page ?? 'home',
@@ -911,7 +1112,7 @@ async function loadPublicPageSource(
     reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
     reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
     media: requestedDatasets.has("photos") ? media : [],
-    qaList: requestedDatasets.has("qa") ? qaRows?.results ?? [] : [],
+    qaList,
     blogList: requestedDatasets.has("blog") ? blogList : [],
     blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
     postsList: requestedDatasets.has("posts") ? locationPublishedPosts : [],
@@ -921,6 +1122,7 @@ async function loadPublicPageSource(
     experiencePolicyById,
     experiencesList,
     experienceDetail,
+    localeRepresentations,
   };
   const payload = pagePayload;
 

@@ -413,7 +413,7 @@ test.describe('stateless MCP server', () => {
           location_id: locationId,
           category: 'Mains',
           name: 'MCP Curry',
-          price_amount: '12.5',
+          price: { amount_minor: 1250, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
           order_url: 'https://orders.example.com/mcp-curry',
         },
       })
@@ -428,8 +428,8 @@ test.describe('stateless MCP server', () => {
           site_id: siteId,
           location_id: locationId,
           products: [
-            { category: 'Mains', name: 'MCP Noodles', price_amount: '11.25' },
-            { category: 'Desserts', name: 'MCP Mango Sticky Rice', price_amount: '8' },
+            { category: 'Mains', name: 'MCP Noodles', price: { amount_minor: 1125, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
+            { category: 'Desserts', name: 'MCP Mango Sticky Rice', price: { amount_minor: 800, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
           ],
         },
       })
@@ -476,7 +476,7 @@ test.describe('stateless MCP server', () => {
           site_id: siteId,
           product_id: productId,
           name: 'MCP Green Curry',
-          price_amount: '13',
+          price: { amount_minor: 1300, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
           order_url: 'https://orders.example.com/green-curry',
         },
       })
@@ -496,16 +496,13 @@ test.describe('stateless MCP server', () => {
 
       const reorder = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'reorder_products',
+        toolName: 'move_products',
         idempotent: true,
         args: {
           site_id: siteId,
           location_id: locationId,
-          products: [
-            { id: productId, sort_order: 1 },
-            { id: secondProductId, sort_order: 0 },
-            { id: batchedProducts[1]!.id, sort_order: 2 },
-          ],
+          product_ids: [secondProductId],
+          before_product_id: productId,
         },
       })
       expect(reorder.status()).toBe(200)

@@ -3,7 +3,7 @@ import { cloudflareEnv, jsonResponse, readRequiredBody } from "~/server/utils/ap
 import { getAuthSession } from "~/server/utils/auth";
 import { platformPermissionJsonResponse } from "~/server/utils/platform-admin-users";
 import { execute, queryFirst } from "~/server/db";
-import { fireSiteEventSafe, resolvePrimarySiteForEvent } from "~/server/utils/site-events";
+import { fireOrganizationEventSafe } from "~/server/utils/organization-events";
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event);
@@ -84,11 +84,8 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: "Request not found" }, { status: 404 });
 
   if ("status" in body && body.status && existing && existing.status !== body.status) {
-    const eventSiteId = existing.site_id ?? (await resolvePrimarySiteForEvent(db, existing.organization_id));
-    if (eventSiteId) {
-      await fireSiteEventSafe({
-        db, organizationId: existing.organization_id, siteId: eventSiteId, actorId: session.user.id, eventType: "work_request.status_changed", entityType: "work_request", entityId: id, metadata: { status: body.status }, });
-    }
+    await fireOrganizationEventSafe({
+      db, organizationId: existing.organization_id, siteId: existing.site_id, actorId: session.user.id, eventType: "work_request.status_changed", entityType: "work_request", entityId: id, metadata: { status: body.status }, });
   }
 
   return jsonResponse({ success: true });

@@ -285,8 +285,6 @@
 </template>
 
 <script setup>
-import { isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
-import { isCurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
@@ -470,11 +468,6 @@ const featuredExperiences = computed(() => {
     })
   return (featured.length > 0 ? featured : allExperiences.filter(exp => exp.status === 'active')).slice(0, 6)
 })
-const defaultCurrency = computed(() => {
-  const currency = pageConfig.value.default_currency
-  if (!isCurrencyCode(currency)) throw new Error(`Unsupported site currency: ${currency}`)
-  return currency
-})
 const isExperienceTenant = computed(() => site?.vertical === 'experience')
 const homeExperienceHref = computed(() => resolveSiteExperienceHref(experiencesList.value))
 const homePrimaryCtaRoute = computed(() => {
@@ -575,9 +568,9 @@ const featuredProductCards = computed(() => {
     if (!locationSlug) throw new Error(`Product location is missing: ${item.location_id}`)
     return {
       name: item.name,
-      price: formatProductMoney(item.price_amount, defaultCurrency.value),
-      compareAtPrice: isSaleActive(item) && item.compare_at_price_amount
-        ? formatProductMoney(item.compare_at_price_amount, defaultCurrency.value)
+      price: formatProductMoney(item.price),
+      compareAtPrice: item.price?.compare_at_amount_minor
+        ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
         : '',
       image: item.image?.public_url || null,
       imageKind: 'image',
@@ -590,7 +583,10 @@ const featuredProductCards = computed(() => {
 
 const featuredExperienceCards = computed(() => featuredExperiences.value.slice(0, 4).map(item => ({
   name: item.title,
-  ...resolveOverridePriceDisplay(item, defaultCurrency.value),
+  price: formatProductMoney(item.price),
+  compareAtPrice: item.price?.compare_at_amount_minor
+    ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
+    : '',
   image: experienceCoverImage(item),
   imageKind: 'image',
   alt: item.title ? `${item.title} experience` : 'Featured experience image',

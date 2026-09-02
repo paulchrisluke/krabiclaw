@@ -8,6 +8,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 
 function safeJsonParse(value: string): unknown {
   return JSON.parse(value)
@@ -55,7 +56,7 @@ export interface DashboardSiteRow {
   public_url: string | null
   status: string
   onboarding_status: string
-  plan: string | null
+  effective_plan: string
   primary_location_id: string | null
   default_currency: string | null
   // JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts),
@@ -211,10 +212,10 @@ export async function resolveRequestedOrganization(
 // ends up with 2+ sites. The site this route means is unambiguous — whichever site this
 // exact user most recently accepted a transfer into — so resolve it precisely instead of
 // falling back to null the way genuine multi-site ambiguity does.
-async function resolveRecentlyTransferredSite(db: DbClient, organizationId: string, userId: string): Promise<DashboardSiteRow | null> {
-  return await queryFirst<DashboardSiteRow>(db, `
+async function resolveRecentlyTransferredSite(db: DbClient, organizationId: string, userId: string): Promise<Omit<DashboardSiteRow, 'effective_plan'> | null> {
+  return await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-           s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency,
+           s.status, s.onboarding_status, s.primary_location_id, s.default_currency,
            s.feature_overrides, s.theme_id
     FROM site_transfer_requests t
     JOIN sites s ON s.id = t.site_id
@@ -319,19 +320,19 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw new HTTPError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  const site = siteId
-    ? await queryFirst<DashboardSiteRow>(db, `
+  const rawSite = siteId
+    ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency,
+               s.status, s.onboarding_status, s.primary_location_id, s.default_currency,
                s.feature_overrides, s.theme_id
         FROM sites s
         WHERE s.organization_id = ? AND s.id = ?
         LIMIT 1
       `, [organization.id, siteId])
     : siteSlug
-      ? await queryFirst<DashboardSiteRow>(db, `
+      ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, s.custom_domain, s.public_url,
-               s.status, s.onboarding_status, s.plan, s.primary_location_id, s.default_currency,
+               s.status, s.onboarding_status, s.primary_location_id, s.default_currency,
                s.feature_overrides, s.theme_id
         FROM sites s
         WHERE s.organization_id = ? AND s.subdomain = ?
@@ -340,6 +341,10 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
       : options.allowTransferFallback
         ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id)
         : null
+
+  const site = rawSite
+    ? { ...rawSite, effective_plan: (await getOrganizationBillingProjection(db, organization.id)).effectivePlan }
+    : null
 
   if (!site && options.requireSite !== false) {
     throw new HTTPError({ statusCode: 404, message: 'Site not found' })
@@ -373,7 +378,7 @@ export interface DashboardSiteSummaryRow {
   vertical: string | null
   status: string | null
   onboarding_status: string | null
-  plan: string | null
+  effective_plan: string
   media: Array<{ asset_id: string; slot: 'media'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
@@ -385,14 +390,15 @@ export async function listOrganizationSites(
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
-  const rows = await queryAll<Omit<DashboardSiteSummaryRow, 'media'>>(db, `
+  const rows = await queryAll<Omit<DashboardSiteSummaryRow, 'media' | 'effective_plan'>>(db, `
     SELECT s.id, s.team_id, s.brand_name, s.subdomain, s.vertical, s.status,
-           s.onboarding_status, s.plan
+           s.onboarding_status
     FROM sites s
     WHERE s.organization_id = ?
       ${scopedTeamIds ? `AND s.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY s.created_at ASC, s.id ASC
   `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
+  const effectivePlan = (await getOrganizationBillingProjection(db, organizationId)).effectivePlan
 
   const homeRows = await queryAll<{
     site_id: string
@@ -429,6 +435,7 @@ export async function listOrganizationSites(
     const home = homeBySite.get(row.id)
     return {
       ...row,
+      effective_plan: effectivePlan,
       media: home?.asset_id && home.hero_media_public_url
         ? [{ asset_id: home.asset_id, slot: 'media' as const, public_url: home.hero_media_public_url, thumbnail_url: home.hero_media_thumbnail_url, kind: home.hero_kind }]
         : [],

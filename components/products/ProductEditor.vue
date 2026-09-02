@@ -10,19 +10,33 @@
       </div>
       <p v-if="error" role="alert" class="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{{ error }}</p>
       <div v-if="loading" class="py-12 text-center text-sm text-muted">Loading Products…</div>
-      <div v-else class="divide-y divide-default overflow-hidden rounded-xl border border-default">
-        <button
-          v-for="product in products"
-          :key="product.id"
-          type="button"
-          class="grid w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left hover:bg-elevated"
-          @click="editProduct(product)"
-        >
-          <img v-if="product.image?.public_url" :src="product.image.public_url" :alt="product.image.alt_text || product.name" class="size-12 rounded object-cover">
-          <span v-else class="size-12 rounded bg-elevated" />
-          <span class="min-w-0"><strong class="block truncate">{{ product.name }}</strong><span class="block truncate text-sm text-muted">{{ product.category }}</span></span>
-          <span class="text-sm tabular-nums">{{ formatProductMoney(product.price_amount, currency) }}</span>
-        </button>
+      <div v-else class="space-y-4">
+        <section v-for="(group, categoryIndex) in productGroups" :key="group.category" class="overflow-hidden rounded-xl border border-default">
+          <header class="flex items-center justify-between gap-3 border-b border-default bg-elevated px-4 py-3">
+            <div>
+              <h2 class="font-semibold text-highlighted">{{ group.category }}</h2>
+              <p class="text-xs text-muted">{{ group.products.length }} {{ group.products.length === 1 ? 'item' : 'items' }}</p>
+            </div>
+            <div class="flex gap-1">
+              <button type="button" class="rounded-md border border-default px-2 py-1 text-sm disabled:opacity-30" :aria-label="`Move ${group.category} up`" :disabled="reordering || categoryIndex === 0" @click="moveCategory(categoryIndex, -1)">↑</button>
+              <button type="button" class="rounded-md border border-default px-2 py-1 text-sm disabled:opacity-30" :aria-label="`Move ${group.category} down`" :disabled="reordering || categoryIndex === productGroups.length - 1" @click="moveCategory(categoryIndex, 1)">↓</button>
+            </div>
+          </header>
+          <div class="divide-y divide-default">
+            <div v-for="(product, productIndex) in group.products" :key="product.id" class="grid grid-cols-[minmax(0,1fr)_auto] items-center">
+              <button type="button" class="grid min-w-0 grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left hover:bg-elevated" @click="editProduct(product)">
+                <img v-if="product.image?.public_url" :src="product.image.public_url" :alt="product.image.alt_text || product.name" class="size-12 rounded object-cover">
+                <span v-else class="size-12 rounded bg-elevated" />
+                <span class="min-w-0"><strong class="block truncate">{{ product.name }}</strong></span>
+                <span class="text-sm tabular-nums">{{ formatProductMoney(product.price) }}</span>
+              </button>
+              <div class="mr-3 flex gap-1">
+                <button type="button" class="rounded-md border border-default px-2 py-1 text-sm disabled:opacity-30" :aria-label="`Move ${product.name} up`" :disabled="reordering || productIndex === 0" @click="moveProduct(categoryIndex, productIndex, -1)">↑</button>
+                <button type="button" class="rounded-md border border-default px-2 py-1 text-sm disabled:opacity-30" :aria-label="`Move ${product.name} down`" :disabled="reordering || productIndex === group.products.length - 1" @click="moveProduct(categoryIndex, productIndex, 1)">↓</button>
+              </div>
+            </div>
+          </div>
+        </section>
         <p v-if="products.length === 0" class="p-8 text-center text-sm text-muted">No Products published for this location.</p>
       </div>
     </section>
@@ -31,7 +45,7 @@
       <h2 class="font-semibold">{{ editing.id ? `Edit ${presentation.itemLabel}` : `New ${presentation.itemLabel}` }}</h2>
       <label class="block text-sm">Name<input v-model="editing.name" required maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="block text-sm">{{ presentation.categoryLabel }}<input v-model="editing.category" required maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
-      <label class="block text-sm">Price ({{ currency }})<input v-model="editing.price_amount" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <label class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="block text-sm">Description<textarea v-model="editing.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
       <label class="block text-sm">Order URL<input v-model="editing.order_url" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="orderHostname" class="mt-1 block text-xs text-muted">Destination: {{ orderHostname }}</span></label>
       <label class="block text-sm">Tags<input v-model="editing.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
@@ -59,21 +73,32 @@ import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { Product, ProductDetail, ProductPresentation } from '~/server/types/products'
 import type { CurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
+import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
 
 const props = defineProps<{ siteId: string; locationId: string; locationTitle: string; currency: CurrencyCode; presentation: ProductPresentation }>()
-interface EditingProduct { id: string | null; name: string; category: string; price_amount: string; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
+interface EditingProduct { id: string | null; name: string; category: string; price_major: string; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
 const products = ref<Product[]>([])
 const editing = ref<EditingProduct | null>(null)
 const loading = ref(true)
 const saving = ref(false)
+const reordering = ref(false)
 const error = ref<string | null>(null)
 const dashboardApi = useDashboardApi()
-const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && typeof value.price_amount === 'string' && Array.isArray(value.tags) && Array.isArray(value.details)
+const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details)
 const isList = (value: unknown): value is { success: true; products: Product[] } => isRecord(value) && value.success === true && Array.isArray(value.products) && value.products.every(isProduct)
 const isOne = (value: unknown): value is { success: true; product: Product } => isRecord(value) && value.success === true && isProduct(value.product)
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
 const endpoint = `/api/editor/sites/${props.siteId}/locations/${props.locationId}/products`
 const orderHostname = computed(() => { try { return editing.value?.order_url ? new URL(editing.value.order_url).hostname : '' } catch { return '' } })
+const productGroups = computed(() => {
+  const groups = new Map<string, Product[]>()
+  for (const product of products.value) {
+    const group = groups.get(product.category) ?? []
+    group.push(product)
+    groups.set(product.category, group)
+  }
+  return [...groups].map(([category, groupedProducts]) => ({ category, products: groupedProducts }))
+})
 
 async function load() {
   loading.value = true
@@ -81,12 +106,12 @@ async function load() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Failed to load Products' }
   finally { loading.value = false }
 }
-function startCreate() { editing.value = { id: null, name: '', category: '', price_amount: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
-function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_amount: product.price_amount, description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null } }
+function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
+function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null } }
 function payload(product: EditingProduct) {
   let details: ProductDetail[]
   try { details = JSON.parse(product.details_text) as ProductDetail[] } catch { throw new Error('Details must be valid JSON') }
-  return { name: product.name, category: product.category, price_amount: product.price_amount, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured }
+  return { name: product.name, category: product.category, price: { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured }
 }
 async function save() {
   const product = editing.value
@@ -110,6 +135,49 @@ async function remove() {
     await load()
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Failed to delete Product'
+  }
+}
+async function moveCategory(categoryIndex: number, direction: -1 | 1) {
+  const group = productGroups.value[categoryIndex]
+  if (!group) return
+  const beforeCategory = direction === -1
+    ? productGroups.value[categoryIndex - 1]?.category ?? null
+    : productGroups.value[categoryIndex + 2]?.category ?? null
+  reordering.value = true
+  error.value = null
+  try {
+    await dashboardApi(`${endpoint}/categories/move`, {
+      method: 'POST',
+      body: { category: group.category, before_category: beforeCategory },
+      validate: isSuccess,
+    })
+    await load()
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : `Failed to move ${props.presentation.categoryLabel}`
+  } finally {
+    reordering.value = false
+  }
+}
+async function moveProduct(categoryIndex: number, productIndex: number, direction: -1 | 1) {
+  const group = productGroups.value[categoryIndex]
+  const product = group?.products[productIndex]
+  if (!group || !product) return
+  const beforeProductId = direction === -1
+    ? group.products[productIndex - 1]?.id ?? null
+    : group.products[productIndex + 2]?.id ?? productGroups.value[categoryIndex + 1]?.products[0]?.id ?? null
+  reordering.value = true
+  error.value = null
+  try {
+    await dashboardApi(`${endpoint}/move`, {
+      method: 'POST',
+      body: { product_ids: [product.id], before_product_id: beforeProductId },
+      validate: isSuccess,
+    })
+    await load()
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : `Failed to move ${props.presentation.itemLabel}`
+  } finally {
+    reordering.value = false
   }
 }
 async function setPrimaryImage(assetId: string | null) {

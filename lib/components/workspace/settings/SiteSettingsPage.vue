@@ -269,7 +269,7 @@ const form = reactive({
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
-const hasFacebookAccess = computed(() => dashboard.site.value?.plan === 'growth')
+const hasFacebookAccess = computed(() => dashboard.site.value?.effective_plan === 'growth')
 const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
   .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.license_status !== 'disabled'))
   .map(catalog => ({ label: `${catalog.label} (${catalog.locale})`, value: catalog.locale })))
@@ -489,10 +489,10 @@ async function loadLocalizationSettings() {
   } catch (error) { localizationError.value = errorMessage(error, 'Failed to load localization settings') }
   finally { localizationLoading.value = false }
 }
-async function mutateLocalization(path: string, method: 'POST' | 'DELETE') {
+async function mutateLocalization(path: string, method: 'POST' | 'DELETE', body?: Record<string, unknown>) {
   localizationBusy.value = true
   try {
-    await dashboardApi(path, { method, validate: (value): value is Record<string, unknown> => isRecord(value) })
+    await dashboardApi(path, { method, body, validate: (value): value is Record<string, unknown> => isRecord(value) })
     await loadLocalizationSettings()
     return true
   } catch (error) {
@@ -504,7 +504,9 @@ async function mutateLocalization(path: string, method: 'POST' | 'DELETE') {
 }
 async function enableLanguage(): Promise<boolean> {
   if (newLocale.value) {
-    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST')
+    const selectedCatalog = localizationSettings.value?.available_catalogs.find(catalog => catalog.locale === newLocale.value)
+    if (!selectedCatalog) return false
+    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST', { label: selectedCatalog.label })
     if (success) newLocale.value = ''
     return success
   }

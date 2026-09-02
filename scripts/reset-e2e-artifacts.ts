@@ -75,17 +75,15 @@ const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-kikuzuki', 'or
 // SET NULL (or intentionally polymorphic), so deleting the site alone would
 // leave rows behind in the shared preview database.
 const E2E_FIXTURE_SITE_RETAINED_TABLES = [
-  'ai_usage_log',
   'usage_events',
   'stripe_ga4_subscription_intents',
   'canary_runs',
   'mcp_tool_call_events',
   'notification_events',
   'notifications',
-  'client_import_artifacts',
   'chowbot_messages',
   'chowbot_conversations',
-  'site_events',
+  'organization_events',
   'site_domain_events',
   'site_conversion_events',
   'site_pageview_events',

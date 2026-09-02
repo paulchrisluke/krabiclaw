@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
+import { localizedPublicRouteAliases } from './build/localized-public-routes'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
@@ -190,6 +191,9 @@ export default defineNuxtConfig({
 
   // Bundle analysis is opt-in and client-only; it has no runtime effect.
   hooks: {
+    'pages:extend'(pages) {
+      pages.push(...localizedPublicRouteAliases(pages))
+    },
     'nitro:config'(nitroConfig) {
       nitroConfig.handlers = nitroConfig.handlers?.filter(
         handler => handler.route !== '/api/_nuxt_icon/:collection',

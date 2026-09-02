@@ -3,9 +3,11 @@ import { HTTPError } from 'nitro';
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
-import { assertValidSaleWindow } from '~/shared/money'
+import type { Price, PriceInput } from '~/shared/prices'
+import { PRICE_TAX_BEHAVIORS, PRICE_UNITS } from '~/shared/prices'
+import { isCurrencyCode } from '~/shared/currencies'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import {
   insertInitialMediaPlacements,
@@ -34,11 +36,9 @@ export interface Experience {
   tagline: string | null
   body: string | null
   media: ResolvedMediaAsset[]
-  price: string | null
-  price_amount: number | null
-  compare_at_price_amount: number | null
-  sale_starts_at: string | null
-  sale_ends_at: string | null
+  price: Price | null
+  scheduled_prices?: Price[]
+  pricing_note: string | null
   duration_minutes: number | null
   max_capacity: number | null
   time_slots: string[] | null
@@ -77,11 +77,18 @@ interface ExperienceRow {
   slug: string
   tagline: string | null
   body: string | null
-  price: string | null
-  price_amount: number | null
-  compare_at_price_amount: number | null
-  sale_starts_at: string | null
-  sale_ends_at: string | null
+  pricing_note: string | null
+  price_id: string | null
+  amount_minor: number | null
+  currency: string | null
+  price_unit: string | null
+  tax_behavior: string | null
+  compare_at_amount_minor: number | null
+  valid_from: string | null
+  valid_until: string | null
+  provenance: string | null
+  price_created_by: string | null
+  price_created_at: string | null
   duration_minutes: number | null
   max_capacity: number | null
   time_slots: string | null
@@ -117,8 +124,21 @@ function parseRow(row: ExperienceRow): Experience {
   if (row.time_slots) time_slots = JSON.parse(row.time_slots)
   let recurring_slots: RecurringSlots | null = null
   if (row.recurring_slots) recurring_slots = JSON.parse(row.recurring_slots)
+  const {
+    price_id, amount_minor, currency, price_unit, tax_behavior,
+    compare_at_amount_minor, valid_from, valid_until, provenance,
+    price_created_by, price_created_at, ...experience
+  } = row
   return {
-    ...row,
+    ...experience,
+    price: price_id ? {
+      id: price_id, organization_id: row.organization_id, site_id: row.site_id,
+      location_id: row.location_id, product_id: row.id, amount_minor: amount_minor!,
+      currency: currency as Price['currency'], unit: price_unit as Price['unit'],
+      tax_behavior: tax_behavior as Price['tax_behavior'], compare_at_amount_minor,
+      valid_from: valid_from!, valid_until, provenance: provenance!,
+      created_by: price_created_by!, created_at: price_created_at!,
+    } : null,
     status: row.status as Experience['status'],
     highlights: parseStringArray(row.highlights),
     included_items: parseStringArray(row.included_items),
@@ -146,12 +166,20 @@ async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId:
 
 const SELECT = `
   SELECT e.id, e.organization_id, e.site_id, e.location_id,
-         e.title, e.slug, e.tagline, e.body,
-         e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.status, e.sort_order,
-         e.featured, e.featured_sort_order,
-         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at
+         p.name AS title, p.slug, e.tagline, p.description AS body, e.pricing_note,
+         pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit,
+         pr.tax_behavior, pr.compare_at_amount_minor, pr.valid_from, pr.valid_until,
+         pr.provenance, pr.created_by AS price_created_by, pr.created_at AS price_created_at,
+         e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
+         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
+         CASE WHEN p.is_visible = 0 THEN 'inactive' WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
+         p.sort_order, p.featured, p.featured_sort_order,
+         p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
   FROM experiences e
+  JOIN products p ON p.id = e.id AND p.site_id = e.site_id AND p.organization_id = e.organization_id
+  LEFT JOIN prices pr ON pr.product_id = p.id AND pr.organization_id = p.organization_id
+    AND pr.site_id = p.site_id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 `
 
 export async function listExperiences(
@@ -165,13 +193,13 @@ export async function listExperiences(
   if (opts.activeOnly) {
     // "active-only" means publicly visible, not "bookable" — sold_out experiences
     // stay visible with sold-out messaging; inactive experiences are hidden.
-    sql += ` AND e.status != 'inactive'`
+    sql += ` AND p.is_visible = 1`
   }
   if (opts.locationId) {
     sql += ` AND e.location_id = ?`
     params.push(opts.locationId)
   }
-  sql += ` ORDER BY e.sort_order ASC, e.created_at ASC`
+  sql += ` ORDER BY p.sort_order ASC, p.created_at ASC`
 
   const results = await queryAll<ExperienceRow>(db, sql, params)
   return attachExperienceMedia(db, siteId, (results ?? []).map(parseRow))
@@ -182,7 +210,7 @@ export async function getExperienceBySlug(
   siteId: string,
   slug: string,
 ): Promise<Experience | null> {
-  const row = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, slug])
+  const row = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND p.slug = ? LIMIT 1`, [siteId, slug])
   if (!row) return null
   const [experience] = await attachExperienceMedia(db, siteId, [parseRow(row)])
   return experience ?? null
@@ -198,12 +226,34 @@ export async function getExperienceById(
   const byId = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.id = ? LIMIT 1`, [siteId, idOrSlug])
   if (byId) {
     const [experience] = await attachExperienceMedia(db, siteId, [parseRow(byId)])
-    return experience ?? null
+    return experience ? attachScheduledPrices(db, experience) : null
   }
-  const bySlug = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, idOrSlug])
+  const bySlug = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND p.slug = ? LIMIT 1`, [siteId, idOrSlug])
   if (!bySlug) return null
   const [experience] = await attachExperienceMedia(db, siteId, [parseRow(bySlug)])
-  return experience ?? null
+  return experience ? attachScheduledPrices(db, experience) : null
+}
+
+async function attachScheduledPrices(db: DbClient, experience: Experience): Promise<Experience> {
+  const rows = await queryAll<Record<string, unknown>>(db, `
+    SELECT id, organization_id, site_id, location_id, product_id, amount_minor, currency,
+           unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until,
+           provenance, created_by, created_at
+      FROM prices WHERE product_id = ? AND valid_from > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     ORDER BY valid_from, id
+  `, [experience.id])
+  return {
+    ...experience,
+    scheduled_prices: rows.map(row => ({
+      id: String(row.id), organization_id: String(row.organization_id), site_id: String(row.site_id),
+      location_id: String(row.location_id), product_id: String(row.product_id), amount_minor: Number(row.amount_minor),
+      currency: String(row.currency) as Price['currency'], unit: String(row.unit) as Price['unit'],
+      tax_behavior: String(row.tax_behavior) as Price['tax_behavior'],
+      compare_at_amount_minor: row.compare_at_amount_minor == null ? null : Number(row.compare_at_amount_minor),
+      valid_from: String(row.valid_from), valid_until: row.valid_until == null ? null : String(row.valid_until),
+      provenance: String(row.provenance), created_by: String(row.created_by), created_at: String(row.created_at),
+    })),
+  }
 }
 
 // Used by callers (update/delete/bookings) that need the canonical row id before
@@ -212,7 +262,7 @@ export async function getExperienceById(
 async function resolveExperienceId(db: DbClient, siteId: string, idOrSlug: string): Promise<string | null> {
   const byId = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, idOrSlug])
   if (byId) return byId.id
-  const bySlug = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE site_id = ? AND slug = ? LIMIT 1`, [siteId, idOrSlug])
+  const bySlug = await queryFirst<{ id: string }>(db, `SELECT p.id FROM products p JOIN experiences e ON e.id = p.id WHERE p.site_id = ? AND p.slug = ? LIMIT 1`, [siteId, idOrSlug])
   return bySlug?.id ?? null
 }
 
@@ -227,7 +277,7 @@ function slugify(title: string): string {
 export async function uniqueSlug(db: DbClient, siteId: string, base: string, excludeId?: string): Promise<string> {
   for (let i = 0; i < 8; i++) {
     const candidate = i === 0 ? base : `${base}-${Math.random().toString(36).slice(2, 6)}`
-    const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE site_id = ? AND slug = ? LIMIT 1`, [siteId, candidate])
+    const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM products WHERE site_id = ? AND slug = ? LIMIT 1`, [siteId, candidate])
     if (!existing || existing.id === excludeId) return candidate
   }
   return `${base}-${Date.now()}`
@@ -238,11 +288,8 @@ export interface CreateExperienceInput {
   tagline?: string | null
   body?: string | null
   media?: MediaAssetRefInput[] | null
-  price?: string | null
-  price_amount?: number | null
-  compare_at_price_amount?: number | null
-  sale_starts_at?: string | null
-  sale_ends_at?: string | null
+  price?: PriceInput | null
+  pricing_note?: string | null
   duration_minutes?: number | null
   max_capacity?: number | null
   time_slots?: string[] | null
@@ -278,6 +325,38 @@ function assertFiniteNonNegative(value: number | null | undefined, field: string
   if (!Number.isFinite(value) || value < 0) {
     throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a finite non-negative number` })
   }
+}
+
+async function normalizeExperiencePrice(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  input: PriceInput,
+) {
+  if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor < 0) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'price.amount_minor must be a non-negative integer' })
+  }
+  const site = await queryFirst<{ default_currency: string }>(db, `
+    SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [siteId, organizationId])
+  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
+  const currency = input.currency ?? site.default_currency
+  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.currency is unsupported' })
+  const unit = input.unit ?? 'person'
+  if (!(PRICE_UNITS as readonly string[]).includes(unit)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.unit is unsupported' })
+  const taxBehavior = input.tax_behavior ?? 'unspecified'
+  if (!(PRICE_TAX_BEHAVIORS as readonly string[]).includes(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: 'price.tax_behavior is unsupported' })
+  const compareAt = input.compare_at_amount_minor ?? null
+  if (compareAt !== null && (!Number.isSafeInteger(compareAt) || compareAt <= input.amount_minor)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'price.compare_at_amount_minor must exceed amount_minor' })
+  }
+  const validFrom = input.valid_from ?? new Date().toISOString()
+  if (Number.isNaN(Date.parse(validFrom))) throw new HTTPError({ statusCode: 400, statusMessage: 'price.valid_from must be an ISO instant' })
+  const validUntil = input.valid_until ?? null
+  if (validUntil !== null && (Number.isNaN(Date.parse(validUntil)) || validUntil <= validFrom)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'price.valid_until must be an ISO instant after valid_from' })
+  }
+  return { amountMinor: input.amount_minor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance: input.provenance ?? 'manual' }
 }
 
 
@@ -380,10 +459,11 @@ export async function createExperience(
   if (!input.location_id) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'location_id is required' })
   }
-  assertFiniteNonNegative(input.price_amount, 'price_amount')
-  assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
-  assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
+  const normalizedPrice = input.price ? await normalizeExperiencePrice(db, organizationId, siteId, input.price) : null
+  if (normalizedPrice && input.pricing_note?.trim()) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'pricing_note is only valid for an inquiry-only Experience without a Price' })
+  }
   const mediaRefs = input.media ?? []
   const media = input.media !== undefined
     ? await hydrateMediaAssetRefs(db, {
@@ -407,24 +487,30 @@ export async function createExperience(
 
   const queries: BatchQuery[] = [
     {
-      query: `INSERT INTO experiences
-       (id, organization_id, site_id, location_id, title, slug, tagline, body,
-        price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots,
-        available_note, highlights, included_items, what_to_bring, meeting_point, status, sort_order, featured, featured_sort_order,
-        seo_title, seo_description, canonical_url, robots, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      query: `INSERT INTO products
+       (id, organization_id, site_id, location_id, product_type, category, name, slug,
+        description, order_url, is_visible, available, featured, featured_sort_order,
+        sort_order, tags_json, details_json, seo_title, seo_description, canonical_url,
+        robots, source, created_at, updated_at, created_by, updated_by)
+       VALUES (?,?,?,?, 'experience', 'Experiences', ?,?,?, NULL,?,?,?,?,?,'[]','[]',?,?,?,?, 'manual',?,?,?,?)`,
       params: [
-        id, organizationId, siteId,
-        input.location_id,
-        input.title,
-        slug,
+        id, organizationId, siteId, input.location_id, input.title, slug, input.body ?? '',
+        status === 'inactive' ? 0 : 1, status === 'sold_out' ? 0 : 1,
+        input.featured ? 1 : 0, input.featured_sort_order ?? 0, input.sort_order ?? 0,
+        input.seo_title ?? null, input.seo_description ?? null, input.canonical_url ?? null, input.robots ?? null,
+        now, now, userId, userId,
+      ],
+    },
+    {
+      query: `INSERT INTO experiences
+       (id, organization_id, site_id, location_id, tagline, pricing_note,
+        duration_minutes, max_capacity, time_slots, recurring_slots, available_note,
+        highlights, included_items, what_to_bring, meeting_point, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      params: [
+        id, organizationId, siteId, input.location_id,
         input.tagline ?? null,
-        input.body ?? null,
-        input.price ?? null,
-        input.price_amount ?? null,
-        input.compare_at_price_amount ?? null,
-        input.sale_starts_at ?? null,
-        input.sale_ends_at ?? null,
+        normalizedPrice ? null : input.pricing_note?.trim() || null,
         input.duration_minutes ?? null,
         input.max_capacity ?? null,
         slotsJson,
@@ -433,19 +519,22 @@ export async function createExperience(
         highlightsJson,
         includedItemsJson,
         whatToBringJson,
-        input.meeting_point ?? null,
-        status,
-        input.sort_order ?? 0,
-        input.featured ? 1 : 0,
-        input.featured_sort_order ?? 0,
-        input.seo_title ?? null,
-        input.seo_description ?? null,
-        input.canonical_url ?? null,
-        input.robots ?? null,
-        now, now, userId,
+        input.meeting_point ?? null, now, now,
       ],
     },
   ]
+  if (normalizedPrice) {
+    queries.push({
+      query: `INSERT INTO prices
+        (id, organization_id, site_id, location_id, product_id, amount_minor, currency,
+         unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      params: [crypto.randomUUID(), organizationId, siteId, input.location_id, id,
+        normalizedPrice.amountMinor, normalizedPrice.currency, normalizedPrice.unit,
+        normalizedPrice.taxBehavior, normalizedPrice.compareAt, normalizedPrice.validFrom, normalizedPrice.validUntil,
+        normalizedPrice.provenance, userId, now],
+    })
+  }
   if (media) {
     queries.push(...insertInitialMediaPlacements({
       organizationId,
@@ -466,7 +555,7 @@ export async function createExperience(
   if (!created) {
     throw new Error(`Failed to retrieve newly created experience with ID: ${id}`)
   }
-  await fireSiteEventSafe({
+  await fireOrganizationEventSafe({
     db,
     organizationId,
     siteId,
@@ -491,82 +580,99 @@ export async function updateExperience(
   input: UpdateExperienceInput,
 ): Promise<Experience | null> {
   const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
-  assertFiniteNonNegative(input.price_amount, 'price_amount')
-  assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
-  assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
-  const owner = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
+  const owner = await queryFirst<{ organization_id: string; location_id: string; updated_by: string }>(db, `
+    SELECT p.organization_id, p.location_id, p.updated_by
+      FROM products p JOIN experiences e ON e.id = p.id
+     WHERE p.site_id = ? AND p.id = ? LIMIT 1
+  `, [siteId, id])
   if (!owner) return null
-  const sets: string[] = []
-  const params: (string | number | null)[] = []
+  const activePrice = await queryFirst<{ id: string }>(db, `
+    SELECT id FROM prices WHERE product_id = ? AND valid_from <= ? AND (valid_until IS NULL OR valid_until > ?) LIMIT 1
+  `, [id, new Date().toISOString(), new Date().toISOString()])
+  if (input.price && input.pricing_note?.trim()) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'pricing_note is only valid for an inquiry-only Experience without a Price' })
+  }
+  if (input.price === undefined && activePrice && input.pricing_note?.trim()) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Close the active Price before adding an inquiry pricing_note' })
+  }
+  const productSets: string[] = []
+  const productParams: (string | number | null)[] = []
+  const experienceSets: string[] = []
+  const experienceParams: (string | number | null)[] = []
 
   if (input.title !== undefined) {
-    sets.push('title = ?')
-    params.push(input.title)
+    productSets.push('name = ?')
+    productParams.push(input.title)
     if (!input.slug) {
       const newSlug = await uniqueSlug(db, siteId, slugify(input.title), id)
-      sets.push('slug = ?')
-      params.push(newSlug)
+      productSets.push('slug = ?')
+      productParams.push(newSlug)
     }
   }
-  if (input.slug !== undefined) { sets.push('slug = ?'); params.push(input.slug) }
-  if (input.tagline !== undefined) { sets.push('tagline = ?'); params.push(input.tagline ?? null) }
-  if (input.body !== undefined) { sets.push('body = ?'); params.push(input.body ?? null) }
-  if (input.price !== undefined) { sets.push('price = ?'); params.push(input.price ?? null) }
-  if (input.price_amount !== undefined) { sets.push('price_amount = ?'); params.push(input.price_amount ?? null) }
-  if (input.compare_at_price_amount !== undefined) { sets.push('compare_at_price_amount = ?'); params.push(input.compare_at_price_amount ?? null) }
-  if (input.sale_starts_at !== undefined) { sets.push('sale_starts_at = ?'); params.push(input.sale_starts_at ?? null) }
-  if (input.sale_ends_at !== undefined) { sets.push('sale_ends_at = ?'); params.push(input.sale_ends_at ?? null) }
-  if (input.duration_minutes !== undefined) { sets.push('duration_minutes = ?'); params.push(input.duration_minutes ?? null) }
-  if (input.max_capacity !== undefined) { sets.push('max_capacity = ?'); params.push(input.max_capacity ?? null) }
+  if (input.slug !== undefined) { productSets.push('slug = ?'); productParams.push(input.slug) }
+  if (input.tagline !== undefined) { experienceSets.push('tagline = ?'); experienceParams.push(input.tagline ?? null) }
+  if (input.body !== undefined) { productSets.push('description = ?'); productParams.push(input.body ?? '') }
+  if (input.price) { experienceSets.push('pricing_note = ?'); experienceParams.push(null) }
+  else if (input.pricing_note !== undefined) { experienceSets.push('pricing_note = ?'); experienceParams.push(input.pricing_note?.trim() || null) }
+  if (input.duration_minutes !== undefined) { experienceSets.push('duration_minutes = ?'); experienceParams.push(input.duration_minutes ?? null) }
+  if (input.max_capacity !== undefined) { experienceSets.push('max_capacity = ?'); experienceParams.push(input.max_capacity ?? null) }
   if (input.time_slots !== undefined) {
-    sets.push('time_slots = ?')
-    params.push(input.time_slots?.length ? JSON.stringify(input.time_slots) : null)
+    experienceSets.push('time_slots = ?')
+    experienceParams.push(input.time_slots?.length ? JSON.stringify(input.time_slots) : null)
   }
   if (input.recurring_slots !== undefined) {
     const validRecurringSlots = assertRecurringSlots(input.recurring_slots)
-    sets.push('recurring_slots = ?')
-    params.push(validRecurringSlots ? JSON.stringify(validRecurringSlots) : null)
+    experienceSets.push('recurring_slots = ?')
+    experienceParams.push(validRecurringSlots ? JSON.stringify(validRecurringSlots) : null)
   }
-  if (input.available_note !== undefined) { sets.push('available_note = ?'); params.push(input.available_note ?? null) }
-  if (input.highlights !== undefined) { sets.push('highlights = ?'); params.push(input.highlights?.length ? JSON.stringify(input.highlights) : null) }
-  if (input.included_items !== undefined) { sets.push('included_items = ?'); params.push(input.included_items?.length ? JSON.stringify(input.included_items) : null) }
-  if (input.what_to_bring !== undefined) { sets.push('what_to_bring = ?'); params.push(input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null) }
-  if (input.meeting_point !== undefined) { sets.push('meeting_point = ?'); params.push(input.meeting_point ?? null) }
+  if (input.available_note !== undefined) { experienceSets.push('available_note = ?'); experienceParams.push(input.available_note ?? null) }
+  if (input.highlights !== undefined) { experienceSets.push('highlights = ?'); experienceParams.push(input.highlights?.length ? JSON.stringify(input.highlights) : null) }
+  if (input.included_items !== undefined) { experienceSets.push('included_items = ?'); experienceParams.push(input.included_items?.length ? JSON.stringify(input.included_items) : null) }
+  if (input.what_to_bring !== undefined) { experienceSets.push('what_to_bring = ?'); experienceParams.push(input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null) }
+  if (input.meeting_point !== undefined) { experienceSets.push('meeting_point = ?'); experienceParams.push(input.meeting_point ?? null) }
   if (input.status !== undefined) {
-    sets.push('status = ?')
-    params.push(assertExperienceStatus(input.status, 'status'))
+    const status = assertExperienceStatus(input.status, 'status')
+    productSets.push('is_visible = ?', 'available = ?')
+    productParams.push(status === 'inactive' ? 0 : 1, status === 'sold_out' ? 0 : 1)
   }
-  if (input.sort_order !== undefined) { sets.push('sort_order = ?'); params.push(input.sort_order) }
-  if (input.featured !== undefined) { sets.push('featured = ?'); params.push(input.featured ? 1 : 0) }
-  if (input.featured_sort_order !== undefined) { sets.push('featured_sort_order = ?'); params.push(input.featured_sort_order) }
+  if (input.sort_order !== undefined) { productSets.push('sort_order = ?'); productParams.push(input.sort_order) }
+  if (input.featured !== undefined) { productSets.push('featured = ?'); productParams.push(input.featured ? 1 : 0) }
+  if (input.featured_sort_order !== undefined) { productSets.push('featured_sort_order = ?'); productParams.push(input.featured_sort_order) }
   if (input.location_id !== undefined) {
-    if (!input.location_id) {
-      throw new HTTPError({ statusCode: 400, statusMessage: 'location_id cannot be cleared' })
-    }
-    sets.push('location_id = ?')
-    params.push(input.location_id)
+    if (!input.location_id) throw new HTTPError({ statusCode: 400, statusMessage: 'location_id cannot be cleared' })
+    if (input.location_id !== owner.location_id) throw new HTTPError({ statusCode: 400, statusMessage: 'Experience location cannot be changed' })
   }
-  if (input.seo_title !== undefined) { sets.push('seo_title = ?'); params.push(input.seo_title ?? null) }
-  if (input.seo_description !== undefined) { sets.push('seo_description = ?'); params.push(input.seo_description ?? null) }
-  if (input.canonical_url !== undefined) { sets.push('canonical_url = ?'); params.push(input.canonical_url ?? null) }
-  if (input.robots !== undefined) { sets.push('robots = ?'); params.push(input.robots ?? null) }
-
-  if (sets.length === 0) {
-    return getExperienceById(db, siteId, id)
-  }
+  if (input.seo_title !== undefined) { productSets.push('seo_title = ?'); productParams.push(input.seo_title ?? null) }
+  if (input.seo_description !== undefined) { productSets.push('seo_description = ?'); productParams.push(input.seo_description ?? null) }
+  if (input.canonical_url !== undefined) { productSets.push('canonical_url = ?'); productParams.push(input.canonical_url ?? null) }
+  if (input.robots !== undefined) { productSets.push('robots = ?'); productParams.push(input.robots ?? null) }
 
   const now = new Date().toISOString()
-  sets.push('updated_at = ?')
-  params.push(now)
-  params.push(owner.organization_id, siteId, id)
-
-  const updateQuery: BatchQuery = {
-    query: `UPDATE experiences SET ${sets.join(', ')} WHERE organization_id = ? AND site_id = ? AND id = ?`,
-    params,
+  const queries: BatchQuery[] = []
+  if (productSets.length) {
+    productSets.push('updated_at = ?', 'updated_by = ?')
+    queries.push({ query: `UPDATE products SET ${productSets.join(', ')} WHERE organization_id = ? AND site_id = ? AND id = ?`, params: [...productParams, now, owner.updated_by, owner.organization_id, siteId, id] })
   }
-  const result = await execute(db, updateQuery.query, updateQuery.params)
-  if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
+  if (experienceSets.length) {
+    experienceSets.push('updated_at = ?')
+    queries.push({ query: `UPDATE experiences SET ${experienceSets.join(', ')} WHERE organization_id = ? AND site_id = ? AND id = ?`, params: [...experienceParams, now, owner.organization_id, siteId, id] })
+  }
+  if (input.price !== undefined) {
+    const replacement = input.price ? await normalizeExperiencePrice(db, owner.organization_id, siteId, input.price) : null
+    const boundary = replacement?.validFrom ?? now
+    if (replacement) {
+      const conflict = await queryFirst(db, `SELECT id FROM prices WHERE product_id = ? AND id <> COALESCE(?, '') AND valid_from < COALESCE(?, '9999-12-31T23:59:59.999Z') AND (valid_until IS NULL OR valid_until > ?) LIMIT 1`, [id, activePrice?.id ?? null, replacement.validUntil, replacement.validFrom])
+      if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: 'Scheduled Price overlaps an existing Price' })
+    }
+    queries.push({ query: `UPDATE prices SET valid_until = ? WHERE product_id = ? AND valid_from < ? AND (valid_until IS NULL OR valid_until > ?)`, params: [boundary, id, boundary, boundary] })
+    if (replacement) queries.push({
+      query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      params: [crypto.randomUUID(), owner.organization_id, siteId, owner.location_id, id, replacement.amountMinor, replacement.currency, replacement.unit, replacement.taxBehavior, replacement.compareAt, replacement.validFrom, replacement.validUntil, replacement.provenance, owner.updated_by, now],
+    })
+  }
+  if (!queries.length) return getExperienceById(db, siteId, id)
+  await executeBatch(db, queries)
 
   return getExperienceById(db, siteId, id)
 }
@@ -592,7 +698,7 @@ export async function deleteExperience(
       query: `DELETE FROM media_placements WHERE owner_type = 'experience' AND owner_id IN (SELECT id FROM experiences WHERE ${where})`,
       params,
     },
-    { query: `DELETE FROM experiences WHERE ${where}`, params },
+    { query: `DELETE FROM products WHERE id IN (SELECT id FROM experiences WHERE ${where})`, params },
   ])
   return Boolean(deleteResult?.meta.changes)
 }
@@ -773,7 +879,7 @@ export async function listExperienceBookingsForSite(
     `SELECT eb.id, eb.experience_id, eb.organization_id, eb.site_id,
               eb.location_id,
               bl.title AS location_title,
-              e.title AS experience_title,
+              p.name AS experience_title,
               eb.guest_name, eb.guest_email,
               eb.guest_phone, eb.party_size, eb.booking_date, eb.time_slot,
               eb.status, eb.notes, eb.completed_at, eb.completion_source,
@@ -781,7 +887,7 @@ export async function listExperienceBookingsForSite(
               eb.review_submitted_at, eb.review_id, eb.created_at, eb.updated_at
 	       FROM experience_bookings eb
 	       LEFT JOIN business_locations bl ON bl.id = eb.location_id
-	       LEFT JOIN experiences e ON e.id = eb.experience_id
+	       LEFT JOIN products p ON p.id = eb.experience_id
 	       WHERE ${where}
 	       ORDER BY eb.created_at DESC
 	       LIMIT ?`,
@@ -819,11 +925,11 @@ export async function getExperienceBookingsSummary(
     ),
     queryAll<{ experience_id: string; experience_title: string | null; count: number }>(
       db,
-      `SELECT eb.experience_id, e.title AS experience_title, COUNT(*) as count
+      `SELECT eb.experience_id, p.name AS experience_title, COUNT(*) as count
        FROM experience_bookings eb
-       LEFT JOIN experiences e ON e.id = eb.experience_id
+       LEFT JOIN products p ON p.id = eb.experience_id
        WHERE ${where}
-       GROUP BY eb.experience_id, e.title
+       GROUP BY eb.experience_id, p.name
        ORDER BY count DESC`,
       params,
     ),
@@ -1219,7 +1325,7 @@ function calculateAvailabilitySummary(
   if (opts.locationClosed) return { availability_state: 'temporarily_unavailable', ...none }
 
   const hasSchedule = Boolean(experience.recurring_slots) || Boolean(experience.time_slots?.length)
-  const hasPrice = Boolean(experience.price) || experience.price_amount != null
+  const hasPrice = experience.price !== null
   if (!hasSchedule || !hasPrice) return { availability_state: 'inquiry_only', ...none }
 
   const bookedMap = new Map<string, number>()
@@ -1278,7 +1384,7 @@ export async function computeExperienceAvailabilitySummary(
   if (opts.locationClosed) return { availability_state: 'temporarily_unavailable', ...none }
 
   const hasSchedule = Boolean(experience.recurring_slots) || Boolean(experience.time_slots?.length)
-  const hasPrice = Boolean(experience.price) || experience.price_amount != null
+  const hasPrice = experience.price !== null
   if (!hasSchedule || !hasPrice) return { availability_state: 'inquiry_only', ...none }
 
   const today = new Date()

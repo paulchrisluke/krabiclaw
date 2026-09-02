@@ -4,7 +4,7 @@ import { execute, queryAll, queryFirst } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
-import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 
 export interface DomainEnv {
   GA4_MEASUREMENT_ID?: string
@@ -682,7 +682,7 @@ async function persistCloudflareState(
     })
 
     if (before.status !== after.status && (after.status === 'active' || after.status === 'failed' || after.status === 'blocked')) {
-      await fireSiteEventSafe({
+      await fireOrganizationEventSafe({
         db,
         organizationId: after.organization_id,
         siteId: after.site_id,
@@ -781,7 +781,7 @@ export async function createCustomDomainPair(
     // block below rolls back site_domains rows on failure, so firing earlier
     // could record a domain.connected event for a domain that never existed.
     for (const entry of entries) {
-      await fireSiteEventSafe({
+      await fireOrganizationEventSafe({
         db,
         organizationId: opts.organizationId,
         siteId: opts.siteId,

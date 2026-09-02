@@ -38,7 +38,6 @@ export const demoFixture: CuratedSiteDefinition = {
     brandDescription:
       'A Brooklyn wood-fired trattoria serving blistered pies, seasonal antipasti, and easy neighborhood hospitality.',
     status: 'active',
-    plan: 'free',
     onboardingStatus: 'active',
     primaryLocationId: 'loc-demo',
     contactEmail: 'hello@emberandslice.example',
@@ -1252,7 +1251,7 @@ export function renderCompiledDemoCoreSeedBlock(): string {
 INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   public_url, brand_name, brand_description,
-  status, plan, onboarding_status, primary_location_id,
+  status, onboarding_status, primary_location_id,
   contact_email, default_currency, vertical, analytics_data_start_at
 ) VALUES (
   ${sqlValue(compiledDemoSeed.identity.siteId)},
@@ -1265,7 +1264,6 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(compiledDemoSeed.site.brandName)},
   ${sqlValue(compiledDemoSeed.site.brandDescription)},
   ${sqlValue(compiledDemoSeed.site.status)},
-  ${sqlValue(compiledDemoSeed.site.plan)},
   ${sqlValue(compiledDemoSeed.site.onboardingStatus)},
   NULL,
   ${sqlValue(compiledDemoSeed.site.contactEmail)},
@@ -1422,11 +1420,11 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue(product.organizationId),
       sqlValue(product.siteId),
       sqlValue(product.locationId),
+      sqlValue('standard'),
       sqlValue(product.category),
       sqlValue(product.name),
       sqlValue(product.slug),
       sqlValue(product.description),
-      sqlValue(product.priceAmount),
       sqlValue(true),
       sqlValue(product.available),
       sqlValue(false),
@@ -1440,6 +1438,15 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue('template'),
       sqlValue('seed:demo'),
       sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
+  const productPriceRows = compiledDemoSeed.products
+    .map(product => `  (${[
+      sqlValue(`price-${product.id}`), sqlValue(product.organizationId), sqlValue(product.siteId),
+      sqlValue(product.locationId), sqlValue(product.id), sqlValue(Math.round(product.priceAmount * 100)),
+      sqlValue(compiledDemoSeed.site.defaultCurrency), sqlValue('item'), sqlValue('unspecified'),
+      'NULL', sqlValue('2026-01-01T00:00:00.000Z'), 'NULL', sqlValue('template'),
+      sqlValue('seed:demo'), sqlValue('2026-01-01T00:00:00.000Z'),
     ].join(', ')})`)
     .join(',\n')
   const productMediaRows = compiledDemoSeed.products.flatMap(product => {
@@ -1464,11 +1471,17 @@ ${productMediaRows};`
 
   return `-- BEGIN GENERATED: demo_products
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, category, name, slug, description,
-   price_amount, is_visible, available, featured, featured_sort_order, sort_order,
+  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+   is_visible, available, featured, featured_sort_order, sort_order,
    tags_json, details_json, source, created_by, updated_by)
 VALUES
-${productRows};${productMediaSql}
+${productRows};
+
+INSERT OR REPLACE INTO prices
+  (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior,
+   compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
+VALUES
+${productPriceRows};${productMediaSql}
 -- END GENERATED: demo_products`
 }
 
@@ -1618,18 +1631,25 @@ VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL
 
 export function renderCompiledDemoExperienceSeedBlock(): string {
   const experienceMedia = compiledDemoSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const experienceProductRows = compiledDemoSeed.experiences
+    .map(experience => `  (${[
+      sqlValue(experience.id), sqlValue(experience.organizationId), sqlValue(experience.siteId),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
+      sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
+      sqlJson([]), sqlJson([]), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
+      sqlValue('template'), sqlValue('seed:demo'), sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceRows = compiledDemoSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
       sqlValue(experience.organizationId),
       sqlValue(experience.siteId),
       sqlValue(experience.locationId),
-      sqlValue(experience.title),
-      sqlValue(experience.slug),
       sqlValue(experience.tagline),
-      sqlValue(experience.body),
-      sqlValue(experience.price),
-      sqlValue(experience.priceAmount),
+      sqlValue(experience.priceAmount == null ? experience.price : null),
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
       sqlJson(experience.timeSlots),
@@ -1640,13 +1660,21 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
       sqlValue(experience.whatToBring?.length ? JSON.stringify(experience.whatToBring) : null),
       sqlValue(experience.meetingPoint ?? null),
       sqlValue(experience.cancellationPolicy ?? null),
-      sqlValue(experience.status),
-      sqlValue(experience.sortOrder),
-      sqlValue(experience.featured),
-      sqlValue(experience.featuredSortOrder),
-      sqlValue(experience.seoTitle),
-      sqlValue(experience.seoDescription),
     ].join(', ')})`)
+    .join(',\n')
+  const experiencePriceRows = compiledDemoSeed.experiences
+    .filter(experience => experience.priceAmount != null)
+    .map(experience => {
+      const unit = /per table/i.test(experience.price) ? 'table' : /per guest|per person/i.test(experience.price) ? 'person' : null
+      if (!unit) throw new Error(`Unmapped demo experience pricing unit: ${experience.id} (${experience.price})`)
+      return `  (${[
+        sqlValue(`price-${experience.id}`), sqlValue(experience.organizationId), sqlValue(experience.siteId),
+        sqlValue(experience.locationId), sqlValue(experience.id), sqlValue(Math.round(experience.priceAmount! * 100)),
+        sqlValue(compiledDemoSeed.site.defaultCurrency), sqlValue(unit), sqlValue('unspecified'), 'NULL',
+        sqlValue('2026-01-01T00:00:00.000Z'), 'NULL', sqlValue('template'), sqlValue('seed:demo'),
+        sqlValue('2026-01-01T00:00:00.000Z'),
+      ].join(', ')})`
+    })
     .join(',\n')
   const coverBlock = experienceMedia.length
     ? `
@@ -1668,16 +1696,25 @@ ${experienceMedia
 
   return `-- BEGIN GENERATED: demo_experiences
 -- Hybrid restaurant + experiences showcase for the platform demo.
-INSERT OR REPLACE INTO experiences
-  (id, organization_id, site_id, location_id,
-   title, slug, tagline, body,
-   price, price_amount, duration_minutes, max_capacity,
-   time_slots, recurring_slots, available_note,
-   highlights, included_items, what_to_bring, meeting_point, cancellation_policy,
-   status, sort_order, featured, featured_sort_order,
-   seo_title, seo_description)
+INSERT OR REPLACE INTO products
+  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+   is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
+   seo_title, seo_description, source, created_by, updated_by)
 VALUES
-${experienceRows};${coverBlock}
+${experienceProductRows};
+
+INSERT OR REPLACE INTO experiences
+  (id, organization_id, site_id, location_id, tagline, pricing_note, duration_minutes, max_capacity,
+   time_slots, recurring_slots, available_note,
+   highlights, included_items, what_to_bring, meeting_point, cancellation_policy)
+VALUES
+${experienceRows};
+
+INSERT OR REPLACE INTO prices
+  (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior,
+   compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
+VALUES
+${experiencePriceRows};${coverBlock}
 -- END GENERATED: demo_experiences`
 }
 

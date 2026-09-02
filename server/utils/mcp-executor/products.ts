@@ -1,12 +1,12 @@
 import { queryFirst } from '~/server/db'
-import type { CreateProductInput, SyncProductInput, UpdateProductInput } from '~/server/types/products'
-import { createProduct, createProductsBatch, deleteProduct, deleteProductCategory, getProduct, listLocationProducts, renameProductCategory, reorderProducts, syncProducts, updateProduct } from '~/server/utils/product-management'
+import type { CreateProductInput, Product, SyncProductInput, UpdateProductInput } from '~/server/types/products'
+import { createProduct, createProductsBatch, deleteProduct, deleteProductCategory, getProduct, listLocationProducts, moveProductCategory, moveProducts, renameProductCategory, syncProducts, updateProduct } from '~/server/utils/product-management'
 import { extractProductsFromMediaAsset } from '~/server/utils/chowbot-media'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import type { McpExecutorContext } from './shared'
-import { NOT_HANDLED, objectArray, omit, requiredString } from './shared'
+import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } from './shared'
 
 async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   await assertResourceAccess(ctx.site.db, {
@@ -28,6 +28,28 @@ async function resolveStoredProduct(ctx: McpExecutorContext, productId: string) 
   return product
 }
 
+function productListItem(product: Product) {
+  return {
+    id: product.id,
+    location_id: product.location_id,
+    category: product.category,
+    name: product.name,
+    description: product.description,
+    price: product.price
+      ? {
+          amount_minor: product.price.amount_minor,
+          currency: product.price.currency,
+          unit: product.price.unit,
+          tax_behavior: product.price.tax_behavior,
+          compare_at_amount_minor: product.price.compare_at_amount_minor,
+        }
+      : null,
+    is_visible: product.is_visible,
+    available: product.available,
+    sort_order: product.sort_order,
+  }
+}
+
 export async function handleProductsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { args, site, toolName } = ctx
   switch (toolName) {
@@ -36,7 +58,7 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
       await authorizeLocation(ctx, locationId)
       const products = await listLocationProducts(site.db, site.organizationId, site.siteId, locationId)
       const page = paginateMcpCollection(products, args, { resource: `products:${site.siteId}:${locationId}` })
-      return { products: page.items, page_info: page.page_info }
+      return { products: page.items.map(productListItem), page_info: page.page_info }
     }
     case 'get_product': return { product: await resolveStoredProduct(ctx, requiredString(args, 'product_id')) }
     case 'create_product': {
@@ -52,12 +74,20 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
       const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
       return { deleted: await deleteProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, site.userId) }
     }
-    case 'reorder_products': {
+    case 'move_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      const products = objectArray(args.products, 'products').map(item => ({ id: requiredString(item, 'id'), sort_order: Number(item.sort_order) }))
-      await reorderProducts(site.db, site.organizationId, site.siteId, locationId, products, site.userId)
-      return { reordered: true }
+      const productIds = requiredStringArray(args.product_ids, 'product_ids')
+      const beforeProductId = args.before_product_id === null ? null : requiredString(args, 'before_product_id')
+      await moveProducts({ db: site.db, organizationId: site.organizationId, siteId: site.siteId, locationId, productIds, beforeProductId, actor: site.userId })
+      return { moved: true }
+    }
+    case 'move_product_category': {
+      const locationId = requiredString(args, 'location_id')
+      await authorizeLocation(ctx, locationId)
+      const beforeCategory = args.before_category === null ? null : requiredString(args, 'before_category')
+      await moveProductCategory({ db: site.db, organizationId: site.organizationId, siteId: site.siteId, locationId, category: requiredString(args, 'category'), beforeCategory, actor: site.userId })
+      return { moved: true }
     }
     case 'rename_product_category': {
       const locationId = requiredString(args, 'location_id')

@@ -5,6 +5,7 @@ import {
   createContentDocumentWithBlocks,
   getContentEditorSnapshot,
   getContentBlocksForOwner,
+  getContentOutline,
   getContentDocumentByOwner,
   listBlocksForDocument,
   replaceContentDocumentBlocks,
@@ -12,8 +13,16 @@ import {
   type ContentDocumentOwnerType,
   type ContentBlockInput,
 } from '~/server/utils/content-documents'
+import {
+  loadExactPublicLocalizations,
+  projectExactLocalizedResource,
+  projectLocalizedMediaAlt,
+  resolveLocalizedRouteResourceId,
+} from '~/server/utils/public-localization'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
+import { normalizeVertical } from '~/utils/vertical-copy'
 import { slugifyTitle } from '~/utils/post-slugs'
-import { PLATFORM_MEDIA_SITE_ID } from '~/server/utils/platform-media'
+import { PLATFORM_ORGANIZATION_ID, PLATFORM_SITE_ID, isPlatformSite } from '~/shared/platform-scope'
 import { BLOG_CATEGORY_LABELS, blogCategoryToSlug } from '~/utils/blog-categories'
 import { categoryToSlug } from '~/utils/docs-categories'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
@@ -110,7 +119,7 @@ export type PlatformRobotsDirective = 'index,follow' | 'noindex,follow' | 'index
 export const PLATFORM_ROBOTS_DIRECTIVES: readonly PlatformRobotsDirective[] = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
 
 function blogContentOwnerType(siteId: string | null): ContentDocumentOwnerType {
-  return siteId ? 'tenant_blog' : 'platform_blog'
+  return isPlatformSite(siteId ?? PLATFORM_SITE_ID) ? 'platform_blog' : 'tenant_blog'
 }
 
 export interface PlatformContentNavInput {
@@ -263,8 +272,8 @@ async function resolvePlatformContentId(
   notFoundMessage: string,
   siteId: string | null = null,
 ): Promise<string> {
-  const scope = table === 'blog_posts' ? (siteId ? ' AND site_id = ?' : ' AND site_id IS NULL') : ''
-  const scopeParams = table === 'blog_posts' && siteId ? [siteId] : []
+  const scope = table === 'blog_posts' ? ' AND site_id = ?' : ''
+  const scopeParams = table === 'blog_posts' ? [siteId ?? PLATFORM_SITE_ID] : []
   const byId = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE id = ?${scope} LIMIT 1`, [identifier, ...scopeParams])
   const bySlug = await queryFirst<{ id: string }>(db, `SELECT id FROM ${table} WHERE slug = ?${scope} LIMIT 1`, [identifier, ...scopeParams])
   if (byId && bySlug && byId.id !== bySlug.id) {
@@ -326,7 +335,7 @@ async function ensureRenderableMediaAssetExists(
   field = 'media.asset_id',
   siteId: string | null = null,
 ) {
-  const scopedSiteId = siteId ?? PLATFORM_MEDIA_SITE_ID
+  const scopedSiteId = siteId ?? PLATFORM_SITE_ID
   const conditions = ['id = ?', 'status = ?', "kind IN ('image', 'video')"]
   const params: ApiValue[] = [assetId, 'active']
   conditions.push('site_id = ?')
@@ -334,7 +343,7 @@ async function ensureRenderableMediaAssetExists(
 
   const asset = await queryFirst(db, `SELECT id FROM media_assets WHERE ${conditions.join(' AND ')} LIMIT 1`, params)
   if (!asset) {
-    badRequest(siteId ? `${field} must reference active visual media from this site` : `${field} must reference active platform visual media`)
+    badRequest(!isPlatformSite(siteId ?? PLATFORM_SITE_ID) ? `${field} must reference active visual media from this site` : `${field} must reference active platform visual media`)
   }
 }
 
@@ -344,10 +353,10 @@ async function mediaPlacementScope(db: DbClient, siteId: string | null, organiza
   // resolves both together from the same site row) — it must fail loudly rather
   // than silently fall through to platform scope, which would misfile tenant media
   // as platform-owned.
-  if (siteId) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant media placement requires an organization id' })
-  const platformSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? LIMIT 1', [PLATFORM_MEDIA_SITE_ID])
+  if (siteId && !isPlatformSite(siteId)) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant media placement requires an organization id' })
+  const platformSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? LIMIT 1', [PLATFORM_SITE_ID])
   if (!platformSite) throw new HTTPError({ statusCode: 500, statusMessage: 'Platform media site is not configured' })
-  return { siteId: PLATFORM_MEDIA_SITE_ID, organizationId: platformSite.organization_id }
+  return { siteId: PLATFORM_SITE_ID, organizationId: platformSite.organization_id }
 }
 
 type NormalizedEditorBlock = ContentBlockInput & { id: string; placement_media: Array<{ asset_id: string; slot: string }> }
@@ -526,7 +535,7 @@ function contentReviewUrls(
   const publicPath = (() => {
     if (!slug) return null
     if (kind === 'blog') {
-      if (siteId) return tenantBlogPath ?? `/blog/${slug}`
+      if (!isPlatformSite(siteId ?? PLATFORM_SITE_ID)) return tenantBlogPath ?? `/blog/${slug}`
       return resolveBlogPublicPath({ scope: 'platform', slug, category })
     }
     return categorySlug ? `/docs/${categorySlug}/${slug}` : null
@@ -549,7 +558,7 @@ function platformDocReviewUrls(record: ApiRecord) {
 }
 
 async function resolveTenantBlogPostPath(db: DbClient, siteId: string | null, slug: string) {
-  if (!siteId) return null
+  if (!siteId || isPlatformSite(siteId)) return null
   const site = await queryFirst<{ theme: string | null; theme_id: string | null }>(
     db,
     'SELECT theme, theme_id FROM sites WHERE id = ? LIMIT 1',
@@ -559,7 +568,7 @@ async function resolveTenantBlogPostPath(db: DbClient, siteId: string | null, sl
 }
 
 async function resolveTenantContext(db: DbClient, siteId: string | null, env?: CloudflareEnv): Promise<ContentReviewContext | undefined> {
-  if (!siteId) return undefined
+  if (!siteId || isPlatformSite(siteId)) return undefined
   if (!env) throw new Error('CloudflareEnv is required to resolve tenant organization context')
   const site = await queryFirst<{ slug: string; organization_id: string }>(
     db,
@@ -598,8 +607,8 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
     FROM blog_posts p
     LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-    WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id IS NULL
-  `, [slug, category])
+    WHERE p.slug = ? AND p.category = ? AND p.status = 'published' AND p.site_id = ?
+  `, [slug, category, PLATFORM_SITE_ID])
 
   if (!post) return null
 
@@ -754,25 +763,27 @@ export async function listPlatformBlogPosts(db: DbClient, status?: string | null
     FROM blog_posts p
     LEFT JOIN media_placements mp ON mp.owner_type = 'blog_post' AND mp.owner_id = p.id AND mp.slot = 'featured' AND mp.sort_order = 0
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-    WHERE ${siteId ? 'p.site_id = ?' : 'p.site_id IS NULL'}`
-  const params: ApiValue[] = siteId ? [siteId] : []
+    WHERE p.site_id = ?`
+  const resolvedSiteId = siteId ?? PLATFORM_SITE_ID
+  const params: ApiValue[] = [resolvedSiteId]
   if (status === 'published') sql += " AND p.status = 'published'"
   else if (status === 'scheduled') sql += " AND p.status = 'scheduled'"
   sql += ' ORDER BY COALESCE(p.featured_order, 999999), COALESCE(p.nav_section_order, 999999), COALESCE(p.nav_section, p.category), COALESCE(p.nav_order, 999999), p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
-  const context = await resolveTenantContext(db, siteId, env)
-  const site = siteId
+  const context = isPlatformSite(resolvedSiteId) ? undefined : await resolveTenantContext(db, resolvedSiteId, env)
+  const site = !isPlatformSite(resolvedSiteId)
     ? await queryFirst<{ theme: string | null; theme_id: string | null }>(db, 'SELECT theme, theme_id FROM sites WHERE id = ? LIMIT 1', [siteId])
     : null
   return (results ?? []).map((record) => {
     const slug = typeof record.slug === 'string' ? record.slug : ''
-    const publicPath = siteId && slug ? tenantBlogPostPath(site, slug) : null
-    return contentReviewUrls(attachFeaturedMedia(attachPublished(record, Boolean(record.published_at))), 'blog', siteId, publicPath, context)
+    const publicPath = !isPlatformSite(resolvedSiteId) && slug ? tenantBlogPostPath(site, slug) : null
+    return contentReviewUrls(attachFeaturedMedia(attachPublished(record, Boolean(record.published_at))), 'blog', resolvedSiteId, publicPath, context)
   })
 }
 
 export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, siteId: string | null = null, env?: CloudflareEnv) {
-  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
+  const resolvedSiteId = siteId ?? PLATFORM_SITE_ID
+  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', resolvedSiteId)
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
@@ -790,24 +801,24 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     [postId],
   )
   if (!post) notFound('Post not found')
-  const contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
+  const contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(resolvedSiteId), postId)
   if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const rawBlocks = await listBlocksForDocument(db, contentDocument.document.id)
   const slug = typeof post.slug === 'string' ? post.slug : ''
-  const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
-  const context = await resolveTenantContext(db, siteId, env)
-  const editorTheme = siteId ? await queryFirst<{ theme: string | null; theme_id: string | null; vertical: string | null; brand_name: string | null; brand_color: string | null } | null>(db, `
+  const publicPath = !isPlatformSite(resolvedSiteId) && slug ? await resolveTenantBlogPostPath(db, resolvedSiteId, slug) : null
+  const context = await resolveTenantContext(db, resolvedSiteId, env)
+  const editorTheme = !isPlatformSite(resolvedSiteId) ? await queryFirst<{ theme: string | null; theme_id: string | null; vertical: string | null; brand_name: string | null; brand_color: string | null } | null>(db, `
     SELECT s.theme, s.theme_id, s.vertical, s.brand_name,
            (SELECT sc.value FROM site_config sc WHERE sc.site_id = s.id AND sc.key = 'brand_color' LIMIT 1) AS brand_color
       FROM sites s
      WHERE s.id = ? LIMIT 1
-  `, [siteId]) : null
-  const editorTemplate = siteId ? resolvePublicTemplate({ theme: editorTheme?.theme, themeId: editorTheme?.theme_id, vertical: editorTheme?.vertical }) : null
-  const editorThemeTokenRow = siteId && editorTemplate ? await queryFirst<{ tokens_json: string | null } | null>(db, `
+  `, [resolvedSiteId]) : null
+  const editorTemplate = !isPlatformSite(resolvedSiteId) ? resolvePublicTemplate({ theme: editorTheme?.theme, themeId: editorTheme?.theme_id, vertical: editorTheme?.vertical }) : null
+  const editorThemeTokenRow = editorTemplate ? await queryFirst<{ tokens_json: string | null } | null>(db, `
     SELECT tokens_json FROM site_theme_tokens
      WHERE site_id = ? AND template_slug = ? AND status = 'active'
      LIMIT 1
-  `, [siteId, editorTemplate.slug]) : null
+  `, [resolvedSiteId, editorTemplate.slug]) : null
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
     ...contentReviewUrls(attachFeaturedMedia(attachPublished(post, Boolean(post.published_at))), 'blog', siteId, publicPath, context),
@@ -816,7 +827,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     content_document: contentDocument,
     editor_template: editorTemplate?.slug ?? 'platform',
     editor_theme_tokens: editorThemeTokens,
-    editor_site_name: siteId ? (editorTheme?.brand_name || '') : 'KrabiClaw',
+    editor_site_name: !isPlatformSite(resolvedSiteId) ? (editorTheme?.brand_name || '') : 'KrabiClaw',
     editor_brand_color: editorTheme?.brand_color ?? null,
   }
 }
@@ -859,6 +870,75 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
   }
 }
 
+export async function getPublishedLocalizedSiteBlogPost(
+  db: DbClient,
+  siteId: string,
+  slug: string,
+  locale: string,
+  env: CloudflareEnv,
+) {
+  const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `
+    SELECT organization_id, vertical FROM sites WHERE id = ? AND status = 'active' LIMIT 1
+  `, [siteId])
+  if (!site) return null
+  const prefix = normalizeVertical(site.vertical) === 'professional_service' ? 'article' : 'blog'
+  if (locale === 'en') {
+    const post = await getPublishedSiteBlogPost(db, siteId, slug, env)
+    if (!post || typeof post.id !== 'string') return post
+    return {
+      ...post,
+      localeRepresentations: await listPublicLocaleRepresentations(db, {
+        organizationId: site.organization_id,
+        siteId,
+        sourcePath: `/${prefix}/${slug}`,
+        sourceLabel: 'English',
+        resource: { type: 'tenant_blog_post', id: post.id },
+      }),
+    }
+  }
+
+  const localizations = await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+  const routePath = `/${locale}/${prefix}/${slug}`
+  const resourceId = resolveLocalizedRouteResourceId(localizations, 'tenant_blog_post', routePath)
+  if (!resourceId) return null
+  const row = await queryFirst<{ document_id: string | null }>(db, `
+    SELECT document_id FROM resource_localizations
+     WHERE organization_id = ? AND site_id = ? AND locale = ?
+       AND resource_type = 'tenant_blog_post' AND resource_id = ?
+     LIMIT 1
+  `, [site.organization_id, siteId, locale, resourceId])
+  if (!row?.document_id) return null
+  const source = await queryFirst<{ slug: string }>(db, `
+    SELECT slug FROM blog_posts WHERE id = ? AND site_id = ? AND status = 'published' LIMIT 1
+  `, [resourceId, siteId])
+  if (!source) return null
+  const canonical = await getPublishedSiteBlogPost(db, siteId, source.slug, env)
+  if (!canonical || typeof canonical.id !== 'string') return null
+  const postLocalization = localizations.find(item => item.resourceType === 'tenant_blog_post' && item.resourceId === resourceId)
+  if (!postLocalization) return null
+  const [contentBlocks, rawBlocks] = await Promise.all([
+    getContentOutline(db, row.document_id),
+    listBlocksForDocument(db, row.document_id),
+  ])
+  const localized = projectExactLocalizedResource('tenant_blog_post', canonical, postLocalization)
+  const media = Array.isArray(localized.media)
+    ? projectLocalizedMediaAlt(localized.media, localizations)
+    : []
+  return {
+    ...localized,
+    body: renderContentBlocksToMarkdown(rawBlocks),
+    content_blocks: contentBlocks,
+    media,
+    localeRepresentations: await listPublicLocaleRepresentations(db, {
+      organizationId: site.organization_id,
+      siteId,
+      sourcePath: `/${prefix}/${source.slug}`,
+      sourceLabel: 'English',
+      resource: { type: 'tenant_blog_post', id: resourceId },
+    }),
+  }
+}
+
 export async function createPlatformBlogPost(
   db: D1Database,
   authorId: string,
@@ -877,8 +957,8 @@ export async function createPlatformBlogPost(
   const featuredId = featuredAssetId(input)
   if (featuredId) await ensureRenderableMediaAssetExists(db, featuredId, 'media', scope.site_id ?? null)
 
-  const siteId = scope.site_id ?? null
-  const organizationId = scope.organization_id ?? null
+  const siteId = scope.site_id ?? PLATFORM_SITE_ID
+  const organizationId = scope.organization_id ?? PLATFORM_ORGANIZATION_ID
   const id = crypto.randomUUID()
   const customSlug = typeof input.slug === 'string' && input.slug.trim()
     ? normalizeBlogSlug(input.slug)
@@ -973,6 +1053,7 @@ export async function updatePlatformBlogLifecycle(
   input: PlatformBlogLifecycleInput,
   siteId: string | null = null,
 ): Promise<PlatformBlogLifecycleState> {
+  const resolvedSiteId = siteId ?? PLATFORM_SITE_ID
   if (!input.expected_updated_at?.trim()) badRequest('expected_updated_at is required')
   if (!input.expected_document_updated_at?.trim()) badRequest('expected_document_updated_at is required')
 
@@ -995,11 +1076,9 @@ export async function updatePlatformBlogLifecycle(
       LEFT JOIN content_documents d
         ON d.owner_type = ? AND d.owner_id = p.id
      WHERE (p.id = ? OR p.slug = ?)
-       AND ${siteId ? 'p.site_id = ?' : 'p.site_id IS NULL'}
+       AND p.site_id = ?
      LIMIT 2
-  `, siteId
-    ? [blogContentOwnerType(siteId), postIdOrSlug, postIdOrSlug, siteId]
-    : [blogContentOwnerType(siteId), postIdOrSlug, postIdOrSlug])
+  `, [blogContentOwnerType(resolvedSiteId), postIdOrSlug, postIdOrSlug, resolvedSiteId])
   if (rows.length === 0) notFound('Post not found')
   if (rows.length > 1) badRequest('Ambiguous platform content identifier; use the row id.')
   const source = rows[0]!
@@ -1099,13 +1178,14 @@ export async function updatePlatformBlogPost(
   siteId: string | null = null,
   env?: CloudflareEnv,
 ) {
+  const resolvedSiteId = siteId ?? PLATFORM_SITE_ID
   rejectLegacyBlogContentFields(input)
   rejectBlogUpdateLifecycleFields(input)
   if (!BLOG_UPDATE_MUTATION_FIELDS.some(field => input[field] !== undefined)) {
     badRequest('At least one blog mutation field is required')
   }
-  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
-  const isTenant = Boolean(siteId)
+  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', resolvedSiteId)
+  const isTenant = !isPlatformSite(resolvedSiteId)
   validateBlogCommon(input, isTenant)
   const current = await queryFirst<{ organization_id: string | null; category: string | null; title: string; slug: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, 'SELECT organization_id, category, title, slug, published_at, first_published_at, slug_manually_overridden, updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
   if (!current) notFound('Post not found')
@@ -1116,11 +1196,11 @@ export async function updatePlatformBlogPost(
   let contentDocument: Awaited<ReturnType<typeof getContentEditorSnapshot>> = null
   if (input.content_blocks !== undefined) {
     if (!input.expected_document_updated_at) badRequest('expected_document_updated_at is required with content_blocks')
-    contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
+    contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(resolvedSiteId), postId)
     if (!contentDocument || contentDocument.document.updated_at !== input.expected_document_updated_at) {
       throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
     }
-    normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, siteId)
+    normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, resolvedSiteId)
   }
   const effectiveCategory = input.category !== undefined ? input.category : current?.category ?? null
   if (!isTenant) {
@@ -1155,14 +1235,12 @@ export async function updatePlatformBlogPost(
   if (requestedSlug && requestedSlug !== current?.slug) {
     const postCollision = await queryFirst<{ id: string } | null>(db, `
       SELECT id FROM blog_posts
-       WHERE slug = ? AND id != ? AND ${siteId ? 'site_id = ?' : 'site_id IS NULL'} LIMIT 1
-    `, siteId ? [requestedSlug, postId, siteId] : [requestedSlug, postId])
+       WHERE slug = ? AND id != ? AND site_id = ? LIMIT 1
+    `, [requestedSlug, postId, resolvedSiteId])
     if (postCollision) badRequest('Slug already in use')
     const redirectCollision = await queryFirst<{ id: string } | null>(db, `
-      ${siteId
-        ? "SELECT id FROM site_redirects WHERE site_id = ? AND locale = 'en' AND from_path IN (?, ?) LIMIT 1"
-        : 'SELECT id FROM platform_blog_redirects WHERE old_slug = ? LIMIT 1'}
-    `, siteId ? [siteId, `/blog/${requestedSlug}`, `/article/${requestedSlug}`] : [requestedSlug])
+      SELECT id FROM site_redirects WHERE site_id = ? AND locale = 'en' AND from_path IN (?, ?, ?) LIMIT 1
+    `, [resolvedSiteId, `/blog/${requestedSlug}`, `/article/${requestedSlug}`, `/${requestedSlug}`])
     if (redirectCollision) badRequest('Slug collides with redirect history')
     updates.push('slug = ?', 'slug_manually_overridden = ?')
     params.push(requestedSlug, slugMutation.manuallyOverridden ? 1 : 0)
@@ -1172,7 +1250,7 @@ export async function updatePlatformBlogPost(
 
   const featuredId = featuredAssetId(input)
   if (featuredId) {
-    await ensureRenderableMediaAssetExists(db, featuredId, 'media', siteId)
+    await ensureRenderableMediaAssetExists(db, featuredId, 'media', resolvedSiteId)
   }
   const fields: Array<keyof Omit<PlatformBlogUpdateInput,
     | 'title'
@@ -1272,8 +1350,9 @@ export async function updatePlatformBlogPost(
 }
 
 export async function deletePlatformBlogPost(db: D1Database, postIdOrSlug: string, siteId: string | null = null) {
-  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', siteId)
-  const ownerType = blogContentOwnerType(siteId)
+  const resolvedSiteId = siteId ?? PLATFORM_SITE_ID
+  const postId = await resolvePlatformContentId(db, 'blog_posts', postIdOrSlug, 'Post not found', resolvedSiteId)
+  const ownerType = blogContentOwnerType(resolvedSiteId)
   await executeBatch(db, [
     { query: "DELETE FROM media_placements WHERE owner_type = 'blog_post' AND owner_id = ?", params: [postId] },
     // The content_documents delete below cascades to content_blocks (FK ON DELETE
@@ -1312,7 +1391,8 @@ export async function reorderPlatformBlogPosts(
   if (!items.length) badRequest('items are required')
   const now = new Date().toISOString()
   const queries: { query: string; params: unknown[] }[] = []
-  const scopeClause = siteId ? 'site_id = ?' : 'site_id IS NULL'
+  const resolvedSiteId = siteId ?? PLATFORM_SITE_ID
+  const scopeClause = 'site_id = ?'
 
   for (const item of items) {
     const metadata: Partial<PlatformContentNavInput> = { nav_order: item.nav_order }
@@ -1320,7 +1400,7 @@ export async function reorderPlatformBlogPosts(
     if (hasOwnField(item, 'nav_title')) metadata.nav_title = item.nav_title ?? null
     if (hasOwnField(item, 'nav_section_order')) metadata.nav_section_order = item.nav_section_order ?? null
     validateNavMetadata(metadata)
-    const postId = await resolvePlatformContentId(db, 'blog_posts', item.post_id, 'Post not found', siteId)
+    const postId = await resolvePlatformContentId(db, 'blog_posts', item.post_id, 'Post not found', resolvedSiteId)
     const updates = ['nav_order = ?', 'updated_at = ?']
     const params: ApiValue[] = [Number(item.nav_order), now]
     if (hasOwnField(item, 'nav_section')) {
@@ -1340,7 +1420,7 @@ export async function reorderPlatformBlogPosts(
       params.splice(params.length - 1, 0, normalizeHideFromNav(item.hide_from_nav) ?? 0)
     }
     params.push(postId)
-    if (siteId) params.push(siteId)
+    params.push(resolvedSiteId)
     queries.push({
       query: `UPDATE blog_posts SET ${updates.join(', ')} WHERE id = ? AND ${scopeClause}`,
       params,

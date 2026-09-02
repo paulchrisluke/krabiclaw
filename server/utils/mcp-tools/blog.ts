@@ -1,11 +1,12 @@
 import type { McpToolDefinition } from './shared'
 import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, pageInfoObject, paginationInputSchema, siteTool } from './shared'
+import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
 
 const blogContentBlockSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    type: { type: 'string', enum: ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout'] },
+    type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
     parent_block_id: { type: ['string', 'null'] },
     level: { type: ['number', 'null'] },
     position: { type: ['number', 'null'] },

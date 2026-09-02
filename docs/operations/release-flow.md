@@ -15,6 +15,21 @@ A database-epoch cutover additionally uses the temporary maintenance deployment
 defined in [release-and-outage-prevention.md](release-and-outage-prevention.md).
 It is not part of an ordinary schema migration or application release.
 
+## Release-owner emergency override
+
+The release owner may explicitly authorize an emergency promotion while a
+qualification check is incomplete when production already has a material
+customer-facing regression and waiting would prolong the incident. The
+authorization must name the release, acknowledge the incomplete gate, and
+require immediate post-deploy verification. Agents and operators may not infer
+this override from urgency; it must be given directly for the current release.
+
+Record the override in the promotion pull request or merge record, including
+the customer impact, the waived or incomplete checks, and the verification
+that will run after deployment. This override does not permit bypassing a known
+reproducible first-party failure, database-epoch safeguards, migration safety,
+or production data and write restrictions.
+
 Production deployment and verification are separate jobs in the same workflow. The deploy job builds once, performs the single Wrangler deployment, then applies forward-compatible migrations and refreshes search. The verification job waits until all three custom domains expose that exact Nuxt build and its referenced assets, then runs read-only browser coverage. Retrying a failed verification job never redeploys production.
 
-For migration safety, preview reset behavior, database epoch transitions, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md).
+For migration safety, preview reset behavior, database epoch transitions, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md). For the canonical migration workflow, see [docs/database/migrations.md](../database/migrations.md).

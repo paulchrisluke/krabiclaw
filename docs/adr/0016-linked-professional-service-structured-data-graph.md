@@ -1,5 +1,8 @@
 # Linked Professional-Service Structured Data Graph
 
+**Status: Accepted**
+**Date: 2026-06-XX**
+
 Professional-service tenants need a schema.org graph generated from canonical platform data rather than pasted tenant JSON-LD, with a stable, linked shape (Organization/WebSite plus route-specific nodes) so every route — home, services index/detail, about, contact, schedule, pricing, donate, blog index/article, and tenant pages — is consistent and machine-checkable at the NCLS cutover gate. The generator must stay reusable for any professional-service vertical, not hardcoded to NCLS or legal services.
 
 `utils/professional-service-schema.ts` is the single canonical builder (`buildProfessionalServiceGraph`), called by the `useProfessionalServiceSchema`/`useBlawbyOrgIdentity` composables for public rendering. It is framework-free so it can also be exercised directly by unit tests and reasoned about independently of Nuxt. Every page emits its own complete `@graph` (Organization + WebSite + route-specific nodes) with deterministic, canonical-origin `@id`s (`{origin}/#organization`, `{origin}/#website`), rather than a single layout-level block referenced by ID from separate per-page scripts — this matches the existing `useContentPageSchema` platform-blog pattern and keeps each page's JSON-LD independently valid.

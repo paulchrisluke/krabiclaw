@@ -3,9 +3,18 @@ import { HTTPError } from 'nitro';
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../db/index.ts'
 import { d1JsonStringSet } from '../db/d1-limits.ts'
 import { assertNoEmbeddedMediaFields } from '../../utils/tenant-page-blocks.ts'
+import {
+  CONTENT_BLOCK_TYPES,
+  type ContentBlockType,
+  type ContentDocumentOwnerType,
+} from '~/shared/content-registries'
 
-export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog' | 'tenant_page'
-export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'divider' | 'ai_assistance' | 'cta' | 'callout' | 'hero' | 'button_group' | 'feature_grid' | 'testimonial_grid' | 'contact_cta' | 'booking_cta' | 'donation_choices' | 'offering_grid' | 'location_grid'
+export {
+  CONTENT_BLOCK_TYPES,
+  CONTENT_DOCUMENT_OWNER_TYPES,
+  type ContentBlockType,
+  type ContentDocumentOwnerType,
+} from '~/shared/content-registries'
 
 export interface ContentDocumentRow {
   id: string
@@ -69,7 +78,6 @@ interface ContentDocumentWriteOptions {
   additionalQueriesAfter?: BatchQuery[]
 }
 
-const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid']
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/
 
 function badRequest(message: string): never {
@@ -81,8 +89,8 @@ function notFound(message: string): never {
 }
 
 function assertBlockType(type: string): ContentBlockType {
-  if (!VALID_BLOCK_TYPES.includes(type as ContentBlockType)) {
-    badRequest(`content block type must be one of: ${VALID_BLOCK_TYPES.join(', ')}`)
+  if (!(CONTENT_BLOCK_TYPES as readonly string[]).includes(type)) {
+    badRequest(`content block type must be one of: ${CONTENT_BLOCK_TYPES.join(', ')}`)
   }
   return type as ContentBlockType
 }

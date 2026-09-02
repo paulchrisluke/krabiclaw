@@ -11,10 +11,8 @@ import {
   validateOrganizationBillingProjection,
   type OrganizationBillingProjectionRow,
 } from '~/server/utils/organization-billing'
-import type { EntitlementsMap } from '~/server/utils/billing-entitlements'
 import {
   RESOURCE_TEAM_GENERATION_CONFIG_KEY,
-  SITE_TRANSFER_REBUILD_TABLES,
   SITE_TRANSFER_REPARENT_TABLES,
   SITE_TRANSFER_RETAIN_TABLES,
   SITE_TRANSFER_REVOKE_TABLES,
@@ -293,17 +291,10 @@ export async function restoreSiteCustomDomains(
   return restored
 }
 
-export interface OrganizationBillingMirrorRow extends OrganizationBillingProjectionRow {
-  stripe_subscription_item_id: string | null
-  last_paid_invoice_id: string | null
-  last_payment_event_created: number | null
-  last_payment_event_id: string | null
-}
+export type OrganizationBillingMirrorRow = OrganizationBillingProjectionRow
 
 export interface SiteTransferBillingProjection {
   organizationId: string
-  effectivePlan: string
-  entitlements: EntitlementsMap
   organizationBilling: OrganizationBillingMirrorRow | null
 }
 
@@ -312,15 +303,12 @@ async function loadSiteTransferBillingProjection(
   organizationId: string,
 ): Promise<SiteTransferBillingProjection> {
   // Read the organization billing row once and validate that exact snapshot.
-  // The validator intentionally returns the explicit Starter projection when
-  // the recipient has no billing row, while malformed state throws before any
-  // transfer mutation begins.
+  // A malformed recipient projection must abort before any transfer mutation.
   const organizationBilling = await queryFirst<OrganizationBillingMirrorRow>(db, `
     SELECT organization_id, stripe_customer_id, stripe_subscription_id,
-           stripe_subscription_item_id, status, plan, current_period_end,
-           cancel_at_period_end, payment_status, paid_through, past_due_since,
+           payment_status, paid_through, past_due_since,
            last_paid_invoice_id, last_payment_event_created, last_payment_event_id,
-           updated_at
+           access_plan, access_expires_at, updated_at
       FROM organization_billing
      WHERE organization_id = ?
      LIMIT 1
@@ -330,101 +318,8 @@ async function loadSiteTransferBillingProjection(
 
   return {
     organizationId: projection.organizationId,
-    effectivePlan: projection.effectivePlan,
-    entitlements: projection.entitlements,
     organizationBilling: organizationBilling ?? null,
   }
-}
-
-function buildSiteBillingCompatibilityQueries(
-  siteId: string,
-  projection: SiteTransferBillingProjection,
-  now: string,
-): BatchQuery[] {
-  const billing = projection.organizationBilling
-  const plan = projection.effectivePlan
-  const status = billing?.status ?? 'free'
-  const currentPeriodEnd = billing?.current_period_end ?? null
-  const cancelAtPeriodEnd = billing?.cancel_at_period_end ?? 0
-  const paymentStatus = billing?.payment_status ?? 'unknown'
-  const paidThrough = billing?.paid_through ?? null
-  const pastDueSince = billing?.past_due_since ?? null
-  const lastPaidInvoiceId = billing?.last_paid_invoice_id ?? null
-  const lastPaymentEventCreated = billing?.last_payment_event_created ?? null
-  const lastPaymentEventId = billing?.last_payment_event_id ?? null
-
-  const siteEntitlementsTable = SITE_TRANSFER_REBUILD_TABLES.find(table => table === 'site_entitlements')
-  if (!siteEntitlementsTable) throw new Error('Site transfer policy is missing site_entitlements')
-  const queries: BatchQuery[] = [
-    {
-      query: `DELETE FROM ${siteEntitlementsTable} WHERE site_id = ?`,
-      params: [siteId],
-    },
-  ]
-
-  for (const [key, value] of Object.entries(projection.entitlements)) {
-    queries.push({
-      query: `
-        INSERT INTO ${siteEntitlementsTable}
-          (id, site_id, organization_id, key, value, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'better-auth-stripe', ?, ?)
-      `,
-      params: [`sent-${siteId}-${key}`, siteId, projection.organizationId, key, String(value), now, now],
-    })
-  }
-
-  queries.push({
-    query: `
-      INSERT INTO site_billing
-        (id, site_id, organization_id, stripe_customer_id, stripe_subscription_id,
-         stripe_subscription_item_id, plan, status, current_period_end,
-         cancel_at_period_end, payment_status, paid_through, past_due_since,
-         last_paid_invoice_id, last_payment_event_created, last_payment_event_id,
-         updated_at, payment_method)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'stripe')
-      ON CONFLICT(site_id) DO UPDATE SET
-        organization_id = excluded.organization_id,
-        stripe_customer_id = excluded.stripe_customer_id,
-        stripe_subscription_id = excluded.stripe_subscription_id,
-        stripe_subscription_item_id = excluded.stripe_subscription_item_id,
-        plan = excluded.plan,
-        status = excluded.status,
-        current_period_end = excluded.current_period_end,
-        cancel_at_period_end = excluded.cancel_at_period_end,
-        payment_status = excluded.payment_status,
-        paid_through = excluded.paid_through,
-        past_due_since = excluded.past_due_since,
-        last_paid_invoice_id = excluded.last_paid_invoice_id,
-        last_payment_event_created = excluded.last_payment_event_created,
-        last_payment_event_id = excluded.last_payment_event_id,
-        updated_at = excluded.updated_at,
-        payment_method = excluded.payment_method
-    `,
-    params: [
-      `sb-${siteId}`,
-      siteId,
-      projection.organizationId,
-      billing?.stripe_customer_id ?? null,
-      // Subscription identifiers are organization-scoped and unique on the
-      // compatibility table; never leave a source organization's IDs attached
-      // to a transferred site.
-      null,
-      null,
-      plan,
-      status,
-      currentPeriodEnd,
-      cancelAtPeriodEnd,
-      paymentStatus,
-      paidThrough,
-      pastDueSince,
-      lastPaidInvoiceId,
-      lastPaymentEventCreated,
-      lastPaymentEventId,
-      now,
-    ],
-  })
-
-  return queries
 }
 
 const MEDIA_ASSET_COLUMNS = [
@@ -527,7 +422,6 @@ function buildSiteTransferAssertions(
   fromOrgId: string,
   toOrgId: string,
   transferPrefix: string,
-  effectivePlan: string,
 ): BatchQuery[] {
   const assertions: BatchQuery[] = []
   for (const table of SITE_TRANSFER_REPARENT_TABLES) {
@@ -583,19 +477,6 @@ function buildSiteTransferAssertions(
     `SELECT 1 FROM sites WHERE id = ? AND (organization_id != ? OR team_id IS NOT NULL) LIMIT 1`,
     [siteId, toOrgId],
     'site organization or team scope is invalid after transfer',
-  ))
-  assertions.push(transferAssertion(
-    `SELECT 1 FROM site_billing
-      WHERE site_id = ?
-        AND (organization_id != ? OR plan != ? OR stripe_subscription_id IS NOT NULL OR stripe_subscription_item_id IS NOT NULL)
-      LIMIT 1`,
-    [siteId, toOrgId, effectivePlan],
-    'site billing compatibility projection is invalid after transfer',
-  ))
-  assertions.push(transferAssertion(
-    `SELECT 1 FROM site_entitlements WHERE site_id = ? AND organization_id != ? LIMIT 1`,
-    [siteId, toOrgId],
-    'site entitlement compatibility projection is invalid after transfer',
   ))
   return assertions
 }
@@ -656,17 +537,14 @@ export function buildSiteTransferMutationBatch(input: {
           WHERE organization_id = ?
             AND stripe_customer_id IS ?
             AND stripe_subscription_id IS ?
-            AND stripe_subscription_item_id IS ?
-            AND status IS ?
-            AND plan IS ?
-            AND current_period_end IS ?
-            AND cancel_at_period_end IS ?
             AND payment_status IS ?
             AND paid_through IS ?
             AND past_due_since IS ?
             AND last_paid_invoice_id IS ?
             AND last_payment_event_created IS ?
             AND last_payment_event_id IS ?
+            AND access_plan IS ?
+            AND access_expires_at IS ?
             AND updated_at IS ?
           LIMIT 1
        )`
@@ -676,17 +554,14 @@ export function buildSiteTransferMutationBatch(input: {
         input.toOrgId,
         billing.stripe_customer_id,
         billing.stripe_subscription_id,
-        billing.stripe_subscription_item_id,
-        billing.status,
-        billing.plan,
-        billing.current_period_end,
-        billing.cancel_at_period_end,
         billing.payment_status,
         billing.paid_through,
         billing.past_due_since,
         billing.last_paid_invoice_id,
         billing.last_payment_event_created,
         billing.last_payment_event_id,
+        billing.access_plan,
+        billing.access_expires_at,
         billing.updated_at,
       ]
     : [input.toOrgId]
@@ -716,12 +591,11 @@ export function buildSiteTransferMutationBatch(input: {
     'site transfer temporary media prefix collides with an existing asset',
   ))
 
-  // Set the site scope first so the blog-post scope trigger accepts every
-  // subsequent child reparent. Resource team membership is intentionally not
-  // transferred; the separate auth task provisions recipient teams later.
+  // Site access is inherited from its organization. Transfers only reparent
+  // domain state and never materialize site billing or entitlement mirrors.
   batch.push({
-    query: `UPDATE sites SET organization_id = ?, team_id = NULL, plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
-    params: [input.toOrgId, input.projection.effectivePlan, now, input.siteId, input.fromOrgId],
+    query: `UPDATE sites SET organization_id = ?, team_id = NULL, updated_at = ? WHERE id = ? AND organization_id = ?`,
+    params: [input.toOrgId, now, input.siteId, input.fromOrgId],
   })
 
   const facebookConnections = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'facebook_pages_connections')
@@ -800,9 +674,7 @@ export function buildSiteTransferMutationBatch(input: {
     params: [input.toOrgId, input.siteId, RESOURCE_TEAM_GENERATION_CONFIG_KEY, resourceTeamGeneration, now],
   })
 
-  batch.push(...buildSiteBillingCompatibilityQueries(input.siteId, input.projection, now))
-
-  batch.push(...buildSiteTransferAssertions(input.siteId, input.fromOrgId, input.toOrgId, transferPrefix, input.projection.effectivePlan))
+  batch.push(...buildSiteTransferAssertions(input.siteId, input.fromOrgId, input.toOrgId, transferPrefix))
 
   return batch
 }

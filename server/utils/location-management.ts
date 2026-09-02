@@ -1,4 +1,4 @@
-import { fireSiteEventSafe } from "~/server/utils/site-events";
+import { fireOrganizationEventSafe } from "~/server/utils/organization-events";
 import { execute, executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 import { parsePhone } from "~/utils/phone";
@@ -666,7 +666,7 @@ export async function createLocation(
         throw teamError;
       }
       const location = await loadLocation(db, organizationId, siteId, id);
-      await fireSiteEventSafe({
+      await fireOrganizationEventSafe({
         db,
         organizationId,
         siteId,
@@ -985,7 +985,7 @@ export async function updateLocation(
           siteId,
           locationId,
         );
-        await fireSiteEventSafe({
+        await fireOrganizationEventSafe({
           db,
           organizationId,
           siteId,
@@ -1019,7 +1019,7 @@ export async function updateLocation(
   params.push(locationId, organizationId, siteId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, siteId, locationId);
-  await fireSiteEventSafe({
+  await fireOrganizationEventSafe({
     db,
     organizationId,
     siteId,

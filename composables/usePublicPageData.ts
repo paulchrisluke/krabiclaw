@@ -6,7 +6,7 @@
 //
 // Usage (in a page):
 //   const { getField, getHero, media, qaList, ... } = await usePublicPageData()
-import { onMounted, onBeforeUnmount } from "vue";
+import { onMounted, onBeforeUnmount, watch } from "vue";
 import {
   usePublicPageRequest,
   usePublicPageKey,
@@ -18,6 +18,7 @@ import type { Experience } from "~/server/utils/experiences";
 import type { Product } from '~/server/types/products'
 import {
   isPublicPagePayload,
+  type PublicLocaleRepresentation,
   type PublicPagePayload,
 } from '~/utils/public-resource-contracts'
 
@@ -113,6 +114,12 @@ export const usePublicPageData = async (options: {
     onMounted(() => void asyncData.execute());
   }
   const { data, error, pending, refresh } = asyncData
+  const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
+  watch(
+    () => data.value?.localeRepresentations,
+    representations => { localeRepresentations.value = representations ?? [] },
+    { immediate: true },
+  )
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
@@ -305,5 +312,6 @@ export const usePublicPageData = async (options: {
     products,
     productsByCategory,
     error,
+    localeRepresentations,
   };
 };

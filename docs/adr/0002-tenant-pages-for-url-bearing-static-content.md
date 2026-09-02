@@ -1,5 +1,8 @@
 # Use Tenant Pages for URL-Bearing Static Content
 
+**Status: Accepted**
+**Date: 2026-06-XX**
+
 Tenant legal, compliance, and static informational pages need their own public URLs, SEO metadata, robots/canonical behavior, and publication state. KrabiClaw models these as canonical tenant pages rather than field rows or tenant articles; `blog_posts` remains the article model and blocks own page composition.
 
 ## Considered Options

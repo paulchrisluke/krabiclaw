@@ -1,7 +1,7 @@
 // POST /api/dashboard/onboarding/places-preview
 // Single-purpose authenticated Google Places lookup for the new-site onboarding
 // wizard's "confirm this is your business" card. Read-only: it never creates a
-// site, org, or location, and it never charges ai_credits — the Places details
+// site, org, or location, and it never charges the AI usage ledger — the Places details
 // charge for a new-site import happens once, at draft creation time
 // (POST /api/dashboard/onboarding/drafts/active), not here.
 //

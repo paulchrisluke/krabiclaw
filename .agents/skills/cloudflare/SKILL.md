@@ -9,6 +9,18 @@ references:
   - workers-ai
 ---
 
+# Repository contracts override this generic skill
+
+This skill provides syntax, testing technique, and vendor reference material for Cloudflare platform. It does not authorize new architecture, dependencies, infrastructure, abstractions, schema, routes, resources, or workflows.
+
+When this skill conflicts with AGENTS.md, CLAUDE.md, repository runbooks, existing package scripts, or existing configuration, follow the repository. Do not "modernize" the repository to match this skill.
+
+**KrabiClaw-specific overrides:**
+- Do not introduce new Cloudflare products, bindings, or resources without explicit task authorization
+- Do not replace existing D1 with Hyperdrive, or existing Workers AI with alternative AI providers
+- Do not add new Workers, queues, Durable Objects, or other resources without task explicitly requesting them
+- Use syntax/reference only — follow existing repository infrastructure patterns
+
 # Cloudflare Platform Skill
 
 Consolidated skill for building on the Cloudflare platform. Use decision trees below to find the right product, then load detailed references.

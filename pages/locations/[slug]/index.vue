@@ -310,8 +310,6 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage, nowInTimezone } from '~/utils/formatters'
-import { isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
-import { isCurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
@@ -428,10 +426,6 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-const rawCurrency = pageConfig.value?.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
-const productCurrency = rawCurrency
-
 const featuredProductItems = computed(() => {
   const presentation = productPresentation.value
   if (!presentation) return []
@@ -441,9 +435,9 @@ const featuredProductItems = computed(() => {
     .slice(0, 4)
     .map(product => ({
       name: product.name,
-      price: formatProductMoney(product.price_amount, productCurrency),
-      compareAtPrice: isSaleActive(product) && product.compare_at_price_amount
-        ? formatProductMoney(product.compare_at_price_amount, productCurrency)
+      price: formatProductMoney(product.price),
+      compareAtPrice: product.price?.compare_at_amount_minor
+        ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })
         : '',
       image: product.image?.public_url || null,
       imageKind: 'image',
@@ -459,7 +453,10 @@ const featuredExperienceItems = computed(() => {
     .sort((a, b) => Number(a.featured_sort_order) - Number(b.featured_sort_order) || Number(a.sort_order) - Number(b.sort_order) || String(a.id).localeCompare(String(b.id)))
   return featured.slice(0, 4).map(experience => ({
     name: experience.title,
-    ...resolveOverridePriceDisplay(experience, productCurrency),
+    price: formatProductMoney(experience.price),
+    compareAtPrice: experience.price?.compare_at_amount_minor
+      ? formatProductMoney({ ...experience.price, amount_minor: experience.price.compare_at_amount_minor, compare_at_amount_minor: null })
+      : '',
     image: experienceCoverImage(experience),
     imageKind: 'image',
     alt: experience.title ? `${experience.title} experience` : 'Featured experience image',

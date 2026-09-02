@@ -1,5 +1,8 @@
 # Use a Template Registry for Tenant Public Rendering
 
+**Status: Accepted**
+**Date: 2026-06-XX**
+
 KrabiClaw already stores `theme_id` and `theme`, but tenant public rendering is still Saya-shaped in the route/layout code. KrabiClaw will introduce a central template registry that maps a tenant's selected template to route components, layouts, navigation/footer components, copy behavior, and supported content models rather than adding scattered vertical checks throughout public pages.
 
 ## Consequences

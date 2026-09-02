@@ -1,16 +1,17 @@
 <template>
-  <ProductCollectionPage :products="products" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Menu`" />
+  <ProductCollectionPage :products="products" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Menu`" :brand-name="brandName" :empty-experience-href="emptyExperienceHref" />
 </template>
 
 <script setup lang="ts">
 import ProductCollectionPage from '~/components/products/ProductCollectionPage.vue'
 import { isCurrencyCode } from '~/shared/currencies'
+import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 import { requireProductPresentation } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
-const { products, locations, location, config, site } = await usePublicPageData({ lazy: false })
+const { products, locations, location, config, site, experiencesList } = await usePublicPageData({ lazy: false })
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404 })
 const brandName = site.value?.brand_name
@@ -24,5 +25,6 @@ const currency = rawCurrency
 const locationId = currentLocation.id
 const locationTitle = currentLocation.title
 const productLocations = computed(() => locations.value.map(item => ({ id: item.id, slug: item.slug, title: item.title })))
+const emptyExperienceHref = computed(() => resolveLocationExperienceHref(currentLocation.slug, experiencesList.value))
 useSocialMetadata(() => ({ path: `/locations/${encodeURIComponent(currentLocation.slug)}/menu`, title: `${locationTitle} Menu`, description: `Full menu for ${locationTitle}.`, location: locationTitle, brand: { siteName: brandName } }))
 </script>

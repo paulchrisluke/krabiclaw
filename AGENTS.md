@@ -10,7 +10,28 @@ Do not invent alternative deployment, migration, rollback, or environment-manage
 
 - Fix the canonical API, schema, or domain source of truth. Do not add frontend fallbacks, guards, shadow models, compatibility branches, or silent empty success states unless nullable behavior is intentional and documented.
 - Do not hand-mutate staging or production data or schema to mask application failures.
-- Inspect violations found in an affected path. Fix adjacent small defects in the same pass; defer only work that is genuinely larger and state the reason.
+- Do not broaden the task to adjacent defects. Report them unless they directly block the requested change; if they block it, fix them through the same canonical path rather than creating another mechanism.
+
+## Complexity control
+
+Default order: delete, reuse, modify, add.
+
+Before adding code, find the existing implementation of the behavior. There must be one canonical implementation, not parallel paths.
+
+Do not add a helper, wrapper, service, repository, composable, endpoint, schema field/table, state model, compatibility path, dependency, or infrastructure resource when an existing path can be deleted or modified.
+
+A refactor must remove the implementation it replaces in the same change. Do not leave dual reads, dual writes, aliases, temporary fallbacks, or "migration" compatibility code behind.
+
+Do not implement adjacent cleanup, TODOs, "future work," roadmap ideas, or reviewer suggestions unless they are required to complete the requested task.
+
+For cleanup/refactor work, net handwritten production code should decrease.
+
+## Test discipline
+
+Follow [docs/testing-strategy.md](docs/testing-strategy.md). Do not add a test by
+default. Unit tests may not inspect production source text or mock internal
+application modules. Prove UI, persistence, and MCP workflows through their real
+runtime boundaries.
 
 ## Platform and authorization boundaries
 

@@ -7,6 +7,8 @@ import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
 import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils/media-asset-manager'
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { localizationError } from '~/server/utils/localization-errors'
+import { queryFirst } from '~/server/db'
+import { isCurrencyCode } from '~/shared/currencies'
 import {
   MARKDOWN_MIME_TYPES,
   assertMarkdownSize,
@@ -16,7 +18,7 @@ import {
 } from '~/server/utils/markdown-document'
 
 const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
-const EXTRACT_SYSTEM = `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, or order URLs. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, or order URLs. Prices must be returned as integer amount_minor values in ${currency}. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
 
 const PRODUCT_EXTRACTION_TOOL = {
   name: PRODUCT_EXTRACTION_TOOL_NAME,
@@ -33,10 +35,15 @@ const PRODUCT_EXTRACTION_TOOL = {
             category: { type: 'string' },
             name: { type: 'string' },
             description: { type: ['string', 'null'] },
-            price_amount: { type: 'string' },
+            price: {
+              type: 'object',
+              properties: { amount_minor: { type: 'integer', minimum: 0 } },
+              required: ['amount_minor'],
+              additionalProperties: false,
+            },
             order_url: { type: ['string', 'null'] },
           },
-          required: ['category', 'name', 'description', 'price_amount', 'order_url'],
+          required: ['category', 'name', 'description', 'price', 'order_url'],
           additionalProperties: false,
         },
       },
@@ -46,7 +53,7 @@ const PRODUCT_EXTRACTION_TOOL = {
   },
 }
 
-function parseProductExtraction(input: unknown): CreateProductInput[] {
+function parseProductExtraction(input: unknown, currency: CreateProductInput['price']['currency']): CreateProductInput[] {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
   }
@@ -70,12 +77,19 @@ function parseProductExtraction(input: unknown): CreateProductInput[] {
       continue
     }
     const item = value as Record<string, unknown>
-    const allowed = ['category', 'name', 'description', 'price_amount', 'order_url']
+    const allowed = ['category', 'name', 'description', 'price', 'order_url']
     const unknown = Object.keys(item).filter(key => !allowed.includes(key)).sort()
     const missing = allowed.filter(key => !Object.hasOwn(item, key))
     const category = typeof item.category === 'string' ? item.category.trim() : ''
     const name = typeof item.name === 'string' ? item.name.trim() : ''
-    const priceAmount = typeof item.price_amount === 'string' ? item.price_amount.trim() : ''
+    const price = item.price && typeof item.price === 'object' && !Array.isArray(item.price)
+      ? item.price as Record<string, unknown>
+      : null
+    const amountMinor = price?.amount_minor
+    const priceValid = price != null
+      && Object.keys(price).length === 1
+      && Number.isSafeInteger(amountMinor)
+      && Number(amountMinor) >= 0
     const descriptionValid = item.description === null || typeof item.description === 'string'
     const orderUrlValid = item.order_url === null || typeof item.order_url === 'string'
     const invalidFields = [
@@ -83,7 +97,7 @@ function parseProductExtraction(input: unknown): CreateProductInput[] {
       ...missing,
       ...(!category ? ['category'] : []),
       ...(!name ? ['name'] : []),
-      ...(!priceAmount ? ['price_amount'] : []),
+      ...(!priceValid ? ['price'] : []),
       ...(!descriptionValid ? ['description'] : []),
       ...(!orderUrlValid ? ['order_url'] : []),
     ]
@@ -98,7 +112,7 @@ function parseProductExtraction(input: unknown): CreateProductInput[] {
       category,
       name,
       description: item.description === null ? '' : item.description as string,
-      price_amount: priceAmount,
+      price: { amount_minor: Number(amountMinor), currency, unit: 'item', tax_behavior: 'unspecified', provenance: 'ai-import' },
       order_url: item.order_url as string | null,
       tags: [],
       details: [],
@@ -238,6 +252,8 @@ export async function extractProductsFromMediaAsset(
 
   const creditOk = await hasCredits(db, opts.organizationId, opts.sessionId)
   if (!creditOk) throw new Error('No AI credits remaining.')
+  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM sites WHERE id = ? AND organization_id = ?', [opts.siteId, opts.organizationId])
+  if (!site || !isCurrencyCode(site.default_currency)) throw new Error('Site default currency is unavailable')
 
   const base64 = base64FromArrayBuffer(bytes)
   const fileContentBlock = isPdf ? documentBlock(base64) : imageBlock(base64, imageType)
@@ -245,7 +261,7 @@ export async function extractProductsFromMediaAsset(
     env,
     [{ role: 'user', content: [fileContentBlock, textBlock('Extract all Products from this file as JSON.')] }],
     {
-      system: EXTRACT_SYSTEM,
+      system: extractionSystem(site.default_currency),
       maxTokens: 4096,
       tools: [PRODUCT_EXTRACTION_TOOL],
       toolChoice: { type: 'tool', name: PRODUCT_EXTRACTION_TOOL_NAME },
@@ -272,7 +288,7 @@ export async function extractProductsFromMediaAsset(
   ) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must return exactly one structured tool call')
   }
-  const accepted = parseProductExtraction(toolBlocks[0].input)
+  const accepted = parseProductExtraction(toolBlocks[0].input, site.default_currency)
   try {
     const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, `ai:${opts.userId}`)
     return { products, creditsRemaining: charged.newBalance }

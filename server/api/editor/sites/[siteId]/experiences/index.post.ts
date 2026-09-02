@@ -5,6 +5,7 @@ import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-
 import { queryFirst } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
+import type { PriceInput } from '~/shared/prices'
 
 const optionalInteger = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -62,14 +63,8 @@ export default defineHandler(async (event) => {
     throw err
   }
 
-  // Validate compare_at_price_amount before object construction
-  if (body.compare_at_price_amount !== null && body.compare_at_price_amount !== undefined && body.compare_at_price_amount !== '') {
-    const parsed = Number(body.compare_at_price_amount)
-    if (!Number.isFinite(parsed)) return jsonResponse({ error: 'compare_at_price_amount must be a valid number' }, { status: 400 })
-  }
-
   const experience = await createExperience(db, site.organization_id, siteId, {
-    title, tagline: body.tagline ? String(body.tagline).trim() : null, body: body.body ? String(body.body).trim() : null, media, highlights, included_items: includedItems, what_to_bring: whatToBring, meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null, price: body.price ? String(body.price).trim() : null, price_amount: body.price_amount === null || body.price_amount === undefined || body.price_amount === '' ? null : Number(body.price_amount), compare_at_price_amount: body.compare_at_price_amount === null || body.compare_at_price_amount === undefined || body.compare_at_price_amount === '' ? null : Number(body.compare_at_price_amount), sale_starts_at: body.sale_starts_at ? String(body.sale_starts_at) : null, sale_ends_at: body.sale_ends_at ? String(body.sale_ends_at) : null, duration_minutes: optionalInteger(body.duration_minutes), max_capacity: optionalInteger(body.max_capacity), time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null, recurring_slots: body.recurring_slots && typeof body.recurring_slots === 'object' && !Array.isArray(body.recurring_slots)
+    title, tagline: body.tagline ? String(body.tagline).trim() : null, body: body.body ? String(body.body).trim() : null, media, highlights, included_items: includedItems, what_to_bring: whatToBring, meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null, pricing_note: body.pricing_note ? String(body.pricing_note).trim() : null, price: body.price === null ? null : body.price as PriceInput | undefined, duration_minutes: optionalInteger(body.duration_minutes), max_capacity: optionalInteger(body.max_capacity), time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null, recurring_slots: body.recurring_slots && typeof body.recurring_slots === 'object' && !Array.isArray(body.recurring_slots)
       ? (body.recurring_slots as Record<string, string[]>)
       : null, available_note: body.available_note ? String(body.available_note).trim() : null, status: (['active', 'inactive', 'sold_out'].includes(String(body.status)) ? String(body.status) : 'active') as 'active' | 'inactive' | 'sold_out', sort_order: optionalInteger(body.sort_order) ?? 0, featured: typeof body.featured === 'boolean' ? body.featured : false, featured_sort_order: optionalInteger(body.featured_sort_order) ?? 0, location_id: locationId, seo_title: body.seo_title ? String(body.seo_title).trim() : null, seo_description: body.seo_description ? String(body.seo_description).trim() : null, }, session.user.id)
 

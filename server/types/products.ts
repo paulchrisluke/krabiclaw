@@ -1,4 +1,5 @@
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
+import type { Price, PriceInput } from '~/shared/prices'
 
 export interface ProductDetail {
   key: string
@@ -13,14 +14,13 @@ export interface Product {
   organization_id: string
   site_id: string
   location_id: string
+  product_type: 'standard' | 'experience'
   category: string
   name: string
   slug: string
   description: string
-  price_amount: string
-  compare_at_price_amount: string | null
-  sale_starts_at: string | null
-  sale_ends_at: string | null
+  price: Price | null
+  scheduled_prices?: Price[]
   order_url: string | null
   is_visible: boolean
   available: boolean
@@ -46,10 +46,7 @@ export interface CreateProductInput {
   category: string
   name: string
   description?: string
-  price_amount: string | number
-  compare_at_price_amount?: string | number | null
-  sale_starts_at?: string | null
-  sale_ends_at?: string | null
+  price: PriceInput
   order_url?: string | null
   is_visible?: boolean
   available?: boolean
@@ -69,10 +66,7 @@ export interface UpdateProductInput {
   category?: string
   name?: string
   description?: string
-  price_amount?: string | number
-  compare_at_price_amount?: string | number | null
-  sale_starts_at?: string | null
-  sale_ends_at?: string | null
+  price?: PriceInput | null
   order_url?: string | null
   is_visible?: boolean
   available?: boolean
@@ -87,8 +81,14 @@ export interface UpdateProductInput {
   robots?: string | null
 }
 
-export interface ReorderProductsInput {
-  products: Array<{ id: string; sort_order: number }>
+export interface MoveProductsInput {
+  product_ids: string[]
+  before_product_id: string | null
+}
+
+export interface MoveProductCategoryInput {
+  category: string
+  before_category: string | null
 }
 
 export interface RenameProductCategoryInput {

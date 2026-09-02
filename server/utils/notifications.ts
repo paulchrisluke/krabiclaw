@@ -309,7 +309,7 @@ async function getOwnerNotificationChannels(
 
 export async function insertDashboardNotification(
   db: DbClient,
-  opts: SiteContext & {
+  opts: Omit<SiteContext, 'siteId'> & { siteId: string | null } & {
     locationId?: string | null
     template: string
     title: string
@@ -341,7 +341,7 @@ export async function insertDashboardNotification(
 async function sendEmailNotification(
   env: NotificationEnv,
   db: DbClient,
-  opts: SiteContext & {
+  opts: Omit<SiteContext, 'siteId'> & { siteId: string | null } & {
     locationId?: string | null
     to: string
     replyTo?: string | null
@@ -1514,7 +1514,8 @@ async function notifyGuestThreadReplyInner(
   }
 }
 
-export interface OrganizationInvitationInput extends SiteContext {
+export interface OrganizationInvitationInput {
+  organizationId: string
   invitationId: string
   email: string
   role: string
@@ -1546,7 +1547,7 @@ export async function notifyOrganizationInvited(
 
   await sendEmailNotification(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
+    siteId: null,
     to: opts.email,
     template: 'organization_invited',
     title: `You're invited to join ${opts.organizationName}`,

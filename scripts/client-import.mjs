@@ -616,12 +616,12 @@ ON CONFLICT(id) DO UPDATE SET
 INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
-  status, plan, onboarding_status,
+  status, onboarding_status,
   default_currency, vertical
 ) VALUES (
   '${siteId}', '${orgId}', 'saya-theme-v1', 'saya', '${SLUG}', '${SLUG}',
   '${brandName.replace(/'/g, "''")}', NULL,
-  'active', 'free', 'active',
+  'active', 'active',
   'USD', '${VERTICAL}'
 ) ON CONFLICT(id) DO UPDATE SET
   brand_name = excluded.brand_name,
@@ -1334,7 +1334,7 @@ const clientManifest = {
   forbidden_copy_domains: FORBIDDEN_BY_VERTICAL[VERTICAL] ?? [],
 };
 
-// Remove _raw from manifest (too verbose — stored separately in google_place_snapshots)
+// Remove the verbose provider payload from the durable manifest.
 const manifestForFile = JSON.parse(
   JSON.stringify(clientManifest, (k, v) => (k === "_raw" ? undefined : v)),
 );
