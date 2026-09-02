@@ -86,3 +86,13 @@ yarn test:e2e:mcp
 | Production source-scanning files | 15 | 0 |
 
 The retained Playwright files are unchanged by this reduction.
+
+## 2026-09-02 cap increase
+
+The unit-test cap in `yarn lint:test-quality` moved from 180 to 190 to make room
+for genuinely boundary-appropriate coverage (isolated normalization/parsing
+logic) added alongside the nullable-Product-price feature, without forcing an
+unrelated deletion pass in the same change. The file and line caps are
+unchanged. The limits in `scripts/check-unit-test-quality.mjs` remain
+authoritative; this note explains why the number moved, not what it currently
+is.

@@ -1,6 +1,7 @@
 import { callAiGateway, documentBlock, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { chargeCredits, hasCredits } from '~/server/utils/ai-credits'
 import { createProductsBatch } from '~/server/utils/product-management'
+import { validateProductDetails } from '~/server/utils/product-validation'
 import type { CreateProductInput, Product } from '~/server/types/products'
 import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
@@ -8,7 +9,7 @@ import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { localizationError } from '~/server/utils/localization-errors'
 import { queryFirst } from '~/server/db'
-import { isCurrencyCode } from '~/shared/currencies'
+import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   MARKDOWN_MIME_TYPES,
   assertMarkdownSize,
@@ -18,7 +19,7 @@ import {
 } from '~/server/utils/markdown-document'
 
 const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
-const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, or order URLs. Prices must be returned as integer amount_minor values in ${currency}. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, order URLs, or a fixed price. Prices must be returned as integer amount_minor values in ${currency} when a fixed amount is visible, or price: null when it is not. Only populate details with a price-note entry when the source explicitly shows wording such as "Market Price" or "Ask Staff" — never fabricate one. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
 
 const PRODUCT_EXTRACTION_TOOL = {
   name: PRODUCT_EXTRACTION_TOOL_NAME,
@@ -36,14 +37,28 @@ const PRODUCT_EXTRACTION_TOOL = {
             name: { type: 'string' },
             description: { type: ['string', 'null'] },
             price: {
-              type: 'object',
+              type: ['object', 'null'],
               properties: { amount_minor: { type: 'integer', minimum: 0 } },
               required: ['amount_minor'],
               additionalProperties: false,
             },
             order_url: { type: ['string', 'null'] },
+            details: {
+              type: 'array',
+              description: 'Explicit structured customer-facing wording found in the source, e.g. a price-note entry for "Market Price". Empty when nothing explicit is present.',
+              items: {
+                type: 'object',
+                properties: {
+                  key: { type: 'string' },
+                  label: { type: 'string' },
+                  values: { type: 'array', items: { type: 'string' } },
+                },
+                required: ['key', 'label', 'values'],
+                additionalProperties: false,
+              },
+            },
           },
-          required: ['category', 'name', 'description', 'price', 'order_url'],
+          required: ['category', 'name', 'description', 'price', 'order_url', 'details'],
           additionalProperties: false,
         },
       },
@@ -53,7 +68,7 @@ const PRODUCT_EXTRACTION_TOOL = {
   },
 }
 
-function parseProductExtraction(input: unknown, currency: CreateProductInput['price']['currency']): CreateProductInput[] {
+export function parseProductExtraction(input: unknown, currency: CurrencyCode): CreateProductInput[] {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
   }
@@ -77,21 +92,26 @@ function parseProductExtraction(input: unknown, currency: CreateProductInput['pr
       continue
     }
     const item = value as Record<string, unknown>
-    const allowed = ['category', 'name', 'description', 'price', 'order_url']
+    const allowed = ['category', 'name', 'description', 'price', 'order_url', 'details']
     const unknown = Object.keys(item).filter(key => !allowed.includes(key)).sort()
     const missing = allowed.filter(key => !Object.hasOwn(item, key))
     const category = typeof item.category === 'string' ? item.category.trim() : ''
     const name = typeof item.name === 'string' ? item.name.trim() : ''
-    const price = item.price && typeof item.price === 'object' && !Array.isArray(item.price)
-      ? item.price as Record<string, unknown>
-      : null
-    const amountMinor = price?.amount_minor
-    const priceValid = price != null
-      && Object.keys(price).length === 1
-      && Number.isSafeInteger(amountMinor)
-      && Number(amountMinor) >= 0
+    const rawPrice = item.price
+    const priceValid = rawPrice === null
+      || (typeof rawPrice === 'object' && !Array.isArray(rawPrice)
+          && Object.keys(rawPrice).length === 1
+          && Number.isSafeInteger((rawPrice as Record<string, unknown>).amount_minor)
+          && Number((rawPrice as Record<string, unknown>).amount_minor) >= 0)
     const descriptionValid = item.description === null || typeof item.description === 'string'
     const orderUrlValid = item.order_url === null || typeof item.order_url === 'string'
+    let details: Product['details'] = []
+    let detailsValid = true
+    try {
+      details = validateProductDetails(item.details)
+    } catch {
+      detailsValid = false
+    }
     const invalidFields = [
       ...unknown,
       ...missing,
@@ -100,6 +120,7 @@ function parseProductExtraction(input: unknown, currency: CreateProductInput['pr
       ...(!priceValid ? ['price'] : []),
       ...(!descriptionValid ? ['description'] : []),
       ...(!orderUrlValid ? ['order_url'] : []),
+      ...(!detailsValid ? ['details'] : []),
     ]
     const duplicateKey = `${category.toLocaleLowerCase()}\0${name.toLocaleLowerCase()}`
     if (category && name && duplicateKeys.has(duplicateKey)) invalidFields.push('duplicate')
@@ -112,10 +133,10 @@ function parseProductExtraction(input: unknown, currency: CreateProductInput['pr
       category,
       name,
       description: item.description === null ? '' : item.description as string,
-      price: { amount_minor: Number(amountMinor), currency, unit: 'item', tax_behavior: 'unspecified', provenance: 'ai-import' },
+      price: rawPrice === null ? null : { amount_minor: Number((rawPrice as Record<string, unknown>).amount_minor), currency, unit: 'item', tax_behavior: 'unspecified', provenance: 'ai-import' },
       order_url: item.order_url as string | null,
       tags: [],
-      details: [],
+      details,
       source: 'ai',
     })
   }

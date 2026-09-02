@@ -28,7 +28,7 @@
                 <img v-if="product.image?.public_url" :src="product.image.public_url" :alt="product.image.alt_text || product.name" class="size-12 rounded object-cover">
                 <span v-else class="size-12 rounded bg-elevated" />
                 <span class="min-w-0"><strong class="block truncate">{{ product.name }}</strong></span>
-                <span class="text-sm tabular-nums">{{ formatProductMoney(product.price) }}</span>
+                <span class="text-sm tabular-nums">{{ formatProductPriceLabel(product) }}</span>
               </button>
               <div class="mr-3 flex gap-1">
                 <button type="button" class="rounded-md border border-default px-2 py-1 text-sm disabled:opacity-30" :aria-label="`Move ${product.name} up`" :disabled="reordering || productIndex === 0" @click="moveProduct(categoryIndex, productIndex, -1)">↑</button>
@@ -45,7 +45,9 @@
       <h2 class="font-semibold">{{ editing.id ? `Edit ${presentation.itemLabel}` : `New ${presentation.itemLabel}` }}</h2>
       <label class="block text-sm">Name<input v-model="editing.name" required maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="block text-sm">{{ presentation.categoryLabel }}<input v-model="editing.category" required maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
-      <label class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <label class="flex items-center gap-2 text-sm"><input v-model="editing.has_fixed_price" type="checkbox"> Fixed price</label>
+      <label v-if="editing.has_fixed_price" class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <p v-else class="text-sm text-muted">No fixed price. Add a "price-note" entry in Details JSON for wording like "Market Price".</p>
       <label class="block text-sm">Description<textarea v-model="editing.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
       <label class="block text-sm">Order URL<input v-model="editing.order_url" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="orderHostname" class="mt-1 block text-xs text-muted">Destination: {{ orderHostname }}</span></label>
       <label class="block text-sm">Tags<input v-model="editing.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
@@ -72,11 +74,11 @@
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { Product, ProductDetail, ProductPresentation } from '~/server/types/products'
 import type { CurrencyCode } from '~/shared/currencies'
-import { formatProductMoney } from '~/utils/product-money'
+import { formatProductPriceLabel } from '~/utils/product-money'
 import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
 
 const props = defineProps<{ siteId: string; locationId: string; locationTitle: string; currency: CurrencyCode; presentation: ProductPresentation }>()
-interface EditingProduct { id: string | null; name: string; category: string; price_major: string; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
+interface EditingProduct { id: string | null; name: string; category: string; price_major: string; has_fixed_price: boolean; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
 const products = ref<Product[]>([])
 const editing = ref<EditingProduct | null>(null)
 const loading = ref(true)
@@ -106,12 +108,15 @@ async function load() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Failed to load Products' }
   finally { loading.value = false }
 }
-function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
-function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null } }
+function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', has_fixed_price: true, description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
+function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', has_fixed_price: product.price !== null, description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null } }
 function payload(product: EditingProduct) {
   let details: ProductDetail[]
   try { details = JSON.parse(product.details_text) as ProductDetail[] } catch { throw new Error('Details must be valid JSON') }
-  return { name: product.name, category: product.category, price: { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured }
+  const price = product.has_fixed_price
+    ? { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }
+    : null
+  return { name: product.name, category: product.category, price, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured }
 }
 async function save() {
   const product = editing.value

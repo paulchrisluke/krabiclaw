@@ -310,7 +310,7 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage, nowInTimezone } from '~/utils/formatters'
-import { formatProductMoney } from '~/utils/product-money'
+import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
@@ -435,7 +435,7 @@ const featuredProductItems = computed(() => {
     .slice(0, 4)
     .map(product => ({
       name: product.name,
-      price: formatProductMoney(product.price),
+      price: formatProductPriceLabel(product),
       compareAtPrice: product.price?.compare_at_amount_minor
         ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })
         : '',
