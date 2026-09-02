@@ -11,8 +11,8 @@ import type {
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
-import { isCurrencyCode } from '~/shared/currencies'
-import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput } from '~/shared/prices'
+import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
 import {
   PRODUCT_LIMITS,
   normalizeOptionalProductString,
@@ -112,8 +112,21 @@ function mapPrice(row: ProductRow): Price {
   }
 }
 
-function normalizePriceInput(input: PriceInput, defaultCurrency: string, field = 'price') {
-  if (!input || typeof input !== 'object') throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
+interface NormalizedPriceInput {
+  amountMinor: number
+  currency: CurrencyCode
+  unit: PriceUnit
+  taxBehavior: PriceTaxBehavior
+  compareAt: number | null
+  validFrom: string
+  validUntil: string | null
+  provenance: string
+}
+
+export function normalizePriceInput(input: PriceInput | null | undefined, defaultCurrency: string, field = 'price'): NormalizedPriceInput | null {
+  if (input === undefined) throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
+  if (input === null) return null
+  if (typeof input !== 'object' || Array.isArray(input)) throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an object or null` })
   if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor < 0) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.amount_minor must be a non-negative integer` })
   const currency = input.currency ?? defaultCurrency
   if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.currency is unsupported` })
@@ -130,6 +143,16 @@ function normalizePriceInput(input: PriceInput, defaultCurrency: string, field =
     throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_until must be an ISO instant after valid_from` })
   }
   return { amountMinor: input.amount_minor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance: input.provenance ?? 'manual' }
+}
+
+// Shared by updateProduct and syncProducts, which both batch their writes
+// through one executeBatch — this must return a query, never execute
+// anything itself, or the two writes would no longer be atomic.
+function closeActivePriceQuery(priceId: string, at: string): BatchQuery {
+  return {
+    query: `UPDATE prices SET valid_until = ? WHERE id = ? AND valid_until IS NULL`,
+    params: [at, priceId],
+  }
 }
 
 async function siteDefaultCurrency(db: DbClient, organizationId: string, siteId: string): Promise<string> {
@@ -374,17 +397,18 @@ export async function createProduct(
       seoTitle, seoDescription, canonicalUrl, robots, source, now, now, actor, actor,
     ],
   }
-  const insertPrice: BatchQuery = {
+  const insertPrice: BatchQuery | null = price === null ? null : {
     query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
   }
+  const priceInserts: BatchQuery[] = insertPrice ? [insertPrice] : []
   const queries: BatchQuery[] = requestedOrder === productCount
-    ? [insert, insertPrice]
+    ? [insert, ...priceInserts]
     : [
         { query: `UPDATE products SET sort_order = sort_order + ? WHERE site_id = ? AND location_id = ? AND product_type = 'standard'`, params: [REORDER_OFFSET, siteId, locationId] },
         insert,
-        insertPrice,
+        ...priceInserts,
         { query: `UPDATE products SET sort_order = (sort_order - ?) + CASE WHEN sort_order - ? >= ? THEN 1 ELSE 0 END WHERE site_id = ? AND location_id = ? AND product_type = 'standard' AND id <> ?`, params: [REORDER_OFFSET, REORDER_OFFSET, requestedOrder, siteId, locationId, id] },
       ]
   queries.push(publicResourceCacheInvalidationQuery(siteId, 'product.created'))
@@ -430,7 +454,7 @@ export async function createProductsBatch(
     if (!slug) throw new HTTPError({ statusCode: 409, statusMessage: `Unable to create a unique Product slug for products[${index}]` })
     const id = crypto.randomUUID()
     ids.push(id)
-    return [{
+    const productInsert: BatchQuery = {
       query: `INSERT INTO products (
         id, organization_id, site_id, location_id, product_type, category, name, slug, description, order_url,
         is_visible, available, featured, featured_sort_order, sort_order, tags_json,
@@ -450,7 +474,9 @@ export async function createProductsBatch(
         validateProductCanonicalUrl(input.canonical_url), validateProductRobots(input.robots), validateSource(input.source),
         now, now, actor, actor,
       ],
-    }, {
+    }
+    if (price === null) return [productInsert]
+    return [productInsert, {
       query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
@@ -516,8 +542,16 @@ export async function syncProducts(
           input.robots === undefined ? current.robots : validateProductRobots(input.robots), now, actor,
           id, organizationId, siteId, locationId],
       })
+      if (price === null) {
+        if (current.price) {
+          if (now <= current.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price cannot close before the active Price starts` })
+          writes.push(closeActivePriceQuery(current.price.id, now))
+        }
+        continue
+      }
+      const rawPrice = input.price!
       const samePrice = current.price
-        && input.price.valid_from === undefined && input.price.valid_until === undefined
+        && rawPrice.valid_from === undefined && rawPrice.valid_until === undefined
         && current.price.amount_minor === price.amountMinor
         && current.price.currency === price.currency
         && current.price.unit === price.unit
@@ -527,7 +561,7 @@ export async function syncProducts(
         if (current.price && price.validFrom <= current.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price must start after the active Price` })
         const conflict = await queryFirst<{ id: string }>(db, `SELECT id FROM prices WHERE product_id = ? AND id <> COALESCE(?, '') AND valid_from < COALESCE(?, '9999-12-31T23:59:59.999Z') AND (valid_until IS NULL OR valid_until > ?) LIMIT 1`, [id, current.price?.id ?? null, price.validUntil, price.validFrom])
         if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price overlaps an existing Price` })
-        if (current.price) writes.push({ query: `UPDATE prices SET valid_until=? WHERE id=? AND valid_until IS NULL`, params: [price.validFrom, current.price.id] })
+        if (current.price) writes.push(closeActivePriceQuery(current.price.id, price.validFrom))
         writes.push({
           query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
@@ -555,10 +589,13 @@ export async function syncProducts(
         normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
         normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
         validateProductCanonicalUrl(input.canonical_url), validateProductRobots(input.robots), validateSource(input.source), now, now, actor, actor],
-    }, {
-      query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
     })
+    if (price !== null) {
+      writes.push({
+        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
+      })
+    }
   }
   const omitted = existing.filter(product => !requestedIds.includes(product.id))
   const intendedIds = [...orderedIds]
@@ -629,6 +666,7 @@ export async function updateProduct(
     if (existing.price && at <= existing.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: 'Replacement Price must start after the active Price' })
     if (input.price !== null) {
       const price = normalizePriceInput({ ...input.price, valid_from: at }, await siteDefaultCurrency(db, organizationId, siteId))
+      if (!price) throw new Error('normalizePriceInput returned null for a non-null input')
       const conflict = await queryFirst<{ id: string }>(db, `
         SELECT id FROM prices
         WHERE product_id = ? AND id <> COALESCE(?, '')
@@ -637,14 +675,14 @@ export async function updateProduct(
         LIMIT 1
       `, [productId, existing.price?.id ?? null, price.validUntil, price.validFrom])
       if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: 'Scheduled Price overlaps an existing Price' })
-      if (existing.price) writes.push({ query: `UPDATE prices SET valid_until = ? WHERE id = ? AND valid_until IS NULL`, params: [at, existing.price.id] })
+      if (existing.price) writes.push(closeActivePriceQuery(existing.price.id, at))
       writes.push({
         query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()],
       })
     } else if (existing.price) {
-      writes.push({ query: `UPDATE prices SET valid_until = ? WHERE id = ? AND valid_until IS NULL`, params: [at, existing.price.id] })
+      writes.push(closeActivePriceQuery(existing.price.id, at))
     }
   }
   const [result] = await executeBatch(db, [

@@ -111,7 +111,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           "Call get_workspace_context and list_locations, then use the explicit location_id selected by the user.",
           "Call every list_location_products page before deciding whether this is a create or reconciliation.",
-          `Parse the following into individual Products (name, category, nested Price with integer amount_minor, and description where given), then call batch_create_products for entirely new Products or sync_products for mixed create/update work: ${itemsDescription}`,
+          `Parse the following into individual Products (name, category, and description where given). Every row must include price: a nested Price object with integer amount_minor for a fixed amount, or price: null when there is no fixed amount. When the source explicitly shows wording like "Market Price" or "Ask Staff", copy it into a details entry with key "price-note" — never invent a price or a note. Then call batch_create_products for entirely new Products or sync_products for mixed create/update work: ${itemsDescription}`,
           "If the user has photos or videos, offer to attach them after creation. Use set_media with { owner_type: 'product', owner_id: <exact Product id>, slot: 'image' } for the explicit primary and attach_media with slot 'gallery' for detail-gallery assets.",
           "Report the Products that were created or updated.",
         ].join(" "),

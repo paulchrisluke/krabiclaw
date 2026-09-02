@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:c6605df8a7d09ab064e50a89768b11d6200bb83fd45935226b08ced28fc5c3ed",
+  "fingerprint": "sha256:5d3c4837868e4d77e8d5d5ece72013d181bcca22dbeb1e9f0708c5af7f4cf922",
   "tools": [
     {
       "name": "analyze_document",
@@ -295,15 +295,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -314,6 +323,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -336,18 +346,38 @@
                 },
                 "price": {
                   "additionalProperties": false,
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
                   "properties": {
                     "amount_minor": {
+                      "maximum": 9007199254740991,
                       "minimum": 0,
                       "type": "integer"
                     },
                     "compare_at_amount_minor": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
                       "type": [
                         "integer",
                         "null"
                       ]
                     },
                     "currency": {
+                      "enum": [
+                        "THB",
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "JPY",
+                        "AUD",
+                        "CAD",
+                        "SGD",
+                        "HKD",
+                        "MYR",
+                        "IDR",
+                        "PHP",
+                        "VND",
+                        "INR"
+                      ],
                       "type": "string"
                     },
                     "provenance": {
@@ -465,15 +495,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -484,6 +523,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -2273,15 +2313,24 @@
               "additionalProperties": false,
               "properties": {
                 "key": {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                   "type": "string"
                 },
                 "label": {
+                  "maxLength": 120,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "values": {
                   "items": {
+                    "maxLength": 500,
+                    "minLength": 1,
                     "type": "string"
                   },
+                  "maxItems": 32,
+                  "minItems": 1,
                   "type": "array"
                 }
               },
@@ -2292,6 +2341,7 @@
               ],
               "type": "object"
             },
+            "maxItems": 24,
             "type": "array"
           },
           "featured": {
@@ -2317,18 +2367,38 @@
           },
           "price": {
             "additionalProperties": false,
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
             "properties": {
               "amount_minor": {
+                "maximum": 9007199254740991,
                 "minimum": 0,
                 "type": "integer"
               },
               "compare_at_amount_minor": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
                 "type": [
                   "integer",
                   "null"
                 ]
               },
               "currency": {
+                "enum": [
+                  "THB",
+                  "USD",
+                  "EUR",
+                  "GBP",
+                  "JPY",
+                  "AUD",
+                  "CAD",
+                  "SGD",
+                  "HKD",
+                  "MYR",
+                  "IDR",
+                  "PHP",
+                  "VND",
+                  "INR"
+                ],
                 "type": "string"
               },
               "provenance": {
@@ -2435,15 +2505,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                       "type": "string"
                     },
                     "label": {
+                      "maxLength": 120,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "values": {
                       "items": {
+                        "maxLength": 500,
+                        "minLength": 1,
                         "type": "string"
                       },
+                      "maxItems": 32,
+                      "minItems": 1,
                       "type": "array"
                     }
                   },
@@ -2454,6 +2533,7 @@
                   ],
                   "type": "object"
                 },
+                "maxItems": 24,
                 "type": "array"
               },
               "featured": {
@@ -5195,15 +5275,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                       "type": "string"
                     },
                     "label": {
+                      "maxLength": 120,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "values": {
                       "items": {
+                        "maxLength": 500,
+                        "minLength": 1,
                         "type": "string"
                       },
+                      "maxItems": 32,
+                      "minItems": 1,
                       "type": "array"
                     }
                   },
@@ -5214,6 +5303,7 @@
                   ],
                   "type": "object"
                 },
+                "maxItems": 24,
                 "type": "array"
               },
               "featured": {
@@ -6998,15 +7088,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -7017,6 +7116,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -13723,15 +13823,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -13742,6 +13851,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -13764,18 +13874,38 @@
                 },
                 "price": {
                   "additionalProperties": false,
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
                   "properties": {
                     "amount_minor": {
+                      "maximum": 9007199254740991,
                       "minimum": 0,
                       "type": "integer"
                     },
                     "compare_at_amount_minor": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
                       "type": [
                         "integer",
                         "null"
                       ]
                     },
                     "currency": {
+                      "enum": [
+                        "THB",
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "JPY",
+                        "AUD",
+                        "CAD",
+                        "SGD",
+                        "HKD",
+                        "MYR",
+                        "IDR",
+                        "PHP",
+                        "VND",
+                        "INR"
+                      ],
                       "type": "string"
                     },
                     "provenance": {
@@ -13899,15 +14029,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -13918,6 +14057,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -16479,15 +16619,24 @@
               "additionalProperties": false,
               "properties": {
                 "key": {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                   "type": "string"
                 },
                 "label": {
+                  "maxLength": 120,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "values": {
                   "items": {
+                    "maxLength": 500,
+                    "minLength": 1,
                     "type": "string"
                   },
+                  "maxItems": 32,
+                  "minItems": 1,
                   "type": "array"
                 }
               },
@@ -16498,6 +16647,7 @@
               ],
               "type": "object"
             },
+            "maxItems": 24,
             "type": "array"
           },
           "featured": {
@@ -16520,18 +16670,38 @@
           },
           "price": {
             "additionalProperties": false,
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\".",
             "properties": {
               "amount_minor": {
+                "maximum": 9007199254740991,
                 "minimum": 0,
                 "type": "integer"
               },
               "compare_at_amount_minor": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
                 "type": [
                   "integer",
                   "null"
                 ]
               },
               "currency": {
+                "enum": [
+                  "THB",
+                  "USD",
+                  "EUR",
+                  "GBP",
+                  "JPY",
+                  "AUD",
+                  "CAD",
+                  "SGD",
+                  "HKD",
+                  "MYR",
+                  "IDR",
+                  "PHP",
+                  "VND",
+                  "INR"
+                ],
                 "type": "string"
               },
               "provenance": {
@@ -16638,15 +16808,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                       "type": "string"
                     },
                     "label": {
+                      "maxLength": 120,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "values": {
                       "items": {
+                        "maxLength": 500,
+                        "minLength": 1,
                         "type": "string"
                       },
+                      "maxItems": 32,
+                      "minItems": 1,
                       "type": "array"
                     }
                   },
@@ -16657,6 +16836,7 @@
                   ],
                   "type": "object"
                 },
+                "maxItems": 24,
                 "type": "array"
               },
               "featured": {
