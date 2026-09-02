@@ -33,20 +33,22 @@
                   :content="false"
                   variant="pill"
                   class="min-w-0 flex-1"
-                  :ui="{ list: 'w-full', trigger: 'flex-1' }"
+                  :ui="{ list: 'w-full', trigger: 'min-h-11 flex-1' }"
                 />
                 <UButton
+                  v-if="settingsPath"
                   :to="settingsPath"
                   icon="i-lucide-settings"
                   color="neutral"
                   variant="ghost"
                   square
+                  class="min-h-11 min-w-11"
                   aria-label="Location settings"
                 />
               </div>
 
               <div v-if="activeTab === 'location'" class="space-y-4">
-                <NuxtLink :to="`${settingsPath}/profile`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <NuxtLink v-if="settingsPath" :to="`${settingsPath}/profile`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                   <UCard
                     variant="subtle"
                     class="overflow-hidden rounded-2xl transition-colors group-hover:bg-elevated"
@@ -88,7 +90,7 @@
                   </UCard>
                 </NuxtLink>
 
-                <NuxtLink :to="`${settingsPath}/hours`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <NuxtLink v-if="settingsPath" :to="`${settingsPath}/hours`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                   <UCard variant="subtle" class="rounded-2xl transition-colors group-hover:bg-elevated">
                     <div class="flex items-center justify-between gap-5">
                       <div class="min-w-0">
@@ -100,7 +102,7 @@
                   </UCard>
                 </NuxtLink>
 
-                <NuxtLink :to="`${settingsPath}/discovery`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <NuxtLink v-if="settingsPath" :to="`${settingsPath}/discovery`" class="group block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                   <UCard variant="subtle" class="rounded-2xl transition-colors group-hover:bg-elevated">
                     <div class="flex items-center justify-between gap-5">
                       <div class="min-w-0">
@@ -113,7 +115,63 @@
                 </NuxtLink>
               </div>
 
-              <EditorNavigationList v-else :groups="contentGroups" />
+              <section
+                v-else
+                aria-label="Location content managers"
+                class="divide-y divide-default border-y border-default"
+              >
+                <NuxtLink
+                  v-for="item in locationManagerItems"
+                  :key="item.manager.key"
+                  :to="item.to"
+                  :data-testid="`manager-preview-${item.manager.id}`"
+                  class="group block px-1 py-6 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                >
+                  <template v-if="item.manager.id === 'photos'">
+                    <div class="grid gap-4 sm:grid-cols-[minmax(0,1.15fr)_minmax(10rem,0.85fr)] sm:items-center">
+                      <img
+                        v-if="locationImage"
+                        :src="locationImage"
+                        alt=""
+                        class="aspect-[16/10] w-full rounded-2xl object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <div v-else class="flex aspect-[16/10] w-full items-center justify-center rounded-2xl bg-muted text-dimmed">
+                        <UIcon name="i-lucide-image-off" class="size-7" />
+                      </div>
+                      <div>
+                        <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                        <p class="mt-2 text-sm leading-6 text-muted">{{ locationImage ? 'Current location image' : 'No location image yet' }}</p>
+                      </div>
+                    </div>
+                  </template>
+
+                  <template v-else-if="item.manager.id === 'products'">
+                    <div class="grid gap-4 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)]">
+                      <div>
+                        <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                        <p data-testid="manager-preview-product-count" class="mt-1 text-sm text-muted">
+                          {{ products.length }} {{ products.length === 1 ? 'item' : 'items' }}
+                        </p>
+                      </div>
+                      <ul v-if="products.length" class="space-y-2 text-sm text-highlighted">
+                        <li v-for="product in products.slice(0, 4)" :key="product.id" class="truncate font-medium">
+                          {{ product.name }}
+                        </li>
+                      </ul>
+                      <p v-else class="text-sm text-muted">No items yet</p>
+                    </div>
+                  </template>
+
+                  <template v-else>
+                    <div class="grid gap-2 sm:grid-cols-[minmax(9rem,0.7fr)_minmax(0,1.3fr)] sm:gap-6">
+                      <h2 class="text-base font-semibold text-highlighted">{{ item.manager.label }}</h2>
+                      <p class="max-w-xl text-sm leading-6 text-muted">{{ locationManagerSummary(item.manager) }}</p>
+                    </div>
+                  </template>
+                </NuxtLink>
+              </section>
             </div>
           </div>
         </UPageBody>
@@ -123,8 +181,8 @@
 </template>
 
 <script setup lang="ts">
-import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability } from '~/config/cms-registry'
+import { resolveDashboardManagerRoute, type DashboardManagerRouteContext } from '~/utils/dashboard-navigation'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayGoogleHours } from '~/utils/formatters'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
@@ -152,9 +210,14 @@ interface InboxSummary {
   unreadThreads: number
 }
 
+interface LocationProductPreview {
+  id: string
+  name: string
+}
+
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
-  products: { success: boolean; products: ApiRecord[] }
+  products: { success: boolean; products: LocationProductPreview[] }
   threads: { summary: InboxSummary }
 }
 
@@ -164,11 +227,19 @@ const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
-const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
-const locationPath = computed(() => `${sitePath.value}/locations/${String(route.params.locationSlug)}`)
-const settingsPath = computed(() => `${locationPath.value}/settings`)
+const organizationSlug = computed(() => String(route.params.orgSlug))
+const siteSlug = computed(() => String(route.params.siteSlug))
+const locationSlug = computed(() => String(route.params.locationSlug))
+const sitePath = computed(() => `/dashboard/${encodeURIComponent(organizationSlug.value)}/sites/${encodeURIComponent(siteSlug.value)}`)
+const locationPath = computed(() => `${sitePath.value}/locations/${encodeURIComponent(locationSlug.value)}`)
+const managerContext = computed<DashboardManagerRouteContext>(() => ({
+  scope: 'location',
+  organizationSlug: organizationSlug.value,
+  siteSlug: siteSlug.value,
+  locationSlug: locationSlug.value,
+}))
 const location = ref<LocationOverview | null>(null)
-const products = ref<ApiRecord[]>([])
+const products = ref<LocationProductPreview[]>([])
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -187,25 +258,21 @@ const addressSummary = computed(() => location.value?.address?.addressLines?.joi
 
 const capabilities = computed(() => {
   const vertical = dashboard.site.value?.vertical
-  if (!vertical) return null
-  try {
-    const normalizedVertical = normalizeVertical(vertical) as SiteVertical
-    const template = resolvePublicTemplate({ vertical }).slug
-    return resolveCmsCapabilities(normalizedVertical, template, {
-      site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
-      location: parseCmsFeatureOverrideDelta(dashboardLocationRow.value?.feature_overrides),
-    })
-  } catch {
-    return null
-  }
+  if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+  const normalizedVertical = normalizeVertical(vertical) as SiteVertical
+  const template = resolvePublicTemplate({ vertical }).slug
+  return resolveCmsCapabilities(normalizedVertical, template, {
+    site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
+    location: parseCmsFeatureOverrideDelta(dashboardLocationRow.value?.feature_overrides),
+  })
 })
 
-const featureSet = computed(() => new Set<ProductFeature>([
-  ...(capabilities.value?.pages.map(page => page.feature) ?? []),
-  ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
-]))
-const hasFeature = (feature: ProductFeature) => featureSet.value.has(feature)
-const includeProducts = computed(() => hasFeature('products'))
+const locationManagers = computed(() => capabilities.value.managers.filter(manager => manager.scope === 'location'))
+const settingsManager = computed(() => locationManagers.value.find(manager => manager.id === 'settings') ?? null)
+const settingsPath = computed(() => settingsManager.value
+  ? resolveDashboardManagerRoute({ manager: settingsManager.value, context: managerContext.value })
+  : null)
+const includeProducts = computed(() => locationManagers.value.some(manager => manager.id === 'products'))
 
 const currentOpeningState = computed(() => {
   const hours = location.value?.opening_hours
@@ -229,67 +296,22 @@ const locationStatusSummary = computed(() => {
   return parts.join(' · ')
 })
 
-const contentGroups = computed(() => {
-  const publicContent = [
-    {
-      id: 'photos',
-      label: 'Photos',
-      summary: 'Manage the images shown for this location',
-      to: `${locationPath.value}/photos`,
-      visible: hasFeature('photos'),
-    },
-    {
-      id: 'products',
-      label: dashboard.site.value?.vertical === 'restaurant' ? 'Menu' : 'Products',
-      summary: `${products.value.length} ${products.value.length === 1 ? 'product' : 'products'}`,
-      to: `${locationPath.value}/products`,
-      visible: hasFeature('products'),
-    },
-    {
-      id: 'services',
-      label: 'Services',
-      summary: 'Manage services available at this location',
-      to: `${sitePath.value}/professional-services`,
-      visible: hasFeature('services'),
-    },
-    {
-      id: 'experiences',
-      label: 'Experiences',
-      summary: 'Manage bookable experiences',
-      to: `${locationPath.value}/experiences`,
-      visible: hasFeature('experiences'),
-    },
-    {
-      id: 'posts',
-      label: 'Posts',
-      summary: 'Publish updates and stories from this location',
-      to: `${locationPath.value}/posts`,
-      visible: hasFeature('posts'),
-    },
-    {
-      id: 'qa',
-      label: 'Q&A',
-      summary: 'Manage guest questions and answers',
-      to: `${locationPath.value}/qa`,
-      visible: hasFeature('qa'),
-    },
-  ].filter(item => item.visible !== false)
+function locationManagerSummary(manager: CmsManagerCapability): string {
+  switch (manager.id) {
+    case 'posts': return 'Publish updates and stories from this location'
+    case 'qa': return 'Answer common questions from visitors'
+    case 'experiences': return 'Manage bookable experiences at this location'
+    case 'reservations': return 'Manage reservation settings and requests'
+    default: return `Manage ${manager.label.toLowerCase()}`
+  }
+}
 
-  const operations = [
-    {
-      id: 'reservations',
-      label: 'Reservations',
-      summary: 'Manage reservation requests and bookings',
-      to: `${locationPath.value}/reservations`,
-      visible: hasFeature('reservations'),
-    },
-  ].filter(item => item.visible !== false)
-
-  return [
-    { id: 'public-content', items: publicContent },
-    { id: 'operations', label: 'Manage', items: operations },
-  ].filter(group => group.items.length > 0)
-})
+const locationManagerItems = computed(() => locationManagers.value
+    .filter(manager => manager.id !== 'settings')
+    .flatMap((manager) => {
+      const to = resolveDashboardManagerRoute({ manager, context: managerContext.value })
+      return to ? [{ manager, to }] : []
+    }))
 
 const isLocationResponse = (value: unknown): value is { success: boolean; location: LocationOverview } =>
   isRecord(value)
@@ -299,11 +321,13 @@ const isLocationResponse = (value: unknown): value is { success: boolean; locati
   && typeof value.location.title === 'string'
   && typeof value.location.status === 'string'
 
-const isProductsResponse = (value: unknown): value is { success: boolean; products: ApiRecord[] } =>
+const isProductsResponse = (value: unknown): value is { success: boolean; products: LocationProductPreview[] } =>
   isRecord(value)
   && typeof value.success === 'boolean'
   && Array.isArray(value.products)
-  && value.products.every(product => isRecord(product) && typeof product.id === 'string')
+  && value.products.every(product => isRecord(product)
+    && typeof product.id === 'string'
+    && typeof product.name === 'string')
 
 const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSummary } =>
   isRecord(value)
@@ -330,7 +354,7 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
       { validate: isLocationResponse },
     ),
     shouldIncludeProducts
-      ? dashboardApi<{ success: boolean; products: ApiRecord[] }>(
+      ? dashboardApi<{ success: boolean; products: LocationProductPreview[] }>(
           `/api/editor/sites/${siteId}/locations/${locationId.value}/products`,
           { validate: isProductsResponse },
         )

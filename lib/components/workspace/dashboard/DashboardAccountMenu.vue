@@ -6,24 +6,25 @@
     :ui="menuUi"
   >
     <UButton
-      v-if="!mobileOnly"
+      v-if="placement === 'desktop-top'"
       color="neutral"
       variant="ghost"
-      class="dashboard-account-menu-button w-full min-w-0 cursor-pointer hover:text-highlighted"
-      :class="collapsed ? 'justify-center' : 'justify-between'"
-      :ui="{ base: 'min-w-0 w-full items-center px-2 py-1.5', trailingIcon: 'text-dimmed ms-auto' }"
+      class="dashboard-account-menu-button min-h-11 min-w-0 max-w-56 cursor-pointer hover:text-highlighted"
+      :ui="{ base: 'min-w-0 items-center px-3', label: 'truncate', trailingIcon: 'text-dimmed ms-auto' }"
       :avatar="{ src: renderedUser?.image ?? undefined, alt: displayName, size: 'sm' }"
-      :label="collapsed ? undefined : displayName"
-      :trailing-icon="collapsed ? undefined : 'i-lucide-ellipsis'"
+      :label="displayName"
+      trailing-icon="i-lucide-chevron-down"
       data-testid="dashboard-account-menu-button"
     />
     <UButton
       v-else
       color="neutral"
       variant="ghost"
-      square
-      :avatar="{ src: renderedUser?.image ?? undefined, alt: displayName, size: 'sm' }"
-      aria-label="Open account menu"
+      icon="i-lucide-menu"
+      label="Menu"
+      class="min-h-14 min-w-11 w-full flex-col gap-0.5 rounded-none px-2 py-1 text-xs"
+      :ui="{ leadingIcon: 'size-5', label: 'font-medium' }"
+      aria-label="Open dashboard menu"
       data-testid="dashboard-mobile-account-menu-button"
     />
 
@@ -38,7 +39,9 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 
-const props = defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
+type DashboardAccountMenuPlacement = 'desktop-top' | 'mobile-bottom'
+
+const props = defineProps<{ placement: DashboardAccountMenuPlacement }>()
 
 const { sessionData } = await useAuthSession()
 const { signOut } = useAuth()
@@ -64,16 +67,16 @@ const organizationSettingsTo = computed(() => {
 })
 
 const menuContent = computed(() => ({
-  align: props.mobileOnly ? 'end' as const : 'start' as const,
+  align: 'end' as const,
   collisionPadding: 12,
-  side: 'top' as const,
+  side: props.placement === 'mobile-bottom' ? 'top' as const : 'bottom' as const,
   sideOffset: 12,
 }))
 const menuUi = computed(() => ({
-  content: props.mobileOnly
+  content: props.placement === 'mobile-bottom'
     ? 'max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-3xl p-2 shadow-2xl'
     : 'w-64 rounded-2xl p-1.5 shadow-xl',
-  item: 'min-h-10 rounded-xl px-2.5 py-2 text-sm',
+  item: 'min-h-11 rounded-xl px-2.5 py-2 text-sm',
   separator: 'my-1',
 }))
 
@@ -150,33 +153,66 @@ if (import.meta.client) {
 }
 
 async function handleSignOut() {
-  // Preserve the current path across sign-out/sign-back-in like
-  // middleware/account.ts and middleware/dashboard.global.ts already do for
-  // session-expiry redirects, so a manager who explicitly logs out from a
-  // notification deep link lands back on the same thread after signing in
-  // again rather than the generic dashboard root.
   const redirect = route.fullPath
   await signOut()
   await navigateTo({ path: '/login', query: { redirect } })
 }
 
-const items = computed<DropdownMenuItem[][]>(() => [
-  [
+const accountItems = computed<DropdownMenuItem[]>(() => [
+  { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: accountRouteQuery.value } },
+  { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: accountRouteQuery.value } },
+])
+
+const siteItems = computed<DropdownMenuItem[]>(() => {
+  const organizationSlug = dashboard.organization.value?.slug
+  const siteSlug = route.params.siteSlug
+  if (!organizationSlug || typeof siteSlug !== 'string' || dashboard.siteAccess.value === 'location') return []
+
+  const siteBase = `/dashboard/${encodeURIComponent(organizationSlug)}/sites/${encodeURIComponent(siteSlug)}`
+  return [
+    { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase}/conversations` },
+    { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${siteBase}/analytics` },
+    { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase}/domains` },
+    { label: 'Site settings', icon: 'i-lucide-settings', to: `${siteBase}/settings` },
+  ]
+})
+
+const adminItems = computed<DropdownMenuItem[]>(() => [
+  ...(dashboard.managedServiceEnabled.value ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin/work' }] : []),
+  { label: 'Clients', icon: 'i-lucide-building-2', to: '/admin/clients' },
+  { label: 'Members', icon: 'i-lucide-user-plus', to: '/admin/members' },
+  { label: 'Analytics', icon: 'i-lucide-chart-bar', to: '/admin/analytics' },
+  { label: 'Domains', icon: 'i-lucide-globe', to: '/admin/domains' },
+  { label: 'Users', icon: 'i-lucide-users', to: '/admin/users' },
+  { label: 'Content', icon: 'i-lucide-file-text', to: '/admin/content' },
+  { label: 'Localization', icon: 'i-lucide-languages', to: '/admin/localization' },
+  { label: 'Blog', icon: 'i-lucide-pencil', to: '/admin/blog' },
+  { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
+])
+
+const items = computed<DropdownMenuItem[][]>(() => {
+  const groups: DropdownMenuItem[][] = [
+    [
     {
       label: displayName.value,
       description: renderedUser.value?.email ?? undefined,
       avatar: { src: renderedUser.value?.image ?? undefined, alt: displayName.value },
       to: settingsTo.value,
     },
-  ],
-  [
+    ],
+    accountItems.value,
+  ]
+  if (siteItems.value.length) groups.push(siteItems.value)
+  if (route.name?.toString().startsWith('admin')) groups.push(adminItems.value)
+  groups.push([
     ...(usageLabel.value ? [{ label: 'Usage', icon: 'i-lucide-gauge', disabled: true, slot: 'usage' }] : []),
-    ...(organizationSettingsTo.value ? [{ label: 'Settings', icon: 'i-lucide-settings', to: organizationSettingsTo.value }] : []),
+    ...(organizationSettingsTo.value ? [{ label: 'Organization settings', icon: 'i-lucide-settings', to: organizationSettingsTo.value }] : []),
     { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
     { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
     { label: 'Log Out', icon: 'i-lucide-log-out', onSelect: handleSignOut },
-  ],
-])
+  ])
+  return groups
+})
 </script>
 
 <style scoped>

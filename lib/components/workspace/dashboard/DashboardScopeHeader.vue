@@ -1,7 +1,6 @@
 <template>
-  <div class="flex w-full items-center gap-1" :class="collapsed ? 'justify-center' : ''">
+  <div class="flex min-w-0 items-center">
     <UDropdownMenu
-      v-if="!collapsed"
       :items="menuItems"
       :content="{ align: 'start', collisionPadding: 12 }"
       :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-64' }"
@@ -12,11 +11,12 @@
         :label="model.current.label"
         color="neutral"
         variant="ghost"
-        class="min-w-0 flex-1 data-[state=open]:bg-elevated"
+        class="min-h-11 min-w-0 max-w-64 flex-1 data-[state=open]:bg-elevated"
         :ui="{ label: 'truncate text-left' }"
+        :aria-label="`Switch context. Current context: ${model.current.label}`"
+        trailing-icon="i-lucide-chevrons-up-down"
       />
     </UDropdownMenu>
-    <DashboardSidebarCollapseButton />
   </div>
 </template>
 
@@ -30,12 +30,6 @@ export interface DashboardScopeHeaderPeer {
   onSelect?: () => void
 }
 
-// This component renders ONLY the current-level switcher (dropdown of peers +
-// createAction). It deliberately does NOT render `model.parent` — that's
-// consumed by the layout to build a normal nav item instead (see
-// layouts/dashboard.vue's parentNavItem()), matching the reviewed reference
-// pattern of a back-row sized like every other nav item, not custom chrome
-// inside the switcher header. Do not add parent-rendering back here.
 export interface DashboardScopeHeaderModel {
   scope: 'organization' | 'site' | 'location'
   current: { label: string; icon?: string; avatar?: string }
@@ -44,7 +38,7 @@ export interface DashboardScopeHeaderModel {
   createAction?: { label: string; to: string }
 }
 
-const props = defineProps<{ model: DashboardScopeHeaderModel; collapsed?: boolean }>()
+const props = defineProps<{ model: DashboardScopeHeaderModel }>()
 
 const currentAvatar = computed(() => props.model.current.avatar ? { src: props.model.current.avatar } : undefined)
 const currentIcon = computed(() => !props.model.current.avatar ? (props.model.current.icon ?? 'i-lucide-building-2') : undefined)

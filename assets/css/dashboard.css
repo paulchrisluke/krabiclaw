@@ -6,23 +6,64 @@
 @source "../../lib/components/workspace";
 @import "@nuxt/ui";
 
-/*
- * Dashboard responsive contract:
- * - compact: below sm
- * - tablet: sm through below lg
- * - desktop: lg and above
- *
- * Structural UI changes only at lg: persistent sidebar, removal of the bottom
- * navigation, split editors, calendar grid, and side-by-side previews. The sm
- * breakpoint may adjust spacing and content density, but never navigation or
- * pane topology.
- */
+:root {
+  --dashboard-mobile-nav-height: 4rem;
+}
+
+.dashboard-shell,
+.dashboard-shell-content {
+  min-width: 0;
+}
+
+.dashboard-shell-header {
+  position: relative;
+  z-index: 30;
+}
+
+.dashboard-shell-content {
+  position: relative;
+  inset: auto;
+  padding-bottom: calc(var(--dashboard-mobile-nav-height) + env(safe-area-inset-bottom) + 0.25rem);
+}
+
+.dashboard-mobile-navigation {
+  min-height: calc(var(--dashboard-mobile-nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.dashboard-impersonation-banner {
+  bottom: calc(var(--dashboard-mobile-nav-height) + env(safe-area-inset-bottom));
+}
+
+.dashboard-site-preview-action {
+  bottom: calc(var(--dashboard-mobile-nav-height) + env(safe-area-inset-bottom) + 1rem);
+}
+
+.dashboard-has-impersonation-banner .dashboard-site-preview-action {
+  bottom: calc(var(--dashboard-mobile-nav-height) + env(safe-area-inset-bottom) + 6rem);
+}
 
 .w-\(--width\) {
   width: var(--width);
 }
 
 @media (width >= 1024px) {
+  .dashboard-shell-content {
+    padding-bottom: 0;
+  }
+
+  .dashboard-impersonation-banner {
+    bottom: 0;
+  }
+
+  .dashboard-site-preview-action {
+    bottom: 1.5rem;
+  }
+
+  .dashboard-has-impersonation-banner .dashboard-site-preview-action {
+    bottom: 6rem;
+  }
+
   /* stylelint-disable-next-line selector-class-pattern -- utility mirrors Nuxt UI's generated class */
   .lg\:w-\(--width\) {
     width: var(--width);
