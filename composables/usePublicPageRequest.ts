@@ -1,4 +1,3 @@
-import { splitLocalePrefix } from "~/utils/tenant-locale-path";
 
 // Maps each public route to the exact page datasets it may request.
 //
@@ -24,6 +23,8 @@ export type PublicPageDataset =
   | 'experienceDetail'
   | 'reservationPolicies'
   | 'experiencePolicies'
+
+import { splitLocalePrefix } from '~/utils/tenant-locale-path'
 
 export interface PublicPageRequest {
   page: string | null;
@@ -106,11 +107,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "blog",
       location: null,
       experience: null,
-      // 'blog' (the list) is required alongside 'blogPost' - BlogPostDetailPage.vue's
-      // sidebar category nav (BlogCategoryNav.vue) is built from the full post list,
-      // not just the current post. Without it the nav renders as a category list
-      // with zero posts inside, on every locale.
-      datasets: ['blogPost', 'blog'],
+      datasets: ['blogPost'],
       blogSlug: blogMatch[1] ?? null,
     };
   }
@@ -255,18 +252,14 @@ export const usePublicPageRequest = () => {
 
   return computed<PublicPageRequest>(() => {
     const previewSubpath = getPreviewSubpath(route.path)
-    const rawPath = previewSubpath ?? route.path
-    // A locale-prefixed request (e.g. /th/locations/{slug}/qa) is served by
-    // the tenantPath catch-all, whose route.path still carries the locale
-    // segment - strip it the same way pages/[...tenantPath].vue does before
-    // matching it against the locale-bare page-request patterns below.
-    const effectivePath = locale.value !== 'en' ? splitLocalePrefix(rawPath).tenantPagePath : rawPath
+    const effectivePath = previewSubpath ?? route.path
+    const localePath = splitLocalePrefix(effectivePath)
     const token = previewSubpath !== null && typeof route.query.token === 'string'
       ? route.query.token
       : null
     return {
-      ...getPublicPageRequest(effectivePath),
-      locale: locale.value,
+      ...getPublicPageRequest(localePath.sourcePath),
+      locale: localePath.localeSegment ?? locale.value,
       token,
     }
   });
@@ -318,16 +311,14 @@ export const buildPublicPageUrl = (
     qs.set("preview", "true");
     qs.set("token", params.token);
   }
-  const q = qs.toString();
   const draftId = typeof route.params.draftId === 'string' && route.path.startsWith('/preview/draft/')
     ? route.params.draftId
     : null
+  if (!draftId && params.locale && params.locale !== 'en') qs.set('locale', params.locale)
+  const q = qs.toString();
   if (draftId) {
     const draftQuery = qs.toString()
     return `/api/public/drafts/${draftId}/${resourceKind}${draftQuery ? `?${draftQuery}` : ""}`
   }
-  const localizedResource = params.locale && params.locale !== 'en'
-    ? `localized-${resourceKind}/${encodeURIComponent(params.locale)}`
-    : resourceKind
-  return `/api/public/sites/${siteId}/${localizedResource}${q ? `?${q}` : ""}`;
+  return `/api/public/sites/${siteId}/${resourceKind}${q ? `?${q}` : ""}`;
 };

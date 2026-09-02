@@ -4,6 +4,15 @@ import { getPublicProductBySlug, listPublicSiteProducts } from '~/server/utils/p
 import type { Product, ProductPresentation } from '~/server/types/products'
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import {
+  loadExactPublicLocalizations,
+  projectExactLocalizedCollection,
+  projectExactLocalizedResource,
+  projectLocalizedMediaAlt,
+  resolveLocalizedRouteResourceId,
+} from '~/server/utils/public-localization'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 interface PublicProductSiteRow {
   id: string
@@ -33,6 +42,7 @@ export interface PublicProductCollection {
 export interface PublicProductDetail extends PublicProductCollection {
   location: PublicProductLocation
   product: Product
+  localeRepresentations: PublicLocaleRepresentation[]
 }
 
 export interface PublicProductReview {
@@ -95,21 +105,71 @@ export async function loadPublicProductDetail(
   routeKind: 'menu' | 'products',
   locationSlug: string,
   productSlug: string,
-  locale?: string | null,
+  locale = 'en',
 ): Promise<PublicProductDetail | null> {
-  const collection = await loadPublicProductCollection(db, siteId, routeKind, locationSlug)
+  if (locale === 'en') {
+    const collection = await loadPublicProductCollection(db, siteId, routeKind, locationSlug)
+    const location = collection?.locations[0]
+    if (!collection || !location) return null
+    const product = await getPublicProductBySlug(db, siteId, location.id, productSlug)
+    if (!product) return null
+    const localeRepresentations = await listPublicLocaleRepresentations(db, {
+      organizationId: collection.site.organization_id,
+      siteId,
+      sourcePath: collection.presentation.productPath(location.slug, product.slug),
+      sourceLabel: 'English',
+      resource: { type: 'product', id: product.id },
+    })
+    return { ...collection, location, product, localeRepresentations }
+  }
+
+  const resolved = await loadProductSite(db, siteId, routeKind)
+  if (!resolved) return null
+  const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
+  const localizedLocationPath = `/${locale}/locations/${locationSlug}`
+  const localizedProductPath = `${localizedLocationPath}/${routeKind}/${productSlug}`
+  const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
+  const productId = resolveLocalizedRouteResourceId(localizations, 'product', localizedProductPath)
+  if (!locationId || !productId) return null
+  const sourceLocation = await queryFirst<PublicProductLocation>(db, `
+    SELECT id, slug, title, feature_overrides FROM business_locations
+     WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active' LIMIT 1
+  `, [resolved.site.organization_id, siteId, locationId])
+  if (!sourceLocation) return null
+  const collection = await loadPublicProductCollection(db, siteId, routeKind, sourceLocation.slug)
   const location = collection?.locations[0]
   if (!collection || !location) return null
-  const product = await getPublicProductBySlug(db, siteId, location.id, productSlug)
-  if (!product) return null
-  if (locale && locale !== 'en') {
-    const { loadExactPublicLocalizations, projectExactLocalizedResource } = await import('~/server/utils/public-localization')
-    const localizations = await loadExactPublicLocalizations(db, collection.site.organization_id, siteId, locale)
-    const localization = localizations.find(item => item.resourceType === 'product' && item.resourceId === product.id)
-    if (!localization) return null
-    return { ...collection, location, product: projectExactLocalizedResource('product', product, localization) }
+  const sourceProduct = collection.products.find(product => product.id === productId)
+  const locationLocalization = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
+  const productLocalization = localizations.find(item => item.resourceType === 'product' && item.resourceId === productId)
+  const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
+  if (!sourceProduct || !locationLocalization || !productLocalization || !siteLocalization) return null
+  const localizedProduct = projectExactLocalizedResource('product', sourceProduct, productLocalization)
+  const product = {
+    ...localizedProduct,
+    image: localizedProduct.image
+      ? projectLocalizedMediaAlt([localizedProduct.image], localizations)[0] ?? null
+      : null,
+    gallery: projectLocalizedMediaAlt(localizedProduct.gallery, localizations),
   }
-  return { ...collection, location, product }
+  const localizedLocation = projectExactLocalizedResource('business_location', location, locationLocalization)
+  const localizedSite = projectExactLocalizedResource('site', collection.site, siteLocalization)
+  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+    organizationId: collection.site.organization_id,
+    siteId,
+    sourcePath: collection.presentation.productPath(location.slug, sourceProduct.slug),
+    sourceLabel: 'English',
+    resource: { type: 'product', id: sourceProduct.id },
+  })
+  return {
+    ...collection,
+    site: localizedSite,
+    locations: projectExactLocalizedCollection('business_location', collection.locations, localizations),
+    products: projectExactLocalizedCollection('product', collection.products, localizations),
+    location: localizedLocation,
+    product,
+    localeRepresentations,
+  }
 }
 
 export async function loadPublicProductApiCollection(
@@ -128,7 +188,7 @@ export async function loadPublicProductApiDetail(
   siteId: string,
   locationSlug: string,
   productSlug: string,
-  locale?: string | null,
+  locale = 'en',
 ): Promise<PublicProductDetail | null> {
   const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [siteId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null

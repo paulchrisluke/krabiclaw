@@ -1,5 +1,10 @@
 import { HTTPError } from 'nitro'
 import englishManifest from '~/i18n/locales/en.json' with { type: 'json' }
+import {
+  flattenLocaleManifest,
+  localeManifestHash,
+  validateLocaleCatalog,
+} from '~/shared/platform-locale-catalog'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { localizationError } from '~/server/utils/localization-errors'
@@ -52,7 +57,6 @@ export interface LocalizedPublicRoute {
   representation:
     | { kind: 'tenant_page'; resource_type: 'tenant_page'; resource_id: string }
     | { kind: 'resource'; resource_type: LocalizedResourceType; resource_id: string; localization: ResourceLocalizationRecord }
-    | { kind: 'location_subpage'; resource_type: 'business_location'; resource_id: string; sub_page: 'qa' | 'photos'; tenant_page_path: string }
 }
 
 interface SiteLocaleRow extends Omit<SiteLocaleRecord, 'is_source'> {
@@ -130,22 +134,7 @@ export async function listSiteLocaleRecords(
   return rows.map(row => ({ ...row, is_source: Boolean(row.is_source) }))
 }
 
-function flattenManifest(value: unknown, prefix = '', result: Record<string, string> = {}): Record<string, string> {
-  if (typeof value === 'string') {
-    if (!prefix) throw new Error('English locale manifest root cannot be a string')
-    result[prefix] = value
-    return result
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`English locale manifest value ${prefix || '<root>'} must be an object or string`)
-  }
-  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-    flattenManifest((value as Record<string, unknown>)[key], prefix ? `${prefix}.${key}` : key, result)
-  }
-  return result
-}
-
-export const ENGLISH_LOCALE_MESSAGES = Object.freeze(flattenManifest(englishManifest))
+export const ENGLISH_LOCALE_MESSAGES = Object.freeze(flattenLocaleManifest(englishManifest))
 
 // ENGLISH_LOCALE_MESSAGES is a frozen module-level constant, so its hash
 // never changes within an isolate - compute it once and reuse the Promise.
@@ -153,52 +142,34 @@ let cachedEnglishManifestHash: Promise<string> | null = null
 export function englishManifestHash(): Promise<string> {
   if (!cachedEnglishManifestHash) {
     cachedEnglishManifestHash = (async () => {
-      const payload = JSON.stringify(ENGLISH_LOCALE_MESSAGES)
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload))
-      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+      return await localeManifestHash(ENGLISH_LOCALE_MESSAGES)
     })()
   }
   return cachedEnglishManifestHash
 }
 
-function placeholders(value: string): string[] {
-  return [...value.matchAll(/\{([A-Za-z0-9_]+)\}/g)].map(match => match[1]!).sort()
-}
-
 function validateCatalogMessages(messages: unknown, complete: boolean): Record<string, string> {
-  if (!messages || typeof messages !== 'object' || Array.isArray(messages)) {
-    localizationError(422, 'PLATFORM_CATALOG_INCOMPLETE', 'Catalog messages must be an object')
-  }
-  const record = messages as Record<string, unknown>
-  const sourceKeys = Object.keys(ENGLISH_LOCALE_MESSAGES).sort()
-  const targetKeys = Object.keys(record).sort()
-  const extra = targetKeys.filter(key => !Object.hasOwn(ENGLISH_LOCALE_MESSAGES, key))
-  const missing = sourceKeys.filter(key => !Object.hasOwn(record, key) || typeof record[key] !== 'string' || !String(record[key]).trim())
-  if (extra.length || (complete && missing.length)) {
-    localizationError(422, 'PLATFORM_CATALOG_INCOMPLETE', 'Platform locale catalog does not match the English manifest', { missing, extra })
-  }
-  const normalized: Record<string, string> = {}
-  for (const key of targetKeys) {
-    const value = record[key]
-    if (typeof value !== 'string') {
-      localizationError(422, 'PLATFORM_CATALOG_INCOMPLETE', `Catalog message ${key} must be a string`, { message_key: key })
-    }
-    if (!value.trim()) {
-      if (complete) localizationError(422, 'PLATFORM_CATALOG_INCOMPLETE', `Catalog message ${key} cannot be blank`, { message_key: key })
-      continue
-    }
-    const sourcePlaceholders = placeholders(ENGLISH_LOCALE_MESSAGES[key]!)
-    const targetPlaceholders = placeholders(value)
-    if (sourcePlaceholders.join('\0') !== targetPlaceholders.join('\0')) {
-      localizationError(422, 'PLATFORM_CATALOG_PLACEHOLDER_MISMATCH', `Catalog message ${key} has different placeholders`, {
-        message_key: key,
-        expected: sourcePlaceholders,
-        actual: targetPlaceholders,
+  const validation = validateLocaleCatalog(ENGLISH_LOCALE_MESSAGES, messages, { complete })
+  if (validation.ok) return validation.messages
+
+  const issue = validation.issue
+  switch (issue.kind) {
+    case 'shape':
+      return localizationError(422, 'PLATFORM_CATALOG_INCOMPLETE', 'Catalog messages must be an object')
+    case 'coverage':
+      return localizationError(422, 'PLATFORM_CATALOG_INCOMPLETE', 'Platform locale catalog does not match the English manifest', {
+        missing: issue.missing,
+        extra: issue.extra,
       })
-    }
-    normalized[key] = value
+    case 'value':
+      return localizationError(422, 'PLATFORM_CATALOG_INCOMPLETE', `Catalog message ${issue.key} must be a string`, { message_key: issue.key })
+    case 'placeholder':
+      return localizationError(422, 'PLATFORM_CATALOG_PLACEHOLDER_MISMATCH', `Catalog message ${issue.key} has different placeholders`, {
+        message_key: issue.key,
+        expected: issue.expected,
+        actual: issue.actual,
+      })
   }
-  return normalized
 }
 
 export async function listPlatformLocaleCatalogs(db: DbClient) {
@@ -507,37 +478,14 @@ export async function resolveLocalizedPublicRoute(
      WHERE v.organization_id = ? AND v.site_id = ? AND v.locale = ? AND v.path = ?
      LIMIT 1
   `, [organizationId, siteId, locale, tenantPagePath])
-  if (page) {
-    return {
-      locale,
-      route_path: routePath,
-      platform_messages: entitlement.platform_messages ?? {},
-      site,
-      representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.id },
-    }
+  if (!page) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized route was not found', { locale, route_path: routePath })
+  return {
+    locale,
+    route_path: routePath,
+    platform_messages: entitlement.platform_messages ?? {},
+    site,
+    representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.id },
   }
-  // business_location sub-pages (e.g. /locations/{slug}/qa) have no route_path
-  // of their own in resource_localizations - route: 'none' for location_qa,
-  // since the QA rows aren't independently routable resources. The slug isn't
-  // a localizable field (see RESOURCE_LOCALIZATION_REGISTRY.business_location),
-  // so it's identical across locales and the canonical business_locations row
-  // can be looked up directly.
-  const subPageMatch = tenantPagePath.match(/^\/locations\/([^/]+)\/(qa|photos)$/)
-  if (subPageMatch) {
-    const location = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM business_locations WHERE organization_id = ? AND site_id = ? AND slug = ? LIMIT 1
-    `, [organizationId, siteId, subPageMatch[1]])
-    if (location) {
-      return {
-        locale,
-        route_path: routePath,
-        platform_messages: entitlement.platform_messages ?? {},
-        site,
-        representation: { kind: 'location_subpage', resource_type: 'business_location', resource_id: location.id, sub_page: subPageMatch[2] as 'qa' | 'photos', tenant_page_path: tenantPagePath },
-      }
-    }
-  }
-  localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized route was not found', { locale, route_path: routePath })
 }
 
 export async function resolveLocalizedRedirect(

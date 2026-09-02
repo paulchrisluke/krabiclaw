@@ -1,5 +1,5 @@
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getPublishedPostBySlug } from '~/server/utils/post-management'
+import { getPublishedPostByPublicRoute } from '~/server/utils/post-management'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -11,11 +11,11 @@ export default defineHandler(async (event) => {
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Public post data is temporarily unavailable')
 
   const query = getQuery(event)
-  const locale = typeof query.locale === 'string' ? query.locale : null
-  const post = await getPublishedPostBySlug(db, siteId, slug, env, locale)
+  const locale = typeof query.locale === 'string' ? query.locale : 'en'
+  const post = await getPublishedPostByPublicRoute(db, siteId, slug, locale, env)
   if (!post) return apiErrorResponse(event, 404, 'POST_NOT_FOUND', 'Post not found')
 
   return jsonResponse({ success: true, post })
 })
 import { defineHandler } from 'nitro';
-import { getRouterParam, getQuery } from 'nitro/h3';
+import { getQuery, getRouterParam } from 'nitro/h3';

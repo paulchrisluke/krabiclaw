@@ -4,6 +4,13 @@ import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { platformHostname, type DomainEnv } from '~/server/utils/domains'
 import { buildDeleteOwnerPlacementsQuery, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
+import {
+  loadExactPublicLocalizations,
+  projectExactLocalizedResource,
+  projectLocalizedMediaAlt,
+  resolveLocalizedRouteResourceId,
+} from '~/server/utils/public-localization'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 
 export { normalizePostSlug, postPublicPath }
 
@@ -713,12 +720,11 @@ export async function getPublishedPostBySlug(
   siteId: string,
   slugOrId: string,
   env: DomainEnv,
-  locale?: string | null,
 ) {
-  const row = await queryFirst<PublishedPostRow & { organization_id: string }>(
+  const row = await queryFirst<PublishedPostRow>(
     db,
     `
-    SELECT p.id, p.organization_id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
+    SELECT p.id, p.site_id, p.location_id, bl.title AS location_title, bl.slug AS location_slug,
            p.slug, p.post_type, p.title, p.body,
            p.seo_title, p.seo_description,
            p.cta_type, p.cta_url, p.event_title, p.event_start, p.event_end,
@@ -735,20 +741,52 @@ export async function getPublishedPostBySlug(
     resolveSitePublicOrigin(db, siteId, env),
     getPostMediaByPostIds(db, siteId, [row.id]),
   ])
-  let localizedRow = row
-  if (locale && locale !== 'en') {
-    const { loadExactPublicLocalizations, projectExactLocalizedResource } = await import('~/server/utils/public-localization')
-    const localizations = await loadExactPublicLocalizations(db, row.organization_id, siteId, locale)
-    const localization = localizations.find(item => item.resourceType === 'site_post' && item.resourceId === row.id)
-    if (!localization) return null
-    const projected = projectExactLocalizedResource('site_post', row, localization)
-    localizedRow = { ...row, ...projected }
-  }
-  const summary = formatPublishedPost(localizedRow, mediaByPost.get(row.id), origin)
+  const summary = formatPublishedPost(row, mediaByPost.get(row.id), origin)
   return {
-    ...localizedRow,
+    ...row,
     ...summary,
-    seo_title: localizedRow.seo_title,
-    seo_description: localizedRow.seo_description,
+    seo_title: row.seo_title,
+    seo_description: row.seo_description,
   }
+}
+
+export async function getPublishedPostByPublicRoute(
+  db: DbClient,
+  siteId: string,
+  slug: string,
+  locale: string,
+  env: DomainEnv,
+) {
+  const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
+  if (!site) return null
+
+  let resourceId = slug
+  let localizations = [] as Awaited<ReturnType<typeof loadExactPublicLocalizations>>
+  if (locale !== 'en') {
+    localizations = await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+    const routeResourceId = resolveLocalizedRouteResourceId(localizations, 'site_post', `/${locale}/posts/${slug}`)
+    if (!routeResourceId) return null
+    resourceId = routeResourceId
+  }
+
+  const sourcePost = await getPublishedPostBySlug(db, siteId, resourceId, env)
+  if (!sourcePost) return null
+  let post = sourcePost
+  if (locale !== 'en') {
+    const postLocalization = localizations.find(item => item.resourceType === 'site_post' && item.resourceId === sourcePost.id)
+    if (!postLocalization) return null
+    post = {
+      ...projectExactLocalizedResource('site_post', sourcePost, postLocalization),
+      media: projectLocalizedMediaAlt(sourcePost.media, localizations),
+    }
+  }
+
+  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+    organizationId: site.organization_id,
+    siteId,
+    sourcePath: sourcePost.public_path,
+    sourceLabel: 'English',
+    resource: { type: 'site_post', id: sourcePost.id },
+  })
+  return { ...post, localeRepresentations }
 }

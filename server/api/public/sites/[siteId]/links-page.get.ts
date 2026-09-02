@@ -9,12 +9,10 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
 
-  const query = getQuery(event)
-  const locale = typeof query.locale === 'string' ? query.locale : null
-  const linksPage = await getPublicLinksPage(db, siteId, locale)
+  const linksPage = await getPublicLinksPage(db, siteId)
   if (!linksPage) return jsonResponse({ error: 'Links page not found' }, { status: 404 })
 
   return jsonResponse({ success: true, ...linksPage })
 })
 import { defineHandler } from 'nitro';
-import { getRouterParam, getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

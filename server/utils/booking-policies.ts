@@ -42,14 +42,14 @@ export interface BookingPolicyPatch {
   free_cancellation_until_minutes?: number | null
   late_arrival_grace_minutes?: number | null
   host_confirmation_sla_minutes?: number | null
-  reschedule_allowed?: boolean | null
+  reschedule_allowed?: boolean
   reschedule_cutoff_minutes?: number | null
-  deposit_required?: boolean | null
+  deposit_required?: boolean
   deposit_trigger_party_size?: number | null
-  special_requests_allowed?: boolean | null
+  special_requests_allowed?: boolean
   weather_policy?: string | null
   minimum_guest_age?: number | null
-  accessibility_contact_required?: boolean | null
+  accessibility_contact_required?: boolean
   additional_notes_html?: string | null
 }
 
@@ -359,13 +359,8 @@ function normalizeInteger(value: unknown, field: string) {
 
 function normalizeBoolean(value: unknown, field: string) {
   if (value === undefined) return undefined
-  // A boolean policy field is legitimately null (unset, inherits from the
-  // parent scope - see rowToPolicy/seedDefaultsForScope) and the client
-  // round-trips whatever the last GET returned on every save, so this must
-  // accept null the same way normalizeString does, not just undefined.
-  if (value === null) return null
   if (typeof value !== 'boolean') {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a boolean or null` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a boolean` })
   }
   return value
 }

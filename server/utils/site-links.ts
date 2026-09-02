@@ -215,7 +215,7 @@ export async function getLinksPage(db: DbClient, siteId: string): Promise<{ page
   return { page: mapPage(pageRow), items: items.map(mapItem) }
 }
 
-export async function getPublicLinksPage(db: DbClient, siteId: string, locale?: string | null): Promise<PublicSiteLinksPayload | null> {
+export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<PublicSiteLinksPayload | null> {
   const site = await queryFirst<ApiRecord>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
            s.theme_id, s.vertical,
@@ -228,21 +228,9 @@ export async function getPublicLinksPage(db: DbClient, siteId: string, locale?: 
   if (!site) return null
   const media = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
 
-  const { page: sourcePage, items } = await getLinksPage(db, siteId)
-  const sourcePublicItems = items.filter(item => item.status === 'active')
-  if (!sourcePage || sourcePage.path !== '/links' || sourcePublicItems.length === 0) return null
-
-  let page = sourcePage
-  let publicItems = sourcePublicItems
-  if (locale && locale !== 'en') {
-    const { loadExactPublicLocalizations, projectExactLocalizedCollection, projectExactLocalizedResource } = await import('~/server/utils/public-localization')
-    const localizations = await loadExactPublicLocalizations(db, String(site.organization_id), siteId, locale)
-    const pageLocalization = localizations.find(item => item.resourceType === 'site_link_page' && item.resourceId === sourcePage.id)
-    if (!pageLocalization) return null
-    page = projectExactLocalizedResource('site_link_page', sourcePage, pageLocalization)
-    publicItems = projectExactLocalizedCollection('site_link_item', sourcePublicItems, localizations)
-    if (publicItems.length === 0) return null
-  }
+  const { page, items } = await getLinksPage(db, siteId)
+  const publicItems = items.filter(item => item.status === 'active')
+  if (!page || page.path !== '/links' || publicItems.length === 0) return null
 
   const template = resolvePublicTemplate({
     themeId: typeof site.theme_id === 'string' ? site.theme_id : null,

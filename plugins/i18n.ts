@@ -19,6 +19,8 @@ function expandMessages(messages: Record<string, string>): Record<string, unknow
 }
 
 export default defineNuxtPlugin((nuxtApp) => {
+  const publicLocale = useState<string>('public-locale', () => 'en')
+  const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
   const i18n = createI18n({
     legacy: false,
     globalInjection: true,
@@ -27,18 +29,13 @@ export default defineNuxtPlugin((nuxtApp) => {
     messages: { en },
   })
 
-  nuxtApp.vueApp.use(i18n)
-  nuxtApp.provide('appLocale', i18n.global.locale)
-  // Imperative, not a reactive watch: the routing layer (pages/[...tenantPath].vue)
-  // resolves locale/messages inside its own synchronous <script setup>, before any
-  // descendant (header/footer, which call t()) renders. A watch() with default SSR
-  // flush timing is not guaranteed to have re-run by then, so callers must apply the
-  // locale directly at the point they resolve it instead of mutating reactive state
-  // and hoping a watcher catches up.
-  nuxtApp.provide('setAppLocale', (locale: string, messages: Record<string, string> | null) => {
+  watch([publicLocale, platformMessages], ([locale, messages]) => {
     if (locale !== 'en' && messages) {
       i18n.global.setLocaleMessage(locale, expandMessages(messages) as typeof en)
     }
     i18n.global.locale.value = locale as 'en'
-  })
+  }, { immediate: true })
+
+  nuxtApp.vueApp.use(i18n)
+  nuxtApp.provide('appLocale', i18n.global.locale)
 })
