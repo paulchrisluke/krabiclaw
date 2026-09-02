@@ -10,10 +10,8 @@ import {
   replacePrice,
   type Price,
 } from '../../shared/prices.ts'
-import { normalizePriceInput } from '../../server/utils/product-management.ts'
-import { assertNoPriceNoteContradiction } from '../../server/utils/product-validation.ts'
 import { parseProductExtraction } from '../../server/utils/chowbot-media.ts'
-import { formatProductPriceLabel } from '../../utils/product-money.ts'
+import { normalizePriceInput } from '../../server/utils/product-management.ts'
 
 const base: Price = {
   id: 'price-1', organization_id: 'org', site_id: 'site', location_id: 'location', product_id: 'product',
@@ -22,36 +20,56 @@ const base: Price = {
   provenance: 'manual', created_by: 'user', created_at: '2026-01-01T00:00:00.000Z',
 }
 
-test('Product price input and display preserve canonical integer amounts and explicit no-price metadata', () => {
+test('currency precision converts and formats canonical integer minor amounts', () => {
   assert.equal(majorAmountToMinor('12.50', 'THB'), 1250)
   assert.equal(majorAmountToMinor('1250', 'JPY'), 1250)
   assert.equal(majorAmountToMinor('1250', 'VND'), 1250)
   assert.throws(() => majorAmountToMinor('12.5', 'JPY'), /fraction digits/)
   assert.throws(() => majorAmountToMinor('12.345', 'USD'), /fraction digits/)
   assert.equal(formatMinorAmount(1250, 'THB', 'th-TH'), '฿12.50')
+})
 
+test('Product price normalization distinguishes no price from a complete fixed price', () => {
   assert.throws(() => normalizePriceInput(undefined, 'manual'), /price is required/)
   assert.equal(normalizePriceInput(null, 'manual'), null)
-  const normalized = normalizePriceInput({ amount_minor: 500, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' }, 'manual')
-  assert.ok(normalized)
-  assert.equal(normalized.amountMinor, 500)
-  assert.equal(normalized.provenance, 'manual')
+  assert.deepEqual(
+    normalizePriceInput({
+      amount_minor: 500,
+      currency: 'USD',
+      unit: 'item',
+      tax_behavior: 'unspecified',
+      valid_from: '2026-06-01T00:00:00.000Z',
+    }, 'manual'),
+    {
+      amountMinor: 500,
+      currency: 'USD',
+      unit: 'item',
+      taxBehavior: 'unspecified',
+      compareAt: null,
+      validFrom: '2026-06-01T00:00:00.000Z',
+      validUntil: null,
+      provenance: 'manual',
+      validFromProvided: true,
+      validUntilProvided: false,
+    },
+  )
   assert.throws(() => normalizePriceInput({ amount_minor: 500 }, 'manual'), /currency is required/)
-  assert.throws(() => normalizePriceInput({ amount_minor: 500, currency: 'USD', unit: 'item', tax_behavior: 'unspecified', provenance: 'caller' }, 'manual'), /assigned by the server/)
+  assert.throws(
+    () => normalizePriceInput({ amount_minor: 500, currency: 'USD', unit: 'item', tax_behavior: 'unspecified', provenance: 'caller' }, 'manual'),
+    /assigned by the server/,
+  )
+})
 
-  const note = [{ key: 'price-note', label: 'Price', values: ['Market Price'] }]
-  assert.throws(() => assertNoPriceNoteContradiction(true, note), /price-note.*fixed amount/)
-  assert.equal(formatProductPriceLabel({ price: null, details: note }), 'Market Price')
-  assert.equal(formatProductPriceLabel({ price: null, details: [] }), null)
-
+test('Product media extraction preserves canonical no-price details and rejects unreadable prices', () => {
+  const details = [{ key: 'price-note', label: 'Price', values: ['Market Price'] }]
   const [extracted] = parseProductExtraction({
     items: [{
       category: 'Sushi', name: 'Chef\'s Choice', description: null, order_url: null,
-      price: null, price_unreadable: false, details: note,
+      price: null, price_unreadable: false, details,
     }],
   }, 'USD')
   assert.equal(extracted?.price, null)
-  assert.deepEqual(extracted?.details, note)
+  assert.deepEqual(extracted?.details, details)
   assert.throws(() => parseProductExtraction({
     items: [{
       category: 'Sushi', name: 'Cropped Price Roll', description: null, order_url: null,

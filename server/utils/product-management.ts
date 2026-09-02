@@ -33,6 +33,11 @@ const REORDER_OFFSET = 1_000_000
 type ProductRow = Record<string, unknown>
 type SqlValue = string | number | boolean | null
 
+interface ProductWriteAttribution {
+  actorId: string
+  priceProvenance?: ProductPriceProvenance
+}
+
 function notFound(): never {
   throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found' })
 }
@@ -394,10 +399,10 @@ export async function createProduct(
   siteId: string,
   locationId: string,
   input: CreateProductInput,
-  actor: string,
+  attribution: ProductWriteAttribution,
   env: CloudflareEnv,
-  priceProvenance: ProductPriceProvenance = 'manual',
 ): Promise<Product> {
+  const { actorId: actor, priceProvenance = 'manual' } = attribution
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const category = requireTrimmedProductString(input.category, 'category', PRODUCT_LIMITS.category)
   const name = requireTrimmedProductString(input.name, 'name', PRODUCT_LIMITS.name)
@@ -474,9 +479,9 @@ export async function createProductsBatch(
   siteId: string,
   locationId: string,
   inputs: CreateProductInput[],
-  actor: string,
-  priceProvenance: ProductPriceProvenance = 'manual',
+  attribution: ProductWriteAttribution,
 ): Promise<Product[]> {
+  const { actorId: actor, priceProvenance = 'manual' } = attribution
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > PRODUCT_LIMITS.batchCreate) {
     throw new HTTPError({ statusCode: 400, statusMessage: `products must contain between 1 and ${PRODUCT_LIMITS.batchCreate} rows` })
@@ -545,10 +550,10 @@ export async function syncProducts(
   siteId: string,
   locationId: string,
   inputs: SyncProductInput[],
-  actor: string,
+  attribution: ProductWriteAttribution,
   setMissingUnavailable = false,
-  priceProvenance: ProductPriceProvenance = 'manual',
 ): Promise<Product[]> {
+  const { actorId: actor, priceProvenance = 'manual' } = attribution
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   if (!Array.isArray(inputs) || inputs.length > PRODUCT_LIMITS.sync) throw new HTTPError({ statusCode: 400, statusMessage: `products may contain at most ${PRODUCT_LIMITS.sync} rows` })
   const existing = await listLocationProducts(db, organizationId, siteId, locationId)
@@ -678,10 +683,10 @@ export async function updateProduct(
   locationId: string,
   productId: string,
   input: UpdateProductInput,
-  actor: string,
+  attribution: ProductWriteAttribution,
   env: CloudflareEnv,
-  priceProvenance: ProductPriceProvenance = 'manual',
 ): Promise<Product> {
+  const { actorId: actor, priceProvenance = 'manual' } = attribution
   const existing = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!existing) notFound()
   if (input.sort_order !== undefined && input.sort_order !== existing.sort_order) {
@@ -771,12 +776,10 @@ export async function updateProduct(
     })
   }
   if (priceInsert) writes.push(priceInsert)
+  writes.push(publicResourceCacheInvalidationQuery(siteId, 'product.updated', priceSnapshot ?? undefined))
   const closeWriteIndex = priceClose ? writes.length : -1
   if (priceClose) writes.push(priceClose)
-  const results = await executeBatch(db, [
-    ...writes,
-    publicResourceCacheInvalidationQuery(siteId, 'product.updated'),
-  ], { operation: 'update Product' })
+  const results = await executeBatch(db, writes, { operation: 'update Product' })
   if (closeWriteIndex >= 0 && Number(results[closeWriteIndex]?.meta?.changes ?? 0) !== 1) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Active Price was modified by a concurrent request; re-read the Product and retry' })
   }

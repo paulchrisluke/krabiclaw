@@ -316,7 +316,10 @@ export async function extractProductsFromMediaAsset(
   }
   const accepted = parseProductExtraction(toolBlocks[0].input, site.default_currency)
   try {
-    const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, opts.userId, 'ai-import')
+    const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, {
+      actorId: opts.userId,
+      priceProvenance: 'ai-import',
+    })
     return { products, creditsRemaining: charged.newBalance }
   } catch (error) {
     if (error && typeof error === 'object' && 'statusCode' in error) {

@@ -1184,7 +1184,7 @@ export function buildToolAnnotationsByName() {
 
 export const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
 
-function validateToolAnnotations(name: string, annotations: McpToolAnnotations, confirmRequired: boolean): void {
+export function validateToolAnnotations(name: string, annotations: McpToolAnnotations, confirmRequired: boolean): void {
   // ChatGPT Apps submission review requires every tool to declare all three
   // hints explicitly. A future classification that forgets openWorldHint or
   // destructiveHint must fail at module load.
