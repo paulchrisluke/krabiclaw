@@ -19,6 +19,7 @@ if (!previewUrl) {
 }
 
 const localWorkerEnvironment = [
+  'cross-env',
   'EMAIL_DELIVERY_MODE=log_only',
   'WHATSAPP_DELIVERY_MODE=log_only',
   'DISCORD_DELIVERY_MODE=log_only',
