@@ -4,14 +4,32 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { parseArgs } from 'node:util'
 import { hashPassword } from 'better-auth/crypto'
-import { E2E_AUTH_FIXTURES } from '../config/e2e-auth-fixtures.ts'
+import {
+  E2E_AUTH_FIXTURES,
+  LOCAL_DEVELOPER_EMAIL,
+  LOCAL_DEVELOPER_LOGIN_URL,
+  LOCAL_DEVELOPER_PASSWORD,
+} from '../config/e2e-auth-fixtures.ts'
 
-const isPreview = process.argv.includes('--preview')
-const isStaging = process.argv.includes('--staging')
-if (isPreview && isStaging) throw new Error('Choose only one of --preview or --staging.')
+const { values: options } = parseArgs({
+  options: {
+    preview: { type: 'boolean', default: false },
+    'local-dev': { type: 'boolean', default: false },
+    'persist-to': { type: 'string' },
+  },
+  strict: true,
+})
+const isPreview = options.preview
+const isLocalDev = options['local-dev']
+const persistTo = options['persist-to'] ? resolve(options['persist-to']) : null
+if (isPreview && isLocalDev) throw new Error('Choose only one of --preview or --local-dev.')
+if (persistTo && isPreview) {
+  throw new Error('--persist-to is available only for local D1 fixture provisioning.')
+}
 
-const password = process.env.E2E_TEST_PASSWORD
+const password = process.env.E2E_TEST_PASSWORD || (isLocalDev ? LOCAL_DEVELOPER_PASSWORD : '')
 if (!password) {
   throw new Error('E2E_TEST_PASSWORD is required when provisioning Better Auth E2E credentials.')
 }
@@ -70,11 +88,18 @@ try {
   writeFileSync(sqlPath, sql, { encoding: 'utf8', mode: 0o600 })
   const args = [resolve('node_modules/wrangler/bin/wrangler.js'), 'd1', 'execute', 'DB']
   if (isPreview) args.push('--env', 'preview', '--remote')
-  else if (isStaging) args.push('--env', 'staging', '--remote')
-  else args.push('--local')
+  else {
+    args.push('--local')
+    if (persistTo) args.push('--persist-to', persistTo)
+  }
   args.push('--file', sqlPath)
   execFileSync(process.execPath, args, { cwd: process.cwd(), stdio: 'inherit' })
-  console.log(`Provisioned ${E2E_AUTH_FIXTURES.length} verified Better Auth E2E credentials (${isStaging ? 'staging' : isPreview ? 'preview' : 'local'}).`)
+  console.log(`Provisioned ${E2E_AUTH_FIXTURES.length} verified Better Auth E2E credentials (${isPreview ? 'preview' : 'local'}).`)
+  if (isLocalDev) {
+    console.log(`Local login: ${LOCAL_DEVELOPER_LOGIN_URL}`)
+    console.log(`Email: ${LOCAL_DEVELOPER_EMAIL}`)
+    console.log(`Password: ${process.env.E2E_TEST_PASSWORD ? 'the E2E_TEST_PASSWORD value from your environment' : LOCAL_DEVELOPER_PASSWORD}`)
+  }
 } finally {
   rmSync(directory, { recursive: true, force: true })
 }

@@ -1,5 +1,5 @@
 import { defineComponent, h } from 'vue'
-import { EText } from 'vue-email'
+import { EText } from '../vue-email'
 import EmailShell from '../layouts/EmailShell'
 import EmailDetails from '../components/EmailDetails'
 

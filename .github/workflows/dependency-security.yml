@@ -1,0 +1,30 @@
+name: Dependency Security
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "31 8 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-security:
+    name: Hardened install and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.1"
+      - run: corepack enable
+      - name: Hardened immutable installs
+        env:
+          YARN_ENABLE_HARDENED_MODE: "1"
+        run: |
+          corepack yarn install --immutable
+          corepack yarn --cwd workers/email-inbound install --immutable
+      - run: corepack yarn security:packages

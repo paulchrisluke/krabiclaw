@@ -76,9 +76,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
+      - run: corepack enable
+      - run: corepack yarn install --immutable
+      - run: corepack yarn playwright install --with-deps chromium
       - name: Run production auth canary
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -110,8 +110,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
+      - run: corepack enable
+      - run: corepack yarn install --immutable
       - name: Run production notification canary
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -42,9 +42,10 @@
 </template>
 
 <script setup lang="ts">
-import type { Editor } from '@tiptap/vue-3'
 import type { EditorCustomHandlers, EditorSuggestionMenuItem, EditorToolbarItem } from '@nuxt/ui'
 import { replaceMarkdownRange, splitMarkdownAt } from '~/utils/markdown-source'
+
+type Editor = Parameters<EditorCustomHandlers[string]['execute']>[0]
 
 const props = withDefaults(defineProps<{
   modelValue?: string

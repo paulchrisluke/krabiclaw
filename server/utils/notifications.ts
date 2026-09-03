@@ -1,4 +1,4 @@
-import { useRender } from 'vue-email'
+import { renderEmail } from '~/server/emails/vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
@@ -763,8 +763,8 @@ export async function notifyReservationCreated(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, platformDomain, replyUrl: inboxUrl } }),
-    useRender(ReservationGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain } }),
+    renderEmail(ReservationOwnerNew, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, platformDomain, replyUrl: inboxUrl }),
+    renderEmail(ReservationGuestReceived, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain }),
   ])
 
   const results = await Promise.allSettled([
@@ -850,8 +850,8 @@ export async function notifyReservationCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ReservationOwnerCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl } }),
-    useRender(ReservationGuestCancelled, { props: { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain } }),
+    renderEmail(ReservationOwnerCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
+    renderEmail(ReservationGuestCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain }),
   ])
 
   const results = await Promise.allSettled([
@@ -926,8 +926,8 @@ export async function notifyContactSubmitted(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ContactOwnerNew, { props: { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged } }),
-    useRender(ContactGuestReceived, { props: { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged } }),
+    renderEmail(ContactOwnerNew, { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged }),
+    renderEmail(ContactGuestReceived, { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged }),
   ])
 
   const results = await Promise.allSettled([
@@ -1018,24 +1018,20 @@ export async function notifyPlatformContactSubmitted(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(ContactOwnerNew, {
-      props: {
-        guestName: opts.guestName,
-        email: opts.email,
-        subject: opts.subject,
-        message: opts.message,
-        siteName: siteLabel,
-        platformDomain,
-      },
+    renderEmail(ContactOwnerNew, {
+      guestName: opts.guestName,
+      email: opts.email,
+      subject: opts.subject,
+      message: opts.message,
+      siteName: siteLabel,
+      platformDomain,
     }),
-    useRender(ContactGuestReceived, {
-      props: {
-        guestName: opts.guestName,
-        siteName: siteLabel,
-        subject: opts.subject,
-        message: opts.message,
-        platformDomain,
-      },
+    renderEmail(ContactGuestReceived, {
+      guestName: opts.guestName,
+      siteName: siteLabel,
+      subject: opts.subject,
+      message: opts.message,
+      platformDomain,
     }),
   ])
 
@@ -1116,15 +1112,13 @@ export async function notifyReviewReceived(
   })
 
   try {
-    const ownerEmail = await useRender(ReviewOwnerNew, {
-      props: {
-        authorName: opts.authorName,
-        rating: opts.rating,
-        content: opts.content ?? '',
-        siteName: restaurant,
-        platformDomain,
-        reviewsUrl,
-      },
+    const ownerEmail = await renderEmail(ReviewOwnerNew, {
+      authorName: opts.authorName,
+      rating: opts.rating,
+      content: opts.content ?? '',
+      siteName: restaurant,
+      platformDomain,
+      reviewsUrl,
     })
 
     await notifyOwner(env, db, {
@@ -1166,16 +1160,14 @@ export async function notifyReviewRequest(
     ? `Review reminder for ${opts.bookingLabel}`
     : `Review request for ${opts.bookingLabel}`
 
-  const email = await useRender(templateComponent, {
-    props: {
-      guestName: opts.guestName,
-      siteName: restaurant,
-      locationName: opts.locationName ?? null,
-      bookingLabel: opts.bookingLabel,
-      reviewUrl: opts.reviewUrl,
-      optOutUrl: opts.optOutUrl,
-      platformDomain,
-    },
+  const email = await renderEmail(templateComponent, {
+    guestName: opts.guestName,
+    siteName: restaurant,
+    locationName: opts.locationName ?? null,
+    bookingLabel: opts.bookingLabel,
+    reviewUrl: opts.reviewUrl,
+    optOutUrl: opts.optOutUrl,
+    platformDomain,
   })
 
   return await sendEmailNotification(env, db, {
@@ -1239,8 +1231,8 @@ export async function notifyExperienceBookingCreated(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(BookingOwnerNew, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl } }),
-    useRender(BookingGuestReceived, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain } }),
+    renderEmail(BookingOwnerNew, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl }),
+    renderEmail(BookingGuestReceived, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain }),
   ])
 
   const results = await Promise.allSettled([
@@ -1325,8 +1317,8 @@ export async function notifyExperienceBookingCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    useRender(BookingOwnerCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl } }),
-    useRender(BookingGuestCancelled, { props: { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain } }),
+    renderEmail(BookingOwnerCancelled, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
+    renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain }),
   ])
 
   const results = await Promise.allSettled([
@@ -1535,14 +1527,12 @@ export async function notifyOrganizationInvited(
   const platformDomain = getPlatformDomain(env)
   const inviteUrl = `https://${platformDomain}/accept-invitation/${opts.invitationId}`
 
-  const rendered = await useRender(OrganizationInvite, {
-    props: {
-      organizationName: opts.organizationName,
-      inviterName: opts.inviterName,
-      role: opts.role,
-      inviteUrl,
-      platformDomain,
-    },
+  const rendered = await renderEmail(OrganizationInvite, {
+    organizationName: opts.organizationName,
+    inviterName: opts.inviterName,
+    role: opts.role,
+    inviteUrl,
+    platformDomain,
   })
 
   await sendEmailNotification(env, db, {
@@ -1581,15 +1571,15 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     guestBooking,
     organizationInvite,
   ] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/locations/main/inbox/res-preview-1' } }),
-    useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain } }),
-    useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
-    useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
-    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/contact-preview-1', consentAcknowledged: true } }),
-    useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true } }),
-    useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' } }),
-    useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain } }),
-    useRender(OrganizationInvite, { props: { organizationName: studio, inviterName: 'Priya Shah', role: 'admin', inviteUrl: 'https://demo.krabiclaw.com/accept-invitation/invite-preview-1', platformDomain } }),
+    renderEmail(ReservationOwnerNew, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/locations/main/inbox/res-preview-1' }),
+    renderEmail(ReservationGuestReceived, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain }),
+    renderEmail(ReservationGuestCancelled, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain }),
+    renderEmail(ReservationOwnerCancelled, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain }),
+    renderEmail(ContactOwnerNew, { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/contact-preview-1', consentAcknowledged: true }),
+    renderEmail(ContactGuestReceived, { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true }),
+    renderEmail(BookingOwnerNew, { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' }),
+    renderEmail(BookingGuestReceived, { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain }),
+    renderEmail(OrganizationInvite, { organizationName: studio, inviterName: 'Priya Shah', role: 'admin', inviteUrl: 'https://demo.krabiclaw.com/accept-invitation/invite-preview-1', platformDomain }),
   ])
 
   return [

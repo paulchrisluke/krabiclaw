@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { ESection, EButton, ELink } from 'vue-email'
+import { ESection, EButton, ELink } from '../vue-email'
 
 // KrabiClaw brand colors (WCAG AA compliant)
 const PRIMARY = '#FB7461' // coral

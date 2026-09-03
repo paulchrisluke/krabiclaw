@@ -3,20 +3,20 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "yarn",
-      "runtimeArgs": ["dev"],
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["yarn", "dev"],
       "port": 3000
     },
     {
       "name": "worker",
-      "runtimeExecutable": "yarn",
-      "runtimeArgs": ["dev:worker"],
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["yarn", "dev:worker"],
       "port": 3000
     },
     {
       "name": "worker-verify",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "dev", ".output/server/index.mjs", "--assets", ".output/public", "--local", "--port", "3100", "--live-reload"],
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["yarn", "wrangler", "dev", ".output/server/index.mjs", "--assets", ".output/public", "--local", "--port", "3100", "--live-reload"],
       "port": 3100
     }
   ]

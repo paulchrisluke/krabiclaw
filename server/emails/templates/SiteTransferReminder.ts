@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { EHeading, EText } from 'vue-email'
+import { EHeading, EText } from '../vue-email'
 import EmailShell from '../layouts/EmailShell'
 import SiteInfoCard from '../components/SiteInfoCard'
 

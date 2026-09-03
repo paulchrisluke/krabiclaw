@@ -29,7 +29,6 @@ import { readdir, stat, mkdir, writeFile, readFile } from "node:fs/promises";
 import { join, extname, basename } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { spawnYarn } from "./utils/spawn-yarn.mjs";
 import { prepareD1SeedFile } from "./utils/d1-seed-file.mjs";
 
@@ -716,8 +715,7 @@ function extractD1JsonArray(output) {
 function queryD1Count(table, siteId, remote) {
   const flag = remote ? "--remote" : "--local";
   try {
-    const result = spawnSync(
-      "yarn",
+    const result = spawnYarn(
       [
         "wrangler",
         "d1",
@@ -746,8 +744,7 @@ function queryD1Count(table, siteId, remote) {
 // never be silently treated the same as "no matching row exists."
 function queryD1Row(query, remote) {
   const flag = remote ? "--remote" : "--local";
-  const result = spawnSync(
-    "yarn",
+  const result = spawnYarn(
     ["wrangler", "d1", "execute", "DB", flag, "--command", query, "--json"],
     { encoding: "utf8", cwd: process.cwd() },
   );

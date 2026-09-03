@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { EHtml, EHead, EBody, EPreview, EContainer, ESection, EText, EHeading, EButton, ELink, EImg, EStyle } from 'vue-email'
+import { EHtml, EHead, EBody, EPreview, EContainer, ESection, EText, EHeading, EButton, ELink, EImg, EStyle } from '../vue-email'
 
 // Nuxt UI-inspired color tokens (email-safe inline styles)
 // Light mode
@@ -21,11 +21,7 @@ const BORDER_DARK = '#27272a' // zinc-800
 const CARD_BG_DARK = '#18181b' // zinc-900
 
 // Dark-mode brand accents (assets/css/main.css --kc-teal/--kc-success/--kc-warning/
-// --kc-danger, hand-copied — see the note in EmailCallout.ts on why emails can't read
-// CSS custom properties from main.css directly). Translucent brand-hue backgrounds over
-// the dark card, vibrant brand-hue text — mirrors the app's own .dark .platform-theme
-// rule that coral/teal/yellow accents stay vibrant on dark surfaces rather than fading
-// to a single neutral gray, so each callout variant keeps its semantic color in dark mode.
+// --kc-danger, copied because emails cannot read CSS custom properties from main.css).
 const CALLOUT_DARK = {
   info:    { bg: 'rgba(43,181,181,0.16)', fg: '#6BDBDB', border: 'rgba(43,181,181,0.4)' },  // kc-teal
   success: { bg: 'rgba(43,181,115,0.16)', fg: '#4ADE94', border: 'rgba(43,181,115,0.4)' },  // kc-success

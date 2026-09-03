@@ -56,3 +56,9 @@ Use the approved client onboarding and import pipeline. Never manually seed or p
 ## Agent documentation
 
 - Domain context and ADRs: root `CONTEXT.md` and `docs/adr/`
+
+## Agent skills
+
+### Issue tracker
+
+Issues, specs, and Wayfinder maps live in the canonical `paulchrisluke/krabiclaw` GitHub repository. See `docs/agents/issue-tracker.md`.
