@@ -126,6 +126,7 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
+const router = useRouter()
 const { data: sessionData, refreshSession } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
@@ -357,8 +358,9 @@ const primaryNavigationContext = computed<DashboardPrimaryNavigationContext>(() 
   const organizationSlug = (organization.value ?? accountOrganization.value)?.slug
   if (!organizationSlug) return { kind: 'unavailable' }
 
-  const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
-  const locationSlug = typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null
+  const currentRoute = router.currentRoute.value
+  const siteSlug = typeof currentRoute.params.siteSlug === 'string' ? currentRoute.params.siteSlug : null
+  const locationSlug = typeof currentRoute.params.locationSlug === 'string' ? currentRoute.params.locationSlug : null
   if (siteSlug && locationSlug) {
     return { kind: 'location', organizationSlug, siteSlug, locationSlug }
   }
@@ -368,7 +370,7 @@ const primaryNavigationContext = computed<DashboardPrimaryNavigationContext>(() 
 
 const primaryNavigation = computed(() => resolveDashboardPrimaryNavigation({
   context: primaryNavigationContext.value,
-  currentPath: route.path,
+  currentPath: router.currentRoute.value.path,
 }))
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
