@@ -135,13 +135,16 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     expect(links.items).toHaveLength(2)
   })
 
-  test('stores Thai page variants without a site localization', async () => {
+  test('stores the Thai home page variant without a site localization', async () => {
     await createPageVariant(owner, {
       pageId: 'page_ncls_home',
       path: '/',
       title: 'ความยุติธรรมสำหรับทุกคน',
       summary: 'บริการกฎหมายภาษาไทยที่เข้าใจง่าย',
     })
+  })
+
+  test('stores the Thai services page variant without a site localization', async () => {
     await createPageVariant(owner, {
       pageId: 'page_ncls_services',
       path: '/services',
@@ -162,6 +165,9 @@ test.describe.serial('published Thai content saves through the CMS and renders w
         },
       ],
     })
+  })
+
+  test('stores the Thai blog page variant without a site localization', async () => {
     await createPageVariant(owner, {
       pageId: 'page_ncls_blog',
       path: '/blog',
