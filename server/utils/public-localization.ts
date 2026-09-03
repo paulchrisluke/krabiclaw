@@ -49,6 +49,10 @@ export async function loadExactPublicLocalizations(
 }
 
 const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {
+  business_location: {
+    address: 'address_translated',
+    opening_hours: 'opening_hours_translated',
+  },
   product: {
     tags_json: 'tags',
     details_json: 'details',
@@ -68,10 +72,6 @@ const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Reco
 function localizedSlug(routePath: string | null): string | null {
   if (!routePath) return null
   return routePath.split('/').filter(Boolean).at(-1) ?? null
-}
-
-function emptyLocalizedValue(_sourceValue: unknown, _structured = false): undefined {
-  return undefined
 }
 
 export function indexStoredPublicLocalizations(rows: readonly StoredPublicLocalizationRow[]): ExactPublicLocalization[] {
@@ -100,42 +100,31 @@ export function projectExactLocalizedResource<T extends { id: string }>(
   const fieldNames = PROJECTED_FIELD_NAMES[resourceType] ?? {}
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
   const clearedValues = Object.fromEntries(
-    [...definition.required, ...definition.optional].map((field) => {
-      const target = fieldNames[field] ?? field
-      return [target, emptyLocalizedValue(
-        (canonical as Record<string, unknown>)[target],
-        Boolean(definition.shapes?.[field]),
-      )]
-    }),
+    Object.keys(definition.fields).map(field => [fieldNames[field] ?? field, undefined]),
   )
   if (resourceType === 'site_post') {
-    clearedValues.body = emptyLocalizedValue((canonical as Record<string, unknown>).body)
-    clearedValues.summary = emptyLocalizedValue((canonical as Record<string, unknown>).summary)
+    clearedValues.body = undefined
+    clearedValues.summary = undefined
   }
   const projectedValues = Object.fromEntries(Object.entries(localization.values).map(([field, value]) => [
     fieldNames[field] ?? field,
     value,
   ]))
-  if (resourceType === 'business_location') {
-    if (typeof localization.values.address === 'string') {
-      projectedValues.address = { addressLines: [localization.values.address] }
-    }
-    if (Array.isArray(localization.values.opening_hours)) {
-      projectedValues.opening_hours = { weekdayDescriptions: localization.values.opening_hours }
-    }
-  }
   if (resourceType === 'site_post' && typeof localization.values.body === 'string') {
     projectedValues.body = localization.values.body
     projectedValues.summary = localization.values.body
   }
   const slug = localizedSlug(localization.routePath)
+  const routeFields = {
+    ...(slug && 'slug' in canonical ? { slug } : {}),
+    ...(localization.routePath && 'public_path' in canonical ? { public_path: localization.routePath } : {}),
+    ...(localization.routePath && 'canonical_url' in canonical ? { canonical_url: null } : {}),
+  }
   return {
     ...canonical,
     ...clearedValues,
     ...projectedValues,
-    ...(slug && 'slug' in canonical ? { slug } : {}),
-    ...(localization.routePath && 'public_path' in canonical ? { public_path: localization.routePath } : {}),
-    ...(localization.routePath && 'canonical_url' in canonical ? { canonical_url: null } : {}),
+    ...routeFields,
   }
 }
 
@@ -149,15 +138,11 @@ export function projectExactLocalizedCollection<T extends { id: string }>(
       .filter(localization => localization.resourceType === resourceType)
       .map(localization => [localization.resourceId, localization]),
   )
-  return canonical.map((resource) => {
+  return canonical.flatMap((resource) => {
     const localization = byResourceId.get(resource.id)
-    if (!localization) {
-      throw new HTTPError({
-        statusCode: 404,
-        statusMessage: `Exact localized ${resourceType} representation was not found`,
-      })
-    }
-    return projectExactLocalizedResource(resourceType, resource, localization)
+    return localization
+      ? [projectExactLocalizedResource(resourceType, resource, localization)]
+      : []
   })
 }
 
@@ -181,11 +166,7 @@ export function projectLocalizedMediaAlt<T extends { asset_id: string; alt_text:
       .map(localization => [localization.resourceId, localization]),
   )
   return media.map((asset) => {
-    const localization = byResourceId.get(asset.asset_id)
-    const altText = localization?.values.alt_text
-    if (!localization || typeof altText !== 'string' || !altText.trim()) {
-      throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized media alternative text was not found' })
-    }
-    return { ...asset, alt_text: altText }
+    const altText = byResourceId.get(asset.asset_id)?.values.alt_text
+    return { ...asset, alt_text: typeof altText === 'string' ? altText : null }
   })
 }

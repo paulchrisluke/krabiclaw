@@ -486,7 +486,7 @@ const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 // Derived location data
-const formattedAddress = computed(() => {
+const canonicalFormattedAddress = computed(() => {
   const loc = location.value
   if (!loc) return ''
   if (loc.address && typeof loc.address === 'object') {
@@ -495,9 +495,14 @@ const formattedAddress = computed(() => {
   }
   return loc.address || loc.city || ''
 })
+const formattedAddress = computed(() => locale.value === 'en'
+  ? canonicalFormattedAddress.value
+  : location.value?.address_translated ?? '')
 
 const weekHours = computed(() => {
-  const hours = location.value?.opening_hours
+  const hours = locale.value === 'en'
+    ? location.value?.opening_hours
+    : location.value?.opening_hours_translated
   if (!hours) return []
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   const today = nowInTimezone(location.value?.timezone).weekday
@@ -541,8 +546,8 @@ useSchemaOrg([
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
-      description: formattedAddress.value,
-      address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
+      description: canonicalFormattedAddress.value,
+      address: { '@type': 'PostalAddress', streetAddress: canonicalFormattedAddress.value },
       telephone: loc.phone,
       url: `${tenantOrigin}${localePath(`/locations/${loc.slug}`)}`,
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),

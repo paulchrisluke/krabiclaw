@@ -34,7 +34,7 @@ test('exact localized projection clears untranslated localizable fields', () => 
   )
 
   assert.equal(projected.title, 'บทเรียน')
-  assert.equal(projected.tagline, '')
+  assert.equal(projected.tagline, undefined)
   assert.deepEqual(projected.price, { amount_minor: 2500 })
 })
 

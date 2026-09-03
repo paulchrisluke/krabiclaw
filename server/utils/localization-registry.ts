@@ -25,67 +25,116 @@ type ValueShape = 'text' | 'string_array' | 'details' | 'features' | 'faqs'
 
 interface ResourceLocalizationDefinition {
   table: string
-  required: readonly string[]
-  optional: readonly string[]
-  shapes?: Readonly<Record<string, ValueShape>>
+  fields: Readonly<Record<string, ValueShape>>
   route: 'none' | 'location' | 'product' | 'experience' | 'offering' | 'site_post' | 'tenant_blog_post' | 'site_link_page'
 }
 
 export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceType, ResourceLocalizationDefinition>> = Object.freeze({
-  site: { table: 'sites', required: ['brand_name'], optional: ['brand_description', 'seo_title', 'seo_description'], route: 'none' },
+  site: {
+    table: 'sites',
+    fields: {
+      brand_name: 'text',
+      brand_description: 'text',
+      seo_title: 'text',
+      seo_description: 'text',
+    },
+    route: 'none',
+  },
   business_location: {
     table: 'business_locations',
-    required: ['title'],
-    optional: ['address', 'city', 'neighborhood', 'description', 'short_description', 'opening_hours', 'seo_title', 'seo_description'],
-    shapes: { opening_hours: 'string_array' },
+    fields: {
+      title: 'text',
+      address: 'text',
+      city: 'text',
+      neighborhood: 'text',
+      description: 'text',
+      short_description: 'text',
+      opening_hours: 'string_array',
+      seo_title: 'text',
+      seo_description: 'text',
+    },
     route: 'location',
   },
   product: {
     table: 'products',
-    required: ['category', 'name'],
-    optional: ['description', 'tags_json', 'details_json', 'seo_title', 'seo_description'],
-    shapes: { tags_json: 'string_array', details_json: 'details' },
+    fields: {
+      category: 'text',
+      name: 'text',
+      description: 'text',
+      tags_json: 'string_array',
+      details_json: 'details',
+      seo_title: 'text',
+      seo_description: 'text',
+    },
     route: 'product',
   },
   experience: {
     table: 'experiences',
-    required: ['title'],
-    // pricing_note (not 'price') - the canonical Experience.price is a
-    // structured { amount_minor, currency, ... } object never editable as a
-    // translated string; the registry key must match the canonical field
-    // name exactly since the public overlay spreads localized values
-    // straight onto the canonical resource (see projectExactLocalizedResource).
-    optional: ['tagline', 'body', 'pricing_note', 'available_note', 'highlights_json', 'included_items_json', 'what_to_bring', 'meeting_point', 'cancellation_policy', 'seo_title', 'seo_description'],
-    shapes: { highlights_json: 'string_array', included_items_json: 'string_array', what_to_bring: 'string_array' },
+    fields: {
+      title: 'text',
+      tagline: 'text',
+      body: 'text',
+      pricing_note: 'text',
+      available_note: 'text',
+      highlights_json: 'string_array',
+      included_items_json: 'string_array',
+      what_to_bring: 'string_array',
+      meeting_point: 'text',
+      cancellation_policy: 'text',
+      seo_title: 'text',
+      seo_description: 'text',
+    },
     route: 'experience',
   },
   offering: {
     table: 'offerings',
-    required: ['name'],
-    optional: ['label', 'summary', 'short_description', 'body', 'features_json', 'faqs_json', 'cta_label', 'seo_title', 'seo_description'],
-    shapes: { features_json: 'features', faqs_json: 'faqs' },
+    fields: {
+      name: 'text',
+      label: 'text',
+      summary: 'text',
+      short_description: 'text',
+      body: 'text',
+      features_json: 'features',
+      faqs_json: 'faqs',
+      cta_label: 'text',
+      seo_title: 'text',
+      seo_description: 'text',
+    },
     route: 'offering',
   },
   site_post: {
     table: 'posts',
-    required: ['title', 'body'],
-    optional: ['seo_title', 'seo_description', 'event_title', 'offer_terms'],
+    fields: {
+      title: 'text',
+      body: 'text',
+      seo_title: 'text',
+      seo_description: 'text',
+      event_title: 'text',
+      offer_terms: 'text',
+    },
     route: 'site_post',
   },
   tenant_blog_post: {
     table: 'blog_posts',
-    required: ['title'],
-    optional: ['excerpt', 'category', 'tags_json', 'nav_title', 'seo_title', 'seo_description', 'seo_keywords'],
-    shapes: { tags_json: 'string_array' },
+    fields: {
+      title: 'text',
+      excerpt: 'text',
+      category: 'text',
+      tags_json: 'string_array',
+      nav_title: 'text',
+      seo_title: 'text',
+      seo_description: 'text',
+      seo_keywords: 'text',
+    },
     route: 'tenant_blog_post',
   },
-  location_qa: { table: 'location_qa', required: ['question'], optional: ['answer'], route: 'none' },
-  media_asset: { table: 'media_assets', required: [], optional: ['alt_text'], route: 'none' },
-  booking_policy: { table: 'booking_policies', required: [], optional: ['weather_policy', 'additional_notes_html'], route: 'none' },
-  site_link_page: { table: 'site_link_pages', required: ['title'], optional: ['seo_title', 'seo_description'], route: 'site_link_page' },
-  site_link_item: { table: 'site_link_items', required: ['label'], optional: [], route: 'none' },
-  tenant_compliance: { table: 'tenant_compliance', required: [], optional: ['service_area', 'disclaimer', 'footer_disclaimer'], route: 'none' },
-  site_consultation_settings: { table: 'site_consultation_settings', required: [], optional: ['cta_label'], route: 'none' },
+  location_qa: { table: 'location_qa', fields: { question: 'text', answer: 'text' }, route: 'none' },
+  media_asset: { table: 'media_assets', fields: { alt_text: 'text' }, route: 'none' },
+  booking_policy: { table: 'booking_policies', fields: { weather_policy: 'text', additional_notes_html: 'text' }, route: 'none' },
+  site_link_page: { table: 'site_link_pages', fields: { title: 'text', seo_title: 'text', seo_description: 'text' }, route: 'site_link_page' },
+  site_link_item: { table: 'site_link_items', fields: { label: 'text' }, route: 'none' },
+  tenant_compliance: { table: 'tenant_compliance', fields: { service_area: 'text', disclaimer: 'text', footer_disclaimer: 'text' }, route: 'none' },
+  site_consultation_settings: { table: 'site_consultation_settings', fields: { cta_label: 'text' }, route: 'none' },
 })
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -129,20 +178,16 @@ export function parseLocalizedResourceType(value: unknown): LocalizedResourceTyp
 export function validateLocalizedValues(resourceType: LocalizedResourceType, input: unknown): LocalizedValues {
   if (!isRecord(input)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'values must be an object')
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
-  const allowed = new Set([...definition.required, ...definition.optional])
-  const unknown = Object.keys(input).filter(key => !allowed.has(key)).sort()
+  const unknown = Object.keys(input).filter(key => !Object.hasOwn(definition.fields, key)).sort()
   if (unknown.length) {
     localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `Unknown localized field${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}`, { fields: unknown })
   }
-  const missing = definition.required.filter(field => !isNonBlankText(input[field]))
-  if (missing.length) {
-    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `Missing required localized field${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`, { fields: missing })
-  }
-  for (const [field, value] of Object.entries(input)) {
+  for (const [field, shape] of Object.entries(definition.fields)) {
+    if (!Object.hasOwn(input, field)) continue
+    const value = input[field]
     if (value === undefined || value === null) {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field} must be omitted instead of null`, { field })
     }
-    const shape = definition.shapes?.[field] ?? 'text'
     if (shape === 'text' && typeof value !== 'string') {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field} must be a string`, { field })
     }
