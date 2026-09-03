@@ -274,7 +274,20 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     }
 
     test('reloads the saved Thai link copy', async () => {
-      await cms.reload({ waitUntil: 'domcontentloaded' })
+      const localizationReads = [
+        `/localization/site_link_page/${links.page.id}/th`,
+        ...links.items.map(item => `/localization/site_link_item/${item.id}/th`),
+      ].map(path => cms.waitForResponse(response => (
+        response.request().method() === 'GET'
+        && response.url().includes(path)
+      )))
+      const [responses] = await Promise.all([
+        Promise.all(localizationReads),
+        cms.reload({ waitUntil: 'domcontentloaded' }),
+      ])
+      for (const response of responses) {
+        expect(response.status()).toBe(200)
+      }
       await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
       for (const [index, item] of links.items.entries()) {
         await expect(cms.getByTestId(`links-item-translation-${item.id}`).getByTestId('links-item-translation-label')).toHaveValue(translatedLabels[index]!)
