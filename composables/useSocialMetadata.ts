@@ -73,7 +73,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       ? {
           siteName: PLATFORM_NAME,
         }
-      : null)
+      : { siteName: '' })
     const socialInput: SocialPageMetadataInput = {
       ...value,
       template,
