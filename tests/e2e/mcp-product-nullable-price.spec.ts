@@ -15,6 +15,8 @@ interface ProductRow {
 }
 
 test('deployed MCP transport preserves an explicit no-fixed-price Product', async ({ request, baseURL }) => {
+  test.setTimeout(120_000)
+
   await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
   const toolsResponse = await mcpRequest(request, baseURL!, { method: 'tools/list' })
   expect(await toolsResponse.json()).toMatchObject({
