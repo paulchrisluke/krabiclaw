@@ -209,22 +209,25 @@ test('published Thai content saves through the CMS and renders without English f
       const cms = await dashboardContext.newPage()
       await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`)
       await expect(cms.getByTestId('links-translation-locale')).toHaveValue(locale)
+      await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์ที่มีประโยชน์')
       await cms.getByTestId('links-translation-title').fill('ลิงก์กฎหมายภาษาไทย')
       await cms.getByTestId('links-translation-seo-title').fill('ลิงก์กฎหมายภาษาไทย')
       await cms.getByTestId('links-translation-seo-description').fill('ลิงก์ที่ผ่านการตรวจสอบสำหรับผู้อ่านภาษาไทย')
-      await Promise.all([
+      const pageTranslationSave = await Promise.all([
         cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/localization/site_link_page/${links.page.id}/th`)),
         cms.getByTestId('links-save-page-translation').click(),
-      ])
+      ]).then(([response]) => response)
+      expect(pageTranslationSave.status()).toBe(200)
 
       const translatedLabels = ['บริการกฎหมายครอบครัว', 'ติดต่อทีมงานของเรา']
       for (const [index, item] of links.items.entries()) {
         const editor = cms.getByTestId(`links-item-translation-${item.id}`)
         await editor.getByTestId('links-item-translation-label').fill(translatedLabels[index]!)
-        await Promise.all([
+        const itemTranslationSave = await Promise.all([
           cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/localization/site_link_item/${item.id}/th`)),
           editor.getByTestId('links-save-item-translation').click(),
-        ])
+        ]).then(([response]) => response)
+        expect(itemTranslationSave.status()).toBe(200)
       }
 
       await cms.reload()
