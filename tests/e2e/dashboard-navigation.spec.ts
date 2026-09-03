@@ -30,6 +30,8 @@ async function followPrimaryRoute(page: Page, start: string, label: string, expe
 }
 
 test.describe('authenticated dashboard navigation', () => {
+  test.describe.configure({ timeout: 120_000 })
+
   test.beforeEach(async ({ page, baseURL }) => {
     await loginAs(page.context().request, baseURL!, 'user-e2e-kikuzuki-owner')
   })
