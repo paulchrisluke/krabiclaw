@@ -1,4 +1,10 @@
-import type { BlogLifecycleState, BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput } from './types'
+import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogPostCreateInput, BlogPostUpdateInput } from './types'
+import {
+  isBlogLifecycleResponse,
+  isBlogPostResponse,
+  isCreatedBlogPostResponse,
+  isSuccessResponse,
+} from './blog-response-contracts'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 
 interface TenantBlogRepositoryOptions {
@@ -9,28 +15,6 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
   const baseUrl = `/api/editor/sites/${siteId}/blog`
   const dashboardBaseUrl = `/dashboard/${orgSlug}/sites/${siteSlug}/blog`
   const scope = { orgSlug, siteSlug }
-  const isBlogPost = (value: unknown): value is BlogPost =>
-    isRecord(value)
-    && typeof value.id === 'string'
-    && typeof value.title === 'string'
-    && isRecord(value.content_document)
-  const isPostResponse = (value: unknown): value is { post: BlogPost } =>
-    isRecord(value) && isBlogPost(value.post)
-  const isCreatedPostResponse = (value: unknown): value is { id: string; post: BlogPost } =>
-    isRecord(value) && typeof value.id === 'string' && isBlogPost(value.post)
-  const isSuccess = (value: unknown): value is { success: true } =>
-    isRecord(value) && value.success === true
-  const isLifecycleState = (value: unknown): value is BlogLifecycleState =>
-    isRecord(value)
-    && typeof value.id === 'string'
-    && ['published', 'scheduled'].includes(String(value.status))
-    && (value.published_at === null || typeof value.published_at === 'string')
-    && (value.scheduled_for === null || typeof value.scheduled_for === 'string')
-    && typeof value.updated_at === 'string'
-    && typeof value.content_document_updated_at === 'string'
-  const isLifecycleResponse = (value: unknown): value is { success: true; lifecycle: BlogLifecycleState } =>
-    isRecord(value) && value.success === true && isLifecycleState(value.lifecycle)
-
   return {
     listUrl: dashboardBaseUrl,
     editUrl: postId => `${dashboardBaseUrl}/${postId}`,
@@ -39,39 +23,38 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
       const res = await dashboardFetch<{ post: BlogPost }>(
         `${baseUrl}/${postId}`,
         scope,
-        { validate: isPostResponse },
+        { validate: isBlogPostResponse },
       )
       return res.post
     },
 
-    async create(input: PlatformBlogCreateInput): Promise<BlogPost & { id: string }> {
+    async create(input: BlogPostCreateInput): Promise<BlogPost & { id: string }> {
       const res = await dashboardFetch<{ id: string; post: BlogPost }>(`${baseUrl}/posts`, scope, {
         method: 'POST',
         body: input,
-        validate: isCreatedPostResponse,
+        validate: isCreatedBlogPostResponse,
       })
-      return { ...res.post, id: res.id } as BlogPost & { id: string }
+      return { ...res.post, id: res.id }
     },
 
-    async update(postId: string, input: PlatformBlogUpdateInput): Promise<BlogPost> {
+    async update(postId: string, input: BlogPostUpdateInput): Promise<BlogPost> {
       const res = await dashboardFetch<{ post: BlogPost }>(`${baseUrl}/${postId}`, scope, {
         method: 'PATCH',
         body: input,
-        validate: isPostResponse,
+        validate: isBlogPostResponse,
       })
-      if (!res.post) throw new Error('Post not found after update')
       return res.post
     },
 
     async delete(postId: string): Promise<void> {
-      await dashboardFetch(`${baseUrl}/${postId}`, scope, { method: 'DELETE', validate: isSuccess })
+      await dashboardFetch(`${baseUrl}/${postId}`, scope, { method: 'DELETE', validate: isSuccessResponse })
     },
 
     async publish(postId: string, input): Promise<BlogLifecycleState> {
       const response = await dashboardFetch<{ success: true; lifecycle: BlogLifecycleState }>(
         `/api/editor/sites/${siteId}/blog/${postId}/publish`,
         scope,
-        { method: 'POST', body: input, validate: isLifecycleResponse },
+        { method: 'POST', body: input, validate: isBlogLifecycleResponse },
       )
       return response.lifecycle
     },

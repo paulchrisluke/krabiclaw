@@ -99,7 +99,7 @@
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import PlatformMediaPicker from '~/lib/components/workspace/media/PlatformMediaPicker.vue'
-import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput } from './types'
+import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, BlogPostUpdateInput } from './types'
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, scheduledLifecycleValue, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
@@ -197,7 +197,7 @@ const saveLabel = computed(() => {
 })
 type InserterBlockType = 'image' | 'faq' | 'how_to' | 'divider'
 
-type SaveSnapshot = { postId: string; payload: PlatformBlogUpdateInput }
+type SaveSnapshot = { postId: string; payload: BlogPostUpdateInput }
 const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
   async (snapshot) => {
     const updated = await props.repository.update(snapshot.postId, {

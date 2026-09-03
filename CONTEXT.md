@@ -114,6 +114,10 @@ _Avoid_: provider enum as the order model, multiple automatic receivers, fallbac
 A URL-bearing public page owned by one tenant, such as a privacy policy, disclaimer, notice, or other static legal/compliance page. Tenant pages are not articles and are not reusable field-level content.
 _Avoid_: blog post, site content field, platform page
 
+**Blog post**:
+Editorial content owned by either the platform or one tenant. A blog post has a draft, published, or scheduled lifecycle and one public path. Platform and tenant repositories share the post contract but keep their authorization transports separate.
+_Avoid_: platform blog input for shared post data, tenant page, documentation page
+
 **Redirect manifest**:
 A reviewable import artifact that maps legacy tenant URLs to their intended KrabiClaw destination or retirement behavior. It is the source of truth for preserving SEO and conversion paths during a tenant cutover.
 _Avoid_: ad-hoc redirects, implicit route compatibility

@@ -1629,7 +1629,7 @@ VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL
 -- END GENERATED: demo_blog`
 }
 
-export function renderCompiledDemoExperienceSeedBlock(): string {
+export function renderDemoExperienceSeedBlock(): string {
   const experienceMedia = compiledDemoSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
   const experienceProductRows = compiledDemoSeed.experiences
     .map(experience => `  (${[
@@ -1834,5 +1834,3 @@ export function renderCompiledDemoBillingBlock(): string {
 ${parts.join('\n\n')}
 -- END GENERATED: demo_billing`
 }
-
-export const renderDemoExperienceSeedBlock = renderCompiledDemoExperienceSeedBlock

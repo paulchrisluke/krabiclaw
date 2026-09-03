@@ -1,39 +1,12 @@
-import { HTTPError, defineHandler  } from 'nitro';
+import { defineHandler } from 'nitro'
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { queryAll } from '~/server/db'
 
-const enc = new TextEncoder()
-
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = enc.encode(a)
-  const right = enc.encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
-
 export default defineHandler(async (event) => {
+  assertDevRouteAllowed(event)
   const env = cloudflareEnv(event)
-  const devMode = import.meta.dev
-  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
-  if (!devMode && !e2eOverride) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
-  }
-
-  if (!devMode && e2eOverride) {
-    const expected = env.E2E_DEV_ROUTE_SECRET || ''
-    const provided = (event.req.headers.get('x-dev-route-secret')) || ''
-    if (!expected || !provided || !timingSafeEqualText(provided, expected)) {
-      throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
-    }
-  }
-
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 

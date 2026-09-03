@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const nowIso = () => new Date().toISOString()
 
@@ -17,7 +17,7 @@ function sqlEscape(value) {
 }
 
 function d1Raw(sql, label = 'd1Raw') {
-  const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
+  const res = spawnYarn(['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })

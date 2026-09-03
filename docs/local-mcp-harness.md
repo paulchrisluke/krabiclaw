@@ -19,6 +19,7 @@ NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3000
 MCP_BASE_URL=https://local.krabiclaw.com
 E2E_ALLOW_DEV_ROUTES=true
 E2E_DEV_ROUTE_SECRET=<local-secret>
+E2E_TEST_PASSWORD=<non-default-tunnel-password>
 MCP_CREDENTIAL_LOGIN=1
 EMAIL_DELIVERY_MODE=log_only
 WHATSAPP_DELIVERY_MODE=log_only
@@ -26,6 +27,8 @@ WHATSAPP_DELIVERY_MODE=log_only
 
 Do not change those origins for tunnel testing. The harness passes its public
 origin directly to the build, Worker, and test processes for that run.
+Because the tunnel is public, `E2E_TEST_PASSWORD` must be set explicitly and
+must not use the documented `krabiclaw-local-dev` localhost fixture password.
 
 ## Automated gate
 

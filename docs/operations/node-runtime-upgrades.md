@@ -9,9 +9,10 @@ and package the generated Cloudflare Worker locally and in every CI lane.
 `.nvmrc` declares the exact repository runtime. Keep these consumers aligned in
 the same change:
 
-- `.nvmrc` — exact local and release runtime;
-- `package.json` `engines.node` — must admit the exact `.nvmrc` version;
-- `package.json` `@types/node` — use the runtime major unless a documented
+- `.nvmrc`: exact local and release runtime;
+- both `package.json` files: `engines.node` must equal the exact `.nvmrc`
+  version and `packageManager` must keep the integrity-pinned Yarn release;
+- `package.json` `@types/node`: use the runtime major unless a documented
   dependency constraint requires a different type major;
 - every `actions/setup-node` step in `.github/workflows/`;
 - README local-setup guidance;
@@ -35,22 +36,28 @@ them with a Node upgrade; those require their own demonstrated reason.
    ```bash
    node -v
    printf 'expected v%s\n' "$(tr -d '\n' < .nvmrc)"
-   yarn --version
+   corepack yarn --version
    ```
 
    The two Node versions must match exactly. A convenient system Node or a
    bundled agent runtime at a different version is not equivalent evidence.
-4. Install with `yarn install --frozen-lockfile` and run:
+4. Enable Corepack, install both package graphs immutably, and run:
 
    ```bash
-   yarn quality
-   yarn test:unit
-   yarn build
-   yarn test:e2e:local
-   npx wrangler deploy --dry-run --strict
-   npx wrangler deploy --env preview --dry-run --strict
-   npx wrangler deploy --env staging --dry-run --strict
+   corepack enable
+   corepack yarn install --immutable
+   corepack yarn --cwd workers/email-inbound install --immutable
+   corepack yarn quality
+   corepack yarn test:unit
+   corepack yarn build
+   corepack yarn test:e2e:local
+   corepack yarn wrangler deploy --dry-run --strict
+   corepack yarn wrangler deploy --env preview --dry-run --strict
+   corepack yarn wrangler deploy --env staging --dry-run --strict
    ```
+
+   Node 25 and later do not bundle Corepack. Add and pin a separate Corepack
+   bootstrap before widening `engines.node` beyond Node 24.
 
 5. Inspect the production build and dry-run output for the generated entrypoint
    `.output/server/index.mjs`, named Durable Object exports, native `fetch`,

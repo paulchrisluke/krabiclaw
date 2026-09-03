@@ -9,8 +9,8 @@ cold public request first; cache-hit numbers are reported separately.
 Build and run the production-style Worker:
 
 ```bash
-yarn build
-npx wrangler dev .output/server/index.mjs --assets .output/public --local --port 8787
+corepack yarn build
+corepack yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 8787
 ```
 
 Use a preview-shaped host so the Worker deliberately skips public HTML and

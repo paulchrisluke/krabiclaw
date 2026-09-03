@@ -1,4 +1,4 @@
-import { useRender } from 'vue-email'
+import { renderEmail } from '~/server/emails/vue-email'
 import { execute } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { getOrganizationOwnerEmail } from '~/server/utils/member-access'
@@ -97,7 +97,7 @@ async function sendEmail(
   const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
   if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  const { html, text } = await useRender(DomainUpdate, { props: { title: opts.title, message: opts.message, domain: opts.domain, status: opts.status, dashboardUrl, platformDomain } })
+  const { html, text } = await renderEmail(DomainUpdate, { title: opts.title, message: opts.message, domain: opts.domain, status: opts.status, dashboardUrl, platformDomain })
 
   let response: Response
   try {

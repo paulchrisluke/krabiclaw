@@ -6,17 +6,20 @@
  * Usage: node scripts/backup-kikuzuki.mjs
  */
 
-import { execSync } from 'child_process'
 import { writeFileSync } from 'fs'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const ORG  = 'org-IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO-1778576822253'
 const USER = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
 
 function query(sql) {
-  const raw = execSync(
-    `yarn --silent wrangler d1 execute DB --remote --command ${JSON.stringify(sql)} 2>/dev/null`,
-    { encoding: 'utf8' }
-  )
+  const result = spawnYarn(['--silent', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--command', sql], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(`Wrangler exited ${result.status}`)
+  const raw = result.stdout
   const start = raw.indexOf('[')
   const end   = raw.lastIndexOf(']')
   if (start === -1 || end === -1) return []
