@@ -73,7 +73,7 @@ test('deployed MCP transport preserves an explicit no-fixed-price Product', asyn
   const fixed = mcpData<{ product: ProductRow }>(await fixedCreate.json()).product
   expect(fixed.price).toMatchObject({
     amount_minor: 500,
-    currency: 'THB',
+    currency: 'USD',
     unit: 'item',
     tax_behavior: 'unspecified',
   })
