@@ -70,11 +70,8 @@ function localizedSlug(routePath: string | null): string | null {
   return routePath.split('/').filter(Boolean).at(-1) ?? null
 }
 
-function emptyLocalizedValue(sourceValue: unknown, structured = false): unknown {
-  if (structured) return []
-  if (Array.isArray(sourceValue)) return []
-  if (typeof sourceValue === 'string') return ''
-  return null
+function emptyLocalizedValue(_sourceValue: unknown, _structured = false): undefined {
+  return undefined
 }
 
 export function indexStoredPublicLocalizations(rows: readonly StoredPublicLocalizationRow[]): ExactPublicLocalization[] {
@@ -119,6 +116,14 @@ export function projectExactLocalizedResource<T extends { id: string }>(
     fieldNames[field] ?? field,
     value,
   ]))
+  if (resourceType === 'business_location') {
+    if (typeof localization.values.address === 'string') {
+      projectedValues.address = { addressLines: [localization.values.address] }
+    }
+    if (Array.isArray(localization.values.opening_hours)) {
+      projectedValues.opening_hours = { weekdayDescriptions: localization.values.opening_hours }
+    }
+  }
   if (resourceType === 'site_post' && typeof localization.values.body === 'string') {
     projectedValues.body = localization.values.body
     projectedValues.summary = localization.values.body
@@ -144,9 +149,15 @@ export function projectExactLocalizedCollection<T extends { id: string }>(
       .filter(localization => localization.resourceType === resourceType)
       .map(localization => [localization.resourceId, localization]),
   )
-  return canonical.flatMap((resource) => {
+  return canonical.map((resource) => {
     const localization = byResourceId.get(resource.id)
-    return localization ? [projectExactLocalizedResource(resourceType, resource, localization)] : []
+    if (!localization) {
+      throw new HTTPError({
+        statusCode: 404,
+        statusMessage: `Exact localized ${resourceType} representation was not found`,
+      })
+    }
+    return projectExactLocalizedResource(resourceType, resource, localization)
   })
 }
 
@@ -170,7 +181,11 @@ export function projectLocalizedMediaAlt<T extends { asset_id: string; alt_text:
       .map(localization => [localization.resourceId, localization]),
   )
   return media.map((asset) => {
-    const altText = byResourceId.get(asset.asset_id)?.values.alt_text
-    return { ...asset, alt_text: typeof altText === 'string' ? altText : null }
+    const localization = byResourceId.get(asset.asset_id)
+    const altText = localization?.values.alt_text
+    if (!localization || typeof altText !== 'string' || !altText.trim()) {
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized media alternative text was not found' })
+    }
+    return { ...asset, alt_text: altText }
   })
 }

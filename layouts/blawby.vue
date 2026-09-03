@@ -57,7 +57,9 @@ const blawbyRoutePath = computed(() => resolveTenantLocalePath(
 ).sourcePath)
 const target = resolveBlawbyRouteTarget(blawbyRoutePath.value, route.params)
 const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
-useState<PublicBlawbyRouteData['localeRepresentations']>('public-locale-representations', () => []).value = document.value.route.localeRepresentations
+if (target.recipe !== 'links') {
+  useState<PublicBlawbyRouteData['localeRepresentations']>('public-locale-representations', () => []).value = document.value.route.localeRepresentations
+}
 provide('blawby-document', document)
 const identity = computed(() => document.value.shell.identity)
 const consultation = computed(() => document.value.shell.consultation)

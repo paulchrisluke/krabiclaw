@@ -14,7 +14,7 @@
             class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide"
             :class="variant === 'blawby' ? 'bg-[var(--blawby-accent-100)] text-[var(--blawby-accent-strong)]' : 'bg-muted text-muted'"
           >
-            {{ t('saya.posts.title') }}
+            {{ t('saya.posts.featured') }}
           </span>
           <span v-if="post.category" class="rounded-full px-2.5 py-1 text-xs font-medium" :class="categoryClass">{{ post.category }}</span>
         </div>

@@ -11,7 +11,9 @@ export function useI18n() {
 
   const setLocale = (value: string) => {
     const representation = representations.value.find(item => item.locale === value)
-    if (!representation) return
+    if (!representation) {
+      throw createError({ statusCode: 404, statusMessage: `Locale ${value} is not available for this route` })
+    }
     return navigateTo(representation.route_path)
   }
   const localePath = (path: string) => formatTenantLocalePath(path, publicLocale.value)

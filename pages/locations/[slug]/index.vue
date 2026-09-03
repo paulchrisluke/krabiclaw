@@ -519,8 +519,7 @@ const activeClosureMessage = computed(() => locale.value === 'en'
 
 
 
-const runtimeConfig = useRuntimeConfig()
-const siteUrl = runtimeConfig.public.siteUrl
+const tenantOrigin = useRequestURL().origin.replace(/\/$/, '')
 useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
   title: location.value?.seo_title || location.value?.title || '',
@@ -545,7 +544,7 @@ useSchemaOrg([
       description: formattedAddress.value,
       address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
       telephone: loc.phone,
-      url: `${siteUrl}/locations/${loc.slug}`,
+      url: `${tenantOrigin}${localePath(`/locations/${loc.slug}`)}`,
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),
       ...(loc.rating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: loc.rating, reviewCount: loc.review_count ?? 0 } } : {})
     }
@@ -553,9 +552,9 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` }
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${tenantOrigin}${localePath('/')}` },
+      { '@type': 'ListItem', position: 2, name: t('saya.header.locations'), item: `${tenantOrigin}${localePath('/locations')}` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${tenantOrigin}${localePath(`/locations/${slug.value}`)}` }
     ]
   }))
 ])

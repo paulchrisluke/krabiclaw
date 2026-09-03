@@ -36,6 +36,7 @@
       <label class="block text-sm">Nav title ({{ translationLocale }})<input v-model="translationFields.nav_title" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="block text-sm">SEO title ({{ translationLocale }})<input v-model="translationFields.seo_title" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="block text-sm">SEO description ({{ translationLocale }})<textarea v-model="translationFields.seo_description" :rows="2" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
+      <label class="block text-sm">SEO keywords ({{ translationLocale }})<input v-model="translationFields.seo_keywords" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <div class="space-y-3 border-t border-default pt-4">
         <h3 class="text-sm font-semibold">Article content</h3>
         <div v-for="(block, blockIndex) in translationBlocks" :key="block.id || blockIndex" class="space-y-2 rounded-lg border border-default p-3">
@@ -112,7 +113,7 @@ const dashboardApi = useDashboardApi()
 const toast = useToast()
 const translationLocale = ref('en')
 const translationLocales = ref<string[]>([])
-const translationFields = reactive({ title: '', excerpt: '', category: '', tags_text: '', nav_title: '', seo_title: '', seo_description: '' })
+const translationFields = reactive({ title: '', excerpt: '', category: '', tags_text: '', nav_title: '', seo_title: '', seo_description: '', seo_keywords: '' })
 const translationBlocks = ref<BlogEditorBlock[]>([])
 const translationDocumentUpdatedAt = ref<string | null>(null)
 const translationError = ref<string | null>(null)
@@ -167,6 +168,7 @@ async function loadTranslationFields() {
     translationFields.nav_title = typeof values.nav_title === 'string' ? values.nav_title : ''
     translationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
     translationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
+    translationFields.seo_keywords = typeof values.seo_keywords === 'string' ? values.seo_keywords : ''
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
@@ -174,7 +176,7 @@ async function loadTranslationFields() {
     translationDocumentUpdatedAt.value = null
     translationFields.title = ''; translationFields.excerpt = ''
     translationFields.category = ''; translationFields.tags_text = ''; translationFields.nav_title = ''
-    translationFields.seo_title = ''; translationFields.seo_description = ''
+    translationFields.seo_title = ''; translationFields.seo_description = ''; translationFields.seo_keywords = ''
   }
 }
 watch(translationLocale, () => { if (translationLocale.value !== 'en') void loadTranslationFields() })
@@ -198,6 +200,7 @@ async function saveTranslation() {
     if (translationFields.nav_title.trim()) values.nav_title = translationFields.nav_title.trim()
     if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
     if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
+    if (translationFields.seo_keywords.trim()) values.seo_keywords = translationFields.seo_keywords.trim()
     const slug = String(postResource.value?.post.slug ?? '')
     const sourcePath = tenantBlogPostPath({ theme: postResource.value?.post.editor_template }, slug)
     const tags_json = translationFields.tags_text.split(',').map(tag => tag.trim()).filter(Boolean)

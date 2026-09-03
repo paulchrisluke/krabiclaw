@@ -117,6 +117,7 @@
       "heading_connect": "Connect",
       "blog": "Blog",
       "menu": "Menu",
+      "products": "Products",
       "experiences": "Experiences",
       "gallery": "Gallery",
       "our_story": "Our Story",
@@ -133,6 +134,7 @@
     },
     "posts": {
       "title": "Latest Updates",
+      "featured": "Featured",
       "subtitle": "News & Events",
       "no_preview": "No preview available",
       "image_alt": "Restaurant update",
@@ -152,7 +154,14 @@
       "cta_default": "Learn more",
       "remaining": "remaining",
       "empty_title": "Nothing posted yet.",
-      "empty_desc": "Check back soon for updates, events, and announcements."
+      "empty_desc": "Check back soon for updates, events, and announcements.",
+      "meta_description": "Stories, news, and updates from {site}."
+    },
+    "products": {
+      "empty": "No products published."
+    },
+    "photos": {
+      "meta_description": "{count} photos from {location} at {site}."
     },
     "reviews": {
       "title": "Guest Experience",

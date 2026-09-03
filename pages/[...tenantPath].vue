@@ -4,10 +4,6 @@
       <LazyBlawbyHome v-if="isBlawby" />
       <LazySayaHomePage v-else />
     </template>
-    <LocalizedResourcePage
-      v-else-if="localizedRoute?.representation.kind === 'resource'"
-      :route="localizedRoute"
-    />
     <TenantPublicPage
       v-else
       :path="tenantPagePath"
@@ -94,6 +90,9 @@ const localizedData = localeSegment.value
 if (localizedData?.error.value) throw localizedData.error.value
 const localizedRoute = computed(() => localizedData?.data.value?.route ?? null)
 if (localeSegment.value && !localizedRoute.value) throw createError({ statusCode: 404, statusMessage: 'Localized route not found' })
+if (localizedRoute.value?.representation.kind === 'resource') {
+  throw createError({ statusCode: 404, statusMessage: 'Localized resource route is not handled by the tenant page catch-all' })
+}
 if (localizedRoute.value) {
   useState<string>('public-locale', () => 'en').value = localizedRoute.value.locale
   useState<Record<string, string> | null>('platform-locale-messages', () => null).value = localizedRoute.value.platform_messages

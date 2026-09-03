@@ -53,6 +53,11 @@ function requiredText(value: unknown, field: string): string {
   throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
 }
 
+function exactLocalizedText(value: unknown, resource: string): string {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  throw new HTTPError({ statusCode: 404, statusMessage: `Exact localized ${resource} text was not found` })
+}
+
 export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown): string {
   if (typeof value === 'string' && value.trim()) return value.trim()
   return `/article/${requiredText(slug, 'article.slug')}`
@@ -454,7 +459,7 @@ export async function getPublicBlawbyShellData(
   const identity = siteLocalization
     ? {
         ...sourceIdentity,
-        brand_name: typeof siteLocalization.values.brand_name === 'string' ? siteLocalization.values.brand_name : '',
+        brand_name: exactLocalizedText(siteLocalization.values.brand_name, 'site identity'),
         brand_description: typeof siteLocalization.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
         primary_location_address_street: typeof primaryLocationLocalization?.values.address === 'string' ? primaryLocationLocalization.values.address : null,
         primary_location_address_locality: typeof primaryLocationLocalization?.values.city === 'string' ? primaryLocationLocalization.values.city : null,
@@ -467,7 +472,7 @@ export async function getPublicBlawbyShellData(
     const consultationValues = localizations.find(row => row.resourceType === 'site_consultation_settings')?.values
     consultation = {
       ...sourceConsultation,
-      cta_label: typeof consultationValues?.cta_label === 'string' ? consultationValues.cta_label : '',
+      cta_label: exactLocalizedText(consultationValues?.cta_label, 'consultation call-to-action'),
       metadata: { ...sourceConsultation.metadata, header_cta_label: null },
     }
     const complianceValues = localizations.find(row => row.resourceType === 'tenant_compliance')?.values
@@ -481,15 +486,18 @@ export async function getPublicBlawbyShellData(
           media: sourceCompliance.media.map(item => ({ ...item, alt_text: null, file_name: null })),
         }
       : null
-    const offeringById = new Map(sourceOfferingLinks.map(offering => [offering.id, offering]))
-    offeringLinks = localizations
-      .filter(row => row.resourceType === 'offering')
-      .flatMap(row => {
-        const source = offeringById.get(row.resourceId)
-        const name = row.values.name
-        if (!source || typeof name !== 'string' || !name.trim() || !row.routePath) return []
-        return [{ ...source, name, canonical_path: row.routePath }]
-      })
+    const offeringLocalizations = new Map(
+      localizations
+        .filter(row => row.resourceType === 'offering')
+        .map(row => [row.resourceId, row]),
+    )
+    offeringLinks = projectExactLocalizedCollection('offering', sourceOfferingLinks, localizations).map((offering) => {
+      const routePath = offeringLocalizations.get(offering.id)?.routePath
+      if (!routePath) {
+        throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized offering route was not found' })
+      }
+      return { ...offering, canonical_path: routePath }
+    })
   }
   const header = compliance?.metadata?.header
   if (header && typeof header === 'object') {
@@ -549,6 +557,9 @@ export async function getPublicBlawbyDocumentData(
         sourceLabel,
         pageId: route.page?.page_id,
       })
+  if (BLAWBY_RECIPES_WITH_REVIEWS.has(recipe)) {
+    route.localeRepresentations = route.localeRepresentations.filter(item => item.locale === 'en')
+  }
   return { shell, route }
 }
 
@@ -588,12 +599,19 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   confirmation: null,
   schedule: '/schedule',
   blog: '/blog',
-  article: '/blog',
+  article: null,
   donate: '/donate',
   privacy: '/policies/privacy',
   terms: '/policies/terms',
   'third-party-notices': '/third-party-notices',
 }
+const BLAWBY_RECIPES_WITH_REVIEWS = new Set<PublicBlawbyRouteData['recipe']>([
+  'home',
+  'offering',
+  'about',
+  'contact',
+  'schedule',
+])
 
 function mapPublicQa(rows: Array<{
   id: unknown
@@ -674,7 +692,7 @@ export async function getPublicBlawbyRouteData(
 ): Promise<PublicBlawbyRouteData> {
   const needsOfferings = ['home', 'services', 'offering', 'about', 'pricing'].includes(recipe)
   const needsQa = ['home', 'services', 'about', 'pricing', 'contact', 'schedule', 'blog', 'donate'].includes(recipe)
-  const needsReviews = ['home', 'offering', 'about', 'contact', 'schedule'].includes(recipe)
+  const needsReviews = BLAWBY_RECIPES_WITH_REVIEWS.has(recipe)
   const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
   const pagePath = ROUTE_PAGE_PATHS[recipe]
   const offeringRowsPromise = needsOfferings
@@ -684,6 +702,9 @@ export async function getPublicBlawbyRouteData(
     ? listPageQa(db, siteId, pagePath, true)
     : Promise.resolve([])
   const localized = options.locale !== undefined && options.locale !== 'en'
+  if (localized && needsReviews) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Reviews do not have localized representations' })
+  }
   const localizedOfferingId = localized && recipe === 'offering' && options.slug
     ? resolveLocalizedRouteResourceId(options.localizations ?? [], 'offering', `/${options.locale}/services/${options.slug}`)
     : null
@@ -719,13 +740,14 @@ export async function getPublicBlawbyRouteData(
   const localizations = options.localizations ?? []
   const sourceOfferings = mapPublicOfferingSummaries(offeringRows)
   const offerings = localized
-    ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).flatMap(item => {
+    ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).map(item => {
         const representation = localizations.find(value => value.resourceType === 'offering' && value.resourceId === item.id)
-        return representation?.routePath ? [{
+        if (!representation?.routePath) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized offering route was not found' })
+        return {
           ...item,
           canonical_path: representation.routePath,
           media: projectLocalizedMediaAlt(item.media, localizations),
-        }] : []
+        }
       })
     : sourceOfferings
   const sourceOffering = offering
@@ -762,9 +784,10 @@ export async function getPublicBlawbyRouteData(
   const qa = localized ? projectExactLocalizedCollection('location_qa', sourceQa, localizations) : sourceQa
   const sourcePosts = posts
   const resolvedPosts = localized
-    ? projectExactLocalizedCollection('tenant_blog_post', sourcePosts, localizations).flatMap(item => {
+    ? projectExactLocalizedCollection('tenant_blog_post', sourcePosts, localizations).map(item => {
         const representation = localizations.find(value => value.resourceType === 'tenant_blog_post' && value.resourceId === item.id)
-        return representation?.routePath ? [{ ...item, canonical_url: representation.routePath }] : []
+        if (!representation?.routePath) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized blog route was not found' })
+        return { ...item, canonical_url: representation.routePath }
       })
     : sourcePosts
   const resolvedPost = mapPublicBlogPost(postRow)
@@ -775,7 +798,7 @@ export async function getPublicBlawbyRouteData(
     offerings,
     offering: resolvedOffering,
     qa,
-    reviews: localized ? [] : mapPublicReviews(reviewRows),
+    reviews: mapPublicReviews(reviewRows),
     posts: resolvedPosts,
     post: resolvedPost,
   }

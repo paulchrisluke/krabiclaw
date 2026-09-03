@@ -9,7 +9,7 @@
           page's primary content. It only reappears once the grid actually puts it side by
                  side with the article at `lg:` (~992px, see --breakpoint-lg in assets/css/base.css).
         -->
-        <aside class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
+        <aside v-if="publicLocale === 'en'" class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
           <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" />
           <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" />
         </aside>
@@ -18,7 +18,7 @@
           <div class="mx-auto max-w-3xl">
             <!-- Mobile-only compact control replacing the sidebar: search + a drawer with
                  the same category nav shown in the desktop sidebar. -->
-            <div class="flex items-center gap-3 lg:hidden">
+            <div v-if="publicLocale === 'en'" class="flex items-center gap-3 lg:hidden">
               <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles" aria-label="Search articles" class="flex-1" />
               <button
                 type="button"
@@ -37,7 +37,7 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :site-name="identity.brand_name" :media-url="articleDisplayMedia?.public_url" :media-kind="articleDisplayMedia?.kind || 'image'" :blocks="post.content_blocks" template="blawby" />
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="t('saya.search.article')" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :site-name="identity.brand_name" :media-url="articleDisplayMedia?.public_url" :media-kind="articleDisplayMedia?.kind || 'image'" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -61,14 +61,14 @@
         :featured-url="assetUrl(ctaBlock?.featured)"
         @click="trackConsultation"
       />
-      <ClientOnly>
+      <ClientOnly v-if="publicLocale === 'en'">
         <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
       </ClientOnly>
 
       <!-- Mobile "Browse topics" drawer — same search trigger + category nav as the
            desktop sidebar, just reachable from the compact control instead of always
            occupying document flow. -->
-      <PlatformDrawer v-model="browseTopicsOpen" title="Browse topics">
+      <PlatformDrawer v-if="publicLocale === 'en'" v-model="browseTopicsOpen" title="Browse topics">
         <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" @click="browseTopicsOpen = false" />
         <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" @click="browseTopicsOpen = false" />
       </PlatformDrawer>
@@ -90,6 +90,8 @@ if (!isTenant) throw createError({ statusCode: 404 })
 definePageMeta({ layout: false })
 
 const slug = String(useRoute().params.slug || '')
+const { localePath, t } = useI18n()
+const publicLocale = useState<string>('public-locale', () => 'en')
 const { data, error, shell } = await useBlawbyRoute('article', slug)
 if (error.value) throw error.value
 if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })
@@ -101,8 +103,8 @@ const identity = computed(() => shell.value.identity)
 const consultation = computed(() => shell.value.consultation)
 const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
-const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
-if (blogIndexError.value) throw blogIndexError.value
+const blogIndex = publicLocale.value === 'en' ? await useBlawbyRoute('blog') : null
+if (blogIndex?.error.value) throw blogIndex.error.value
 const post = computed(() => data.value.post!)
 const articleDisplayMedia = computed(() => post.value.media.find(item => item.slot === 'featured') ?? null)
 const articleSocialMedia = computed(() => post.value.media.find(item => item.slot === 'featured') ?? null)
@@ -112,10 +114,10 @@ const ctaBlock = computed(() => {
   if (!page) return null
   return findTenantPageBlock(page.blocks, 'consultation_cta', 'contact_cta')
 })
-const displayTags = computed(() => post.value.tags.slice(1))
+const displayTags = computed(() => Array.isArray(post.value.tags) ? post.value.tags.slice(1) : [])
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
-const { categories } = useTenantBlogNav(computed(() => blogIndexData.value.posts))
+const { categories } = useTenantBlogNav(computed(() => blogIndex?.data.value?.posts ?? []))
 const browseTopicsOpen = ref(false)
 const requestURL = useRequestURL()
 const articlePath = computed(() => `/article/${post.value.slug}`)
@@ -151,8 +153,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   robots: resolvedSeo.value.robots,
 }))
 
-const blogUrl = useSeoUrl(() => '/blog')
-const homeUrl = useSeoUrl(() => '/')
+const blogUrl = useSeoUrl(() => localePath('/blog'))
+const homeUrl = useSeoUrl(() => localePath('/'))
 
 useProfessionalServiceSchema(() => ({
   recipe: 'article',
@@ -164,8 +166,8 @@ useProfessionalServiceSchema(() => ({
   imageWidth: articleSocialMedia.value?.width || null,
   imageHeight: articleSocialMedia.value?.height || null,
   breadcrumbs: [
-    { name: 'Home', url: homeUrl.value },
-    { name: 'Blog', url: blogUrl.value },
+    { name: t('saya.experience_detail.home'), url: homeUrl.value },
+    { name: t('saya.footer.blog'), url: blogUrl.value },
     { name: post.value.title, url: canonicalUrl.value },
   ],
   article: {

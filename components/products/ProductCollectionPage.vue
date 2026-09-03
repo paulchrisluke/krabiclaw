@@ -209,15 +209,13 @@ const props = defineProps<{
   emptyExperienceHref?: string | null
 }>()
 
-const { locale, localePath, t } = useI18n()
+const { localePath, t } = useI18n()
 const { formatDate } = useLocaleDate()
 const isMenu = computed(() => props.presentation.structuredDataType === 'MenuItem')
 const collectionLabel = computed(() => isMenu.value
   ? t('saya.footer.menu')
-  : locale.value === 'en' ? props.presentation.collectionLabel : '')
-const emptyCollectionMessage = computed(() => locale.value === 'en'
-  ? `No ${props.presentation.collectionLabel.toLowerCase()} published.`
-  : '')
+  : t('saya.footer.products'))
+const emptyCollectionMessage = computed(() => t('saya.products.empty'))
 const locationMap = computed(() => new Map(props.locations.map(location => [location.id, location])))
 const showLocations = computed(() => !props.locationId && props.locations.length > 1)
 const currentLocation = computed(() => {

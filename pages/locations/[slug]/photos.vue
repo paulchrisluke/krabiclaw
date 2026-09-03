@@ -136,7 +136,11 @@ function toAbsoluteUrl(value?: string | null): string | null {
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/photos`,
   title: locale.value === 'en' ? `Photos · ${location.value?.title || slug.value}` : t('saya.subnav.photos'),
-  description: locale.value === 'en' ? `${photos.value.length} photos from ${location.value?.title || slug.value} at ${siteName.value}.` : '',
+  description: t('saya.photos.meta_description', {
+    count: photos.value.length,
+    location: location.value?.title || slug.value,
+    site: siteName.value,
+  }),
   socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
@@ -146,7 +150,7 @@ useSocialMetadata(() => ({
 useSchemaOrg([
   computed(() => ({
     '@type': 'ImageGallery',
-    name: `${location.value?.title ?? ''} Photos`,
+    name: `${location.value?.title ?? ''} · ${t('saya.subnav.photos')}`,
     image: photos.value.slice(0, 20).map((p: ApiValue) => {
       const contentUrl = toAbsoluteUrl(p.public_url)
       const thumbnailUrl = toAbsoluteUrl(p.thumbnail_url)

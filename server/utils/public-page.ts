@@ -385,6 +385,9 @@ async function loadPublicPageSource(
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
     publicLocalizations = await loadExactPublicLocalizations(db, orgId, siteId, localizedLocale)
+    if (requestedDatasets.has('reviews')) {
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Reviews do not have localized representations' })
+    }
   }
 
   const localizedLocationId = localizedLocale && locationSlug
@@ -1078,7 +1081,7 @@ async function loadPublicPageSource(
     representationSourcePath = `/locations/${sourceLocationSlug}${routeSuffix}`
     representationResource = { type: 'business_location', id: locationId, routeSuffix }
   }
-  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+  const availableLocaleRepresentations = await listPublicLocaleRepresentations(db, {
     organizationId: orgId,
     siteId,
     sourcePath: representationSourcePath,
@@ -1086,6 +1089,9 @@ async function loadPublicPageSource(
     resource: representationResource,
     pageId: representationResource ? undefined : tenantPage?.page_id,
   })
+  const localeRepresentations = requestedDatasets.has('reviews')
+    ? availableLocaleRepresentations.filter(item => item.locale === 'en')
+    : availableLocaleRepresentations
 
   const pagePayload = {
     kind: page ?? 'home',
@@ -1095,10 +1101,10 @@ async function loadPublicPageSource(
     content_blocks: groupContentBlocks(contentRows),
     tenant_page: tenantPage,
     products,
-    locationReviews: localizedLocale ? [] : locationReviewRows?.results ?? [],
-    globalReviews: localizedLocale ? [] : needsGlobalReviews ? reviewRows.results ?? [] : [],
+    locationReviews: locationReviewRows?.results ?? [],
+    globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
     reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
-    reviewsList: localizedLocale ? [] : requestedDatasets.has("reviews") ? fullReviews : [],
+    reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
     media: requestedDatasets.has("photos") ? media : [],
     qaList,
     blogList: requestedDatasets.has("blog") ? blogList : [],

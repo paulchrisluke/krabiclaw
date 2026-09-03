@@ -7,9 +7,9 @@
     </div>
   </div>
 
-  <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
-    <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
-      <PlatformCommandSearchTrigger v-if="locale === 'en'" surface="tenant_blog" variant="saya" :label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" :aria-label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" class="mb-6" />
+  <div v-else-if="post" :class="locale === 'en' ? 'mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8' : 'mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8'">
+    <aside v-if="locale === 'en'" class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
+      <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" :label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" :aria-label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" class="mb-6" />
       <BlogCategoryNav :categories="categories" :base-path="blogBasePath" :active-slug="post?.slug" />
     </aside>
 
@@ -26,7 +26,7 @@
     </div>
     </div>
 
-    <div v-if="relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
+    <div v-if="locale === 'en' && relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
       <h2 class="mb-6 text-xl font-bold text-default">{{ t('saya.posts.title') }} · {{ siteName }}</h2>
       <div class="grid gap-6 sm:grid-cols-2">
         <NuxtLink
@@ -172,13 +172,20 @@ if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_bl
 useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = data.value.post.localeRepresentations
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList, site: publicSite } = await usePublicPageData()
-const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
+const shell = useSiteShellState()
+await shell.ready
+if (locale !== 'en' && !shell.site.value?.brand_name?.trim()) {
+  throw createError({ statusCode: 404, statusMessage: 'Exact localized site identity was not found' })
+}
+const sourceBlogData = locale === 'en'
+  ? await usePublicPageData({ datasets: ['blog'], routeOwned: false })
+  : null
+const allPosts = computed(() => (sourceBlogData?.blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
 const siteName = computed(() => locale === 'en'
-  ? (publicSite.value?.brand_name?.trim() ?? site?.brand_name?.trim() ?? '')
-  : (publicSite.value?.brand_name?.trim() ?? ''))
+  ? (shell.site.value?.brand_name?.trim() ?? site?.brand_name?.trim() ?? '')
+  : (shell.site.value?.brand_name?.trim() ?? ''))
 const authorName = computed(() => post.value?.author?.name ?? null)
 const authorImage = computed(() => post.value?.author?.image ?? null)
 const readTime = computed(() => {
@@ -212,7 +219,7 @@ const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.valu
 const postPath = computed(() => `${blogBasePath}/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
 const resolvedSeo = computed(() => resolveBlogSeo({
-  title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
+  title: post.value?.title || t('saya.footer.blog'), seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
   seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
   baseUrl: requestURL.origin, publicPath: postPath.value, siteName: siteName.value,
   robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
@@ -255,13 +262,13 @@ useContentPageSchema(computed(() => {
     keywords: post.value.seo_keywords || undefined,
     inLanguage: locale === 'en' ? 'en-US' : locale,
     breadcrumbs: [
-      { name: blogSection === 'article' ? 'Articles' : 'Blog', url: blogBasePath },
+      { name: blogSection === 'article' ? t('saya.search.articles') : t('saya.footer.blog'), url: blogBasePath },
       { name: post.value.title, url: postPath.value },
     ],
     components: renderableComponents.value,
     siteName: siteName.value,
-    siteLogoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || undefined,
-    siteDescription: site?.brand_description || undefined,
+    siteLogoUrl: shell.site.value?.media.find(item => item.slot === 'logo')?.public_url || undefined,
+    siteDescription: shell.site.value?.brand_description || undefined,
   }
 }))
 </script>

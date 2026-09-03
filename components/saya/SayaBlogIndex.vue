@@ -46,7 +46,7 @@ const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost
 useSocialMetadata(() => ({
   path: '/blog',
   title: locale.value === 'en' ? `Blog | ${siteName.value}` : t('saya.footer.blog'),
-  description: locale.value === 'en' ? `Stories, news, and updates from ${siteName.value}.` : '',
+  description: t('saya.posts.meta_description', { site: siteName.value }),
   brand: {
     siteName: siteName.value,
   },

@@ -13,6 +13,12 @@ import { isPreviewContext } from '~/server/utils/tenant-hosts'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPublicShellPayload } from '~/utils/public-resource-contracts'
 import { assertExactCanonicalLocale, assertPublicSiteLanguageEntitlement, getResourceLocalization } from '~/server/utils/localization'
+import {
+  indexStoredPublicLocalizations,
+  projectExactLocalizedCollection,
+  projectExactLocalizedResource,
+  type StoredPublicLocalizationRow,
+} from '~/server/utils/public-localization'
 
 export interface PublicShellLoadOptions {
   mutateResponseHeaders?: boolean
@@ -105,23 +111,25 @@ export async function loadPublicShellSource(
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
     payload.platformMessages = entitlement.platform_messages ?? {}
     const siteLocalization = await getResourceLocalization(db, site.organization_id, siteId, 'site', siteId, locale)
-    const localizedLocations = await queryAll<{ resource_id: string; values_json: string; route_path: string }>(db, `
-      SELECT resource_id, values_json, route_path
+    const localizedLocations = await queryAll<StoredPublicLocalizationRow>(db, `
+      SELECT resource_type, resource_id, locale, values_json, route_path, document_id
         FROM resource_localizations
        WHERE organization_id = ? AND site_id = ? AND locale = ?
-         AND resource_type = 'business_location' AND route_path IS NOT NULL
+         AND resource_type = 'business_location'
     `, [site.organization_id, siteId, locale])
-    const locationById = new Map(localizedLocations.map(row => [row.resource_id, row]))
-    payload.locations = payload.locations.flatMap((location) => {
-      const localized = locationById.get(location.id)
-      if (!localized) return []
-      const values = JSON.parse(localized.values_json) as Record<string, unknown>
-      const segment = localized.route_path.split('/').filter(Boolean).at(-1)
-      if (!segment) throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized location route is invalid' })
-      return [{ ...location, ...values, slug: segment }]
-    }) as typeof payload.locations
+    const localizations = indexStoredPublicLocalizations(localizedLocations)
+    payload.locations = projectExactLocalizedCollection('business_location', payload.locations, localizations)
     const siteValues = siteLocalization.values
-    payload.site = { ...payload.site, ...siteValues }
+    const localizedSite = projectExactLocalizedResource('site', { ...payload.site, id: siteId }, {
+      resourceType: 'site',
+      resourceId: siteId,
+      locale,
+      values: siteValues,
+      routePath: siteLocalization.route_path,
+      documentId: siteLocalization.document_id,
+    })
+    const { id: _localizedSiteId, ...localizedSiteValues } = localizedSite
+    payload.site = localizedSiteValues
     const {
       brand_name: _sourceBrandName,
       brand_description: _sourceBrandDescription,

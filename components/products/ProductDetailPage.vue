@@ -91,10 +91,10 @@ const props = defineProps<{
 }>()
 
 const { trackProductOrder } = useSiteConversionTracking()
-const { locale, localePath, t } = useI18n()
+const { localePath, t } = useI18n()
 const collectionLabel = computed(() => props.presentation.collectionPath === '/menu'
   ? t('saya.footer.menu')
-  : locale.value === 'en' ? props.presentation.collectionLabel : '')
+  : t('saya.footer.products'))
 const breadcrumbs = computed(() => [
   { to: localePath('/'), label: t('saya.experience_detail.home') },
   { to: localePath(props.presentation.collectionPath), label: collectionLabel.value },
@@ -121,7 +121,7 @@ useSchemaOrg(computed(() => ({
     price: props.product.price ? minorAmountToMajor(props.product.price.amount_minor, props.product.price.currency) : undefined,
     priceCurrency: props.product.price?.currency,
     availability: props.product.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-    url: props.product.order_url || props.presentation.productPath(props.location.slug, props.product.slug),
+    url: props.product.order_url || localePath(props.presentation.productPath(props.location.slug, props.product.slug)),
   },
   aggregateRating: props.reviews.length
     ? {

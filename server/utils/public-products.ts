@@ -113,13 +113,13 @@ export async function loadPublicProductDetail(
     if (!collection || !location) return null
     const product = await getPublicProductBySlug(db, siteId, location.id, productSlug)
     if (!product) return null
-    const localeRepresentations = await listPublicLocaleRepresentations(db, {
+    const localeRepresentations = (await listPublicLocaleRepresentations(db, {
       organizationId: collection.site.organization_id,
       siteId,
       sourcePath: collection.presentation.productPath(location.slug, product.slug),
       sourceLabel: 'English',
       resource: { type: 'product', id: product.id },
-    })
+    })).filter(item => item.locale === 'en')
     return { ...collection, location, product, localeRepresentations }
   }
 

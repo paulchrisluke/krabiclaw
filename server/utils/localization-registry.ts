@@ -75,7 +75,7 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   tenant_blog_post: {
     table: 'blog_posts',
     required: ['title'],
-    optional: ['excerpt', 'category', 'tags_json', 'nav_title', 'seo_title', 'seo_description'],
+    optional: ['excerpt', 'category', 'tags_json', 'nav_title', 'seo_title', 'seo_description', 'seo_keywords'],
     shapes: { tags_json: 'string_array' },
     route: 'tenant_blog_post',
   },
