@@ -204,12 +204,14 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     })
   })
 
-  test('hydrates sparse Thai page collections and initializes link translations', async ({ page }) => {
+  test('hydrates sparse Thai page collections', async () => {
     const localizedServicesResponse = await owner.get(`/api/public/sites/${siteId}/localized-pages/${locale}?path=${encodeURIComponent('/services')}`)
     await expectStatus(localizedServicesResponse, 200)
     const localizedServices = await localizedServicesResponse.json() as { page: { blocks: unknown[] } }
     expect(JSON.stringify(localizedServices.page.blocks)).toContain('กฎหมายครอบครัวภาษาไทย')
+  })
 
+  test('stores the Thai link page translation', async () => {
     await putLocalization(owner, 'site_link_page', links.page.id, {
       route_path: '/th/links',
       values: {
@@ -218,12 +220,17 @@ test.describe.serial('published Thai content saves through the CMS and renders w
         seo_description: 'ลิงก์กฎหมายภาษาไทย',
       },
     })
-    for (const [index, item] of links.items.entries()) {
-      await putLocalization(owner, 'site_link_item', item.id, {
-        values: { label: index === 0 ? 'บริการกฎหมายครอบครัวเก่า' : 'ติดต่อทีมงานเก่า' },
-      })
-    }
+  })
 
+  for (const [index, label] of ['บริการกฎหมายครอบครัวเก่า', 'ติดต่อทีมงานเก่า'].entries()) {
+    test(`stores Thai copy for initial link ${index + 1}`, async () => {
+      await putLocalization(owner, 'site_link_item', links.items[index]!.id, {
+        values: { label },
+      })
+    })
+  }
+
+  test('renders initialized Thai link translations', async ({ page }) => {
     const primedLinks = await openTenantPage(page, `${blawbyBaseURL}/th/links`, blawbyExtraHeaders)
     expect(primedLinks?.status()).toBeLessThan(400)
     await expect(page.locator('main')).toContainText('บริการกฎหมายครอบครัวเก่า')
