@@ -665,7 +665,7 @@ function cancelEditor() {
 // Leaving a section resets its editor. This used to hang off the back button's
 // click handler, which left browser back with stale editor state.
 watch(() => route.path, (next, previous) => {
-  if (previous && previous !== next) cancelEditor()
+  if (previous && previous !== next) resetDraft()
 })
 
 async function patchLocation(body: Record<string, unknown>, successMessage: string) {

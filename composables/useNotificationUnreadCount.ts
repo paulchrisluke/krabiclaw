@@ -11,6 +11,7 @@ export function useNotificationUnreadCount() {
   const route = useRoute()
   const dashboardApi = useDashboardApi()
   const unreadCount = ref(0)
+  let latestRequestId = 0
 
   const orgSlug = computed(() => typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null)
 
@@ -18,6 +19,7 @@ export function useNotificationUnreadCount() {
     isRecord(value) && typeof value.unread_count === 'number'
 
   watch(orgSlug, async (slug) => {
+    const requestId = ++latestRequestId
     if (!slug) {
       unreadCount.value = 0
       return
@@ -26,12 +28,12 @@ export function useNotificationUnreadCount() {
       const response = await dashboardApi('/api/dashboard/notifications/unread-count', {
         validate: isUnreadCountResponse,
       })
-      unreadCount.value = response.unread_count
+      if (requestId === latestRequestId) unreadCount.value = response.unread_count
     } catch (error) {
       // The badge has no way to render a failure, so it renders nothing — but
       // the error still reaches the console rather than passing for "all read".
       console.error('notification_unread_count_failed', error)
-      unreadCount.value = 0
+      if (requestId === latestRequestId) unreadCount.value = 0
     }
   }, { immediate: true })
 

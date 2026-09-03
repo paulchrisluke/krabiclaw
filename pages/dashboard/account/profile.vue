@@ -170,6 +170,7 @@ import { getInitials } from '~/utils/formatters'
 // -nocheck
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
+import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -177,15 +178,13 @@ const toast = useToast()
 const route = useRoute()
 const { data: sessionData } = useAuth()
 
-// Credits are an organization resource, so this links to where the organization
-// is in the route rather than rendering a second copy of them on a user page.
-// No organization means no billing page to open, so the row is simply absent.
-const dashboard = useDashboardSite()
-const organizationName = computed(() => dashboard.organization.value?.name ?? 'your organization')
-const billingTo = computed(() => {
-  const slug = dashboard.organization.value?.slug
-  return slug ? `/dashboard/${encodeURIComponent(slug)}/settings/billing` : null
-})
+// Credits are an organization resource, so this links to the active
+// organization's billing page rather than rendering a second copy on a user
+// page. The dashboard layout already resolves that organization for account
+// routes, which deliberately have no organization slug of their own.
+const organizationParent = inject(dashboardOrganizationParentKey, null)
+const organizationName = computed(() => organizationParent?.value?.label ?? 'your organization')
+const billingTo = computed(() => organizationParent?.value ? `${organizationParent.value.to}/settings/billing` : null)
 const { signOut } = useAuth()
 
 // listAccounts() doesn't expose a per-account email (only providerId/accountId/

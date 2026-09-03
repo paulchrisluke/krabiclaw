@@ -750,7 +750,7 @@ async function executeTool(
     case "create_blog_post":
     case "update_blog_post":
     case "update_media_asset": {
-      return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
     // Anything else ChowBot advertises is an MCP tool with no ChowBot-specific

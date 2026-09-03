@@ -256,7 +256,7 @@ const backTo = computed(() => {
   if (!hasDetail.value) return siteDashboardPath.value
   // "Search and analytics" nests one level deeper, so its children go up to it
   // rather than skipping the whole way out to the settings index.
-  if (secondSegment.value && detailKey.value) return `${settingsPath.value}/${detailKey.value}`
+  if (secondSegment.value) return `${settingsPath.value}/${firstSegment.value}`
   return settingsPath.value
 })
 const backLabel = computed(() => hasDetail.value ? 'Site settings' : 'Site overview')
@@ -379,7 +379,7 @@ const showActions = computed(() => Boolean(detailKey.value && !['search-index', 
 // Leaving a section resets its editor. This used to hang off the back button's
 // click handler, which left browser back with stale editor state.
 watch(() => route.path, (next, previous) => {
-  if (previous && previous !== next) cancelEditor()
+  if (previous && previous !== next) resetDraft()
 })
 
 function editorSignature(key: string | null) {
