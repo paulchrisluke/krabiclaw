@@ -1,9 +1,12 @@
 <template>
   <div class="space-y-8">
-    <section v-for="group in groups" :key="group.id" class="space-y-3">
-      <h2 v-if="group.label" class="px-1 text-sm font-semibold text-muted">
-        {{ group.label }}
-      </h2>
+    <section v-for="(group, groupIndex) in groups" :key="group.id" class="space-y-3">
+      <div v-if="group.label || $slots['group-actions']" class="flex min-h-9 min-w-0 items-center justify-between gap-3 px-1">
+        <h2 v-if="group.label" class="min-w-0 truncate text-sm font-semibold text-muted">
+          {{ group.label }}
+        </h2>
+        <slot name="group-actions" :group="group" :index="groupIndex" />
+      </div>
 
       <UCard
         v-if="variant === 'list'"
@@ -42,8 +45,9 @@
           <button
             type="button"
             class="block w-full text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
-            :aria-label="`Open ${item.label}`"
+            :aria-label="item.ariaLabel ?? `Open ${item.label}`"
             :aria-pressed="item.id === activeItem"
+            :data-editor-item-id="item.id"
             @click="emit('select', item.id, $event.currentTarget)"
           >
             <slot name="item" :item="item" :active="item.id === activeItem" />
@@ -63,6 +67,7 @@ export interface EditorNavigationItem {
   label: string
   summary?: string
   icon?: string
+  ariaLabel?: string
   to?: string
   actions?: boolean
 }
