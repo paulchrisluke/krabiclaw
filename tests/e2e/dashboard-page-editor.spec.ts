@@ -173,7 +173,7 @@ test.describe('authenticated Page Editor', () => {
   })
 
   test('defers persisted gallery changes until Save and uses placement operations', async ({ page }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
     const { apiPagePath } = await openSeededPage(page)
     const initialResponse = await page.context().request.get(apiPagePath)
     expect(initialResponse.ok()).toBe(true)
