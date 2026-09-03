@@ -52,7 +52,7 @@ const submission = {
   app_info: {
     display_name: 'KrabiClaw',
     subtitle: 'Manage your business website',
-    description: 'KrabiClaw helps business owners create and manage websites, locations, products, experiences, posts, media, localizations, domains, and customer inquiries through ChatGPT.',
+    description: 'KrabiClaw helps business owners create and manage websites, locations, products, experiences, posts, media, localizations, and customer inquiries through ChatGPT.',
     category: 'BUSINESS',
   },
   tools,
