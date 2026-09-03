@@ -34,9 +34,17 @@ const GROUP_FLAG_ENV: Record<ConversationalToolSurfaceGroup, string> = {
 }
 
 const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]> = {
-  social_publishing: [],
+  social_publishing: [
+    'get_facebook_connection',
+    'publish_to_facebook',
+    'sync_facebook_page',
+  ],
   domains: [
     'get_site_domains',
+    'create_domain',
+    'set_canonical_domain',
+    'delete_domain',
+    'sync_domain',
   ],
   managed_service: [
     'list_work_requests',

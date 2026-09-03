@@ -13,14 +13,15 @@ describe('conversational tool surface policy', () => {
     assert.equal(isConversationalToolEnabled('list_site_locales'), true)
     assert.equal(isConversationalToolEnabled('get_site_domains'), false)
     assert.equal(isConversationalToolEnabled('create_work_request'), false)
+    assert.equal(isConversationalToolEnabled('publish_to_facebook'), false)
     assert.equal(isConversationalToolEnabled('update_product'), true)
   })
 
   test('enables a group only through its explicit env flag', () => {
-    const env = { CONVERSATIONAL_TOOLS_DOMAINS_ENABLED: 'true' }
+    const env = { CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED: 'true' }
 
-    assert.equal(isConversationalToolEnabled('get_site_domains', env), true)
-    assert.equal(isConversationalToolEnabled('create_work_request', env), false)
+    assert.equal(isConversationalToolEnabled('publish_to_facebook', env), true)
+    assert.equal(isConversationalToolEnabled('get_site_domains', env), false)
   })
 
   test('filters mixed tool lists consistently', () => {
@@ -35,14 +36,14 @@ describe('conversational tool surface policy', () => {
 
   test('blocks stale calls to hidden tools', () => {
     assert.throws(
-      () => assertConversationalToolEnabled('create_work_request'),
-      /CONVERSATIONAL_TOOLS_MANAGED_SERVICE_ENABLED/,
+      () => assertConversationalToolEnabled('publish_to_facebook'),
+      /CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED/,
     )
   })
 
   test('blocked-tool error is MCP-shaped with methodNotFound, not a generic internal error', () => {
     try {
-      assertConversationalToolEnabled('create_work_request')
+      assertConversationalToolEnabled('publish_to_facebook')
       assert.fail('expected assertConversationalToolEnabled to throw')
     } catch (error) {
       // This is what mcp.post.ts's catch block does with a thrown auth/gating
@@ -53,7 +54,7 @@ describe('conversational tool surface policy', () => {
     }
   })
 
-  test('narrows publish_post channels while unmanaged targets are hidden', () => {
+  test('narrows publish_post social channels while social publishing is disabled', () => {
     const tool = normalizeMcpToolForConversationalSurface({
       name: 'publish_post',
       description: 'Publish a post.',

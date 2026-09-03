@@ -21,7 +21,7 @@ test.describe('stateless MCP server', () => {
     const toolsBody = await listForSite.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(tool => tool.name)
     expect(toolNames).toContain('update_tenant_page')
-    expect(toolNames).not.toContain('create_work_request')
+    expect(toolNames).not.toContain('update_notification_settings')
   })
 
   test('site-scoped tools/list fails closed for inaccessible site ids', async ({ request, baseURL }) => {
