@@ -187,9 +187,19 @@ test.describe('location inventory authority', () => {
     expect((await unresolvedCatalog.json() as { products: Array<{ id: string; available: boolean; inventory: { state: string; status: string } }> }).products)
       .toContainEqual(expect.objectContaining({ id: product.id, available: false, inventory: expect.objectContaining({ state: 'unresolved', status: 'unavailable' }) }))
     await expect(push(`resolved-${crypto.randomUUID()}`, 5, 6)).resolves.toMatchObject({ outcome: 'applied', inventory: { quantity_on_hand: 6, status: 'available' } })
+    const publicPageUrl = `${baseURL}/api/public/sites/${MCP_GROWTH_SITE_ID}/page?page=products&datasets=products`
+    const publicPageHeaders = { Host: 'inventory-cache-regression.example' }
+    const warmPublicPage = await request.get(publicPageUrl, { headers: publicPageHeaders })
+    expect(warmPublicPage.status(), await warmPublicPage.text()).toBe(200)
+    expect(warmPublicPage.headers()['x-bootstrap-cache']).toBe('SKIP')
+    expect(warmPublicPage.headers()['cache-control']).toBe('no-store')
+    expect((await warmPublicPage.json() as { products: Array<{ id: string; available: boolean; inventory: { status: string } }> }).products)
+      .toContainEqual(expect.objectContaining({ id: product.id, available: true, inventory: expect.objectContaining({ status: 'available' }) }))
     await expect(push(`expired-${crypto.randomUUID()}`, 6, 6, product.id, new Date(Date.now() - 1_000).toISOString())).resolves.toMatchObject({ outcome: 'applied', inventory: { status: 'unavailable' } })
-    const publicPage = await request.get(`${baseURL}/api/public/sites/${MCP_GROWTH_SITE_ID}/page?page=products&datasets=products`)
+    const publicPage = await request.get(publicPageUrl, { headers: publicPageHeaders })
     expect(publicPage.status(), await publicPage.text()).toBe(200)
+    expect(publicPage.headers()['x-bootstrap-cache']).toBe('SKIP')
+    expect(publicPage.headers()['cache-control']).toBe('no-store')
     expect((await publicPage.json() as { products: Array<{ id: string; available: boolean; inventory: { status: string } }> }).products)
       .toContainEqual(expect.objectContaining({ id: product.id, available: false, inventory: expect.objectContaining({ status: 'unavailable' }) }))
     const staleProductResponse = await mcpRequest(request, baseURL!, {

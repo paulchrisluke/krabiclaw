@@ -260,15 +260,6 @@ async function loadPublicPageSource(
   }
   options.signal?.throwIfAborted();
 
-  if (mutateResponseHeaders) {
-    setHeader(
-      event,
-      "cache-control",
-      isPreviewAuthorized
-        ? "private, no-store"
-        : "public, max-age=60, stale-while-revalidate=300",
-    );
-  }
   const page = typeof query.page === "string" ? query.page : null;
   const locationSlug =
     typeof query.location === "string" ? query.location : null;
@@ -280,6 +271,17 @@ async function loadPublicPageSource(
       : [],
   );
   const includeProducts = requestedDatasets.has('products');
+  if (mutateResponseHeaders) {
+    setHeader(
+      event,
+      "cache-control",
+      isPreviewAuthorized
+        ? "private, no-store"
+        : includeProducts
+          ? "no-store"
+          : "public, max-age=60, stale-while-revalidate=300",
+    );
+  }
   const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
 
@@ -322,9 +324,11 @@ async function loadPublicPageSource(
   // with the public cache entry for the same page/location) and for preview/staging
   // hosts, whose D1 gets reseeded on every CI push —
   // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
-  // Also skipped if any query input is invalid to prevent unbounded cache entries.
+  // Product availability can expire based on wall-clock time, so Product-bearing
+  // pages cannot safely read or write a fixed-TTL payload. Invalid inputs are also
+  // skipped to prevent unbounded cache entries.
   const host = (event.req.headers.get("host")) ?? "";
-  const usePageCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
+  const usePageCache = !includeProducts && !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
   const cacheKey = buildPublicResourceCacheKey(siteId, {
     contract: 'page',
     page,
