@@ -13,15 +13,12 @@ import {
   normalizePublicReviewAggregateRows,
 } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
-import { mapProduct } from '~/server/utils/product-management'
+import { listPublicSiteProducts } from '~/server/utils/product-management'
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { attachAvailabilitySummaries, attachExperienceMedia, type Experience } from "~/server/utils/experiences";
-import {
-  toResolvedMediaAsset,
-  type MediaAsset,
-} from "~/server/utils/media-asset-manager";
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import type { Product } from '~/server/types/products'
+import { projectProductOrderingAvailability } from '~/shared/ordering-catalog'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { attachFeaturedMediaFromBareJoin } from "~/server/utils/platform-content";
 import { getContentBlocksForOwner } from '~/server/utils/content-documents'
@@ -113,8 +110,6 @@ interface ReviewRow {
 
 
 
-
-type ProductMediaRow = MediaAsset & { product_id: string; slot: 'image' | 'gallery'; sort_order: number };
 
 const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 
@@ -445,8 +440,6 @@ async function loadPublicPageSource(
     idxReviewAggregate = -1,
     idxPhotos = -1,
     idxQa = -1;
-  let idxProducts = -1, idxProductMedia = -1;
-    
   let idxExperiencesList = -1,
     idxExperienceDetail = -1;
   let idxBlogList = -1,
@@ -460,43 +453,6 @@ async function loadPublicPageSource(
 
   const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId);
   if (needsLocations) idxLoc = shellIndexes.locations;
-
-  if (includeProducts) {
-    const locationClause = locationSlug ? 'AND location_id = ?' : ''
-    const productParams = locationSlug
-      ? [orgId, siteId, locationId ?? '__missing-location__']
-      : [orgId, siteId]
-    idxProducts = push(
-      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category, p.name, p.slug, p.description,
-              p.order_url, p.is_visible, p.available, p.featured, p.featured_sort_order, p.sort_order, p.tags_json,
-              p.details_json, p.seo_title, p.seo_description, p.canonical_url, p.robots, p.source,
-              p.created_at, p.updated_at, p.created_by, p.updated_by,
-              pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
-              pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
-              pr.created_by AS price_created_by, pr.created_at AS price_created_at
-         FROM products p
-         LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-           AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard' AND p.is_visible = 1 ${locationClause.replace('location_id', 'p.location_id')}
-        ORDER BY p.location_id, p.sort_order, p.id`,
-      productParams,
-    )
-
-    idxProductMedia = push(
-      `SELECT ma.*, mp.owner_id AS product_id, mp.slot, mp.sort_order
-         FROM media_placements mp
-         JOIN products p ON p.id = mp.owner_id
-         JOIN media_assets ma ON ma.id = mp.asset_id
-          AND ma.organization_id = mp.organization_id
-          AND ma.site_id = mp.site_id
-          AND ma.status = 'active'
-        WHERE p.organization_id = ? AND p.site_id = ? AND p.is_visible = 1
-          ${locationSlug ? 'AND p.location_id = ?' : ''}
-          AND mp.owner_type = 'product' AND mp.slot IN ('image', 'gallery') AND mp.status = 'active'
-        ORDER BY mp.owner_id, mp.slot, mp.sort_order, mp.id`,
-      productParams,
-    )
-  }
 
   // Experiences remain route data. The page response also carries the shared
   // shell so the layout and route components consume one canonical resource.
@@ -758,24 +714,13 @@ async function loadPublicPageSource(
       })
       return capabilities.managers.some(manager => manager.key === 'location.products')
     }).map(location => String(location.id)))
-    const productRows = ((batchResults[idxProducts] as { results: Record<string, unknown>[] })?.results ?? [])
-      .filter(row => enabledLocationIds.has(String(row.location_id)))
-    const productMediaRows = (batchResults[idxProductMedia] as { results: ProductMediaRow[] })?.results ?? []
-    const mediaByProduct = new Map<string, ProductMediaRow[]>()
-    for (const row of productMediaRows) {
-      const rows = mediaByProduct.get(row.product_id) ?? []
-      rows.push(row)
-      mediaByProduct.set(row.product_id, rows)
-    }
-    products = productRows.map((row) => {
-      const product = mapProduct(row)
-      const media = mediaByProduct.get(product.id) ?? []
-      return {
-        ...product,
-        image: media.find(item => item.slot === 'image') ? toResolvedMediaAsset(media.find(item => item.slot === 'image')!) : null,
-        gallery: media.filter(item => item.slot === 'gallery').map(toResolvedMediaAsset),
-      }
-    })
+    const productLocationIds = locationId
+      ? enabledLocationIds.has(locationId) ? [locationId] : []
+      : [...enabledLocationIds]
+    options.signal?.throwIfAborted()
+    products = (await listPublicSiteProducts(db, siteId, productLocationIds))
+      .map(projectProductOrderingAvailability)
+    options.signal?.throwIfAborted()
     if (localizedLocale) {
       products = projectExactLocalizedCollection('product', products, publicLocalizations)
         .map(product => ({

@@ -188,6 +188,10 @@ test.describe('location inventory authority', () => {
       .toContainEqual(expect.objectContaining({ id: product.id, available: false, inventory: expect.objectContaining({ state: 'unresolved', status: 'unavailable' }) }))
     await expect(push(`resolved-${crypto.randomUUID()}`, 5, 6)).resolves.toMatchObject({ outcome: 'applied', inventory: { quantity_on_hand: 6, status: 'available' } })
     await expect(push(`expired-${crypto.randomUUID()}`, 6, 6, product.id, new Date(Date.now() - 1_000).toISOString())).resolves.toMatchObject({ outcome: 'applied', inventory: { status: 'unavailable' } })
+    const publicPage = await request.get(`${baseURL}/api/public/sites/${MCP_GROWTH_SITE_ID}/page?page=products&datasets=products`)
+    expect(publicPage.status(), await publicPage.text()).toBe(200)
+    expect((await publicPage.json() as { products: Array<{ id: string; available: boolean; inventory: { status: string } }> }).products)
+      .toContainEqual(expect.objectContaining({ id: product.id, available: false, inventory: expect.objectContaining({ status: 'unavailable' }) }))
     const staleProductResponse = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'get_product', args: { site_id: MCP_GROWTH_SITE_ID, product_id: product.id },
     })
