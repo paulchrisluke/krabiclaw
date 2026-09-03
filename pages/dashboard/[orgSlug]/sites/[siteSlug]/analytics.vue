@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Analytics">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="paths.site" label="Site" />
         </template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="loading" @click="loadAnalytics">
@@ -88,7 +88,7 @@
           </UCard>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <UCard v-for="metric in metricCards" :key="metric.label" variant="soft">
             <div class="flex items-start justify-between gap-3">
               <div>
@@ -218,6 +218,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
+
+const { paths } = useDashboardSiteLinks()
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { getLocalTimezone } from '~/utils/timezone'

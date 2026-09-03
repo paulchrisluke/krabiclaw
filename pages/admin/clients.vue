@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Clients">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading to="/admin" label="Admin" />
         </template>
         <template #trailing>
           <UButton color="neutral" variant="ghost" size="xs" :loading="clientsLoading" @click="loadClients">

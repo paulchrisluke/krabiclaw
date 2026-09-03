@@ -87,7 +87,7 @@ export const useChowBot = () => {
 
     // Keep panel open across navigation — set isLoading briefly as a guard
     // so the overlay @click doesn't fire during the route transition
-    const dashboardLinks = useDashboardSiteLinks(siteId.value)
+    const dashboardLinks = useDashboardSiteLinks()
     const paths = dashboardLinks.paths.value
     let target = ''
     if (names.has('create_post') || names.has('publish_post')) {

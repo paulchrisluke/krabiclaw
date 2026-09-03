@@ -1,72 +1,68 @@
 <template>
-  <UPopover :content="{ align: 'end', sideOffset: 8 }">
-    <UButton
-      icon="i-lucide-bell"
-      color="neutral"
-      variant="ghost"
-      size="sm"
-      aria-label="Open notifications"
-      class="relative"
-      @click="refreshNotifications"
-    >
-      <span
-        v-if="unreadCount > 0"
-        class="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-error text-white text-[10px] leading-4 text-center font-semibold"
-      >{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
-    </UButton>
-
-    <template #content>
-      <div class="w-[min(24rem,calc(100vw-2rem))]">
-        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-default">
-          <div>
-            <p class="text-sm font-semibold text-highlighted">Notifications</p>
-            <p class="text-xs text-muted">{{ unreadCount }} unread</p>
-          </div>
+  <UDashboardPanel id="organization-notifications">
+    <template #header>
+      <UDashboardNavbar title="Notifications">
+        <template #leading>
+          <DashboardNavbarLeading :to="paths.org" label="Organization" />
+        </template>
+        <template #right>
           <UButton
             v-if="unreadCount > 0"
             label="Mark all read"
             color="neutral"
             variant="ghost"
-            size="xs"
+            size="sm"
             :loading="markingAll"
             @click="markAllRead"
           />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
+        <div v-if="loading && notifications.length === 0" class="space-y-3">
+          <USkeleton v-for="index in 4" :key="index" class="h-16 rounded-lg" />
         </div>
 
-        <div v-if="loading && notifications.length === 0" class="space-y-3 p-4">
-          <USkeleton v-for="index in 3" :key="index" class="h-14 rounded-lg" />
-        </div>
-        <div v-else-if="notifications.length === 0" class="px-4 py-10 text-center">
-          <UIcon name="i-lucide-bell-off" class="size-6 text-muted mx-auto mb-2" />
+        <div v-else-if="notifications.length === 0" class="py-16 text-center">
+          <UIcon name="i-lucide-bell-off" class="mx-auto mb-3 size-7 text-muted" />
           <p class="text-sm text-muted">No notifications yet.</p>
         </div>
-        <div v-else class="max-h-96 overflow-y-auto divide-y divide-default">
-          <UButton
+
+        <div v-else class="divide-y divide-default border-y border-default">
+          <button
             v-for="notification in notifications"
             :key="notification.id"
-            block
-            class="justify-start text-left"
-            color="neutral"
-            variant="ghost"
+            type="button"
+            class="flex w-full items-start gap-3.5 py-4 text-left transition-colors hover:bg-elevated"
             @click="openNotification(notification)"
           >
-            <span class="mt-1 relative flex size-2 shrink-0">
+            <span class="mt-1.5 flex size-2 shrink-0">
               <span class="size-2 rounded-full" :class="notification.read_at ? 'bg-muted' : severityDot(notification.severity)" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block text-sm font-medium text-highlighted truncate">{{ notification.title || 'Notification' }}</span>
-              <span v-if="notification.message" class="block text-xs text-muted line-clamp-2 mt-0.5">{{ notification.message }}</span>
-              <span class="block text-[11px] text-dimmed mt-1">{{ formatExactDateTime(notification.created_at, { includeTime: true }) }}</span>
+              <span class="block font-medium text-highlighted">{{ notification.title || 'Notification' }}</span>
+              <span v-if="notification.message" class="mt-0.5 block text-sm text-muted">{{ notification.message }}</span>
+              <span class="mt-1 block text-xs text-dimmed">{{ formatExactDateTime(notification.created_at, { includeTime: true }) }}</span>
             </span>
-          </UButton>
+            <UIcon v-if="notification.deep_link" name="i-lucide-chevron-right" class="mt-1 size-4 shrink-0 text-dimmed" />
+          </button>
         </div>
       </div>
     </template>
-  </UPopover>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
+definePageMeta({ layout: 'dashboard' })
+
+const { paths } = useDashboardSiteLinks()
+useSeoMeta({ title: 'Notifications | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+
 const dashboardApi = useDashboardApi()
+const { formatExactDateTime } = useHumanTime()
+
 interface DashboardNotification {
   id: string
   scope: 'platform' | 'organization' | 'site'
@@ -98,7 +94,6 @@ const notifications = ref<DashboardNotification[]>([])
 const unreadCount = ref(0)
 const loading = ref(false)
 const markingAll = ref(false)
-const { formatExactDateTime } = useHumanTime()
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 
 function severityDot(severity: DashboardNotification['severity']) {
@@ -108,6 +103,8 @@ function severityDot(severity: DashboardNotification['severity']) {
   return 'bg-primary'
 }
 
+// A deep link is stored data, so it is treated as untrusted: only a same-origin
+// destination is followed, and only its path is handed to the router.
 function safeDeepLink(value: string | null): string | null {
   if (!value || !import.meta.client) return null
   try {
@@ -124,13 +121,13 @@ async function refreshNotifications() {
   loading.value = true
   try {
     const response = await dashboardApi<NotificationResponse>('/api/dashboard/notifications', {
-      query: { limit: 20 },
+      query: { limit: 50 },
       validate: isNotificationResponse,
     })
     notifications.value = response.notifications
     unreadCount.value = response.unread_count
   } catch (error) {
-    console.error('notification_center_load_failed', error)
+    console.error('notifications_load_failed', error)
   } finally {
     loading.value = false
   }

@@ -1,6 +1,6 @@
 # Goal: Airbnb Hosting Listing Editor
 
-Reference screenshots from Airbnb's own listing editor, used only for the navigation/layout patterns called out in `principles/README.md` — large photo cards, single-field-per-screen editing, drill-down navigation, bottom Cancel/Save bars, large text areas.
+Reference screenshots from Airbnb's own listing editor, kept as a visual reference for navigation and layout patterns — large photo cards, single-field-per-screen editing, drill-down navigation, bottom Cancel/Save bars, large text areas. Read the screenshots themselves; a written `principles/` analysis that used to sit alongside them was found stale and removed rather than left to mislead.
 
 **Captured: 57 screenshots** across three capture sessions — 30 on 2026-08-31/09-01, 18 more on 2026-09-01 evening, 9 more on 2026-09-02 from a recursive pass over every hub's children (Preferences' remaining 4 items, the Photo tour task list and the room it points to, and a nested "Add details" editor inside Guest safety → Property info).
 

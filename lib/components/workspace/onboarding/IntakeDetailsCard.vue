@@ -79,7 +79,7 @@
               :style="{ '--dial-code-length': `${dialCode.length + 1.5}ch` }"
               :ui="{
                 base: 'ps-(--dial-code-length)',
-                leading: 'pointer-events-none text-base md:text-sm text-muted',
+                leading: 'pointer-events-none text-base sm:text-sm text-muted',
               }"
               @update:model-value="syncPhoneValue"
               @blur="phoneTouched = true"

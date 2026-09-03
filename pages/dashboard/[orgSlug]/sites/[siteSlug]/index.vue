@@ -5,7 +5,7 @@
         :title="siteName"
         :toggle="false"
       >
-        <template #leading><DashboardNavbarLeading /></template>
+        <template #leading><DashboardNavbarLeading :to="`${paths.org}/sites`" label="Sites" /></template>
       </UDashboardNavbar>
     </template>
 
@@ -131,7 +131,7 @@
         </div>
       </div>
 
-      <div v-if="publicSiteUrl" class="pointer-events-none fixed inset-x-0 bottom-20 z-20 flex justify-center px-4 md:bottom-5">
+      <div v-if="publicSiteUrl" class="pointer-events-none fixed inset-x-0 bottom-[calc(var(--kc-dashboard-bottom-nav)+1.25rem)] z-20 flex justify-center px-4 md:bottom-5">
         <UButton :to="publicSiteUrl" target="_blank" icon="i-lucide-external-link" label="View site" class="pointer-events-auto rounded-full px-5 shadow-lg" />
       </div>
     </template>
@@ -143,6 +143,8 @@ import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, resolve
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
+
+const { paths } = useDashboardSiteLinks()
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'My site | KrabiClaw', robots: 'noindex, nofollow' })

@@ -1,11 +1,10 @@
 <template>
   <UDashboardPanel id="account-profile">
     <template #header>
-      <UDashboardNavbar title="Profile">
+      <UDashboardNavbar title="Account">
         <template #leading>
-          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
+          <DashboardNavbarLeading to="/dashboard" label="Dashboard" />
         </template>
-        <template #right><DashboardAccountMenu mobile-only class="lg:hidden" /></template>
       </UDashboardNavbar>
     </template>
 
@@ -29,7 +28,24 @@
         </section>
 
         <section class="profile-row" :class="rowTone('email')">
-          <div class="min-w-0"><h3 class="profile-label">Email</h3><p class="profile-value">{{ sessionData?.user?.email }}</p><p class="profile-meta"><UIcon name="i-logos-google-icon" class="size-3.5" />Signed in with Google</p></div>
+          <div class="min-w-0">
+            <h3 class="profile-label">Email</h3>
+            <p class="profile-value">{{ sessionData?.user?.email }}</p>
+            <p v-if="sessionData?.user?.emailVerified" class="profile-meta text-success"><span class="size-1.5 rounded-full bg-current" />Verified</p>
+          </div>
+          <NuxtLink to="/forgot-password" class="account-action shrink-0">Reset password</NuxtLink>
+        </section>
+
+        <section class="profile-row" :class="rowTone('google')">
+          <div class="min-w-0">
+            <h3 class="profile-label">Google</h3>
+            <p class="profile-value">
+              <span v-if="googleStatus === 'loading'">Checking…</span>
+              <span v-else-if="googleStatus === 'connected'">Connected</span>
+              <span v-else-if="googleStatus === 'error'">Unable to check connection status</span>
+              <span v-else>Not connected</span>
+            </p>
+          </div>
         </section>
 
         <section class="profile-row items-start" :class="rowTone('phone')">
@@ -46,9 +62,19 @@
           <UButton variant="link" color="neutral" @click="copyUserId">Copy</UButton>
         </section>
 
+        <section v-if="billingTo" class="profile-row" :class="rowTone('billing')">
+          <div class="min-w-0"><h3 class="profile-label">Usage and billing</h3><p class="profile-value whitespace-normal">Credits, plan and payments for {{ organizationName }}.</p></div>
+          <NuxtLink :to="billingTo" class="account-action shrink-0">Open</NuxtLink>
+        </section>
+
         <section class="profile-row" :class="rowTone('delete')">
           <div><h3 class="profile-label text-error">Delete account</h3><p class="profile-value whitespace-normal">Removes your account, organization, site, locations and menu data.</p></div>
           <UButton variant="link" color="error" @click="deleteModalOpen = true">Delete</UButton>
+        </section>
+
+        <section class="profile-row" :class="rowTone('log-out')">
+          <div class="min-w-0"><h3 class="profile-label">Log out</h3><p class="profile-value whitespace-normal">Sign out on this device.</p></div>
+          <UButton variant="link" color="neutral" @click="handleSignOut">Log out</UButton>
         </section>
       </div>
     </template>
@@ -144,19 +170,50 @@ import { getInitials } from '~/utils/formatters'
 // -nocheck
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
+import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 
 definePageMeta({ layout: 'dashboard' })
 
 const toast = useToast()
 const route = useRoute()
-const accountIndexTo = computed(() => ({
-  path: '/dashboard/account',
-  query: {
-    ...(typeof route.query.organization === 'string' ? { organization: route.query.organization } : {}),
-    ...(typeof route.query.organizationName === 'string' ? { organizationName: route.query.organizationName } : {}),
-  },
-}))
 const { data: sessionData } = useAuth()
+
+// Credits are an organization resource, so this links to the active
+// organization's billing page rather than rendering a second copy on a user
+// page. The dashboard layout already resolves that organization for account
+// routes, which deliberately have no organization slug of their own.
+const organizationParent = inject(dashboardOrganizationParentKey, null)
+const organizationName = computed(() => organizationParent?.value?.label ?? 'your organization')
+const billingTo = computed(() => organizationParent?.value ? `${organizationParent.value.to}/settings/billing` : null)
+const { signOut } = useAuth()
+
+// listAccounts() doesn't expose a per-account email (only providerId/accountId/
+// scopes) — there's no Google-specific email to show, so "connected" renders a
+// generic label rather than implying we know a per-provider address. A failed
+// lookup is shown distinctly from "not connected" too, since defaulting an
+// error to false would misreport a real Google-linked account as unlinked.
+const googleStatus = ref<'loading' | 'connected' | 'not-connected' | 'error'>('loading')
+onMounted(async () => {
+  try {
+    const { data, error } = await authClient.listAccounts()
+    if (error) {
+      googleStatus.value = 'error'
+      return
+    }
+    googleStatus.value = data?.some(account => account.providerId === 'google') ? 'connected' : 'not-connected'
+  } catch {
+    googleStatus.value = 'error'
+  }
+})
+
+async function handleSignOut() {
+  // Preserve the current path across sign-out/sign-back-in like
+  // middleware/account.ts and middleware/dashboard.global.ts already do for
+  // session-expiry redirects.
+  const redirect = route.fullPath
+  await signOut()
+  await navigateTo({ path: '/login', query: { redirect } })
+}
 const refreshSession = async () => {
   await authClient.getSession()
 }
@@ -164,7 +221,7 @@ const refreshSession = async () => {
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
-type ProfileRow = 'avatar' | 'name' | 'email' | 'phone' | 'user-id' | 'delete'
+type ProfileRow = 'avatar' | 'name' | 'email' | 'google' | 'phone' | 'user-id' | 'billing' | 'delete' | 'log-out'
 const editingRow = ref<ProfileRow | null>(null)
 
 function rowTone(row: ProfileRow) {
@@ -351,7 +408,7 @@ async function confirmDeleteAccount() {
   }
 }
 
-useSeoMeta({ title: 'Profile | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Account | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
 
 <style scoped>

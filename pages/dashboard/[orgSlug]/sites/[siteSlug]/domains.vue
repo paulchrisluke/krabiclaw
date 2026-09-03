@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Domains">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="paths.site" label="Site" />
         </template>
         <template #right>
           <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
@@ -162,6 +162,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
+
+const { paths } = useDashboardSiteLinks()
 
 type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'
 
