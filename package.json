@@ -131,7 +131,7 @@
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
-    "vue": "^3.5.33",
+    "vue": "^3.5.40",
     "vue-router": "^5.0.6",
     "vue-tsc": "^3.2.9",
     "wrangler": "4.113.0",
@@ -162,7 +162,7 @@
     "slugify": "^1.6.9",
     "stripe": "^22.1.0",
     "tailwind-variants": "^3.2.2",
-    "vue-i18n": "11.4.8",
-    "vue-email": "^0.8.11"
+    "vue-email": "^0.8.11",
+    "vue-i18n": "11.4.8"
   }
 }

@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import englishManifest from '../i18n/locales/en.json' with { type: 'json' }
+import englishManifest from '../i18n/locales/en.ts'
 import {
   flattenLocaleManifest,
   localeManifestHash,

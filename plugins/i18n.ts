@@ -1,5 +1,5 @@
 import { createI18n } from 'vue-i18n'
-import en from '~/i18n/locales/en.json'
+import en from '~/i18n/locales/en'
 
 function expandMessages(messages: Record<string, string>): Record<string, unknown> {
   const root: Record<string, unknown> = {}
