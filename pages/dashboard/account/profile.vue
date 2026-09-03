@@ -62,10 +62,6 @@
           <UButton variant="link" color="neutral" @click="copyUserId">Copy</UButton>
         </section>
 
-        <section v-if="usageLabel" class="profile-row" :class="rowTone('usage')">
-          <div class="min-w-0"><h3 class="profile-label">Usage</h3><p class="profile-value">{{ usageLabel }}</p></div>
-        </section>
-
         <section class="profile-row" :class="rowTone('delete')">
           <div><h3 class="profile-label text-error">Delete account</h3><p class="profile-value whitespace-normal">Removes your account, organization, site, locations and menu data.</p></div>
           <UButton variant="link" color="error" @click="deleteModalOpen = true">Delete</UButton>
@@ -176,7 +172,6 @@ const toast = useToast()
 const route = useRoute()
 const { data: sessionData } = useAuth()
 const { signOut } = useAuth()
-const { usageLabel } = await useAccountCredits()
 
 // listAccounts() doesn't expose a per-account email (only providerId/accountId/
 // scopes) — there's no Google-specific email to show, so "connected" renders a
@@ -212,7 +207,7 @@ const refreshSession = async () => {
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
-type ProfileRow = 'avatar' | 'name' | 'email' | 'google' | 'phone' | 'user-id' | 'usage' | 'delete' | 'log-out'
+type ProfileRow = 'avatar' | 'name' | 'email' | 'google' | 'phone' | 'user-id' | 'delete' | 'log-out'
 const editingRow = ref<ProfileRow | null>(null)
 
 function rowTone(row: ProfileRow) {
