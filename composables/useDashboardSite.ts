@@ -35,6 +35,7 @@ interface DashboardSiteSummary {
   onboarding_status: string | null
   effective_plan: string
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
+  social_image: { url: string; width?: number; height?: number; type?: string } | null
 }
 
 interface DashboardLocation {
@@ -46,6 +47,7 @@ interface DashboardLocation {
   city: string | null
   address: { addressLines?: string[] } | null
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
+  social_image: { url: string; width?: number; height?: number; type?: string } | null
   feature_overrides: string | null
 }
 
@@ -68,6 +70,9 @@ const isDashboardOrganization = (value: unknown): value is DashboardOrganization
   && typeof value.role === 'string'
   && typeof value.memberId === 'string'
 
+const isSocialImage = (value: unknown): value is { url: string } | null =>
+  value === null || (isRecord(value) && typeof value.url === 'string')
+
 const isDashboardSite = (value: unknown): value is DashboardSite =>
   isRecord(value)
   && typeof value.id === 'string'
@@ -77,6 +82,7 @@ const isDashboardSite = (value: unknown): value is DashboardSite =>
   && (value.public_url === null || typeof value.public_url === 'string')
   && typeof value.status === 'string'
   && typeof value.onboarding_status === 'string'
+  && isSocialImage(value.social_image)
 
 const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   isRecord(value)
@@ -85,6 +91,7 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   && typeof value.title === 'string'
   && typeof value.is_primary === 'boolean'
   && typeof value.status === 'string'
+  && isSocialImage(value.social_image)
   && Array.isArray(value.media)
   && value.media.every(item =>
     isRecord(item)
