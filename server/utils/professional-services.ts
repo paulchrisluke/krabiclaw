@@ -53,11 +53,6 @@ function requiredText(value: unknown, field: string): string {
   throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
 }
 
-function exactLocalizedText(value: unknown, resource: string): string {
-  if (typeof value === 'string' && value.trim()) return value.trim()
-  throw new HTTPError({ statusCode: 404, statusMessage: `Exact localized ${resource} text was not found` })
-}
-
 export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown): string {
   if (typeof value === 'string' && value.trim()) return value.trim()
   return `/article/${requiredText(slug, 'article.slug')}`
@@ -459,7 +454,7 @@ export async function getPublicBlawbyShellData(
   const identity = siteLocalization
     ? {
         ...sourceIdentity,
-        brand_name: exactLocalizedText(siteLocalization.values.brand_name, 'site identity'),
+        brand_name: typeof siteLocalization.values.brand_name === 'string' ? siteLocalization.values.brand_name : '',
         brand_description: typeof siteLocalization.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
         primary_location_address_street: typeof primaryLocationLocalization?.values.address === 'string' ? primaryLocationLocalization.values.address : null,
         primary_location_address_locality: typeof primaryLocationLocalization?.values.city === 'string' ? primaryLocationLocalization.values.city : null,
@@ -472,7 +467,7 @@ export async function getPublicBlawbyShellData(
     const consultationValues = localizations.find(row => row.resourceType === 'site_consultation_settings')?.values
     consultation = {
       ...sourceConsultation,
-      cta_label: exactLocalizedText(consultationValues?.cta_label, 'consultation call-to-action'),
+      cta_label: typeof consultationValues?.cta_label === 'string' ? consultationValues.cta_label : '',
       metadata: { ...sourceConsultation.metadata, header_cta_label: null },
     }
     const complianceValues = localizations.find(row => row.resourceType === 'tenant_compliance')?.values
@@ -493,8 +488,8 @@ export async function getPublicBlawbyShellData(
     )
     offeringLinks = projectExactLocalizedCollection('offering', sourceOfferingLinks, localizations).map((offering) => {
       const routePath = offeringLocalizations.get(offering.id)?.routePath
-      if (!routePath) {
-        throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized offering route was not found' })
+      if (!routePath?.startsWith('/')) {
+        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized offering route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
       }
       return { ...offering, canonical_path: routePath }
     })
@@ -557,9 +552,6 @@ export async function getPublicBlawbyDocumentData(
         sourceLabel,
         pageId: route.page?.page_id,
       })
-  if (BLAWBY_RECIPES_WITH_REVIEWS.has(recipe)) {
-    route.localeRepresentations = route.localeRepresentations.filter(item => item.locale === 'en')
-  }
   return { shell, route }
 }
 
@@ -605,14 +597,6 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   terms: '/policies/terms',
   'third-party-notices': '/third-party-notices',
 }
-const BLAWBY_RECIPES_WITH_REVIEWS = new Set<PublicBlawbyRouteData['recipe']>([
-  'home',
-  'offering',
-  'about',
-  'contact',
-  'schedule',
-])
-
 function mapPublicQa(rows: Array<{
   id: unknown
   question: unknown
@@ -692,7 +676,7 @@ export async function getPublicBlawbyRouteData(
 ): Promise<PublicBlawbyRouteData> {
   const needsOfferings = ['home', 'services', 'offering', 'about', 'pricing'].includes(recipe)
   const needsQa = ['home', 'services', 'about', 'pricing', 'contact', 'schedule', 'blog', 'donate'].includes(recipe)
-  const needsReviews = BLAWBY_RECIPES_WITH_REVIEWS.has(recipe)
+  const needsReviews = ['home', 'offering', 'about', 'contact', 'schedule'].includes(recipe)
   const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
   const pagePath = ROUTE_PAGE_PATHS[recipe]
   const offeringRowsPromise = needsOfferings
@@ -702,9 +686,6 @@ export async function getPublicBlawbyRouteData(
     ? listPageQa(db, siteId, pagePath, true)
     : Promise.resolve([])
   const localized = options.locale !== undefined && options.locale !== 'en'
-  if (localized && needsReviews) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Reviews do not have localized representations' })
-  }
   const localizedOfferingId = localized && recipe === 'offering' && options.slug
     ? resolveLocalizedRouteResourceId(options.localizations ?? [], 'offering', `/${options.locale}/services/${options.slug}`)
     : null
@@ -742,7 +723,9 @@ export async function getPublicBlawbyRouteData(
   const offerings = localized
     ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).map(item => {
         const representation = localizations.find(value => value.resourceType === 'offering' && value.resourceId === item.id)
-        if (!representation?.routePath) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized offering route was not found' })
+        if (!representation?.routePath?.startsWith('/')) {
+          throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized offering route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+        }
         return {
           ...item,
           canonical_path: representation.routePath,
@@ -770,26 +753,27 @@ export async function getPublicBlawbyRouteData(
     : sourceOffering
   let posts = initialPosts
   if (recipe === 'article' && postRow) {
-    if (localized) posts = []
-    else {
-    const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
-    const summaries = await listPublicBlogSummaries(db, siteId, 50)
-    posts = summaries
-      .filter(summary => summary.id !== postRow.id && summary.tags.some(tag => postTags.includes(tag)))
-      .slice(0, 3)
-    }
+    posts = await listPublicBlogSummaries(db, siteId, 50)
   }
 
   const sourceQa = mapPublicQa(qaRows)
   const qa = localized ? projectExactLocalizedCollection('location_qa', sourceQa, localizations) : sourceQa
   const sourcePosts = posts
-  const resolvedPosts = localized
+  let resolvedPosts = localized
     ? projectExactLocalizedCollection('tenant_blog_post', sourcePosts, localizations).map(item => {
         const representation = localizations.find(value => value.resourceType === 'tenant_blog_post' && value.resourceId === item.id)
-        if (!representation?.routePath) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized blog route was not found' })
+        if (!representation?.routePath?.startsWith('/')) {
+          throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized blog route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+        }
         return { ...item, canonical_url: representation.routePath }
       })
     : sourcePosts
+  if (recipe === 'article' && postRow) {
+    const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
+    resolvedPosts = resolvedPosts
+      .filter(summary => summary.id !== postRow.id && summary.tags.some(tag => postTags.includes(tag)))
+      .slice(0, 3)
+  }
   const resolvedPost = mapPublicBlogPost(postRow)
   return {
     recipe,

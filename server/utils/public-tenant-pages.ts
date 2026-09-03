@@ -89,9 +89,6 @@ async function hydrateBlocks(
   const hasOfferingSource = publicBlocks.some(block => block.type === 'offering_grid' && block.data.source === 'site_offerings')
   const hasQaSource = publicBlocks.some(block => block.type === 'faq' && block.data.source === 'page_qa')
   const hasReviewSource = publicBlocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
-  if (localizations && hasReviewSource) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Reviews do not have localized representations' })
-  }
   const hasPostSource = publicBlocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
   for (const block of publicBlocks) {
     if (block.type === 'offering_grid' && Array.isArray(block.data.offering_ids)) {
@@ -109,7 +106,9 @@ async function hydrateBlocks(
   const offerings = localizations
     ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).map((offering) => {
         const representation = localizations.find(item => item.resourceType === 'offering' && item.resourceId === offering.id)
-        if (!representation?.routePath) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized offering route was not found' })
+        if (!representation?.routePath?.startsWith('/')) {
+          throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized offering route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+        }
         return {
           ...offering,
           canonical_path: representation.routePath,
@@ -130,12 +129,12 @@ async function hydrateBlocks(
     ? projectExactLocalizedCollection('business_location', sourceLocations, localizations).map((location) => {
         const representation = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
         const slug = representation?.routePath?.split('/').filter(Boolean).at(-1)
-        if (!representation?.routePath || !slug) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized location route was not found' })
+        if (!representation?.routePath?.startsWith('/') || !slug) {
+          throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized location route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+        }
         return { ...location, slug, public_path: representation.routePath }
       })
     : sourceLocations
-  const distinctLocationIds = new Set(locations.map(l => l.id))
-  if (distinctLocationIds.size !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
   const [sourceQaRows, sourceReviewRows, sourcePostRows] = await Promise.all([
     hasQaSource ? (resources.qaRows ?? listPageQa(db, siteId, pagePath, true)) : Promise.resolve([]),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
@@ -154,13 +153,13 @@ async function hydrateBlocks(
     ? projectExactLocalizedCollection('tenant_blog_post', sourcePostRows, localizations).map((post) => {
         const representation = localizations.find(item => item.resourceType === 'tenant_blog_post' && item.resourceId === post.id)
         const slug = representation?.routePath?.split('/').filter(Boolean).at(-1)
-        if (!representation?.routePath || !slug) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized blog route was not found' })
+        if (!representation?.routePath?.startsWith('/') || !slug) {
+          throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized blog route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+        }
         return { ...post, slug, canonical_url: representation.routePath }
       })
     : sourcePostRows
   const offeringById = new Map(offerings.map(item => [item.id, item]))
-  const selectedOfferings = new Map(Array.from(offeringIds).map(id => [id, offeringById.get(id)] as const))
-  if ([...selectedOfferings.values()].some(offering => !offering)) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
   const locationById = new Map(locations.map(item => [item.id, item]))
   const qaItems = qaRows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
   const reviewItems = (reviewRows as unknown as Array<Record<string, unknown>>).map(row => ({
@@ -179,44 +178,50 @@ async function hydrateBlocks(
       ? projectLocalizedMediaAlt([{ asset_id: post.asset_id, slot: 'featured', public_url: post.public_url, thumbnail_url: post.thumbnail_url, kind: post.kind, alt_text: post.alt_text }], localizations ?? [])
       : [],
   }))
-  const hydratedBlocks = publicBlocks.map(block => {
+  return publicBlocks.map(block => {
     const data = { ...block.data }
     if (block.type === 'offering_grid' && Array.isArray(data.offering_ids)) {
-      data.items = data.offering_ids.map(id => {
-        const offering = typeof id === 'string' ? selectedOfferings.get(id) : undefined
-        if (!offering) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
-        return {
+      data.items = data.offering_ids.flatMap((id) => {
+        const offering = typeof id === 'string' ? offeringById.get(id) : undefined
+        if (!offering) {
+          if (localizations) return []
+          throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
+        }
+        return [{
           id: offering.id,
-          title: offering.name,
-          description: offering.summary || undefined,
+          title: offering.label || offering.name,
+          description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
           labelKey: 'saya.posts.cta_default',
           media: offering.media,
-        }
+        }]
       })
     }
     if (block.type === 'location_grid' && Array.isArray(data.location_ids)) {
-      data.items = data.location_ids.map(id => {
+      data.items = data.location_ids.flatMap((id) => {
         const location = typeof id === 'string' ? locationById.get(id) : undefined
-        if (!location) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page location reference is unavailable' })
-        return {
+        if (!location) {
+          if (localizations) return []
+          throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page location reference is unavailable' })
+        }
+        return [{
           id: location.id,
           title: location.title,
-          description: location.short_description || undefined,
+          description: location.short_description || location.description || undefined,
           url: 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
           labelKey: 'saya.home.visit_location',
           media: location.asset_id
             ? projectLocalizedMediaAlt([{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind, alt_text: location.alt_text }], localizations ?? [])
             : [],
-        }
+        }]
       })
     }
     if (block.type === 'offering_grid' && data.source === 'site_offerings') {
       data.items = offerings.map(offering => {
         return {
           id: offering.id,
-          title: offering.name,
-          description: offering.summary || undefined,
+          title: offering.label || offering.name,
+          description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
           labelKey: 'saya.posts.cta_default',
           media: offering.media,
@@ -231,40 +236,6 @@ async function hydrateBlocks(
     }
     return { ...block, data }
   })
-  if (localizations) assertExactLocalizedBlockContent(hydratedBlocks)
-  return hydratedBlocks
-}
-
-function assertExactLocalizedBlockContent(blocks: readonly TenantPageBlock[]): void {
-  const requiredText = (value: unknown, message: string) => {
-    if (typeof value !== 'string' || !value.trim()) {
-      throw new HTTPError({ statusCode: 404, statusMessage: message })
-    }
-  }
-  for (const block of blocks) {
-    if (block.type === 'hero') requiredText(block.data.title, 'Localized hero title was not found')
-    if (block.type === 'heading') requiredText(block.data.text, 'Localized heading text was not found')
-    if (block.type === 'markdown') {
-      const field = Object.hasOwn(block.data, 'markdown') ? block.data.markdown : block.data.content
-      requiredText(field, 'Localized markdown content was not found')
-    }
-    if (!['feature_grid', 'testimonial_grid', 'offering_grid', 'location_grid'].includes(block.type)) continue
-    if (!Array.isArray(block.data.items)) continue
-    for (const item of block.data.items) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) {
-        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized grid item is invalid' })
-      }
-      const record = item as Record<string, unknown>
-      requiredText(
-        Object.hasOwn(record, 'title') ? record.title : record.name,
-        'Localized grid item title was not found',
-      )
-      if (typeof record.url === 'string' && record.url.trim()) {
-        const label = Object.hasOwn(record, 'label') ? record.label : record.labelKey
-        requiredText(label, 'Localized grid item label was not found')
-      }
-    }
-  }
 }
 
 function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], socialMedia: { media: MediaPlacementItem[]; social_image: SocialImageSource | null }): PublicTenantPage {

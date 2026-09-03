@@ -4,7 +4,6 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { getQuery } from 'nitro/h3'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
-import { HTTPError } from 'nitro'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -17,7 +16,6 @@ export default defineHandler(async (event) => {
     const locale = assertExactCanonicalLocale(getQuery(event).locale ?? 'en')
     const result = await loadPublicProductApiDetail(db, siteId, locationSlug, productSlug, locale)
     if (!result) return jsonResponse({ error: 'Product not found' }, { status: 404 })
-    if (locale !== 'en') throw new HTTPError({ statusCode: 404, statusMessage: 'Product reviews do not have localized representations' })
     const reviews = await loadPublicProductReviews(db, result)
     return jsonResponse({
       product: result.product,

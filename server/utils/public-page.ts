@@ -385,9 +385,6 @@ async function loadPublicPageSource(
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
     publicLocalizations = await loadExactPublicLocalizations(db, orgId, siteId, localizedLocale)
-    if (requestedDatasets.has('reviews')) {
-      throw new HTTPError({ statusCode: 404, statusMessage: 'Reviews do not have localized representations' })
-    }
   }
 
   const localizedLocationId = localizedLocale && locationSlug
@@ -1081,7 +1078,7 @@ async function loadPublicPageSource(
     representationSourcePath = `/locations/${sourceLocationSlug}${routeSuffix}`
     representationResource = { type: 'business_location', id: locationId, routeSuffix }
   }
-  const availableLocaleRepresentations = await listPublicLocaleRepresentations(db, {
+  const localeRepresentations = await listPublicLocaleRepresentations(db, {
     organizationId: orgId,
     siteId,
     sourcePath: representationSourcePath,
@@ -1089,10 +1086,6 @@ async function loadPublicPageSource(
     resource: representationResource,
     pageId: representationResource ? undefined : tenantPage?.page_id,
   })
-  const localeRepresentations = requestedDatasets.has('reviews')
-    ? availableLocaleRepresentations.filter(item => item.locale === 'en')
-    : availableLocaleRepresentations
-
   const pagePayload = {
     kind: page ?? 'home',
     success: true,
