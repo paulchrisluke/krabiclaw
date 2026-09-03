@@ -1,4 +1,4 @@
-{
+export default {
   "home": {
     "highlights": "Latest posts & photos.",
     "reviews": "Guest reviews & ratings."
@@ -265,4 +265,4 @@
       "toast_cancel_failed": "Failed to cancel booking"
     }
   }
-}
+} as const

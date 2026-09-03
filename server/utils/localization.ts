@@ -1,5 +1,5 @@
 import { HTTPError } from 'nitro'
-import englishManifest from '~/i18n/locales/en.json' with { type: 'json' }
+import englishManifest from '~/i18n/locales/en'
 import {
   flattenLocaleManifest,
   localeManifestHash,
