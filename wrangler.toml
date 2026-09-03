@@ -228,10 +228,7 @@ namespace = "default"
 remote = true
 
 [env.preview.observability]
-enabled = true
-
-[env.preview.observability.traces]
-enabled = true
+enabled = false
 
 # Stable staging environment — uses dedicated non-production data/resources.
 # Tenant aliases stay at the first subdomain level (for example,
