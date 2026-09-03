@@ -2,13 +2,18 @@ import { expect, request as playwrightRequest, test } from '@playwright/test'
 
 import { loginAs } from './helpers/auth'
 import { createScratchLocation, mcpData, mcpRequest } from './helpers/mcp'
-import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
+import {
+  kikuzukiTestBaseUrl,
+  kikuzukiTestExtraHeaders,
+  potteryHouseTestBaseUrl,
+  potteryHouseTestExtraHeaders,
+} from './test-env'
 
 const KIKUZUKI_OWNER_ID = 'user-e2e-kikuzuki-owner'
 const KIKUZUKI_SITE_ID = 'site-kikuzuki'
 const KIKUZUKI_LOCATION_ID = 'loc-kikuzuki'
 
-test('Service Point QR credentials preserve Better Auth continuity and reject stale or cross-location use', async ({ browser, request, baseURL }) => {
+test('Service Point QR credentials preserve Better Auth continuity and reject stale, cross-tenant, or cross-location use', async ({ browser, request, baseURL }) => {
   test.setTimeout(120_000)
   await loginAs(request, baseURL!, KIKUZUKI_OWNER_ID)
   const siteId = KIKUZUKI_SITE_ID
@@ -44,6 +49,26 @@ test('Service Point QR credentials preserve Better Auth continuity and reject st
   const provisionedUrl = new URL(provisioned.ordering_qr.ordering_url)
   expect(provisionedUrl.pathname).toBe('/ordering')
   expect(provisionedUrl.hash).toBe(`#credential=${provisioned.ordering_qr.credential}`)
+
+  const wrongTenantBaseUrl = potteryHouseTestBaseUrl()
+  const wrongTenant = await playwrightRequest.newContext({
+    baseURL: wrongTenantBaseUrl,
+    extraHTTPHeaders: potteryHouseTestExtraHeaders(),
+  })
+  const wrongTenantSignIn = await wrongTenant.post('/api/auth/sign-in/anonymous', {
+    headers: { origin: new URL(wrongTenantBaseUrl).origin },
+    data: {},
+  })
+  expect(wrongTenantSignIn.status(), await wrongTenantSignIn.text()).toBe(200)
+  const wrongTenantResolution = await wrongTenant.post('/api/public/ordering/resolve', {
+    data: { credential: provisioned.ordering_qr.credential },
+  })
+  expect(wrongTenantResolution.status()).toBe(404)
+  const wrongTenantBody = await wrongTenantResolution.text()
+  expect(wrongTenantBody).toBe('{"error":"Ordering QR code is unavailable"}')
+  expect(wrongTenantBody).not.toContain(label)
+  expect(wrongTenantBody).not.toContain('Kikuzuki')
+  await wrongTenant.dispose()
 
   const tenantBaseUrl = kikuzukiTestBaseUrl()
   const orderingUrl = (credential: string) => `${tenantBaseUrl}/ordering#credential=${credential}`
@@ -117,9 +142,13 @@ test('Service Point QR credentials preserve Better Auth continuity and reject st
   await anonymousContext.close()
 })
 
-test('Ordering QR resolution requires Better Auth and rate-limits credential guessing', async ({ baseURL }) => {
+test('Ordering QR resolution requires Better Auth and rate-limits credential guessing', async () => {
   test.setTimeout(120_000)
-  const anonymous = await playwrightRequest.newContext({ baseURL })
+  const tenantBaseUrl = kikuzukiTestBaseUrl()
+  const anonymous = await playwrightRequest.newContext({
+    baseURL: tenantBaseUrl,
+    extraHTTPHeaders: kikuzukiTestExtraHeaders(),
+  })
   const testNonce = Date.now().toString(36)
   const credential = `oqr_${testNonce.padEnd(43, 'A')}`
   const sourceIp = `198.51.100.${(Date.now() % 250) + 1}`
@@ -129,7 +158,7 @@ test('Ordering QR resolution requires Better Auth and rate-limits credential gue
   expect(unauthenticated.status()).toBe(401)
 
   const signIn = await anonymous.post('/api/auth/sign-in/anonymous', {
-    headers: { origin: new URL(baseURL!).origin },
+    headers: { origin: new URL(tenantBaseUrl).origin },
     data: {},
   })
   expect(signIn.status(), await signIn.text()).toBe(200)

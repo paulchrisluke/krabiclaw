@@ -13,6 +13,8 @@ export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
+  const tenantSiteId = typeof event.context.siteId === 'string' ? event.context.siteId : null
+  if (!tenantSiteId) return jsonResponse({ error: 'Ordering QR code is unavailable' }, { status: 404 })
 
   const body = await readStrictBody<{ credential: string }>(event, { credential: 'string' })
   const ipHash = await hashClientIp(getClientIp(event))
@@ -33,7 +35,7 @@ export default defineHandler(async (event) => {
   )
   if (!credentialAllowed) return jsonResponse({ error: 'Too many Ordering QR attempts' }, { status: 429 })
 
-  const resolution = await resolveOrderingQrCredential(env.DB, body.credential)
+  const resolution = await resolveOrderingQrCredential(env.DB, body.credential, { siteId: tenantSiteId })
   if (!resolution) return jsonResponse({ error: 'Ordering QR code is unavailable' }, { status: 404 })
   const publicOrigin = resolveSitePublicOrigin({
     publicUrl: resolution.sitePublicUrl,
