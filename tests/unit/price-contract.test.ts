@@ -67,7 +67,7 @@ test('Product media extraction preserves canonical no-price details and rejects 
       category: 'Sushi', name: 'Chef\'s Choice', description: null, order_url: null,
       price: { kind: 'no-fixed-price', note: 'Market Price' }, details: [],
     }],
-  })
+  }, 'THB')
   assert.equal(extracted?.price, null)
   assert.deepEqual(extracted?.details, details)
   assert.throws(() => parseProductExtraction({
@@ -75,13 +75,19 @@ test('Product media extraction preserves canonical no-price details and rejects 
       category: 'Sushi', name: 'Cropped Price Roll', description: null, order_url: null,
       price: { kind: 'unreadable' }, details: [],
     }],
-  }), /complete Product import batch was rejected/)
-  assert.throws(() => parseProductExtraction({
+  }, 'THB'), /complete Product import batch was rejected/)
+  const [fixed] = parseProductExtraction({
     items: [{
-      category: 'Sushi', name: 'Ambiguous Currency Roll', description: null, order_url: null,
+      category: 'Sushi', name: 'Site Currency Roll', description: null, order_url: null,
       price: { kind: 'fixed', amount_minor: 1200 }, details: [],
     }],
-  }), /complete Product import batch was rejected/)
+  }, 'THB')
+  assert.deepEqual(fixed?.price, {
+    amount_minor: 1200,
+    currency: 'THB',
+    unit: 'item',
+    tax_behavior: 'unspecified',
+  })
 })
 
 test('priceAt selects one active interval and rejects overlapping schedules', () => {

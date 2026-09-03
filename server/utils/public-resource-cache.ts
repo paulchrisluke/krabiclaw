@@ -22,18 +22,8 @@ const CACHE_INVALIDATION_RETRY_AFTER_MS = 5 * 60 * 1000
 export function publicResourceCacheInvalidationQuery(
   siteId: string,
   reason: string,
-  condition?: { sql: string; params: unknown[] },
 ): BatchQuery {
   const values = [crypto.randomUUID(), siteId, reason, new Date().toISOString()]
-  if (condition) {
-    return {
-      query: `INSERT INTO public_resource_cache_invalidations
-        (id, site_id, reason, status, attempt_count, created_at)
-        SELECT ?, ?, ?, 'pending', 0, ?
-         WHERE ${condition.sql}`,
-      params: [...values, ...condition.params],
-    }
-  }
   return {
     query: `INSERT INTO public_resource_cache_invalidations
       (id, site_id, reason, status, attempt_count, created_at)

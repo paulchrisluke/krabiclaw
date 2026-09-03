@@ -727,8 +727,6 @@ export const prices = sqliteTable("prices", {
 	}).onDelete("cascade"),
 	index("prices_product_validity_idx").on(table.organization_id, table.site_id, table.product_id, table.valid_from, table.valid_until),
 	index("prices_site_location_validity_idx").on(table.site_id, table.location_id, table.valid_from, table.valid_until),
-	uniqueIndex("prices_product_start_unique").on(table.product_id, table.valid_from),
-	uniqueIndex("prices_product_open_unique").on(table.product_id).where(sql`${table.valid_until} IS NULL`),
 	check("prices_amount_check", sql`${table.amount_minor} >= 0`),
 	check("prices_compare_at_check", sql`${table.compare_at_amount_minor} IS NULL OR ${table.compare_at_amount_minor} > ${table.amount_minor}`),
 	check("prices_currency_check", sql`${table.currency} IN ('THB','USD','EUR','GBP','JPY','AUD','CAD','SGD','HKD','MYR','IDR','PHP','VND','INR')`),

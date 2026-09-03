@@ -9,8 +9,7 @@ import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { localizationError } from '~/server/utils/localization-errors'
 import { queryFirst } from '~/server/db'
-import { isCurrencyCode, SUPPORTED_CURRENCIES, type CurrencyCode } from '~/shared/currencies'
-import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
+import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   MARKDOWN_MIME_TYPES,
   assertMarkdownSize,
@@ -20,7 +19,12 @@ import {
 } from '~/server/utils/markdown-document'
 
 const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
-const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, details, order URLs, currency, unit, or tax treatment. For each Product, return exactly one discriminated price result. Use { kind: "fixed", amount_minor, currency, unit, tax_behavior } only when every field is explicit in the source; ${currency} is the site's default currency but is context only and must not be assumed. Use { kind: "no-fixed-price", note } only when the source visibly gives exact customer-facing wording such as "Market Price" or "Ask Staff"; copy that wording verbatim into note. Use { kind: "unreadable" } when price information is missing, ambiguous, cropped, blurred, obscured, or otherwise cannot be read completely. Any unreadable result rejects the complete import, so never guess. Do not add a price-note entry to details; the server derives it from note. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, details, or order URLs. For each Product, return exactly one discriminated price result. Use { kind: "fixed", amount_minor } when a fixed numeric amount is clearly visible. The server applies the trusted site currency ${currency}, unit "item", and tax behavior "unspecified". Use { kind: "no-fixed-price", note } only when the source visibly gives exact customer-facing wording such as "Market Price" or "Ask Staff"; copy that wording verbatim into note. Use { kind: "unreadable" } when price information is missing, ambiguous, cropped, blurred, obscured, or otherwise cannot be read completely. Any unreadable result rejects the complete import, so never guess. Do not add a price-note entry to details; the server derives it from note. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+
+type ExtractedPrice =
+  | { kind: 'fixed'; amount_minor: number }
+  | { kind: 'no-fixed-price'; note: string }
+  | { kind: 'unreadable' }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -43,7 +47,7 @@ const PRODUCT_EXTRACTION_TOOL = {
             description: { type: ['string', 'null'] },
             price: {
               oneOf: [
-                { type: 'object', properties: { kind: { const: 'fixed' }, amount_minor: { type: 'integer', minimum: 0 }, currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] }, unit: { type: 'string', enum: [...PRICE_UNITS] }, tax_behavior: { type: 'string', enum: [...PRICE_TAX_BEHAVIORS] } }, required: ['kind', 'amount_minor', 'currency', 'unit', 'tax_behavior'], additionalProperties: false },
+                { type: 'object', properties: { kind: { const: 'fixed' }, amount_minor: { type: 'integer', minimum: 0 } }, required: ['kind', 'amount_minor'], additionalProperties: false },
                 { type: 'object', properties: { kind: { const: 'no-fixed-price' }, note: { type: 'string', minLength: 1 } }, required: ['kind', 'note'], additionalProperties: false },
                 { type: 'object', properties: { kind: { const: 'unreadable' } }, required: ['kind'], additionalProperties: false },
               ],
@@ -61,7 +65,29 @@ const PRODUCT_EXTRACTION_TOOL = {
   },
 }
 
-export function parseProductExtraction(input: unknown): CreateProductInput[] {
+function parseExtractedPrice(input: unknown): ExtractedPrice | null {
+  if (!isRecord(input)) return null
+  const keys = Object.keys(input).sort().join(',')
+  if (input.kind === 'fixed') {
+    return keys === 'amount_minor,kind'
+      && typeof input.amount_minor === 'number'
+      && Number.isSafeInteger(input.amount_minor)
+      && input.amount_minor >= 0
+      ? { kind: 'fixed', amount_minor: input.amount_minor }
+      : null
+  }
+  if (input.kind === 'no-fixed-price') {
+    return keys === 'kind,note'
+      && typeof input.note === 'string'
+      && input.note.length > 0
+      && input.note === input.note.trim()
+      ? { kind: 'no-fixed-price', note: input.note }
+      : null
+  }
+  return input.kind === 'unreadable' && keys === 'kind' ? { kind: 'unreadable' } : null
+}
+
+export function parseProductExtraction(input: unknown, currency: CurrencyCode): CreateProductInput[] {
   if (!isRecord(input)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
   }
@@ -93,35 +119,12 @@ export function parseProductExtraction(input: unknown): CreateProductInput[] {
     const descriptionValid = item.description === null || typeof item.description === 'string'
     const orderUrlValid = item.order_url === null || typeof item.order_url === 'string'
 
-    const rawPrice = item.price
-    let resolvedPrice: CreateProductInput['price'] = null
-    let priceValid = false
-    let priceNote: string | null = null
-    if (isRecord(rawPrice)) {
-      const keys = Object.keys(rawPrice).sort().join(',')
-      if (rawPrice.kind === 'fixed') {
-        const amountMinor = rawPrice.amount_minor
-        const currency = rawPrice.currency
-        const unit = rawPrice.unit
-        const taxBehavior = rawPrice.tax_behavior
-        priceValid = keys === 'amount_minor,currency,kind,tax_behavior,unit'
-          && typeof amountMinor === 'number' && Number.isSafeInteger(amountMinor) && amountMinor >= 0
-          && typeof currency === 'string' && isCurrencyCode(currency)
-          && typeof unit === 'string' && PRICE_UNITS.includes(unit as PriceUnit)
-          && typeof taxBehavior === 'string' && PRICE_TAX_BEHAVIORS.includes(taxBehavior as PriceTaxBehavior)
-        if (priceValid) {
-          resolvedPrice = {
-            amount_minor: amountMinor as number,
-            currency: currency as CurrencyCode,
-            unit: unit as PriceUnit,
-            tax_behavior: taxBehavior as PriceTaxBehavior,
-          }
-        }
-      } else if (rawPrice.kind === 'no-fixed-price') {
-        priceNote = typeof rawPrice.note === 'string' ? rawPrice.note : null
-        priceValid = keys === 'kind,note' && priceNote !== null && priceNote.length > 0 && priceNote === priceNote.trim()
-      }
-    }
+    const extractedPrice = parseExtractedPrice(item.price)
+    const priceValid = extractedPrice !== null && extractedPrice.kind !== 'unreadable'
+    const resolvedPrice: CreateProductInput['price'] = extractedPrice?.kind === 'fixed'
+      ? { amount_minor: extractedPrice.amount_minor, currency, unit: 'item', tax_behavior: 'unspecified' }
+      : null
+    const priceNote = extractedPrice?.kind === 'no-fixed-price' ? extractedPrice.note : null
     let details: Product['details'] = []
     let detailsValid = true
     try {
@@ -328,7 +331,7 @@ export async function extractProductsFromMediaAsset(
   ) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must return exactly one structured tool call')
   }
-  const accepted = parseProductExtraction(toolBlocks[0].input)
+  const accepted = parseProductExtraction(toolBlocks[0].input, site.default_currency)
   try {
     const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, {
       actorId: opts.userId,

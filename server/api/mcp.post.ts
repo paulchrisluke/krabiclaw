@@ -16,7 +16,7 @@ import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
-  assertConversationalToolEnabled, filterConversationalTools, normalizeMcpToolForConversationalSurface, } from "~/server/utils/conversational-tool-surface";
+  assertConversationalToolEnabled, visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
 import {
   dispatchStandardMcpMethod, respondToMcpError, resolveMissingMcpCredential, unsupportedMcpMethodError, type McpToolMeta, } from "~/server/utils/mcp-runtime";
 import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
@@ -230,8 +230,7 @@ Common workflows: manage location-scoped Products, create and publish site posts
         ? await getVisibleSiteContext(event, siteId)
         : null;
 
-      const visibleSurfaceTools = filterConversationalTools(MCP_PUBLIC_TOOLS, cfEnv)
-        .map((tool) => normalizeMcpToolForConversationalSurface(tool, cfEnv));
+      const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
 
       const entitlementKeys = siteCtx
         ? [

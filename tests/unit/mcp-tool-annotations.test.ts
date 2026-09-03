@@ -43,7 +43,11 @@ test('MCP annotation validation accepts only internally consistent hint combinat
   }
   const byName = new Map(MCP_PUBLIC_TOOLS.map(tool => [tool.name, tool.annotations]))
   assert.equal(byName.get('analyze_document')?.openWorldHint, true)
-  assert.equal(byName.get('import_from_maps')?.openWorldHint, true)
+  assert.deepEqual(byName.get('import_from_maps'), {
+    readOnlyHint: false,
+    openWorldHint: false,
+    destructiveHint: false,
+  })
   for (const name of ['update_product', 'rename_product_category', 'move_products', 'move_product_category', 'reorder_media', 'update_media_asset', 'update_notification_settings', 'update_site_settings']) {
     assert.equal(byName.get(name)?.destructiveHint, true, name)
   }

@@ -1,9 +1,14 @@
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { register } from 'node:module'
+import Ajv2020 from 'ajv/dist/2020.js'
 
 register('../tests/unit/support/alias-hooks.mjs', import.meta.url)
 
 const { MCP_PUBLIC_TOOLS } = await import('../server/utils/mcp-tools/index.ts')
+const { visibleConversationalMcpTools } = await import('../server/utils/conversational-tool-surface.ts')
+
+const SCHEMA_URL = 'https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json'
+const OUTPUT_PATH = 'chatgpt-app-submission.json'
 
 function justifications(tool) {
   const annotations = tool.annotations
@@ -11,13 +16,13 @@ function justifications(tool) {
     ? 'Retrieves data from the authenticated tenant workspace without modifying state.'
     : tool.name === 'analyze_document'
       ? 'Analyzes an attachment, consumes AI credits, and records usage in the tenant workspace.'
+      : tool.name === 'import_from_maps'
+        ? 'Queries Google Places, consumes credits, and records usage without persisting imported content.'
       : 'Creates or changes data in the authenticated tenant workspace.'
   const openWorld = annotations.openWorldHint
     ? tool.name === 'analyze_document'
       ? 'Sends the attached document to the configured AI service for analysis.'
-      : tool.name === 'import_from_maps'
-        ? 'Reads Google Places and writes imported content that can appear on the tenant website.'
-        : 'Can change tenant content that is visible on a public website or an external service.'
+      : 'Can change tenant content that is visible on a public website or an external service.'
     : 'Does not change public internet state or a third-party system.'
   const destructive = annotations.destructiveHint
     ? 'Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically.'
@@ -29,7 +34,8 @@ function justifications(tool) {
   }
 }
 
-const tools = Object.fromEntries(MCP_PUBLIC_TOOLS.map(tool => [tool.name, {
+const publicTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS)
+const tools = Object.fromEntries(publicTools.map(tool => [tool.name, {
   annotations: {
     readOnlyHint: tool.annotations.readOnlyHint,
     openWorldHint: tool.annotations.openWorldHint,
@@ -39,7 +45,7 @@ const tools = Object.fromEntries(MCP_PUBLIC_TOOLS.map(tool => [tool.name, {
 }]))
 
 const submission = {
-  $schema: 'https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json',
+  $schema: SCHEMA_URL,
   schema_version: 1,
   app_info: {
     display_name: 'KrabiClaw',
@@ -118,4 +124,28 @@ const submission = {
   ],
 }
 
-await writeFile('chatgpt-app-submission.json', `${JSON.stringify(submission, null, 2)}\n`)
+const mode = process.argv[2] ?? '--write'
+if (mode !== '--write' && mode !== '--check') {
+  throw new Error('Usage: generate-chatgpt-app-submission.mjs [--write|--check]')
+}
+
+const response = await fetch(SCHEMA_URL)
+if (!response.ok) {
+  throw new Error(`Unable to fetch ChatGPT submission schema: ${response.status} ${response.statusText}`)
+}
+
+const schema = await response.json()
+const validate = new Ajv2020({ allErrors: true }).compile(schema)
+if (!validate(submission)) {
+  throw new Error(`ChatGPT submission is invalid: ${JSON.stringify(validate.errors)}`)
+}
+
+const serialized = `${JSON.stringify(submission, null, 2)}\n`
+if (mode === '--check') {
+  const committed = await readFile(OUTPUT_PATH, 'utf8')
+  if (committed !== serialized) {
+    throw new Error(`ChatGPT submission is stale. Run yarn chatgpt:submission:write and commit ${OUTPUT_PATH}.`)
+  }
+} else {
+  await writeFile(OUTPUT_PATH, serialized)
+}

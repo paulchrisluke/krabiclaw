@@ -2,10 +2,10 @@
 
 **Status: Contract**
 
-`server/db/schema.ts` is the source of truth for every object supported by the
-Drizzle SQLite schema DSL. Unsupported SQLite DDL may use the narrow custom
-migration procedure below; the custom migration is the source of truth for that
-DDL.
+`server/db/schema.ts` is the only schema source of truth.
+
+Custom migrations are prohibited. If an LLM proposes, generates, or edits one,
+stop and require human review. Do not commit or apply it.
 
 ## Normal schema change
 
@@ -23,23 +23,6 @@ DDL.
 5. Rebuild local D1 from the complete migration chain.
 6. Run schema/invariant/foreign-key checks and `yarn lint:migrations`.
 7. Deploy only through the PR/branch workflow.
-
-## Unsupported SQLite DDL
-
-Use an official Drizzle custom migration only when the SQLite schema DSL cannot
-represent a required invariant, such as a cross-row interval trigger:
-
-1. Generate ordinary schema changes first and verify their SQL is clean.
-2. Run `yarn drizzle-kit generate --custom --name <invariant-name>`.
-3. Put only the unsupported DDL in that generated custom migration. Do not patch
-   the ordinary generated migration or its metadata.
-4. Include a fail-closed statement that validates all historical rows before the
-   migration can be marked applied.
-5. Rebuild D1 from the complete chain and prove the invariant through direct
-   database writes.
-
-Do not use a custom migration for tables, columns, indexes, foreign keys, or
-checks that Drizzle can express in `schema.ts`.
 
 ## Preview
 

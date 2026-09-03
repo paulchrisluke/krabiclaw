@@ -142,3 +142,11 @@ export function normalizeChowBotToolForConversationalSurface<T extends ChowBotTo
 export function filterConversationalTools<T extends ToolLike>(tools: readonly T[], env?: ApiRecord): T[] {
   return tools.filter((tool) => isConversationalToolEnabled(tool.name, env))
 }
+
+export function visibleConversationalMcpTools<T extends McpToolLike>(
+  tools: readonly T[],
+  env?: ApiRecord,
+): T[] {
+  return filterConversationalTools(tools, env)
+    .map((tool) => normalizeMcpToolForConversationalSurface(tool, env))
+}

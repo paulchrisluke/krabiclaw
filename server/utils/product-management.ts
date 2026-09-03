@@ -183,47 +183,17 @@ export function normalizePriceInput(input: unknown, provenance: ProductPriceProv
 // Shared by updateProduct and syncProducts, which both batch their writes
 // through one executeBatch — this must return a query, never execute
 // anything itself, or the two writes would no longer be atomic.
-function closeActivePriceQuery(price: Pick<Price, 'id' | 'valid_from' | 'valid_until'>, at: string): BatchQuery {
+function closeActivePriceQuery(priceId: string, at: string): BatchQuery {
   return {
     query: `
       UPDATE prices
          SET valid_until = ?
        WHERE id = ?
-         AND valid_from = ?
-         AND valid_until IS ?
          AND valid_from < ?
          AND (valid_until IS NULL OR valid_until > ?)
     `,
-    params: [at, price.id, price.valid_from, price.valid_until, at, at],
+    params: [at, priceId, at, at],
   }
-}
-
-function currentPriceSnapshotPredicate(productId: string, price: Pick<Price, 'id' | 'valid_from' | 'valid_until'> | null): { sql: string; params: SqlValue[] } {
-  const current = `valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND (valid_until IS NULL OR valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
-  if (!price) {
-    return {
-      sql: `NOT EXISTS (SELECT 1 FROM prices WHERE product_id = ? AND ${current})`,
-      params: [productId],
-    }
-  }
-  return {
-    sql: `EXISTS (
-      SELECT 1 FROM prices
-       WHERE product_id = ? AND id = ? AND valid_from = ? AND valid_until IS ? AND ${current}
-    ) AND NOT EXISTS (
-      SELECT 1 FROM prices
-       WHERE product_id = ? AND id <> ? AND ${current}
-    )`,
-    params: [productId, price.id, price.valid_from, price.valid_until, productId, price.id],
-  }
-}
-
-function isStalePriceWrite(error: unknown): boolean {
-  return error instanceof Error && (
-    error.message.includes('products.updated_at')
-    || error.message.includes('prices_overlap')
-    || error.message.includes('UNIQUE constraint failed: prices.product_id')
-  )
 }
 
 async function hydrateProductMedia(db: DbClient, siteId: string, products: Product[]): Promise<Product[]> {
@@ -613,14 +583,13 @@ export async function syncProducts(
     const id = current?.id ?? crypto.randomUUID()
     orderedIds.push(id)
     if (current) {
-      const priceSnapshot = currentPriceSnapshotPredicate(id, current.price)
       const effectiveDetails = input.details === undefined ? current.details : details
       // A row that previously had no Price and a price-note transitioning
       // to a fixed Price must explicitly clear the note in the same call —
       // omitting `details` keeps it, which this correctly rejects.
       assertNoPriceNoteContradiction(price !== null, effectiveDetails)
       writes.push({
-        query: `UPDATE products SET category=?, name=?, description=?, order_url=?, is_visible=?, available=?, featured=?, featured_sort_order=?, tags_json=?, details_json=?, seo_title=?, seo_description=?, canonical_url=?, robots=?, source='manual', updated_at=CASE WHEN updated_at=? AND ${priceSnapshot.sql} THEN ? ELSE NULL END, updated_by=? WHERE id=? AND organization_id=? AND site_id=? AND location_id=? AND product_type='standard'`,
+        query: `UPDATE products SET category=?, name=?, description=?, order_url=?, is_visible=?, available=?, featured=?, featured_sort_order=?, tags_json=?, details_json=?, seo_title=?, seo_description=?, canonical_url=?, robots=?, source='manual', updated_at=?, updated_by=? WHERE id=? AND organization_id=? AND site_id=? AND location_id=? AND product_type='standard'`,
         params: [category, name, input.description === undefined ? current.description : description,
           input.order_url === undefined ? current.order_url : orderUrl,
           validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, current.is_visible),
@@ -632,13 +601,13 @@ export async function syncProducts(
           input.seo_title === undefined ? current.seo_title : normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
           input.seo_description === undefined ? current.seo_description : normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
           input.canonical_url === undefined ? current.canonical_url : validateProductCanonicalUrl(input.canonical_url),
-          input.robots === undefined ? current.robots : validateProductRobots(input.robots), current.updated_at, ...priceSnapshot.params, now, actor,
+          input.robots === undefined ? current.robots : validateProductRobots(input.robots), now, actor,
           id, organizationId, siteId, locationId],
       })
       if (price === null) {
         if (current.price) {
           if (now <= current.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price cannot close before the active Price starts` })
-          writes.push(closeActivePriceQuery(current.price, now))
+          writes.push(closeActivePriceQuery(current.price.id, now))
         }
         continue
       }
@@ -653,7 +622,7 @@ export async function syncProducts(
         if (current.price && price.validFrom <= current.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price must start after the active Price` })
         const conflict = await queryFirst<{ id: string }>(db, `SELECT id FROM prices WHERE product_id = ? AND id <> COALESCE(?, '') AND valid_from < COALESCE(?, '9999-12-31T23:59:59.999Z') AND (valid_until IS NULL OR valid_until > ?) LIMIT 1`, [id, current.price?.id ?? null, price.validUntil, price.validFrom])
         if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price overlaps an existing Price` })
-        if (current.price) writes.push(closeActivePriceQuery(current.price, price.validFrom))
+        if (current.price) writes.push(closeActivePriceQuery(current.price.id, price.validFrom))
         writes.push({
           query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
@@ -703,12 +672,7 @@ export async function syncProducts(
   }
   writes.push(denseProductOrderQuery({ organizationId, siteId, locationId, ids: orderedIds, actor, now }))
   writes.push(publicResourceCacheInvalidationQuery(siteId, 'product.synced'))
-  try {
-    await executeBatch(db, writes, { operation: 'sync Products' })
-  } catch (error) {
-    if (isStalePriceWrite(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'A Product Price changed concurrently; re-read the location and retry' })
-    throw error
-  }
+  await executeBatch(db, writes, { operation: 'sync Products' })
   await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { product_count: inputs.length, omitted_count: omitted.length, set_missing_unavailable: setMissingUnavailable, mutation_type: 'sync_products', requested_location_id: locationId, resolved_location_id: locationId } })
   return listLocationProducts(db, organizationId, siteId, locationId)
 }
@@ -761,10 +725,9 @@ export async function updateProduct(
   assertNoPriceNoteContradiction(effectiveHasFixedPrice, effectiveDetails)
   const contentChanged = input.price !== undefined || ['category', 'name', 'description', 'order_url', 'tags_json', 'details_json'].some(column => sets.some(set => set.startsWith(`${column} =`)))
   if (contentChanged) add('source', 'manual')
+  add('updated_at', new Date().toISOString())
   add('updated_by', actor)
-  const updatedAt = new Date().toISOString()
   let priceInsert: BatchQuery | null = null
-  const priceSnapshot = currentPriceSnapshotPredicate(productId, existing.price)
   let priceClose: BatchQuery | null = null
   if (input.price !== undefined) {
     const at = input.price?.valid_from ?? new Date().toISOString()
@@ -780,7 +743,7 @@ export async function updateProduct(
       `, [productId, existing.price?.id ?? null, price.validUntil, price.validFrom])
       if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: 'Scheduled Price overlaps an existing Price' })
       if (existing.price && (existing.price.valid_until === null || existing.price.valid_until > at)) {
-        priceClose = closeActivePriceQuery(existing.price, at)
+        priceClose = closeActivePriceQuery(existing.price.id, at)
       }
       const insertParams: SqlValue[] = [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()]
       priceInsert = {
@@ -789,26 +752,21 @@ export async function updateProduct(
         params: insertParams,
       }
     } else if (existing.price && (existing.price.valid_until === null || existing.price.valid_until > at)) {
-      priceClose = closeActivePriceQuery(existing.price, at)
+      priceClose = closeActivePriceQuery(existing.price.id, at)
     }
   }
   const writes: BatchQuery[] = []
   if (sets.length) {
-    params.push(existing.updated_at, ...priceSnapshot.params, updatedAt, productId, organizationId, siteId, locationId)
+    params.push(productId, organizationId, siteId, locationId)
     writes.push({
-      query: `UPDATE products SET ${sets.join(', ')}, updated_at = CASE WHEN updated_at = ? AND ${priceSnapshot.sql} THEN ? ELSE NULL END WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`,
+      query: `UPDATE products SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`,
       params,
     })
   }
   if (priceClose) writes.push(priceClose)
   if (priceInsert) writes.push(priceInsert)
   writes.push(publicResourceCacheInvalidationQuery(siteId, 'product.updated'))
-  try {
-    await executeBatch(db, writes, { operation: 'update Product' })
-  } catch (error) {
-    if (isStalePriceWrite(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'The Product Price changed concurrently; re-read the Product and retry' })
-    throw error
-  }
+  await executeBatch(db, writes, { operation: 'update Product' })
   await productEvent(db, 'product.updated', { organizationId, siteId, locationId, actor, productId, metadata: { mutation_type: 'update_product', requested_location_id: null, resolved_location_id: locationId } })
   const updated = await getProduct(db, organizationId, siteId, locationId, productId)
   if (!updated) throw new Error('Product not found after update')

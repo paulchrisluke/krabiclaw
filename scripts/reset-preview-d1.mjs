@@ -42,24 +42,15 @@ function d1Binding(source, heading) {
   }
 }
 
-function runWrangler(args, { json = false, input, rejectFallback = false } = {}) {
-  const capture = json || input !== undefined || rejectFallback
+function runWrangler(args, { json = false } = {}) {
   const result = spawnSync(WRANGLER_BIN, args, {
     cwd: ROOT,
     env: WRANGLER_ENV,
     encoding: 'utf8',
-    input,
-    stdio: capture ? [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] : 'inherit',
+    stdio: json ? ['ignore', 'pipe', 'inherit'] : 'inherit',
   })
   if (result.error) throw result.error
-  if (capture && !json) {
-    if (result.stdout) process.stdout.write(result.stdout)
-    if (result.stderr) process.stderr.write(result.stderr)
-  }
   if (result.status !== 0) throw new Error(`Wrangler failed (${args.join(' ')})`)
-  if (rejectFallback && /fallback value|not have access to all zones/i.test(`${result.stdout ?? ''}\n${result.stderr ?? ''}`)) {
-    throw new Error(`Wrangler used a permission fallback (${args.join(' ')})`)
-  }
   if (!json) return undefined
   try {
     return JSON.parse(result.stdout)
@@ -216,7 +207,7 @@ function main() {
       throw new Error(`Preview reset left application objects: ${remaining.map(row => row.name).join(', ')}`)
     }
 
-    runWrangler(['d1', 'migrations', 'apply', preview.name, '--env', 'preview', '--remote'], { input: 'y\n', rejectFallback: true })
+    runWrangler(['d1', 'migrations', 'apply', preview.name, '--env', 'preview', '--remote'])
 
     const applied = queryRows(preview.name, 'SELECT name FROM d1_migrations ORDER BY name')
       .map(row => row.name)
