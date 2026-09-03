@@ -12,6 +12,7 @@ interface RepresentationInput {
   sourceLabel: string
   resource?: { type: LocalizedResourceType; id: string; routeSuffix?: string }
   pageId?: string
+  publishedLocaleRoute?: boolean
 }
 
 export async function resolvePublicLocalizationSourcePath(
@@ -99,11 +100,6 @@ export async function listPublicLocaleRepresentations(
          WHERE rl.organization_id = ? AND rl.site_id = ?
            AND rl.resource_type = ? AND rl.resource_id = ? AND rl.route_path IS NOT NULL
            AND sl.status = 'published'
-           AND EXISTS (
-             SELECT 1 FROM resource_localizations site_rl
-              WHERE site_rl.organization_id = rl.organization_id AND site_rl.site_id = rl.site_id
-                AND site_rl.locale = rl.locale AND site_rl.resource_type = 'site' AND site_rl.resource_id = rl.site_id
-           )
          ORDER BY rl.locale
       `, [input.organizationId, input.siteId, input.resource.type, input.resource.id])
     : input.pageId
@@ -115,14 +111,18 @@ export async function listPublicLocaleRepresentations(
               ON sl.organization_id = v.organization_id AND sl.site_id = v.site_id AND sl.locale = v.locale
            WHERE v.organization_id = ? AND v.site_id = ? AND v.page_id = ? AND v.locale <> 'en'
              AND sl.status = 'published'
-             AND EXISTS (
-               SELECT 1 FROM resource_localizations site_rl
-                WHERE site_rl.organization_id = v.organization_id AND site_rl.site_id = v.site_id
-                  AND site_rl.locale = v.locale AND site_rl.resource_type = 'site' AND site_rl.resource_id = v.site_id
-             )
            ORDER BY v.locale
         `, [input.organizationId, input.siteId, input.pageId])
-      : []
+      : input.publishedLocaleRoute
+        ? await queryAll<{ locale: string; label: string; route_path: string }>(db, `
+            SELECT sl.locale, COALESCE(sl.label, sl.locale) AS label,
+                   CASE WHEN ? = '/' THEN '/' || sl.locale ELSE '/' || sl.locale || ? END AS route_path
+              FROM site_locales sl
+             WHERE sl.organization_id = ? AND sl.site_id = ? AND sl.locale <> 'en'
+               AND sl.status = 'published'
+             ORDER BY sl.locale
+          `, [input.sourcePath, input.sourcePath, input.organizationId, input.siteId])
+        : []
 
   for (const candidate of candidates) {
     try {

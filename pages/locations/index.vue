@@ -124,8 +124,8 @@ const siteName = computed(() => unref(site)?.brand_name || '')
 
 useSocialMetadata(() => ({
   path: '/locations',
-  title: `Locations · ${siteName.value}`,
-  description: 'Find all our locations.',
+  title: t('saya.locations.collection_title', { site: siteName.value }),
+  description: t('saya.locations.meta_description'),
   brand: {
     siteName: siteName.value,
   },

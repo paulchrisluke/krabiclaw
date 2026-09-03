@@ -41,11 +41,7 @@ export async function loadExactPublicLocalizations(
      WHERE organization_id = ? AND site_id = ? AND locale = ?
      ORDER BY resource_type, resource_id
   `, [organizationId, siteId, locale])
-  const localizations = indexStoredPublicLocalizations(rows)
-  if (!localizations.some(item => item.resourceType === 'site' && item.resourceId === siteId)) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized site representation was not found' })
-  }
-  return localizations
+  return indexStoredPublicLocalizations(rows)
 }
 
 const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {

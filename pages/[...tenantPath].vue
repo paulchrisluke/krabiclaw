@@ -97,7 +97,6 @@ if (localizedRoute.value) {
   useState<string>('public-locale', () => 'en').value = localizedRoute.value.locale
   useState<Record<string, string> | null>('platform-locale-messages', () => null).value = localizedRoute.value.platform_messages
   useState<LocalizedPublicRoute['locale_representations']>('public-locale-representations', () => []).value = localizedRoute.value.locale_representations
-  useState<Record<string, string> | null>('localized-site-values', () => null).value = localizedRoute.value.site.values as Record<string, string>
   useHead({
     htmlAttrs: { lang: localizedRoute.value.locale },
     link: [{ rel: 'alternate', hreflang: localizedRoute.value.locale, href: localizedRoute.value.route_path }],

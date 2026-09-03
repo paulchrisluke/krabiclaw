@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   const resourceType = getRouterParam(event, 'resourceType')
   const resourceId = getRouterParam(event, 'resourceId')
   const locale = getRouterParam(event, 'locale')
-  if (!siteId || !resourceType || !resourceId || !locale) throw createError({ statusCode: 400, statusMessage: 'Complete localization route is required' })
+  if (!siteId || !resourceType || !resourceId || !locale) throw createError({ statusCode: 400, statusMessage: 'Site, resource, and locale route parameters are required' })
   const { db, site } = await requireSiteAccess(event, siteId)
   return { localization: await getResourceLocalizationForAuthoring(db, site.organization_id, siteId, resourceType, resourceId, locale) }
 })

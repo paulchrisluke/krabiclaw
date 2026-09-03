@@ -10,7 +10,7 @@
                  side with the article at `lg:` (~992px, see --breakpoint-lg in assets/css/base.css).
         -->
         <aside class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
-          <PlatformCommandSearchTrigger v-if="publicLocale === 'en'" surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" />
+          <PlatformCommandSearchTrigger v-if="searchSupportsLocale" surface="tenant_blog" variant="blawby" :label="articleSearchLabel" :aria-label="articleSearchLabel" class="mb-6" />
           <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" />
         </aside>
 
@@ -19,7 +19,7 @@
             <!-- Mobile-only compact control replacing the sidebar: search + a drawer with
                  the same category nav shown in the desktop sidebar. -->
             <div class="flex items-center gap-3 lg:hidden">
-              <PlatformCommandSearchTrigger v-if="publicLocale === 'en'" surface="tenant_blog" variant="blawby" label="Search articles" aria-label="Search articles" class="flex-1" />
+              <PlatformCommandSearchTrigger v-if="searchSupportsLocale" surface="tenant_blog" variant="blawby" :label="articleSearchLabel" :aria-label="articleSearchLabel" class="flex-1" />
               <button
                 type="button"
                 class="group flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--blawby-border)] bg-[var(--blawby-surface)] px-3 py-2.5 text-sm font-medium transition hover:border-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-100)]"
@@ -28,13 +28,13 @@
                 @click="browseTopicsOpen = true"
               >
                 <PlatformIcon name="list" class="size-4 shrink-0 text-[var(--blawby-ink)] opacity-60 transition group-hover:opacity-100" />
-                <span class="text-[var(--blawby-ink)] opacity-60 transition group-hover:opacity-100">Browse topics</span>
+                <span class="text-[var(--blawby-ink)] opacity-60 transition group-hover:opacity-100">{{ t('blawby.article.browse_topics') }}</span>
               </button>
             </div>
             <h3 v-if="displayTags.length" class="mt-6 inline-block rounded bg-[var(--blawby-accent)] px-2 text-sm font-semibold uppercase text-white">
               <template v-for="(tag, index) in displayTags" :key="tag">
                 <span v-if="index" aria-hidden="true"> · </span>
-                <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
+                <NuxtLink :to="localePath(`/blog?tags[]=${encodeURIComponent(tag)}`)" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
             <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="t('saya.search.article')" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :site-name="identity.brand_name" :media-url="articleDisplayMedia?.public_url" :media-kind="articleDisplayMedia?.kind || 'image'" :blocks="post.content_blocks" template="blawby" />
@@ -42,11 +42,11 @@
           </div>
 
           <div v-if="relatedPosts.length" class="my-8" data-parity-section="related-articles">
-            <BlawbySectionHeading title="From the" accent="Blog" centered />
+            <BlawbySectionHeading :title="t('blawby.article.from_the')" :accent="t('saya.footer.blog')" centered />
             <BlawbyArticleGrid :posts="relatedPosts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
           </div>
           <div v-if="relatedPosts.length" class="my-4 mb-8 flex justify-center" data-parity-section="related-articles-more">
-            <BlawbyButton to="/blog">See All</BlawbyButton>
+            <BlawbyButton :to="localePath('/blog')">{{ t('saya.common.view_all') }}</BlawbyButton>
           </div>
         </div>
       </div>
@@ -61,15 +61,15 @@
         :featured-url="assetUrl(ctaBlock?.featured)"
         @click="trackConsultation"
       />
-      <ClientOnly v-if="publicLocale === 'en'">
+      <ClientOnly v-if="searchSupportsLocale">
         <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
       </ClientOnly>
 
       <!-- Mobile "Browse topics" drawer — same search trigger + category nav as the
            desktop sidebar, just reachable from the compact control instead of always
            occupying document flow. -->
-      <PlatformDrawer v-model="browseTopicsOpen" title="Browse topics">
-        <PlatformCommandSearchTrigger v-if="publicLocale === 'en'" surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" @click="browseTopicsOpen = false" />
+      <PlatformDrawer v-model="browseTopicsOpen" :title="t('blawby.article.browse_topics')">
+        <PlatformCommandSearchTrigger v-if="searchSupportsLocale" surface="tenant_blog" variant="blawby" :label="articleSearchLabel" :aria-label="articleSearchLabel" class="mb-6" @click="browseTopicsOpen = false" />
         <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" @click="browseTopicsOpen = false" />
       </PlatformDrawer>
     </div>
@@ -92,6 +92,8 @@ definePageMeta({ layout: false })
 const slug = String(useRoute().params.slug || '')
 const { localePath, t } = useI18n()
 const publicLocale = useState<string>('public-locale', () => 'en')
+const searchSupportsLocale = computed(() => publicLocale.value === 'en')
+const articleSearchLabel = computed(() => t('saya.search.dialog_title', { surface: t('saya.search.articles') }))
 const { data, error, shell } = await useBlawbyRoute('article', slug)
 if (error.value) throw error.value
 if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })

@@ -451,11 +451,12 @@ export async function getPublicBlawbyShellData(
   const primaryLocationLocalization = primaryLocation?.primary_location_id
     ? localizations.find(item => item.resourceType === 'business_location' && item.resourceId === primaryLocation.primary_location_id)
     : null
-  const identity = siteLocalization
+  const localizedRepresentation = locale !== 'en'
+  const identity = localizedRepresentation
     ? {
         ...sourceIdentity,
-        brand_name: typeof siteLocalization.values.brand_name === 'string' ? siteLocalization.values.brand_name : '',
-        brand_description: typeof siteLocalization.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
+        brand_name: typeof siteLocalization?.values.brand_name === 'string' ? siteLocalization.values.brand_name : '',
+        brand_description: typeof siteLocalization?.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
         primary_location_address_street: typeof primaryLocationLocalization?.values.address === 'string' ? primaryLocationLocalization.values.address : null,
         primary_location_address_locality: typeof primaryLocationLocalization?.values.city === 'string' ? primaryLocationLocalization.values.city : null,
       }
@@ -463,7 +464,7 @@ export async function getPublicBlawbyShellData(
   let consultation = sourceConsultation
   let compliance = sourceCompliance
   let offeringLinks = sourceOfferingLinks
-  if (siteLocalization) {
+  if (localizedRepresentation) {
     const consultationValues = localizations.find(row => row.resourceType === 'site_consultation_settings')?.values
     consultation = {
       ...sourceConsultation,

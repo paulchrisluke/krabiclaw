@@ -67,7 +67,6 @@ export interface LocalizedPublicRoute {
   route_path: string
   platform_messages: Record<string, string>
   locale_representations: PublicLocaleRepresentation[]
-  site: ResourceLocalizationRecord
   representation:
     | { kind: 'tenant_page'; resource_type: 'tenant_page'; resource_id: string }
     | { kind: 'resource'; resource_type: LocalizedResourceType; resource_id: string; localization: ResourceLocalizationRecord }
@@ -456,7 +455,7 @@ export async function getResourceLocalization(
      WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ?
      LIMIT 1
   `, [organizationId, siteId, resourceType, resourceId, locale])
-  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: resourceType, resource_id: resourceId, locale })
+  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized representation was not found', { resource_type: resourceType, resource_id: resourceId, locale })
   return mapLocalization(row)
 }
 
@@ -500,17 +499,6 @@ export async function resolveLocalizedPublicRoute(
   if (entitlement.source) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'English source routes are unprefixed', { locale, route_path: routePath })
   }
-  // Reuse the entitlement already checked above instead of re-deriving it
-  // via getResourceLocalization - this runs on every localized page request.
-  const siteRow = await queryFirst<ResourceLocalizationRow>(db, `
-    SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
-           document_id, created_at, created_by_user_id, updated_at, updated_by_user_id
-      FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND resource_type = 'site' AND resource_id = ? AND locale = ?
-     LIMIT 1
-  `, [organizationId, siteId, siteId, locale])
-  if (!siteRow) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: 'site', resource_id: siteId, locale })
-  const site = mapLocalization(siteRow)
   const sourceLocale = await queryFirst<{ label: string | null }>(db, `
     SELECT label FROM site_locales
      WHERE organization_id = ? AND site_id = ? AND is_source = 1
@@ -538,7 +526,6 @@ export async function resolveLocalizedPublicRoute(
         sourceLabel,
         resource: { type: localization.resource_type, id: localization.resource_id },
       }),
-      site,
       representation: {
         kind: 'resource',
         resource_type: localization.resource_type,
@@ -559,7 +546,7 @@ export async function resolveLocalizedPublicRoute(
      WHERE v.organization_id = ? AND v.site_id = ? AND v.locale = ? AND v.path = ?
      LIMIT 1
   `, [organizationId, siteId, locale, tenantPagePath])
-  if (!page) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized route was not found', { locale, route_path: routePath })
+  if (!page) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
   return {
     locale,
     route_path: routePath,
@@ -571,7 +558,6 @@ export async function resolveLocalizedPublicRoute(
       sourceLabel,
       pageId: page.page_id,
     }),
-    site,
     representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.page_id },
   }
 }
@@ -774,7 +760,7 @@ export async function deleteResourceLocalization(
     SELECT id, document_id FROM resource_localizations
      WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ? LIMIT 1
   `, [input.organizationId, input.siteId, resourceType, input.resourceId, locale])
-  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: resourceType, resource_id: input.resourceId, locale })
+  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized representation was not found', { resource_type: resourceType, resource_id: input.resourceId, locale })
   const statements: BatchQuery[] = [
     { query: `DELETE FROM site_redirects WHERE owner_type = 'resource_localization' AND owner_id = ?`, params: [row.id] },
     { query: 'DELETE FROM resource_localizations WHERE id = ?', params: [row.id] },

@@ -9,6 +9,6 @@ export default defineHandler((event) => {
   // Allow locale query parameter for preview URLs
   if (path.startsWith('/preview/')) return
   if (!path.startsWith('/api/')) {
-    localizationError(400, 'LOCALE_QUERY_UNSUPPORTED', 'Public locale selection must use an exact locale-prefixed path')
+    localizationError(400, 'LOCALE_QUERY_UNSUPPORTED', 'Public locale selection must use a locale-prefixed path')
   }
 })

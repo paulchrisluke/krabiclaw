@@ -247,7 +247,7 @@ export async function getPublicLinksPage(db: DbClient, siteId: string, locale = 
     : await loadExactPublicLocalizations(db, organizationId, siteId, locale)
   const pageLocalization = localizations.find(item => item.resourceType === 'site_link_page' && item.resourceId === sourcePage.id)
   const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
-  if (locale !== 'en' && (!pageLocalization || !siteLocalization)) return null
+  if (locale !== 'en' && !pageLocalization) return null
   const page = pageLocalization
     ? projectExactLocalizedResource('site_link_page', sourcePage, pageLocalization)
     : sourcePage
@@ -257,7 +257,7 @@ export async function getPublicLinksPage(db: DbClient, siteId: string, locale = 
   if (publicItems.length === 0) return null
   const localizedSite = siteLocalization
     ? projectExactLocalizedResource('site', { ...site, id: siteId }, siteLocalization)
-    : site
+    : { ...site, brand_name: null, brand_description: null }
 
   const template = resolvePublicTemplate({
     themeId: typeof site.theme_id === 'string' ? site.theme_id : null,

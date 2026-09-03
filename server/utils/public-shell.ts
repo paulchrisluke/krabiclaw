@@ -12,7 +12,7 @@ import { verifyPreviewToken } from '~/server/utils/preview-token'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPublicShellPayload } from '~/utils/public-resource-contracts'
-import { assertExactCanonicalLocale, assertPublicSiteLanguageEntitlement, getResourceLocalization } from '~/server/utils/localization'
+import { assertExactCanonicalLocale, assertPublicSiteLanguageEntitlement } from '~/server/utils/localization'
 import {
   indexStoredPublicLocalizations,
   projectExactLocalizedCollection,
@@ -110,24 +110,19 @@ export async function loadPublicShellSource(
     const entitlement = await assertPublicSiteLanguageEntitlement(db, site.organization_id, siteId, locale)
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
     payload.platformMessages = entitlement.platform_messages ?? {}
-    const siteLocalization = await getResourceLocalization(db, site.organization_id, siteId, 'site', siteId, locale)
-    const localizedLocations = await queryAll<StoredPublicLocalizationRow>(db, `
+    const localizedRows = await queryAll<StoredPublicLocalizationRow>(db, `
       SELECT resource_type, resource_id, locale, values_json, route_path, document_id
-        FROM resource_localizations
+       FROM resource_localizations
        WHERE organization_id = ? AND site_id = ? AND locale = ?
-         AND resource_type = 'business_location'
+         AND resource_type IN ('site', 'business_location')
     `, [site.organization_id, siteId, locale])
-    const localizations = indexStoredPublicLocalizations(localizedLocations)
+    const localizations = indexStoredPublicLocalizations(localizedRows)
+    const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
     payload.locations = projectExactLocalizedCollection('business_location', payload.locations, localizations)
-    const siteValues = siteLocalization.values
-    const localizedSite = projectExactLocalizedResource('site', { ...payload.site, id: siteId }, {
-      resourceType: 'site',
-      resourceId: siteId,
-      locale,
-      values: siteValues,
-      routePath: siteLocalization.route_path,
-      documentId: siteLocalization.document_id,
-    })
+    const siteValues = siteLocalization?.values ?? {}
+    const localizedSite = siteLocalization
+      ? projectExactLocalizedResource('site', { ...payload.site, id: siteId }, siteLocalization)
+      : { ...payload.site, id: siteId, brand_name: null, brand_description: null }
     const { id: _localizedSiteId, ...localizedSiteValues } = localizedSite
     payload.site = localizedSiteValues
     const {

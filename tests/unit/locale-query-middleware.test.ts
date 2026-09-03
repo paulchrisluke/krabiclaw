@@ -10,7 +10,7 @@ function event(url: string) {
 test('locale query selection is limited to public data APIs', () => {
   assert.throws(
     () => localeQueryMiddleware(event('https://tenant.example/menu?locale=th')),
-    /exact locale-prefixed path/i,
+    /locale-prefixed path/i,
   )
   assert.equal(
     localeQueryMiddleware(event('https://tenant.example/api/public/sites/site-1/page?locale=th')),

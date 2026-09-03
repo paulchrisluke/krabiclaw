@@ -8,6 +8,10 @@
     "terms": "Terms"
   },
   "blawby": {
+    "article": {
+      "browse_topics": "Browse topics",
+      "from_the": "From the"
+    },
     "navigation": {
       "main": "Main navigation",
       "toggle": "Toggle navigation"
@@ -158,7 +162,9 @@
       "meta_description": "Stories, news, and updates from {site}."
     },
     "products": {
-      "empty": "No products published."
+      "collection_title": "{site} Products",
+      "empty": "No products published.",
+      "meta_description": "Products from {site}."
     },
     "photos": {
       "meta_description": "{count} photos from {location} at {site}."
@@ -235,6 +241,10 @@
       "call_us": "Call us",
       "view_all_locations": "View all locations",
       "not_found": "Location Not Found"
+    },
+    "locations": {
+      "collection_title": "Locations · {site}",
+      "meta_description": "Find all our locations."
     },
     "menu_page": {
       "updated": "Menu · Updated {date}",

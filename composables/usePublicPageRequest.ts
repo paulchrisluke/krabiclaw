@@ -71,7 +71,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       location: slug ?? null,
       experience: null,
       datasets: [
-        'content',
+        ...(page === 'location' || page === 'contact' ? ['content'] as const : []),
         'location',
         ...(page === 'location' || page === 'menu' || page === 'products' ? ['products'] as const : []),
         ...(page === "location" || page === "menu" || page === 'products' || page === "experiences"
@@ -91,7 +91,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "experiences",
       location: null,
       experience: experienceMatch[1] ?? null,
-      datasets: ['content', 'experiences', 'experienceDetail', 'experiencePolicies'],
+      datasets: ['experiences', 'experienceDetail', 'experiencePolicies'],
       blogSlug: null,
     };
   }
@@ -135,7 +135,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "locations",
       location: null,
       experience: null,
-      datasets: ['content', 'location'],
+      datasets: ['location'],
       blogSlug: null,
     };
   if (path.startsWith("/about"))
@@ -175,7 +175,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "qa",
       location: null,
       experience: null,
-      datasets: ['content', 'qa'],
+      datasets: ['qa'],
       blogSlug: null,
     };
   if (path.startsWith("/reviews"))
@@ -183,7 +183,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "reviews",
       location: null,
       experience: null,
-      datasets: ['content', 'reviews'],
+      datasets: ['reviews'],
       blogSlug: null,
     };
   if (path.startsWith("/posts"))
@@ -191,7 +191,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "posts",
       location: null,
       experience: null,
-      datasets: ['content', 'posts'],
+      datasets: ['posts'],
       blogSlug: null,
     };
   if (path.startsWith("/experiences"))
@@ -207,7 +207,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "photos",
       location: null,
       experience: null,
-      datasets: ['content', 'photos'],
+      datasets: ['photos'],
       blogSlug: null,
     };
   if (path === "/menu" || path.startsWith("/menu/"))
@@ -215,7 +215,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "menu",
       location: null,
       experience: null,
-      datasets: ['content', 'products'],
+      datasets: ['products'],
       blogSlug: null,
     };
   if (path === '/products' || path.startsWith('/products/'))
@@ -223,7 +223,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: 'products',
       location: null,
       experience: null,
-      datasets: ['content', 'products'],
+      datasets: ['products'],
       blogSlug: null,
     };
   if (path === "/blog" || path === "/blog/")

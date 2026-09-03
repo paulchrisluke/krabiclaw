@@ -66,7 +66,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       : requestURL.origin || config.public.siteUrl
     const exactRepresentation = localeRepresentations.value.find(item => item.locale === publicLocale.value)
     if (publicLocale.value !== 'en' && !exactRepresentation) {
-      throw createError({ statusCode: 404, statusMessage: 'Exact localized route representation was not found' })
+      throw createError({ statusCode: 404, statusMessage: 'Localized route representation was not found' })
     }
     const canonicalUrl = resolveSeoUrl(exactRepresentation?.route_path ?? value.path, origin)
     const brand = value.brand ?? (template === 'platform'

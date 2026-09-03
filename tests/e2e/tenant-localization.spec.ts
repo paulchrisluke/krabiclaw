@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
+import { expect, test, type APIRequestContext, type APIResponse, type Page } from '@playwright/test'
 import thaiPlatformMessages from '../../i18n/catalogs/th.json' with { type: 'json' }
 import { loginAs } from './helpers/auth'
 import { blawbyBaseURL, blawbyExtraHeaders, openTenantPage } from './helpers'
@@ -61,7 +61,7 @@ async function createPageVariant(
   await expectStatus(response, 201)
 }
 
-async function expectExactThaiPage(
+async function expectThaiRepresentation(
   page: Parameters<typeof openTenantPage>[0],
   path: string,
   sourcePath: string,
@@ -78,12 +78,26 @@ async function expectExactThaiPage(
   await expect(page.locator('link[rel="alternate"][hreflang="en"]')).toHaveAttribute('href', new RegExp(`${sourcePath.replaceAll('/', '\\/')}$`))
 }
 
-test('published Thai content saves through the CMS and renders without English fallback', async ({ page, playwright, browser }) => {
-  const baseURL = testBaseUrl()
-  const admin = await playwright.request.newContext({ baseURL })
-  const owner = await playwright.request.newContext({ baseURL })
-  try {
+test.describe.serial('published Thai content saves through the CMS and renders without English fallback', () => {
+  let baseURL: string
+  let admin: APIRequestContext
+  let owner: APIRequestContext
+  let links: { page: { id: string }; items: Array<{ id: string; label: string }> }
+
+  test.beforeAll(async ({ playwright }) => {
+    baseURL = testBaseUrl()
+    admin = await playwright.request.newContext({ baseURL })
+    owner = await playwright.request.newContext({ baseURL })
     await loginAs(admin, baseURL, 'user-e2e-platform-admin')
+    await loginAs(owner, baseURL, 'user-e2e-ncls-owner')
+  })
+
+  test.afterAll(async () => {
+    await admin.dispose()
+    await owner.dispose()
+  })
+
+  test('publishes the platform catalog and enables Thai for the tenant', async () => {
     const catalogsResponse = await admin.get('/api/admin/localization')
     await expectStatus(catalogsResponse, 200)
     if (!includesLocaleCatalog(await catalogsResponse.json(), locale)) {
@@ -95,7 +109,6 @@ test('published Thai content saves through the CMS and renders without English f
       data: { messages: thaiPlatformMessages },
     }), 200)
 
-    await loginAs(owner, baseURL, 'user-e2e-ncls-owner')
     await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/enable`, {
       data: { label: 'ไทย' },
     }), 200)
@@ -115,18 +128,14 @@ test('published Thai content saves through the CMS and renders without English f
       },
     })
     await expectStatus(linksResponse, 200)
-    const links = await linksResponse.json() as {
+    links = await linksResponse.json() as {
       page: { id: string }
       items: Array<{ id: string; label: string }>
     }
     expect(links.items).toHaveLength(2)
+  })
 
-    await putLocalization(owner, 'site', siteId, {
-      values: {
-        brand_name: 'บริการกฎหมายไทยเพื่อทุกคน',
-        brand_description: 'คำแนะนำทางกฎหมายที่ชัดเจนและเข้าถึงได้',
-      },
-    })
+  test('stores Thai page variants without a site localization', async () => {
     await createPageVariant(owner, {
       pageId: 'page_ncls_home',
       path: '/',
@@ -159,6 +168,10 @@ test('published Thai content saves through the CMS and renders without English f
       title: 'บทความกฎหมาย',
       summary: 'ความรู้ทางกฎหมายสำหรับผู้อ่านภาษาไทย',
     })
+  })
+
+  test('stores directly requested Thai resources without a site localization', async () => {
+    await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site/${siteId}/${locale}`), 404)
     await putLocalization(owner, 'offering', 'offering_ncls_family', {
       route_path: '/th/services/family-th',
       values: {
@@ -180,7 +193,9 @@ test('published Thai content saves through the CMS and renders without English f
         media: [],
       }],
     })
+  })
 
+  test('hydrates sparse Thai page collections and initializes link translations', async ({ page }) => {
     const localizedServicesResponse = await owner.get(`/api/public/sites/${siteId}/localized-pages/${locale}?path=${encodeURIComponent('/services')}`)
     await expectStatus(localizedServicesResponse, 200)
     const localizedServices = await localizedServicesResponse.json() as { page: { blocks: unknown[] } }
@@ -194,14 +209,18 @@ test('published Thai content saves through the CMS and renders without English f
         seo_description: 'ลิงก์กฎหมายภาษาไทย',
       },
     })
-    await Promise.all(links.items.map((item, index) => putLocalization(owner, 'site_link_item', item.id, {
-      values: { label: index === 0 ? 'บริการกฎหมายครอบครัวเก่า' : 'ติดต่อทีมงานเก่า' },
-    })))
+    for (const [index, item] of links.items.entries()) {
+      await putLocalization(owner, 'site_link_item', item.id, {
+        values: { label: index === 0 ? 'บริการกฎหมายครอบครัวเก่า' : 'ติดต่อทีมงานเก่า' },
+      })
+    }
 
     const primedLinks = await openTenantPage(page, `${blawbyBaseURL}/th/links`, blawbyExtraHeaders)
     expect(primedLinks?.status()).toBeLessThan(400)
     await expect(page.locator('main')).toContainText('บริการกฎหมายครอบครัวเก่า')
+  })
 
+  test('saves and reloads Thai link copy through the CMS', async ({ browser }) => {
     const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
     try {
       const cms = await dashboardContext.newPage()
@@ -233,7 +252,17 @@ test('published Thai content saves through the CMS and renders without English f
       for (const [index, item] of links.items.entries()) {
         await expect(cms.getByTestId(`links-item-translation-${item.id}`).getByTestId('links-item-translation-label')).toHaveValue(translatedLabels[index]!)
       }
+    } finally {
+      await dashboardContext.close()
+    }
+  })
 
+  test('keeps dirty Thai form state after a rejected save', async ({ browser }) => {
+    const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
+    try {
+      const cms = await dashboardContext.newPage()
+      await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`)
+      await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
       await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/disable`), 200)
       await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site_link_page/${links.page.id}/${locale}`), 402)
 
@@ -255,7 +284,10 @@ test('published Thai content saves through the CMS and renders without English f
     } finally {
       await dashboardContext.close()
     }
+  })
 
+  async function verifyThaiRoutes(page: Page, viewport: { width: number; height: number }) {
+    await openTenantPage(page, `${blawbyBaseURL}/th/links`, blawbyExtraHeaders)
     await page.reload()
     await expect(page.locator('main')).toContainText('ลิงก์กฎหมายภาษาไทย')
     await expect(page.locator('main')).toContainText('บริการกฎหมายครอบครัว')
@@ -263,17 +295,28 @@ test('published Thai content saves through the CMS and renders without English f
     await expect(page.locator('a[href="/th/contact"]')).toBeVisible()
     await expect(page.locator('body')).not.toContainText(/Family law services|Contact our team/i)
 
-    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-      await page.setViewportSize(viewport)
-      await expectExactThaiPage(page, '/th', '/', 'ความยุติธรรมสำหรับทุกคน', /Access to Justice for All/i)
-      await expectExactThaiPage(page, '/th/services/family-th', '/services/family', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
-      await expectExactThaiPage(page, '/th/services', '/services', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
-      await expectExactThaiPage(page, '/th/blog', '/blog', 'บทความกฎหมาย', /Our Blog|Legal insights/i)
-      await expect(page.locator('a[href="/th/article/will-th"]')).toBeVisible()
-      await expectExactThaiPage(page, '/th/article/will-th', '/article/writing-your-own-will-how-it-works', 'คู่มือพินัยกรรมภาษาไทย', /Last Will and Testament in North Carolina/i)
-    }
-  } finally {
-    await admin.dispose()
-    await owner.dispose()
+    await page.setViewportSize(viewport)
+    await expectThaiRepresentation(page, '/th', '/', 'ความยุติธรรมสำหรับทุกคน', /Access to Justice for All/i)
+    await expectThaiRepresentation(page, '/th/services/family-th', '/services/family', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
+    await expectThaiRepresentation(page, '/th/services', '/services', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
+    await expectThaiRepresentation(page, '/th/blog', '/blog', 'บทความกฎหมาย', /Our Blog|Legal insights/i)
+    await expect(page.locator('a[href="/th/article/will-th"]')).toBeVisible()
+    await expectThaiRepresentation(page, '/th/article/will-th', '/article/writing-your-own-will-how-it-works', 'คู่มือพินัยกรรมภาษาไทย', /Last Will and Testament in North Carolina/i)
   }
+
+  test('renders Thai routes and locale-preserving navigation on desktop', async ({ page }) => {
+    await verifyThaiRoutes(page, { width: 1440, height: 900 })
+  })
+
+  test('renders Thai routes and locale-preserving navigation on mobile', async ({ page }) => {
+    await verifyThaiRoutes(page, { width: 390, height: 844 })
+  })
+
+  test('renders a published Thai functional route without a tenant-page variant', async ({ page }) => {
+    const response = await openTenantPage(page, `${blawbyBaseURL}/th/locations`, blawbyExtraHeaders)
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page.locator('html')).toHaveAttribute('lang', locale)
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/th\/locations$/)
+    await expect(page.locator('link[rel="alternate"][hreflang="th"]')).toHaveAttribute('href', /\/th\/locations$/)
+  })
 })

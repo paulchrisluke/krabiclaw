@@ -1,5 +1,5 @@
 <template>
-  <ProductCollectionPage :products="products" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${brandName} Products`" :brand-name="brandName" />
+  <ProductCollectionPage :products="products" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
@@ -10,6 +10,7 @@ import { requireProductPresentation } from '~/utils/product-presentation'
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
+const { t } = useI18n()
 const { products, locations, config, site } = await usePublicPageData({ lazy: false })
 const vertical = String(site.value?.vertical ?? '')
 const presentation = requireProductPresentation(vertical)
@@ -18,6 +19,7 @@ const rawCurrency = config.value.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
 const currency = rawCurrency
 const brandName = String(site.value?.brand_name ?? '').trim()
+const collectionTitle = computed(() => t('saya.products.collection_title', { site: brandName }))
 const productLocations = computed(() => locations.value.map(location => ({ id: String(location.id), slug: String(location.slug), title: String(location.title) })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Products`, description: `Products from ${brandName}.`, brand: { siteName: brandName } }))
+useSocialMetadata(() => ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.products.meta_description', { site: brandName }), brand: { siteName: brandName } }))
 </script>

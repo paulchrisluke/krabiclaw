@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:480f2384e11f70137b5e9218effbadf2923fc102f2886c00abda4d4fb53d53a6",
+  "fingerprint": "sha256:6cda091d388546bc2b65f2100fe57efb292969c6838e41a50246702884c2ac1d",
   "tools": [
     {
       "name": "analyze_document",
@@ -5797,7 +5797,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type.",
                 "type": "object"
               }
             },
@@ -10657,7 +10657,7 @@
           },
           "values": {
             "additionalProperties": true,
-            "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+            "description": "Localized scalar values. Allowed fields depend on resource_type.",
             "type": "object"
           }
         },
@@ -10708,7 +10708,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type.",
                 "type": "object"
               }
             },
@@ -13674,7 +13674,7 @@
                 },
                 "values": {
                   "additionalProperties": true,
-                  "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                  "description": "Localized scalar values. Allowed fields depend on resource_type.",
                   "type": "object"
                 }
               },

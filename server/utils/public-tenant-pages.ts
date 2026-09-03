@@ -159,7 +159,9 @@ async function hydrateBlocks(
         return { ...post, slug, canonical_url: representation.routePath }
       })
     : sourcePostRows
+  const sourceOfferingById = new Map(sourceOfferings.map(item => [item.id, item]))
   const offeringById = new Map(offerings.map(item => [item.id, item]))
+  const sourceLocationById = new Map(sourceLocations.map(item => [item.id, item]))
   const locationById = new Map(locations.map(item => [item.id, item]))
   const qaItems = qaRows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
   const reviewItems = (reviewRows as unknown as Array<Record<string, unknown>>).map(row => ({
@@ -182,11 +184,12 @@ async function hydrateBlocks(
     const data = { ...block.data }
     if (block.type === 'offering_grid' && Array.isArray(data.offering_ids)) {
       data.items = data.offering_ids.flatMap((id) => {
-        const offering = typeof id === 'string' ? offeringById.get(id) : undefined
-        if (!offering) {
-          if (localizations) return []
+        const sourceOffering = typeof id === 'string' ? sourceOfferingById.get(id) : undefined
+        if (!sourceOffering) {
           throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
         }
+        const offering = offeringById.get(sourceOffering.id)
+        if (!offering) return []
         return [{
           id: offering.id,
           title: offering.label || offering.name,
@@ -199,11 +202,12 @@ async function hydrateBlocks(
     }
     if (block.type === 'location_grid' && Array.isArray(data.location_ids)) {
       data.items = data.location_ids.flatMap((id) => {
-        const location = typeof id === 'string' ? locationById.get(id) : undefined
-        if (!location) {
-          if (localizations) return []
+        const sourceLocation = typeof id === 'string' ? sourceLocationById.get(id) : undefined
+        if (!sourceLocation) {
           throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page location reference is unavailable' })
         }
+        const location = locationById.get(sourceLocation.id)
+        if (!location) return []
         return [{
           id: location.id,
           title: location.title,

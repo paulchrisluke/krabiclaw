@@ -20,7 +20,7 @@ test('catch-all locale classification uses the tenant published-locale set', () 
   }
 })
 
-test('exact localized projection clears untranslated localizable fields', () => {
+test('localized projection clears untranslated localizable fields', () => {
   const projected = projectExactLocalizedResource(
     'experience',
     { id: 'experience-1', title: 'English title', tagline: 'English tagline', price: { amount_minor: 2500 } },

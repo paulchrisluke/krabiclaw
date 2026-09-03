@@ -14,6 +14,6 @@ export default defineHandler(async (event) => {
   const db = cloudflareEnv(event).db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const page = await getPublicTenantPageForPath(db, siteId, path, { locale })
-  if (!page) throw createError({ statusCode: 404, statusMessage: 'Exact localized page was not found' })
+  if (!page) throw createError({ statusCode: 404, statusMessage: 'Localized page was not found' })
   return { success: true as const, page }
 })
