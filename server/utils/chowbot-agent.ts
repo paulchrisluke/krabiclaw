@@ -210,10 +210,6 @@ async function executeTool(
     // instead of ChowBot's stricter local check.
     case "create_post":
     case "update_post":
-    case "delete_post": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "publish_post": {
       return runMcpExecutorToolForChowbot(executorSite, "publish_post", { ...input, channels: ["site"] });
     }
@@ -228,21 +224,9 @@ async function executeTool(
     case "rename_product_category":
     case "delete_product_category":
     case "batch_create_products":
-    case "sync_products": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    // Regression note: create_location/update_location's rating/review_count/
-    // max_capacity range checks were duplicated here — createLocation/
-    // updateLocation already validate the same rules server-side, so this
-    // was redundant, not filling a gap.
     case "list_locations":
     case "create_location":
     case "update_location":
-    case "delete_location": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "import_from_maps": {
       const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined;
       if (!apiKey) return { error: "Google Places API not configured." };
@@ -351,22 +335,10 @@ async function executeTool(
     // minimumRole 'owner' — the adapter now enforces that (previously
     // ChowBot's own case body had no role check at all).
     case "list_location_reviews":
-    case "reply_to_review": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "list_site_reviews":
     case "create_owner_entered_site_review":
     case "update_owner_entered_site_review":
-    case "delete_owner_entered_site_review": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "get_site_media_assets":
-    case "delete_media_asset": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "import_products_from_media": {
       const pendingAssetId = ctx.pendingMedia?.siteId === siteId ? ctx.pendingMedia.assetId : undefined;
       const assetId = toSqlText(input.asset_id)?.trim() || pendingAssetId;
@@ -477,16 +449,8 @@ async function executeTool(
 
     case "list_location_qa":
     case "create_location_qa":
-    case "delete_location_qa": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "list_site_qa":
     case "create_site_qa":
-    case "delete_site_qa": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "get_contact_inquiries": {
       return runMcpExecutorToolForChowbot(executorSite, "get_contact_inquiries", input);
     }
@@ -510,9 +474,6 @@ async function executeTool(
     case "get_tenant_page":
     case "create_tenant_page":
     case "update_tenant_page":
-    case "change_tenant_page_path":
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-
     case "get_site_stats": {
       const [postStats, productCount, locationCount, reviewCount] =
         await Promise.all([
@@ -639,11 +600,6 @@ async function executeTool(
     case "put_resource_localization":
     case "delete_resource_localization":
     case "get_product_catalog_localization":
-    case "sync_product_catalog_localization": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    // ── Experiences ────────────────────────────────────────────────────────
     case "list_experiences": {
       return runMcpExecutorToolForChowbot(executorSite, "list_experiences", input);
     }
@@ -789,57 +745,23 @@ async function executeTool(
       return { results };
     }
 
-    case "get_post": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    // Regression fix: seo_description/seo_keywords/canonical_url/robots were
-    // in ChowBot's old create/update schema but the case bodies never
-    // forwarded them to createPlatformBlogPost/updatePlatformBlogPost —
-    // silently dropped despite the underlying function fully supporting them.
     case "list_blog_posts":
     case "get_blog_post":
     case "create_blog_post":
     case "update_blog_post":
-    case "delete_blog_post": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "get_location": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "get_site_settings": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "update_media_asset": {
       return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
     }
 
-    case "set_media":
-    case "attach_media":
-    case "remove_media":
-    case "reorder_media": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "update_location_qa":
-    case "reorder_location_qa": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "update_site_qa":
-    case "reorder_site_qa": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "get_experience": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
+    // Anything else ChowBot advertises is an MCP tool with no ChowBot-specific
+    // shaping, so it dispatches straight to the shared executor. Cases that
+    // only re-listed a tool name to call this exact line have been removed:
+    // they were a second registry of tool names to keep in sync with
+    // MCP_TOOLS, and forgetting one was how ChowBot fell behind MCP.
+    // runMcpExecutorToolForChowbot rejects names absent from MCP_TOOLS and
+    // enforces the same minimumRole and requiredEntitlement as the MCP path.
     default:
-      return { error: `Unknown tool: ${name}` };
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
   }
 }
 

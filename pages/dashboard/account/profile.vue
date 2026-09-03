@@ -62,6 +62,11 @@
           <UButton variant="link" color="neutral" @click="copyUserId">Copy</UButton>
         </section>
 
+        <section v-if="billingTo" class="profile-row" :class="rowTone('billing')">
+          <div class="min-w-0"><h3 class="profile-label">Usage and billing</h3><p class="profile-value whitespace-normal">Credits, plan and payments for {{ organizationName }}.</p></div>
+          <NuxtLink :to="billingTo" class="account-action shrink-0">Open</NuxtLink>
+        </section>
+
         <section class="profile-row" :class="rowTone('delete')">
           <div><h3 class="profile-label text-error">Delete account</h3><p class="profile-value whitespace-normal">Removes your account, organization, site, locations and menu data.</p></div>
           <UButton variant="link" color="error" @click="deleteModalOpen = true">Delete</UButton>
@@ -171,6 +176,16 @@ definePageMeta({ layout: 'dashboard' })
 const toast = useToast()
 const route = useRoute()
 const { data: sessionData } = useAuth()
+
+// Credits are an organization resource, so this links to where the organization
+// is in the route rather than rendering a second copy of them on a user page.
+// No organization means no billing page to open, so the row is simply absent.
+const dashboard = useDashboardSite()
+const organizationName = computed(() => dashboard.organization.value?.name ?? 'your organization')
+const billingTo = computed(() => {
+  const slug = dashboard.organization.value?.slug
+  return slug ? `/dashboard/${encodeURIComponent(slug)}/settings/billing` : null
+})
 const { signOut } = useAuth()
 
 // listAccounts() doesn't expose a per-account email (only providerId/accountId/
@@ -207,7 +222,7 @@ const refreshSession = async () => {
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
-type ProfileRow = 'avatar' | 'name' | 'email' | 'google' | 'phone' | 'user-id' | 'delete' | 'log-out'
+type ProfileRow = 'avatar' | 'name' | 'email' | 'google' | 'phone' | 'user-id' | 'billing' | 'delete' | 'log-out'
 const editingRow = ref<ProfileRow | null>(null)
 
 function rowTone(row: ProfileRow) {
