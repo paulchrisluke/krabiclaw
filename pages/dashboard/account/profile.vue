@@ -5,7 +5,7 @@
         <template #leading>
           <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>
-        <template #right><DashboardAccountMenu mobile-only class="lg:hidden" /></template>
+        <template #right><DashboardAccountMenu compact class="lg:hidden" /></template>
       </UDashboardNavbar>
     </template>
 

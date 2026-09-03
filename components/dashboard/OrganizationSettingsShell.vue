@@ -54,8 +54,7 @@ const router = useRouter()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
-const organization = dashboard.organization
-const orgSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings`)
+const { settingsPath: orgSettingsPath, groups, activeItem } = useOrganizationSettingsNavigation()
 function navigateBack() {
   if (props.detailTitle) {
     closeDetail()
@@ -67,22 +66,4 @@ function closeDetail() {
   emit('cancel')
   router.push(orgSettingsPath.value)
 }
-const activeItem = computed(() => {
-  const segment = route.path.slice(`${orgSettingsPath.value}/`.length).split('/')[0]
-  return route.path === orgSettingsPath.value ? null : segment
-})
-const { preference } = usePlatformTheme()
-
-const items = computed(() => [
-  { id: 'general', label: 'General', summary: organization.value?.name || 'Organization details', to: `${orgSettingsPath.value}/general` },
-  { id: 'appearance', label: 'Appearance', summary: `${preference.value.charAt(0).toUpperCase()}${preference.value.slice(1)} theme`, to: `${orgSettingsPath.value}/appearance` },
-  { id: 'members', label: 'Members', summary: 'People and organization access', to: `${orgSettingsPath.value}/members` },
-  { id: 'billing', label: 'Billing', summary: 'Plans, payments, and credits', to: `${orgSettingsPath.value}/billing` },
-  { id: 'analytics', label: 'Analytics', summary: 'Google Analytics and Search Console', to: `${orgSettingsPath.value}/analytics` },
-  { id: 'chatgpt', label: 'ChatGPT', summary: 'Organization ChatGPT connection', to: `${orgSettingsPath.value}/chatgpt` },
-])
-const groups = computed(() => [
-  { id: 'organization', label: 'Organization', items: items.value.slice(0, 3) },
-  { id: 'account', label: 'Account and connections', items: items.value.slice(3) },
-])
 </script>

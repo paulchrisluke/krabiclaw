@@ -24,6 +24,15 @@ export default defineAppConfig({
         toggle: 'hidden'
       }
     },
+    // The dashboard group no longer fills the viewport — it is inset by the top
+    // and bottom nav bars (see assets/css/dashboard.css). Nuxt UI's default
+    // `min-h-svh` would size panels to the full viewport instead, overflowing
+    // the group and clipping the bottom of every page.
+    dashboardPanel: {
+      slots: {
+        root: 'min-h-full'
+      }
+    },
     icons: {
       menu: 'i-lucide-menu',
       panelClose: 'i-lucide-panel-left-close',

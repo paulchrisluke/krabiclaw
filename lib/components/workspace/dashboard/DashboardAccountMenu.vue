@@ -6,7 +6,7 @@
     :ui="menuUi"
   >
     <UButton
-      v-if="!mobileOnly"
+      v-if="!compact"
       color="neutral"
       variant="ghost"
       class="dashboard-account-menu-button w-full min-w-0 cursor-pointer hover:text-highlighted"
@@ -24,7 +24,7 @@
       square
       :avatar="{ src: renderedUser?.image ?? undefined, alt: displayName, size: 'sm' }"
       aria-label="Open account menu"
-      data-testid="dashboard-mobile-account-menu-button"
+      data-testid="dashboard-compact-account-menu-button"
     />
 
     <template #usage-trailing>
@@ -38,7 +38,13 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 
-const props = defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
+const props = withDefaults(defineProps<{
+  collapsed?: boolean
+  /** Icon-only avatar trigger, for the bottom bar and the desktop top nav. */
+  compact?: boolean
+  /** Which side of the trigger the menu opens toward. */
+  side?: 'top' | 'bottom'
+}>(), { side: 'top' })
 
 const { sessionData } = await useAuthSession()
 const { signOut } = useAuth()
@@ -64,13 +70,13 @@ const organizationSettingsTo = computed(() => {
 })
 
 const menuContent = computed(() => ({
-  align: props.mobileOnly ? 'end' as const : 'start' as const,
+  align: props.compact ? 'end' as const : 'start' as const,
   collisionPadding: 12,
-  side: 'top' as const,
+  side: props.side,
   sideOffset: 12,
 }))
 const menuUi = computed(() => ({
-  content: props.mobileOnly
+  content: props.compact
     ? 'max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-3xl p-2 shadow-2xl'
     : 'w-64 rounded-2xl p-1.5 shadow-xl',
   item: 'min-h-10 rounded-xl px-2.5 py-2 text-sm',

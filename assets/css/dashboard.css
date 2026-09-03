@@ -7,16 +7,34 @@
 @import "@nuxt/ui";
 
 /*
- * Dashboard responsive contract:
- * - compact: below sm
- * - tablet: sm through below lg
- * - desktop: lg and above
+ * Dashboard responsive contract. Device categories follow Tailwind's own
+ * mobile-first scale — unprefixed is mobile, md: is tablet and up, lg: is
+ * desktop and up:
+ * - mobile:  below md (< 768px)
+ * - tablet:  md through below lg (768px - 1023px)
+ * - desktop: lg and above (>= 1024px)
  *
- * Structural UI changes only at lg: persistent sidebar, removal of the bottom
- * navigation, split editors, calendar grid, and side-by-side previews. The sm
- * breakpoint may adjust spacing and content density, but never navigation or
- * pane topology.
+ * Exactly two breakpoints are allowed to change structure:
+ * - md swaps the primary navigation chrome: below it the bottom bar, at it and
+ *   above the top nav. Exactly one of the two is mounted at any width.
+ * - lg adds the persistent sidebar and switches pane topology: split editors,
+ *   calendar grid, and side-by-side previews.
+ *
+ * sm and xl are content-density breakpoints only — grid columns, stacking,
+ * padding, type scale. They must never change navigation or pane topology, and
+ * neither may any other breakpoint.
  */
+
+/*
+ * UDashboardGroup is `fixed inset-0`, so the nav chrome cannot simply sit
+ * around it in normal flow — the group is inset by these heights instead.
+ * Both bars and the group read the same two variables, so changing a bar's
+ * height here keeps the panel viewport in step automatically.
+ */
+.platform-theme {
+  --kc-dashboard-top-nav: 4rem;
+  --kc-dashboard-bottom-nav: calc(4rem + env(safe-area-inset-bottom));
+}
 
 .w-\(--width\) {
   width: var(--width);

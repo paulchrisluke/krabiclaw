@@ -43,14 +43,28 @@
       </UCard>
     </div>
 
-    <UDashboardGroup v-else unit="rem" :min-size="14" :default-size="18" :max-size="24">
+    <div v-else>
+    <DashboardTopNav
+      v-if="showDashboardChrome"
+      :items="mobileNavItems"
+      :home-to="topNavHomeTo"
+      @menu="menuOpen = true"
+    />
+
+    <UDashboardGroup
+      unit="rem"
+      :min-size="14"
+      :default-size="18"
+      :max-size="24"
+      :ui="{ base: showDashboardChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : '' }"
+    >
       <UDashboardSidebar
         v-model:collapsed="sidebarCollapsed"
         resizable
         collapsible
         class="hidden lg:flex"
         :menu="{ close: false }"
-        :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
+        :ui="{ root: 'h-full min-h-0 max-h-full bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
       >
         <template #header="{ collapsed }">
           <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
@@ -87,28 +101,37 @@
       <ChowBot v-if="showChowBot" />
     </UDashboardGroup>
 
-    <div
-      v-if="mobileNavItems.length && !isAccountRoute"
-      class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden"
+    <nav
+      v-if="showDashboardChrome"
+      class="fixed inset-x-0 bottom-0 z-40 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
+      aria-label="Dashboard"
       data-testid="dashboard-mobile-nav"
     >
-      <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
-        <UButton
-          v-for="item in mobileNavItems"
-          :key="item.key"
-          :to="item.to"
-          :icon="item.icon"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          square
-          :aria-label="item.label"
-          :title="item.label"
-          :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
-        />
-        <DashboardAccountMenu mobile-only />
-      </nav>
+      <NuxtLink
+        v-for="item in mobileNavItems"
+        :key="item.key"
+        :to="item.to"
+        class="flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2 no-underline transition-colors"
+        :class="item.active ? 'text-primary' : 'text-dimmed hover:text-highlighted'"
+        :aria-current="item.active ? 'page' : undefined"
+      >
+        <UIcon :name="item.icon" class="size-6 shrink-0" />
+        <span class="text-[10px] leading-tight font-medium">{{ item.label }}</span>
+      </NuxtLink>
+      <NuxtLink
+        :to="menuPageTo"
+        class="flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2 no-underline transition-colors"
+        :class="isMenuPageActive ? 'text-primary' : 'text-dimmed hover:text-highlighted'"
+        :aria-current="isMenuPageActive ? 'page' : undefined"
+        data-testid="dashboard-mobile-nav-menu-link"
+      >
+        <UIcon name="i-lucide-menu" class="size-6 shrink-0" />
+        <span class="text-[10px] leading-tight font-medium">Menu</span>
+      </NuxtLink>
+    </nav>
     </div>
+
+    <DashboardMenuSlideover v-model:open="menuOpen" />
 
     <BillingServiceUpsellModal />
     </div>
@@ -117,6 +140,8 @@
 
 <script setup lang="ts">
 import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
+import DashboardTopNav from '~/lib/components/workspace/dashboard/DashboardTopNav.vue'
+import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/DashboardMenuSlideover.vue'
 import DashboardScopeHeader from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import { dashboardAccountRouteQueryKey, dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
@@ -682,6 +707,19 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   ]
   return items.map(item => ({ ...item, active: isActivePath(item.to, item.exact) }))
 })
+
+// The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below
+// md) render the same mobileNavItems list — one nav source, two presentations.
+// "Menu" opens the settings slideover at md and up and navigates to the settings
+// page below it, because a slideover is the wrong control on a phone.
+const menuOpen = ref(false)
+const showDashboardChrome = computed(() => mobileNavItems.value.length > 0 && !isAccountRoute.value)
+const topNavHomeTo = computed(() => {
+  const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+  return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
+})
+const menuPageTo = computed(() => `${topNavHomeTo.value}/settings`)
+const isMenuPageActive = computed(() => isActivePath(menuPageTo.value))
 
 watch(
   () => dashboard.contextKey.value,
