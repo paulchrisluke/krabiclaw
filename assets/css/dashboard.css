@@ -4,6 +4,10 @@
 @source "../../pages/account";
 @source "../../components";
 @source "../../lib/components/workspace";
+/* Nuxt UI slot overrides live here, and a class Tailwind never scans is a class
+   it never generates — those overrides silently did nothing unless the same
+   utility happened to be emitted from some other file. */
+@source "../../app.config.ts";
 @import "@nuxt/ui";
 
 /*
@@ -35,6 +39,20 @@
 .platform-theme {
   --kc-dashboard-top-nav: 4rem;
   --kc-dashboard-bottom-nav: calc(4rem + env(safe-area-inset-bottom));
+  /* Shared by the top nav and every panel navbar. One gutter, one alignment. */
+  --kc-nav-gutter: 1rem;
+}
+
+@media (width >= 40rem) {
+  .platform-theme {
+    --kc-nav-gutter: 1.5rem;
+  }
+}
+
+@media (width >= 64rem) {
+  .platform-theme {
+    --kc-nav-gutter: 2rem;
+  }
 }
 
 .w-\(--width\) {

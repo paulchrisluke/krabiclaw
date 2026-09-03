@@ -95,12 +95,7 @@
     </nav>
     </div>
 
-    <DashboardMenuSlideover
-      v-model:open="menuOpen"
-      :groups="menuGroups"
-      :active-item="menuActiveItem"
-      :scope-model="menuScopeModel"
-    />
+    <DashboardMenuSlideover v-model:open="menuOpen" />
 
     <BillingServiceUpsellModal />
     </div>
@@ -386,38 +381,6 @@ const locationsNavTarget = computed(() => {
   return firstLocation?.slug ? `${locationsBase.value}/${firstLocation.slug}` : `${locationsBase.value}/new`
 })
 
-// Admin mirrors the tenant surface: four links in the bar, the rest in the menu.
-// Ten links will not fit a centred bar, and splitting them is what keeps admin
-// on the same chrome as the dashboard rather than earning its own layout.
-const ADMIN_PRIMARY = ['/admin/clients', '/admin/users', '/admin/content', '/admin/analytics']
-
-const adminNavSections = computed(() => {
-  const all = [
-    ...(dashboard.managedServiceEnabled.value ? [{ id: 'work', label: 'Work Queue', summary: 'Managed service queue', to: '/admin/work' }] : []),
-    { id: 'clients', label: 'Clients', summary: 'Client organizations and onboarding', to: '/admin/clients' },
-    { id: 'members', label: 'Members', summary: 'Platform staff access', to: '/admin/members' },
-    { id: 'analytics', label: 'Analytics', summary: 'Platform-wide usage', to: '/admin/analytics' },
-    { id: 'domains', label: 'Domains', summary: 'Custom domain requests', to: '/admin/domains' },
-    { id: 'users', label: 'Users', summary: 'Accounts and impersonation', to: '/admin/users' },
-    { id: 'content', label: 'Content', summary: 'Marketing pages', to: '/admin/content' },
-    { id: 'localization', label: 'Localization', summary: 'Platform locale catalogs', to: '/admin/localization' },
-    { id: 'blog', label: 'Blog', summary: 'Platform blog posts', to: '/admin/blog' },
-    { id: 'docs', label: 'Docs', summary: 'Documentation pages', to: '/admin/docs' },
-  ]
-  return {
-    primary: all.filter(item => ADMIN_PRIMARY.includes(item.to)),
-    secondary: all.filter(item => !ADMIN_PRIMARY.includes(item.to)),
-  }
-})
-
-const adminPrimaryNavItems = computed(() => adminNavSections.value.primary.map(item => ({
-  key: item.id,
-  label: item.label,
-  icon: 'i-lucide-square',
-  to: item.to,
-  active: isActivePath(item.to),
-})))
-
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
   const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
@@ -465,36 +428,20 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
 })
 
 // The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below
-// md) render the same list — one nav source, two presentations. Admin swaps the
-// list for its own; everything else about the chrome is identical, which is the
-// point: admin is a different link set, not a different layout.
+// md) render the same list — one nav source, two presentations. useDashboardMenu
+// owns which list that is, so admin is a different link set, not a second layout.
 // "Menu" opens the slideover at md and up and navigates to the menu page below
 // it, because a slideover is the wrong control on a phone.
 const menuOpen = ref(false)
-const primaryNavItems = computed(() => isAdminRoute.value ? adminPrimaryNavItems.value : mobileNavItems.value)
+const { primaryNavItems: adminPrimaryNavItems, menuPageTo } = useDashboardMenu()
+const primaryNavItems = computed(() => adminPrimaryNavItems.value ?? mobileNavItems.value)
 const showDashboardChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
 const topNavHomeTo = computed(() => {
   if (isAdminRoute.value) return '/admin'
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
 })
-const menuPageTo = computed(() => isAdminRoute.value ? '/admin' : `${topNavHomeTo.value}/settings`)
 const isMenuPageActive = computed(() => isActivePath(menuPageTo.value, isAdminRoute.value))
-
-// Organization settings on the tenant surface; the admin links that did not fit
-// the bar on admin. One slideover, two content sets, no second component.
-const organizationSettings = useOrganizationSettingsNavigation()
-const menuGroups = computed(() => {
-  if (isAdminRoute.value) return [{ id: 'admin', label: 'Platform admin', items: adminNavSections.value.secondary }]
-  const notifications = topNavHomeTo.value === '/dashboard'
-    ? []
-    : [{ id: 'notifications', label: 'Notifications', items: [{ id: 'notifications', label: 'Notifications', summary: 'Alerts for this organization', to: `${topNavHomeTo.value}/notifications` }] }]
-  return [...notifications, ...organizationSettings.groups.value]
-})
-const menuActiveItem = computed(() => isAdminRoute.value
-  ? adminNavSections.value.secondary.find(item => isActivePath(item.to))?.id ?? null
-  : organizationSettings.activeItem.value)
-const menuScopeModel = computed(() => isAdminRoute.value ? null : scopeHeaderModel.value)
 
 watch(
   () => dashboard.contextKey.value,
