@@ -15,9 +15,9 @@
           <p class="saya-kicker">{{ product.category }}</p>
           <h1 class="saya-display-md mt-3">{{ product.name }}</h1>
           <p class="mt-2 text-sm text-muted">{{ location.title }}</p>
-          <div class="mt-6 flex items-baseline gap-3 text-xl">
+          <div v-if="formatProductPriceLabel(product)" class="mt-6 flex items-baseline gap-3 text-xl">
             <span v-if="product.price?.compare_at_amount_minor" class="text-muted line-through">{{ formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null }) }}</span>
-            <span v-if="formatProductPriceLabel(product)" class="font-semibold">{{ formatProductPriceLabel(product) }}</span>
+            <span class="font-semibold">{{ formatProductPriceLabel(product) }}</span>
           </div>
           <p v-if="product.description" class="mt-8 leading-7 text-muted">{{ product.description }}</p>
           <p v-if="!product.available" class="mt-8 font-semibold text-muted">Currently unavailable</p>

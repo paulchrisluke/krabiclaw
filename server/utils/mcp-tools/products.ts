@@ -17,14 +17,14 @@ const priceObject = {
 
 const priceWrite = {
   type: ['object', 'null'],
-  description: 'Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key "price-note". currency, unit, and tax_behavior must be stated explicitly.',
+  description: 'Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key "price-note". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.',
   properties: {
     amount_minor: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER }, currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
     unit: { type: 'string', enum: ['item', 'person', 'table'] },
     tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
     compare_at_amount_minor: { type: ['integer', 'null'], minimum: 0, maximum: Number.MAX_SAFE_INTEGER }, valid_from: { type: 'string', format: 'date-time' }, valid_until: { type: ['string', 'null'], format: 'date-time' },
   },
-  required: ['amount_minor', 'currency', 'unit', 'tax_behavior'],
+  required: ['amount_minor'],
   additionalProperties: false,
 } as const
 

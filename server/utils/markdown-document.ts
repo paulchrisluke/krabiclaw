@@ -6,6 +6,7 @@
 // gateway or D1.
 
 export const MARKDOWN_MIME_TYPES = new Set(["text/markdown", "text/x-markdown"]);
+const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
 
 /** Keep a single grounded analysis request safely below the model context window.
  * Oversized files fail explicitly rather than being truncated or rejected later
@@ -19,12 +20,13 @@ export class MarkdownDocumentError extends Error {
   }
 }
 
-/**
- * Treats an upload as Markdown only when its explicit MIME type is supported.
- * A caller-owned filename is not content-type evidence.
- */
-export function resolveMarkdownMimeType(mimeType: string | undefined | null): string | null {
-  if (mimeType && MARKDOWN_MIME_TYPES.has(mimeType.toLowerCase())) return "text/markdown";
+export function resolveMarkdownMimeType(mimeType: string | undefined | null, filename?: string | null): string | null {
+  const normalizedMimeType = mimeType?.toLowerCase();
+  if (normalizedMimeType && MARKDOWN_MIME_TYPES.has(normalizedMimeType)) return "text/markdown";
+  if ((!normalizedMimeType || normalizedMimeType === "application/octet-stream") && filename) {
+    const lowerFilename = filename.toLowerCase();
+    if (MARKDOWN_EXTENSIONS.some((extension) => lowerFilename.endsWith(extension))) return "text/markdown";
+  }
   return null;
 }
 

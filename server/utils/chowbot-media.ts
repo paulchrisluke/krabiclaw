@@ -210,10 +210,7 @@ export async function saveInboundMediaAsset(
     filename?: string
   }
 ): Promise<MediaAsset> {
-  // Only explicit Markdown MIME metadata enables the Markdown pipeline.
-  // Generic or missing MIME types remain unchanged and are never inferred
-  // from a user-controlled filename.
-  const normalizedMimeType = resolveMarkdownMimeType(opts.mimeType) ?? opts.mimeType
+  const normalizedMimeType = resolveMarkdownMimeType(opts.mimeType, opts.filename) ?? opts.mimeType
 
   if (MARKDOWN_MIME_TYPES.has(normalizedMimeType)) {
     // Fail fast with a clear error instead of persisting a file the ChowBot
@@ -386,7 +383,7 @@ export async function analyzeDocumentAsset(
   const asset = await getMediaAsset(db, opts.assetId, opts.siteId)
   if (!asset?.public_url || !asset.mime_type) throw new Error('Media asset not found')
 
-  const resolvedMimeType = resolveMarkdownMimeType(asset.mime_type)
+  const resolvedMimeType = resolveMarkdownMimeType(asset.mime_type, asset.file_name)
   if (!resolvedMimeType) {
     throw new Error(`Unsupported media type for document analysis: ${asset.mime_type}`)
   }

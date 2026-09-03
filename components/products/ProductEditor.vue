@@ -78,7 +78,7 @@ import { formatProductPriceLabel } from '~/utils/product-money'
 import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
 
 const props = defineProps<{ siteId: string; locationId: string; locationTitle: string; currency: CurrencyCode; presentation: ProductPresentation }>()
-interface EditingProduct { id: string | null; name: string; category: string; price_major: string; has_fixed_price: boolean; price_note: string; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
+interface EditingProduct { id: string | null; name: string; category: string; price_major: string; has_fixed_price: boolean; price_note: string; original_price_note: ProductDetail | null; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
 const products = ref<Product[]>([])
 const editing = ref<EditingProduct | null>(null)
 const loading = ref(true)
@@ -109,17 +109,12 @@ async function load() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Failed to load Products' }
   finally { loading.value = false }
 }
-function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', has_fixed_price: true, price_note: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
+function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', has_fixed_price: true, price_note: '', original_price_note: null, description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
 function editProduct(product: Product) {
-  const priceNoteDetails = product.details.filter(detail => detail.key === 'price-note')
-  if (priceNoteDetails.length > 1 || priceNoteDetails.some(detail => detail.values.length > 1)) {
-    editing.value = null
-    error.value = 'Price wording must contain a single value'
-    return
-  }
-  const priceNote = priceNoteDetails[0]?.values[0] ?? ''
+  const priceNoteDetail = product.details.find(detail => detail.key === 'price-note') ?? null
+  const priceNote = priceNoteDetail?.values[0] ?? ''
   const otherDetails = product.details.filter(detail => detail.key !== 'price-note')
-  editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', has_fixed_price: product.price !== null, price_note: priceNote, description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(otherDetails, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null }
+  editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', has_fixed_price: product.price !== null, price_note: priceNote, original_price_note: priceNoteDetail, description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(otherDetails, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null }
 }
 function payload(product: EditingProduct) {
   let parsedDetails: unknown
@@ -132,7 +127,13 @@ function payload(product: EditingProduct) {
     ? { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }
     : null
   const priceNote = product.price_note.trim()
-  const finalDetails = priceNote ? [...details, { key: 'price-note', label: 'Price', values: [priceNote] }] : details
+  const originalPriceNote = product.original_price_note
+  const priceNoteValues = originalPriceNote && priceNote === originalPriceNote.values[0]
+    ? originalPriceNote.values
+    : [priceNote, ...(originalPriceNote?.values.slice(1) ?? [])]
+  const finalDetails = priceNote
+    ? [...details, { key: 'price-note', label: originalPriceNote?.label ?? 'Price', values: priceNoteValues }]
+    : details
   return { name: product.name, category: product.category, price, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details: finalDetails, is_visible: product.is_visible, available: product.available, featured: product.featured }
 }
 async function save() {

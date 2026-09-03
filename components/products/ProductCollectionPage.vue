@@ -126,11 +126,13 @@
                       {{ tag }}
                     </span>
                   </div>
-                  <div class="saya-dotted-leader" />
-                  <div class="flex shrink-0 items-baseline gap-1.5 tabular-nums text-base text-default">
-                    <span v-if="compareAtPrice(product)" class="text-sm text-muted line-through">{{ compareAtPrice(product) }}</span>
-                    <span v-if="formatProductPriceLabel(product)">{{ formatProductPriceLabel(product) }}</span>
-                  </div>
+                  <template v-if="formatProductPriceLabel(product)">
+                    <div class="saya-dotted-leader" />
+                    <div class="flex shrink-0 items-baseline gap-1.5 tabular-nums text-base text-default">
+                      <span v-if="compareAtPrice(product)" class="text-sm text-muted line-through">{{ compareAtPrice(product) }}</span>
+                      <span>{{ formatProductPriceLabel(product) }}</span>
+                    </div>
+                  </template>
                 </div>
                 <p v-if="product.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
                   {{ product.description }}

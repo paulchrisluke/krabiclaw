@@ -539,12 +539,12 @@
     "import_from_maps": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Queries Google Places, consumes credits, and records usage without persisting imported content.",
-        "open_world_justification": "Does not change public internet state or a third-party system.",
+        "open_world_justification": "Queries Google Maps and Google Places without persisting the imported content.",
         "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
       }
     },

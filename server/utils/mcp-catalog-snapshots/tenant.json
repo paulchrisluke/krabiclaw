@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:329bba04d41c53fd1a53a67f10a31ac35fed8cf66b51a697f0094e9d4a938881",
+  "fingerprint": "sha256:94e5c9e3ff44f76890a8e7622b2d6c8067bd8a906f9f7b1e57871af90e11e80b",
   "tools": [
     {
       "name": "analyze_document",
@@ -346,7 +346,7 @@
                 },
                 "price": {
                   "additionalProperties": false,
-                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
                   "properties": {
                     "amount_minor": {
                       "maximum": 9007199254740991,
@@ -409,10 +409,7 @@
                     }
                   },
                   "required": [
-                    "amount_minor",
-                    "currency",
-                    "unit",
-                    "tax_behavior"
+                    "amount_minor"
                   ],
                   "type": [
                     "object",
@@ -2379,7 +2376,7 @@
           },
           "price": {
             "additionalProperties": false,
-            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
             "properties": {
               "amount_minor": {
                 "maximum": 9007199254740991,
@@ -2442,10 +2439,7 @@
               }
             },
             "required": [
-              "amount_minor",
-              "currency",
-              "unit",
-              "tax_behavior"
+              "amount_minor"
             ],
             "type": [
               "object",
@@ -13003,7 +12997,7 @@
                 },
                 "price": {
                   "additionalProperties": false,
-                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
                   "properties": {
                     "amount_minor": {
                       "maximum": 9007199254740991,
@@ -13066,10 +13060,7 @@
                     }
                   },
                   "required": [
-                    "amount_minor",
-                    "currency",
-                    "unit",
-                    "tax_behavior"
+                    "amount_minor"
                   ],
                   "type": [
                     "object",
@@ -15811,7 +15802,7 @@
           },
           "price": {
             "additionalProperties": false,
-            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". currency, unit, and tax_behavior must be stated explicitly.",
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
             "properties": {
               "amount_minor": {
                 "maximum": 9007199254740991,
@@ -15874,10 +15865,7 @@
               }
             },
             "required": [
-              "amount_minor",
-              "currency",
-              "unit",
-              "tax_behavior"
+              "amount_minor"
             ],
             "type": [
               "object",

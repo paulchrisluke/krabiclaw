@@ -1009,10 +1009,6 @@ export function openWorldWriteAnnotations(): McpToolAnnotations {
   return { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
 }
 
-export function boundedWriteAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-}
-
 export function boundedDestructiveAnnotations(): McpToolAnnotations {
   return { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
 }
@@ -1023,7 +1019,6 @@ export function openWorldDestructiveAnnotations(): McpToolAnnotations {
 
 const R = READ_ONLY_DEFAULT
 const W = Object.freeze(openWorldWriteAnnotations())
-const B = Object.freeze(boundedWriteAnnotations())
 const BD = Object.freeze(boundedDestructiveAnnotations())
 const D = Object.freeze(openWorldDestructiveAnnotations())
 
@@ -1077,7 +1072,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   get_site_settings: R,
   get_tenant_page: R,
   get_workspace_context: R,
-  import_from_maps: B,
+  import_from_maps: W,
   import_products_from_media: W,
   list_all_experience_bookings: R,
   list_blog_posts: R,

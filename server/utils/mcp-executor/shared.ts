@@ -520,7 +520,7 @@ export async function resolveUserUploadedMediaFile(
     maxBytes,
   );
   const bytes = buffer;
-  const markdownType = resolveMarkdownMimeType(file.mime_type);
+  const markdownType = resolveMarkdownMimeType(file.mime_type, file.file_name);
   if (markdownType) {
     assertMarkdownSize(bytes.byteLength);
     decodeMarkdownText(buffer);

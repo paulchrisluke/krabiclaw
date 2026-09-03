@@ -20,9 +20,11 @@ function justifications(tool) {
         ? 'Queries Google Places, consumes credits, and records usage without persisting imported content.'
       : 'Creates or changes data in the authenticated tenant workspace.'
   const openWorld = annotations.openWorldHint
-    ? tool.name === 'analyze_document'
-      ? 'Sends the attached document to the configured AI service for analysis.'
-      : 'Can change tenant content that is visible on a public website or an external service.'
+    ? tool.name === 'import_from_maps'
+      ? 'Queries Google Maps and Google Places without persisting the imported content.'
+      : tool.name === 'analyze_document'
+        ? 'Sends the attached document to the configured AI service for analysis.'
+        : 'Can change tenant content that is visible on a public website or an external service.'
     : 'Does not change public internet state or a third-party system.'
   const destructive = annotations.destructiveHint
     ? 'Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically.'

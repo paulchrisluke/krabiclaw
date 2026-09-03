@@ -9,6 +9,7 @@ import {
   priceAt,
   replacePrice,
   type Price,
+  type PriceInput,
 } from '../../shared/prices.ts'
 import { parseProductExtraction } from '../../server/utils/chowbot-media.ts'
 import { normalizePriceInput } from '../../server/utils/product-management.ts'
@@ -30,8 +31,8 @@ test('currency precision converts and formats canonical integer minor amounts', 
 })
 
 test('Product price normalization distinguishes no price from a complete fixed price', () => {
-  assert.throws(() => normalizePriceInput(undefined, 'manual'), /price is required/)
-  assert.equal(normalizePriceInput(null, 'manual'), null)
+  assert.throws(() => normalizePriceInput(undefined, 'THB', 'manual'), /price is required/)
+  assert.equal(normalizePriceInput(null, 'THB', 'manual'), null)
   assert.deepEqual(
     normalizePriceInput({
       amount_minor: 500,
@@ -39,7 +40,7 @@ test('Product price normalization distinguishes no price from a complete fixed p
       unit: 'item',
       tax_behavior: 'unspecified',
       valid_from: '2026-06-01T00:00:00.000Z',
-    }, 'manual'),
+    }, 'THB', 'manual'),
     {
       amountMinor: 500,
       currency: 'USD',
@@ -53,10 +54,22 @@ test('Product price normalization distinguishes no price from a complete fixed p
       validUntilProvided: false,
     },
   )
-  assert.throws(() => normalizePriceInput({ amount_minor: 500 }, 'manual'), /currency is required/)
+  const defaulted = normalizePriceInput({ amount_minor: 500 }, 'THB', 'manual')
+  assert.ok(defaulted)
+  assert.equal(defaulted.amountMinor, 500)
+  assert.equal(defaulted.currency, 'THB')
+  assert.equal(defaulted.unit, 'item')
+  assert.equal(defaulted.taxBehavior, 'unspecified')
+  assert.equal(defaulted.provenance, 'manual')
+  assert.equal(defaulted.validFromProvided, false)
+  assert.equal(isIsoInstant(defaulted.validFrom), true)
   assert.throws(
-    () => normalizePriceInput({ amount_minor: 500, currency: 'USD', unit: 'item', tax_behavior: 'unspecified', provenance: 'caller' }, 'manual'),
+    () => normalizePriceInput({ amount_minor: 500, provenance: 'caller' }, 'THB', 'manual'),
     /assigned by the server/,
+  )
+  assert.throws(
+    () => normalizePriceInput({ amount_minor: 500, currency: null } as unknown as PriceInput, 'THB', 'manual'),
+    /currency must be a supported currency/,
   )
 })
 

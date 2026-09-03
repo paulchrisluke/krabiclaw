@@ -14,7 +14,7 @@ import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
-import { isIsoInstant, PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
+import { isIsoInstant, PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
 import {
   PRODUCT_LIMITS,
   assertNoPriceNoteContradiction,
@@ -149,17 +149,19 @@ function isPriceTaxBehavior(value: unknown): value is PriceTaxBehavior {
   return typeof value === 'string' && PRICE_TAX_BEHAVIORS.some(candidate => candidate === value)
 }
 
-function normalizeFixedPriceInput(input: unknown, provenance: ProductPriceProvenance, field: string): NormalizedPriceInput {
+export function normalizePriceInput(input: PriceInput | null | undefined, defaultCurrency: CurrencyCode, provenance: ProductPriceProvenance, field = 'price'): NormalizedPriceInput | null {
+  if (input === undefined) throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
+  if (input === null) return null
   if (!isRecord(input)) throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an object or null` })
   if (Object.hasOwn(input, 'provenance')) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.provenance is assigned by the server` })
   const amountMinor = input.amount_minor
   if (typeof amountMinor !== 'number' || !Number.isSafeInteger(amountMinor) || amountMinor < 0) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.amount_minor must be a non-negative integer` })
-  const currency = input.currency
-  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.currency is required and must be a supported currency` })
-  const unit = input.unit
-  if (!isPriceUnit(unit)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.unit is required and must be supported` })
-  const taxBehavior = input.tax_behavior
-  if (!isPriceTaxBehavior(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.tax_behavior is required and must be supported` })
+  const currency = input.currency === undefined ? defaultCurrency : input.currency
+  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.currency must be a supported currency` })
+  const unit = input.unit === undefined ? 'item' : input.unit
+  if (!isPriceUnit(unit)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.unit must be supported` })
+  const taxBehavior = input.tax_behavior === undefined ? 'unspecified' : input.tax_behavior
+  if (!isPriceTaxBehavior(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.tax_behavior must be supported` })
   const compareAt = input.compare_at_amount_minor ?? null
   if (compareAt !== null && (typeof compareAt !== 'number' || !Number.isSafeInteger(compareAt) || compareAt <= amountMinor)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.compare_at_amount_minor must exceed amount_minor` })
   const validFromProvided = input.valid_from !== undefined
@@ -174,10 +176,11 @@ function normalizeFixedPriceInput(input: unknown, provenance: ProductPriceProven
   return { amountMinor, currency, unit, taxBehavior, compareAt, validFrom, validUntil, provenance, validFromProvided, validUntilProvided }
 }
 
-export function normalizePriceInput(input: unknown, provenance: ProductPriceProvenance, field = 'price'): NormalizedPriceInput | null {
-  if (input === undefined) throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
-  if (input === null) return null
-  return normalizeFixedPriceInput(input, provenance, field)
+async function siteDefaultCurrency(db: DbClient, organizationId: string, siteId: string): Promise<CurrencyCode> {
+  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM sites WHERE id = ? AND organization_id = ?', [siteId, organizationId])
+  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
+  if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${siteId} has an unsupported default currency`)
+  return site.default_currency
 }
 
 // Shared by updateProduct and syncProducts, which both batch their writes
@@ -409,7 +412,7 @@ export async function createProduct(
   if (description.length > PRODUCT_LIMITS.description) {
     throw new HTTPError({ statusCode: 400, statusMessage: `description must be at most ${PRODUCT_LIMITS.description} characters` })
   }
-  const price = normalizePriceInput(input.price, priceProvenance)
+  const price = normalizePriceInput(input.price, await siteDefaultCurrency(db, organizationId, siteId), priceProvenance)
   const orderUrl = validateProductOrderUrl(input.order_url)
   const tags = validateProductTags(input.tags)
   const details = validateProductDetails(input.details)
@@ -485,6 +488,7 @@ export async function createProductsBatch(
   const existing = await queryAll<{ slug: string }>(db, `SELECT slug FROM products WHERE site_id = ? AND location_id = ?`, [siteId, locationId])
   const usedSlugs = new Set(existing.map(row => row.slug))
   const now = new Date().toISOString()
+  const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
   const ids: string[] = []
   const inserts: BatchQuery[] = inputs.flatMap((input, index) => {
     const category = requireTrimmedProductString(input.category, `products[${index}].category`, PRODUCT_LIMITS.category)
@@ -492,7 +496,7 @@ export async function createProductsBatch(
     if (input.description !== undefined && typeof input.description !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description must be a string` })
     const description = input.description?.trim() ?? ''
     if (description.length > PRODUCT_LIMITS.description) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description is too long` })
-    const price = normalizePriceInput(input.price, priceProvenance, `products[${index}].price`)
+    const price = normalizePriceInput(input.price, defaultCurrency, priceProvenance, `products[${index}].price`)
     const details = validateProductDetails(input.details)
     assertNoPriceNoteContradiction(price !== null, details)
     const base = slugifyProductName(name)
@@ -558,6 +562,7 @@ export async function syncProducts(
     }
   }
   const existing = await listLocationProducts(db, organizationId, siteId, locationId)
+  const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
   const existingById = new Map(existing.map(product => [product.id, product]))
   const requestedIds = inputs.map(input => input.product_id).filter((id): id is string => typeof id === 'string' && id.length > 0)
   if (new Set(requestedIds).size !== requestedIds.length) throw new HTTPError({ statusCode: 400, statusMessage: 'product_id values must be unique' })
@@ -578,7 +583,7 @@ export async function syncProducts(
     const orderUrl = validateProductOrderUrl(input.order_url)
     const tags = validateProductTags(input.tags)
     const details = validateProductDetails(input.details)
-    const price = normalizePriceInput(input.price, priceProvenance, `products[${index}].price`)
+    const price = normalizePriceInput(input.price, defaultCurrency, priceProvenance, `products[${index}].price`)
     const current = input.product_id ? existingById.get(input.product_id)! : null
     const id = current?.id ?? crypto.randomUUID()
     orderedIds.push(id)
@@ -733,7 +738,7 @@ export async function updateProduct(
     const at = input.price?.valid_from ?? new Date().toISOString()
     if (existing.price && at <= existing.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: 'Replacement Price must start after the active Price' })
     if (input.price !== null) {
-      const price = normalizeFixedPriceInput({ ...input.price, valid_from: at }, priceProvenance, 'price')
+      const price = normalizePriceInput({ ...input.price, valid_from: at }, await siteDefaultCurrency(db, organizationId, siteId), priceProvenance)!
       const conflict = await queryFirst<{ id: string }>(db, `
         SELECT id FROM prices
         WHERE product_id = ? AND id <> COALESCE(?, '')
