@@ -106,7 +106,7 @@
             <UInput :model-value="cellValue(row, 3)" type="number" aria-label="400 percent limit" placeholder="400%" @update:model-value="setCalculatorCell(rowIndex, 3, $event)" />
             <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove calculator row" @click="removeCalculatorRow(rowIndex)" />
           </div>
-          <div class="grid grid-cols-4 gap-2 text-xs text-muted"><span>Household size</span><span>250% limit</span><span>350% limit</span><span>400% limit</span></div>
+          <div class="grid gap-2 text-xs text-muted lg:grid-cols-4"><span>Household size</span><span>250% limit</span><span>350% limit</span><span>400% limit</span></div>
           <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" @click="addCalculatorRow">Add calculator row</UButton>
         </div>
       </template>
