@@ -324,16 +324,22 @@ export async function refreshSocialCard(input: {
   actorId?: string | null
 }): Promise<SocialCardRefreshResult> {
   const { db, env, owner } = input
+  const rt = Date.now()
+  console.log(`[SCTRACE ${rt}] refreshSocialCard START owner=${owner.owner_type}:${owner.owner_id}`)
   try {
+    console.log(`[SCTRACE ${rt}] loadOwner START t=${Date.now()}`)
     const ownerRecord = await loadOwner(db, owner)
+    console.log(`[SCTRACE ${rt}] loadOwner DONE t=${Date.now()} found=${!!ownerRecord}`)
     if (!ownerRecord) return { kind: 'skipped', owner, reason: 'owner_not_found' }
     const site = await loadSite(db, ownerRecord.site_id)
+    console.log(`[SCTRACE ${rt}] loadSite DONE t=${Date.now()} found=${!!site}`)
     if (!site) return { kind: 'skipped', owner, reason: 'owner_not_found' }
     const title = ownerRecord.title?.trim()
     const siteName = site.brand_name?.trim() || (site.id === PLATFORM_SITE_ID ? 'KrabiClaw' : null)
     if (!title || !siteName) return { kind: 'skipped', owner, reason: 'missing_content' }
 
     const assets = await loadPlacedAssets(db, site.id, owner)
+    console.log(`[SCTRACE ${rt}] loadPlacedAssets DONE t=${Date.now()} count=${assets.length}`)
     const { logo, current, source } = selectSocialCardPlacements(assets, owner, site.id)
     const backgroundImageUrl = mediaUrl(source)
     if (!source || !backgroundImageUrl) return { kind: 'skipped', owner, reason: 'no_source' }
@@ -354,10 +360,13 @@ export async function refreshSocialCard(input: {
       payload,
     })
     if (current?.generation_key === generationKey && current.public_url) {
+      console.log(`[SCTRACE ${rt}] REUSED existing card t=${Date.now()}`)
       return { kind: 'reused', owner, assetId: current.asset_id, publicUrl: current.public_url, generationKey }
     }
 
+    console.log(`[SCTRACE ${rt}] renderOgImagePng START t=${Date.now()} backgroundImageUrl=${backgroundImageUrl}`)
     const png = await renderOgImagePng(payload, { platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN })
+    console.log(`[SCTRACE ${rt}] renderOgImagePng DONE t=${Date.now()} bytes=${png.byteLength}`)
     const uploaded = await uploadResolvedMediaToAssetStore({
       db,
       env,
@@ -375,6 +384,7 @@ export async function refreshSocialCard(input: {
       height: OG_IMAGE_HEIGHT,
       generationKey,
     })
+    console.log(`[SCTRACE ${rt}] uploadResolvedMediaToAssetStore DONE t=${Date.now()} assetId=${uploaded.assetId}`)
 
     try {
       await executeBatch(db, buildSingleMediaPlacementQueries({
@@ -383,6 +393,7 @@ export async function refreshSocialCard(input: {
         placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
         media: [{ asset_id: uploaded.assetId }],
       }), { operation: 'replace social card placement' })
+      console.log(`[SCTRACE ${rt}] placement executeBatch DONE t=${Date.now()}`)
     } catch (placementError) {
       try {
         await deleteMediaAsset(db, env, uploaded.assetId, site.id, input.actorId ?? null)

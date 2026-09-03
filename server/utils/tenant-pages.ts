@@ -819,6 +819,8 @@ export async function applyOnboardingTenantPages(
 }
 
 export async function createTenantPage(db: DbClient, input: { organizationId: string; siteId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean; env: CloudflareEnv }) {
+  const traceId = crypto.randomUUID().slice(0, 8)
+  console.log(`[TRACE ${traceId}] createTenantPage START t=${Date.now()} path=${input.data.path} pageId=${input.data.pageId}`)
   const locale = await resolveLocale(db, input.siteId, input.data.locale)
   const existingPage = input.data.pageId
     ? await queryFirst<{ id: string; organization_id: string; site_id: string; page_type: TenantPageType; recipe: string | null } | null>(db, `
@@ -843,6 +845,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       `, [existingPage.id, input.organizationId, input.siteId])
     : null
   if (existingPage && !sourceVariant) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page source variant is missing' })
+  console.log(`[TRACE ${traceId}] sourceVariant lookup DONE t=${Date.now()}`)
   const existingIdentity = existingPage
     ? await canonicalTenantPageIdentity(db, {
         site_id: input.siteId,
@@ -864,12 +867,14 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   const existingSystemPage = existingPage?.page_type === 'system'
   if (effectiveData.pageType === 'system' && !input.trustedSystemPage && !existingSystemPage) badRequest('System pages are managed by the site template')
   const requestedPath = existingPage ? sourceVariant!.path : input.data.path
+  console.log(`[TRACE ${traceId}] assertTenantPagePathAvailable START t=${Date.now()}`)
   const path = await assertTenantPagePathAvailable(db, {
     siteId: input.siteId,
     locale,
     path: requestedPath,
     allowSystemPath: input.trustedSystemPage === true || existingSystemPage,
   })
+  console.log(`[TRACE ${traceId}] assertTenantPagePathAvailable DONE t=${Date.now()} path=${path}`)
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
   await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)
@@ -886,6 +891,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     query: "INSERT INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, document_id, path, title, summary, seo_title, seo_description, canonical_url, robots, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     params: [variantId, input.organizationId, input.siteId, pageId, locale, documentId, path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, metadata.robots, now, now, input.userId],
   }
+  console.log(`[TRACE ${traceId}] createContentDocumentWithBlocks START t=${Date.now()}`)
   await createContentDocumentWithBlocks(db, 'tenant_page', variantId, blocksAsInputs(blocks), {
     documentId,
     additionalQueriesBefore: [
@@ -897,12 +903,15 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       params: [now, input.userId, variantId],
     }, publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-create')],
   })
+  console.log(`[TRACE ${traceId}] createContentDocumentWithBlocks DONE t=${Date.now()}`)
+  console.log(`[TRACE ${traceId}] refreshSocialCard START t=${Date.now()} path=${path}`)
   if (path === '/') {
     // The homepage is represented by the site card. Refresh the site card only.
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.siteId }, actorId: input.userId })
   } else {
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
   }
+  console.log(`[TRACE ${traceId}] refreshSocialCard DONE t=${Date.now()}`)
   return { page: await getTenantPageForEditor(db, variantId) }
 }
 
