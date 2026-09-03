@@ -127,9 +127,6 @@ test('published Thai content saves through the CMS and renders without English f
         brand_description: 'คำแนะนำทางกฎหมายที่ชัดเจนและเข้าถึงได้',
       },
     })
-    await putLocalization(owner, 'site_consultation_settings', 'consultation_ncls', {
-      values: { cta_label: 'นัดหมายปรึกษากฎหมาย' },
-    })
     await Promise.all([
       createPageVariant(owner, {
         pageId: 'page_ncls_home',
@@ -172,16 +169,6 @@ test('published Thai content saves through the CMS and renders without English f
         body: 'ทีมกฎหมายของเราช่วยอธิบายทางเลือกและขั้นตอนเป็นภาษาไทย',
       },
     })
-    await Promise.all([
-      ['offering_ncls_employment', 'employment', 'กฎหมายแรงงาน'],
-      ['offering_ncls_probate-and-estate', 'probate-and-estate', 'พินัยกรรมและมรดก'],
-      ['offering_ncls_small-business-and-nonprofits', 'small-business-and-nonprofits', 'ธุรกิจขนาดเล็กและองค์กรไม่แสวงหากำไร'],
-      ['offering_ncls_special-education-and-iep-advocacy', 'special-education-and-iep-advocacy', 'การศึกษาพิเศษและแผนการศึกษาเฉพาะบุคคล'],
-      ['offering_ncls_tenant-rights', 'tenant-rights', 'สิทธิของผู้เช่า'],
-    ].map(([id, slug, name]) => putLocalization(owner, 'offering', id!, {
-      route_path: `/th/services/${slug}-th`,
-      values: { name },
-    })))
     await putLocalization(owner, 'tenant_blog_post', 'blog_ncls_writing-your-own-will-how-it-works', {
       route_path: '/th/article/will-th',
       values: {
@@ -195,12 +182,11 @@ test('published Thai content saves through the CMS and renders without English f
         media: [],
       }],
     })
-    await putLocalization(owner, 'media_asset', 'asset_ncls_media_writing-your-own-will-how-it-works_c1f1ad9b', {
-      values: { alt_text: 'ภาพประกอบบทความเกี่ยวกับการจัดทำพินัยกรรม' },
-    })
 
     const localizedServicesResponse = await owner.get(`/api/public/sites/${siteId}/localized-pages/${locale}?path=${encodeURIComponent('/services')}`)
-    await expectStatus(localizedServicesResponse, 404)
+    await expectStatus(localizedServicesResponse, 200)
+    const localizedServices = await localizedServicesResponse.json() as { page: { blocks: unknown[] } }
+    expect(JSON.stringify(localizedServices.page.blocks)).toContain('กฎหมายครอบครัวภาษาไทย')
 
     await putLocalization(owner, 'site_link_page', links.page.id, {
       route_path: '/th/links',
@@ -259,10 +245,11 @@ test('published Thai content saves through the CMS and renders without English f
 
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport)
-      await expectStatus(await page.request.get(`${blawbyBaseURL}/th`, { headers: blawbyExtraHeaders }), 404)
-      await expectStatus(await page.request.get(`${blawbyBaseURL}/th/services/family-th`, { headers: blawbyExtraHeaders }), 404)
-      await expectStatus(await page.request.get(`${blawbyBaseURL}/th/services`, { headers: blawbyExtraHeaders }), 404)
-      await expectStatus(await page.request.get(`${blawbyBaseURL}/th/blog`, { headers: blawbyExtraHeaders }), 404)
+      await expectExactThaiPage(page, '/th', '/', 'ความยุติธรรมสำหรับทุกคน', /Access to Justice for All/i)
+      await expectExactThaiPage(page, '/th/services/family-th', '/services/family', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
+      await expectExactThaiPage(page, '/th/services', '/services', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
+      await expectExactThaiPage(page, '/th/blog', '/blog', 'บทความกฎหมาย', /Our Blog|Legal insights/i)
+      await expect(page.locator('a[href="/th/article/will-th"]')).toBeVisible()
       await expectExactThaiPage(page, '/th/article/will-th', '/article/writing-your-own-will-how-it-works', 'คู่มือพินัยกรรมภาษาไทย', /Last Will and Testament in North Carolina/i)
     }
   } finally {

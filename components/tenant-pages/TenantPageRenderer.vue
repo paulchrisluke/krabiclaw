@@ -11,9 +11,9 @@
       <template v-if="block.type === 'hero'">
         <div :class="template === 'blawby' ? 'py-20 text-center sm:py-28' : 'py-12 sm:py-20'">
           <p v-if="text(block.data.eyebrow)" class="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ text(block.data.eyebrow) }}</p>
-          <h1 class="text-4xl font-bold tracking-tight sm:text-6xl">{{ heroTitle(block) }}</h1>
-          <p v-if="heroDescription(block)" class="mx-auto mt-6 max-w-3xl text-lg leading-8 text-muted">
-            {{ heroDescription(block) }}
+          <h1 class="text-4xl font-bold tracking-tight sm:text-6xl">{{ text(block.data.title) || page.title }}</h1>
+          <p v-if="text(block.data.subtitle) || text(block.data.description) || page.summary" class="mx-auto mt-6 max-w-3xl text-lg leading-8 text-muted">
+            {{ text(block.data.subtitle) || text(block.data.description) || page.summary }}
           </p>
           <TenantPageButton v-if="text(block.data.cta_label) && text(block.data.cta_url)" class="mt-8" :label="text(block.data.cta_label)" :url="text(block.data.cta_url)" />
           <video
@@ -23,11 +23,11 @@
             autoplay muted loop playsinline
             class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl"
           />
-          <img v-else-if="blockMedia(block, 'media')" :src="blockMedia(block, 'media')!.public_url!" :alt="mediaAlt(block)" class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl">
+          <img v-else-if="blockMedia(block, 'media')" :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="mx-auto mt-10 max-h-[34rem] w-full rounded-3xl object-cover shadow-xl">
         </div>
       </template>
 
-      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" />
+      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" :page-title="page.title" />
 
       <template v-else-if="block.type === 'image'">
         <figure v-if="blockMedia(block, 'media')" class="my-12">
@@ -38,7 +38,7 @@
             autoplay muted loop playsinline
             class="w-full rounded-2xl object-cover shadow-lg"
           />
-          <img v-else :src="blockMedia(block, 'media')!.public_url!" :alt="mediaAlt(block)" class="w-full rounded-2xl object-cover shadow-lg">
+          <img v-else :src="blockMedia(block, 'media')!.public_url!" :alt="text(block.data.alt) || page.title" class="w-full rounded-2xl object-cover shadow-lg">
           <figcaption v-if="text(block.data.caption)" class="mt-3 text-center text-sm text-muted">{{ text(block.data.caption) }}</figcaption>
         </figure>
       </template>
@@ -54,7 +54,7 @@
               autoplay muted loop playsinline
               class="aspect-[4/3] w-full rounded-2xl object-cover"
             />
-            <img v-else :src="image.url" :alt="image.alt" class="aspect-[4/3] w-full rounded-2xl object-cover">
+            <img v-else :src="image.url" :alt="image.alt || page.title" class="aspect-[4/3] w-full rounded-2xl object-cover">
             <figcaption v-if="image.caption" class="mt-2 text-sm text-muted">{{ image.caption }}</figcaption>
           </figure>
         </div>
@@ -109,7 +109,7 @@
           <h2 v-if="text(block.data.title)" class="mb-6 text-2xl font-semibold">{{ text(block.data.title) }}</h2>
           <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             <article v-for="(item, index) in gridItems(block)" :key="item.id || item.title || index" class="rounded-2xl border border-default bg-default p-6 shadow-sm">
-              <img v-if="gridItemMedia(item)" :src="gridItemMedia(item)!" :alt="item.title" class="mb-5 aspect-[4/3] w-full rounded-xl object-cover">
+              <img v-if="gridItemMedia(item)" :src="gridItemMedia(item)!" :alt="item.title || page.title" class="mb-5 aspect-[4/3] w-full rounded-xl object-cover">
               <p v-if="item.value" class="text-3xl font-bold text-primary">{{ item.value }}</p>
               <h3 v-if="item.title" class="text-lg font-semibold">{{ item.title }}</h3>
               <p v-if="item.description" class="mt-2 text-sm leading-6 text-muted">{{ item.description }}</p>
@@ -162,20 +162,6 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function heroTitle(block: TenantPageBlock): string {
-  return text(block.data.title)
-}
-
-function heroDescription(block: TenantPageBlock): string {
-  return Object.hasOwn(block.data, 'subtitle')
-    ? text(block.data.subtitle)
-    : text(block.data.description)
-}
-
-function mediaAlt(block: TenantPageBlock): string {
-  return blockMedia(block, 'media')?.alt_text?.trim() ?? ''
-}
-
 function sanitize(value: string): string {
   return sanitizer.sanitize(value)
 }
@@ -198,11 +184,11 @@ function asItems(value: unknown): GridItem[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item))).map(item => ({
     id: text(item.id) || undefined,
-    title: text(Object.hasOwn(item, 'title') ? item.title : item.name) || undefined,
-    description: text(Object.hasOwn(item, 'description') ? item.description : Object.hasOwn(item, 'summary') ? item.summary : item.body) || undefined,
+    title: text(item.title) || text(item.name) || undefined,
+    description: text(item.description) || text(item.summary) || text(item.body) || undefined,
     value: text(item.value) || undefined,
     media: Array.isArray(item.media) ? item.media as GridItem['media'] : [],
-    label: text(Object.hasOwn(item, 'label') ? item.label : item.cta_label) || undefined,
+    label: text(item.label) || text(item.cta_label) || undefined,
     labelKey: text(item.labelKey) || undefined,
     url: text(item.url) || text(item.cta_url) || undefined,
     amount: item.amount == null ? undefined : String(item.amount),

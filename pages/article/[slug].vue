@@ -9,8 +9,8 @@
           page's primary content. It only reappears once the grid actually puts it side by
                  side with the article at `lg:` (~992px, see --breakpoint-lg in assets/css/base.css).
         -->
-        <aside v-if="publicLocale === 'en'" class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
-          <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" />
+        <aside class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
+          <PlatformCommandSearchTrigger v-if="publicLocale === 'en'" surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" />
           <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" />
         </aside>
 
@@ -18,8 +18,8 @@
           <div class="mx-auto max-w-3xl">
             <!-- Mobile-only compact control replacing the sidebar: search + a drawer with
                  the same category nav shown in the desktop sidebar. -->
-            <div v-if="publicLocale === 'en'" class="flex items-center gap-3 lg:hidden">
-              <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles" aria-label="Search articles" class="flex-1" />
+            <div class="flex items-center gap-3 lg:hidden">
+              <PlatformCommandSearchTrigger v-if="publicLocale === 'en'" surface="tenant_blog" variant="blawby" label="Search articles" aria-label="Search articles" class="flex-1" />
               <button
                 type="button"
                 class="group flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--blawby-border)] bg-[var(--blawby-surface)] px-3 py-2.5 text-sm font-medium transition hover:border-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-100)]"
@@ -68,8 +68,8 @@
       <!-- Mobile "Browse topics" drawer — same search trigger + category nav as the
            desktop sidebar, just reachable from the compact control instead of always
            occupying document flow. -->
-      <PlatformDrawer v-if="publicLocale === 'en'" v-model="browseTopicsOpen" title="Browse topics">
-        <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" @click="browseTopicsOpen = false" />
+      <PlatformDrawer v-model="browseTopicsOpen" title="Browse topics">
+        <PlatformCommandSearchTrigger v-if="publicLocale === 'en'" surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" @click="browseTopicsOpen = false" />
         <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" @click="browseTopicsOpen = false" />
       </PlatformDrawer>
     </div>
@@ -103,8 +103,8 @@ const identity = computed(() => shell.value.identity)
 const consultation = computed(() => shell.value.consultation)
 const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
-const blogIndex = publicLocale.value === 'en' ? await useBlawbyRoute('blog') : null
-if (blogIndex?.error.value) throw blogIndex.error.value
+const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
+if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
 const articleDisplayMedia = computed(() => post.value.media.find(item => item.slot === 'featured') ?? null)
 const articleSocialMedia = computed(() => post.value.media.find(item => item.slot === 'featured') ?? null)
@@ -116,8 +116,8 @@ const ctaBlock = computed(() => {
 })
 const displayTags = computed(() => Array.isArray(post.value.tags) ? post.value.tags.slice(1) : [])
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
-const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
-const { categories } = useTenantBlogNav(computed(() => blogIndex?.data.value?.posts ?? []))
+const relatedPosts = computed(() => blogIndexData.value.posts.filter(item => item.slug !== slug).slice(0, 3))
+const { categories } = useTenantBlogNav(computed(() => blogIndexData.value.posts))
 const browseTopicsOpen = ref(false)
 const requestURL = useRequestURL()
 const articlePath = computed(() => `/article/${post.value.slug}`)

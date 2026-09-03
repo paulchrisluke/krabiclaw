@@ -7,9 +7,9 @@
     </div>
   </div>
 
-  <div v-else-if="post" :class="locale === 'en' ? 'mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8' : 'mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8'">
-    <aside v-if="locale === 'en'" class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
-      <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" :label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" :aria-label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" class="mb-6" />
+  <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
+    <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
+      <PlatformCommandSearchTrigger v-if="locale === 'en'" surface="tenant_blog" variant="saya" :label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" :aria-label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" class="mb-6" />
       <BlogCategoryNav :categories="categories" :base-path="blogBasePath" :active-slug="post?.slug" />
     </aside>
 
@@ -26,7 +26,7 @@
     </div>
     </div>
 
-    <div v-if="locale === 'en' && relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
+    <div v-if="relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
       <h2 class="mb-6 text-xl font-bold text-default">{{ t('saya.posts.title') }} · {{ siteName }}</h2>
       <div class="grid gap-6 sm:grid-cols-2">
         <NuxtLink
@@ -177,10 +177,8 @@ await shell.ready
 if (locale !== 'en' && !shell.site.value?.brand_name?.trim()) {
   throw createError({ statusCode: 404, statusMessage: 'Exact localized site identity was not found' })
 }
-const sourceBlogData = locale === 'en'
-  ? await usePublicPageData({ datasets: ['blog'], routeOwned: false })
-  : null
-const allPosts = computed(() => (sourceBlogData?.blogList.value ?? []) as unknown as TenantBlogPost[])
+const sourceBlogData = await usePublicPageData({ datasets: ['blog'], routeOwned: false })
+const allPosts = computed(() => (sourceBlogData.blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
 const siteName = computed(() => locale === 'en'
