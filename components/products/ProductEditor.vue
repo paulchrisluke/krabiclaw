@@ -28,7 +28,7 @@
                 <img v-if="product.image?.public_url" :src="product.image.public_url" :alt="product.image.alt_text || product.name" class="size-12 rounded object-cover">
                 <span v-else class="size-12 rounded bg-elevated" />
                 <span class="min-w-0"><strong class="block truncate">{{ product.name }}</strong></span>
-                <span class="text-sm tabular-nums">{{ formatProductMoney(product.price) }}</span>
+                <span class="text-sm tabular-nums" :class="{ 'text-muted italic': !formatProductPriceLabel(product) }">{{ formatProductPriceLabel(product) || 'No price set' }}</span>
               </button>
               <div class="mr-3 flex gap-1">
                 <button type="button" class="rounded-md border border-default px-2 py-1 text-sm disabled:opacity-30" :aria-label="`Move ${product.name} up`" :disabled="reordering || productIndex === 0" @click="moveProduct(categoryIndex, productIndex, -1)">↑</button>
@@ -45,7 +45,9 @@
       <h2 class="font-semibold">{{ editing.id ? `Edit ${presentation.itemLabel}` : `New ${presentation.itemLabel}` }}</h2>
       <label class="block text-sm">Name<input v-model="editing.name" required maxlength="240" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
       <label class="block text-sm">{{ presentation.categoryLabel }}<input v-model="editing.category" required maxlength="120" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
-      <label class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <label class="flex items-center gap-2 text-sm"><input v-model="editing.has_fixed_price" type="checkbox"> Fixed price</label>
+      <label v-if="editing.has_fixed_price" class="block text-sm">Price ({{ currency }})<input v-model="editing.price_major" required inputmode="decimal" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"></label>
+      <label class="block text-sm">Price wording (optional)<input v-model="editing.price_note" maxlength="500" placeholder="Market Price, Ask Staff, …" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="editing.has_fixed_price && editing.price_note.trim()" class="mt-1 block text-xs text-red-700">Clear this wording before saving a fixed price. It will not be removed automatically.</span><span v-else-if="!editing.has_fixed_price" class="mt-1 block text-xs text-muted">Shown to customers instead of a number. Leave blank and no price is displayed.</span></label>
       <label class="block text-sm">Description<textarea v-model="editing.description" maxlength="10000" rows="4" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" /></label>
       <label class="block text-sm">Order URL<input v-model="editing.order_url" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2"><span v-if="orderHostname" class="mt-1 block text-xs text-muted">Destination: {{ orderHostname }}</span></label>
       <label class="block text-sm">Tags<input v-model="editing.tags_text" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2" placeholder="tag one, tag two"></label>
@@ -60,7 +62,7 @@
         <label><input v-model="editing.featured" type="checkbox"> Featured</label>
       </div>
       <div class="flex gap-3">
-        <button :disabled="saving" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit">{{ saving ? 'Saving…' : 'Save' }}</button>
+        <button :disabled="saving || Boolean(editing.has_fixed_price && editing.price_note.trim())" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" type="submit">{{ saving ? 'Saving…' : 'Save' }}</button>
         <button class="rounded-lg border border-default px-4 py-2 text-sm" type="button" @click="editing = null">Cancel</button>
         <button v-if="editing.id" class="ml-auto text-sm text-red-600" type="button" @click="remove">Delete</button>
       </div>
@@ -72,11 +74,11 @@
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { Product, ProductDetail, ProductPresentation } from '~/server/types/products'
 import type { CurrencyCode } from '~/shared/currencies'
-import { formatProductMoney } from '~/utils/product-money'
+import { formatProductPriceLabel } from '~/utils/product-money'
 import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
 
 const props = defineProps<{ siteId: string; locationId: string; locationTitle: string; currency: CurrencyCode; presentation: ProductPresentation }>()
-interface EditingProduct { id: string | null; name: string; category: string; price_major: string; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
+interface EditingProduct { id: string | null; name: string; category: string; price_major: string; has_fixed_price: boolean; price_note: string; original_price_note: ProductDetail | null; description: string; order_url: string; tags_text: string; details_text: string; is_visible: boolean; available: boolean; featured: boolean; image_asset_id: string | null }
 const products = ref<Product[]>([])
 const editing = ref<EditingProduct | null>(null)
 const loading = ref(true)
@@ -84,7 +86,8 @@ const saving = ref(false)
 const reordering = ref(false)
 const error = ref<string | null>(null)
 const dashboardApi = useDashboardApi()
-const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details)
+const isProductDetail = (value: unknown): value is ProductDetail => isRecord(value) && typeof value.key === 'string' && typeof value.label === 'string' && Array.isArray(value.values) && value.values.every(item => typeof item === 'string')
+const isProduct = (value: unknown): value is Product => isRecord(value) && typeof value.id === 'string' && typeof value.location_id === 'string' && typeof value.name === 'string' && typeof value.category === 'string' && (value.price === null || isRecord(value.price)) && Array.isArray(value.tags) && Array.isArray(value.details) && value.details.every(isProductDetail)
 const isList = (value: unknown): value is { success: true; products: Product[] } => isRecord(value) && value.success === true && Array.isArray(value.products) && value.products.every(isProduct)
 const isOne = (value: unknown): value is { success: true; product: Product } => isRecord(value) && value.success === true && isProduct(value.product)
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
@@ -106,12 +109,32 @@ async function load() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : 'Failed to load Products' }
   finally { loading.value = false }
 }
-function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
-function editProduct(product: Product) { editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(product.details, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null } }
+function startCreate() { editing.value = { id: null, name: '', category: '', price_major: '', has_fixed_price: true, price_note: '', original_price_note: null, description: '', order_url: '', tags_text: '', details_text: '[]', is_visible: true, available: true, featured: false, image_asset_id: null } }
+function editProduct(product: Product) {
+  const priceNoteDetail = product.details.find(detail => detail.key === 'price-note') ?? null
+  const priceNote = priceNoteDetail?.values[0] ?? ''
+  const otherDetails = product.details.filter(detail => detail.key !== 'price-note')
+  editing.value = { id: product.id, name: product.name, category: product.category, price_major: product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : '', has_fixed_price: product.price !== null, price_note: priceNote, original_price_note: priceNoteDetail, description: product.description, order_url: product.order_url ?? '', tags_text: product.tags.join(', '), details_text: JSON.stringify(otherDetails, null, 2), is_visible: product.is_visible, available: product.available, featured: product.featured, image_asset_id: product.image?.asset_id ?? null }
+}
 function payload(product: EditingProduct) {
-  let details: ProductDetail[]
-  try { details = JSON.parse(product.details_text) as ProductDetail[] } catch { throw new Error('Details must be valid JSON') }
-  return { name: product.name, category: product.category, price: { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details, is_visible: product.is_visible, available: product.available, featured: product.featured }
+  let parsedDetails: unknown
+  try { parsedDetails = JSON.parse(product.details_text) } catch { throw new Error('Details must be valid JSON') }
+  if (!Array.isArray(parsedDetails) || !parsedDetails.every(isProductDetail)) throw new Error('Details must be valid JSON')
+  const details = parsedDetails
+  if (details.some(detail => detail.key === 'price-note')) throw new Error('Use the "Price wording" field for price-note, not Details JSON')
+  if (product.has_fixed_price && product.price_note.trim()) throw new Error('Clear the price wording before saving a fixed price')
+  const price = product.has_fixed_price
+    ? { amount_minor: majorAmountToMinor(product.price_major, props.currency), currency: props.currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }
+    : null
+  const priceNote = product.price_note.trim()
+  const originalPriceNote = product.original_price_note
+  const priceNoteValues = originalPriceNote && priceNote === originalPriceNote.values[0]
+    ? originalPriceNote.values
+    : [priceNote, ...(originalPriceNote?.values.slice(1) ?? [])]
+  const finalDetails = priceNote
+    ? [...details, { key: 'price-note', label: originalPriceNote?.label ?? 'Price', values: priceNoteValues }]
+    : details
+  return { name: product.name, category: product.category, price, description: product.description, order_url: product.order_url || null, tags: product.tags_text.split(',').map(tag => tag.trim()).filter(Boolean), details: finalDetails, is_visible: product.is_visible, available: product.available, featured: product.featured }
 }
 async function save() {
   const product = editing.value

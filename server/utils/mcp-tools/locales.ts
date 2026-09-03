@@ -29,7 +29,6 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: false,
-    strict: true,
     inputSchema: {},
     outputSchema: {
       type: 'object',
@@ -46,7 +45,6 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: false,
-    strict: true,
     inputSchema: {
       resource_type: { type: 'string' },
       resource_id: { type: 'string' },
@@ -61,7 +59,6 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: true,
-    strict: true,
     inputSchema: {
       resource_type: { type: 'string' },
       resource_id: { type: 'string' },
@@ -78,7 +75,6 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: true,
-    strict: true,
     inputSchema: {
       resource_type: { type: 'string' },
       resource_id: { type: 'string' },
@@ -93,7 +89,6 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: false,
-    strict: true,
     inputSchema: { locale: { type: 'string' } },
     required: ['locale'],
     outputSchema: { type: 'object', properties: { locale: { type: 'string' }, products: { type: 'array', items: { type: 'object', additionalProperties: true } } }, required: ['locale', 'products'], additionalProperties: false },
@@ -104,7 +99,6 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: true,
-    strict: true,
     inputSchema: {
       locale: { type: 'string' },
       items: {

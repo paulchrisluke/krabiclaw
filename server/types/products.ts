@@ -49,7 +49,7 @@ export interface CreateProductInput {
   category: string
   name: string
   description?: string
-  price: PriceInput
+  price: PriceInput | null
   order_url?: string | null
   is_visible?: boolean
   available?: boolean

@@ -23,32 +23,21 @@ type ChowBotToolLike = ToolLike & {
 export type ConversationalToolSurfaceGroup =
   | 'social_publishing'
   | 'domains'
-  | 'managed_service'
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled'])
 
 const GROUP_FLAG_ENV: Record<ConversationalToolSurfaceGroup, string> = {
   social_publishing: 'CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED',
   domains: 'CONVERSATIONAL_TOOLS_DOMAINS_ENABLED',
-  managed_service: 'CONVERSATIONAL_TOOLS_MANAGED_SERVICE_ENABLED',
 }
 
 const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]> = {
-  social_publishing: [
-    'get_facebook_connection',
-    'publish_to_facebook',
-    'sync_facebook_page',
-  ],
+  // No standalone tool belongs to this group anymore — social_publishing now
+  // only gates publish_post's facebook/instagram channels (see
+  // normalizeMcpToolForConversationalSurface below).
+  social_publishing: [],
   domains: [
     'get_site_domains',
-    'create_domain',
-    'set_canonical_domain',
-    'delete_domain',
-    'sync_domain',
-  ],
-  managed_service: [
-    'list_work_requests',
-    'create_work_request',
   ],
 }
 
@@ -147,4 +136,12 @@ export function normalizeChowBotToolForConversationalSurface<T extends ChowBotTo
 
 export function filterConversationalTools<T extends ToolLike>(tools: readonly T[], env?: ApiRecord): T[] {
   return tools.filter((tool) => isConversationalToolEnabled(tool.name, env))
+}
+
+export function visibleConversationalMcpTools<T extends McpToolLike>(
+  tools: readonly T[],
+  env?: ApiRecord,
+): T[] {
+  return filterConversationalTools(tools, env)
+    .map((tool) => normalizeMcpToolForConversationalSurface(tool, env))
 }

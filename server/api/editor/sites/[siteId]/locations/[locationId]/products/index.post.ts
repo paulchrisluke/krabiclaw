@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   try {
     const { env, db, session, site } = await requireLocationAccess(event, siteId, locationId)
     const body = await readRequiredBody<CreateProductInput>(event)
-    const product = await createProduct(db, site.organization_id, siteId, locationId, body, session.user.id, env)
+    const product = await createProduct(db, site.organization_id, siteId, locationId, body, { actorId: session.user.id }, env)
     return jsonResponse({ success: true, product, site_id: siteId, location_id: locationId }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)

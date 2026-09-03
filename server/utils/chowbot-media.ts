@@ -1,6 +1,7 @@
 import { callAiGateway, documentBlock, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { chargeCredits, hasCredits } from '~/server/utils/ai-credits'
 import { createProductsBatch } from '~/server/utils/product-management'
+import { PRODUCT_DETAILS_INPUT_SCHEMA, validateProductDetails } from '~/server/utils/product-validation'
 import type { CreateProductInput, Product } from '~/server/types/products'
 import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
@@ -8,7 +9,7 @@ import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils
 import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { localizationError } from '~/server/utils/localization-errors'
 import { queryFirst } from '~/server/db'
-import { isCurrencyCode } from '~/shared/currencies'
+import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   MARKDOWN_MIME_TYPES,
   assertMarkdownSize,
@@ -18,7 +19,16 @@ import {
 } from '~/server/utils/markdown-document'
 
 const PRODUCT_EXTRACTION_TOOL_NAME = 'extract_products'
-const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, or order URLs. Prices must be returned as integer amount_minor values in ${currency}. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+const extractionSystem = (currency: string) => `Extract location-owned Products only from text visibly present in the source. Never infer descriptions, prices, details, or order URLs. For each Product, return exactly one discriminated price result. Use { kind: "fixed", amount_minor } when a fixed numeric amount is clearly visible. The server applies the trusted site currency ${currency}, unit "item", and tax behavior "unspecified". Use { kind: "no-fixed-price", note } only when the source visibly gives exact customer-facing wording such as "Market Price" or "Ask Staff"; copy that wording verbatim into note. Use { kind: "unreadable" } when price information is missing, ambiguous, cropped, blurred, obscured, or otherwise cannot be read completely. Any unreadable result rejects the complete import, so never guess. Do not add a price-note entry to details; the server derives it from note. Call the extract_products tool exactly once. Use an empty items array when no Products can be read.`
+
+type ExtractedPrice =
+  | { kind: 'fixed'; amount_minor: number }
+  | { kind: 'no-fixed-price'; note: string }
+  | { kind: 'unreadable' }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 
 const PRODUCT_EXTRACTION_TOOL = {
   name: PRODUCT_EXTRACTION_TOOL_NAME,
@@ -36,14 +46,16 @@ const PRODUCT_EXTRACTION_TOOL = {
             name: { type: 'string' },
             description: { type: ['string', 'null'] },
             price: {
-              type: 'object',
-              properties: { amount_minor: { type: 'integer', minimum: 0 } },
-              required: ['amount_minor'],
-              additionalProperties: false,
+              oneOf: [
+                { type: 'object', properties: { kind: { const: 'fixed' }, amount_minor: { type: 'integer', minimum: 0 } }, required: ['kind', 'amount_minor'], additionalProperties: false },
+                { type: 'object', properties: { kind: { const: 'no-fixed-price' }, note: { type: 'string', minLength: 1 } }, required: ['kind', 'note'], additionalProperties: false },
+                { type: 'object', properties: { kind: { const: 'unreadable' } }, required: ['kind'], additionalProperties: false },
+              ],
             },
+            details: PRODUCT_DETAILS_INPUT_SCHEMA,
             order_url: { type: ['string', 'null'] },
           },
-          required: ['category', 'name', 'description', 'price', 'order_url'],
+          required: ['category', 'name', 'description', 'price', 'details', 'order_url'],
           additionalProperties: false,
         },
       },
@@ -53,11 +65,33 @@ const PRODUCT_EXTRACTION_TOOL = {
   },
 }
 
-function parseProductExtraction(input: unknown, currency: CreateProductInput['price']['currency']): CreateProductInput[] {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+function parseExtractedPrice(input: unknown): ExtractedPrice | null {
+  if (!isRecord(input)) return null
+  const keys = Object.keys(input).sort().join(',')
+  if (input.kind === 'fixed') {
+    return keys === 'amount_minor,kind'
+      && typeof input.amount_minor === 'number'
+      && Number.isSafeInteger(input.amount_minor)
+      && input.amount_minor >= 0
+      ? { kind: 'fixed', amount_minor: input.amount_minor }
+      : null
+  }
+  if (input.kind === 'no-fixed-price') {
+    return keys === 'kind,note'
+      && typeof input.note === 'string'
+      && input.note.length > 0
+      && input.note === input.note.trim()
+      ? { kind: 'no-fixed-price', note: input.note }
+      : null
+  }
+  return input.kind === 'unreadable' && keys === 'kind' ? { kind: 'unreadable' } : null
+}
+
+export function parseProductExtraction(input: unknown, currency: CurrencyCode): CreateProductInput[] {
+  if (!isRecord(input)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
   }
-  const payload = input as Record<string, unknown>
+  const payload = input
   const payloadKeys = Object.keys(payload)
   if (payloadKeys.length !== 1 || payloadKeys[0] !== 'items' || !Array.isArray(payload.items)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must contain exactly one items array')
@@ -72,32 +106,41 @@ function parseProductExtraction(input: unknown, currency: CreateProductInput['pr
   const products: CreateProductInput[] = []
   const duplicateKeys = new Set<string>()
   for (const [index, value] of payload.items.entries()) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    if (!isRecord(value)) {
       errors.push({ index, fields: [], message: 'item must be an object' })
       continue
     }
-    const item = value as Record<string, unknown>
-    const allowed = ['category', 'name', 'description', 'price', 'order_url']
+    const item = value
+    const allowed = ['category', 'name', 'description', 'price', 'details', 'order_url']
     const unknown = Object.keys(item).filter(key => !allowed.includes(key)).sort()
     const missing = allowed.filter(key => !Object.hasOwn(item, key))
     const category = typeof item.category === 'string' ? item.category.trim() : ''
     const name = typeof item.name === 'string' ? item.name.trim() : ''
-    const price = item.price && typeof item.price === 'object' && !Array.isArray(item.price)
-      ? item.price as Record<string, unknown>
-      : null
-    const amountMinor = price?.amount_minor
-    const priceValid = price != null
-      && Object.keys(price).length === 1
-      && Number.isSafeInteger(amountMinor)
-      && Number(amountMinor) >= 0
     const descriptionValid = item.description === null || typeof item.description === 'string'
     const orderUrlValid = item.order_url === null || typeof item.order_url === 'string'
+
+    const extractedPrice = parseExtractedPrice(item.price)
+    const priceValid = extractedPrice !== null && extractedPrice.kind !== 'unreadable'
+    const resolvedPrice: CreateProductInput['price'] = extractedPrice?.kind === 'fixed'
+      ? { amount_minor: extractedPrice.amount_minor, currency, unit: 'item', tax_behavior: 'unspecified' }
+      : null
+    const priceNote = extractedPrice?.kind === 'no-fixed-price' ? extractedPrice.note : null
+    let details: Product['details'] = []
+    let detailsValid = true
+    try {
+      details = validateProductDetails(item.details)
+    } catch {
+      detailsValid = false
+    }
+    if (details.some(detail => detail.key === 'price-note')) detailsValid = false
+
     const invalidFields = [
       ...unknown,
       ...missing,
       ...(!category ? ['category'] : []),
       ...(!name ? ['name'] : []),
       ...(!priceValid ? ['price'] : []),
+      ...(!detailsValid ? ['details'] : []),
       ...(!descriptionValid ? ['description'] : []),
       ...(!orderUrlValid ? ['order_url'] : []),
     ]
@@ -111,11 +154,11 @@ function parseProductExtraction(input: unknown, currency: CreateProductInput['pr
     products.push({
       category,
       name,
-      description: item.description === null ? '' : item.description as string,
-      price: { amount_minor: Number(amountMinor), currency, unit: 'item', tax_behavior: 'unspecified', provenance: 'ai-import' },
-      order_url: item.order_url as string | null,
+      description: typeof item.description === 'string' ? item.description : '',
+      price: resolvedPrice,
+      order_url: typeof item.order_url === 'string' ? item.order_url : null,
       tags: [],
-      details: [],
+      details: priceNote ? [...details, { key: 'price-note', label: 'Price', values: [priceNote] }] : details,
       source: 'ai',
     })
   }
@@ -167,9 +210,6 @@ export async function saveInboundMediaAsset(
     filename?: string
   }
 ): Promise<MediaAsset> {
-  // WhatsApp (and other generic upload paths) frequently report a generic
-  // or missing MIME type for plain-text attachments — fall back to the
-  // filename extension so a .md/.markdown upload is still recognized.
   const normalizedMimeType = resolveMarkdownMimeType(opts.mimeType, opts.filename) ?? opts.mimeType
 
   if (MARKDOWN_MIME_TYPES.has(normalizedMimeType)) {
@@ -290,7 +330,10 @@ export async function extractProductsFromMediaAsset(
   }
   const accepted = parseProductExtraction(toolBlocks[0].input, site.default_currency)
   try {
-    const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, `ai:${opts.userId}`)
+    const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, {
+      actorId: opts.userId,
+      priceProvenance: 'ai-import',
+    })
     return { products, creditsRemaining: charged.newBalance }
   } catch (error) {
     if (error && typeof error === 'object' && 'statusCode' in error) {

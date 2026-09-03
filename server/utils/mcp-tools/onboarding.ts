@@ -4,7 +4,7 @@ import { fileReferenceObject, generatedImagePickerOutputSchema, globalTool, site
 export const ONBOARDING_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'import_from_maps',
-      description: 'Import business details from a Google Maps URL or share link. Call this when the user provides a Maps URL during site creation. Media is added only after the site exists through the canonical media asset tools.',
+      description: 'Fetch business details from a Google Maps URL or share link without persisting them — the caller still decides what to save. Call this when the user provides a Maps URL during site creation. Consumes Google Places API credits. Media is added only after the site exists through the canonical media asset tools.',
       domain: 'onboarding',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -111,42 +111,6 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
           thumbnail_url: { type: 'string' },
         },
         required: ['asset_id', 'public_url'],
-      },
-    }),
-  siteTool({
-      name: 'show_site_preview',
-      description: 'Show a preview of the site. Call after create_site + create_location succeed. Works before the site is publicly launched.',
-      domain: 'onboarding',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      outputSchema: {
-        type: 'object',
-        properties: {
-          site: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-              subdomain: { type: ['string', 'null'] },
-              publicUrl: { type: 'string' },
-              previewUrl: { type: 'string' },
-            },
-            required: ['id', 'publicUrl', 'previewUrl'],
-          },
-          pages: {
-            type: 'array',
-            description: 'Navigable pages shown in the preview tabs.',
-            items: {
-              type: 'object',
-              properties: {
-                label: { type: 'string' },
-                path: { type: 'string' },
-              },
-              required: ['label', 'path'],
-            },
-          },
-        },
-        required: ['site', 'pages'],
       },
     }),
 ]

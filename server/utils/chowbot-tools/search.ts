@@ -1,13 +1,9 @@
 import type { AiTool } from '~/server/utils/ai-gateway'
-import { MANAGED_SERVICE_TOOLS } from '~/server/utils/mcp-tools/managed-service'
 import { PUBLIC_SEARCH_TYPES } from '~/server/utils/platform-search-types'
-import { chowbotToolFromMcp } from './from-mcp'
 
-export const MANAGED_SERVICE_CHOWBOT_TOOLS: AiTool[] = [
-  ...MANAGED_SERVICE_TOOLS.map(chowbotToolFromMcp),
-  // search_public_resources has no MCP equivalent — ChowBot-only tool over
-  // the platform search index, unrelated to managed-service work requests
-  // but bundled in this file for convenience.
+// search_public_resources has no MCP equivalent — ChowBot-only tool over
+// the platform search index.
+export const SEARCH_CHOWBOT_TOOLS: AiTool[] = [
   {
     name: "search_public_resources",
     description: "Search the unified KrabiClaw AI Search knowledge index across docs, blog posts, support answers, platform pages, and route guidance.",

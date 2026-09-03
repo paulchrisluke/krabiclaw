@@ -285,7 +285,7 @@
 </template>
 
 <script setup>
-import { formatProductMoney } from '~/utils/product-money'
+import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { getActiveSpecialClosure } from '~/utils/formatters'
@@ -560,10 +560,10 @@ const featuredProductCards = computed(() => {
     if (!locationSlug) throw new Error(`Product location is missing: ${item.location_id}`)
     return {
       name: item.name,
-      price: formatProductMoney(item.price),
+      price: formatProductPriceLabel(item),
       compareAtPrice: item.price?.compare_at_amount_minor
         ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
-        : '',
+        : null,
       image: item.image?.public_url || null,
       imageKind: 'image',
       alt: item.image?.alt_text || item.name,

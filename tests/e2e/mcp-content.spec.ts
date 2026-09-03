@@ -306,10 +306,10 @@ test.describe('stateless MCP server', () => {
     const listBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
     // Without site_id, all non-gated tools must be discoverable so AI clients (e.g. ChatGPT) see
     // the full capability set on first connection. Security gates enforce at execution time, not
-    // at discovery. Retired translation-job tools and gated social-publishing/domains/managed-service
-    // tools are intentionally absent here.
-    // by the conversational-surface flags (see conversational-tool-surface.ts) — CI runs with
-    // those flags unset, matching production default — so they're intentionally excluded below.
+    // at discovery. Retired translation-job tools and gated social-publishing/domains tools are
+    // intentionally absent here, gated by the conversational-surface flags (see
+    // conversational-tool-surface.ts) — CI runs with those flags unset, matching production
+    // default — so they're intentionally excluded below.
     const allToolNames = listBody.result.tools.map(tool => tool.name)
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites', 'create_site',
@@ -320,7 +320,6 @@ test.describe('stateless MCP server', () => {
       'get_translation_inventory', 'start_translation_job', 'list_translation_jobs',
       'get_translation_job', 'run_translation_job_batch', 'get_translation_review_items',
       'save_translation_review_item', 'publish_translations',
-      'list_work_requests',
     ]))
     expect(allToolNames.length).toBeGreaterThan(50)
 

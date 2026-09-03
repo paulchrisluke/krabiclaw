@@ -15,9 +15,9 @@
           <p class="saya-kicker">{{ product.category }}</p>
           <h1 class="saya-display-md mt-3">{{ product.name }}</h1>
           <p class="mt-2 text-sm text-muted">{{ location.title }}</p>
-          <div class="mt-6 flex items-baseline gap-3 text-xl">
+          <div v-if="formatProductPriceLabel(product)" class="mt-6 flex items-baseline gap-3 text-xl">
             <span v-if="product.price?.compare_at_amount_minor" class="text-muted line-through">{{ formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null }) }}</span>
-            <span class="font-semibold">{{ formatProductMoney(product.price) }}</span>
+            <span class="font-semibold">{{ formatProductPriceLabel(product) }}</span>
           </div>
           <p v-if="product.description" class="mt-8 leading-7 text-muted">{{ product.description }}</p>
           <p v-if="!product.available" class="mt-8 font-semibold text-muted">Currently unavailable</p>
@@ -29,8 +29,8 @@
             class="mt-8"
             @click="recordExternalOrderClick"
           >Order Now</SayaButton>
-          <dl v-if="product.details.length" class="mt-10 divide-y divide-default border-y border-default">
-            <div v-for="detail in product.details" :key="detail.key" class="py-4">
+          <dl v-if="visibleDetails.length" class="mt-10 divide-y divide-default border-y border-default">
+            <div v-for="detail in visibleDetails" :key="detail.key" class="py-4">
               <dt class="font-medium">{{ detail.label }}</dt>
               <dd class="mt-1 text-sm text-muted">{{ detail.values.join(', ') }}</dd>
             </div>
@@ -73,7 +73,7 @@ import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { minorAmountToMajor } from '~/shared/prices'
-import { formatProductMoney } from '~/utils/product-money'
+import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 
 interface LocationSummary { id: string; slug: string; title: string }
@@ -98,6 +98,8 @@ const breadcrumbs = computed(() => [
   { to: props.presentation.productPath(props.location.slug, props.product.slug), label: props.product.name },
 ])
 
+const visibleDetails = computed(() => props.product.details.filter(detail => detail.key !== 'price-note'))
+
 function recordExternalOrderClick() {
   if (!import.meta.client || props.analyticsEnabled === false) return
   trackProductOrder(
@@ -112,13 +114,15 @@ useSchemaOrg(computed(() => ({
   name: props.product.name,
   description: props.product.description,
   image: props.product.image?.public_url,
-  offers: {
-    '@type': 'Offer',
-    price: props.product.price ? minorAmountToMajor(props.product.price.amount_minor, props.product.price.currency) : undefined,
-    priceCurrency: props.product.price?.currency,
-    availability: props.product.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-    url: props.product.order_url || props.presentation.productPath(props.location.slug, props.product.slug),
-  },
+  offers: props.product.price
+    ? {
+        '@type': 'Offer',
+        price: minorAmountToMajor(props.product.price.amount_minor, props.product.price.currency),
+        priceCurrency: props.product.price.currency,
+        availability: props.product.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        url: props.product.order_url || props.presentation.productPath(props.location.slug, props.product.slug),
+      }
+    : undefined,
   aggregateRating: props.reviews.length
     ? {
         '@type': 'AggregateRating',

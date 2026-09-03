@@ -6,7 +6,7 @@
 // gateway or D1.
 
 export const MARKDOWN_MIME_TYPES = new Set(["text/markdown", "text/x-markdown"]);
-export const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
+const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
 
 /** Keep a single grounded analysis request safely below the model context window.
  * Oversized files fail explicitly rather than being truncated or rejected later
@@ -20,21 +20,13 @@ export class MarkdownDocumentError extends Error {
   }
 }
 
-export function isMarkdownFilename(filename?: string | null): boolean {
-  if (!filename) return false;
-  const lower = filename.toLowerCase();
-  return MARKDOWN_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
-
-/**
- * Resolves whether an uploaded file should be treated as Markdown, matching
- * on either a declared/sniffed MIME type or the filename extension — WhatsApp
- * and generic multipart uploads frequently report a generic or missing MIME
- * type for plain-text files, so extension is an equally valid signal here.
- */
 export function resolveMarkdownMimeType(mimeType: string | undefined | null, filename?: string | null): string | null {
-  if (mimeType && MARKDOWN_MIME_TYPES.has(mimeType.toLowerCase())) return "text/markdown";
-  if (isMarkdownFilename(filename)) return "text/markdown";
+  const normalizedMimeType = mimeType?.toLowerCase();
+  if (normalizedMimeType && MARKDOWN_MIME_TYPES.has(normalizedMimeType)) return "text/markdown";
+  if ((!normalizedMimeType || normalizedMimeType === "application/octet-stream") && filename) {
+    const lowerFilename = filename.toLowerCase();
+    if (MARKDOWN_EXTENSIONS.some((extension) => lowerFilename.endsWith(extension))) return "text/markdown";
+  }
   return null;
 }
 

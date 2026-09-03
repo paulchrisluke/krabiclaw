@@ -32,7 +32,9 @@ jobs:
       - run: yarn install --frozen-lockfile
       - run: yarn quality
       - run: yarn test:unit
+      - run: yarn test:d1
       - run: yarn mcp:catalog
+      - run: yarn chatgpt:submission:check
       - run: yarn lint:seeds
       - run: yarn lint:migrations
       - run: yarn lint:schema-drift
