@@ -317,7 +317,8 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
   })
 
-  async function verifyThaiRoutes(page: Page, viewport: { width: number; height: number }) {
+  async function verifyThaiLinksAndHome(page: Page, viewport: { width: number; height: number }) {
+    await page.setViewportSize(viewport)
     await openTenantPage(page, `${blawbyBaseURL}/th/links`, blawbyExtraHeaders)
     await page.reload()
     await expect(page.locator('main')).toContainText('ลิงก์กฎหมายภาษาไทย')
@@ -326,22 +327,38 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     await expect(page.locator('a[href="/th/contact"]')).toBeVisible()
     await expect(page.locator('body')).not.toContainText(/Family law services|Contact our team/i)
 
-    await page.setViewportSize(viewport)
     await expectThaiRepresentation(page, '/th', '/', 'ความยุติธรรมสำหรับทุกคน', /Access to Justice for All/i)
+  }
+
+  async function verifyThaiServiceRoutes(page: Page, viewport: { width: number; height: number }) {
+    await page.setViewportSize(viewport)
     await expectThaiRepresentation(page, '/th/services/family-th', '/services/family', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
     await expectThaiRepresentation(page, '/th/services', '/services', 'กฎหมายครอบครัวภาษาไทย', /Empower your family to move forward confidently/i)
+  }
+
+  async function verifyThaiBlogRoutes(page: Page, viewport: { width: number; height: number }) {
+    await page.setViewportSize(viewport)
     await expectThaiRepresentation(page, '/th/blog', '/blog', 'บทความกฎหมาย', /Our Blog|Legal insights/i)
     await expect(page.locator('a[href="/th/article/will-th"]')).toBeVisible()
     await expectThaiRepresentation(page, '/th/article/will-th', '/article/writing-your-own-will-how-it-works', 'คู่มือพินัยกรรมภาษาไทย', /Last Will and Testament in North Carolina/i)
   }
 
-  test('renders Thai routes and locale-preserving navigation on desktop', async ({ page }) => {
-    await verifyThaiRoutes(page, { width: 1440, height: 900 })
-  })
+  for (const [viewportName, viewport] of [
+    ['desktop', { width: 1440, height: 900 }],
+    ['mobile', { width: 390, height: 844 }],
+  ] as const) {
+    test(`renders Thai links and home navigation on ${viewportName}`, async ({ page }) => {
+      await verifyThaiLinksAndHome(page, viewport)
+    })
 
-  test('renders Thai routes and locale-preserving navigation on mobile', async ({ page }) => {
-    await verifyThaiRoutes(page, { width: 390, height: 844 })
-  })
+    test(`renders Thai service routes on ${viewportName}`, async ({ page }) => {
+      await verifyThaiServiceRoutes(page, viewport)
+    })
+
+    test(`renders Thai blog routes on ${viewportName}`, async ({ page }) => {
+      await verifyThaiBlogRoutes(page, viewport)
+    })
+  }
 
   test('renders a published Thai functional route without a tenant-page variant', async ({ page }) => {
     const response = await openTenantPage(page, `${blawbyBaseURL}/th/locations`, blawbyExtraHeaders)
