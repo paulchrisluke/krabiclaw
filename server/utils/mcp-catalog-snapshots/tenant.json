@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:4b6cc8ff9825d7eae580ea07af3f122fa02e4e7833726d39b0b84eb01b1a30f5",
+  "fingerprint": "sha256:aaef4142bf234662dbcf3373db5e0964663d92f966fdfc8021042d3244699793",
   "tools": [
     {
       "name": "analyze_document",
@@ -1867,6 +1867,12 @@
         "properties": {
           "canonical_url": {
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
             "type": [
               "string",
               "null"
@@ -15142,6 +15148,12 @@
         "properties": {
           "canonical_url": {
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
             "type": [
               "string",
               "null"
