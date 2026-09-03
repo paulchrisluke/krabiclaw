@@ -32,7 +32,7 @@
     </nav>
 
     <div class="flex items-center justify-end gap-1">
-      <DashboardAccountMenu compact side="bottom" />
+      <DashboardAccountMenu />
       <UButton
         color="neutral"
         variant="ghost"

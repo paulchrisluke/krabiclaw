@@ -112,7 +112,7 @@ import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
 import DashboardTopNav from '~/lib/components/workspace/dashboard/DashboardTopNav.vue'
 import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/DashboardMenuSlideover.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
-import { dashboardAccountRouteQueryKey, dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
+import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
@@ -246,27 +246,17 @@ const canManageOrganization = computed(() => ['owner', 'admin'].includes(organiz
 const dashboardLocation = useDashboardLocation()
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
-const requestedAccountOrganizationSlug = computed(() => {
-  const slug = routeName.value.startsWith('dashboard-account') ? route.query.organization : null
-  return typeof slug === 'string' && /^[a-z0-9-]+$/.test(slug) ? slug : null
-})
-const requestedAccountOrganizationName = computed(() => {
-  const name = routeName.value.startsWith('dashboard-account') ? route.query.organizationName : null
-  return typeof name === 'string' && name.trim().length <= 100 ? name.trim() : null
-})
 const activeOrganizationId = computed(() => {
   const session = sessionData.value?.session as { activeOrganizationId?: string | null } | undefined
   return session?.activeOrganizationId ?? null
 })
-const accountOrganization = computed(() => organizations.value.find(org => org.slug === requestedAccountOrganizationSlug.value)
-  ?? organizations.value.find(org => org.id === activeOrganizationId.value)
+// The account pages are user-scoped, not organization-scoped, so they carry no
+// organization in the path. They used to carry one in the query string purely so
+// a back-link could render a label without a fetch; the top nav is the way back
+// now, and the session's active organization answers "back to which org?".
+const accountOrganization = computed(() => organizations.value.find(org => org.id === activeOrganizationId.value)
   ?? organizations.value[0]
   ?? null)
-const accountRouteQuery = computed((): Record<string, string> => {
-  const target = accountOrganization.value
-  if (!target?.slug) return {}
-  return { organization: target.slug, organizationName: target.name }
-})
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
@@ -431,15 +421,8 @@ const adminPrimaryNavItems = computed(() => adminNavSections.value.primary.map(i
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
   const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
-  if (target) return { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` }
-  return requestedAccountOrganizationSlug.value
-    ? {
-        label: requestedAccountOrganizationName.value ?? requestedAccountOrganizationSlug.value,
-        to: `/dashboard/${encodeURIComponent(requestedAccountOrganizationSlug.value)}`,
-      }
-    : null
+  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` } : null
 }))
-provide(dashboardAccountRouteQueryKey, accountRouteQuery)
 
 interface DashboardMobileNavItem {
   key: string
@@ -501,9 +484,13 @@ const isMenuPageActive = computed(() => isActivePath(menuPageTo.value, isAdminRo
 // Organization settings on the tenant surface; the admin links that did not fit
 // the bar on admin. One slideover, two content sets, no second component.
 const organizationSettings = useOrganizationSettingsNavigation()
-const menuGroups = computed(() => isAdminRoute.value
-  ? [{ id: 'admin', label: 'Platform admin', items: adminNavSections.value.secondary }]
-  : organizationSettings.groups.value)
+const menuGroups = computed(() => {
+  if (isAdminRoute.value) return [{ id: 'admin', label: 'Platform admin', items: adminNavSections.value.secondary }]
+  const notifications = topNavHomeTo.value === '/dashboard'
+    ? []
+    : [{ id: 'notifications', label: 'Notifications', items: [{ id: 'notifications', label: 'Notifications', summary: 'Alerts for this organization', to: `${topNavHomeTo.value}/notifications` }] }]
+  return [...notifications, ...organizationSettings.groups.value]
+})
 const menuActiveItem = computed(() => isAdminRoute.value
   ? adminNavSections.value.secondary.find(item => isActivePath(item.to))?.id ?? null
   : organizationSettings.activeItem.value)
