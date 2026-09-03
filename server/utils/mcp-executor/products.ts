@@ -7,6 +7,8 @@ import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import type { McpExecutorContext } from './shared'
 import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } from './shared'
+import { applyInventoryMovement, listLocationInventory, setInventoryAuthority } from '~/server/utils/inventory'
+import type { SetInventoryAuthorityInput } from '~/shared/inventory'
 
 async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   await assertResourceAccess(ctx.site.db, {
@@ -49,6 +51,7 @@ function productListItem(product: Product) {
     available: product.available,
     sort_order: product.sort_order,
     channel_availability: product.channel_availability,
+    inventory: product.inventory,
   }
 }
 
@@ -115,6 +118,45 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
       return extractProductsFromMediaAsset(site.db, site.env, { organizationId: site.organizationId, siteId: site.siteId, userId: site.userId, assetId: requiredString(args, 'asset_id'), locationId, sessionId: site.sessionId })
+    }
+    case 'get_location_inventory': {
+      const locationId = requiredString(args, 'location_id')
+      await authorizeLocation(ctx, locationId)
+      return listLocationInventory(site.db, site.organizationId, site.siteId, locationId)
+    }
+    case 'set_inventory_authority': {
+      const locationId = requiredString(args, 'location_id')
+      await authorizeLocation(ctx, locationId)
+      const authorityType = requiredString(args, 'authority_type')
+      const input: SetInventoryAuthorityInput = authorityType === 'krabiclaw'
+        ? { authority_type: 'krabiclaw' }
+        : authorityType === 'external'
+          ? {
+              authority_type: 'external', provider: requiredString(args, 'provider'), oauth_client_id: requiredString(args, 'oauth_client_id'),
+              provider_account_reference: requiredString(args, 'provider_account_reference'), external_location_reference: requiredString(args, 'external_location_reference'),
+            }
+          : (() => { throw mcpProtocolError(MCP_ERROR.invalidParams, 'Unsupported inventory authority') })()
+      return { authority: await setInventoryAuthority(site.db, site.organizationId, site.siteId, locationId, input, site.userId) }
+    }
+    case 'record_inventory_movement':
+    case 'reserve_inventory':
+    case 'release_inventory':
+    case 'consume_inventory': {
+      const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
+      const movementType = toolName === 'record_inventory_movement' ? requiredString(args, 'movement_type') : toolName.replace('_inventory', '')
+      if (!['restock', 'waste', 'manual_adjustment', 'reserve', 'release', 'consume'].includes(movementType)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'Unsupported inventory movement')
+      }
+      if (!Number.isSafeInteger(args.quantity) || Number(args.quantity) === 0) throw mcpProtocolError(MCP_ERROR.invalidParams, 'quantity must be a non-zero safe integer')
+      const hasReference = args.reference_type !== undefined || args.reference_id !== undefined
+      const reference = hasReference ? { reference_type: requiredString(args, 'reference_type'), reference_id: requiredString(args, 'reference_id') } : undefined
+      const movement = await applyInventoryMovement(site.db, {
+        organizationId: site.organizationId, siteId: site.siteId, locationId: product.location_id, productId: product.id,
+      }, {
+        movement_type: movementType as 'restock' | 'waste' | 'manual_adjustment' | 'reserve' | 'release' | 'consume',
+        quantity: Number(args.quantity), idempotency_key: requiredString(args, 'idempotency_key'), reference,
+      }, { type: 'user', id: site.userId })
+      return { movement }
     }
     default: return NOT_HANDLED
   }

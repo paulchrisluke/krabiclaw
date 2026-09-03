@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1894c8d0f103adf0cf814e2a3429fa44918b1db023cd419915fda0e5340f6279",
+  "fingerprint": "sha256:12a0cdc4e538d77b1d8eab2bba92f9be44c7c51bc5bd0a61462c41b23c042d52",
   "tools": [
     {
       "name": "analyze_document",
@@ -688,6 +688,94 @@
                     "null"
                   ]
                 },
+                "inventory": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "authority_id": {
+                      "type": "string"
+                    },
+                    "available_quantity": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    },
+                    "quantity_on_hand": {
+                      "type": "integer"
+                    },
+                    "quantity_reserved": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "source_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "current",
+                        "unresolved"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "available",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "unavailable_reason": {
+                      "enum": [
+                        "missing_authority",
+                        "missing_snapshot",
+                        "stale",
+                        "unresolved",
+                        "out_of_stock",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "product_id",
+                    "authority_id",
+                    "quantity_on_hand",
+                    "quantity_reserved",
+                    "available_quantity",
+                    "revision",
+                    "source_version",
+                    "valid_until",
+                    "state",
+                    "status",
+                    "unavailable_reason",
+                    "updated_at"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
                 "is_visible": {
                   "type": "boolean"
                 },
@@ -1129,7 +1217,8 @@
                 "menu_placement",
                 "channel_availability",
                 "modifier_groups",
-                "provider_mappings"
+                "provider_mappings",
+                "inventory"
               ],
               "type": "object"
             },
@@ -1177,6 +1266,195 @@
             "type": "object"
           }
         },
+        "type": "object"
+      }
+    },
+    {
+      "name": "consume_inventory",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_id": {
+            "type": "string"
+          },
+          "reference_type": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "quantity",
+          "idempotency_key",
+          "reference_type",
+          "reference_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "movement": {
+            "additionalProperties": false,
+            "properties": {
+              "actor_id": {
+                "type": "string"
+              },
+              "actor_type": {
+                "enum": [
+                  "user",
+                  "integration",
+                  "system"
+                ],
+                "type": "string"
+              },
+              "authority_id": {
+                "type": "string"
+              },
+              "available_quantity": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "idempotency_key": {
+                "type": "string"
+              },
+              "movement_id": {
+                "type": "string"
+              },
+              "movement_type": {
+                "enum": [
+                  "restock",
+                  "reserve",
+                  "release",
+                  "consume",
+                  "waste",
+                  "manual_adjustment",
+                  "external_sync"
+                ],
+                "type": "string"
+              },
+              "product_id": {
+                "type": "string"
+              },
+              "quantity_on_hand": {
+                "type": "integer"
+              },
+              "quantity_on_hand_delta": {
+                "type": "integer"
+              },
+              "quantity_reserved": {
+                "type": "integer"
+              },
+              "quantity_reserved_delta": {
+                "type": "integer"
+              },
+              "reference_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reference_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "source_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "current",
+                  "unresolved"
+                ],
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "available",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "unavailable_reason": {
+                "enum": [
+                  "missing_authority",
+                  "missing_snapshot",
+                  "stale",
+                  "unresolved",
+                  "out_of_stock",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "product_id",
+              "authority_id",
+              "quantity_on_hand",
+              "quantity_reserved",
+              "available_quantity",
+              "revision",
+              "source_version",
+              "valid_until",
+              "state",
+              "status",
+              "unavailable_reason",
+              "updated_at",
+              "movement_id",
+              "movement_type",
+              "quantity_on_hand_delta",
+              "quantity_reserved_delta",
+              "actor_type",
+              "actor_id",
+              "reference_type",
+              "reference_id",
+              "idempotency_key",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "movement"
+        ],
         "type": "object"
       }
     },
@@ -3058,6 +3336,94 @@
                   "null"
                 ]
               },
+              "inventory": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_id": {
+                    "type": "string"
+                  },
+                  "available_quantity": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  },
+                  "quantity_on_hand": {
+                    "type": "integer"
+                  },
+                  "quantity_reserved": {
+                    "type": "integer"
+                  },
+                  "revision": {
+                    "type": "integer"
+                  },
+                  "source_version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "enum": [
+                      "current",
+                      "unresolved"
+                    ],
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "available",
+                      "unavailable"
+                    ],
+                    "type": "string"
+                  },
+                  "unavailable_reason": {
+                    "enum": [
+                      "missing_authority",
+                      "missing_snapshot",
+                      "stale",
+                      "unresolved",
+                      "out_of_stock",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "product_id",
+                  "authority_id",
+                  "quantity_on_hand",
+                  "quantity_reserved",
+                  "available_quantity",
+                  "revision",
+                  "source_version",
+                  "valid_until",
+                  "state",
+                  "status",
+                  "unavailable_reason",
+                  "updated_at"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "is_visible": {
                 "type": "boolean"
               },
@@ -3499,7 +3865,8 @@
               "menu_placement",
               "channel_availability",
               "modifier_groups",
-              "provider_mappings"
+              "provider_mappings",
+              "inventory"
             ],
             "type": "object"
           }
@@ -5571,6 +5938,204 @@
       }
     },
     {
+      "name": "get_location_inventory",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "authority_type": {
+                "enum": [
+                  "krabiclaw",
+                  "external"
+                ],
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "type": "string"
+              },
+              "external_location_reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "oauth_client_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "provider_account_reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "site_id": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "updated_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organization_id",
+              "site_id",
+              "location_id",
+              "authority_type",
+              "provider",
+              "oauth_client_id",
+              "provider_account_reference",
+              "external_location_reference",
+              "created_by",
+              "updated_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "authority_id": {
+                  "type": "string"
+                },
+                "available_quantity": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "product_id": {
+                  "type": "string"
+                },
+                "quantity_on_hand": {
+                  "type": "integer"
+                },
+                "quantity_reserved": {
+                  "type": "integer"
+                },
+                "revision": {
+                  "type": "integer"
+                },
+                "source_version": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "current",
+                    "unresolved"
+                  ],
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "available",
+                    "unavailable"
+                  ],
+                  "type": "string"
+                },
+                "unavailable_reason": {
+                  "enum": [
+                    "missing_authority",
+                    "missing_snapshot",
+                    "stale",
+                    "unresolved",
+                    "out_of_stock",
+                    null
+                  ],
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "valid_until": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "product_id",
+                "authority_id",
+                "quantity_on_hand",
+                "quantity_reserved",
+                "available_quantity",
+                "revision",
+                "source_version",
+                "valid_until",
+                "state",
+                "status",
+                "unavailable_reason",
+                "updated_at"
+              ],
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "authority",
+          "items"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "get_notification_settings",
       "inputSchema": {
         "additionalProperties": true,
@@ -6149,6 +6714,94 @@
                   "null"
                 ]
               },
+              "inventory": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_id": {
+                    "type": "string"
+                  },
+                  "available_quantity": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  },
+                  "quantity_on_hand": {
+                    "type": "integer"
+                  },
+                  "quantity_reserved": {
+                    "type": "integer"
+                  },
+                  "revision": {
+                    "type": "integer"
+                  },
+                  "source_version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "enum": [
+                      "current",
+                      "unresolved"
+                    ],
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "available",
+                      "unavailable"
+                    ],
+                    "type": "string"
+                  },
+                  "unavailable_reason": {
+                    "enum": [
+                      "missing_authority",
+                      "missing_snapshot",
+                      "stale",
+                      "unresolved",
+                      "out_of_stock",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "product_id",
+                  "authority_id",
+                  "quantity_on_hand",
+                  "quantity_reserved",
+                  "available_quantity",
+                  "revision",
+                  "source_version",
+                  "valid_until",
+                  "state",
+                  "status",
+                  "unavailable_reason",
+                  "updated_at"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "is_visible": {
                 "type": "boolean"
               },
@@ -6590,7 +7243,8 @@
               "menu_placement",
               "channel_availability",
               "modifier_groups",
-              "provider_mappings"
+              "provider_mappings",
+              "inventory"
             ],
             "type": "object"
           }
@@ -8283,6 +8937,94 @@
                     "null"
                   ]
                 },
+                "inventory": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "authority_id": {
+                      "type": "string"
+                    },
+                    "available_quantity": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    },
+                    "quantity_on_hand": {
+                      "type": "integer"
+                    },
+                    "quantity_reserved": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "source_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "current",
+                        "unresolved"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "available",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "unavailable_reason": {
+                      "enum": [
+                        "missing_authority",
+                        "missing_snapshot",
+                        "stale",
+                        "unresolved",
+                        "out_of_stock",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "product_id",
+                    "authority_id",
+                    "quantity_on_hand",
+                    "quantity_reserved",
+                    "available_quantity",
+                    "revision",
+                    "source_version",
+                    "valid_until",
+                    "state",
+                    "status",
+                    "unavailable_reason",
+                    "updated_at"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
                 "is_visible": {
                   "type": "boolean"
                 },
@@ -8724,7 +9466,8 @@
                 "menu_placement",
                 "channel_availability",
                 "modifier_groups",
-                "provider_mappings"
+                "provider_mappings",
+                "inventory"
               ],
               "type": "object"
             },
@@ -9874,6 +10617,94 @@
                 "id": {
                   "type": "string"
                 },
+                "inventory": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "authority_id": {
+                      "type": "string"
+                    },
+                    "available_quantity": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    },
+                    "quantity_on_hand": {
+                      "type": "integer"
+                    },
+                    "quantity_reserved": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "source_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "current",
+                        "unresolved"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "available",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "unavailable_reason": {
+                      "enum": [
+                        "missing_authority",
+                        "missing_snapshot",
+                        "stale",
+                        "unresolved",
+                        "out_of_stock",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "product_id",
+                    "authority_id",
+                    "quantity_on_hand",
+                    "quantity_reserved",
+                    "available_quantity",
+                    "revision",
+                    "source_version",
+                    "valid_until",
+                    "state",
+                    "status",
+                    "unavailable_reason",
+                    "updated_at"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
                 "is_visible": {
                   "type": "boolean"
                 },
@@ -9944,7 +10775,8 @@
                 "is_visible",
                 "available",
                 "sort_order",
-                "channel_availability"
+                "channel_availability",
+                "inventory"
               ],
               "type": "object"
             },
@@ -12145,6 +12977,390 @@
       }
     },
     {
+      "name": "record_inventory_movement",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "type": "string"
+          },
+          "movement_type": {
+            "enum": [
+              "restock",
+              "waste",
+              "manual_adjustment"
+            ],
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "reference_id": {
+            "type": "string"
+          },
+          "reference_type": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "movement_type",
+          "quantity",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "movement": {
+            "additionalProperties": false,
+            "properties": {
+              "actor_id": {
+                "type": "string"
+              },
+              "actor_type": {
+                "enum": [
+                  "user",
+                  "integration",
+                  "system"
+                ],
+                "type": "string"
+              },
+              "authority_id": {
+                "type": "string"
+              },
+              "available_quantity": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "idempotency_key": {
+                "type": "string"
+              },
+              "movement_id": {
+                "type": "string"
+              },
+              "movement_type": {
+                "enum": [
+                  "restock",
+                  "reserve",
+                  "release",
+                  "consume",
+                  "waste",
+                  "manual_adjustment",
+                  "external_sync"
+                ],
+                "type": "string"
+              },
+              "product_id": {
+                "type": "string"
+              },
+              "quantity_on_hand": {
+                "type": "integer"
+              },
+              "quantity_on_hand_delta": {
+                "type": "integer"
+              },
+              "quantity_reserved": {
+                "type": "integer"
+              },
+              "quantity_reserved_delta": {
+                "type": "integer"
+              },
+              "reference_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reference_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "source_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "current",
+                  "unresolved"
+                ],
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "available",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "unavailable_reason": {
+                "enum": [
+                  "missing_authority",
+                  "missing_snapshot",
+                  "stale",
+                  "unresolved",
+                  "out_of_stock",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "product_id",
+              "authority_id",
+              "quantity_on_hand",
+              "quantity_reserved",
+              "available_quantity",
+              "revision",
+              "source_version",
+              "valid_until",
+              "state",
+              "status",
+              "unavailable_reason",
+              "updated_at",
+              "movement_id",
+              "movement_type",
+              "quantity_on_hand_delta",
+              "quantity_reserved_delta",
+              "actor_type",
+              "actor_id",
+              "reference_type",
+              "reference_id",
+              "idempotency_key",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "movement"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "release_inventory",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_id": {
+            "type": "string"
+          },
+          "reference_type": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "quantity",
+          "idempotency_key",
+          "reference_type",
+          "reference_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "movement": {
+            "additionalProperties": false,
+            "properties": {
+              "actor_id": {
+                "type": "string"
+              },
+              "actor_type": {
+                "enum": [
+                  "user",
+                  "integration",
+                  "system"
+                ],
+                "type": "string"
+              },
+              "authority_id": {
+                "type": "string"
+              },
+              "available_quantity": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "idempotency_key": {
+                "type": "string"
+              },
+              "movement_id": {
+                "type": "string"
+              },
+              "movement_type": {
+                "enum": [
+                  "restock",
+                  "reserve",
+                  "release",
+                  "consume",
+                  "waste",
+                  "manual_adjustment",
+                  "external_sync"
+                ],
+                "type": "string"
+              },
+              "product_id": {
+                "type": "string"
+              },
+              "quantity_on_hand": {
+                "type": "integer"
+              },
+              "quantity_on_hand_delta": {
+                "type": "integer"
+              },
+              "quantity_reserved": {
+                "type": "integer"
+              },
+              "quantity_reserved_delta": {
+                "type": "integer"
+              },
+              "reference_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reference_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "source_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "current",
+                  "unresolved"
+                ],
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "available",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "unavailable_reason": {
+                "enum": [
+                  "missing_authority",
+                  "missing_snapshot",
+                  "stale",
+                  "unresolved",
+                  "out_of_stock",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "product_id",
+              "authority_id",
+              "quantity_on_hand",
+              "quantity_reserved",
+              "available_quantity",
+              "revision",
+              "source_version",
+              "valid_until",
+              "state",
+              "status",
+              "unavailable_reason",
+              "updated_at",
+              "movement_id",
+              "movement_type",
+              "quantity_on_hand_delta",
+              "quantity_reserved_delta",
+              "actor_type",
+              "actor_id",
+              "reference_type",
+              "reference_id",
+              "idempotency_key",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "movement"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "remove_media",
       "inputSchema": {
         "additionalProperties": false,
@@ -13498,6 +14714,195 @@
       }
     },
     {
+      "name": "reserve_inventory",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_id": {
+            "type": "string"
+          },
+          "reference_type": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "quantity",
+          "idempotency_key",
+          "reference_type",
+          "reference_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "movement": {
+            "additionalProperties": false,
+            "properties": {
+              "actor_id": {
+                "type": "string"
+              },
+              "actor_type": {
+                "enum": [
+                  "user",
+                  "integration",
+                  "system"
+                ],
+                "type": "string"
+              },
+              "authority_id": {
+                "type": "string"
+              },
+              "available_quantity": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "idempotency_key": {
+                "type": "string"
+              },
+              "movement_id": {
+                "type": "string"
+              },
+              "movement_type": {
+                "enum": [
+                  "restock",
+                  "reserve",
+                  "release",
+                  "consume",
+                  "waste",
+                  "manual_adjustment",
+                  "external_sync"
+                ],
+                "type": "string"
+              },
+              "product_id": {
+                "type": "string"
+              },
+              "quantity_on_hand": {
+                "type": "integer"
+              },
+              "quantity_on_hand_delta": {
+                "type": "integer"
+              },
+              "quantity_reserved": {
+                "type": "integer"
+              },
+              "quantity_reserved_delta": {
+                "type": "integer"
+              },
+              "reference_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reference_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "source_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "current",
+                  "unresolved"
+                ],
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "available",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "unavailable_reason": {
+                "enum": [
+                  "missing_authority",
+                  "missing_snapshot",
+                  "stale",
+                  "unresolved",
+                  "out_of_stock",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "valid_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "product_id",
+              "authority_id",
+              "quantity_on_hand",
+              "quantity_reserved",
+              "available_quantity",
+              "revision",
+              "source_version",
+              "valid_until",
+              "state",
+              "status",
+              "unavailable_reason",
+              "updated_at",
+              "movement_id",
+              "movement_type",
+              "quantity_on_hand_delta",
+              "quantity_reserved_delta",
+              "actor_type",
+              "actor_id",
+              "reference_type",
+              "reference_id",
+              "idempotency_key",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "movement"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "resolve_agent_guidance",
       "inputSchema": {
         "additionalProperties": false,
@@ -14258,6 +15663,129 @@
         "required": [
           "default_currency",
           "updated"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "set_inventory_authority",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_type": {
+            "enum": [
+              "krabiclaw",
+              "external"
+            ],
+            "type": "string"
+          },
+          "external_location_reference": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "oauth_client_id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_account_reference": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "authority_type"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "authority_type": {
+                "enum": [
+                  "krabiclaw",
+                  "external"
+                ],
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "type": "string"
+              },
+              "external_location_reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "oauth_client_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "provider_account_reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "site_id": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "updated_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organization_id",
+              "site_id",
+              "location_id",
+              "authority_type",
+              "provider",
+              "oauth_client_id",
+              "provider_account_reference",
+              "external_location_reference",
+              "created_by",
+              "updated_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "authority"
         ],
         "type": "object"
       }
@@ -15567,6 +17095,94 @@
                     "null"
                   ]
                 },
+                "inventory": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "authority_id": {
+                      "type": "string"
+                    },
+                    "available_quantity": {
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    },
+                    "quantity_on_hand": {
+                      "type": "integer"
+                    },
+                    "quantity_reserved": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "source_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "current",
+                        "unresolved"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "available",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    },
+                    "unavailable_reason": {
+                      "enum": [
+                        "missing_authority",
+                        "missing_snapshot",
+                        "stale",
+                        "unresolved",
+                        "out_of_stock",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "valid_until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "product_id",
+                    "authority_id",
+                    "quantity_on_hand",
+                    "quantity_reserved",
+                    "available_quantity",
+                    "revision",
+                    "source_version",
+                    "valid_until",
+                    "state",
+                    "status",
+                    "unavailable_reason",
+                    "updated_at"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
                 "is_visible": {
                   "type": "boolean"
                 },
@@ -16008,7 +17624,8 @@
                 "menu_placement",
                 "channel_availability",
                 "modifier_groups",
-                "provider_mappings"
+                "provider_mappings",
+                "inventory"
               ],
               "type": "object"
             },
@@ -18706,6 +20323,94 @@
                   "null"
                 ]
               },
+              "inventory": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_id": {
+                    "type": "string"
+                  },
+                  "available_quantity": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  },
+                  "quantity_on_hand": {
+                    "type": "integer"
+                  },
+                  "quantity_reserved": {
+                    "type": "integer"
+                  },
+                  "revision": {
+                    "type": "integer"
+                  },
+                  "source_version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "enum": [
+                      "current",
+                      "unresolved"
+                    ],
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "available",
+                      "unavailable"
+                    ],
+                    "type": "string"
+                  },
+                  "unavailable_reason": {
+                    "enum": [
+                      "missing_authority",
+                      "missing_snapshot",
+                      "stale",
+                      "unresolved",
+                      "out_of_stock",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "valid_until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "product_id",
+                  "authority_id",
+                  "quantity_on_hand",
+                  "quantity_reserved",
+                  "available_quantity",
+                  "revision",
+                  "source_version",
+                  "valid_until",
+                  "state",
+                  "status",
+                  "unavailable_reason",
+                  "updated_at"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "is_visible": {
                 "type": "boolean"
               },
@@ -19147,7 +20852,8 @@
               "menu_placement",
               "channel_availability",
               "modifier_groups",
-              "provider_mappings"
+              "provider_mappings",
+              "inventory"
             ],
             "type": "object"
           }

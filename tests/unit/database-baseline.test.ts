@@ -14,6 +14,7 @@ function migratedDatabase() {
   const database = baselineDatabase()
   database.exec(readFileSync('migrations/0001_product_order_index.sql', 'utf8'))
   database.exec(readFileSync('migrations/0002_busy_dust.sql', 'utf8'))
+  database.exec(readFileSync('migrations/0003_flawless_nocturne.sql', 'utf8'))
   return database
 }
 
@@ -88,6 +89,23 @@ test('epoch-3 baseline enforces canonical cross-scope and value constraints', ()
     database.prepare("INSERT INTO product_modifier_groups (id, organization_id, site_id, location_id, product_id, modifier_group_id) VALUES ('link', 'org', 'site', 'location', 'product', 'group')").run()
     database.prepare("INSERT INTO catalog_provider_mappings (id, organization_id, site_id, location_id, resource_type, resource_id, provider, external_id) VALUES ('mapping', 'org', 'site', 'location', 'product', 'product', 'merchant', 'external-product')").run()
 
+    database.prepare("INSERT INTO inventory_authorities (id, organization_id, site_id, location_id, authority_type, created_by, updated_by) VALUES ('authority', 'org', 'site', 'location', 'krabiclaw', 'user', 'user')").run()
+    database.prepare("INSERT INTO inventory_items (id, organization_id, site_id, location_id, product_id, authority_id, quantity_on_hand, quantity_reserved, revision, state) VALUES ('inventory', 'org', 'site', 'location', 'product', 'authority', 5, 2, 1, 'current')").run()
+    database.prepare("INSERT INTO inventory_movements (id, organization_id, site_id, location_id, product_id, inventory_item_id, authority_id, movement_type, quantity_on_hand_delta, quantity_reserved_delta, resulting_quantity_on_hand, resulting_quantity_reserved, base_revision, resulting_revision, actor_type, actor_id, idempotency_key) VALUES ('movement', 'org', 'site', 'location', 'product', 'inventory', 'authority', 'reserve', 0, 2, 5, 2, 0, 1, 'system', 'checkout', 'reserve-order')").run()
+
+    assert.throws(
+      () => database.prepare("INSERT INTO inventory_authorities (id, organization_id, site_id, location_id, authority_type, provider, created_by, updated_by) VALUES ('invalid-external', 'org', 'site', 'other-location', 'external', 'provider', 'user', 'user')").run(),
+      /inventory_authorities_configuration_check/,
+    )
+    assert.throws(
+      () => database.prepare("UPDATE inventory_items SET quantity_reserved = 6 WHERE id = 'inventory'").run(),
+      /inventory_items_quantity_check/,
+    )
+    assert.throws(
+      () => database.prepare("INSERT INTO inventory_movements (id, organization_id, site_id, location_id, product_id, inventory_item_id, authority_id, movement_type, quantity_on_hand_delta, quantity_reserved_delta, resulting_quantity_on_hand, resulting_quantity_reserved, base_revision, resulting_revision, actor_type, actor_id, idempotency_key) VALUES ('bad-revision', 'org', 'site', 'location', 'product', 'inventory', 'authority', 'reserve', 0, 1, 5, 3, 1, 3, 'system', 'checkout', 'bad-revision')").run(),
+      /inventory_movements_revision_check/,
+    )
+
     assert.throws(
       () => database.prepare("INSERT INTO product_channel_availability (id, organization_id, site_id, location_id, product_id, channel, updated_by) VALUES ('cross-scope', 'org', 'site', 'other-location', 'product', 'seo', 'user')").run(),
       /FOREIGN KEY constraint failed/,
@@ -96,6 +114,10 @@ test('epoch-3 baseline enforces canonical cross-scope and value constraints', ()
       () => database.prepare("INSERT INTO modifier_options (id, organization_id, site_id, location_id, modifier_group_id, name, created_by, updated_by) VALUES ('cross-option', 'org', 'site', 'other-location', 'group', 'Invalid', 'user', 'user')").run(),
       /FOREIGN KEY constraint failed/,
     )
+    database.prepare("DELETE FROM reviews WHERE product_id = 'product'").run()
+    database.prepare("DELETE FROM products WHERE id = 'product'").run()
+    assert.equal((database.prepare("SELECT count(*) count FROM inventory_items WHERE id = 'inventory'").get() as { count: number }).count, 0)
+    assert.equal((database.prepare("SELECT count(*) count FROM inventory_movements WHERE id = 'movement'").get() as { count: number }).count, 1)
     assert.equal(database.pragma('foreign_key_check').length, 0)
   } finally {
     database.close()

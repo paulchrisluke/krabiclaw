@@ -9,6 +9,7 @@ import type {
   ProductChannelAvailability,
 } from '~/shared/ordering-catalog'
 import type { SocialImageSource } from '~/utils/social-metadata'
+import type { InventoryAvailability } from '~/shared/inventory'
 
 export interface ProductDetail {
   key: string
@@ -55,6 +56,7 @@ export interface Product {
   channel_availability: ProductChannelAvailability[]
   modifier_groups: ModifierGroup[]
   provider_mappings: CatalogProviderMapping[]
+  inventory: InventoryAvailability | null
 }
 
 export interface CreateProductInput {

@@ -55,6 +55,12 @@ export function oauthSigningConfig(authBaseUrl: string) {
         allowedScopes: ['openid', 'offline_access', 'platform_admin'],
         signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
       },
+      {
+        identifier: `${authBaseUrl}/api/integrations/inventory`,
+        name: 'KrabiClaw inventory event intake',
+        allowedScopes: ['openid', 'offline_access', 'inventory:write'],
+        signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
+      },
     ],
   }
 }
@@ -67,6 +73,15 @@ const organizationOptions = {
     defaultTeam: { enabled: false },
   },
 } as const
+
+export async function hasInventoryAuthorityPermission(organizationId: string, role: string): Promise<boolean> {
+  return await hasPermission({
+    organizationId,
+    role,
+    options: organizationOptions,
+    permissions: { integrations: ['create'] },
+  }, undefined as never)
+}
 
 async function normalizeCimdClientAuthentication(data: {
   client: SchemaClient<Scope[]>
@@ -454,7 +469,7 @@ export function createAuth(env: CloudflareEnv) {
         allowDynamicClientRegistration: false,
         allowUnauthenticatedClientRegistration: false,
         enforcePerClientResources: false,
-        scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
+        scopes: ['openid', 'offline_access', 'tenant', 'platform_admin', 'inventory:write'],
         ...oauthSigningConfig(authBaseUrl),
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
         // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.

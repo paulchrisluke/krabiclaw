@@ -13,6 +13,7 @@ import { refreshSocialCard } from '~/server/utils/social-card'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { hydrateOrderingCatalog, replaceProductModifierQueries } from '~/server/utils/ordering-catalog'
+import { hydrateProductInventory } from '~/server/utils/inventory'
 import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 import { isCurrencyCode } from '~/shared/currencies'
 import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput } from '~/shared/prices'
@@ -82,6 +83,7 @@ export function mapProduct(row: ProductRow): Product {
     channel_availability: [],
     modifier_groups: [],
     provider_mappings: [],
+    inventory: null,
   }
 }
 
@@ -163,7 +165,9 @@ async function hydrateProductMedia(db: DbClient, siteId: string, products: Produ
       social_image: socialMedia.social_image,
     }
   })
-  return hydrateOrderingCatalog(db, withMedia)
+  const withCatalog = await hydrateOrderingCatalog(db, withMedia)
+  const inventory = await hydrateProductInventory(db, withCatalog)
+  return withCatalog.map(product => ({ ...product, inventory: inventory.get(product.id) ?? null }))
 }
 
 async function assertLocationOwnership(db: DbClient, organizationId: string, siteId: string, locationId: string): Promise<void> {

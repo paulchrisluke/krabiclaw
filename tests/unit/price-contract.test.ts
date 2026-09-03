@@ -64,6 +64,7 @@ test('repricing closes the current immutable record and creates a replacement', 
       options: [{ id: 'hot', modifier_group_id: 'heat', name: 'Hot', price_delta_minor: 100, sort_order: 0, is_active: true, provider_mappings: [] }],
     }],
     provider_mappings: [{ id: 'mapping', resource_type: 'product', resource_id: 'product', provider: 'merchant', provider_account_reference: null, external_id: 'external-product' }],
+    inventory: { id: 'inventory', product_id: 'product', authority_id: 'authority', quantity_on_hand: 10, quantity_reserved: 0, available_quantity: 10, revision: 1, source_version: null, valid_until: null, state: 'current', status: 'available', unavailable_reason: null, updated_at: at },
   }
   const snapshot = buildCatalogLineItemSnapshot(product, ['hot'])
   assert.equal(snapshot.product_id, product.id)
@@ -71,4 +72,6 @@ test('repricing closes the current immutable record and creates a replacement', 
   assert.equal(snapshot.unit_amount_minor, base.amount_minor)
   assert.equal(snapshot.modifiers[0]?.modifier_option_name, 'Hot')
   assert.equal(snapshot.product_provider_mappings[0]?.external_id, 'external-product')
+  assert.throws(() => buildCatalogLineItemSnapshot(product, ['hot'], 11), /sufficient current inventory/)
+  assert.throws(() => buildCatalogLineItemSnapshot({ ...product, inventory: null }, ['hot']), /sufficient current inventory/)
 })

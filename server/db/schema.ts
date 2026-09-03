@@ -735,6 +735,150 @@ export const prices = sqliteTable("prices", {
 	check("prices_validity_check", sql`${table.valid_until} IS NULL OR ${table.valid_until} > ${table.valid_from}`),
 ]);
 
+// A location has exactly one declared inventory authority. Missing rows are an
+// intentional fail-closed state: public ordering must never infer stock from
+// the legacy Product.available presentation flag.
+export const inventory_authorities = sqliteTable("inventory_authorities", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	authority_type: text().$type<'krabiclaw' | 'external'>().notNull(),
+	provider: text(),
+	oauth_client_id: text(),
+	provider_account_reference: text(),
+	external_location_reference: text(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id],
+		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
+		name: "inventory_authorities_location_scope_fk",
+	}).onDelete("cascade"),
+	unique("inventory_authorities_location_unique").on(table.organization_id, table.site_id, table.location_id),
+	unique("inventory_authorities_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
+	check("inventory_authorities_type_check", sql`${table.authority_type} IN ('krabiclaw', 'external')`),
+	check("inventory_authorities_configuration_check", sql`(
+		${table.authority_type} = 'krabiclaw'
+		AND ${table.provider} IS NULL
+		AND ${table.oauth_client_id} IS NULL
+		AND ${table.provider_account_reference} IS NULL
+		AND ${table.external_location_reference} IS NULL
+	) OR (
+		${table.authority_type} = 'external'
+		AND ${table.provider} IS NOT NULL AND trim(${table.provider}) <> ''
+		AND ${table.oauth_client_id} IS NOT NULL AND trim(${table.oauth_client_id}) <> ''
+		AND ${table.provider_account_reference} IS NOT NULL AND trim(${table.provider_account_reference}) <> ''
+		AND ${table.external_location_reference} IS NOT NULL AND trim(${table.external_location_reference}) <> ''
+	)`),
+]);
+
+export const inventory_items = sqliteTable("inventory_items", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	product_id: text().notNull().references(() => products.id, { onDelete: "cascade" }),
+	authority_id: text().notNull().references(() => inventory_authorities.id, { onDelete: "cascade" }),
+	quantity_on_hand: integer().default(0).notNull(),
+	quantity_reserved: integer().default(0).notNull(),
+	revision: integer().default(0).notNull(),
+	source_version: integer(),
+	valid_until: text(),
+	state: text().$type<'current' | 'unresolved'>().default('unresolved').notNull(),
+	last_external_event_id: text(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.product_id],
+		foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id],
+		name: "inventory_items_product_scope_fk",
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.authority_id],
+		foreignColumns: [inventory_authorities.organization_id, inventory_authorities.site_id, inventory_authorities.location_id, inventory_authorities.id],
+		name: "inventory_items_authority_scope_fk",
+	}).onDelete("cascade"),
+	unique("inventory_items_product_unique").on(table.organization_id, table.site_id, table.location_id, table.product_id),
+	unique("inventory_items_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
+	index("inventory_items_location_state_idx").on(table.site_id, table.location_id, table.state, table.valid_until),
+	check("inventory_items_quantity_check", sql`${table.quantity_on_hand} >= 0 AND ${table.quantity_reserved} >= 0 AND ${table.quantity_reserved} <= ${table.quantity_on_hand}`),
+	check("inventory_items_revision_check", sql`${table.revision} >= 0 AND (${table.source_version} IS NULL OR ${table.source_version} >= 0)`),
+	check("inventory_items_state_check", sql`${table.state} IN ('current', 'unresolved')`),
+]);
+
+export const inventory_movements = sqliteTable("inventory_movements", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	// These two identifiers intentionally outlive Product and current-snapshot
+	// deletion so the attributable movement ledger remains append-only.
+	product_id: text().notNull(),
+	inventory_item_id: text().notNull(),
+	authority_id: text().notNull().references(() => inventory_authorities.id, { onDelete: "cascade" }),
+	movement_type: text().notNull(),
+	quantity_on_hand_delta: integer().notNull(),
+	quantity_reserved_delta: integer().notNull(),
+	resulting_quantity_on_hand: integer().notNull(),
+	resulting_quantity_reserved: integer().notNull(),
+	base_revision: integer().notNull(),
+	resulting_revision: integer().notNull(),
+	actor_type: text().notNull(),
+	actor_id: text().notNull(),
+	reference_type: text(),
+	reference_id: text(),
+	idempotency_key: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.authority_id],
+		foreignColumns: [inventory_authorities.organization_id, inventory_authorities.site_id, inventory_authorities.location_id, inventory_authorities.id],
+		name: "inventory_movements_authority_scope_fk",
+	}).onDelete("cascade"),
+	unique("inventory_movements_idempotency_unique").on(table.organization_id, table.site_id, table.location_id, table.idempotency_key),
+	index("inventory_movements_product_created_idx").on(table.site_id, table.location_id, table.product_id, table.created_at),
+	check("inventory_movements_type_check", sql`${table.movement_type} IN ('restock', 'reserve', 'release', 'consume', 'waste', 'manual_adjustment', 'external_sync')`),
+	check("inventory_movements_actor_check", sql`${table.actor_type} IN ('user', 'integration', 'system')`),
+	check("inventory_movements_result_check", sql`${table.resulting_quantity_on_hand} >= 0 AND ${table.resulting_quantity_reserved} >= 0 AND ${table.resulting_quantity_reserved} <= ${table.resulting_quantity_on_hand}`),
+	check("inventory_movements_revision_check", sql`${table.base_revision} >= 0 AND ${table.resulting_revision} = ${table.base_revision} + 1`),
+	check("inventory_movements_reference_check", sql`(${table.reference_type} IS NULL AND ${table.reference_id} IS NULL) OR (trim(${table.reference_type}) <> '' AND trim(${table.reference_id}) <> '')`),
+]);
+
+// Raw provider messages are immutable facts. Application outcome is derived from
+// whether the event became an item's last_external_event_id; duplicates never
+// create a second row and lower resource versions never replace a snapshot.
+export const inventory_external_events = sqliteTable("inventory_external_events", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	authority_id: text().notNull().references(() => inventory_authorities.id, { onDelete: "cascade" }),
+	provider_event_id: text().notNull(),
+	requested_product_id: text().notNull(),
+	product_id: text().references(() => products.id, { onDelete: "set null" }),
+	resource_version: integer().notNull(),
+	quantity_on_hand: integer().notNull(),
+	valid_until: text().notNull(),
+	oauth_client_id: text().notNull(),
+	actor_user_id: text().notNull(),
+	payload_json: text().notNull(),
+	received_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.authority_id],
+		foreignColumns: [inventory_authorities.organization_id, inventory_authorities.site_id, inventory_authorities.location_id, inventory_authorities.id],
+		name: "inventory_external_events_authority_scope_fk",
+	}).onDelete("cascade"),
+	unique("inventory_external_events_provider_event_unique").on(table.authority_id, table.provider_event_id),
+	index("inventory_external_events_product_version_idx").on(table.site_id, table.location_id, table.requested_product_id, table.resource_version),
+	check("inventory_external_events_version_quantity_check", sql`${table.resource_version} >= 0 AND ${table.quantity_on_hand} >= 0`),
+	check("inventory_external_events_payload_check", sql`json_valid(${table.payload_json}) AND json_type(${table.payload_json}) = 'object'`),
+]);
+
 export const product_menu_placements = sqliteTable("product_menu_placements", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),

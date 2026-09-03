@@ -26,6 +26,47 @@ const priceObject = {
   required: ['id', 'amount_minor', 'currency', 'unit', 'tax_behavior', 'compare_at_amount_minor', 'valid_from', 'valid_until', 'provenance', 'provider_mappings'],
 } as const
 
+const inventoryObject = {
+  type: ['object', 'null'],
+  properties: {
+    id: { type: 'string' }, product_id: { type: 'string' }, authority_id: { type: 'string' },
+    quantity_on_hand: { type: 'integer' }, quantity_reserved: { type: 'integer' }, available_quantity: { type: 'integer' },
+    revision: { type: 'integer' }, source_version: { type: ['integer', 'null'] }, valid_until: { type: ['string', 'null'] },
+    state: { type: 'string', enum: ['current', 'unresolved'] }, status: { type: 'string', enum: ['available', 'unavailable'] },
+    unavailable_reason: { type: ['string', 'null'], enum: ['missing_authority', 'missing_snapshot', 'stale', 'unresolved', 'out_of_stock', null] },
+    updated_at: { type: 'string' },
+  },
+  required: ['id', 'product_id', 'authority_id', 'quantity_on_hand', 'quantity_reserved', 'available_quantity', 'revision', 'source_version', 'valid_until', 'state', 'status', 'unavailable_reason', 'updated_at'],
+  additionalProperties: false,
+} as const
+
+const inventoryAuthorityObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' }, organization_id: { type: 'string' }, site_id: { type: 'string' }, location_id: { type: 'string' },
+    authority_type: { type: 'string', enum: ['krabiclaw', 'external'] }, provider: { type: ['string', 'null'] },
+    oauth_client_id: { type: ['string', 'null'] }, provider_account_reference: { type: ['string', 'null'] },
+    external_location_reference: { type: ['string', 'null'] }, created_by: { type: 'string' }, updated_by: { type: 'string' },
+    created_at: { type: 'string' }, updated_at: { type: 'string' },
+  },
+  required: ['id', 'organization_id', 'site_id', 'location_id', 'authority_type', 'provider', 'oauth_client_id', 'provider_account_reference', 'external_location_reference', 'created_by', 'updated_by', 'created_at', 'updated_at'],
+  additionalProperties: false,
+} as const
+
+const inventoryMovementObject = {
+  type: 'object',
+  properties: {
+    ...inventoryObject.properties,
+    movement_id: { type: 'string' }, movement_type: { type: 'string', enum: ['restock', 'reserve', 'release', 'consume', 'waste', 'manual_adjustment', 'external_sync'] },
+    quantity_on_hand_delta: { type: 'integer' }, quantity_reserved_delta: { type: 'integer' },
+    actor_type: { type: 'string', enum: ['user', 'integration', 'system'] }, actor_id: { type: 'string' },
+    reference_type: { type: ['string', 'null'] }, reference_id: { type: ['string', 'null'] },
+    idempotency_key: { type: 'string' }, created_at: { type: 'string' },
+  },
+  required: [...inventoryObject.required, 'movement_id', 'movement_type', 'quantity_on_hand_delta', 'quantity_reserved_delta', 'actor_type', 'actor_id', 'reference_type', 'reference_id', 'idempotency_key', 'created_at'],
+  additionalProperties: false,
+} as const
+
 const providerMappingObject = priceObject.properties.provider_mappings.items
 
 const modifierOptionObject = {
@@ -85,9 +126,10 @@ const productObject = {
     channel_availability: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, location_id: { type: 'string' }, product_id: { type: 'string' }, channel: { type: 'string', enum: ['seo', 'ordering'] }, is_available: { type: 'boolean' } }, required: ['id', 'location_id', 'product_id', 'channel', 'is_available'], additionalProperties: false } },
     modifier_groups: { type: 'array', items: modifierGroupObject },
     provider_mappings: { type: 'array', items: providerMappingObject },
+    inventory: inventoryObject,
     created_at: { type: 'string' }, updated_at: { type: 'string' }, created_by: { type: 'string' }, updated_by: { type: 'string' },
   },
-  required: ['id', 'location_id', 'category', 'name', 'slug', 'description', 'price', 'is_visible', 'available', 'featured', 'featured_sort_order', 'sort_order', 'tags', 'details', 'image', 'gallery', 'source', 'created_at', 'updated_at', 'created_by', 'updated_by', 'menu_placement', 'channel_availability', 'modifier_groups', 'provider_mappings'],
+  required: ['id', 'location_id', 'category', 'name', 'slug', 'description', 'price', 'is_visible', 'available', 'featured', 'featured_sort_order', 'sort_order', 'tags', 'details', 'image', 'gallery', 'source', 'created_at', 'updated_at', 'created_by', 'updated_by', 'menu_placement', 'channel_availability', 'modifier_groups', 'provider_mappings', 'inventory'],
 } as const
 
 const productListPriceObject = {
@@ -115,8 +157,9 @@ const productListItemObject = {
     available: { type: 'boolean' },
     sort_order: { type: 'integer' },
     channel_availability: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, location_id: { type: 'string' }, product_id: { type: 'string' }, channel: { type: 'string', enum: ['seo', 'ordering'] }, is_available: { type: 'boolean' } }, required: ['id', 'location_id', 'product_id', 'channel', 'is_available'], additionalProperties: false } },
+    inventory: inventoryObject,
   },
-  required: ['id', 'location_id', 'category', 'name', 'description', 'price', 'is_visible', 'available', 'sort_order', 'channel_availability'],
+  required: ['id', 'location_id', 'category', 'name', 'description', 'price', 'is_visible', 'available', 'sort_order', 'channel_availability', 'inventory'],
 } as const
 
 const productBulkWrite = {
@@ -147,4 +190,8 @@ export const PRODUCTS_TOOLS: McpToolDefinition[] = [
   siteTool({ name: 'batch_create_products', description: 'Validate every row, then create all Products atomically at one explicit location. Any invalid row rolls back the complete request.', domain: 'products', minimumRole: 'editor', confirmRequired: false, strict: true, inputSchema: { location_id: { type: 'string' }, products: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.batchCreate, items: { type: 'object', properties: productBulkWrite, required: ['category', 'name', 'price'], additionalProperties: false } } }, required: ['location_id', 'products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
   siteTool({ name: 'sync_products', description: 'Apply the complete intended mixed create/update Product mutation atomically at one explicit location. Read every list_location_products page first. Any invalid row rolls back the complete request.', domain: 'products', minimumRole: 'editor', confirmRequired: false, strict: true, inputSchema: { location_id: { type: 'string' }, products: { type: 'array', maxItems: PRODUCT_LIMITS.sync, items: { type: 'object', properties: { product_id: { type: 'string' }, ...productBulkWrite }, required: ['category', 'name', 'price'], additionalProperties: false } }, set_missing_unavailable: { type: 'boolean', description: `When true, mark stored Products omitted from this complete request unavailable. At most ${PRODUCT_LIMITS.sync} intended rows may be supplied.` } }, required: ['location_id', 'products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
   siteTool({ name: 'import_products_from_media', description: 'Extract one strict structured batch and atomically create validated Products from one canonical media asset at one explicit location. Empty or partially invalid extraction is an error.', domain: 'products', minimumRole: 'editor', confirmRequired: true, strict: true, inputSchema: { location_id: { type: 'string' }, asset_id: { type: 'string' } }, required: ['location_id', 'asset_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject }, creditsRemaining: { type: 'number' } }, required: ['products', 'creditsRemaining'] } }),
+  siteTool({ name: 'get_location_inventory', description: 'Read the declared inventory authority and current fail-closed Product quantities for one location.', domain: 'products', minimumRole: 'editor', confirmRequired: false, strict: true, inputSchema: { location_id: { type: 'string' } }, required: ['location_id'], outputSchema: { type: 'object', properties: { authority: { ...inventoryAuthorityObject, type: ['object', 'null'] }, items: { type: 'array', items: inventoryObject } }, required: ['authority', 'items'] } }),
+  siteTool({ name: 'set_inventory_authority', description: 'Declare the single inventory authority for a location. An existing declaration cannot be silently replaced.', domain: 'products', minimumRole: 'admin', confirmRequired: true, strict: true, inputSchema: { location_id: { type: 'string' }, authority_type: { type: 'string', enum: ['krabiclaw', 'external'] }, provider: { type: 'string' }, oauth_client_id: { type: 'string' }, provider_account_reference: { type: 'string' }, external_location_reference: { type: 'string' } }, required: ['location_id', 'authority_type'], outputSchema: { type: 'object', properties: { authority: inventoryAuthorityObject }, required: ['authority'] } }),
+  siteTool({ name: 'record_inventory_movement', description: 'Record an attributable append-only restock, waste, or signed manual adjustment for KrabiClaw-authoritative inventory.', domain: 'products', minimumRole: 'editor', confirmRequired: true, strict: true, inputSchema: { product_id: { type: 'string' }, movement_type: { type: 'string', enum: ['restock', 'waste', 'manual_adjustment'] }, quantity: { type: 'integer' }, idempotency_key: { type: 'string' }, reference_type: { type: 'string' }, reference_id: { type: 'string' } }, required: ['product_id', 'movement_type', 'quantity', 'idempotency_key'], outputSchema: { type: 'object', properties: { movement: inventoryMovementObject }, required: ['movement'] } }),
+  ...(['reserve', 'release', 'consume'] as const).map(operation => siteTool({ name: `${operation}_inventory`, description: `${operation[0]!.toUpperCase()}${operation.slice(1)} a Product quantity atomically after revalidating the current authoritative snapshot.`, domain: 'products', minimumRole: 'editor', confirmRequired: true, strict: true, inputSchema: { product_id: { type: 'string' }, quantity: { type: 'integer', minimum: 1 }, idempotency_key: { type: 'string' }, reference_type: { type: 'string' }, reference_id: { type: 'string' } }, required: ['product_id', 'quantity', 'idempotency_key', 'reference_type', 'reference_id'], outputSchema: { type: 'object', properties: { movement: inventoryMovementObject }, required: ['movement'] } })),
 ]
