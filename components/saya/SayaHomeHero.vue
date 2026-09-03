@@ -67,17 +67,17 @@
         <NuxtLink
           v-for="loc in locations"
           :key="loc.id"
-          :to="`/locations/${loc.slug}`"
+          :to="localePath(`/locations/${loc.slug}`)"
           class="inline-flex items-center rounded-full border border-white/40 bg-white/5 px-5 py-2.5 text-sm text-white backdrop-blur-sm no-underline transition hover:bg-white/10"
         >
           {{ loc.title }}
         </NuxtLink>
       </div>
       <div v-else class="mt-12 flex flex-wrap gap-4">
-        <NuxtLink v-if="hasOrderLinks" to="/order" class="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-base font-medium text-black no-underline transition hover:bg-zinc-100">{{ orderNowCta }}</NuxtLink>
+        <NuxtLink v-if="hasOrderLinks" :to="localePath('/order')" class="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-base font-medium text-black no-underline transition hover:bg-zinc-100">{{ orderNowCta }}</NuxtLink>
         <NuxtLink
           v-if="ctaRoute"
-          :to="ctaRoute"
+          :to="localePath(ctaRoute)"
           class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
           :class="hasOrderLinks ? 'border border-white/50 text-white hover:bg-white/10' : 'bg-white text-black hover:bg-zinc-100'"
         >
@@ -85,7 +85,7 @@
         </NuxtLink>
         <NuxtLink
           v-if="showSecondaryCta"
-          :to="viewMenuRoute"
+          :to="localePath(viewMenuRoute)"
           class="inline-flex items-center justify-center rounded-full border border-white/50 px-6 py-3 text-base font-medium text-white no-underline transition hover:bg-white/10"
         >
           {{ viewMenuCta }}
@@ -97,6 +97,8 @@
 
 <script setup lang="ts">
 import { cfImageSrcset, cfImageVariant } from '~/utils/cf-image'
+
+const { localePath } = useI18n()
 
 interface HeroData {
   title?: string

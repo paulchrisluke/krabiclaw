@@ -4,9 +4,9 @@
       <p class="saya-kicker mb-6 inline-flex items-center justify-center rounded-full border border-default/10 bg-default/3 px-5 py-2 text-center">
         {{ resCopy.reservationPageKicker }}
       </p>
-      <h1 class="saya-display-md max-w-5xl text-default">
+      <h1 v-if="heroTitle" class="saya-display-md max-w-5xl text-default">
         <!-- eslint-disable-next-line vue/no-v-html -->
-        <span v-html="formatTitleItalics(getField('hero.title', 'Save yourself *a seat.*'))" />
+        <span v-html="formatTitleItalics(heroTitle)" />
       </h1>
       <p v-if="heroSubtitle" class="mt-5 max-w-3xl text-balance text-sm leading-relaxed text-muted sm:text-base">
         {{ heroSubtitle }}
@@ -167,8 +167,6 @@ import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 
 function formatTitleItalics(text: string | null | undefined): string {
   if (!text) return ''
-  // If there are no asterisks, fallback to italicizing the whole thing
-  if (!text.includes('*')) return `<em class="saya-italic">${text}</em>`
   return text.replace(/\*(.*?)\*/g, '<em class="saya-italic">$1</em>')
 }
 
@@ -257,18 +255,8 @@ function getLocationMedia(location: ApiRecord): ApiRecord | null {
     : null
 }
 
-const heroSubtitle = computed(() => {
-  const customSubtitle = String(getField('hero.subtitle', '') ?? '').trim()
-  if (customSubtitle) return customSubtitle
-
-  const count = locations.value.length
-  const brand = brandName.value
-
-  if (count <= 0) return `Plan your visit with ${brand}.`
-  if (count === 1) return `${brand} has one location ready for you.`
-  if (count === 2) return `${brand} has 2 locations. Pick yours below.`
-  return `${brand} has ${count} locations. Pick yours below.`
-})
+const heroTitle = computed(() => String(getField('hero.title') ?? '').trim())
+const heroSubtitle = computed(() => String(getField('hero.subtitle') ?? '').trim())
 
 watch(
   locations,

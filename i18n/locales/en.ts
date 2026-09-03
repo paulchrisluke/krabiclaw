@@ -7,10 +7,99 @@ export default {
     "privacy": "Privacy",
     "terms": "Terms"
   },
+  "blawby": {
+    "article": {
+      "browse_topics": "Browse topics",
+      "from_the": "From the"
+    },
+    "navigation": {
+      "main": "Main navigation",
+      "toggle": "Toggle navigation"
+    },
+    "footer": {
+      "label": "Footer",
+      "document": "Document",
+      "services": "Services",
+      "support": "Support",
+      "company": "Company",
+      "legal": "Legal",
+      "copyright": "Copyright © {year} {name}. All rights reserved."
+    }
+  },
   "saya": {
     "hero": {
       "established": "EST. {year}",
       "view_menu": "View Menu"
+    },
+    "common": {
+      "view_all": "View all",
+      "temporarily_unavailable": "Temporarily unavailable"
+    },
+    "search": {
+      "dialog_title": "Search {surface}",
+      "searching": "Searching {surface}...",
+      "no_results": "No results found",
+      "placeholder": "Search posts...",
+      "hint": "Search by title, category, or keyword.",
+      "no_results_hint": "Try a different title, category, or keyword.",
+      "article": "Article",
+      "articles": "Articles"
+    },
+    "home": {
+      "locations_heading": "Our Locations",
+      "visit_location": "Visit this location →",
+      "import_google_maps": "Import from Google Maps →"
+    },
+    "experience_detail": {
+      "available": "Available",
+      "booking_failed": "Something went wrong. Please try again.",
+      "capacity": "Up to {count} guests",
+      "capacity_label": "Capacity",
+      "capacity_max": "{count} guests max",
+      "change": "Change",
+      "choose_time": "Choose a time to continue",
+      "close_booking": "Close booking form",
+      "confirm_booking": "Confirm booking",
+      "continue": "Continue",
+      "duration": "Duration",
+      "email_address": "Email address",
+      "experience": "Experience",
+      "fewer_guests": "Fewer guests",
+      "full_name": "Full name",
+      "guest": "guest",
+      "guest_count": "{count} guests",
+      "guests": "guests",
+      "highlights": "Highlights",
+      "home": "Home",
+      "hours": "{count} hr",
+      "hours_minutes": "{hours} hr {minutes} min",
+      "included": "What's included",
+      "left": "{count} left",
+      "meeting_point": "Meeting point",
+      "meta_description": "Book the {title} experience.",
+      "minutes": "{count} min",
+      "more_guests": "More guests",
+      "no_availability": "No availability in the next {count} days.",
+      "not_found": "Experience not found",
+      "not_found_description": "This experience may no longer be available.",
+      "only_left": "Only {count} left",
+      "open_in_maps": "Open in Maps",
+      "optional": "Optional",
+      "party_size": "Party size",
+      "per_person": "per person",
+      "phone_number": "Phone number",
+      "processing": "Processing…",
+      "select_time": "Select a time",
+      "show_calendar": "Show calendar",
+      "show_list": "Show list",
+      "sold_out": "Sold out",
+      "special_requests": "Special requests",
+      "today_date": "Today, {date}",
+      "tomorrow_date": "Tomorrow, {date}",
+      "what_to_bring": "What to bring",
+      "what_youll_do": "What you'll do",
+      "where_youll_meet": "Where you'll meet",
+      "your_details": "Your details"
     },
     "header": {
       "menu": "Menu",
@@ -32,6 +121,7 @@ export default {
       "heading_connect": "Connect",
       "blog": "Blog",
       "menu": "Menu",
+      "products": "Products",
       "experiences": "Experiences",
       "gallery": "Gallery",
       "our_story": "Our Story",
@@ -41,10 +131,14 @@ export default {
       "all_locations": "All Locations",
       "contact_us": "Contact Us",
       "order_online": "Order online",
+      "temporarily_closed": "Temporarily closed",
+      "switch_to_light_mode": "Switch to light mode",
+      "switch_to_dark_mode": "Switch to dark mode",
       "powered_by": "Powered by krabiclaw.com"
     },
     "posts": {
       "title": "Latest Updates",
+      "featured": "Featured",
       "subtitle": "News & Events",
       "no_preview": "No preview available",
       "image_alt": "Restaurant update",
@@ -64,7 +158,16 @@ export default {
       "cta_default": "Learn more",
       "remaining": "remaining",
       "empty_title": "Nothing posted yet.",
-      "empty_desc": "Check back soon for updates, events, and announcements."
+      "empty_desc": "Check back soon for updates, events, and announcements.",
+      "meta_description": "Stories, news, and updates from {site}."
+    },
+    "products": {
+      "collection_title": "{site} Products",
+      "empty": "No products published.",
+      "meta_description": "Products from {site}."
+    },
+    "photos": {
+      "meta_description": "{count} photos from {location} at {site}."
     },
     "reviews": {
       "title": "Guest Experience",
@@ -139,6 +242,10 @@ export default {
       "view_all_locations": "View all locations",
       "not_found": "Location Not Found"
     },
+    "locations": {
+      "collection_title": "Locations · {site}",
+      "meta_description": "Find all our locations."
+    },
     "menu_page": {
       "updated": "Menu · Updated {date}",
       "loading": "Loading menu…",
@@ -170,7 +277,8 @@ export default {
       "most_recent": "Most recent",
       "highest_rated": "Highest rated",
       "lowest_rated": "Lowest rated",
-      "with_photos": "With photos"
+      "with_photos": "With photos",
+      "meta_description": "Guest reviews for {site}."
     },
     "qa_page": {
       "back_to": "Back to {title}",
@@ -185,7 +293,9 @@ export default {
       "helpful": "found this helpful",
       "awaiting_answer": "Awaiting answer from the team.",
       "asked_by": "Asked by {author}",
-      "owner": "Owner"
+      "owner": "Owner",
+      "intro": "Questions from guests and answers from the team. Owner-answered questions are pinned to the top.",
+      "meta_description": "Frequently asked questions about {site}."
     },
     "contact_page": {
       "title": "Contact",

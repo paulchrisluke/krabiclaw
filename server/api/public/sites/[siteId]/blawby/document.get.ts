@@ -10,7 +10,8 @@ export default defineHandler(async (event) => {
   const query = getQuery(event)
   const recipe = typeof query.recipe === 'string' ? query.recipe as BlawbyRouteRecipe : null
   const slug = typeof query.slug === 'string' ? query.slug : null
-  if (!siteId || !recipe || !RECIPES.has(recipe)) {
+  const locale = query.locale === undefined ? 'en' : query.locale
+  if (!siteId || !recipe || !RECIPES.has(recipe) || typeof locale !== 'string') {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_REQUIRED', 'Valid site ID and Blawby route recipe required')
   }
   if ((recipe === 'offering' || recipe === 'article') && !slug) {
@@ -18,7 +19,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const document = await loadPublicBlawbyDocument(event, siteId, recipe, { slug })
+    const document = await loadPublicBlawbyDocument(event, siteId, recipe, { slug, locale })
     return jsonResponse(finalizeRequestMetrics(event, 'public-blawby-document', document))
   } catch (error) {
     const typedError = error as {

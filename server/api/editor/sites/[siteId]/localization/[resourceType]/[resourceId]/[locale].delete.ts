@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
   const resourceType = getRouterParam(event, 'resourceType')
   const resourceId = getRouterParam(event, 'resourceId')
   const locale = getRouterParam(event, 'locale')
-  if (!siteId || !resourceType || !resourceId || !locale) throw createError({ statusCode: 400, statusMessage: 'Complete localization route is required' })
+  if (!siteId || !resourceType || !resourceId || !locale) throw createError({ statusCode: 400, statusMessage: 'Site, resource, and locale route parameters are required' })
   const { env, db, site } = await requireSiteAccess(event, siteId)
   if (isDemoOrg(site.organization_id) && !(await hasPlatformEventPermission(event, env, { platform: ['access'] }))) {
     throw createError({ statusCode: 403, statusMessage: 'Demo site is read-only' })

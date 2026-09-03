@@ -5,7 +5,7 @@
       <div v-if="metaLine" class="mt-0.5 text-xs text-muted">{{ metaLine }}</div>
     </div>
     <button type="button" class="shrink-0 text-[11px] font-medium uppercase tracking-[0.2em] text-primary" @click="$emit('edit')">
-      {{ editLabel }}
+      {{ editLabel || t('saya.experience_detail.change') }}
     </button>
   </div>
 </template>
@@ -17,8 +17,8 @@ withDefaults(defineProps<{
   editLabel?: string
 }>(), {
   metaLine: '',
-  editLabel: 'Change',
 })
+const { t } = useI18n()
 
 defineEmits<{
   edit: []

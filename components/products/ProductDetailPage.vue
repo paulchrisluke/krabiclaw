@@ -20,7 +20,7 @@
             <span class="font-semibold">{{ formatProductPriceLabel(product) }}</span>
           </div>
           <p v-if="product.description" class="mt-8 leading-7 text-muted">{{ product.description }}</p>
-          <p v-if="!product.available" class="mt-8 font-semibold text-muted">Currently unavailable</p>
+          <p v-if="!product.available" class="mt-8 font-semibold text-muted">{{ t('saya.common.temporarily_unavailable') }}</p>
           <SayaButton
             v-if="product.available && product.order_url"
             :href="product.order_url"
@@ -28,7 +28,7 @@
             rel="noopener noreferrer"
             class="mt-8"
             @click="recordExternalOrderClick"
-          >Order Now</SayaButton>
+          >{{ t('saya.cta.order_now') }}</SayaButton>
           <dl v-if="visibleDetails.length" class="mt-10 divide-y divide-default border-y border-default">
             <div v-for="detail in visibleDetails" :key="detail.key" class="py-4">
               <dt class="font-medium">{{ detail.label }}</dt>
@@ -39,7 +39,7 @@
       </div>
 
       <section v-if="product.gallery.length" class="mt-16">
-        <h2 class="saya-display saya-italic text-4xl">Gallery</h2>
+        <h2 class="saya-display saya-italic text-4xl">{{ t('saya.footer.gallery') }}</h2>
         <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <img
             v-for="asset in product.gallery"
@@ -52,7 +52,7 @@
       </section>
 
       <section v-if="reviews.length" class="mt-16 border-t border-default pt-12">
-        <h2 class="saya-display saya-italic text-4xl">Reviews</h2>
+        <h2 class="saya-display saya-italic text-4xl">{{ t('saya.footer.reviews') }}</h2>
         <div class="mt-6 divide-y divide-default">
           <article v-for="review in reviews" :key="review.id" class="py-6">
             <div class="flex justify-between gap-4">
@@ -91,11 +91,15 @@ const props = defineProps<{
 }>()
 
 const { trackProductOrder } = useSiteConversionTracking()
+const { localePath, t } = useI18n()
+const collectionLabel = computed(() => props.presentation.collectionPath === '/menu'
+  ? t('saya.footer.menu')
+  : t('saya.footer.products'))
 const breadcrumbs = computed(() => [
-  { to: '/', label: 'Home' },
-  { to: props.presentation.collectionPath, label: props.presentation.collectionLabel },
-  { to: productLocationCollectionPath(props.vertical, props.location.slug), label: props.location.title },
-  { to: props.presentation.productPath(props.location.slug, props.product.slug), label: props.product.name },
+  { to: localePath('/'), label: t('saya.experience_detail.home') },
+  { to: localePath(props.presentation.collectionPath), label: collectionLabel.value },
+  { to: localePath(productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title },
+  { to: localePath(props.presentation.productPath(props.location.slug, props.product.slug)), label: props.product.name },
 ])
 
 const visibleDetails = computed(() => props.product.details.filter(detail => detail.key !== 'price-note'))
@@ -120,7 +124,7 @@ useSchemaOrg(computed(() => ({
         price: minorAmountToMajor(props.product.price.amount_minor, props.product.price.currency),
         priceCurrency: props.product.price.currency,
         availability: props.product.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        url: props.product.order_url || props.presentation.productPath(props.location.slug, props.product.slug),
+        url: props.product.order_url || localePath(props.presentation.productPath(props.location.slug, props.product.slug)),
       }
     : undefined,
   aggregateRating: props.reviews.length

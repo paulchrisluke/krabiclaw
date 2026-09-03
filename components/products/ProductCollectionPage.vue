@@ -10,12 +10,12 @@
       <header class="mx-auto max-w-7xl px-4 pb-10 pt-12 text-center sm:px-6 lg:px-8">
         <NuxtLink
           v-if="currentLocation"
-          :to="`/locations/${encodeURIComponent(currentLocation.slug)}`"
+          :to="localePath(`/locations/${encodeURIComponent(currentLocation.slug)}`)"
           class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default"
         >
           ← {{ t('saya.location.back_to', { title: currentLocation.title }) }}
         </NuxtLink>
-        <p v-else class="saya-kicker mb-4">{{ presentation.collectionLabel }}</p>
+        <p v-else-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
         <div class="flex flex-col gap-2">
           <h1 class="saya-display-md text-default">{{ currentLocation?.title ?? brandName }}</h1>
           <p v-if="currentLocation && menuUpdated" class="text-sm text-muted">
@@ -26,7 +26,7 @@
           <NuxtLink
             v-for="location in locations"
             :key="location.id"
-            :to="productLocationCollectionPath(vertical, location.slug)"
+            :to="localePath(productLocationCollectionPath(vertical, location.slug))"
             class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
           >
             <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
@@ -37,13 +37,13 @@
     </template>
 
     <header v-else class="mx-auto max-w-7xl px-4 pb-10 pt-12 text-center sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-4">{{ presentation.collectionLabel }}</p>
+      <p v-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
       <h1 class="saya-display-md text-default">{{ title }}</h1>
       <div v-if="locations.length > 1 && !locationId" class="mt-8 flex flex-wrap justify-center gap-3">
         <NuxtLink
           v-for="location in locations"
           :key="location.id"
-          :to="productLocationCollectionPath(vertical, location.slug)"
+          :to="localePath(productLocationCollectionPath(vertical, location.slug))"
           class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
         >
           <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
@@ -52,14 +52,14 @@
       </div>
     </header>
 
-    <div v-if="products.length === 0" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
-      <p class="saya-display saya-italic text-3xl">
-        {{ currentLocation && isMenu ? t('saya.menu_page.coming_soon_title') : `No ${presentation.collectionLabel.toLowerCase()} published.` }}
+    <div v-if="products.length === 0 && (isMenu || emptyCollectionMessage)" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
+      <p v-if="currentLocation && isMenu || emptyCollectionMessage" class="saya-display saya-italic text-3xl">
+        {{ currentLocation && isMenu ? t('saya.menu_page.coming_soon_title') : emptyCollectionMessage }}
       </p>
       <p v-if="currentLocation && isMenu" class="mt-4 text-sm text-muted">
         {{ t('saya.menu_page.coming_soon_desc', { location: currentLocation.title }) }}
       </p>
-      <SayaButton v-if="isMenu && emptyExperienceHref" class="mt-6" :to="emptyExperienceHref">
+      <SayaButton v-if="isMenu && emptyExperienceHref" class="mt-6" :to="localePath(emptyExperienceHref)">
         {{ t('saya.nav.experiences') }}
       </SayaButton>
     </div>
@@ -92,7 +92,7 @@
             >
               <NuxtLink
                 v-if="product.image && product.available"
-                :to="presentation.productPath(locationSlug(product.location_id), product.slug)"
+                :to="localePath(presentation.productPath(locationSlug(product.location_id), product.slug))"
                 class="shrink-0"
               >
                 <SayaMenuItemPreview :item="previewItem(product)" />
@@ -108,7 +108,7 @@
                   <div class="flex items-baseline gap-2 text-base font-medium text-default">
                     <NuxtLink
                       v-if="product.available"
-                      :to="presentation.productPath(locationSlug(product.location_id), product.slug)"
+                      :to="localePath(presentation.productPath(locationSlug(product.location_id), product.slug))"
                       class="text-default no-underline underline-offset-2 hover:underline"
                     >
                       {{ product.name }}
@@ -145,9 +145,7 @@
         <section class="border-t border-default pt-12">
           <p class="saya-kicker mb-4">{{ t('saya.menu_page.allergens_title') }}</p>
           <p class="text-sm leading-relaxed text-muted">
-            <strong class="font-semibold text-default">V</strong> vegetarian ·
-            <strong class="font-semibold text-default">VG</strong> vegan ·
-            <strong class="font-semibold text-default">GF</strong> gluten-free.
+            {{ t('saya.menu_page.allergens_desc') }}
           </p>
         </section>
       </div>
@@ -158,7 +156,7 @@
         <h2 class="saya-display saya-italic mb-8 border-b border-default pb-6 text-5xl">{{ group.category }}</h2>
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <article v-for="product in group.products" :key="product.id">
-            <NuxtLink :to="presentation.productPath(locationSlug(product.location_id), product.slug)" class="group block text-default no-underline">
+            <NuxtLink :to="localePath(presentation.productPath(locationSlug(product.location_id), product.slug))" class="group block text-default no-underline">
               <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
                 <img
                   v-if="product.image?.public_url"
@@ -213,9 +211,13 @@ const props = defineProps<{
   emptyExperienceHref?: string | null
 }>()
 
-const { t } = useI18n()
+const { localePath, t } = useI18n()
 const { formatDate } = useLocaleDate()
 const isMenu = computed(() => props.presentation.structuredDataType === 'MenuItem')
+const collectionLabel = computed(() => isMenu.value
+  ? t('saya.footer.menu')
+  : t('saya.footer.products'))
+const emptyCollectionMessage = computed(() => t('saya.products.empty'))
 const locationMap = computed(() => new Map(props.locations.map(location => [location.id, location])))
 const showLocations = computed(() => !props.locationId && props.locations.length > 1)
 const currentLocation = computed(() => {

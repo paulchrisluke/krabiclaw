@@ -1,20 +1,21 @@
-import { isPublicSourceRouteRoot, RESERVED_PUBLIC_ROUTE_ROOTS } from '~/shared/public-locale-routes'
-
-export default defineNuxtRouteMiddleware((to) => {
-  const first = to.path.split('/')[1] || ''
+export default defineNuxtRouteMiddleware(async (to) => {
   const state = useState<string>('public-locale', () => 'en')
-  if (!first || isPublicSourceRouteRoot(first) || RESERVED_PUBLIC_ROUTE_ROOTS.has(first)) {
-    state.value = 'en'
-    return
+  const locale = typeof to.params.locale === 'string' ? to.params.locale : 'en'
+  if (import.meta.server && locale !== 'en') {
+    const event = useRequestEvent()
+    const siteId = event?.context.siteId as string | null | undefined
+    if (event && siteId) {
+      const [{ cloudflareEnv }, { queryFirst }, { assertPublicSiteLanguageEntitlement }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/db'),
+        import('~/server/utils/localization'),
+      ])
+      const db = cloudflareEnv(event).db
+      if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+      const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
+      if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+      await assertPublicSiteLanguageEntitlement(db, site.organization_id, siteId, locale)
+    }
   }
-  if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(first)) {
-    state.value = 'en'
-    return
-  }
-  try {
-    const canonical = Intl.getCanonicalLocales(first)
-    state.value = canonical.length === 1 && canonical[0] === first ? first : 'en'
-  } catch {
-    state.value = 'en'
-  }
+  state.value = locale
 })

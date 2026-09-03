@@ -2,7 +2,6 @@ import type { Product } from '~/server/types/products'
 import type { PublicProductReview } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { publicApiRequest } from '~/utils/api-clients'
-import { splitLocalePrefix } from '~/utils/tenant-locale-path'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicProductDetailPayload {
@@ -69,7 +68,7 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
   const { siteId } = useTenantSite()
   const locationSlug = String(route.params.slug ?? '')
   const productSlug = String(route.params.productSlug ?? '')
-  const locale = splitLocalePrefix(route.path).localeSegment ?? 'en'
+  const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
   if (!siteId || !locationSlug || !productSlug) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
 
@@ -92,13 +91,13 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
           currency: detail.currency,
           vertical: detail.site.vertical,
           brandName: detail.site.brand_name,
-          reviews: await loadPublicProductReviews(db, detail),
+          reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
           localeRepresentations: detail.localeRepresentations,
         }
       }
       return publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}?locale=${encodeURIComponent(locale)}`, {
         signal,
-        coalesceKey: `public-product-${siteId}-${locationSlug}-${productSlug}`,
+        coalesceKey: `public-product-${siteId}-${locale}-${locationSlug}-${productSlug}`,
         validate: isPublicProductDetailPayload,
       })
     },

@@ -52,7 +52,7 @@ function parseStatus(value: unknown) {
   return status
 }
 
-function publicReviewRow(row: Record<string, unknown>) {
+function publicReviewRow(row: Record<string, unknown>): Record<string, unknown> & { publication_authorized: boolean; verified: boolean } {
   return {
     ...row,
     publication_authorized: Boolean(row.publication_authorized),

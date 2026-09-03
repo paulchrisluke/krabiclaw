@@ -179,7 +179,7 @@ export interface ComposedSocialTags {
   ogDescription: string | undefined
   ogType: SocialPageType
   ogUrl: string
-  ogSiteName: string
+  ogSiteName: string | undefined
   ogImage: string | undefined
   ogImageWidth: number | undefined
   ogImageHeight: number | undefined
@@ -239,7 +239,7 @@ export function composeSocialMetadata(
     ogDescription: description,
     ogType: pageType,
     ogUrl: input.canonicalUrl,
-    ogSiteName: input.brand.siteName,
+    ogSiteName: firstNonBlank(input.brand.siteName) ?? undefined,
     ogImage: resolvedOgImage?.url,
     ogImageWidth: resolvedOgImage?.width,
     ogImageHeight: resolvedOgImage?.height,

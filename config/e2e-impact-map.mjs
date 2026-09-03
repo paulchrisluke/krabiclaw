@@ -40,6 +40,7 @@ export const IMPACT_GROUPS = [
     specs: [
       'tests/e2e/tenant-rendering.spec.ts',
       'tests/e2e/tenant-client-navigation.spec.ts',
+      'tests/e2e/tenant-localization.spec.ts',
     ],
   },
   {

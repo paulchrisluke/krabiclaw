@@ -54,7 +54,7 @@
     </div>
 
     <div v-if="showViewMore && limit && qa.length > limit" class="mt-12 text-center">
-      <NuxtLink to="/qa" class="inline-flex items-center justify-center rounded ring-1 ring-inset ring-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color) no-underline transition hover:bg-(--brand-color)/10">
+      <NuxtLink :to="localePath('/qa')" class="inline-flex items-center justify-center rounded ring-1 ring-inset ring-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color) no-underline transition hover:bg-(--brand-color)/10">
         {{ $t('saya.qa.view_all') }}
       </NuxtLink>
     </div>
@@ -63,6 +63,8 @@
 
 <script setup>
 import AppSection from '~/components/ui/AppSection.vue'
+
+const { localePath } = useI18n()
 
 const props = defineProps({
   qa: {

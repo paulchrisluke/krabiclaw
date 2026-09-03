@@ -1,4 +1,5 @@
 import type { SocialImageSource } from '~/utils/social-metadata'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicOfferingFeature {
   title: string
@@ -143,6 +144,7 @@ export function isBlawbyShellOnlyRouteRecipe(recipe: BlawbyRouteRecipe): recipe 
 
 export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe
+  localeRepresentations: PublicLocaleRepresentation[]
   page: PublicTenantPage | null
   offerings: PublicOfferingSummary[]
   offering: PublicOffering | null

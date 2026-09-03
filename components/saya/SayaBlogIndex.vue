@@ -2,19 +2,17 @@
   <div class="min-h-screen bg-default text-default">
     <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <div v-if="pending" class="py-24 text-center text-muted">
-        <p class="mb-2 text-xl">Loading posts</p>
-        <p class="text-sm">Please wait a moment...</p>
+        <p class="mb-2 text-xl">{{ t('saya.search.searching', { surface: t('saya.search.articles') }) }}</p>
       </div>
 
       <div v-else-if="error" class="py-24 text-center text-muted">
-        <p class="mb-2 text-xl">Unable to load posts</p>
-        <p class="text-sm">Please try again in a moment.</p>
+        <p class="mb-2 text-xl">{{ t('saya.common.temporarily_unavailable') }}</p>
       </div>
 
       <TenantBlogIndex
         v-else
         variant="saya"
-        :title="`Stories from ${siteName}`"
+        :title="locale === 'en' ? `Stories from ${siteName}` : t('saya.posts.title')"
         :posts="posts"
         base-path="/blog"
       />
@@ -37,6 +35,7 @@ interface TenantBlogPost {
 }
 
 const { siteId, draftId, site } = useTenantSite()
+const { locale, t } = useI18n()
 if (!siteId && !draftId) throw createError({ statusCode: 404 })
 
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
@@ -46,8 +45,8 @@ const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost
 
 useSocialMetadata(() => ({
   path: '/blog',
-  title: `Blog | ${siteName.value}`,
-  description: `Stories, news, and updates from ${siteName.value}.`,
+  title: locale.value === 'en' ? `Blog | ${siteName.value}` : t('saya.footer.blog'),
+  description: t('saya.posts.meta_description', { site: siteName.value }),
   brand: {
     siteName: siteName.value,
   },

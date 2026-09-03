@@ -143,7 +143,7 @@ export async function loadPublicProductDetail(
   const locationLocalization = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
   const productLocalization = localizations.find(item => item.resourceType === 'product' && item.resourceId === productId)
   const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
-  if (!sourceProduct || !locationLocalization || !productLocalization || !siteLocalization) return null
+  if (!sourceProduct || !locationLocalization || !productLocalization) return null
   const localizedProduct = projectExactLocalizedResource('product', sourceProduct, productLocalization)
   const product = {
     ...localizedProduct,
@@ -153,7 +153,9 @@ export async function loadPublicProductDetail(
     gallery: projectLocalizedMediaAlt(localizedProduct.gallery, localizations),
   }
   const localizedLocation = projectExactLocalizedResource('business_location', location, locationLocalization)
-  const localizedSite = projectExactLocalizedResource('site', collection.site, siteLocalization)
+  const localizedSite = siteLocalization
+    ? projectExactLocalizedResource('site', collection.site, siteLocalization)
+    : { ...collection.site, brand_name: '' }
   const localeRepresentations = await listPublicLocaleRepresentations(db, {
     organizationId: collection.site.organization_id,
     siteId,

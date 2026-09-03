@@ -3,7 +3,7 @@ import { siteTool } from './shared'
 
 const localizedValuesSchema = {
   type: 'object',
-  description: 'Complete exact localized scalar representation. Allowed and required fields depend on resource_type.',
+  description: 'Localized scalar values. Allowed fields depend on resource_type.',
   additionalProperties: true,
 } as const
 
@@ -17,8 +17,9 @@ const localizationObject = {
     values: localizedValuesSchema,
     route_path: { type: ['string', 'null'] },
     document_id: { type: ['string', 'null'] },
+    content_document: { type: ['object', 'null'], additionalProperties: true },
   },
-  required: ['id', 'resource_type', 'resource_id', 'locale', 'values', 'route_path', 'document_id'],
+  required: ['id', 'resource_type', 'resource_id', 'locale', 'values', 'route_path', 'document_id', 'content_document'],
   additionalProperties: false,
 } as const
 
@@ -65,13 +66,15 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       locale: { type: 'string' },
       values: localizedValuesSchema,
       route_path: { type: ['string', 'null'] },
+      content_blocks: { type: ['array', 'null'], items: { type: 'object', additionalProperties: true } },
+      expected_document_updated_at: { type: ['string', 'null'] },
     },
     required: ['resource_type', 'resource_id', 'locale', 'values'],
     outputSchema: { type: 'object', properties: { localization: localizationObject }, required: ['localization'], additionalProperties: false },
   }),
   siteTool({
     name: 'delete_resource_localization',
-    description: 'Permanently delete one exact localized resource representation and its owned document and redirect state. This does not change billing.',
+    description: 'Permanently delete one localized resource representation and its owned document and redirect state. This does not change billing.',
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: true,
@@ -85,7 +88,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_product_catalog_localization',
-    description: 'List canonical Product IDs and their exact existing localization for one licensed secondary locale so a complete batch can be prepared.',
+    description: 'List canonical Product IDs and their existing localization for one licensed secondary locale so a batch can be prepared.',
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: false,

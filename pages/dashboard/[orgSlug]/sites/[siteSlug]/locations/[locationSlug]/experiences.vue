@@ -77,15 +77,64 @@
     <USlideover v-model:open="sliderOpen" :title="editing ? 'Edit experience' : 'New experience'" side="right">
       <template #body>
         <div class="space-y-5 p-6">
-          <UFormField label="Title" required>
-            <UInput v-model="form.title" placeholder="e.g. Chef's Table Omakase" class="w-full" />
+          <UFormField v-if="editing && translationLocales.length" label="Language">
+            <select v-model="translationLocale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
+              <option value="en">en</option>
+              <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
+            </select>
           </UFormField>
-          <UFormField label="Tagline" help="One-line hook shown on the listing card.">
-            <UInput v-model="form.tagline" placeholder="e.g. Eight courses, one table, full attention." class="w-full" />
-          </UFormField>
-          <UFormField label="Description">
-            <UTextarea v-model="form.body" :rows="5" placeholder="Describe the experience in detail." class="w-full" />
-          </UFormField>
+          <template v-if="translationLocale === 'en'">
+            <UFormField label="Title" required>
+              <UInput v-model="form.title" placeholder="e.g. Chef's Table Omakase" class="w-full" />
+            </UFormField>
+            <UFormField label="Tagline" help="One-line hook shown on the listing card.">
+              <UInput v-model="form.tagline" placeholder="e.g. Eight courses, one table, full attention." class="w-full" />
+            </UFormField>
+            <UFormField label="Description">
+              <UTextarea v-model="form.body" :rows="5" placeholder="Describe the experience in detail." class="w-full" />
+            </UFormField>
+          </template>
+          <template v-else>
+            <p class="text-xs text-muted">Source (English): {{ form.title }}</p>
+            <UFormField :label="`Title (${translationLocale})`">
+              <UInput v-model="translationFields.title" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Tagline (${translationLocale})`">
+              <UInput v-model="translationFields.tagline" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Description (${translationLocale})`">
+              <UTextarea v-model="translationFields.body" :rows="5" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Price note (${translationLocale})`">
+              <UInput v-model="translationFields.price" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Availability note (${translationLocale})`">
+              <UInput v-model="translationFields.available_note" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Highlights (${translationLocale}, one per line)`">
+              <UTextarea v-model="translationFields.highlights_text" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Included items (${translationLocale}, one per line)`">
+              <UTextarea v-model="translationFields.included_items_text" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`What to bring (${translationLocale}, one per line)`">
+              <UTextarea v-model="translationFields.what_to_bring_text" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Meeting point (${translationLocale})`">
+              <UInput v-model="translationFields.meeting_point" class="w-full" />
+            </UFormField>
+            <UFormField :label="`Cancellation policy (${translationLocale})`">
+              <UTextarea v-model="translationFields.cancellation_policy" :rows="3" class="w-full" />
+            </UFormField>
+            <UFormField :label="`SEO title (${translationLocale})`">
+              <UInput v-model="translationFields.seo_title" class="w-full" />
+            </UFormField>
+            <UFormField :label="`SEO description (${translationLocale})`">
+              <UTextarea v-model="translationFields.seo_description" :rows="2" class="w-full" />
+            </UFormField>
+            <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
+            <UButton :loading="translationSaving" label="Save translation" @click="saveTranslation" />
+          </template>
           <UFormField label="Media gallery" help="Order images and videos exactly as they should appear publicly. The first item is the cover.">
             <div class="space-y-3">
               <div
@@ -244,6 +293,14 @@
               :summary="bookingPolicySummary"
             />
           </UFormField>
+          <UFormField v-if="bookingPolicyId && translationLocales.length" :label="`Booking policy (${translationLocale})`" help="Translated weather policy and additional notes for the saved booking policy above.">
+            <div class="space-y-2">
+              <UTextarea v-model="policyTranslationFields.weather_policy" :rows="2" :placeholder="`Weather policy (${translationLocale})`" class="w-full" />
+              <UTextarea v-model="policyTranslationFields.additional_notes_html" :rows="2" :placeholder="`Additional notes (${translationLocale})`" class="w-full" />
+              <p v-if="policyTranslationError" class="text-sm text-error">{{ policyTranslationError }}</p>
+              <UButton size="sm" variant="soft" :loading="policyTranslationSaving" label="Save policy translation" @click="savePolicyTranslation" />
+            </div>
+          </UFormField>
         </div>
       </template>
       <template #footer>
@@ -357,7 +414,7 @@ const isExperienceResponse = (value: unknown): value is { experience: ApiRecord 
   && typeof value.experience.title === 'string'
 const isPolicyResponse = (
   value: unknown,
-): value is { policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null } =>
+): value is { policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null; resolved_policy?: { id?: string } } =>
   isRecord(value)
   && (value.policy === null || isRecord(value.policy))
   && (value.summary === null || isRecord(value.summary))
@@ -453,6 +510,102 @@ async function loadExperiences() {
   }
 }
 
+// ── Translations (resource_localizations, same API as the editor CRUD) ──
+const translationLocale = ref('en')
+const translationLocales = ref<string[]>([])
+const translationFields = reactive({ title: '', tagline: '', body: '', price: '', available_note: '', highlights_text: '', included_items_text: '', what_to_bring_text: '', meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '' })
+const translationError = ref<string | null>(null)
+const translationSaving = ref(false)
+function isExperienceLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
+  return isRecord(value) && Array.isArray(value.languages)
+}
+async function loadTranslationLocales() {
+  try {
+    const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
+      `/api/editor/sites/${siteId}/locales`,
+      { validate: isExperienceLocalesResponse },
+    )
+    translationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
+  } catch (cause) {
+    translationLocales.value = []
+    translationError.value = cause instanceof Error ? cause.message : 'Failed to load site languages'
+  }
+}
+function isExperienceTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
+}
+async function loadTranslationFields(experienceId: string) {
+  translationError.value = null
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/experience/${experienceId}/${encodeURIComponent(translationLocale.value)}`,
+      { validate: isExperienceTranslationResponse },
+    )
+    const values = response.localization.values
+    translationFields.title = typeof values.title === 'string' ? values.title : ''
+    translationFields.tagline = typeof values.tagline === 'string' ? values.tagline : ''
+    translationFields.body = typeof values.body === 'string' ? values.body : ''
+    translationFields.price = typeof values.price === 'string' ? values.price : ''
+    translationFields.available_note = typeof values.available_note === 'string' ? values.available_note : ''
+    translationFields.highlights_text = Array.isArray(values.highlights_json) ? values.highlights_json.join('\n') : ''
+    translationFields.included_items_text = Array.isArray(values.included_items_json) ? values.included_items_json.join('\n') : ''
+    translationFields.what_to_bring_text = Array.isArray(values.what_to_bring) ? values.what_to_bring.join('\n') : ''
+    translationFields.meeting_point = typeof values.meeting_point === 'string' ? values.meeting_point : ''
+    translationFields.cancellation_policy = typeof values.cancellation_policy === 'string' ? values.cancellation_policy : ''
+    translationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    translationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+    translationFields.title = ''; translationFields.tagline = ''; translationFields.body = ''
+    translationFields.price = ''; translationFields.available_note = ''; translationFields.highlights_text = ''
+    translationFields.included_items_text = ''; translationFields.what_to_bring_text = ''; translationFields.meeting_point = ''
+    translationFields.cancellation_policy = ''; translationFields.seo_title = ''; translationFields.seo_description = ''
+  }
+}
+watch(translationLocale, () => {
+  if (editing.value?.id && translationLocale.value !== 'en') void loadTranslationFields(String(editing.value.id))
+  void loadPolicyTranslation()
+})
+async function saveTranslation() {
+  if (!editing.value?.id || translationLocale.value === 'en') return
+  translationSaving.value = true; translationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (translationFields.title.trim()) values.title = translationFields.title.trim()
+    if (translationFields.tagline.trim()) values.tagline = translationFields.tagline.trim()
+    if (translationFields.body.trim()) values.body = translationFields.body.trim()
+    if (translationFields.price.trim()) values.price = translationFields.price.trim()
+    if (translationFields.available_note.trim()) values.available_note = translationFields.available_note.trim()
+    if (translationFields.meeting_point.trim()) values.meeting_point = translationFields.meeting_point.trim()
+    if (translationFields.cancellation_policy.trim()) values.cancellation_policy = translationFields.cancellation_policy.trim()
+    if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
+    if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
+    const highlights_json = translationFields.highlights_text.split('\n').map(line => line.trim()).filter(Boolean)
+    const included_items_json = translationFields.included_items_text.split('\n').map(line => line.trim()).filter(Boolean)
+    const what_to_bring = translationFields.what_to_bring_text.split('\n').map(line => line.trim()).filter(Boolean)
+    const slug = String(editing.value.slug ?? '')
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/experience/${editing.value.id}/${encodeURIComponent(translationLocale.value)}`, {
+      method: 'PUT',
+      body: {
+        values: {
+          ...values,
+          ...(highlights_json.length ? { highlights_json } : {}),
+          ...(included_items_json.length ? { included_items_json } : {}),
+          ...(what_to_bring.length ? { what_to_bring } : {}),
+        },
+        route_path: `/${translationLocale.value}/experiences/${slug}`,
+      },
+      validate: isRecord,
+    })
+  } catch (cause) {
+    translationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    translationSaving.value = false
+  }
+}
+void loadTranslationLocales()
+
 // ── Form ──────────────────────────────────────────────────
 const sliderOpen = ref(false)
 const editing = ref<ApiRecord | null>(null)
@@ -540,8 +693,20 @@ const emptyForm = () => ({
 
 const form = reactive(emptyForm())
 const originalExperienceMediaIds = ref<string[]>([])
+// Snapshot of the price fields as loaded, so save() can tell "the price form
+// still shows what's on the server" apart from "the owner actually changed
+// the price" - server/utils/experiences.ts treats every payload that includes
+// `price` as a reprice (closes the current immutable prices row, inserts a
+// replacement), by design, for real price changes. Without this guard, every
+// full-form save re-sent the unchanged price and triggered a spurious
+// reprice, growing a new prices row on each save.
+const originalExperiencePrice = ref<{ price_major: number | null; compare_at_major: number | null; valid_from: string; valid_until: string; pricing_note: string } | null>(null)
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
+const bookingPolicyId = ref<string | null>(null)
+const policyTranslationFields = reactive({ weather_policy: '', additional_notes_html: '' })
+const policyTranslationError = ref<string | null>(null)
+const policyTranslationSaving = ref(false)
 
 watch(currentLocationId, () => {
   sliderOpen.value = false
@@ -558,6 +723,7 @@ function openCreate() {
   bookingPolicyDraft.value = {}
   bookingPolicySummary.value = null
   originalExperienceMediaIds.value = []
+  originalExperiencePrice.value = null
   sliderOpen.value = true
 }
 
@@ -603,6 +769,7 @@ function handleGalleryMediaChange(index: number, asset: { asset_id: string; publ
 }
 
 function openEdit(exp: ApiRecord) {
+  translationLocale.value = 'en'
   editing.value = exp
   Object.assign(form, {
     title: exp.title ?? '',
@@ -633,6 +800,13 @@ function openEdit(exp: ApiRecord) {
     featured_sort_order: exp.featured_sort_order ?? 0,
   })
   originalExperienceMediaIds.value = form.media.flatMap(item => item.asset_id ? [item.asset_id] : [])
+  originalExperiencePrice.value = {
+    price_major: form.price_major,
+    compare_at_major: form.compare_at_major,
+    valid_from: form.valid_from,
+    valid_until: form.valid_until,
+    pricing_note: form.pricing_note,
+  }
   timeSlotsInput.value = Array.isArray(exp.time_slots) ? exp.time_slots.join(', ') : (exp.time_slots ?? '')
   for (const day of weekdayNames) recurringInputs[day] = exp.recurring_slots?.[day]?.join(', ') ?? ''
   slotsMode.value = exp.recurring_slots ? 'recurring' : 'flat'
@@ -642,7 +816,7 @@ function openEdit(exp: ApiRecord) {
 
 async function loadExperiencePolicy(experienceId: string, locationId: string | null | undefined) {
   try {
-    const res = await dashboardApi<{ policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+    const res = await dashboardApi<{ policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null; resolved_policy?: { id?: string } }>(`/api/editor/sites/${siteId}/booking-policy`, {
       query: {
         policy_type: 'experience',
         scope_type: 'experience',
@@ -654,10 +828,53 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = res.policy ?? {}
     bookingPolicySummary.value = res.summary ?? null
+    bookingPolicyId.value = res.resolved_policy?.id || null
+    void loadPolicyTranslation()
   } catch {
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = {}
     bookingPolicySummary.value = null
+    bookingPolicyId.value = null
+  }
+}
+
+async function loadPolicyTranslation() {
+  policyTranslationError.value = null
+  policyTranslationFields.weather_policy = ''
+  policyTranslationFields.additional_notes_html = ''
+  if (!bookingPolicyId.value || !translationLocale.value || translationLocale.value === 'en') return
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/booking_policy/${bookingPolicyId.value}/${encodeURIComponent(translationLocale.value)}`,
+      { validate: (value): value is { localization: { values: Record<string, unknown> } } => isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values) },
+    )
+    const values = response.localization.values
+    policyTranslationFields.weather_policy = typeof values.weather_policy === 'string' ? values.weather_policy : ''
+    policyTranslationFields.additional_notes_html = typeof values.additional_notes_html === 'string' ? values.additional_notes_html : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) policyTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+  }
+}
+
+async function savePolicyTranslation() {
+  if (!bookingPolicyId.value || !translationLocale.value || translationLocale.value === 'en') return
+  policyTranslationSaving.value = true
+  policyTranslationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (policyTranslationFields.weather_policy.trim()) values.weather_policy = policyTranslationFields.weather_policy.trim()
+    if (policyTranslationFields.additional_notes_html.trim()) values.additional_notes_html = policyTranslationFields.additional_notes_html.trim()
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/booking_policy/${bookingPolicyId.value}/${encodeURIComponent(translationLocale.value)}`, {
+      method: 'PUT',
+      body: { values },
+      validate: isRecord,
+    })
+    toast.add({ title: 'Translation saved', color: 'success' })
+  } catch (cause) {
+    policyTranslationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    policyTranslationSaving.value = false
   }
 }
 
@@ -720,22 +937,38 @@ async function save() {
     const { media: _media, pricing_note: _pricingNote, price_major: _priceMajor,
       compare_at_major: _compareAt, valid_from: _validFrom, valid_until: _validUntil, ...formFields } = form
     const hasPrice = parseNumber(form.price_major) !== null
+    // Only send price/pricing_note when the owner actually edited them - the
+    // server treats any payload with `price` present as a real reprice
+    // (closes the current prices row, inserts a new one), so re-sending the
+    // unchanged loaded value on every full-form save would silently grow a
+    // fresh prices row each time. New experiences (no baseline) always send it.
+    const priceFieldsChanged = !originalExperiencePrice.value || (
+      originalExperiencePrice.value.price_major !== form.price_major
+      || originalExperiencePrice.value.compare_at_major !== form.compare_at_major
+      || originalExperiencePrice.value.valid_from !== form.valid_from
+      || originalExperiencePrice.value.valid_until !== form.valid_until
+      || originalExperiencePrice.value.pricing_note !== form.pricing_note
+    )
     const payload = {
       ...formFields,
       location_id: locationId,
-      pricing_note: hasPrice ? null : form.pricing_note.trim() || null,
-      price: !hasPrice ? null : {
-        amount_minor: majorAmountToMinor(String(form.price_major), defaultCurrency.value as CurrencyCode),
-        currency: defaultCurrency.value as CurrencyCode,
-        unit: 'person' as const,
-        tax_behavior: 'unspecified' as const,
-        compare_at_amount_minor: parseNumber(form.compare_at_major) === null
-          ? null
-          : majorAmountToMinor(String(form.compare_at_major), defaultCurrency.value as CurrencyCode),
-        ...(form.valid_from.trim() ? { valid_from: `${form.valid_from.trim()}T00:00:00.000Z` } : {}),
-        ...(form.valid_until.trim() ? { valid_until: `${form.valid_until.trim()}T23:59:59.999Z` } : {}),
-        provenance: 'editor',
-      },
+      ...(priceFieldsChanged
+        ? {
+            pricing_note: hasPrice ? null : form.pricing_note.trim() || null,
+            price: !hasPrice ? null : {
+              amount_minor: majorAmountToMinor(String(form.price_major), defaultCurrency.value as CurrencyCode),
+              currency: defaultCurrency.value as CurrencyCode,
+              unit: 'person' as const,
+              tax_behavior: 'unspecified' as const,
+              compare_at_amount_minor: parseNumber(form.compare_at_major) === null
+                ? null
+                : majorAmountToMinor(String(form.compare_at_major), defaultCurrency.value as CurrencyCode),
+              ...(form.valid_from.trim() ? { valid_from: `${form.valid_from.trim()}T00:00:00.000Z` } : {}),
+              ...(form.valid_until.trim() ? { valid_until: `${form.valid_until.trim()}T23:59:59.999Z` } : {}),
+              provenance: 'editor',
+            },
+          }
+        : {}),
       duration_minutes: parseNumber(form.duration_minutes),
       max_capacity: parseNumber(form.max_capacity),
       featured_sort_order: parseNumber(form.featured_sort_order) ?? 0,

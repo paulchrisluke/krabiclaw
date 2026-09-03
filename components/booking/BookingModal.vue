@@ -15,7 +15,7 @@
         :aria-labelledby="titleId"
       >
         <!-- Backdrop -->
-        <label :for="toggleId" class="absolute inset-0 bg-black/40 backdrop-blur-sm" aria-label="Close booking form"></label>
+        <label :for="toggleId" class="absolute inset-0 bg-black/40 backdrop-blur-sm" :aria-label="t('saya.experience_detail.close_booking')"></label>
         
         <!-- Modal content -->
         <div class="relative bg-default border border-default rounded-xl shadow-xl w-full max-w-md h-[min(720px,90vh)] overflow-hidden flex flex-col">
@@ -72,6 +72,7 @@ const props = defineProps<{
   kicker?: string
   canGoBack?: boolean
 }>()
+const { t } = useI18n()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]

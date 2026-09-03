@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:0ae08cd278155e7a5b4f30f5d0720033a84bc2d1989ee21b45365bdce7903169",
+  "fingerprint": "sha256:2f78a4188e1d5266a2ebdf7c025afffccc5e1432d74d3e8fd14740ddd077b491",
   "tools": [
     {
       "name": "analyze_document",
@@ -5486,6 +5486,13 @@
           "localization": {
             "additionalProperties": false,
             "properties": {
+              "content_document": {
+                "additionalProperties": true,
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "document_id": {
                 "type": [
                   "string",
@@ -5512,7 +5519,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type.",
                 "type": "object"
               }
             },
@@ -5523,7 +5530,8 @@
               "locale",
               "values",
               "route_path",
-              "document_id"
+              "document_id",
+              "content_document"
             ],
             "type": "object"
           }
@@ -10195,6 +10203,22 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "content_blocks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "expected_document_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "locale": {
             "type": "string"
           },
@@ -10216,7 +10240,7 @@
           },
           "values": {
             "additionalProperties": true,
-            "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+            "description": "Localized scalar values. Allowed fields depend on resource_type.",
             "type": "object"
           }
         },
@@ -10234,6 +10258,13 @@
           "localization": {
             "additionalProperties": false,
             "properties": {
+              "content_document": {
+                "additionalProperties": true,
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "document_id": {
                 "type": [
                   "string",
@@ -10260,7 +10291,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type.",
                 "type": "object"
               }
             },
@@ -10271,7 +10302,8 @@
               "locale",
               "values",
               "route_path",
-              "document_id"
+              "document_id",
+              "content_document"
             ],
             "type": "object"
           }
@@ -12445,7 +12477,7 @@
                 },
                 "values": {
                   "additionalProperties": true,
-                  "description": "Complete exact localized scalar representation. Allowed and required fields depend on resource_type.",
+                  "description": "Localized scalar values. Allowed fields depend on resource_type.",
                   "type": "object"
                 }
               },

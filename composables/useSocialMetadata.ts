@@ -65,13 +65,15 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       ? config.public.siteUrl || requestURL.origin
       : requestURL.origin || config.public.siteUrl
     const exactRepresentation = localeRepresentations.value.find(item => item.locale === publicLocale.value)
+    if (publicLocale.value !== 'en' && !exactRepresentation) {
+      throw createError({ statusCode: 404, statusMessage: 'Localized route representation was not found' })
+    }
     const canonicalUrl = resolveSeoUrl(exactRepresentation?.route_path ?? value.path, origin)
     const brand = value.brand ?? (template === 'platform'
       ? {
           siteName: PLATFORM_NAME,
         }
-      : null)
-    if (!brand?.siteName.trim()) throw new Error('Page social metadata requires a site name')
+      : { siteName: '' })
     const socialInput: SocialPageMetadataInput = {
       ...value,
       template,
@@ -106,7 +108,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       { property: 'og:description', content: normalized.value.tags.ogDescription },
       { property: 'og:type', content: normalized.value.tags.ogType },
       { property: 'og:url', content: normalized.value.tags.ogUrl },
-      { property: 'og:site_name', content: normalized.value.tags.ogSiteName },
+      ...(normalized.value.tags.ogSiteName ? [{ property: 'og:site_name', content: normalized.value.tags.ogSiteName }] : []),
       { property: 'og:image', content: normalized.value.tags.ogImage },
       { property: 'og:image:width', content: normalized.value.tags.ogImageWidth },
       { property: 'og:image:height', content: normalized.value.tags.ogImageHeight },

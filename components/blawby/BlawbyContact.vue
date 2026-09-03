@@ -61,6 +61,7 @@
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { siteId } = useTenantSite()
+const { localePath } = useI18n()
 const { data, error, shell } = await useBlawbyRoute('contact')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
@@ -114,7 +115,7 @@ async function submitContact() {
       guestName: form.name,
       subject: form.subject,
     })
-    await navigateTo('/contact/confirmed')
+    await navigateTo(localePath('/contact/confirmed'))
   } catch (error) {
     const fetchError = error as { data?: { error?: string; message?: string; statusMessage?: string } }
     submitMessage.value = fetchError.data?.error || fetchError.data?.message || fetchError.data?.statusMessage || 'Unable to send right now.'
