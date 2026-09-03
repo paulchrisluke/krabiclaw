@@ -109,23 +109,29 @@ const route = useRoute()
 const { locale } = useI18n()
 const orderCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { getField, locations } = await usePublicPageData()
+const requestEvent = useRequestEvent()
 
-const catalog = await (async (): Promise<OrderingCatalogResponse> => {
-  if (import.meta.server) {
-    const event = useRequestEvent()
-    if (!event) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-    const [{ cloudflareEnv }, { loadPublicOrderingCatalog }] = await Promise.all([import('~/server/utils/api-response'), import('~/server/utils/public-products')])
-    const db = cloudflareEnv(event).DB
-    if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-    const result = await loadPublicOrderingCatalog(db, siteId)
-    if (!result) throw createError({ statusCode: 404, statusMessage: 'Ordering catalog not found' })
-    return { products: result.products, locations: result.locations.map(({ id, slug, title }) => ({ id, slug, title })), currency: result.currency }
-  }
-  const response = await fetch(`/api/public/sites/${encodeURIComponent(siteId)}/ordering-catalog`)
-  const payload: unknown = await response.json()
-  if (!response.ok || !isOrderingCatalogResponse(payload)) throw createError({ statusCode: response.status || 502, statusMessage: 'Invalid ordering catalog response' })
-  return payload
-})()
+const { data: catalogData, error: catalogError } = await useAsyncData(
+  `public-ordering-catalog-${siteId}`,
+  async (): Promise<OrderingCatalogResponse> => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const [{ cloudflareEnv }, { loadPublicOrderingCatalog }] = await Promise.all([import('~/server/utils/api-response'), import('~/server/utils/public-products')])
+      const db = cloudflareEnv(requestEvent).DB
+      if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+      const result = await loadPublicOrderingCatalog(db, siteId)
+      if (!result) throw createError({ statusCode: 404, statusMessage: 'Ordering catalog not found' })
+      return { products: result.products, locations: result.locations.map(({ id, slug, title }) => ({ id, slug, title })), currency: result.currency }
+    }
+    const response = await fetch(`/api/public/sites/${encodeURIComponent(siteId)}/ordering-catalog`)
+    const payload: unknown = await response.json()
+    if (!response.ok || !isOrderingCatalogResponse(payload)) throw createError({ statusCode: response.status || 502, statusMessage: 'Invalid ordering catalog response' })
+    return payload
+  },
+)
+if (catalogError.value) throw catalogError.value
+const catalog = catalogData.value
+if (!catalog) throw createError({ statusCode: 502, statusMessage: 'Ordering catalog unavailable' })
 
 const queryLocation = typeof route.query.location === 'string' ? route.query.location : null
 const orderingLocations = catalog.locations.filter(location => catalog.products.some(product => product.location_id === location.id))
