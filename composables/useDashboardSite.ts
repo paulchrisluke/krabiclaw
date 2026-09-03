@@ -114,6 +114,7 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     && (site.team_id === null || typeof site.team_id === 'string')
     && (site.brand_name === null || typeof site.brand_name === 'string')
     && (site.subdomain === null || typeof site.subdomain === 'string')
+    && isSocialImage(site.social_image)
     && Array.isArray(site.media)
     && site.media.every(item =>
       isRecord(item)
