@@ -8,7 +8,7 @@ import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, schema } from '~/server/db'
+import { createDb, execute, queryFirst, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -198,7 +198,34 @@ export function localDevelopmentOrigin(value: string | undefined): string | null
   return origin
 }
 
-function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Request) => string[]) {
+function originMatchesConfiguredTenant(origin: string, freeSiteOrigin: string | null): boolean {
+  if (!freeSiteOrigin) return false
+  const candidate = new URL(origin)
+  const freeSite = new URL(freeSiteOrigin)
+  return candidate.protocol === freeSite.protocol
+    && candidate.port === freeSite.port
+    && candidate.hostname.endsWith(`.${freeSite.hostname}`)
+}
+
+async function activeCustomTenantOrigin(env: CloudflareEnv, request?: Request): Promise<string | null> {
+  const origin = normalizeOrigin(request?.headers.get('origin') ?? undefined)
+  if (!origin) return null
+  const hostname = new URL(origin).hostname.toLowerCase()
+  const site = await queryFirst<{ id: string }>(env.DB, `
+    SELECT s.id
+      FROM site_domains domain
+      JOIN sites s ON s.id = domain.site_id AND s.organization_id = domain.organization_id
+     WHERE lower(domain.domain) = ?
+       AND domain.type = 'custom'
+       AND domain.status = 'active'
+       AND s.status = 'active'
+       AND s.onboarding_status = 'active'
+     LIMIT 1
+  `, [hostname])
+  return site ? origin : null
+}
+
+function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Request) => Promise<string[]>) {
   const origins = new Set<string>()
   const authOrigin = normalizeOrigin(env.BETTER_AUTH_URL)
   const platformOrigin = normalizeOrigin(env.NUXT_PUBLIC_PLATFORM_DOMAIN)
@@ -214,14 +241,23 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
       origins.add(`http://*.localhost:${port}`)
     }
 
-    return (request?: Request) => {
+    return async (request?: Request) => {
       const requestOrigin = request && (import.meta.dev || shouldBypassE2eAuthRateLimit(env, request))
         ? localDevelopmentOrigin(request.headers.get('origin') ?? undefined)
         : null
-      return requestOrigin ? [...origins, requestOrigin] : [...origins]
+      if (requestOrigin) return [...origins, requestOrigin]
+      const customTenantOrigin = await activeCustomTenantOrigin(env, request)
+      return customTenantOrigin ? [...origins, customTenantOrigin] : [...origins]
     }
   }
-  return [...origins]
+  return async (request?: Request) => {
+    const requestOrigin = normalizeOrigin(request?.headers.get('origin') ?? undefined)
+    if (!requestOrigin || origins.has(requestOrigin) || originMatchesConfiguredTenant(requestOrigin, freeSiteOrigin)) {
+      return [...origins]
+    }
+    const customTenantOrigin = await activeCustomTenantOrigin(env, request)
+    return customTenantOrigin ? [...origins, customTenantOrigin] : [...origins]
+  }
 }
 
 export function createAuth(env: CloudflareEnv) {

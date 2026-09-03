@@ -6,9 +6,28 @@
       <p v-if="getField('hero.subtitle')" class="mt-5 max-w-xl text-sm leading-relaxed text-muted">{{ getField('hero.subtitle') }}</p>
     </header>
 
-    <section v-if="catalogProducts.length" class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8" aria-label="Ordering menu">
+    <section
+      v-if="servicePointFlow"
+      class="mx-auto mb-8 max-w-7xl px-4 sm:px-6 lg:px-8"
+      aria-label="Ordering context"
+    >
+      <div v-if="orderingContextState === 'loading'" class="border border-primary/30 bg-primary/5 px-5 py-4" aria-live="polite">
+        <p class="text-sm text-muted">Confirming your service point...</p>
+      </div>
+      <div v-else-if="orderingContextState === 'error'" class="border border-error/30 bg-error/5 px-5 py-4" role="alert">
+        <p class="font-medium text-error">This Ordering QR code is unavailable.</p>
+        <p class="mt-1 text-sm text-muted">Scan a current QR code or ask a team member for help.</p>
+      </div>
+      <div v-else-if="orderingContext" class="border border-primary/30 bg-primary/5 px-5 py-4">
+        <p class="saya-eyebrow text-primary">Ordering for</p>
+        <h2 class="mt-1 text-xl font-semibold text-default">{{ orderingContext.servicePointLabel }}</h2>
+        <p class="mt-1 text-sm text-muted">{{ orderingContext.locationTitle }} · {{ orderingContext.siteName }}</p>
+      </div>
+    </section>
+
+    <section v-if="catalogProducts.length && orderingContextState !== 'loading' && orderingContextState !== 'error'" class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8" aria-label="Ordering menu">
       <div class="mb-8 flex flex-col gap-4 border-y border-default py-5 sm:flex-row sm:items-end sm:justify-between">
-        <div v-if="orderingLocations.length > 1" class="min-w-64">
+        <div v-if="orderingLocations.length > 1 && !orderingContext" class="min-w-64">
           <label for="ordering-location" class="saya-eyebrow mb-2 block text-muted">Location</label>
           <select id="ordering-location" v-model="selectedLocationId" class="w-full border border-default bg-default px-3 py-2 text-sm text-default">
             <option v-for="location in orderingLocations" :key="location.id" :value="location.id">{{ location.title }}</option>
@@ -62,7 +81,7 @@
       <p class="mt-10 text-sm text-muted">Scan an Ordering QR at the venue to start a table order.</p>
     </section>
 
-    <section v-else class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
+    <section v-else-if="orderingContextState === 'none' || orderingContextState === 'ready'" class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
       <div class="flex min-h-64 flex-col items-center justify-center gap-6 text-center">
         <SayaIcon name="shopping-bag" class="size-12 text-muted" />
         <div><h2 class="text-2xl font-bold text-default">{{ orderCopy.onlineOrderingNotAvailable }}</h2><p class="mt-2 text-muted">{{ orderCopy.wedLoveToSeeYou }}</p></div>
@@ -92,6 +111,27 @@ definePageMeta({ layout: 'saya' })
 
 interface OrderingLocation { id: string; slug: string; title: string }
 interface OrderingCatalogResponse { products: Product[]; locations: OrderingLocation[]; currency: CurrencyCode }
+interface OrderingContext {
+  siteId: string
+  siteName: string
+  locationId: string
+  locationSlug: string
+  locationTitle: string
+  servicePointId: string
+  servicePointLabel: string
+}
+interface OrderingQrResponse {
+  context: {
+    site_id: string
+    site_name: string
+    location_id: string
+    location_slug: string
+    location_title: string
+    service_point_id: string
+    service_point_label: string
+  }
+  continue_url: string
+}
 
 function isOrderingCatalogResponse(value: unknown): value is OrderingCatalogResponse {
   return isRecord(value)
@@ -102,6 +142,19 @@ function isOrderingCatalogResponse(value: unknown): value is OrderingCatalogResp
     && isCurrencyCode(value.currency)
 }
 
+function isOrderingQrResponse(value: unknown): value is OrderingQrResponse {
+  return isRecord(value)
+    && isRecord(value.context)
+    && typeof value.context.site_id === 'string'
+    && typeof value.context.site_name === 'string'
+    && typeof value.context.location_id === 'string'
+    && typeof value.context.location_slug === 'string'
+    && typeof value.context.location_title === 'string'
+    && typeof value.context.service_point_id === 'string'
+    && typeof value.context.service_point_label === 'string'
+    && typeof value.continue_url === 'string'
+}
+
 const { isPlatform, site, siteId } = useTenantSite()
 if (isPlatform || !siteId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 
@@ -110,6 +163,43 @@ const { locale } = useI18n()
 const orderCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 const { getField, locations } = await usePublicPageData()
 const requestEvent = useRequestEvent()
+const servicePointFlow = route.query.service_point === '1'
+const queryLocation = typeof route.query.location === 'string' ? route.query.location : null
+const orderingContextState = ref<'none' | 'loading' | 'ready' | 'error'>(servicePointFlow ? 'loading' : 'none')
+const orderingContext = ref<OrderingContext | null>(null)
+
+onMounted(async () => {
+  if (!servicePointFlow) return
+  const credential = new URLSearchParams(window.location.hash.slice(1)).get('credential')
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+  if (!credential) {
+    orderingContextState.value = 'error'
+    return
+  }
+  try {
+    const response = await applicationFetch<OrderingQrResponse>('/api/public/ordering/resolve', {
+      method: 'POST',
+      body: { credential },
+      validate: isOrderingQrResponse,
+    })
+    if (response.context.site_id !== siteId || response.context.location_slug !== queryLocation) {
+      throw new Error('Ordering QR scope mismatch')
+    }
+    orderingContext.value = {
+      siteId: response.context.site_id,
+      siteName: response.context.site_name,
+      locationId: response.context.location_id,
+      locationSlug: response.context.location_slug,
+      locationTitle: response.context.location_title,
+      servicePointId: response.context.service_point_id,
+      servicePointLabel: response.context.service_point_label,
+    }
+    selectedLocationId.value = orderingContext.value.locationId
+    orderingContextState.value = 'ready'
+  } catch {
+    orderingContextState.value = 'error'
+  }
+})
 
 const { data: catalogData, error: catalogError } = await useAsyncData(
   `public-ordering-catalog-${siteId}`,
@@ -133,7 +223,6 @@ if (catalogError.value) throw catalogError.value
 const catalog = catalogData.value
 if (!catalog) throw createError({ statusCode: 502, statusMessage: 'Ordering catalog unavailable' })
 
-const queryLocation = typeof route.query.location === 'string' ? route.query.location : null
 const orderingLocations = catalog.locations.filter(location => catalog.products.some(product => product.location_id === location.id))
 const selectedLocationId = ref(orderingLocations.find(location => location.slug === queryLocation)?.id ?? orderingLocations[0]?.id ?? '')
 const search = ref('')

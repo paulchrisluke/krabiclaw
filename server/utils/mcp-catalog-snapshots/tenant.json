@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1894c8d0f103adf0cf814e2a3429fa44918b1db023cd419915fda0e5340f6279",
+  "fingerprint": "sha256:6e6b04869a335c5eb3eb4c4ddc3b354916e76561cb5d734c1e225cfc791fd9e8",
   "tools": [
     {
       "name": "analyze_document",
@@ -3506,6 +3506,106 @@
         },
         "required": [
           "product"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_service_point",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location ID.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "label"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "service_point": {
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "qr_credential": {
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "created_at"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "site_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organization_id",
+              "site_id",
+              "location_id",
+              "label",
+              "status",
+              "created_at",
+              "updated_at",
+              "qr_credential"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "service_point"
         ],
         "type": "object"
       }
@@ -10583,6 +10683,103 @@
       }
     },
     {
+      "name": "list_service_points",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "location_id": {
+            "description": "Location ID.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "service_points": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": "string"
+                },
+                "organization_id": {
+                  "type": "string"
+                },
+                "qr_credential": {
+                  "properties": {
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version",
+                    "created_at"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "site_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active",
+                    "paused"
+                  ],
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "organization_id",
+                "site_id",
+                "location_id",
+                "label",
+                "status",
+                "created_at",
+                "updated_at",
+                "qr_credential"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "service_points"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_site_locales",
       "inputSchema": {
         "additionalProperties": false,
@@ -11510,6 +11707,112 @@
         "required": [
           "resolved_policy",
           "summary"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "provision_service_point_qr",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "location_id": {
+            "description": "Location ID.",
+            "type": "string"
+          },
+          "service_point_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "service_point_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "ordering_url": {
+            "type": "string"
+          },
+          "service_point": {
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "qr_credential": {
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "created_at"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "site_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organization_id",
+              "site_id",
+              "location_id",
+              "label",
+              "status",
+              "created_at",
+              "updated_at",
+              "qr_credential"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "service_point",
+          "ordering_url",
+          "version"
         ],
         "type": "object"
       }
@@ -14021,6 +14324,147 @@
         "required": [
           "review",
           "guidance"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "revoke_service_point_qr",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "location_id": {
+            "description": "Location ID.",
+            "type": "string"
+          },
+          "service_point_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "service_point_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revoked"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "rotate_service_point_qr",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "location_id": {
+            "description": "Location ID.",
+            "type": "string"
+          },
+          "service_point_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "service_point_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "ordering_url": {
+            "type": "string"
+          },
+          "service_point": {
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "qr_credential": {
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "created_at"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "site_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organization_id",
+              "site_id",
+              "location_id",
+              "label",
+              "status",
+              "created_at",
+              "updated_at",
+              "qr_credential"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "service_point",
+          "ordering_url",
+          "version"
         ],
         "type": "object"
       }
@@ -19362,6 +19806,116 @@
         "required": [
           "success",
           "written"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "update_service_point",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location ID.",
+            "type": "string"
+          },
+          "service_point_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "service_point_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "service_point": {
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "qr_credential": {
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "created_at"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "site_id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organization_id",
+              "site_id",
+              "location_id",
+              "label",
+              "status",
+              "created_at",
+              "updated_at",
+              "qr_credential"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "service_point"
         ],
         "type": "object"
       }

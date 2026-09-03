@@ -18,6 +18,7 @@ import { ONBOARDING_TOOLS } from './onboarding'
 import { POSTS_TOOLS } from './posts'
 import { QA_TOOLS } from './qa'
 import { REVIEWS_TOOLS } from './reviews'
+import { SERVICE_POINT_TOOLS } from './service-points'
 import { SETTINGS_TOOLS } from './settings'
 import { SITES_TOOLS } from './sites'
 import { SUBMISSIONS_TOOLS } from './submissions'
@@ -41,6 +42,7 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...POSTS_TOOLS,
   ...QA_TOOLS,
   ...REVIEWS_TOOLS,
+  ...SERVICE_POINT_TOOLS,
   ...SETTINGS_TOOLS,
   ...SITES_TOOLS,
   ...SUBMISSIONS_TOOLS,

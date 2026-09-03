@@ -26,7 +26,7 @@
         v-else-if="location"
         :has-detail="hasDetail"
         show-desktop-detail
-        :show-actions="hasDetail"
+        :show-actions="hasDetail && editorKey !== 'service-points'"
         :saving="saving"
         :save-disabled="saveDisabled"
         @cancel="cancelEditor"
@@ -121,6 +121,13 @@
             <p v-else class="text-sm text-muted">No location-specific modules are enabled for this site.</p>
           </div>
 
+          <ServicePointsSettings
+            v-else-if="editorKey === 'service-points'"
+            :site-id="siteId"
+            :location-id="locationId"
+            embedded
+          />
+
           <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
         </template>
       </EditorPaneShell>
@@ -199,7 +206,7 @@ const routeSegments = computed(() => {
 })
 const detailKey = computed(() => routeSegments.value[0] ?? null)
 const editorKey = computed(() => detailKey.value ?? 'profile')
-const validDetailKeys = new Set(['profile', 'hours', 'content', 'discovery', 'notifications', 'features'])
+const validDetailKeys = new Set(['profile', 'hours', 'content', 'discovery', 'notifications', 'features', 'service-points'])
 if (routeSegments.value.length > 1 || (detailKey.value && !validDetailKeys.has(detailKey.value))) {
   throw createError({ statusCode: 404, statusMessage: 'Location setting not found' })
 }
@@ -466,6 +473,9 @@ const featureSummary = computed(() => {
   const count = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature]).length
   return count ? `${count} ${count === 1 ? 'module' : 'modules'} available` : 'No location modules'
 })
+const servicePointSummary = computed(() => locationEffectiveFeatures.value.includes('ordering')
+  ? 'Ordering destinations and QR codes'
+  : 'Enable online ordering to use')
 const navigationItems = computed(() => [
   { id: 'profile', label: 'Profile', summary: addressSummary.value, icon: 'i-lucide-map-pin', to: `${settingsPath.value}/profile` },
   { id: 'hours', label: 'Hours', summary: hoursSummary.value, icon: 'i-lucide-clock-3', to: `${settingsPath.value}/hours` },
@@ -473,6 +483,7 @@ const navigationItems = computed(() => [
   { id: 'discovery', label: 'Discovery', summary: discoverySummary.value, icon: 'i-simple-icons-googlemaps', to: `${settingsPath.value}/discovery` },
   { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
   { id: 'features', label: 'Available features', summary: featureSummary.value, icon: 'i-lucide-layout-grid', to: `${settingsPath.value}/features` },
+  { id: 'service-points', label: 'Service points', summary: servicePointSummary.value, icon: 'i-lucide-qr-code', to: `${settingsPath.value}/service-points` },
 ])
 const navigationGroups = computed(() => [
   { id: 'location', label: 'Location', items: navigationItems.value.slice(0, 2) },
@@ -486,6 +497,7 @@ const detailTitles: Record<string, string> = {
   discovery: 'Discovery',
   notifications: 'Notifications',
   features: 'Available features',
+  'service-points': 'Service points',
 }
 const hasDetail = computed(() => detailKey.value !== null)
 const navbarTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : location.value?.title || 'Location')
@@ -503,6 +515,7 @@ function editorSignature(key: string | null): string {
     case 'discovery': return JSON.stringify([detailsForm.google_place_id, detailsForm.maps_url, detailsForm.google_review_url])
     case 'notifications': return JSON.stringify([detailsForm.notification_phone, detailsForm.timezone])
     case 'features': return JSON.stringify(locationToggleableFeatures.value.map(feature => [feature, Boolean(locationEnabledFeatureSet[feature])]))
+    case 'service-points': return ''
     default: return ''
   }
 }

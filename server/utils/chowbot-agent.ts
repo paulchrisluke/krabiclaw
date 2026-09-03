@@ -247,6 +247,15 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
+    case "list_service_points":
+    case "create_service_point":
+    case "update_service_point":
+    case "provision_service_point_qr":
+    case "rotate_service_point_qr":
+    case "revoke_service_point_qr": {
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
+    }
+
     // Regression note: create_location/update_location's rating/review_count/
     // max_capacity range checks were duplicated here — createLocation/
     // updateLocation already validate the same rules server-side, so this

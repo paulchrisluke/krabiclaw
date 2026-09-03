@@ -44,5 +44,18 @@ export default withNuxt(
       'vue/no-v-text-v-html-on-component': 'error',
       'vue/require-default-prop': 'off'
     }
+  },
+  {
+    files: ['server/domain/service-points/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['~/server/api/**', '../../api/**', '../../../server/api/**', '~/pages/**', '../../../pages/**', '~/lib/**', '../../../lib/**'],
+            message: 'The Service Point domain cannot depend on transport or UI modules.',
+          },
+        ],
+      }],
+    },
   }
 )

@@ -117,6 +117,56 @@ export const business_locations = sqliteTable("business_locations", {
 	unique("business_locations_organization_id_site_id_id_unique").on(table.organization_id, table.site_id, table.id),
 ]);
 
+export const service_points = sqliteTable("service_points", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
+	label: text().notNull(),
+	status: text().default("active").notNull(),
+	created_by: text().references(() => user.id, { onDelete: "set null" } ),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("service_points_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
+	index("idx_service_points_location_status").on(table.organization_id, table.site_id, table.location_id, table.status),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id],
+		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
+		name: "service_points_location_scope_fk",
+	}).onUpdate("cascade").onDelete("cascade"),
+	check("service_points_label_check", sql`length(trim(label)) BETWEEN 1 AND 120`),
+	check("service_points_status_check", sql`status IN ('active','paused')`),
+]);
+
+export const ordering_qr_credentials = sqliteTable("ordering_qr_credentials", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" } ),
+	service_point_id: text(),
+	version: integer().notNull(),
+	token_hash: text().notNull(),
+	status: text().default("active").notNull(),
+	created_by: text().references(() => user.id, { onDelete: "set null" } ),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	revoked_at: text(),
+}, (table) => [
+	uniqueIndex("idx_ordering_qr_token_hash_unique").on(table.token_hash),
+	uniqueIndex("idx_ordering_qr_service_point_version_unique").on(table.service_point_id, table.version).where(sql`service_point_id IS NOT NULL`),
+	uniqueIndex("idx_ordering_qr_one_active_per_service_point").on(table.service_point_id).where(sql`service_point_id IS NOT NULL AND status = 'active'`),
+	index("idx_ordering_qr_scope_status").on(table.organization_id, table.site_id, table.location_id, table.status),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.service_point_id],
+		foreignColumns: [service_points.organization_id, service_points.site_id, service_points.location_id, service_points.id],
+		name: "ordering_qr_service_point_scope_fk",
+	}).onUpdate("cascade").onDelete("cascade"),
+	check("ordering_qr_version_check", sql`version > 0`),
+	check("ordering_qr_token_hash_check", sql`length(token_hash) = 64 AND token_hash NOT GLOB '*[^0-9a-f]*'`),
+	check("ordering_qr_status_check", sql`status IN ('active','revoked')`),
+	check("ordering_qr_revoked_at_check", sql`(status = 'active' AND revoked_at IS NULL) OR (status = 'revoked' AND revoked_at IS NOT NULL)`),
+]);
+
 export const canary_runs = sqliteTable("canary_runs", {
 	id: text().primaryKey(),
 	run_type: text().notNull(),

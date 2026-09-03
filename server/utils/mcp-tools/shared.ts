@@ -1061,6 +1061,7 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_site_analytics',
   'resolve_agent_guidance',
   'review_agent_guidance_candidate',
+  'list_service_points',
 ] as const
 
 export const BOUNDED_WRITE_TOOL_NAMES = [
@@ -1071,6 +1072,9 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'update_notification_settings',
   'attach_media',
   'reorder_media',
+  'create_service_point',
+  'update_service_point',
+  'provision_service_point_qr',
 ] as const
 
 export const OPEN_WORLD_WRITE_TOOL_NAMES = [
@@ -1125,7 +1129,11 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'sync_domain',
 ] as const
 
-export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = ['remove_media'] as const
+export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = [
+  'remove_media',
+  'rotate_service_point_qr',
+  'revoke_service_point_qr',
+] as const
 
 export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_media_asset',

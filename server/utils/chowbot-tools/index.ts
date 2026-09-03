@@ -12,6 +12,7 @@ import { NOTIFICATIONS_CHOWBOT_TOOLS } from './notifications'
 import { POSTS_CHOWBOT_TOOLS } from './posts'
 import { QA_CHOWBOT_TOOLS } from './qa'
 import { REVIEWS_CHOWBOT_TOOLS } from './reviews'
+import { SERVICE_POINT_CHOWBOT_TOOLS } from './service-points'
 import { SETTINGS_CHOWBOT_TOOLS } from './settings'
 import { SITES_CHOWBOT_TOOLS } from './sites'
 import { SUBMISSIONS_CHOWBOT_TOOLS } from './submissions'
@@ -30,6 +31,7 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   ...POSTS_CHOWBOT_TOOLS,
   ...QA_CHOWBOT_TOOLS,
   ...REVIEWS_CHOWBOT_TOOLS,
+  ...SERVICE_POINT_CHOWBOT_TOOLS,
   ...SETTINGS_CHOWBOT_TOOLS,
   ...SITES_CHOWBOT_TOOLS,
   ...SUBMISSIONS_CHOWBOT_TOOLS,
@@ -44,6 +46,8 @@ export const CHOWBOT_CONFIRM_REQUIRED = new Set([
   "delete_product",
   "delete_product_category",
   "delete_location",
+  "rotate_service_point_qr",
+  "revoke_service_point_qr",
   "delete_media_asset",
   "delete_location_qa",
   "delete_site_qa",

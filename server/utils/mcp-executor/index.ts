@@ -27,6 +27,7 @@ import { handleOnboardingTools } from './onboarding'
 import { handlePostsTools } from './posts'
 import { handleQaTools } from './qa'
 import { handleReviewsTools } from './reviews'
+import { handleServicePointTools } from './service-points'
 import { handleSettingsTools } from './settings'
 import { handleSitesTools } from './sites'
 import { handleSubmissionsTools } from './submissions'
@@ -64,6 +65,7 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   posts: handlePostsTools,
   qa: handleQaTools,
   reviews: handleReviewsTools,
+  service_points: handleServicePointTools,
   settings: handleSettingsTools,
   sites: handleSitesTools,
   submissions: handleSubmissionsTools,

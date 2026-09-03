@@ -601,13 +601,15 @@ export function buildSiteTransferMutationBatch(input: {
   const facebookConnections = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'facebook_pages_connections')
   const googleAnalyticsConnections = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'google_analytics_connections')
   const siteLanguageLicenses = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'site_language_licenses')
-  if (!facebookConnections || !googleAnalyticsConnections || !siteLanguageLicenses) {
+  const orderingQrCredentials = SITE_TRANSFER_REVOKE_TABLES.find(table => table === 'ordering_qr_credentials')
+  if (!facebookConnections || !googleAnalyticsConnections || !siteLanguageLicenses || !orderingQrCredentials) {
     throw new Error('Site transfer policy is missing a revoke table')
   }
   batch.push(
     { query: `DELETE FROM ${facebookConnections} WHERE site_id = ?`, params: [input.siteId] },
     { query: `DELETE FROM ${googleAnalyticsConnections} WHERE site_id = ?`, params: [input.siteId] },
     { query: `DELETE FROM ${siteLanguageLicenses} WHERE site_id = ? AND status = 'disabled'`, params: [input.siteId] },
+    { query: `DELETE FROM ${orderingQrCredentials} WHERE site_id = ?`, params: [input.siteId] },
     { query: `UPDATE site_locales SET status = 'disabled', updated_at = ? WHERE site_id = ? AND is_source = 0`, params: [now, input.siteId] },
     {
       query: `UPDATE mcp_workspace_preferences

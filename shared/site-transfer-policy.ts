@@ -56,6 +56,7 @@ export const SITE_TRANSFER_REPARENT_TABLES = [
   'work_requests',
   'experiences',
   'tenant_page_variants',
+  'service_points',
 ] as const
 
 export const SITE_TRANSFER_RETAIN_TABLES = [
@@ -74,6 +75,7 @@ export const SITE_TRANSFER_REVOKE_TABLES = [
   'google_analytics_connections',
   'mcp_workspace_preferences',
   'site_language_licenses',
+  'ordering_qr_credentials',
 ] as const
 
 // Epoch 3 inherits access directly from the destination organization. No billing,
