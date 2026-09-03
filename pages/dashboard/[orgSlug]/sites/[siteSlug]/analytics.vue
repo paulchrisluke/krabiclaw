@@ -88,7 +88,7 @@
           </UCard>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <UCard v-for="metric in metricCards" :key="metric.label" variant="soft">
             <div class="flex items-start justify-between gap-3">
               <div>

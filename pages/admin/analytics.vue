@@ -10,11 +10,11 @@
 
     <template #body>
       <div class="space-y-6">
-        <div v-if="analyticsLoading" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div v-if="analyticsLoading" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <USkeleton v-for="i in 6" :key="i" class="h-24 rounded-xl" />
         </div>
         <div v-else>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
             <UCard v-for="stat in analyticsStats" :key="stat.label">
               <p class="text-xs font-semibold uppercase tracking-wide text-muted">{{ stat.label }}</p>
               <p class="mt-1 text-2xl font-bold text-highlighted">{{ stat.value }}</p>

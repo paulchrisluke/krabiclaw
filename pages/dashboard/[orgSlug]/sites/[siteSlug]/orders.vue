@@ -36,7 +36,7 @@
             </div>
           </template>
 
-          <div class="grid gap-4 md:grid-cols-3">
+          <div class="grid gap-4 sm:grid-cols-3">
             <UFormField label="Grab" :error="urlError(location.form.grab_url)">
               <UInput v-model="location.form.grab_url" type="url" placeholder="https://grab.onelink.me/..." />
             </UFormField>

@@ -20,9 +20,10 @@
  * - lg adds the persistent sidebar and switches pane topology: split editors,
  *   calendar grid, and side-by-side previews.
  *
- * sm and xl are content-density breakpoints only — grid columns, stacking,
- * padding, type scale. They must never change navigation or pane topology, and
- * neither may any other breakpoint.
+ * sm, lg and xl carry content density — grid columns, stacking, padding, type
+ * scale. `md:` is reserved for navigation chrome, so a `md:` in a diff always
+ * means the nav swap and nothing else; reach for sm or lg for density instead.
+ * No breakpoint other than md and lg may change navigation or pane topology.
  */
 
 /*

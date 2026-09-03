@@ -40,7 +40,7 @@
               <USkeleton class="h-10" />
               <USkeleton class="h-14" />
             </div>
-            <div v-else class="grid gap-5 md:grid-cols-2">
+            <div v-else class="grid gap-5 sm:grid-cols-2">
               <UFormField label="Title" required>
                 <UInput v-model="form.title" aria-label="Links page title" maxlength="160" />
               </UFormField>
@@ -80,8 +80,8 @@
                 <UButton icon="i-lucide-arrow-down" color="neutral" variant="ghost" :disabled="index === items.length - 1" :aria-label="`Move ${item.label || 'link'} down`" @click="moveItem(index, 1)" />
                 <UButton icon="i-lucide-trash-2" color="error" variant="ghost" :aria-label="`Delete ${item.label || 'link'}`" @click="deleteItem(index)" />
               </div>
-              <div class="mt-4 grid gap-4 md:grid-cols-2">
-                <UFormField class="md:col-span-2" label="Destination" required>
+              <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <UFormField class="sm:col-span-2" label="Destination" required>
                   <UInput v-model="item.destination" aria-label="Link destination" placeholder="/reservations or https://example.com" maxlength="2048" />
                 </UFormField>
               </div>
