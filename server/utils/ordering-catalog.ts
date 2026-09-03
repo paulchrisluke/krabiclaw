@@ -10,6 +10,7 @@ import type {
   ModifierGroupInput,
   ProductChannelAvailability,
 } from '~/shared/ordering-catalog'
+import { isProductAvailableForOrdering } from '~/shared/ordering-catalog'
 import { requireTrimmedProductString } from '~/server/utils/product-validation'
 
 const MODIFIER_NAME_LIMIT = 120
@@ -261,11 +262,8 @@ export function replaceProductModifierQueries(input: {
 export function buildCatalogLineItemSnapshot(product: Product, selectedOptionIds: readonly string[], quantity = 1): CatalogLineItemSnapshot {
   if (!product.price) throw new HTTPError({ statusCode: 409, statusMessage: 'Product has no active Price' })
   if (!product.menu_placement?.is_published) throw new HTTPError({ statusCode: 409, statusMessage: 'Product is not published on the menu' })
-  if (!product.channel_availability.some(row => row.channel === 'ordering' && row.is_available)) {
-    throw new HTTPError({ statusCode: 409, statusMessage: 'Product is not available for ordering' })
-  }
   if (!Number.isSafeInteger(quantity) || quantity < 1) throw new HTTPError({ statusCode: 400, statusMessage: 'Quantity must be a positive integer' })
-  if (!product.inventory || product.inventory.status !== 'available' || product.inventory.available_quantity < quantity) {
+  if (!isProductAvailableForOrdering(product, quantity)) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Product does not have sufficient current inventory' })
   }
   if (new Set(selectedOptionIds).size !== selectedOptionIds.length) {

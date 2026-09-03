@@ -51,7 +51,7 @@ async function createOrderingProduct(request: APIRequestContext, baseURL: string
     },
   })
   expect(response.status()).toBe(200)
-  return mcpData<{ product: { id: string; inventory: null } }>(await response.json()).product
+  return mcpData<{ product: { id: string; available: boolean; inventory: null } }>(await response.json()).product
 }
 
 test.describe('location inventory authority', () => {
@@ -61,11 +61,13 @@ test.describe('location inventory authority', () => {
     const locationId = await createScratchLocation(request, baseURL!, MCP_GROWTH_SITE_ID)
     const product = await createOrderingProduct(request, baseURL!, locationId, `Inventory ${Date.now()}`)
     expect(product.inventory).toBeNull()
+    expect(product.available).toBe(false)
 
     const beforeAuthority = await request.get(`${baseURL}/api/public/sites/${MCP_GROWTH_SITE_ID}/ordering-catalog`)
     expect(beforeAuthority.status()).toBe(200)
-    const beforeProduct = (await beforeAuthority.json() as { products: Array<{ id: string; inventory: unknown }> }).products.find(row => row.id === product.id)
+    const beforeProduct = (await beforeAuthority.json() as { products: Array<{ id: string; available: boolean; inventory: unknown }> }).products.find(row => row.id === product.id)
     expect(beforeProduct?.inventory).toBeNull()
+    expect(beforeProduct?.available).toBe(false)
 
     const authority = await request.put(`${baseURL}/api/editor/sites/${MCP_GROWTH_SITE_ID}/locations/${locationId}/inventory/authority`, {
       data: { authority_type: 'krabiclaw' },
@@ -105,8 +107,8 @@ test.describe('location inventory authority', () => {
     expect((await dashboard.json() as { items: Array<{ product_id: string; available_quantity: number }> }).items).toContainEqual(expect.objectContaining({ product_id: product.id, available_quantity: 8 }))
     const publicCatalog = await request.get(`${baseURL}/api/public/sites/${MCP_GROWTH_SITE_ID}/ordering-catalog`)
     expect(publicCatalog.status()).toBe(200)
-    expect((await publicCatalog.json() as { products: Array<{ id: string; inventory: { status: string; available_quantity: number } }> }).products)
-      .toContainEqual(expect.objectContaining({ id: product.id, inventory: expect.objectContaining({ status: 'available', available_quantity: 8 }) }))
+    expect((await publicCatalog.json() as { products: Array<{ id: string; available: boolean; inventory: { status: string; available_quantity: number } }> }).products)
+      .toContainEqual(expect.objectContaining({ id: product.id, available: true, inventory: expect.objectContaining({ status: 'available', available_quantity: 8 }) }))
 
     const concurrentProduct = await createOrderingProduct(request, baseURL!, locationId, `Concurrent Inventory ${Date.now()}`)
     const concurrentKey = `concurrent-${crypto.randomUUID()}`
@@ -128,6 +130,12 @@ test.describe('location inventory authority', () => {
       data: { authority_type: 'krabiclaw' },
     })
     expect(editorAuthorityChange.status()).toBe(403)
+    const editorMcpAuthorityChange = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'set_inventory_authority',
+      args: { site_id: 'site-pottery-house', location_id: editorLocationId, authority_type: 'krabiclaw' },
+    })
+    expect(editorMcpAuthorityChange.status()).toBe(200)
+    expect((await editorMcpAuthorityChange.json()).result?.isError).toBe(true)
   })
 
   test('push-only external authority deduplicates events, orders resource versions, fails stale/unresolved stock closed, and rejects session auth', async ({ request, baseURL }) => {
@@ -176,10 +184,15 @@ test.describe('location inventory authority', () => {
       outcome: 'unresolved', inventory: { quantity_on_hand: 5, status: 'unavailable' },
     })
     const unresolvedCatalog = await request.get(`${baseURL}/api/public/sites/${MCP_GROWTH_SITE_ID}/ordering-catalog`)
-    expect((await unresolvedCatalog.json() as { products: Array<{ id: string; inventory: { state: string; status: string } }> }).products)
-      .toContainEqual(expect.objectContaining({ id: product.id, inventory: expect.objectContaining({ state: 'unresolved', status: 'unavailable' }) }))
+    expect((await unresolvedCatalog.json() as { products: Array<{ id: string; available: boolean; inventory: { state: string; status: string } }> }).products)
+      .toContainEqual(expect.objectContaining({ id: product.id, available: false, inventory: expect.objectContaining({ state: 'unresolved', status: 'unavailable' }) }))
     await expect(push(`resolved-${crypto.randomUUID()}`, 5, 6)).resolves.toMatchObject({ outcome: 'applied', inventory: { quantity_on_hand: 6, status: 'available' } })
     await expect(push(`expired-${crypto.randomUUID()}`, 6, 6, product.id, new Date(Date.now() - 1_000).toISOString())).resolves.toMatchObject({ outcome: 'applied', inventory: { status: 'unavailable' } })
+    const staleProductResponse = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'get_product', args: { site_id: MCP_GROWTH_SITE_ID, product_id: product.id },
+    })
+    expect(staleProductResponse.status()).toBe(200)
+    expect(mcpData<{ product: { available: boolean } }>(await staleProductResponse.json()).product.available).toBe(false)
 
     const crossTenant = await request.post(`${baseURL}/api/integrations/inventory/sites/${MCP_GROWTH_SERVICE_SITE_ID}/locations/${otherLocationId}/events`, {
       headers: { Authorization: `Bearer ${accessToken}` },

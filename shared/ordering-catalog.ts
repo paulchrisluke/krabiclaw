@@ -1,4 +1,5 @@
 import type { CurrencyCode } from './currencies.ts'
+import type { InventoryAvailability } from './inventory.ts'
 import type { PriceTaxBehavior, PriceUnit } from './prices.ts'
 
 export const CATALOG_CHANNELS = ['seo', 'ordering'] as const
@@ -75,6 +76,23 @@ export interface ModifierGroupInput {
 export interface CatalogAvailabilityInput {
   seo?: boolean
   ordering?: boolean
+}
+
+interface OrderingAvailabilityInput {
+  channel_availability: readonly Pick<ProductChannelAvailability, 'channel' | 'is_available'>[]
+  inventory: Pick<InventoryAvailability, 'status' | 'available_quantity'> | null
+}
+
+export function isProductAvailableForOrdering(product: OrderingAvailabilityInput, quantity = 1): boolean {
+  return Number.isSafeInteger(quantity)
+    && quantity > 0
+    && product.channel_availability.some(channel => channel.channel === 'ordering' && channel.is_available)
+    && product.inventory?.status === 'available'
+    && product.inventory.available_quantity >= quantity
+}
+
+export function projectProductOrderingAvailability<T extends OrderingAvailabilityInput & { available: boolean }>(product: T): T {
+  return { ...product, available: isProductAvailableForOrdering(product) }
 }
 
 export interface CatalogLineModifierSnapshot {

@@ -9,6 +9,7 @@ import type { McpExecutorContext } from './shared'
 import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } from './shared'
 import { applyInventoryMovement, listLocationInventory, setInventoryAuthority } from '~/server/utils/inventory'
 import type { SetInventoryAuthorityInput } from '~/shared/inventory'
+import { projectProductOrderingAvailability } from '~/shared/ordering-catalog'
 
 async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   await assertResourceAccess(ctx.site.db, {
@@ -31,27 +32,28 @@ async function resolveStoredProduct(ctx: McpExecutorContext, productId: string) 
 }
 
 function productListItem(product: Product) {
+  const projected = projectProductOrderingAvailability(product)
   return {
-    id: product.id,
-    location_id: product.location_id,
-    category: product.category,
-    name: product.name,
-    description: product.description,
-    price: product.price
+    id: projected.id,
+    location_id: projected.location_id,
+    category: projected.category,
+    name: projected.name,
+    description: projected.description,
+    price: projected.price
       ? {
-          id: product.price.id,
-          amount_minor: product.price.amount_minor,
-          currency: product.price.currency,
-          unit: product.price.unit,
-          tax_behavior: product.price.tax_behavior,
-          compare_at_amount_minor: product.price.compare_at_amount_minor,
+          id: projected.price.id,
+          amount_minor: projected.price.amount_minor,
+          currency: projected.price.currency,
+          unit: projected.price.unit,
+          tax_behavior: projected.price.tax_behavior,
+          compare_at_amount_minor: projected.price.compare_at_amount_minor,
         }
       : null,
-    is_visible: product.is_visible,
-    available: product.available,
-    sort_order: product.sort_order,
-    channel_availability: product.channel_availability,
-    inventory: product.inventory,
+    is_visible: projected.is_visible,
+    available: projected.available,
+    sort_order: projected.sort_order,
+    channel_availability: projected.channel_availability,
+    inventory: projected.inventory,
   }
 }
 
@@ -65,15 +67,15 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
       const page = paginateMcpCollection(products, args, { resource: `products:${site.siteId}:${locationId}` })
       return { products: page.items.map(productListItem), page_info: page.page_info }
     }
-    case 'get_product': return { product: await resolveStoredProduct(ctx, requiredString(args, 'product_id')) }
+    case 'get_product': return { product: projectProductOrderingAvailability(await resolveStoredProduct(ctx, requiredString(args, 'product_id'))) }
     case 'create_product': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { product: await createProduct(site.db, site.organizationId, site.siteId, locationId, omit(args, ['location_id']) as unknown as CreateProductInput, site.userId, site.env) }
+      return { product: projectProductOrderingAvailability(await createProduct(site.db, site.organizationId, site.siteId, locationId, omit(args, ['location_id']) as unknown as CreateProductInput, site.userId, site.env)) }
     }
     case 'update_product': {
       const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
-      return { product: await updateProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, omit(args, ['product_id']) as UpdateProductInput, site.userId, site.env) }
+      return { product: projectProductOrderingAvailability(await updateProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, omit(args, ['product_id']) as UpdateProductInput, site.userId, site.env)) }
     }
     case 'delete_product': {
       const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
@@ -107,17 +109,20 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
     case 'batch_create_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { products: await createProductsBatch(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as CreateProductInput[], site.userId) }
+      const products = await createProductsBatch(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as CreateProductInput[], site.userId)
+      return { products: products.map(projectProductOrderingAvailability) }
     }
     case 'sync_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return { products: await syncProducts(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as SyncProductInput[], site.userId, args.set_missing_unavailable === true) }
+      const products = await syncProducts(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as SyncProductInput[], site.userId, args.set_missing_unavailable === true)
+      return { products: products.map(projectProductOrderingAvailability) }
     }
     case 'import_products_from_media': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      return extractProductsFromMediaAsset(site.db, site.env, { organizationId: site.organizationId, siteId: site.siteId, userId: site.userId, assetId: requiredString(args, 'asset_id'), locationId, sessionId: site.sessionId })
+      const result = await extractProductsFromMediaAsset(site.db, site.env, { organizationId: site.organizationId, siteId: site.siteId, userId: site.userId, assetId: requiredString(args, 'asset_id'), locationId, sessionId: site.sessionId })
+      return { ...result, products: result.products.map(projectProductOrderingAvailability) }
     }
     case 'get_location_inventory': {
       const locationId = requiredString(args, 'location_id')
@@ -136,7 +141,7 @@ export async function handleProductsTools(ctx: McpExecutorContext): Promise<unkn
               provider_account_reference: requiredString(args, 'provider_account_reference'), external_location_reference: requiredString(args, 'external_location_reference'),
             }
           : (() => { throw mcpProtocolError(MCP_ERROR.invalidParams, 'Unsupported inventory authority') })()
-      return { authority: await setInventoryAuthority(site.db, site.organizationId, site.siteId, locationId, input, site.userId) }
+      return { authority: await setInventoryAuthority(site.db, site.organizationId, site.siteId, locationId, input, { id: site.userId, role: site.role }) }
     }
     case 'record_inventory_movement':
     case 'reserve_inventory':

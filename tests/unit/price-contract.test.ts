@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { buildCatalogLineItemSnapshot } from '../../server/utils/ordering-catalog.ts'
 import type { Product } from '../../server/types/products.ts'
+import { isProductAvailableForOrdering } from '../../shared/ordering-catalog.ts'
 import {
   assertNonOverlappingPrices,
   formatMinorAmount,
@@ -72,6 +73,11 @@ test('repricing closes the current immutable record and creates a replacement', 
   assert.equal(snapshot.unit_amount_minor, base.amount_minor)
   assert.equal(snapshot.modifiers[0]?.modifier_option_name, 'Hot')
   assert.equal(snapshot.product_provider_mappings[0]?.external_id, 'external-product')
+  assert.equal(isProductAvailableForOrdering(product), true)
+  assert.equal(isProductAvailableForOrdering({ ...product, inventory: null }), false)
+  assert.equal(isProductAvailableForOrdering({ ...product, inventory: { ...product.inventory!, status: 'unavailable', unavailable_reason: 'stale' } }), false)
+  assert.equal(isProductAvailableForOrdering({ ...product, channel_availability: [{ ...product.channel_availability[0]!, is_available: false }] }), false)
+  assert.equal(isProductAvailableForOrdering(product, 11), false)
   assert.throws(() => buildCatalogLineItemSnapshot(product, ['hot'], 11), /sufficient current inventory/)
   assert.throws(() => buildCatalogLineItemSnapshot({ ...product, inventory: null }, ['hot']), /sufficient current inventory/)
 })

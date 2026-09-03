@@ -36,7 +36,7 @@
                 <span class="shrink-0 text-sm font-semibold text-default">{{ formatProductMoney(product.price, locale) }}</span>
               </div>
               <p v-if="product.description" class="mt-2 text-sm leading-relaxed text-muted">{{ product.description }}</p>
-              <p v-if="product.inventory?.status !== 'available'" class="mt-3 text-sm font-medium text-warning">Currently unavailable</p>
+              <p v-if="!product.available" class="mt-3 text-sm font-medium text-warning">Currently unavailable</p>
             </div>
           </div>
 

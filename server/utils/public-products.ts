@@ -13,6 +13,7 @@ import {
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { projectProductOrderingAvailability } from '~/shared/ordering-catalog'
 
 interface PublicProductSiteRow {
   id: string
@@ -100,7 +101,8 @@ export async function loadPublicProductCollection(
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows.filter(location => locationHasProducts(resolved.site, location))
   if (locationSlug && locations.length !== 1) return null
-  const products = await listPublicSiteProducts(db, siteId, locations.map(location => location.id), options)
+  const products = (await listPublicSiteProducts(db, siteId, locations.map(location => location.id), options))
+    .map(projectProductOrderingAvailability)
   return { ...resolved, locations, products }
 }
 
@@ -133,8 +135,9 @@ export async function loadPublicProductDetail(
     const collection = await loadPublicProductCollection(db, siteId, routeKind, locationSlug)
     const location = collection?.locations[0]
     if (!collection || !location) return null
-    const product = await getPublicProductBySlug(db, siteId, location.id, productSlug)
-    if (!product) return null
+    const storedProduct = await getPublicProductBySlug(db, siteId, location.id, productSlug)
+    if (!storedProduct) return null
+    const product = projectProductOrderingAvailability(storedProduct)
     const localeRepresentations = await listPublicLocaleRepresentations(db, {
       organizationId: collection.site.organization_id,
       siteId,

@@ -1,5 +1,6 @@
 import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { hasInventoryAuthorityPermission } from '~/server/utils/auth'
 import type {
   ExternalInventoryEventInput,
   ExternalInventoryEventResult,
@@ -142,10 +143,13 @@ export async function setInventoryAuthority(
   siteId: string,
   locationId: string,
   input: SetInventoryAuthorityInput,
-  actorId: string,
+  actor: { id: string; role: string },
 ): Promise<InventoryAuthority> {
   if (!input || (input.authority_type !== 'krabiclaw' && input.authority_type !== 'external')) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'authority_type must be krabiclaw or external' })
+  }
+  if (!await hasInventoryAuthorityPermission(organizationId, actor.role)) {
+    throw new HTTPError({ statusCode: 403, statusMessage: 'Integration management permission is required' })
   }
   await assertLocation(db, organizationId, siteId, locationId)
   const existing = await getInventoryAuthority(db, organizationId, siteId, locationId)
@@ -176,7 +180,7 @@ export async function setInventoryAuthority(
       provider_account_reference, external_location_reference, created_by, updated_by, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [authorityId, organizationId, siteId, locationId, input.authority_type, external?.provider ?? null,
-      external?.oauthClientId ?? null, external?.account ?? null, external?.location ?? null, actorId, actorId, now, now],
+      external?.oauthClientId ?? null, external?.account ?? null, external?.location ?? null, actor.id, actor.id, now, now],
   }], { operation: 'declare inventory authority' })
   return (await getInventoryAuthority(db, organizationId, siteId, locationId))!
 }
