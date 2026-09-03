@@ -2,10 +2,8 @@ import type { AiTool } from '~/server/utils/ai-gateway'
 import { SETTINGS_TOOLS } from '~/server/utils/mcp-tools/settings'
 import { chowbotToolFromMcp } from './from-mcp'
 
-// Only get_dashboard_link is shared with MCP's settings domain — domain
-// management (create_domain, sync_domain, etc.) is intentionally not
-// exposed to ChowBot (ACME token rotation is a platform-admin concern), so it's
-// rotation risk), so it's excluded here rather than derived wholesale.
+// Only get_dashboard_link is shared with MCP's settings domain; domain
+// management tools are intentionally not exposed on ChowBot.
 const SETTINGS_DOMAIN_TOOL_NAMES = new Set(['get_dashboard_link'])
 
 // get_site_settings (mcp-tools/sites.ts) and update_media_asset

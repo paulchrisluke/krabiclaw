@@ -863,11 +863,6 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_notification_settings":
-    case "update_notification_settings": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "update_location_qa":
     case "reorder_location_qa": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
@@ -882,10 +877,6 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    // Domain management (create_domain, sync_domain, etc.) also lives in
-    // mcp-executor/settings.ts but is intentionally not exposed to ChowBot —
-    // ACME token rotation is a platform-admin concern.
-    // Only get_dashboard_link overlaps between the two surfaces.
     case "get_dashboard_link": {
       return runMcpExecutorToolForChowbot(executorSite, "get_dashboard_link", input);
     }

@@ -1035,7 +1035,6 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_blog_posts',
   'get_blog_post',
   'get_site_media_assets',
-  'get_facebook_connection',
   'get_dashboard_link',
   'list_tenant_pages',
   'get_tenant_page',
@@ -1055,7 +1054,6 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_product_catalog_localization',
   'get_contact_inquiries',
   'get_reservation_inquiries',
-  'get_notification_settings',
   'list_work_requests',
   'get_site_domains',
   'get_site_analytics',
@@ -1068,7 +1066,6 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'analyze_document',
   'update_media_asset',
   'update_experience_booking',
-  'update_notification_settings',
   'attach_media',
   'reorder_media',
 ] as const
@@ -1102,8 +1099,6 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'move_product_category',
   'reorder_blog_posts',
   'publish_post',
-  'publish_to_facebook',
-  'sync_facebook_page',
   'create_tenant_page',
   'update_tenant_page',
   'change_tenant_page_path',
@@ -1120,9 +1115,6 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'reply_to_review',
   'create_experience',
   'update_experience',
-  'create_domain',
-  'set_canonical_domain',
-  'sync_domain',
 ] as const
 
 export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = ['remove_media'] as const
@@ -1143,7 +1135,6 @@ export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_owner_entered_site_review',
   'delete_experience',
   'delete_resource_localization',
-  'delete_domain',
 ] as const
 
 export function buildToolAnnotationsByName() {

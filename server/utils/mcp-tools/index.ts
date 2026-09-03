@@ -7,13 +7,11 @@ import { BLOG_TOOLS } from './blog'
 import { CONTENT_TOOLS } from './content'
 import { CONTEXT_TOOLS } from './context'
 import { EXPERIENCES_TOOLS } from './experiences'
-import { INTEGRATIONS_TOOLS } from './integrations'
 import { LOCALES_TOOLS } from './locales'
 import { LOCATIONS_TOOLS } from './locations'
 import { MANAGED_SERVICE_TOOLS } from './managed-service'
 import { MEDIA_TOOLS } from './media'
 import { PRODUCTS_TOOLS } from './products'
-import { NOTIFICATIONS_TOOLS } from './notifications'
 import { ONBOARDING_TOOLS } from './onboarding'
 import { POSTS_TOOLS } from './posts'
 import { QA_TOOLS } from './qa'
@@ -30,13 +28,11 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...CONTENT_TOOLS,
   ...CONTEXT_TOOLS,
   ...EXPERIENCES_TOOLS,
-  ...INTEGRATIONS_TOOLS,
   ...LOCALES_TOOLS,
   ...LOCATIONS_TOOLS,
   ...MANAGED_SERVICE_TOOLS,
   ...MEDIA_TOOLS,
   ...PRODUCTS_TOOLS,
-  ...NOTIFICATIONS_TOOLS,
   ...ONBOARDING_TOOLS,
   ...POSTS_TOOLS,
   ...QA_TOOLS,

@@ -1436,69 +1436,6 @@
       }
     },
     {
-      "name": "create_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain": {
-            "description": "Custom domain to add, e.g. \"www.example.com\" or \"example.com\".",
-            "type": "string"
-          },
-          "include_www": {
-            "description": "If true (default), provision both www and the apex domain as a pair.",
-            "type": "boolean"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "domains": {
-            "description": "Newly created domain records (www + apex pair).",
-            "items": {
-              "properties": {
-                "domain": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "instructions": {
-                  "description": "DNS records to add at the registrar.",
-                  "type": "object"
-                },
-                "role": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "domain",
-                "role",
-                "status"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "domains"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "create_experience",
       "inputSchema": {
         "additionalProperties": true,
@@ -3161,41 +3098,6 @@
       }
     },
     {
-      "name": "delete_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain_id": {
-            "description": "ID of the custom domain to delete.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          },
-          "domain_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "deleted",
-          "domain_id"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "delete_experience",
       "inputSchema": {
         "additionalProperties": true,
@@ -4528,51 +4430,6 @@
       }
     },
     {
-      "name": "get_facebook_connection",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "connected": {
-            "type": "boolean"
-          },
-          "facebook_page_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "facebook_page_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "enum": [
-              "active",
-              "disabled",
-              "error"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "connected"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_location",
       "inputSchema": {
         "additionalProperties": true,
@@ -4823,53 +4680,6 @@
         },
         "required": [
           "location"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_notification_settings",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "notifications": {
-            "properties": {
-              "channels": {
-                "items": {
-                  "enum": [
-                    "email",
-                    "whatsapp"
-                  ],
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "whatsapp_phone": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "whatsapp_phone",
-              "channels"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "notifications"
         ],
         "type": "object"
       }
@@ -10562,52 +10372,6 @@
       }
     },
     {
-      "name": "publish_to_facebook",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "link": {
-            "description": "Optional URL to attach to the post.",
-            "type": "string"
-          },
-          "message": {
-            "description": "Post text content.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "post_id": {
-            "description": "Facebook post ID.",
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success",
-          "post_id"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "put_resource_localization",
       "inputSchema": {
         "additionalProperties": false,
@@ -12724,49 +12488,6 @@
       }
     },
     {
-      "name": "set_canonical_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain_id": {
-            "description": "ID of the domain to promote to canonical.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "domain": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "domain",
-          "role",
-          "status"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "set_default_currency",
       "inputSchema": {
         "additionalProperties": true,
@@ -13482,145 +13203,6 @@
         "required": [
           "site",
           "pages"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "sync_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain_id": {
-            "description": "ID of the domain to sync.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "dns_status": {
-            "type": "string"
-          },
-          "domain": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "instructions": {
-            "type": "object"
-          },
-          "ssl_status": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "domain",
-          "status"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "sync_facebook_page",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "description": "Location to sync page info into. Required to actually update the tenant site.",
-            "type": "string"
-          },
-          "page_id": {
-            "description": "Switch to a different Facebook Page by ID. Omit to use the currently connected page.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page": {
-            "properties": {
-              "about": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "city": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "cover": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "fan_count": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "phone": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "picture": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "website": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "type": "object"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "synced_to_location": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success",
-          "synced_to_location",
-          "page"
         ],
         "type": "object"
       }
@@ -16160,71 +15742,6 @@
         },
         "required": [
           "updated"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "update_notification_settings",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "channels": {
-            "description": "Owner alert channels. Use one or both of email and whatsapp.",
-            "items": {
-              "enum": [
-                "email",
-                "whatsapp"
-              ],
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "whatsapp_phone": {
-            "description": "Site-level WhatsApp number for owner alerts. Omit to leave unchanged.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "notifications": {
-            "properties": {
-              "channels": {
-                "items": {
-                  "enum": [
-                    "email",
-                    "whatsapp"
-                  ],
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "whatsapp_phone": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "whatsapp_phone",
-              "channels"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "notifications"
         ],
         "type": "object"
       }

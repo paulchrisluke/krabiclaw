@@ -90,7 +90,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'publish_post',
-      description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image.',
+      description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social. Instagram additionally requires the post to have an image.',
       domain: 'posts',
       minimumRole: 'editor',
       confirmRequired: true,

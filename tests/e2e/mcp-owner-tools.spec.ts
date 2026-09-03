@@ -108,26 +108,10 @@ test.describe('stateless MCP server', () => {
 
   })
 
-  test('owner can use notification settings and submission inquiry tools', async ({ request, baseURL }) => {
+  test('owner can use submission inquiry tools', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
-
-    const notifications = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'update_notification_settings',
-      args: { site_id: siteId, whatsapp_phone: '+1 415 555 2671' },
-    })
-    expect(notifications.status()).toBe(200)
-    const notificationsBody = await notifications.json()
-    expect(mcpData<{ notifications: { whatsapp_phone: string } }>(notificationsBody).notifications.whatsapp_phone).toContain('+14155552671')
-
-    const notificationsRead = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_notification_settings',
-      args: { site_id: siteId },
-    })
-    expect(notificationsRead.status()).toBe(200)
 
     const publicContact = await request.post(`${baseURL}/api/public/sites/${siteId}/contact`, {
       data: { name: 'MCP Contact', email: `mcp-contact-${Date.now()}@example.test`, message: 'hello from MCP e2e' },
