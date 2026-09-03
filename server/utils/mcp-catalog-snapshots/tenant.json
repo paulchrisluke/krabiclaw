@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:aaef4142bf234662dbcf3373db5e0964663d92f966fdfc8021042d3244699793",
+  "fingerprint": "sha256:329bba04d41c53fd1a53a67f10a31ac35fed8cf66b51a697f0094e9d4a938881",
   "tools": [
     {
       "name": "analyze_document",
@@ -2038,6 +2038,9 @@
           "answer": {
             "description": "Optional answer text.",
             "type": "string"
+          },
+          "is_owner_answer": {
+            "type": "boolean"
           },
           "location_id": {
             "type": "string"
@@ -15341,6 +15344,9 @@
               "string",
               "null"
             ]
+          },
+          "is_owner_answer": {
+            "type": "boolean"
           },
           "location_id": {
             "type": "string"

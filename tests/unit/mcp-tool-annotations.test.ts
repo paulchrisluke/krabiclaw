@@ -56,4 +56,9 @@ test('MCP annotation validation accepts only internally consistent hint combinat
     const tool = MCP_PUBLIC_TOOLS.find(candidate => candidate.name === name)
     assert.ok(tool && 'city' in tool.inputSchema.properties, `${name} must accept the canonical city field`)
   }
+
+  for (const name of ['create_location_qa', 'update_location_qa']) {
+    const tool = MCP_PUBLIC_TOOLS.find(candidate => candidate.name === name)
+    assert.ok(tool && 'is_owner_answer' in tool.inputSchema.properties, `${name} must accept the canonical is_owner_answer field`)
+  }
 })
