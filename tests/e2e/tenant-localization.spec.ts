@@ -130,40 +130,38 @@ test('published Thai content saves through the CMS and renders without English f
     await putLocalization(owner, 'site_consultation_settings', 'consultation_ncls', {
       values: { cta_label: 'นัดหมายปรึกษากฎหมาย' },
     })
-    await Promise.all([
-      createPageVariant(owner, {
-        pageId: 'page_ncls_home',
-        path: '/',
-        title: 'ความยุติธรรมสำหรับทุกคน',
-        summary: 'บริการกฎหมายภาษาไทยที่เข้าใจง่าย',
-      }),
-      createPageVariant(owner, {
-        pageId: 'page_ncls_services',
-        path: '/services',
-        title: 'บริการกฎหมายของเรา',
-        summary: 'เลือกบริการที่ตรงกับความต้องการของคุณ',
-        blocks: [
-          {
-            type: 'hero',
-            position: 0,
-            data: { section: 'hero', eyebrow: 'เนื้อหาภาษาไทย', title: 'บริการกฎหมายของเรา', subtitle: 'เลือกบริการที่ตรงกับความต้องการของคุณ' },
-            media: [],
-          },
-          {
-            type: 'offering_grid',
-            position: 1,
-            data: { section: 'services', source: 'site_offerings' },
-            media: [],
-          },
-        ],
-      }),
-      createPageVariant(owner, {
-        pageId: 'page_ncls_blog',
-        path: '/blog',
-        title: 'บทความกฎหมาย',
-        summary: 'ความรู้ทางกฎหมายสำหรับผู้อ่านภาษาไทย',
-      }),
-    ])
+    await createPageVariant(owner, {
+      pageId: 'page_ncls_home',
+      path: '/',
+      title: 'ความยุติธรรมสำหรับทุกคน',
+      summary: 'บริการกฎหมายภาษาไทยที่เข้าใจง่าย',
+    })
+    await createPageVariant(owner, {
+      pageId: 'page_ncls_services',
+      path: '/services',
+      title: 'บริการกฎหมายของเรา',
+      summary: 'เลือกบริการที่ตรงกับความต้องการของคุณ',
+      blocks: [
+        {
+          type: 'hero',
+          position: 0,
+          data: { section: 'hero', eyebrow: 'เนื้อหาภาษาไทย', title: 'บริการกฎหมายของเรา', subtitle: 'เลือกบริการที่ตรงกับความต้องการของคุณ' },
+          media: [],
+        },
+        {
+          type: 'offering_grid',
+          position: 1,
+          data: { section: 'services', source: 'site_offerings' },
+          media: [],
+        },
+      ],
+    })
+    await createPageVariant(owner, {
+      pageId: 'page_ncls_blog',
+      path: '/blog',
+      title: 'บทความกฎหมาย',
+      summary: 'ความรู้ทางกฎหมายสำหรับผู้อ่านภาษาไทย',
+    })
     await putLocalization(owner, 'offering', 'offering_ncls_family', {
       route_path: '/th/services/family-th',
       values: {
