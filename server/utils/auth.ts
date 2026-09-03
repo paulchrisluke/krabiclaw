@@ -32,7 +32,38 @@ import { notifyOrganizationInvited } from '~/server/utils/notifications'
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
 
-const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
+const CIMD_TENANT_SCOPES = ['openid', 'email', 'offline_access', 'tenant'] as const
+// The only scope set a tenant CIMD client could have persisted before the
+// `email` scope was added — the sole legacy state this migration backfills.
+const LEGACY_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
+
+function sameExactSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  if (new Set(a).size !== a.length || new Set(b).size !== b.length) return false
+  const setB = new Set(b)
+  return a.every(item => setB.has(item))
+}
+
+// Pure decision extracted for direct unit testing (see auth-cimd-scopes.test.ts)
+// — the surrounding hook is deeply coupled to Better Auth's adapter/context
+// types. Returns the scopes to persist, or null when no update is needed.
+// A brand-new client (isNewClient) always gets the current scope set. An
+// existing client's persisted scopes must exactly match either the current
+// set (no-op) or the one known legacy set (backfilled) — anything else
+// (unknown scopes, a partial/corrupted array, a non-array value) throws
+// rather than silently leaving an unrecognized scope grant in place.
+export function nextCimdTenantScopes(existingScopes: unknown, isNewClient: boolean): string[] | null {
+  if (isNewClient) return [...CIMD_TENANT_SCOPES]
+  if (!Array.isArray(existingScopes) || !existingScopes.every(scope => typeof scope === 'string')) {
+    throw new Error('CIMD client has a malformed persisted scopes value')
+  }
+  // Non-tenant clients (e.g. platform_admin) are untouched by this
+  // migration — only a client on the tenant scope track is validated below.
+  if (!existingScopes.includes('tenant')) return null
+  if (sameExactSet(existingScopes, CIMD_TENANT_SCOPES)) return null
+  if (sameExactSet(existingScopes, LEGACY_TENANT_SCOPES)) return [...CIMD_TENANT_SCOPES]
+  throw new Error('Unrecognized persisted CIMD scope state for a tenant client')
+}
 
 export const OAUTH_SIGNING_POLICY = {
   algorithm: 'RS256',
@@ -46,13 +77,13 @@ export function oauthSigningConfig(authBaseUrl: string) {
       {
         identifier: `${authBaseUrl}/api/mcp`,
         name: 'KrabiClaw tenant MCP',
-        allowedScopes: ['openid', 'offline_access', 'tenant'],
+        allowedScopes: ['openid', 'email', 'offline_access', 'tenant'],
         signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
       },
       {
         identifier: `${authBaseUrl}/api/mcp/platform`,
         name: 'KrabiClaw platform MCP',
-        allowedScopes: ['openid', 'offline_access', 'platform_admin'],
+        allowedScopes: ['openid', 'email', 'offline_access', 'platform_admin'],
         signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
       },
     ],
@@ -72,7 +103,7 @@ async function normalizeCimdClientAuthentication(data: {
   client: SchemaClient<Scope[]>
   metadata: Record<string, unknown>
   ctx: GenericEndpointContext
-}) {
+}, isNewClient: boolean) {
   const { client, metadata, ctx } = data
   const advertisedMethods = metadata.token_endpoint_auth_methods_supported
   const jwksUri = metadata.jwks_uri
@@ -82,9 +113,8 @@ async function normalizeCimdClientAuthentication(data: {
     && jwksUri.length > 0
 
   const update: Record<string, unknown> = {}
-  if (!Array.isArray(client.scopes) || client.scopes.length === 0) {
-    update.scopes = [...CIMD_TENANT_SCOPES]
-  }
+  const nextScopes = nextCimdTenantScopes(client.scopes, isNewClient)
+  if (nextScopes) update.scopes = nextScopes
   if (supportsPrivateKeyJwt) {
     // @better-auth/cimd@1.7.0-beta.10's convertDocToClient only reads the
     // singular doc.token_endpoint_auth_method (node_modules/@better-auth/cimd/
@@ -454,7 +484,7 @@ export function createAuth(env: CloudflareEnv) {
         allowDynamicClientRegistration: false,
         allowUnauthenticatedClientRegistration: false,
         enforcePerClientResources: false,
-        scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
+        scopes: ['openid', 'email', 'offline_access', 'tenant', 'platform_admin'],
         ...oauthSigningConfig(authBaseUrl),
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
         // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.
@@ -465,8 +495,8 @@ export function createAuth(env: CloudflareEnv) {
       }),
       cimd({
         allowLoopback: import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true',
-        onClientCreated: normalizeCimdClientAuthentication,
-        onClientRefreshed: normalizeCimdClientAuthentication,
+        onClientCreated: data => normalizeCimdClientAuthentication(data, true),
+        onClientRefreshed: data => normalizeCimdClientAuthentication(data, false),
       }),
       organization(configuredOrganizationOptions),
       betterAuthStripe({

@@ -35,7 +35,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      strict: true,
       inputSchema: {
         placement: mediaPlacementObject,
         asset_id: { type: ['string', 'null'], description: 'One asset id, or null to clear this single-valued placement.' },
@@ -49,7 +48,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      strict: true,
       inputSchema: {
         placement: mediaPlacementObject,
         asset_id: { type: 'string', description: 'The single media asset id to attach.' },
@@ -63,7 +61,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      strict: true,
       inputSchema: {
         placement: mediaPlacementObject,
         asset_id: { type: 'string', description: 'The single media asset id to detach.' },
@@ -77,7 +74,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      strict: true,
       inputSchema: {
         placement: mediaPlacementObject,
         moves: {
@@ -117,7 +113,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      strict: true,
       inputSchema: {
         file: chatgptFileInput,
         poster_file: { ...chatgptFileInput, description: 'Required poster/thumbnail image for video uploads. Invalid for non-video uploads.' },
@@ -145,7 +140,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
-      strict: true,
       inputSchema: {
         asset_id: { type: 'string' },
         alt_text: { type: 'string' },
@@ -175,7 +169,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'analyze_document',
-      description: 'Summarize, answer questions about, or extract information from an uploaded Markdown document (.md/.markdown), grounded strictly in that file. Use upload_user_media with the attached Markdown file or get_site_media_assets to obtain its asset_id. Pass a question for grounded Q&A; omit it for a summary.',
+      description: 'Summarize, answer questions about, or extract information from an uploaded Markdown document (.md/.markdown), grounded strictly in that file. Sends the document contents to the configured AI service and consumes AI credits. Use upload_user_media with the attached Markdown file or get_site_media_assets to obtain its asset_id. Pass a question for grounded Q&A; omit it for a summary.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,

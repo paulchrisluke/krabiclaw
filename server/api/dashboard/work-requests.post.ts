@@ -8,29 +8,36 @@ export default defineHandler(async (event) => {
   const { db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: false, });
 
-  const body = (await readBody(event).catch(() => ({}))) as {
-    type?: string;
-    title?: string;
-    description?: string;
-    priority?: string;
-    source?: string;
+  const body = await readBody(event) as {
+    type?: unknown;
+    title?: unknown;
+    description?: unknown;
+    priority?: unknown;
   };
+  if (typeof body.type !== "string" || typeof body.title !== "string") {
+    return jsonResponse({ error: "type and title are required strings" }, { status: 400 });
+  }
+  if (body.description !== undefined && typeof body.description !== "string") {
+    return jsonResponse({ error: "description must be a string" }, { status: 400 });
+  }
+  if (body.priority !== undefined && typeof body.priority !== "string") {
+    return jsonResponse({ error: "priority must be a string" }, { status: 400 });
+  }
 
-  const type = body.type ?? "";
-  const title = body.title?.trim();
+  const type = body.type;
+  const title = body.title.trim();
   const description = body.description?.trim() || null;
-  const source =
-    body.source === "chowbot"
-      ? "chowbot"
-      : body.source === "whatsapp"
-        ? "whatsapp"
-        : "dashboard";
+  const priority = body.priority ?? "normal";
+  // This endpoint only serves the dashboard's own support form — source is
+  // never client-controlled, unlike the removed request contract that let a
+  // caller claim "whatsapp" for a request that never went through WhatsApp.
+  const source = "dashboard" as const;
   const result = await createWorkRequest(db, organization.id, site?.id ?? null, {
-    type, title: title ?? "", description, priority: body.priority, source, });
+    type, title, description, priority, source, });
 
   if (result.status === 201 && "id" in result.data) {
     await fireOrganizationEventSafe({
-      db, organizationId: organization.id, siteId: site?.id ?? null, actorId: userId, eventType: "work_request.created", entityType: "work_request", entityId: result.data.id, metadata: { type, priority: body.priority ?? "normal", source }, });
+    db, organizationId: organization.id, siteId: site?.id ?? null, actorId: userId, eventType: "work_request.created", entityType: "work_request", entityId: result.data.id, metadata: { type, priority, source }, });
   }
 
   return jsonResponse(result.data, { status: result.status });

@@ -2132,7 +2132,7 @@ export const user = sqliteTable("user", {
 	id: text().primaryKey(),
 	name: text().notNull(),
 	email: text().notNull().unique(),
-	emailVerified: integer().default(0).notNull(),
+	emailVerified: integer({ mode: "boolean" }).default(false).notNull(),
 	image: text(),
 	phoneNumber: text().unique(),
 	phoneNumberVerified: integer().default(0).notNull(),

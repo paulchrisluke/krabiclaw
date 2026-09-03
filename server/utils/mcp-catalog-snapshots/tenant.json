@@ -1,11 +1,11 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:6cda091d388546bc2b65f2100fe57efb292969c6838e41a50246702884c2ac1d",
+  "fingerprint": "sha256:2f78a4188e1d5266a2ebdf7c025afffccc5e1432d74d3e8fd14740ddd077b491",
   "tools": [
     {
       "name": "analyze_document",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "asset_id": {
             "description": "Media asset ID of the uploaded Markdown document.",
@@ -295,15 +295,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -314,6 +323,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -336,21 +346,38 @@
                 },
                 "price": {
                   "additionalProperties": false,
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
                   "properties": {
                     "amount_minor": {
+                      "maximum": 9007199254740991,
                       "minimum": 0,
                       "type": "integer"
                     },
                     "compare_at_amount_minor": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
                       "type": [
                         "integer",
                         "null"
                       ]
                     },
                     "currency": {
-                      "type": "string"
-                    },
-                    "provenance": {
+                      "enum": [
+                        "THB",
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "JPY",
+                        "AUD",
+                        "CAD",
+                        "SGD",
+                        "HKD",
+                        "MYR",
+                        "IDR",
+                        "PHP",
+                        "VND",
+                        "INR"
+                      ],
                       "type": "string"
                     },
                     "tax_behavior": {
@@ -370,9 +397,11 @@
                       "type": "string"
                     },
                     "valid_from": {
+                      "format": "date-time",
                       "type": "string"
                     },
                     "valid_until": {
+                      "format": "date-time",
                       "type": [
                         "string",
                         "null"
@@ -465,15 +494,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -484,6 +522,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -802,7 +841,7 @@
     {
       "name": "change_tenant_page_path",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "expected_document_updated_at": {
             "type": "string"
@@ -840,7 +879,7 @@
     {
       "name": "copy_location_batch",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "oneOf": [
           {
             "required": [
@@ -1436,72 +1475,9 @@
       }
     },
     {
-      "name": "create_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain": {
-            "description": "Custom domain to add, e.g. \"www.example.com\" or \"example.com\".",
-            "type": "string"
-          },
-          "include_www": {
-            "description": "If true (default), provision both www and the apex domain as a pair.",
-            "type": "boolean"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "domains": {
-            "description": "Newly created domain records (www + apex pair).",
-            "items": {
-              "properties": {
-                "domain": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "instructions": {
-                  "description": "DNS records to add at the registrar.",
-                  "type": "object"
-                },
-                "role": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "domain",
-                "role",
-                "status"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "domains"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "create_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "available_note": {
             "description": "Short urgency or availability note, e.g. \"Last 2 spots\".",
@@ -1560,7 +1536,7 @@
             ]
           },
           "location_id": {
-            "description": "Optional location id. If omitted, the site primary location is used when available. If the site has no primary location yet, create a location first or pass a valid location_id.",
+            "description": "Location id. Required when creating an experience; updates may omit it to keep the stored owning location.",
             "type": "string"
           },
           "max_capacity": {
@@ -1769,7 +1745,8 @@
           }
         },
         "required": [
-          "title"
+          "title",
+          "location_id"
         ],
         "type": "object"
       },
@@ -1820,10 +1797,16 @@
     {
       "name": "create_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "canonical_url": {
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
             "type": [
               "string",
               "null"
@@ -1984,11 +1967,14 @@
     {
       "name": "create_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "description": "Optional answer text.",
             "type": "string"
+          },
+          "is_owner_answer": {
+            "type": "boolean"
           },
           "location_id": {
             "type": "string"
@@ -2038,7 +2024,7 @@
     {
       "name": "create_owner_entered_site_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "author_name": {
             "type": "string"
@@ -2273,15 +2259,24 @@
               "additionalProperties": false,
               "properties": {
                 "key": {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                   "type": "string"
                 },
                 "label": {
+                  "maxLength": 120,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "values": {
                   "items": {
+                    "maxLength": 500,
+                    "minLength": 1,
                     "type": "string"
                   },
+                  "maxItems": 32,
+                  "minItems": 1,
                   "type": "array"
                 }
               },
@@ -2292,6 +2287,7 @@
               ],
               "type": "object"
             },
+            "maxItems": 24,
             "type": "array"
           },
           "featured": {
@@ -2317,21 +2313,38 @@
           },
           "price": {
             "additionalProperties": false,
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
             "properties": {
               "amount_minor": {
+                "maximum": 9007199254740991,
                 "minimum": 0,
                 "type": "integer"
               },
               "compare_at_amount_minor": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
                 "type": [
                   "integer",
                   "null"
                 ]
               },
               "currency": {
-                "type": "string"
-              },
-              "provenance": {
+                "enum": [
+                  "THB",
+                  "USD",
+                  "EUR",
+                  "GBP",
+                  "JPY",
+                  "AUD",
+                  "CAD",
+                  "SGD",
+                  "HKD",
+                  "MYR",
+                  "IDR",
+                  "PHP",
+                  "VND",
+                  "INR"
+                ],
                 "type": "string"
               },
               "tax_behavior": {
@@ -2351,9 +2364,11 @@
                 "type": "string"
               },
               "valid_from": {
+                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
+                "format": "date-time",
                 "type": [
                   "string",
                   "null"
@@ -2435,15 +2450,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                       "type": "string"
                     },
                     "label": {
+                      "maxLength": 120,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "values": {
                       "items": {
+                        "maxLength": 500,
+                        "minLength": 1,
                         "type": "string"
                       },
+                      "maxItems": 32,
+                      "minItems": 1,
                       "type": "array"
                     }
                   },
@@ -2454,6 +2478,7 @@
                   ],
                   "type": "object"
                 },
+                "maxItems": 24,
                 "type": "array"
               },
               "featured": {
@@ -2770,7 +2795,7 @@
     {
       "name": "create_site",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "name": {
             "type": "string"
@@ -2820,7 +2845,7 @@
     {
       "name": "create_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "type": [
@@ -2873,7 +2898,7 @@
     {
       "name": "create_tenant_page",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "blocks": {
             "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block's current placements; provide media explicitly to replace them, or call set_media with owner_type \"content_block\", the block id, and the intended slot.",
@@ -3020,114 +3045,9 @@
       }
     },
     {
-      "name": "create_work_request",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "description": {
-            "description": "Full details — what, where, any specific requirements or context.",
-            "type": "string"
-          },
-          "priority": {
-            "description": "How urgent. Default: normal.",
-            "enum": [
-              "low",
-              "normal",
-              "high",
-              "urgent"
-            ],
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "title": {
-            "description": "Short summary of what needs to be done (max 120 chars).",
-            "type": "string"
-          },
-          "type": {
-            "description": "Category of work needed.",
-            "enum": [
-              "content_update",
-              "product_update",
-              "seo",
-              "google_places",
-              "seasonal",
-              "photo_update",
-              "social_media",
-              "technical",
-              "other"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "type",
-          "title"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "notes": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "priority": {
-            "enum": [
-              "low",
-              "normal",
-              "high"
-            ],
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "open",
-              "in_progress",
-              "done",
-              "cancelled"
-            ],
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "title",
-          "status"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "delete_blog_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "description": "Post id or slug.",
@@ -3161,44 +3081,9 @@
       }
     },
     {
-      "name": "delete_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain_id": {
-            "description": "ID of the custom domain to delete.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          },
-          "domain_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "deleted",
-          "domain_id"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "delete_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "experience_id": {
             "description": "Experience id or slug.",
@@ -3233,7 +3118,7 @@
     {
       "name": "delete_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "description": "Location id or slug.",
@@ -3264,7 +3149,7 @@
     {
       "name": "delete_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "type": "string"
@@ -3298,7 +3183,7 @@
     {
       "name": "delete_media_asset",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "asset_id": {
             "type": "string"
@@ -3328,7 +3213,7 @@
     {
       "name": "delete_owner_entered_site_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "review_id": {
             "type": "string"
@@ -3362,7 +3247,7 @@
     {
       "name": "delete_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "type": "string"
@@ -3510,7 +3395,7 @@
     {
       "name": "delete_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "page_path": {
             "type": [
@@ -3546,7 +3431,7 @@
     {
       "name": "get_blog_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "description": "Post id or slug.",
@@ -3922,7 +3807,7 @@
     {
       "name": "get_booking_policy",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "experience_id": {
             "description": "Optional experience id when editing an experience-specific policy override.",
@@ -4317,7 +4202,7 @@
     {
       "name": "get_contact_inquiries",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -4384,90 +4269,9 @@
       }
     },
     {
-      "name": "get_current_user",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {},
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "user": {
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "isPlatformAdmin": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "isPlatformAdmin"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "user"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_dashboard_link",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "destination": {
-            "description": "Which dashboard page to link to.",
-            "enum": [
-              "settings.general",
-              "settings.analytics",
-              "settings.billing",
-              "settings.members",
-              "settings.chatgpt",
-              "site.overview",
-              "site.locations",
-              "site.locations.new",
-              "site.domains",
-              "site.settings",
-              "location.overview",
-              "location.settings",
-              "support"
-            ],
-            "type": "string"
-          },
-          "location_slug": {
-            "description": "Required for location.overview and location.settings destinations.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "destination"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "url"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "experience_id": {
             "description": "Experience id, or its slug from the public URL (/experiences/<slug>).",
@@ -4528,54 +4332,9 @@
       }
     },
     {
-      "name": "get_facebook_connection",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "connected": {
-            "type": "boolean"
-          },
-          "facebook_page_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "facebook_page_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "enum": [
-              "active",
-              "disabled",
-              "error"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "connected"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "description": "Location id or slug.",
@@ -4828,56 +4587,9 @@
       }
     },
     {
-      "name": "get_notification_settings",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "notifications": {
-            "properties": {
-              "channels": {
-                "items": {
-                  "enum": [
-                    "email",
-                    "whatsapp"
-                  ],
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "whatsapp_phone": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "whatsapp_phone",
-              "channels"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "notifications"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "post_id": {
             "type": "string"
@@ -5195,15 +4907,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                       "type": "string"
                     },
                     "label": {
+                      "maxLength": 120,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "values": {
                       "items": {
+                        "maxLength": 500,
+                        "minLength": 1,
                         "type": "string"
                       },
+                      "maxItems": 32,
+                      "minItems": 1,
                       "type": "array"
                     }
                   },
@@ -5214,6 +4935,7 @@
                   ],
                   "type": "object"
                 },
+                "maxItems": 24,
                 "type": "array"
               },
               "featured": {
@@ -5569,7 +5291,7 @@
     {
       "name": "get_professional_service_content",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -5611,7 +5333,7 @@
     {
       "name": "get_reservation_inquiries",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "days": {
             "description": "Optional: only include reservations made in the last N days (max 90).",
@@ -5823,7 +5545,7 @@
     {
       "name": "get_site",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -5936,7 +5658,7 @@
     {
       "name": "get_site_analytics",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "end_date": {
             "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
@@ -6249,7 +5971,7 @@
     {
       "name": "get_site_domains",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -6308,7 +6030,7 @@
     {
       "name": "get_site_media_assets",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -6442,7 +6164,7 @@
     {
       "name": "get_site_settings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -6638,7 +6360,7 @@
     {
       "name": "get_tenant_page",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -6668,7 +6390,7 @@
     {
       "name": "get_workspace_context",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {},
         "type": "object"
       },
@@ -7006,15 +6728,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -7025,6 +6756,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -7344,7 +7076,7 @@
     {
       "name": "list_all_experience_bookings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -7516,7 +7248,7 @@
     {
       "name": "list_blog_posts",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -7826,7 +7558,7 @@
     {
       "name": "list_experience_bookings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -7959,7 +7691,7 @@
     {
       "name": "list_experiences",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8524,7 +8256,7 @@
     {
       "name": "list_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8609,7 +8341,7 @@
     {
       "name": "list_location_reviews",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8745,7 +8477,7 @@
     {
       "name": "list_locations",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -8837,7 +8569,7 @@
     {
       "name": "list_posts",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9178,7 +8910,7 @@
     {
       "name": "list_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9265,7 +8997,7 @@
     {
       "name": "list_site_reviews",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9396,7 +9128,7 @@
     {
       "name": "list_sites",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9516,7 +9248,7 @@
     {
       "name": "list_tenant_pages",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
@@ -9571,109 +9303,6 @@
         },
         "required": [
           "pages",
-          "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "list_work_requests",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          },
-          "requests": {
-            "items": {
-              "properties": {
-                "created_at": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "notes": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "priority": {
-                  "enum": [
-                    "low",
-                    "normal",
-                    "high"
-                  ],
-                  "type": "string"
-                },
-                "status": {
-                  "enum": [
-                    "open",
-                    "in_progress",
-                    "done",
-                    "cancelled"
-                  ],
-                  "type": "string"
-                },
-                "title": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": "string"
-                },
-                "updated_at": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "requests",
           "page_info"
         ],
         "type": "object"
@@ -9769,7 +9398,7 @@
     {
       "name": "preview_booking_policy",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "accessibility_contact_required": {
             "type": "boolean"
@@ -10570,52 +10199,6 @@
       }
     },
     {
-      "name": "publish_to_facebook",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "link": {
-            "description": "Optional URL to attach to the post.",
-            "type": "string"
-          },
-          "message": {
-            "description": "Post text content.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "post_id": {
-            "description": "Facebook post ID.",
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success",
-          "post_id"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "put_resource_localization",
       "inputSchema": {
         "additionalProperties": false,
@@ -10967,7 +10550,7 @@
     {
       "name": "reorder_blog_posts",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "items": {
             "items": {
@@ -11294,7 +10877,7 @@
     {
       "name": "reorder_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "location_id": {
             "type": "string"
@@ -11541,7 +11124,7 @@
     {
       "name": "reorder_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "page_path": {
             "type": [
@@ -12032,7 +11615,7 @@
     {
       "name": "reply_to_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "reply": {
             "type": [
@@ -12085,537 +11668,9 @@
       }
     },
     {
-      "name": "resolve_agent_guidance",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "task": {
-            "description": "Reusable guidance task to resolve.",
-            "enum": [
-              "blog.write",
-              "image.generate"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "task"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "notes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "precedence": {
-            "type": "string"
-          },
-          "requested_scope": {
-            "additionalProperties": false,
-            "properties": {
-              "organization_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "scope_type": {
-                "enum": [
-                  "platform",
-                  "organization",
-                  "site"
-                ],
-                "type": "string"
-              },
-              "site_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "scope_type",
-              "organization_id",
-              "site_id"
-            ],
-            "type": "object"
-          },
-          "resolution_fingerprint": {
-            "type": "string"
-          },
-          "scope_order": {
-            "items": {
-              "enum": [
-                "platform",
-                "organization",
-                "site"
-              ],
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "skills": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "content_hash": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "instructions_markdown": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "organization_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "priority": {
-                  "type": "number"
-                },
-                "scope_type": {
-                  "enum": [
-                    "platform",
-                    "organization",
-                    "site"
-                  ],
-                  "type": "string"
-                },
-                "site_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "skill_id": {
-                  "type": "string"
-                },
-                "slug": {
-                  "type": "string"
-                },
-                "source": {
-                  "enum": [
-                    "code_baseline"
-                  ],
-                  "type": "string"
-                },
-                "status": {
-                  "enum": [
-                    "active"
-                  ],
-                  "type": "string"
-                },
-                "task": {
-                  "description": "Reusable guidance task to resolve.",
-                  "enum": [
-                    "blog.write",
-                    "image.generate"
-                  ],
-                  "type": "string"
-                },
-                "version": {
-                  "type": "number"
-                },
-                "version_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "skill_id",
-                "version_id",
-                "scope_type",
-                "organization_id",
-                "site_id",
-                "task",
-                "slug",
-                "name",
-                "description",
-                "version",
-                "priority",
-                "status",
-                "content_hash",
-                "source",
-                "instructions_markdown"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "surface": {
-            "enum": [
-              "tenant_mcp",
-              "platform_mcp"
-            ],
-            "type": "string"
-          },
-          "task": {
-            "description": "Reusable guidance task to resolve.",
-            "enum": [
-              "blog.write",
-              "image.generate"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "task",
-          "surface",
-          "requested_scope",
-          "scope_order",
-          "precedence",
-          "skills",
-          "resolution_fingerprint",
-          "notes"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "review_agent_guidance_candidate",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "candidate": {
-            "additionalProperties": true,
-            "description": "The exact article or image brief being reviewed. For blog.write use { title, content_blocks, ...metadata }. For image.generate use { prompt, intended_use, alt_text, aspect_ratio }. Do not include raw image bytes.",
-            "type": "object"
-          },
-          "candidate_type": {
-            "enum": [
-              "blog_article",
-              "image_brief"
-            ],
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "task": {
-            "description": "Reusable guidance task to resolve.",
-            "enum": [
-              "blog.write",
-              "image.generate"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "task",
-          "candidate_type",
-          "candidate"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "guidance": {
-            "additionalProperties": false,
-            "properties": {
-              "notes": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "precedence": {
-                "type": "string"
-              },
-              "requested_scope": {
-                "additionalProperties": false,
-                "properties": {
-                  "organization_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "scope_type": {
-                    "enum": [
-                      "platform",
-                      "organization",
-                      "site"
-                    ],
-                    "type": "string"
-                  },
-                  "site_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "scope_type",
-                  "organization_id",
-                  "site_id"
-                ],
-                "type": "object"
-              },
-              "resolution_fingerprint": {
-                "type": "string"
-              },
-              "scope_order": {
-                "items": {
-                  "enum": [
-                    "platform",
-                    "organization",
-                    "site"
-                  ],
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "skills": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "content_hash": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    },
-                    "instructions_markdown": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "organization_id": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "priority": {
-                      "type": "number"
-                    },
-                    "scope_type": {
-                      "enum": [
-                        "platform",
-                        "organization",
-                        "site"
-                      ],
-                      "type": "string"
-                    },
-                    "site_id": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "skill_id": {
-                      "type": "string"
-                    },
-                    "slug": {
-                      "type": "string"
-                    },
-                    "source": {
-                      "enum": [
-                        "code_baseline"
-                      ],
-                      "type": "string"
-                    },
-                    "status": {
-                      "enum": [
-                        "active"
-                      ],
-                      "type": "string"
-                    },
-                    "task": {
-                      "description": "Reusable guidance task to resolve.",
-                      "enum": [
-                        "blog.write",
-                        "image.generate"
-                      ],
-                      "type": "string"
-                    },
-                    "version": {
-                      "type": "number"
-                    },
-                    "version_id": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "skill_id",
-                    "version_id",
-                    "scope_type",
-                    "organization_id",
-                    "site_id",
-                    "task",
-                    "slug",
-                    "name",
-                    "description",
-                    "version",
-                    "priority",
-                    "status",
-                    "content_hash",
-                    "source",
-                    "instructions_markdown"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "surface": {
-                "enum": [
-                  "tenant_mcp",
-                  "platform_mcp"
-                ],
-                "type": "string"
-              },
-              "task": {
-                "description": "Reusable guidance task to resolve.",
-                "enum": [
-                  "blog.write",
-                  "image.generate"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "task",
-              "surface",
-              "requested_scope",
-              "scope_order",
-              "precedence",
-              "skills",
-              "resolution_fingerprint",
-              "notes"
-            ],
-            "type": "object"
-          },
-          "review": {
-            "additionalProperties": false,
-            "properties": {
-              "candidate_fingerprint": {
-                "type": "string"
-              },
-              "candidate_type": {
-                "enum": [
-                  "blog_article",
-                  "image_brief"
-                ],
-                "type": "string"
-              },
-              "finding_count": {
-                "type": "number"
-              },
-              "findings": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    },
-                    "severity": {
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high"
-                      ],
-                      "type": "string"
-                    },
-                    "skill_version_id": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "severity",
-                    "skill_version_id",
-                    "message"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "id": {
-                "type": "string"
-              },
-              "persistence": {
-                "enum": [
-                  "not_persisted"
-                ],
-                "type": "string"
-              },
-              "recommendation": {
-                "enum": [
-                  "pass",
-                  "revise"
-                ],
-                "type": "string"
-              },
-              "resolution_fingerprint": {
-                "type": "string"
-              },
-              "status": {
-                "enum": [
-                  "completed"
-                ],
-                "type": "string"
-              },
-              "surface": {
-                "enum": [
-                  "tenant_mcp",
-                  "platform_mcp"
-                ],
-                "type": "string"
-              },
-              "task": {
-                "description": "Reusable guidance task to resolve.",
-                "enum": [
-                  "blog.write",
-                  "image.generate"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "task",
-              "candidate_type",
-              "surface",
-              "status",
-              "recommendation",
-              "resolution_fingerprint",
-              "candidate_fingerprint",
-              "finding_count",
-              "findings",
-              "persistence"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "review",
-          "guidance"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "save_generated_image",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "image_data_base64": {
             "description": "Base64-encoded image data from image_generation_call.result, or a base64 data URL.",
@@ -12657,7 +11712,7 @@
     {
       "name": "save_generated_image_file",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "attachment_id": {
             "description": "Authorized file reference supplied by ChatGPT for the generated image attachment.",
@@ -12717,7 +11772,7 @@
     {
       "name": "set_brand_color",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "color": {
             "description": "Color description in natural language (e.g., \"earthy\", \"warm terracotta\", \"ocean blue\") or hex format (e.g., #8F1D21).",
@@ -12756,52 +11811,9 @@
       }
     },
     {
-      "name": "set_canonical_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain_id": {
-            "description": "ID of the domain to promote to canonical.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "domain": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "domain",
-          "role",
-          "status"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "set_default_currency",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "currency": {
             "description": "ISO 4217 currency code.",
@@ -13050,7 +12062,7 @@
     {
       "name": "set_workspace_context",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "anyOf": [
           {
             "required": [
@@ -13449,215 +12461,6 @@
       }
     },
     {
-      "name": "show_site_preview",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "pages": {
-            "description": "Navigable pages shown in the preview tabs.",
-            "items": {
-              "properties": {
-                "label": {
-                  "type": "string"
-                },
-                "path": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "label",
-                "path"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "site": {
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "previewUrl": {
-                "type": "string"
-              },
-              "publicUrl": {
-                "type": "string"
-              },
-              "subdomain": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "id",
-              "publicUrl",
-              "previewUrl"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "site",
-          "pages"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "sync_domain",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "domain_id": {
-            "description": "ID of the domain to sync.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "domain_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "dns_status": {
-            "type": "string"
-          },
-          "domain": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "instructions": {
-            "type": "object"
-          },
-          "ssl_status": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "domain",
-          "status"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "sync_facebook_page",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "description": "Location to sync page info into. Required to actually update the tenant site.",
-            "type": "string"
-          },
-          "page_id": {
-            "description": "Switch to a different Facebook Page by ID. Omit to use the currently connected page.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page": {
-            "properties": {
-              "about": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "city": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "cover": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "fan_count": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "phone": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "picture": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "website": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "type": "object"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "synced_to_location": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success",
-          "synced_to_location",
-          "page"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "sync_product_catalog_localization",
       "inputSchema": {
         "additionalProperties": false,
@@ -13755,15 +12558,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -13774,6 +12586,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -13796,21 +12609,38 @@
                 },
                 "price": {
                   "additionalProperties": false,
+                  "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
                   "properties": {
                     "amount_minor": {
+                      "maximum": 9007199254740991,
                       "minimum": 0,
                       "type": "integer"
                     },
                     "compare_at_amount_minor": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
                       "type": [
                         "integer",
                         "null"
                       ]
                     },
                     "currency": {
-                      "type": "string"
-                    },
-                    "provenance": {
+                      "enum": [
+                        "THB",
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "JPY",
+                        "AUD",
+                        "CAD",
+                        "SGD",
+                        "HKD",
+                        "MYR",
+                        "IDR",
+                        "PHP",
+                        "VND",
+                        "INR"
+                      ],
                       "type": "string"
                     },
                     "tax_behavior": {
@@ -13830,9 +12660,11 @@
                       "type": "string"
                     },
                     "valid_from": {
+                      "format": "date-time",
                       "type": "string"
                     },
                     "valid_until": {
+                      "format": "date-time",
                       "type": [
                         "string",
                         "null"
@@ -13848,6 +12680,7 @@
                   ]
                 },
                 "product_id": {
+                  "minLength": 1,
                   "type": "string"
                 },
                 "robots": {
@@ -13931,15 +12764,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                         "type": "string"
                       },
                       "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
                         "type": "string"
                       },
                       "values": {
                         "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
                           "type": "string"
                         },
+                        "maxItems": 32,
+                        "minItems": 1,
                         "type": "array"
                       }
                     },
@@ -13950,6 +12792,7 @@
                     ],
                     "type": "object"
                   },
+                  "maxItems": 24,
                   "type": "array"
                 },
                 "featured": {
@@ -15293,7 +14136,7 @@
     {
       "name": "update_booking_policy",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "accessibility_contact_required": {
             "type": "boolean"
@@ -15486,7 +14329,7 @@
     {
       "name": "update_experience",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "available_note": {
             "description": "Short urgency or availability note, e.g. \"Last 2 spots\".",
@@ -15793,7 +14636,7 @@
     {
       "name": "update_experience_booking",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "booking_id": {
             "type": "string"
@@ -15907,10 +14750,16 @@
     {
       "name": "update_location",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "canonical_url": {
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
             "type": [
               "string",
               "null"
@@ -16090,7 +14939,7 @@
     {
       "name": "update_location_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "description": "Answer text. Pass null to clear it.",
@@ -16098,6 +14947,9 @@
               "string",
               "null"
             ]
+          },
+          "is_owner_answer": {
+            "type": "boolean"
           },
           "location_id": {
             "type": "string"
@@ -16197,74 +15049,9 @@
       }
     },
     {
-      "name": "update_notification_settings",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "channels": {
-            "description": "Owner alert channels. Use one or both of email and whatsapp.",
-            "items": {
-              "enum": [
-                "email",
-                "whatsapp"
-              ],
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "whatsapp_phone": {
-            "description": "Site-level WhatsApp number for owner alerts. Omit to leave unchanged.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "notifications": {
-            "properties": {
-              "channels": {
-                "items": {
-                  "enum": [
-                    "email",
-                    "whatsapp"
-                  ],
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "whatsapp_phone": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "whatsapp_phone",
-              "channels"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "notifications"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "update_owner_entered_site_review",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "author_name": {
             "type": "string"
@@ -16511,15 +15298,24 @@
               "additionalProperties": false,
               "properties": {
                 "key": {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                   "type": "string"
                 },
                 "label": {
+                  "maxLength": 120,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "values": {
                   "items": {
+                    "maxLength": 500,
+                    "minLength": 1,
                     "type": "string"
                   },
+                  "maxItems": 32,
+                  "minItems": 1,
                   "type": "array"
                 }
               },
@@ -16530,6 +15326,7 @@
               ],
               "type": "object"
             },
+            "maxItems": 24,
             "type": "array"
           },
           "featured": {
@@ -16552,21 +15349,38 @@
           },
           "price": {
             "additionalProperties": false,
+            "description": "Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key \"price-note\". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.",
             "properties": {
               "amount_minor": {
+                "maximum": 9007199254740991,
                 "minimum": 0,
                 "type": "integer"
               },
               "compare_at_amount_minor": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
                 "type": [
                   "integer",
                   "null"
                 ]
               },
               "currency": {
-                "type": "string"
-              },
-              "provenance": {
+                "enum": [
+                  "THB",
+                  "USD",
+                  "EUR",
+                  "GBP",
+                  "JPY",
+                  "AUD",
+                  "CAD",
+                  "SGD",
+                  "HKD",
+                  "MYR",
+                  "IDR",
+                  "PHP",
+                  "VND",
+                  "INR"
+                ],
                 "type": "string"
               },
               "tax_behavior": {
@@ -16586,9 +15400,11 @@
                 "type": "string"
               },
               "valid_from": {
+                "format": "date-time",
                 "type": "string"
               },
               "valid_until": {
+                "format": "date-time",
                 "type": [
                   "string",
                   "null"
@@ -16670,15 +15486,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
                       "type": "string"
                     },
                     "label": {
+                      "maxLength": 120,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "values": {
                       "items": {
+                        "maxLength": 500,
+                        "minLength": 1,
                         "type": "string"
                       },
+                      "maxItems": 32,
+                      "minItems": 1,
                       "type": "array"
                     }
                   },
@@ -16689,6 +15514,7 @@
                   ],
                   "type": "object"
                 },
+                "maxItems": 24,
                 "type": "array"
               },
               "featured": {
@@ -17005,7 +15831,7 @@
     {
       "name": "update_professional_service_content",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "compliance": {
             "description": "Canonical organization/compliance data used by every professional-service surface and its schema.org graph.",
@@ -17213,7 +16039,7 @@
     {
       "name": "update_site_qa",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "answer": {
             "type": [
@@ -17272,7 +16098,7 @@
     {
       "name": "update_site_settings",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "brand_description": {
             "type": "string"
@@ -17427,7 +16253,7 @@
     {
       "name": "update_tenant_page",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "blocks": {
             "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block's current placements; provide media explicitly to replace them, or call set_media with owner_type \"content_block\", the block id, and the intended slot.",

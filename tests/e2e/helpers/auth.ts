@@ -27,7 +27,7 @@ export async function loginAs(request: APIRequestContext, baseURL: string, userI
   const activeMembership = fixture.memberships?.[0]
   if (activeMembership) {
     const activeOrganization = await request.post(`${baseURL}/api/auth/organization/set-active`, {
-      headers: { origin },
+      headers: { origin, ...devLoginHeaders() },
       data: { organizationId: activeMembership.organizationId },
     })
     expect(activeOrganization.status(), await activeOrganization.text()).toBe(200)

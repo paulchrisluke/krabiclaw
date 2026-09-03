@@ -4,33 +4,24 @@ import {
   MAX_MARKDOWN_BYTES,
   assertMarkdownSize,
   decodeMarkdownText,
-  isMarkdownFilename,
   parseMarkdownDocument,
   resolveMarkdownMimeType,
 } from '../../server/utils/markdown-document.ts'
 
-test('resolveMarkdownMimeType recognizes declared markdown MIME types', () => {
+test('resolveMarkdownMimeType recognizes Markdown MIME types and rejects unrelated types', () => {
   assert.equal(resolveMarkdownMimeType('text/markdown'), 'text/markdown')
   assert.equal(resolveMarkdownMimeType('text/x-markdown'), 'text/markdown')
   assert.equal(resolveMarkdownMimeType('TEXT/MARKDOWN'), 'text/markdown')
+  assert.equal(resolveMarkdownMimeType('application/pdf'), null)
+  assert.equal(resolveMarkdownMimeType('image/png'), null)
+  assert.equal(resolveMarkdownMimeType('image/png', 'notes.md'), null)
 })
 
-test('resolveMarkdownMimeType falls back to the .md/.markdown extension when the MIME type is generic', () => {
+test('resolveMarkdownMimeType falls back to a Markdown filename for generic or missing MIME types', () => {
   assert.equal(resolveMarkdownMimeType('application/octet-stream', 'notes.md'), 'text/markdown')
   assert.equal(resolveMarkdownMimeType(undefined, 'README.MARKDOWN'), 'text/markdown')
-  assert.equal(resolveMarkdownMimeType(null, 'menu.txt'), null)
-})
-
-test('resolveMarkdownMimeType rejects unrelated types', () => {
-  assert.equal(resolveMarkdownMimeType('application/pdf', 'file.pdf'), null)
-  assert.equal(resolveMarkdownMimeType('image/png'), null)
-})
-
-test('isMarkdownFilename matches both supported extensions case-insensitively', () => {
-  assert.equal(isMarkdownFilename('notes.md'), true)
-  assert.equal(isMarkdownFilename('NOTES.MARKDOWN'), true)
-  assert.equal(isMarkdownFilename('notes.txt'), false)
-  assert.equal(isMarkdownFilename(undefined), false)
+  assert.equal(resolveMarkdownMimeType('application/octet-stream', 'notes.txt'), null)
+  assert.equal(resolveMarkdownMimeType(null), null)
 })
 
 test('assertMarkdownSize rejects files over the configured limit with a clear message', () => {
@@ -41,13 +32,10 @@ test('assertMarkdownSize rejects files over the configured limit with a clear me
   )
 })
 
-test('decodeMarkdownText decodes valid UTF-8, including multi-byte characters', () => {
+test('decodeMarkdownText accepts valid UTF-8 and rejects invalid byte sequences', () => {
   const text = '# Café ☕\n\nBonjour à tous.'
   const bytes = new TextEncoder().encode(text)
   assert.equal(decodeMarkdownText(bytes.buffer), text)
-})
-
-test('decodeMarkdownText throws a clear error on invalid UTF-8 instead of silently replacing bytes', () => {
   // 0xFF 0xFE is not a valid UTF-8 sequence.
   const invalid = new Uint8Array([0x23, 0x20, 0xff, 0xfe, 0x41])
   assert.throws(

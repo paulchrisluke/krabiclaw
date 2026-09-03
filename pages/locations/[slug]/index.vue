@@ -308,7 +308,7 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage, nowInTimezone } from '~/utils/formatters'
-import { formatProductMoney } from '~/utils/product-money'
+import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
@@ -432,10 +432,10 @@ const featuredProductItems = computed(() => {
     .slice(0, 4)
     .map(product => ({
       name: product.name,
-      price: formatProductMoney(product.price),
+      price: formatProductPriceLabel(product),
       compareAtPrice: product.price?.compare_at_amount_minor
         ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })
-        : '',
+        : null,
       image: product.image?.public_url || null,
       imageKind: 'image',
       alt: product.image?.alt_text || product.name,
@@ -453,7 +453,7 @@ const featuredExperienceItems = computed(() => {
     price: formatProductMoney(experience.price),
     compareAtPrice: experience.price?.compare_at_amount_minor
       ? formatProductMoney({ ...experience.price, amount_minor: experience.price.compare_at_amount_minor, compare_at_amount_minor: null })
-      : '',
+      : null,
     image: experienceCoverImage(experience),
     imageKind: 'image',
     alt: experience.title || '',

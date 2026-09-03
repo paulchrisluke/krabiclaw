@@ -188,9 +188,9 @@ async function checkMcpResourceBoundary() {
     ['server/routes/.well-known/oauth-protected-resource/platform-mcp.get.ts', 'resource: `${baseUrl}/api/mcp/platform`', 'platform protected resource metadata'],
     ['server/routes/.well-known/oauth-protected-resource/platform-mcp.get.ts', "scopes_supported: ['offline_access', 'platform_admin']", 'platform protected resource scopes'],
     ['server/utils/auth.ts', "identifier: `${authBaseUrl}/api/mcp`", 'tenant OAuth resource registration'],
-    ['server/utils/auth.ts', "allowedScopes: ['openid', 'offline_access', 'tenant']", 'tenant OAuth resource scopes'],
+    ['server/utils/auth.ts', "allowedScopes: ['openid', 'email', 'offline_access', 'tenant']", 'tenant OAuth resource scopes'],
     ['server/utils/auth.ts', "identifier: `${authBaseUrl}/api/mcp/platform`", 'platform OAuth resource registration'],
-    ['server/utils/auth.ts', "allowedScopes: ['openid', 'offline_access', 'platform_admin']", 'platform OAuth resource scopes'],
+    ['server/utils/auth.ts', "allowedScopes: ['openid', 'email', 'offline_access', 'platform_admin']", 'platform OAuth resource scopes'],
   ]) {
     const failure = await assertContains(file, expected, label)
     if (failure) failures.push(failure)

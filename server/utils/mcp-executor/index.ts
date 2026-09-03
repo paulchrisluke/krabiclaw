@@ -11,18 +11,14 @@ import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { listSitesForUser } from '~/server/utils/mcp-workflows'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { hasSiteEntitlement } from '~/server/utils/billing'
-import { handleAgentSkillTools } from './agent-skills'
 import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
 import { handleExperiencesTools } from './experiences'
-import { handleIntegrationsTools } from './integrations'
 import { handleLocalesTools } from './locales'
 import { handleLocationsTools } from './locations'
-import { handleManagedServiceTools } from './managed-service'
 import { handleMediaTools } from './media'
 import { handleProductsTools } from './products'
-import { handleNotificationsTools } from './notifications'
 import { handleOnboardingTools } from './onboarding'
 import { handlePostsTools } from './posts'
 import { handleQaTools } from './qa'
@@ -48,18 +44,14 @@ import type { McpExecutorContext } from './shared'
 // domain-handler registry instead of hand-copying it — one list of which
 // domain owns which tool, not two.
 export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
-  agent_skills: handleAgentSkillTools,
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,
   experiences: handleExperiencesTools,
-  integrations: handleIntegrationsTools,
   locales: handleLocalesTools,
   locations: handleLocationsTools,
-  managed_service: handleManagedServiceTools,
   media: handleMediaTools,
   products: handleProductsTools,
-  notifications: handleNotificationsTools,
   onboarding: handleOnboardingTools,
   posts: handlePostsTools,
   qa: handleQaTools,
@@ -136,16 +128,6 @@ export async function executeMcpToolCall(
         ? "Welcome to KrabiClaw. You have no sites yet — let's create one."
         : `You have ${sites.length} site${sites.length > 1 ? "s" : ""}: ${sites.map((s: { name: unknown }) => s.name).join(", ")}.`,
     );
-  }
-
-  if (toolName === "get_current_user") {
-    const user = authenticatedUser ?? await requireMcpUser(event);
-    return {
-      user: {
-        id: user.userId,
-        isPlatformAdmin: user.isPlatformAdmin,
-      },
-    };
   }
 
   if (toolName === "get_workspace_context") {
