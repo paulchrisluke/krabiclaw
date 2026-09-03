@@ -20,6 +20,5 @@
 <script setup lang="ts">
 defineProps<{ to: string | null }>()
 
-const { unreadCount, refreshUnreadCount } = useNotificationUnreadCount()
-onMounted(() => { refreshUnreadCount().catch(() => {}) })
+const { unreadCount } = useNotificationUnreadCount()
 </script>

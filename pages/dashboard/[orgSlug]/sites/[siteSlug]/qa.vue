@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Site Q&A">
         <template #leading>
-          <DashboardNavbarLeading :to="sitePath" label="Site" />
+          <DashboardNavbarLeading :to="paths.site" label="Site" />
         </template>
         <template #trailing>
           <USelect v-model="selectedPagePath" :items="pageScopes" class="w-48" aria-label="Q&A page scope" />
@@ -73,7 +73,7 @@ import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.qa' })
 
-const { sitePath } = useDashboardPaths()
+const { paths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Site Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface QaRow {

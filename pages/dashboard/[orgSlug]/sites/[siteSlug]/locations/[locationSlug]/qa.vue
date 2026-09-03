@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Q&A">
         <template #leading>
-          <DashboardNavbarLeading :to="locationPath" label="Location" />
+          <DashboardNavbarLeading :to="paths.project" label="Location" />
         </template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
@@ -105,7 +105,7 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.qa' })
 
-const { locationPath } = useDashboardPaths()
+const { paths } = useDashboardSiteLinks()
 
 interface QaRow {
   id: string

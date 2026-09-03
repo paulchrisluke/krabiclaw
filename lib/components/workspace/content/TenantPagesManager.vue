@@ -2,7 +2,7 @@
   <UDashboardPanel id="tenant-pages-manager">
     <template #header>
       <UDashboardNavbar title="Pages">
-        <template #leading><DashboardNavbarLeading :to="sitePath" label="Site overview" /></template>
+        <template #leading><DashboardNavbarLeading :to="paths.site" label="Site overview" /></template>
         <template #right>
           <UButton :to="`${pagesPath}/new`" icon="i-lucide-plus" label="New page" />
         </template>
@@ -68,7 +68,7 @@ if (!siteId) throw createError({ statusCode: 503, statusMessage: 'Dashboard site
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const pagesPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/pages`)
-const { sitePath } = useDashboardPaths()
+const { paths } = useDashboardSiteLinks()
 const locale = ref('en')
 const locales = ref<string[]>([locale.value])
 const pages = ref<PageSummary[]>([])

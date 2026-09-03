@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Orders">
         <template #leading>
-          <DashboardNavbarLeading :to="sitePath" label="Site" />
+          <DashboardNavbarLeading :to="paths.site" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -77,7 +77,6 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.ordering' })
 
-const { sitePath } = useDashboardPaths()
 
 interface LocationRow {
   id: string
@@ -95,14 +94,13 @@ interface OrderForm {
   foodpanda_url: string
 }
 
-const siteId = await useDashboardSiteId()
 const route = useRoute()
 const toast = useToast()
 const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm }>>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const savingId = ref<string | null>(null)
-const { paths, locationPath } = useDashboardSiteLinks(siteId)
+const { paths, locationPath } = useDashboardSiteLinks()
 
 function addressText(address: LocationRow['address']) {
   return address?.addressLines?.filter(Boolean).join(', ') ?? ''

@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Support">
         <template #leading>
-          <DashboardNavbarLeading :to="organizationPath" label="Organization" />
+          <DashboardNavbarLeading :to="paths.org" label="Organization" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -166,7 +166,7 @@ const dashboardApi = useDashboardApi()
 const dashboardScope = useDashboardRouteScope()
 definePageMeta({ layout: 'dashboard' })
 
-const { organizationPath } = useDashboardPaths()
+const { paths } = useDashboardSiteLinks()
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()

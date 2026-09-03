@@ -2,7 +2,7 @@
   <UDashboardPanel id="site-professional-services">
     <template #header>
       <UDashboardNavbar title="Services">
-        <template #leading><DashboardNavbarLeading :to="sitePath" label="Site" /></template>
+        <template #leading><DashboardNavbarLeading :to="paths.site" label="Site" /></template>
         <template #right><UButton :to="pagesPath" color="neutral" variant="soft">Pages</UButton></template>
       </UDashboardNavbar>
     </template>
@@ -36,7 +36,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.services' })
 
-const { sitePath } = useDashboardPaths()
+const { paths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Services | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface Offering { id: string; name: string; slug: string; summary: string; short_description: string; sort_order: number; featured: boolean }

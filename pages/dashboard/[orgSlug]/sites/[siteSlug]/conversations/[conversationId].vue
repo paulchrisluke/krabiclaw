@@ -51,7 +51,7 @@ const route = useRoute()
 const dashboard = useDashboardSite()
 const chowBot = useChowBot()
 const activeSiteId = dashboard.siteId
-const { paths } = useDashboardSiteLinks('')
+const { paths } = useDashboardSiteLinks()
 
 const assistantPath = computed(() => paths.value.conversations)
 const newConversationPath = computed(() => `${assistantPath.value}/new`)

@@ -51,11 +51,11 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
 const { settingsPath: orgSettingsPath, groups, activeItem } = useOrganizationSettingsNavigation()
-const { organizationPath } = useDashboardPaths()
+const { paths } = useDashboardSiteLinks()
 
 // Up one level: out of a section back to the settings index, out of the index
 // back to the menu that opened it.
-const backTo = computed(() => props.detailTitle ? orgSettingsPath.value : `${organizationPath.value}/menu`)
+const backTo = computed(() => props.detailTitle ? orgSettingsPath.value : `${paths.value.org}/menu`)
 const backLabel = computed(() => props.detailTitle ? 'Organization Settings' : 'Menu')
 
 // Leaving a section resets the form. This used to hang off the back button's
