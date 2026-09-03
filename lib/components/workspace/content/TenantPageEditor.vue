@@ -2,7 +2,7 @@
   <UDashboardPanel id="tenant-page-editor">
     <template #header>
       <UDashboardNavbar :title="editorTitle">
-        <template #leading><DashboardNavbarLeading :detail-to="pagesPath" detail-label="Pages" /></template>
+        <template #leading><DashboardNavbarLeading :to="pagesPath" label="Pages" /></template>
         <template #right>
           <UButton
             v-if="selected?.id"

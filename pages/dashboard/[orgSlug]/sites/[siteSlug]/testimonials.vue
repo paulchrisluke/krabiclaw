@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Testimonials">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="sitePath" label="Site" />
         </template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh testimonials" @click="refresh()" />
@@ -74,6 +74,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
+
+const { sitePath } = useDashboardPaths()
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 const requestEvent = useRequestEvent()
 

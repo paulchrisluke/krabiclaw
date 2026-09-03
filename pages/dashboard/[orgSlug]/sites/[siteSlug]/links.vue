@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Links page">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="sitePath" label="Site" />
         </template>
         <template #right>
           <div class="flex items-center gap-2">
@@ -156,6 +156,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.links' })
+
+const { sitePath } = useDashboardPaths()
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 type ItemStatus = 'active' | 'hidden'

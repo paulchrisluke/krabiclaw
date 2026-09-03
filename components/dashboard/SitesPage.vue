@@ -2,7 +2,6 @@
   <UDashboardPanel id="org-overview">
     <template #header>
       <UDashboardNavbar title="Sites">
-        <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
     </template>
 

@@ -2,9 +2,6 @@
   <UDashboardPanel :id="`org-${slug}`">
     <template #header>
       <UDashboardNavbar :title="title">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
       </UDashboardNavbar>
     </template>
 

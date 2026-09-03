@@ -6,11 +6,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading
-            :action-icon="navbarActionIcon"
-            :action-label="navbarActionLabel"
-            @action="navigateFromNavbar"
-          />
+          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -253,6 +249,17 @@ const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
 const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
 const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
+
+// Up one level: out of a section back to the settings index, out of the index
+// back to the site overview.
+const backTo = computed(() => {
+  if (!hasDetail.value) return siteDashboardPath.value
+  // "Search and analytics" nests one level deeper, so its children go up to it
+  // rather than skipping the whole way out to the settings index.
+  if (secondSegment.value && detailKey.value) return `${settingsPath.value}/${detailKey.value}`
+  return settingsPath.value
+})
+const backLabel = computed(() => hasDetail.value ? 'Site settings' : 'Site overview')
 const routeSegments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.map(String)
@@ -367,17 +374,13 @@ const hasDetail = computed(() => detailKey.value !== null)
 const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization', 'site-translations': 'Translations' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
 const navbarTitle = computed(() => detailTitle.value ?? (surface.value === 'brand' ? 'Brand' : 'Site Settings'))
-const navbarActionIcon = computed(() => hasDetail.value && !secondSegment.value ? 'i-lucide-x' : 'i-lucide-arrow-left')
-const navbarActionLabel = computed(() => hasDetail.value && !secondSegment.value ? 'Close editor' : 'Go back')
 const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing'].includes(detailKey.value)))
 
-function navigateFromNavbar() {
-  if (hasDetail.value) {
-    cancelEditor()
-    return
-  }
-  router.push(siteDashboardPath.value)
-}
+// Leaving a section resets its editor. This used to hang off the back button's
+// click handler, which left browser back with stale editor state.
+watch(() => route.path, (next, previous) => {
+  if (previous && previous !== next) cancelEditor()
+})
 
 function editorSignature(key: string | null) {
   switch (key) {

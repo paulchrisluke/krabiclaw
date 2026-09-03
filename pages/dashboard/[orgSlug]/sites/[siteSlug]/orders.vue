@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Orders">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="sitePath" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -76,6 +76,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.ordering' })
+
+const { sitePath } = useDashboardPaths()
 
 interface LocationRow {
   id: string

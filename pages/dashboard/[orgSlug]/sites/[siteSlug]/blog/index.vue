@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Blog Posts">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="sitePath" label="Site" />
         </template>
 
         <template #right>
@@ -85,6 +85,8 @@ interface BlogPost {
 }
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })
+
+const { sitePath } = useDashboardPaths()
 
 const route = useRoute()
 const siteId = await useDashboardSiteId()

@@ -5,12 +5,6 @@
   >
     <template #header>
       <UDashboardNavbar :title="navbarTitle">
-        <template #leading>
-          <DashboardNavbarLeading
-            :detail-to="isDetailMode ? listRoute : null"
-            detail-label="Inbox"
-          />
-        </template>
 
       </UDashboardNavbar>
     </template>

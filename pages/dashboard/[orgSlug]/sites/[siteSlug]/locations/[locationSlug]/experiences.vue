@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Experiences">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="locationPath" label="Location" />
         </template>
         <template #trailing>
           <UButton v-if="!loading" icon="i-lucide-plus" size="sm" @click="openCreate">Add experience</UButton>
@@ -400,6 +400,8 @@ import type { CurrencyCode } from '~/shared/currencies'
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' })
+
+const { locationPath } = useDashboardPaths()
 
 type ApiRecord = Experience
 

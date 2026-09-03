@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Support">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="organizationPath" label="Organization" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -165,6 +165,8 @@ import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 const dashboardScope = useDashboardRouteScope()
 definePageMeta({ layout: 'dashboard' })
+
+const { organizationPath } = useDashboardPaths()
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()

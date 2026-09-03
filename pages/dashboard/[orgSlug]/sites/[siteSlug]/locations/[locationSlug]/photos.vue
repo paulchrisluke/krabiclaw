@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Photos">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="locationPath" label="Location" />
         </template>
         <template #trailing>
           <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />
@@ -115,6 +115,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
+
+const { locationPath } = useDashboardPaths()
 
 
 interface MediaAsset {

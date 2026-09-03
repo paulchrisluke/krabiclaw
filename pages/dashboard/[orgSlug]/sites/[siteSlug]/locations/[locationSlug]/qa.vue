@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Q&A">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="locationPath" label="Location" />
         </template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
@@ -104,6 +104,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.qa' })
+
+const { locationPath } = useDashboardPaths()
 
 interface QaRow {
   id: string

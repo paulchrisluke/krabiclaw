@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Notifications">
         <template #leading>
-          <DashboardNavbarLeading back-to-organization />
+          <DashboardNavbarLeading :to="organizationPath" label="Organization" />
         </template>
         <template #right>
           <UButton
@@ -56,6 +56,8 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
+
+const { organizationPath } = useDashboardPaths()
 useSeoMeta({ title: 'Notifications | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const dashboardApi = useDashboardApi()

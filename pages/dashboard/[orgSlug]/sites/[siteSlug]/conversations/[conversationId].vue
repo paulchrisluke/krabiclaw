@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="conversationTitle">
         <template #leading>
-          <DashboardNavbarLeading :detail-to="assistantPath" detail-label="Assistant" />
+          <DashboardNavbarLeading :to="assistantPath" label="Assistant" />
         </template>
         <template #right>
           <UButton

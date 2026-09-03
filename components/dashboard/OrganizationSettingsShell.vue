@@ -6,11 +6,7 @@
     <template #header>
       <UDashboardNavbar :title="detailTitle || 'Organization Settings'" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading
-            :action-icon="detailTitle ? 'i-lucide-x' : 'i-lucide-arrow-left'"
-            :action-label="detailTitle ? 'Close editor' : 'Back to dashboard'"
-            @action="navigateBack"
-          />
+          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -55,13 +51,20 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
 const { settingsPath: orgSettingsPath, groups, activeItem } = useOrganizationSettingsNavigation()
-function navigateBack() {
-  if (props.detailTitle) {
-    closeDetail()
-    return
-  }
-  router.push(`/dashboard/${String(route.params.orgSlug)}`)
-}
+const { organizationPath } = useDashboardPaths()
+
+// Up one level: out of a section back to the settings index, out of the index
+// back to the menu that opened it.
+const backTo = computed(() => props.detailTitle ? orgSettingsPath.value : `${organizationPath.value}/menu`)
+const backLabel = computed(() => props.detailTitle ? 'Organization Settings' : 'Menu')
+
+// Leaving a section resets the form. This used to hang off the back button's
+// click handler, which meant browser back left the previous section's edits in
+// the shared component instance. Watching the route covers every way out.
+watch(() => route.path, (next, previous) => {
+  if (previous && previous !== next) emit('cancel')
+})
+
 function closeDetail() {
   emit('cancel')
   router.push(orgSettingsPath.value)

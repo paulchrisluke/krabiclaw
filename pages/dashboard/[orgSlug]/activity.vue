@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Activity">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="organizationPath" label="Organization" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -81,6 +81,8 @@ import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 definePageMeta({ layout: 'dashboard' })
+
+const { organizationPath } = useDashboardPaths()
 useSeoMeta({ title: 'Activity | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const { eventLabel } = useSiteEventLabels()

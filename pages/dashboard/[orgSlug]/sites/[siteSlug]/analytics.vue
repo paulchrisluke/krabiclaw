@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Analytics">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="sitePath" label="Site" />
         </template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" :loading="loading" @click="loadAnalytics">
@@ -218,6 +218,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
+
+const { sitePath } = useDashboardPaths()
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { getLocalTimezone } from '~/utils/timezone'
