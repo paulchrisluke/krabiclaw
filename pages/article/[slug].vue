@@ -116,7 +116,12 @@ const ctaBlock = computed(() => {
 })
 const displayTags = computed(() => Array.isArray(post.value.tags) ? post.value.tags.slice(1) : [])
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
-const relatedPosts = computed(() => blogIndexData.value.posts.filter(item => item.slug !== slug).slice(0, 3))
+const relatedPosts = computed(() => {
+  const tags = Array.isArray(post.value.tags) ? post.value.tags : []
+  return blogIndexData.value.posts
+    .filter(item => item.slug !== slug && item.tags.some(tag => tags.includes(tag)))
+    .slice(0, 3)
+})
 const { categories } = useTenantBlogNav(computed(() => blogIndexData.value.posts))
 const browseTopicsOpen = ref(false)
 const requestURL = useRequestURL()

@@ -174,9 +174,6 @@ useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []
 const post = computed(() => data.value?.post ?? null)
 const shell = useSiteShellState()
 await shell.ready
-if (locale !== 'en' && !shell.site.value?.brand_name?.trim()) {
-  throw createError({ statusCode: 404, statusMessage: 'Exact localized site identity was not found' })
-}
 const sourceBlogData = await usePublicPageData({ datasets: ['blog'], routeOwned: false })
 const allPosts = computed(() => (sourceBlogData.blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)

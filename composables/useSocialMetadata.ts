@@ -74,7 +74,6 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
           siteName: PLATFORM_NAME,
         }
       : null)
-    if (!brand?.siteName.trim()) throw new Error('Page social metadata requires a site name')
     const socialInput: SocialPageMetadataInput = {
       ...value,
       template,
@@ -109,7 +108,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       { property: 'og:description', content: normalized.value.tags.ogDescription },
       { property: 'og:type', content: normalized.value.tags.ogType },
       { property: 'og:url', content: normalized.value.tags.ogUrl },
-      { property: 'og:site_name', content: normalized.value.tags.ogSiteName },
+      ...(normalized.value.tags.ogSiteName ? [{ property: 'og:site_name', content: normalized.value.tags.ogSiteName }] : []),
       { property: 'og:image', content: normalized.value.tags.ogImage },
       { property: 'og:image:width', content: normalized.value.tags.ogImageWidth },
       { property: 'og:image:height', content: normalized.value.tags.ogImageHeight },

@@ -232,6 +232,25 @@ test('published Thai content saves through the CMS and renders without English f
       for (const [index, item] of links.items.entries()) {
         await expect(cms.getByTestId(`links-item-translation-${item.id}`).getByTestId('links-item-translation-label')).toHaveValue(translatedLabels[index]!)
       }
+
+      await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/disable`), 200)
+      await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site_link_page/${links.page.id}/${locale}`), 402)
+
+      const unsavedTitle = 'ฉบับร่างที่ยังไม่ได้บันทึก'
+      await cms.getByTestId('links-translation-title').fill(unsavedTitle)
+      const failedSave = await Promise.all([
+        cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/localization/site_link_page/${links.page.id}/th`)),
+        cms.getByTestId('links-save-page-translation').click(),
+      ]).then(([response]) => response)
+      expect(failedSave.status()).toBe(402)
+      await expect(cms.locator('p.text-error')).toBeVisible()
+      await expect(cms.getByTestId('links-translation-title')).toHaveValue(unsavedTitle)
+
+      await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/enable`, {
+        data: { label: 'ไทย' },
+      }), 200)
+      await cms.reload()
+      await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
     } finally {
       await dashboardContext.close()
     }

@@ -753,13 +753,20 @@ export async function getPublicBlawbyRouteData(
     : sourceOffering
   let posts = initialPosts
   if (recipe === 'article' && postRow) {
-    posts = await listPublicBlogSummaries(db, siteId, 50)
+    if (localized) posts = []
+    else {
+      const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
+      const summaries = await listPublicBlogSummaries(db, siteId, 50)
+      posts = summaries
+        .filter(summary => summary.id !== postRow.id && summary.tags.some(tag => postTags.includes(tag)))
+        .slice(0, 3)
+    }
   }
 
   const sourceQa = mapPublicQa(qaRows)
   const qa = localized ? projectExactLocalizedCollection('location_qa', sourceQa, localizations) : sourceQa
   const sourcePosts = posts
-  let resolvedPosts = localized
+  const resolvedPosts = localized
     ? projectExactLocalizedCollection('tenant_blog_post', sourcePosts, localizations).map(item => {
         const representation = localizations.find(value => value.resourceType === 'tenant_blog_post' && value.resourceId === item.id)
         if (!representation?.routePath?.startsWith('/')) {
@@ -768,12 +775,6 @@ export async function getPublicBlawbyRouteData(
         return { ...item, canonical_url: representation.routePath }
       })
     : sourcePosts
-  if (recipe === 'article' && postRow) {
-    const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
-    resolvedPosts = resolvedPosts
-      .filter(summary => summary.id !== postRow.id && summary.tags.some(tag => postTags.includes(tag)))
-      .slice(0, 3)
-  }
   const resolvedPost = mapPublicBlogPost(postRow)
   return {
     recipe,
