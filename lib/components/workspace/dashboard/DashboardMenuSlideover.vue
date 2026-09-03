@@ -2,10 +2,20 @@
   <USlideover
     v-model:open="open"
     title="Menu"
-    :ui="{ body: 'overflow-y-auto' }"
+    :ui="{
+      body: 'overflow-y-auto',
+      header: 'px-(--kc-nav-gutter) sm:px-(--kc-nav-gutter)',
+      // Nuxt UI floats the close button with `absolute end-4`, which would leave
+      // the bell stranded next to the title while the menu page renders it on
+      // the right. Returning close to the flow lets both sit together, bell then
+      // close, the way the menu page's navbar already lays them out.
+      close: 'static',
+    }"
   >
     <template #actions>
-      <DashboardNotificationBell :to="notificationsTo" />
+      <div class="ms-auto flex items-center gap-1.5">
+        <DashboardNotificationBell :to="notificationsTo" />
+      </div>
     </template>
 
     <template #body>

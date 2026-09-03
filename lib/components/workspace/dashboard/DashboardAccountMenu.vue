@@ -4,7 +4,7 @@
     color="neutral"
     variant="ghost"
     square
-    :avatar="{ src: renderedUser?.image ?? undefined, alt: displayName, size: 'sm' }"
+    :avatar="{ src: renderedUser?.image ?? undefined, alt: displayName, size: 'md' }"
     :aria-label="`Account: ${displayName}`"
     data-testid="dashboard-account-link"
   />

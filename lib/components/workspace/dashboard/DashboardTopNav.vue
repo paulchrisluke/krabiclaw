@@ -16,12 +16,12 @@
       </span>
     </NuxtLink>
 
-    <nav class="flex items-center justify-center gap-1" aria-label="Dashboard">
+    <nav class="flex items-center justify-center gap-6" aria-label="Dashboard">
       <NuxtLink
         v-for="item in items"
         :key="item.key"
         :to="item.to"
-        class="rounded-full px-3 py-2 text-sm font-medium no-underline transition-colors"
+        class="px-4 py-2 text-sm font-medium no-underline transition-colors"
         :class="item.active
           ? 'text-highlighted underline decoration-2 underline-offset-8'
           : 'text-muted hover:text-highlighted'"
@@ -31,7 +31,7 @@
       </NuxtLink>
     </nav>
 
-    <div class="flex items-center justify-end gap-1">
+    <div class="flex items-center justify-end gap-3">
       <DashboardAccountMenu />
       <UButton
         color="neutral"
