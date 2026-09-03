@@ -1,51 +1,4 @@
 <template>
-  <UDashboardSidebar
-    v-if="selected && !loading"
-    id="tenant-page-outline"
-    resizable
-    :default-size="30"
-    :min-size="27"
-    :max-size="34"
-    class="hidden bg-default lg:flex"
-    :ui="{
-      root: 'h-full min-h-0 max-h-full border-r border-default bg-default',
-      header: 'h-auto min-h-24 border-b border-default px-6 py-5',
-      body: 'min-h-0 overflow-y-auto px-6 py-8',
-      footer: 'border-t border-default px-6 py-4',
-      content: 'bg-default',
-    }"
-  >
-    <template #header>
-      <div class="mx-auto flex w-full max-w-sm items-center gap-4">
-        <UButton :to="pagesPath" icon="i-lucide-arrow-left" color="neutral" variant="soft" square aria-label="Back to pages" class="rounded-full" />
-        <h1 class="min-w-0 flex-1 truncate text-2xl font-bold tracking-tight text-highlighted">Page editor</h1>
-      </div>
-    </template>
-
-    <TenantPageOutline
-      :title="selected.title"
-      :summary="selected.summary"
-      :locale="selected.locale"
-      :path="selected.path"
-      :blocks="selected.blocks"
-      :selected-id="desktopSelectedId"
-      :block-type-options="blockTypeOptions"
-      :disabled="busy !== null"
-      @select="openSection"
-      @add="addBlock"
-      @move="moveBlock"
-      @duplicate="duplicateBlock"
-      @remove="removeBlock"
-    />
-
-    <template #footer>
-      <div class="flex w-full flex-col items-center gap-2">
-        <UButton :to="navigablePreviewUrl" target="_blank" icon="i-lucide-eye" label="Preview page" color="neutral" variant="solid" :disabled="busy !== null || !navigablePreviewUrl" class="min-w-44 justify-center rounded-full" />
-        <span v-if="dirty" class="text-xs text-warning">Unsaved changes</span>
-      </div>
-    </template>
-  </UDashboardSidebar>
-
   <UDashboardPanel id="tenant-page-editor" class="min-w-0 bg-default" :ui="{ root: 'h-full min-h-0', body: 'min-h-0 overflow-y-auto p-0' }">
     <template #header>
       <UDashboardNavbar :toggle="false" :title="mobileTitle" class="bg-default lg:hidden" :ui="{ root: 'border-b border-default' }">
@@ -69,8 +22,12 @@
         <UAlert color="error" variant="soft" title="Page unavailable" :description="pageLoadError || 'This page could not be loaded.'" />
       </div>
 
-      <template v-else>
-        <section v-if="!selectedSectionId" class="mx-auto max-w-xl px-5 pb-28 pt-6 lg:hidden">
+      <EditorPaneShell v-else :has-detail="Boolean(selectedSectionId)" show-desktop-detail>
+        <template #index>
+          <div class="mb-8 hidden items-center gap-4 lg:flex">
+            <UButton :to="pagesPath" icon="i-lucide-arrow-left" color="neutral" variant="soft" square aria-label="Back to pages" class="rounded-full" />
+            <h1 class="min-w-0 flex-1 truncate text-2xl font-bold tracking-tight text-highlighted">Page editor</h1>
+          </div>
           <UAlert v-if="pageLoadError" class="mb-5" color="error" variant="soft" title="Page could not be loaded" :description="pageLoadError" />
           <UAlert v-if="editorError" class="mb-5" color="error" variant="soft" title="Page could not be saved" :description="editorError" />
           <TenantPageOutline
@@ -79,7 +36,8 @@
             :locale="selected.locale"
             :path="selected.path"
             :blocks="selected.blocks"
-            selected-id=""
+            :preview-blocks="previewBlocks"
+            :selected-id="desktopSelectedId"
             :block-type-options="blockTypeOptions"
             :disabled="busy !== null"
             @select="openSection"
@@ -88,9 +46,13 @@
             @duplicate="duplicateBlock"
             @remove="removeBlock"
           />
-        </section>
+          <div class="mt-8 flex flex-col items-center gap-2">
+            <UButton :to="navigablePreviewUrl" target="_blank" icon="i-lucide-eye" label="Preview page" color="neutral" variant="solid" :disabled="busy !== null || !navigablePreviewUrl" class="min-w-44 justify-center rounded-full" />
+            <span v-if="dirty" class="text-xs text-warning">Unsaved changes</span>
+          </div>
+        </template>
 
-        <main class="min-h-full px-5 pb-28 pt-3 sm:px-10 lg:px-16 lg:pb-16 lg:pt-8" :class="selectedSectionId ? 'block' : 'hidden lg:block'">
+        <template #detail>
           <div class="mx-auto max-w-xl">
             <div class="mb-8 hidden items-start justify-between gap-5 lg:flex">
               <div class="min-w-0">
@@ -126,7 +88,7 @@
 
             <template v-else-if="activeBlock">
               <div class="overflow-hidden rounded-[1.25rem] bg-white shadow-sm lg:rounded-none lg:bg-transparent lg:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent">
-                <TenantPageSectionPreview :block="activeBlock" />
+                <TenantPageSectionPreview :block="previewBlock(activeBlock)" />
               </div>
               <button v-if="activeBlock.type !== 'divider'" type="button" class="mt-6 w-full rounded-[1.25rem] bg-white p-5 text-left shadow-sm transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:rounded-none lg:border-y lg:border-default lg:bg-transparent lg:px-0 lg:py-6 lg:shadow-none lg:hover:shadow-none dark:bg-white/[0.04] lg:dark:bg-transparent" @click="openBlockField($event.currentTarget)">
                 <span class="block text-sm font-semibold text-highlighted lg:text-muted">Content</span>
@@ -134,8 +96,8 @@
               </button>
             </template>
           </div>
-        </main>
-      </template>
+        </template>
+      </EditorPaneShell>
     </template>
   </UDashboardPanel>
 
@@ -153,17 +115,18 @@
     <UInput v-if="fieldDraft?.kind === 'title'" v-model="fieldDraft.value" size="xl" aria-label="Page title" :disabled="busy !== null" class="w-full" />
     <UTextarea v-else-if="fieldDraft?.kind === 'summary'" v-model="fieldDraft.value" :rows="8" autoresize aria-label="Short description" :disabled="busy !== null" class="w-full" />
     <fieldset v-else-if="fieldDraft?.kind === 'block'" :disabled="busy !== null" class="contents">
-      <TenantPageBlockEditor :block="fieldDraft.block" :site-id="resolvedSiteId" :is-persisted="false" :page-recipe="selected?.recipe" :page-type="selected?.page_type ?? 'custom'" @update:block="updateDraftBlock" />
+      <TenantPageBlockEditor :block="fieldDraft.block" :site-id="resolvedSiteId" :page-recipe="selected?.recipe" :page-type="selected?.page_type ?? 'custom'" @update:block="updateDraftBlock" />
     </fieldset>
   </EditorFocusedField>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, type LocationQueryRaw } from 'vue-router'
 import EditorFocusedField from '~/components/dashboard/EditorFocusedField.vue'
+import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { slugifyTitle } from '~/utils/post-slugs'
-import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
+import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageMedia, type TenantPageType } from '~/utils/tenant-page-blocks'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import { canProceedWithTenantPageTransition, createTenantPageLocaleRevertGuard, createTenantPageRequestGate, previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 
@@ -175,6 +138,9 @@ interface PageDetail extends Omit<PageDetailResponse, 'recipe' | 'summary' | 'se
 type PageFieldId = 'title' | 'summary'
 type ReadSection = { kind: 'details' } | { kind: 'block', blockId: string }
 type FieldDraft = { kind: 'title', value: string } | { kind: 'summary', value: string } | { kind: 'block', block: TenantPageBlock }
+interface GalleryMediaResponse { media: Array<Pick<TenantPageMedia, 'asset_id'> & Partial<TenantPageMedia>> }
+interface GalleryChange { blockId: string, desired: TenantPageMedia[] }
+interface PreviewPageResponse { page: { blocks: TenantPageBlock[] } }
 
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
@@ -205,6 +171,8 @@ const fieldDraft = ref<FieldDraft | null>(null)
 const fieldTrigger = ref<HTMLElement | null>(null)
 const allowFieldExit = ref(false)
 const initialFieldSnapshot = ref('')
+const persistedGalleryMedia = ref(new Map<string, TenantPageMedia[]>())
+const sourcePreviewBlocks = ref<TenantPageBlock[]>([])
 
 const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY)
   .filter(definition => !selected.value || isTenantPageBlockAllowed(definition, selected.value.recipe, selected.value.page_type))
@@ -229,6 +197,7 @@ const activeBlock = computed(() => {
   const section = readSection.value
   return section.kind === 'block' ? selected.value?.blocks.find(block => block.id === section.blockId) ?? null : null
 })
+const previewBlocks = computed(() => selected.value?.blocks.map(previewBlock) ?? [])
 const readTitle = computed(() => readSection.value.kind === 'details' ? 'Page details' : activeBlock.value ? TENANT_PAGE_BLOCK_REGISTRY[activeBlock.value.type].label : 'Page editor')
 const mobileTitle = computed(() => selectedSectionId.value ? readTitle.value : 'Page editor')
 const requestedFieldId = computed(() => singleQueryValue(route.query.field))
@@ -269,6 +238,10 @@ function validateLocales(value: unknown): value is { languages: Array<{ locale: 
   return isRecord(value) && Array.isArray(value.languages)
 }
 
+function validatePreviewPage(value: unknown): value is PreviewPageResponse {
+  return isRecord(value) && isRecord(value.page) && Array.isArray(value.page.blocks)
+}
+
 function toEditorPage(page: PageDetailResponse): PageDetail {
   return { ...page, recipe: page.recipe ?? '', summary: page.summary ?? '', seo_title: page.seo_title ?? '', seo_description: page.seo_description ?? '', canonical_url: page.canonical_url ?? '', robots: page.robots ?? '' }
 }
@@ -295,12 +268,16 @@ async function loadEditor() {
     if (pageResponse) {
       selected.value = toEditorPage(pageResponse.page)
       locale.value = pageResponse.page.locale
+      persistedGalleryMedia.value = galleryMediaMap(selected.value.blocks)
+      sourcePreviewBlocks.value = await loadSourcePreviewBlocks(selected.value, contextResponse.context.previewToken)
     } else {
       locale.value = 'en'
       selected.value = {
         id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '', title: '', page_type: 'custom', recipe: '', sort_order: pagesResponse?.pages.length ?? 0, updated_at: '',
         summary: '', seo_title: '', seo_description: '', canonical_url: '', robots: '', blocks: [], document: { updated_at: '' },
       }
+      persistedGalleryMedia.value = new Map()
+      sourcePreviewBlocks.value = []
     }
     dirty.value = false
   } catch (error) {
@@ -393,7 +370,7 @@ function duplicateBlock(index: number) {
   if (!selected.value) return
   const original = selected.value.blocks[index]
   if (!original) return
-  const copy: TenantPageBlock = { ...original, id: crypto.randomUUID(), data: structuredClone(toRaw(original.data)), media: structuredClone(toRaw(original.media)), position: index + 1 }
+  const copy: TenantPageBlock = { ...cloneEditorValue(original), id: crypto.randomUUID(), position: index + 1 }
   selected.value.blocks.splice(index + 1, 0, copy)
   selected.value.blocks.forEach((block, position) => { block.position = position })
 }
@@ -411,18 +388,125 @@ function blockSummary(block: TenantPageBlock): string {
 }
 
 function updateDraftBlock(block: TenantPageBlock) {
-  if (fieldDraft.value?.kind === 'block') fieldDraft.value = { kind: 'block', block }
+  if (fieldDraft.value?.kind === 'block') fieldDraft.value = { kind: 'block', block: cloneEditorValue(block) }
+}
+
+function isSourceBacked(block: TenantPageBlock): boolean {
+  const source = block.data.source
+  return (block.type === 'faq' && source === 'page_qa')
+    || (block.type === 'feature_grid' && source === 'site_posts')
+    || (block.type === 'testimonial_grid' && source === 'site_reviews')
+    || (block.type === 'offering_grid' && source === 'site_offerings')
+}
+
+async function loadSourcePreviewBlocks(page: PageDetail, token: string): Promise<TenantPageBlock[]> {
+  if (!page.blocks.some(isSourceBacked)) return []
+  const query = new URLSearchParams({ path: page.path, locale: page.locale, preview: 'true', token })
+  const response = await dashboardApi<PreviewPageResponse>(`/api/public/sites/${siteId}/pages?${query}`, { validate: validatePreviewPage })
+  return response.page.blocks
+}
+
+function previewBlock(block: TenantPageBlock): TenantPageBlock {
+  if (!isSourceBacked(block)) return block
+  const hydrated = sourcePreviewBlocks.value.find(item => item.id === block.id && item.type === block.type && item.data.source === block.data.source)
+  return hydrated ? { ...block, data: { ...block.data, items: hydrated.data.items } } : block
+}
+
+function cloneEditorValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function galleryMediaMap(blocks: TenantPageBlock[]): Map<string, TenantPageMedia[]> {
+  return new Map(blocks
+    .filter(block => block.type === 'gallery')
+    .map(block => [block.id, cloneEditorValue(block.media)]))
+}
+
+function assetOrder(media: TenantPageMedia[]): string[] {
+  return media
+    .filter(item => item.slot === 'gallery')
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map(item => item.asset_id)
+}
+
+function galleryChangesFor(candidate: PageDetail): GalleryChange[] {
+  return candidate.blocks.flatMap((block) => {
+    const persisted = persistedGalleryMedia.value.get(block.id)
+    if (block.type !== 'gallery' || !persisted) return []
+    return JSON.stringify(assetOrder(persisted)) === JSON.stringify(assetOrder(block.media))
+      ? []
+      : [{ blockId: block.id, desired: cloneEditorValue(block.media) }]
+  })
+}
+
+function pageWriteBlocks(candidate: PageDetail): TenantPageBlock[] {
+  return candidate.blocks.map((block) => {
+    const persisted = persistedGalleryMedia.value.get(block.id)
+    return block.type === 'gallery' && persisted
+      ? { ...block, media: cloneEditorValue(persisted) }
+      : block
+  })
+}
+
+function validateGalleryMediaResponse(value: unknown): value is GalleryMediaResponse {
+  return isRecord(value) && Array.isArray(value.media)
+    && value.media.every(item => isRecord(item) && typeof item.asset_id === 'string')
+}
+
+function toGalleryMedia(response: GalleryMediaResponse): TenantPageMedia[] {
+  return response.media.map((item, sortOrder) => ({
+    asset_id: item.asset_id,
+    slot: 'gallery',
+    sort_order: item.sort_order ?? sortOrder,
+    public_url: item.public_url ?? null,
+    thumbnail_url: item.thumbnail_url ?? null,
+    kind: item.kind ?? null,
+    alt_text: item.alt_text ?? null,
+  }))
+}
+
+async function reconcileGallery(change: GalleryChange): Promise<TenantPageMedia[]> {
+  const placement = { owner_type: 'content_block', owner_id: change.blockId, slot: 'gallery' }
+  const desiredOrder = assetOrder(change.desired)
+  let current = cloneEditorValue(persistedGalleryMedia.value.get(change.blockId) ?? [])
+  let currentOrder = assetOrder(current)
+
+  for (const assetId of desiredOrder.filter(assetId => !currentOrder.includes(assetId))) {
+    const response = await dashboardApi<GalleryMediaResponse>(`/api/editor/sites/${siteId}/media/placements/attach`, {
+      method: 'POST', body: { placement, asset_id: assetId }, validate: validateGalleryMediaResponse,
+    })
+    current = toGalleryMedia(response)
+    currentOrder = assetOrder(current)
+    persistedGalleryMedia.value.set(change.blockId, current)
+  }
+  for (const assetId of currentOrder.filter(assetId => !desiredOrder.includes(assetId))) {
+    const response = await dashboardApi<GalleryMediaResponse>(`/api/editor/sites/${siteId}/media/placements/remove`, {
+      method: 'POST', body: { placement, asset_id: assetId }, validate: validateGalleryMediaResponse,
+    })
+    current = toGalleryMedia(response)
+    currentOrder = assetOrder(current)
+    persistedGalleryMedia.value.set(change.blockId, current)
+  }
+  if (JSON.stringify(currentOrder) !== JSON.stringify(desiredOrder)) {
+    const response = await dashboardApi<GalleryMediaResponse>(`/api/editor/sites/${siteId}/media/placements/reorder`, {
+      method: 'POST', body: { placement, moves: desiredOrder.map(asset_id => ({ asset_id })) }, validate: validateGalleryMediaResponse,
+    })
+    current = toGalleryMedia(response)
+    persistedGalleryMedia.value.set(change.blockId, current)
+  }
+  return current
 }
 
 async function saveCurrentPage() {
-  if (selected.value) await persistPage(structuredClone(toRaw(selected.value)))
+  if (selected.value) await persistPage(cloneEditorValue(selected.value))
 }
 
 async function saveFocusedField() {
+  if (busy.value) return
   const draft = fieldDraft.value
   if (!selected.value || !draft) return
   editorError.value = null
-  const candidate = structuredClone(toRaw(selected.value))
+  const candidate = cloneEditorValue(selected.value)
   if (draft.kind === 'title') {
     if (!draft.value.trim()) {
       editorError.value = 'Add a page title before saving.'
@@ -442,7 +526,7 @@ async function saveFocusedField() {
       editorError.value = 'This section is no longer available.'
       return
     }
-    candidate.blocks[blockIndex] = structuredClone(toRaw(draft.block))
+    candidate.blocks[blockIndex] = cloneEditorValue(draft.block)
   }
   if (await persistPage(candidate) && focusedField.value) {
     allowFieldExit.value = true
@@ -451,8 +535,11 @@ async function saveFocusedField() {
 }
 
 async function persistPage(candidate: PageDetail): Promise<boolean> {
+  if (busy.value) return false
   busy.value = 'save'
   editorError.value = null
+  const galleryChanges = galleryChangesFor(candidate)
+  let persistedPage: PageDetail | null = null
   try {
     const title = candidate.title.trim()
     if (!title) throw new Error('Add a page title before saving.')
@@ -475,15 +562,22 @@ async function persistPage(candidate: PageDetail): Promise<boolean> {
       pageType: candidate.page_type,
       recipe: candidate.recipe || null,
       sortOrder: candidate.sort_order,
-      blocks: candidate.blocks,
+      blocks: pageWriteBlocks(candidate),
       expectedDocumentUpdatedAt: candidate.id ? candidate.document.updated_at : undefined,
     }
     const response = candidate.id
       ? await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${candidate.id}`, { method: 'PATCH', body, validate: validatePage })
       : await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: validatePage })
+    persistedPage = toEditorPage(response.page)
+    persistedGalleryMedia.value = galleryMediaMap(persistedPage.blocks)
+    for (const change of galleryChanges) {
+      const block = persistedPage.blocks.find(item => item.id === change.blockId)
+      if (block) block.media = await reconcileGallery(change)
+    }
     hydrating.value = true
-    selected.value = toEditorPage(response.page)
-    locale.value = response.page.locale
+    selected.value = persistedPage
+    locale.value = persistedPage.locale
+    persistedGalleryMedia.value = galleryMediaMap(persistedPage.blocks)
     dirty.value = false
     hydrating.value = false
     toast.add({ title: 'Saved', description: 'Page saved.', color: 'success' })
@@ -493,9 +587,22 @@ async function persistPage(candidate: PageDetail): Promise<boolean> {
     }
     return true
   } catch (error) {
+    if (persistedPage) {
+      const retryPage = cloneEditorValue(persistedPage)
+      for (const change of galleryChanges) {
+        const block = retryPage.blocks.find(item => item.id === change.blockId)
+        if (block) block.media = cloneEditorValue(change.desired)
+      }
+      hydrating.value = true
+      selected.value = retryPage
+      locale.value = retryPage.locale
+      dirty.value = true
+      hydrating.value = false
+    }
     editorError.value = error instanceof Error ? error.message : 'Unable to save page'
     return false
   } finally {
+    hydrating.value = false
     busy.value = null
   }
 }
@@ -504,7 +611,7 @@ watch(focusedField, (field) => {
   editorError.value = null
   if (field === 'title') fieldDraft.value = { kind: 'title', value: selected.value?.title ?? '' }
   else if (field === 'summary') fieldDraft.value = { kind: 'summary', value: selected.value?.summary ?? '' }
-  else if (field === 'content' && activeBlock.value) fieldDraft.value = { kind: 'block', block: structuredClone(toRaw(activeBlock.value)) }
+  else if (field === 'content' && activeBlock.value) fieldDraft.value = { kind: 'block', block: cloneEditorValue(activeBlock.value) }
   else fieldDraft.value = null
   initialFieldSnapshot.value = JSON.stringify(fieldDraft.value)
   if (!field) allowFieldExit.value = false

@@ -12,7 +12,7 @@
     @after:leave="emit('restore-focus')"
   >
     <template #body>
-      <div ref="editorBody" class="min-h-0 flex-1 overflow-y-auto py-2" @keydown.ctrl.enter="emit('save')" @keydown.meta.enter="emit('save')">
+      <div ref="editorBody" class="min-h-0 flex-1 overflow-y-auto py-2" @keydown.ctrl.enter="requestSave" @keydown.meta.enter="requestSave">
         <slot />
       </div>
     </template>
@@ -32,7 +32,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   title: string
   saving?: boolean
@@ -51,6 +51,10 @@ const editorBody = ref<HTMLElement | null>(null)
 
 function handleOpen(open: boolean) {
   if (!open) emit('close')
+}
+
+function requestSave() {
+  if (!props.saving && !props.saveDisabled) emit('save')
 }
 
 function focusEditor(event: Event) {

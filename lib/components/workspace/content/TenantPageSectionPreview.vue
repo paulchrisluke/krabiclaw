@@ -42,7 +42,7 @@
       <span v-if="preview.items.length" class="mt-4 grid grid-cols-2 gap-2">
         <span v-for="item in preview.items" :key="item" class="line-clamp-2 rounded-lg border border-default p-2 text-xs text-toned">{{ item }}</span>
       </span>
-      <span v-else class="mt-4 block text-sm text-muted">No items yet</span>
+      <span v-else-if="!preview.source" class="mt-4 block text-sm text-muted">No items yet</span>
     </div>
 
     <div v-else class="px-5 py-8">

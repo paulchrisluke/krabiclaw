@@ -185,6 +185,18 @@ function objectItemLabels(data: EditorData, key: string): string[] {
     .slice(0, 4)
 }
 
+function calculatorRowLabels(data: EditorData): string[] {
+  const calculator = data.calculator
+  if (!calculator || typeof calculator !== 'object' || Array.isArray(calculator)) return []
+  const rows = (calculator as Record<string, unknown>).rows
+  if (!Array.isArray(rows)) return []
+  return rows.filter(Array.isArray).slice(0, 4).map((row) => {
+    const household = String(row[0] ?? '').trim()
+    const values = row.slice(1).map(value => String(value ?? '').trim()).filter(Boolean)
+    return [household ? `Household ${household}` : '', values.join(' / ')].filter(Boolean).join(': ')
+  }).filter(Boolean)
+}
+
 /**
  * The page-block owner supplies the outline preview for every supported type.
  * Adding a block type makes this switch fail typechecking until its preview is
@@ -266,10 +278,11 @@ export function tenantPageBlockPreview(block: TenantPageBlock): TenantPageBlockP
     case 'testimonial_grid':
     case 'offering_grid':
     case 'location_grid': {
+      const source = text(data.source)
       const references = block.type === 'offering_grid'
         ? stringArray(data, 'offering_ids')
         : block.type === 'location_grid' ? stringArray(data, 'location_ids') : []
-      const items = objectItemLabels(data, 'items')
+      const items = source === 'calculator' ? calculatorRowLabels(data) : objectItemLabels(data, 'items')
       if (!items.length && references.length) {
         const noun = block.type === 'offering_grid' ? 'offering' : 'location'
         items.push(`${references.length} ${noun}${references.length === 1 ? '' : 's'} selected`)
@@ -279,7 +292,7 @@ export function tenantPageBlockPreview(block: TenantPageBlock): TenantPageBlockP
         label,
         title: text(data.title) || label,
         items,
-        source: text(data.source).replaceAll('_', ' '),
+        source: source.replaceAll('_', ' '),
       }
     }
     case 'divider':
