@@ -83,6 +83,8 @@ test.describe.serial('published Thai content saves through the CMS and renders w
   let admin: APIRequestContext
   let owner: APIRequestContext
   let links: { page: { id: string }; items: Array<{ id: string; label: string }> }
+  let dashboardContext: BrowserContext
+  let cms: Page
 
   test.beforeAll(async ({ playwright }) => {
     baseURL = testBaseUrl()
@@ -93,6 +95,7 @@ test.describe.serial('published Thai content saves through the CMS and renders w
   })
 
   test.afterAll(async () => {
+    await dashboardContext?.close()
     await admin.dispose()
     await owner.dispose()
   })
@@ -227,26 +230,18 @@ test.describe.serial('published Thai content saves through the CMS and renders w
   })
 
   test.describe('Thai link copy in the CMS', () => {
-    let dashboardContext: BrowserContext
-    let cms: Page
-
-    test.beforeEach(async ({ browser }) => {
+    test.beforeAll(async ({ browser }) => {
       dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
       cms = await dashboardContext.newPage()
-    })
-
-    test.afterEach(async () => {
-      await dashboardContext.close()
+      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, {})
     })
 
     test('loads seeded translations', async () => {
-      await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, { waitUntil: 'domcontentloaded' })
       await expect(cms.getByTestId('links-translation-locale')).toHaveValue(locale)
       await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์ที่มีประโยชน์')
     })
 
     test('saves the Thai page translation', async () => {
-      await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, { waitUntil: 'domcontentloaded' })
       await cms.getByTestId('links-translation-title').fill('ลิงก์กฎหมายภาษาไทย')
       await cms.getByTestId('links-translation-seo-title').fill('ลิงก์กฎหมายภาษาไทย')
       await cms.getByTestId('links-translation-seo-description').fill('ลิงก์ที่ผ่านการตรวจสอบสำหรับผู้อ่านภาษาไทย')
@@ -261,7 +256,6 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     for (const index of [0, 1] as const) {
       test(`saves Thai copy for link ${index + 1}`, async () => {
         const item = links.items[index]!
-        await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, { waitUntil: 'domcontentloaded' })
         const editor = cms.getByTestId(`links-item-translation-${item.id}`)
         await editor.getByTestId('links-item-translation-label').fill(translatedLabels[index])
         const itemTranslationSave = await Promise.all([
@@ -273,7 +267,7 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     }
 
     test('reloads the saved Thai link copy', async () => {
-      await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, { waitUntil: 'domcontentloaded' })
+      await cms.reload({ waitUntil: 'domcontentloaded' })
       await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
       for (const [index, item] of links.items.entries()) {
         await expect(cms.getByTestId(`links-item-translation-${item.id}`).getByTestId('links-item-translation-label')).toHaveValue(translatedLabels[index]!)
@@ -281,33 +275,26 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     })
   })
 
-  test('keeps dirty Thai form state after a rejected save', async ({ browser }) => {
-    const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
-    try {
-      const cms = await dashboardContext.newPage()
-      await cms.goto(`${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, { waitUntil: 'domcontentloaded' })
-      await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
-      await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/disable`), 200)
-      await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site_link_page/${links.page.id}/${locale}`), 402)
+  test('keeps dirty Thai form state after a rejected save', async () => {
+    await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
+    await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/disable`), 200)
+    await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site_link_page/${links.page.id}/${locale}`), 402)
 
-      const unsavedTitle = 'ฉบับร่างที่ยังไม่ได้บันทึก'
-      await cms.getByTestId('links-translation-title').fill(unsavedTitle)
-      const failedSave = await Promise.all([
-        cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/localization/site_link_page/${links.page.id}/th`)),
-        cms.getByTestId('links-save-page-translation').click(),
-      ]).then(([response]) => response)
-      expect(failedSave.status()).toBe(402)
-      await expect(cms.locator('p.text-error')).toBeVisible()
-      await expect(cms.getByTestId('links-translation-title')).toHaveValue(unsavedTitle)
+    const unsavedTitle = 'ฉบับร่างที่ยังไม่ได้บันทึก'
+    await cms.getByTestId('links-translation-title').fill(unsavedTitle)
+    const failedSave = await Promise.all([
+      cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/localization/site_link_page/${links.page.id}/th`)),
+      cms.getByTestId('links-save-page-translation').click(),
+    ]).then(([response]) => response)
+    expect(failedSave.status()).toBe(402)
+    await expect(cms.locator('p.text-error')).toBeVisible()
+    await expect(cms.getByTestId('links-translation-title')).toHaveValue(unsavedTitle)
 
-      await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/enable`, {
-        data: { label: 'ไทย' },
-      }), 200)
-      await cms.reload()
-      await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
-    } finally {
-      await dashboardContext.close()
-    }
+    await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/enable`, {
+      data: { label: 'ไทย' },
+    }), 200)
+    await cms.reload()
+    await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
   })
 
   async function verifyThaiRoutes(page: Page, viewport: { width: number; height: number }) {
