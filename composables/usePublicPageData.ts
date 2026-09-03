@@ -280,6 +280,9 @@ export const usePublicPageData = async (options: {
     await asyncData
     if (asyncData.error.value) throwPublicPageError(asyncData.error.value)
   }
+  if (options.routeOwned !== false) {
+    localeRepresentations.value = data.value?.localeRepresentations ?? []
+  }
   await shell.ready
   if (options.routeOwned !== false && shell.error.value) throwPublicPageError(shell.error.value)
 
