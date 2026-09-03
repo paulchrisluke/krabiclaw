@@ -32,17 +32,12 @@ const GROUP_FLAG_ENV: Record<ConversationalToolSurfaceGroup, string> = {
 }
 
 const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]> = {
-  social_publishing: [
-    'get_facebook_connection',
-    'publish_to_facebook',
-    'sync_facebook_page',
-  ],
+  // No standalone tool belongs to this group anymore — social_publishing now
+  // only gates publish_post's facebook/instagram channels (see
+  // normalizeMcpToolForConversationalSurface below).
+  social_publishing: [],
   domains: [
     'get_site_domains',
-    'create_domain',
-    'set_canonical_domain',
-    'delete_domain',
-    'sync_domain',
   ],
 }
 

@@ -824,11 +824,6 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_notification_settings":
-    case "update_notification_settings": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "update_location_qa":
     case "reorder_location_qa": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);

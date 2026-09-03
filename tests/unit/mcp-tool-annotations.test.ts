@@ -48,7 +48,7 @@ test('MCP annotation validation accepts only internally consistent hint combinat
     openWorldHint: true,
     destructiveHint: false,
   })
-  for (const name of ['update_product', 'rename_product_category', 'move_products', 'move_product_category', 'reorder_media', 'update_media_asset', 'update_notification_settings', 'update_site_settings']) {
+  for (const name of ['update_product', 'rename_product_category', 'move_products', 'move_product_category', 'reorder_media', 'update_media_asset', 'update_site_settings']) {
     assert.equal(byName.get(name)?.destructiveHint, true, name)
   }
 

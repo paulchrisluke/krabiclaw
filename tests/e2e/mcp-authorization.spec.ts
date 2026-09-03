@@ -21,7 +21,7 @@ test.describe('stateless MCP server', () => {
     const toolsBody = await listForSite.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(tool => tool.name)
     expect(toolNames).toContain('update_tenant_page')
-    expect(toolNames).not.toContain('update_notification_settings')
+    expect(toolNames).not.toContain('get_site_domains')
   })
 
   test('site-scoped tools/list fails closed for inaccessible site ids', async ({ request, baseURL }) => {
@@ -69,7 +69,11 @@ test.describe('stateless MCP server', () => {
     const toolNames = toolsBody.result.tools.map(t => t.name)
     expect(toolNames).toContain('list_site_locales')
     expect(toolNames).not.toContain('get_site_domains')
-    expect(toolNames).not.toContain('publish_to_facebook')
+
+    const publishPost = toolsBody.result.tools.find(t => t.name === 'publish_post') as
+      | { inputSchema?: { properties?: { channels?: { items?: { enum?: string[] } } } } }
+      | undefined
+    expect(publishPost?.inputSchema?.properties?.channels?.items?.enum).toEqual(['site'])
   })
 
   // Grouped so siteA/siteB and the logged-in-as-site-B-owner session are

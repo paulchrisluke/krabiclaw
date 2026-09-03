@@ -15,12 +15,10 @@ import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
 import { handleExperiencesTools } from './experiences'
-import { handleIntegrationsTools } from './integrations'
 import { handleLocalesTools } from './locales'
 import { handleLocationsTools } from './locations'
 import { handleMediaTools } from './media'
 import { handleProductsTools } from './products'
-import { handleNotificationsTools } from './notifications'
 import { handleOnboardingTools } from './onboarding'
 import { handlePostsTools } from './posts'
 import { handleQaTools } from './qa'
@@ -50,12 +48,10 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   blog: handleBlogTools,
   content: handleContentTools,
   experiences: handleExperiencesTools,
-  integrations: handleIntegrationsTools,
   locales: handleLocalesTools,
   locations: handleLocationsTools,
   media: handleMediaTools,
   products: handleProductsTools,
-  notifications: handleNotificationsTools,
   onboarding: handleOnboardingTools,
   posts: handlePostsTools,
   qa: handleQaTools,

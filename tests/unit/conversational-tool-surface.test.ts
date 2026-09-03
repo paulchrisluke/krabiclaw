@@ -12,15 +12,14 @@ describe('conversational tool surface policy', () => {
   test('keeps manual locale tools visible while hiding gated groups', () => {
     assert.equal(isConversationalToolEnabled('list_site_locales'), true)
     assert.equal(isConversationalToolEnabled('get_site_domains'), false)
-    assert.equal(isConversationalToolEnabled('publish_to_facebook'), false)
     assert.equal(isConversationalToolEnabled('update_product'), true)
   })
 
   test('enables a group only through its explicit env flag', () => {
-    const env = { CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED: 'true' }
+    const env = { CONVERSATIONAL_TOOLS_DOMAINS_ENABLED: 'true' }
 
-    assert.equal(isConversationalToolEnabled('publish_to_facebook', env), true)
-    assert.equal(isConversationalToolEnabled('get_site_domains', env), false)
+    assert.equal(isConversationalToolEnabled('get_site_domains', env), true)
+    assert.equal(isConversationalToolEnabled('get_site_domains'), false)
   })
 
   test('filters mixed tool lists consistently', () => {
@@ -35,14 +34,14 @@ describe('conversational tool surface policy', () => {
 
   test('blocks stale calls to hidden tools', () => {
     assert.throws(
-      () => assertConversationalToolEnabled('publish_to_facebook'),
-      /CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED/,
+      () => assertConversationalToolEnabled('get_site_domains'),
+      /CONVERSATIONAL_TOOLS_DOMAINS_ENABLED/,
     )
   })
 
   test('blocked-tool error is MCP-shaped with methodNotFound, not a generic internal error', () => {
     try {
-      assertConversationalToolEnabled('publish_to_facebook')
+      assertConversationalToolEnabled('get_site_domains')
       assert.fail('expected assertConversationalToolEnabled to throw')
     } catch (error) {
       // This is what mcp.post.ts's catch block does with a thrown auth/gating

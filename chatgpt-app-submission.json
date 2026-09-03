@@ -380,18 +380,6 @@
         "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
       }
     },
-    "get_notification_settings": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Retrieves data from the authenticated tenant workspace without modifying state.",
-        "open_world_justification": "Does not change public internet state or a third-party system.",
-        "destructive_justification": "Does not delete, replace, revoke, or irreversibly overwrite existing state."
-      }
-    },
     "get_post": {
       "annotations": {
         "readOnlyHint": true,
@@ -1097,18 +1085,6 @@
       "justifications": {
         "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
         "open_world_justification": "Can change tenant content that is visible on a public website or an external service.",
-        "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
-      }
-    },
-    "update_notification_settings": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": false,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Creates or changes data in the authenticated tenant workspace.",
-        "open_world_justification": "Does not change public internet state or a third-party system.",
         "destructive_justification": "Can delete, replace, reorder, publish, or overwrite existing state that is not restored automatically."
       }
     },
