@@ -2,7 +2,6 @@ import type { McpExecutorContext } from './shared'
 import { createExperience, deleteExperience, getExperienceBookingsSummary, getExperienceById, getSlotAvailability, listExperienceBookings, listExperienceBookingsForSite, listExperiences, listSlotOverrides, resolveExperienceTimezone, updateBookingStatus, updateExperience, upsertSlotOverride, type CreateExperienceInput, type UpdateExperienceInput } from '~/server/utils/experiences'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { loadSettingsPayload, SiteSettingsNotFoundError } from '~/server/utils/site-settings'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
 import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
@@ -40,24 +39,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       }
     case "create_experience": {
       const ceArgs = expandSlotGeneratorArgs(args as Record<string, unknown>);
-      let locationId = ceArgs.location_id ? String(ceArgs.location_id) : null;
-      if (!locationId) {
-        try {
-          const siteRow = (await loadSettingsPayload(site.db, site.organizationId, site.siteId)) as Record<string, unknown>;
-          locationId = (siteRow.primary_location_id as string | null) ?? null;
-        } catch (err) {
-          if (err instanceof SiteSettingsNotFoundError) {
-            throw mcpProtocolError(MCP_ERROR.invalidParams, "Site not found");
-          }
-          throw err;
-        }
-      }
-      if (!locationId) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "location_id is required because this site does not have a primary location yet. Call list_locations or create_location first, then retry create_experience with that location_id.",
-        );
-      }
+      const locationId = requiredString(ceArgs, "location_id");
       const experience = await createExperience(
           site.db,
           site.organizationId,

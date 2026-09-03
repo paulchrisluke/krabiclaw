@@ -75,7 +75,7 @@ export const QA_TOOLS: McpToolDefinition[] = [
       domain: 'qa',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { location_id: { type: 'string' }, question: { type: 'string' }, answer: { type: 'string', description: 'Optional answer text.' } },
+      inputSchema: { location_id: { type: 'string' }, question: { type: 'string' }, answer: { type: 'string', description: 'Optional answer text.' }, is_owner_answer: { type: 'boolean' } },
       required: ['location_id', 'question'],
       outputSchema: {
         type: 'object',
@@ -95,7 +95,7 @@ export const QA_TOOLS: McpToolDefinition[] = [
       domain: 'qa',
       minimumRole: 'editor',
       confirmRequired: false,
-      inputSchema: { location_id: { type: 'string' }, qa_id: { type: 'string' }, question: { type: 'string' }, answer: { type: ['string', 'null'], description: 'Answer text. Pass null to clear it.' } },
+      inputSchema: { location_id: { type: 'string' }, qa_id: { type: 'string' }, question: { type: 'string' }, answer: { type: ['string', 'null'], description: 'Answer text. Pass null to clear it.' }, is_owner_answer: { type: 'boolean' } },
       required: ['location_id', 'qa_id'],
       outputSchema: {
         type: 'object',

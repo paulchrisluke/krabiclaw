@@ -63,7 +63,7 @@
           {{ block.data.text }}
         </component>
         <figure v-else-if="block.type === 'image'" class="space-y-3">
-          <img v-if="blockMedia(block)[0]?.public_url" :src="String(blockMedia(block)[0]?.public_url)" :alt="String(blockMedia(block)[0]?.alt_text || block.data.alt || '')" class="max-h-[70vh] w-full object-cover">
+          <img v-if="blockMedia(block)[0]?.public_url" :src="String(blockMedia(block)[0]?.public_url)" :alt="String(block.data.alt || blockMedia(block)[0]?.alt_text || '')" class="max-h-[70vh] w-full object-cover">
           <div v-else class="flex min-h-48 items-center justify-center bg-black/5 text-sm opacity-70">Choose an image</div>
           <figcaption v-if="block.data.caption" class="text-center text-sm opacity-70">{{ block.data.caption }}</figcaption>
           <slot v-if="editable" name="image-editor" :block="block" :index="index" />

@@ -215,6 +215,31 @@ export function createTenantPageBlock(type: TenantPageBlockType, data: Record<st
   return { id: crypto.randomUUID(), type, position, data: { ...data }, media: [] }
 }
 
+const TRANSLATABLE_DATA_FIELDS = new Set([
+  'alt', 'answer', 'body', 'caption', 'copy_label', 'description', 'eyebrow', 'heading',
+  'intro', 'label', 'markdown', 'name', 'note', 'prompt', 'question', 'short_description',
+  'subtitle', 'summary', 'text', 'title', 'cta_label',
+])
+
+function clearTenantPageTranslationText(value: unknown, key = ''): unknown {
+  if (typeof value === 'string') return TRANSLATABLE_DATA_FIELDS.has(key) ? '' : value
+  if (Array.isArray(value)) return value.map(item => clearTenantPageTranslationText(item))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .map(([childKey, childValue]) => [childKey, clearTenantPageTranslationText(childValue, childKey)]))
+}
+
+export function createTenantPageTranslationBlocks(blocks: readonly TenantPageBlock[]): TenantPageBlock[] {
+  const ids = new Map(blocks.map(block => [block.id, crypto.randomUUID()]))
+  return blocks.map((block, position) => ({
+    ...block,
+    id: ids.get(block.id)!,
+    position,
+    data: clearTenantPageTranslationText(structuredClone(block.data)) as Record<string, unknown>,
+    media: block.media.map(item => ({ ...item, alt_text: null })),
+  }))
+}
+
 export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
   if (!Array.isArray(value)) throw new Error('blocks must be an array.')
   if (value.length > 50) throw new Error('A page may contain at most 50 blocks.')

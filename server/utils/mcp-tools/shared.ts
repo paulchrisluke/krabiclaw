@@ -22,8 +22,8 @@ export interface McpToolDefinition {
 
 export interface McpToolAnnotations {
   readOnlyHint: boolean
-  openWorldHint?: boolean
-  destructiveHint?: boolean
+  openWorldHint: boolean
+  destructiveHint: boolean
   idempotentHint?: boolean
 }
 
@@ -656,7 +656,7 @@ export const experienceWriteSchema = {
   sort_order: { type: 'number', description: 'Lower numbers sort earlier in lists.' },
   featured: { type: 'boolean', description: 'Whether this experience should be highlighted in featured placements.' },
   featured_sort_order: { type: 'number', description: 'Lower numbers sort earlier among featured experiences.' },
-  location_id: { type: 'string', description: 'Optional location id. If omitted, the site primary location is used when available. If the site has no primary location yet, create a location first or pass a valid location_id.' },
+  location_id: { type: 'string', description: 'Location id. Required when creating an experience; updates may omit it to keep the stored owning location.' },
   seo_title: { type: ['string', 'null'], description: 'Optional SEO title override.' },
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
   canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
@@ -947,10 +947,6 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>
-  // Opt-in: rejects unknown arguments (see validateArguments).
-  // Defaults to false (additionalProperties: true) to preserve existing behavior for
-  // tools that haven't been reviewed for this yet — enable per-tool as they're audited.
-  strict?: boolean
 }): McpToolDefinition {
   const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
@@ -973,7 +969,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
       type: 'object',
       properties,
       required,
-      additionalProperties: definition.strict ? false : true,
+      additionalProperties: false,
       ...combinators,
     },
     outputSchema: definition.outputSchema ?? { type: 'object' },
@@ -988,7 +984,10 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
     const hasValidAnnotations = definition.annotations && typeof definition.annotations === 'object'
     const hasValidSecuritySchemes = definition.securitySchemes && Array.isArray(definition.securitySchemes) && definition.securitySchemes.length > 0
     if (hasValidAnnotations && hasValidSecuritySchemes) {
-      return definition
+      // Re-validate even on this pre-built-definition path — a caller could
+      // hand in annotations that never passed through withToolAnnotations.
+      validateToolAnnotations(definition.name, definition.annotations, definition.confirmRequired)
+      return { ...definition, inputSchema: { ...definition.inputSchema, additionalProperties: false } }
     }
   }
 
@@ -997,14 +996,14 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
 
 export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
+// The explicit catalog table below is authoritative. These defaults are only
+// constructors for definitions whose reviewed table entry has the same shape.
 export const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
+  openWorldHint: false,
+  destructiveHint: false,
 })
-
-export function boundedWriteAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-}
 
 export function openWorldWriteAnnotations(): McpToolAnnotations {
   return { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
@@ -1018,156 +1017,141 @@ export function openWorldDestructiveAnnotations(): McpToolAnnotations {
   return { readOnlyHint: false, openWorldHint: true, destructiveHint: true }
 }
 
-export const READ_ONLY_TOOL_NAMES = [
-  'get_current_user',
-  'get_workspace_context',
-  'show_generated_images',
-  'list_sites',
-  'show_site_preview',
-  'get_site',
-  'get_site_settings',
-  'list_locations',
-  'get_location',
-  'list_location_products',
-  'get_product',
-  'list_posts',
-  'get_post',
-  'list_blog_posts',
-  'get_blog_post',
-  'get_site_media_assets',
-  'get_facebook_connection',
-  'get_dashboard_link',
-  'list_tenant_pages',
-  'get_tenant_page',
-  'get_professional_service_content',
-  'get_booking_policy',
-  'preview_booking_policy',
-  'list_location_qa',
-  'list_site_qa',
-  'list_location_reviews',
-  'list_site_reviews',
-  'list_experiences',
-  'get_experience',
-  'list_experience_bookings',
-  'list_all_experience_bookings',
-  'list_site_locales',
-  'get_resource_localization',
-  'get_product_catalog_localization',
-  'get_contact_inquiries',
-  'get_reservation_inquiries',
-  'get_notification_settings',
-  'list_work_requests',
-  'get_site_domains',
-  'get_site_analytics',
-  'resolve_agent_guidance',
-  'review_agent_guidance_candidate',
-] as const
+const R = READ_ONLY_DEFAULT
+const W = Object.freeze(openWorldWriteAnnotations())
+const BD = Object.freeze(boundedDestructiveAnnotations())
+const D = Object.freeze(openWorldDestructiveAnnotations())
 
-export const BOUNDED_WRITE_TOOL_NAMES = [
-  'set_workspace_context',
-  'analyze_document',
-  'update_media_asset',
-  'update_experience_booking',
-  'update_notification_settings',
-  'attach_media',
-  'reorder_media',
-] as const
-
-export const OPEN_WORLD_WRITE_TOOL_NAMES = [
-  'save_generated_image',
-  'save_generated_image_file',
-  'upload_user_media',
-  'create_site',
-  'import_products_from_media',
-  'set_brand_color',
-  'create_blog_post',
-  'update_blog_metadata',
-  'publish_blog_post',
-  'create_post',
-  'update_post',
-  'put_resource_localization',
-  'sync_product_catalog_localization',
-  'create_work_request',
-  'set_default_currency',
-  'import_from_maps',
-  'update_site_settings',
-  'create_location',
-  'update_location',
-  'copy_location_batch',
-  'create_product',
-  'update_product',
-  'batch_create_products',
-  'rename_product_category',
-  'move_products',
-  'move_product_category',
-  'reorder_blog_posts',
-  'publish_post',
-  'publish_to_facebook',
-  'sync_facebook_page',
-  'create_tenant_page',
-  'update_tenant_page',
-  'change_tenant_page_path',
-  'update_professional_service_content',
-  'update_booking_policy',
-  'create_location_qa',
-  'update_location_qa',
-  'reorder_location_qa',
-  'create_site_qa',
-  'update_site_qa',
-  'reorder_site_qa',
-  'create_owner_entered_site_review',
-  'update_owner_entered_site_review',
-  'reply_to_review',
-  'create_experience',
-  'update_experience',
-  'create_domain',
-  'set_canonical_domain',
-  'sync_domain',
-] as const
-
-export const BOUNDED_DESTRUCTIVE_TOOL_NAMES = ['remove_media'] as const
-
-export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
-  'delete_media_asset',
-  'set_media',
-  'sync_products',
-  'update_blog_post',
-  'replace_blog_content',
-  'delete_location',
-  'delete_product',
-  'delete_product_category',
-  'delete_post',
-  'delete_blog_post',
-  'delete_location_qa',
-  'delete_site_qa',
-  'delete_owner_entered_site_review',
-  'delete_experience',
-  'delete_resource_localization',
-  'delete_domain',
-] as const
+/** Submission-review contract. Every real public tool is listed explicitly. */
+export const EXPECTED_TOOL_ANNOTATIONS = {
+  analyze_document: W,
+  attach_media: W,
+  batch_create_products: W,
+  change_tenant_page_path: D,
+  copy_location_batch: D,
+  create_blog_post: W,
+  create_experience: W,
+  create_location: W,
+  create_location_qa: W,
+  create_owner_entered_site_review: W,
+  create_post: W,
+  create_product: W,
+  create_site: W,
+  create_site_qa: W,
+  create_tenant_page: W,
+  delete_blog_post: D,
+  delete_experience: D,
+  delete_location: D,
+  delete_location_qa: D,
+  delete_media_asset: D,
+  delete_owner_entered_site_review: D,
+  delete_post: D,
+  delete_product: D,
+  delete_product_category: D,
+  delete_resource_localization: D,
+  delete_site_qa: D,
+  get_blog_post: R,
+  get_booking_policy: R,
+  get_contact_inquiries: R,
+  get_experience: R,
+  get_location: R,
+  get_post: R,
+  get_product: R,
+  get_product_catalog_localization: R,
+  get_professional_service_content: R,
+  get_reservation_inquiries: R,
+  get_resource_localization: R,
+  get_site: R,
+  get_site_analytics: R,
+  get_site_domains: R,
+  get_site_media_assets: R,
+  get_site_settings: R,
+  get_tenant_page: R,
+  get_workspace_context: R,
+  import_from_maps: W,
+  import_products_from_media: W,
+  list_all_experience_bookings: R,
+  list_blog_posts: R,
+  list_experience_bookings: R,
+  list_experiences: R,
+  list_location_products: R,
+  list_location_qa: R,
+  list_location_reviews: R,
+  list_locations: R,
+  list_posts: R,
+  list_site_locales: R,
+  list_site_qa: R,
+  list_site_reviews: R,
+  list_sites: R,
+  list_tenant_pages: R,
+  move_product_category: D,
+  move_products: D,
+  preview_booking_policy: R,
+  publish_blog_post: D,
+  publish_post: D,
+  put_resource_localization: D,
+  remove_media: D,
+  rename_product_category: D,
+  reorder_blog_posts: D,
+  reorder_location_qa: D,
+  reorder_media: D,
+  reorder_site_qa: D,
+  replace_blog_content: D,
+  reply_to_review: D,
+  save_generated_image: W,
+  save_generated_image_file: W,
+  set_brand_color: D,
+  set_default_currency: D,
+  set_media: D,
+  set_workspace_context: BD,
+  show_generated_images: R,
+  sync_product_catalog_localization: D,
+  sync_products: D,
+  update_blog_metadata: D,
+  update_blog_post: D,
+  update_booking_policy: D,
+  update_experience: D,
+  update_experience_booking: BD,
+  update_location: D,
+  update_location_qa: D,
+  update_media_asset: D,
+  update_owner_entered_site_review: D,
+  update_post: D,
+  update_product: D,
+  update_professional_service_content: D,
+  update_site_qa: D,
+  update_site_settings: D,
+  update_tenant_page: D,
+  upload_user_media: W,
+} as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {
-  const groups = [
-    { names: READ_ONLY_TOOL_NAMES, annotations: READ_ONLY_DEFAULT },
-    { names: BOUNDED_WRITE_TOOL_NAMES, annotations: boundedWriteAnnotations() },
-    { names: OPEN_WORLD_WRITE_TOOL_NAMES, annotations: openWorldWriteAnnotations() },
-    { names: BOUNDED_DESTRUCTIVE_TOOL_NAMES, annotations: boundedDestructiveAnnotations() },
-    { names: OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES, annotations: openWorldDestructiveAnnotations() },
-  ] as const
-
-  const map = new Map<string, McpToolAnnotations>()
-  for (const group of groups) {
-    for (const name of group.names) {
-      if (map.has(name)) {
-        throw new Error(`Duplicate MCP tool annotation classification for "${name}".`)
-      }
-      map.set(name, group.annotations)
-    }
-  }
-  return map
+  return new Map<string, McpToolAnnotations>(Object.entries(EXPECTED_TOOL_ANNOTATIONS))
 }
 
 export const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
+
+export function validateToolAnnotations(name: string, annotations: McpToolAnnotations, confirmRequired: boolean): void {
+  // ChatGPT Apps submission review requires every tool to declare all three
+  // hints explicitly. A future classification that forgets openWorldHint or
+  // destructiveHint must fail at module load.
+  if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
+    throw new Error(`Tool "${name}" must declare openWorldHint and destructiveHint explicitly.`)
+  }
+
+  if (annotations.readOnlyHint === true) {
+    // openWorldHint is independent of readOnlyHint — a read-only tool (e.g. a
+    // web search) can legitimately be open-world. destructiveHint is the one
+    // that's genuinely incompatible with read-only: a tool that only reads
+    // cannot also delete, overwrite, or otherwise mutate state.
+    if (annotations.destructiveHint) {
+      throw new Error(`Read-only tool "${name}" cannot declare destructiveHint as true.`)
+    }
+    if (confirmRequired) {
+      throw new Error(`Read-only MCP tool "${name}" cannot require confirmation.`)
+    }
+  }
+}
 
 export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDefinition {
   const annotations = TOOL_ANNOTATIONS_BY_NAME.get(definition.name)
@@ -1175,16 +1159,11 @@ export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDe
     throw new Error(`Missing MCP tool annotation classification for "${definition.name}".`)
   }
 
-  if (annotations.readOnlyHint === false) {
-    if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
-      throw new Error(`Write tool "${definition.name}" must declare openWorldHint and destructiveHint.`)
-    }
-  } else if (definition.confirmRequired) {
-    throw new Error(`Read-only MCP tool "${definition.name}" cannot require confirmation.`)
-  }
+  validateToolAnnotations(definition.name, annotations, definition.confirmRequired)
 
   return {
     ...definition,
+    inputSchema: { ...definition.inputSchema, additionalProperties: false },
     securitySchemes: MCP_TOOL_SECURITY_SCHEMES,
     annotations,
   }

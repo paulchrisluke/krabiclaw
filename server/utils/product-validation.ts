@@ -22,6 +22,23 @@ export const PRODUCT_LIMITS = {
   robots: 240,
 } as const
 
+export const PRODUCT_DETAIL_INPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    key: { type: 'string', minLength: 1, maxLength: PRODUCT_LIMITS.detailKey, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' },
+    label: { type: 'string', minLength: 1, maxLength: PRODUCT_LIMITS.detailLabel },
+    values: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.detailValues, items: { type: 'string', minLength: 1, maxLength: PRODUCT_LIMITS.detailValue } },
+  },
+  required: ['key', 'label', 'values'],
+} as const
+
+export const PRODUCT_DETAILS_INPUT_SCHEMA = {
+  type: 'array',
+  maxItems: PRODUCT_LIMITS.detailGroups,
+  items: PRODUCT_DETAIL_INPUT_SCHEMA,
+} as const
+
 const PRODUCT_DETAIL_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const PRODUCT_ROBOTS_DIRECTIVES = new Set([
   'index,follow',
@@ -95,6 +112,17 @@ export function validateProductDetails(value: unknown): ProductDetail[] {
   })
   if (JSON.stringify(details).length > PRODUCT_LIMITS.detailPayload) invalid('details payload is too large')
   return details
+}
+
+// A Product must not carry a "price-note" detail while it also has an
+// active fixed Price — that's contradictory state a renderer would
+// otherwise have to silently choose between (or worse, resurface the note
+// as live text once the Price is later cleared). Call this with the final
+// intended {price, details} state for every write path.
+export function assertNoPriceNoteContradiction(hasFixedPrice: boolean, details: readonly ProductDetail[]): void {
+  if (hasFixedPrice && details.some(detail => detail.key === 'price-note')) {
+    invalid('details cannot contain a "price-note" entry while price is a fixed amount — remove the note or clear the price first')
+  }
 }
 
 export function validateProductOrderUrl(value: unknown): string | null {

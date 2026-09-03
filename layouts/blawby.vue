@@ -25,9 +25,13 @@
 <script setup lang="ts">
 import blawbyCriticalCss from '~/assets/css/blawby-critical.css?raw'
 import '~/assets/css/blawby-entry.css'
+import type { PublicBlawbyRouteData } from '~/types/blawby'
 
 const route = useRoute()
-const isHome = computed(() => route.path === '/' || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
+const publicLocale = useState<string>('public-locale', () => 'en')
+const isHome = computed(() => route.path === '/'
+  || (publicLocale.value !== 'en' && route.path === `/${publicLocale.value}`)
+  || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
 const blawbyStylesheetHref = '/_nuxt/surfaces/blawby.css'
 const blawbyStylesheetForRoute = computed(() => {
   return blawbyStylesheetHref
@@ -47,8 +51,15 @@ useHead(() => ({
     : [],
 }))
 
-const target = resolveBlawbyRouteTarget(route.path, route.params)
+const blawbyRoutePath = computed(() => resolveTenantLocalePath(
+  route.path,
+  publicLocale.value === 'en' ? [] : [publicLocale.value],
+).sourcePath)
+const target = resolveBlawbyRouteTarget(blawbyRoutePath.value, route.params)
 const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
+if (target.recipe !== 'links') {
+  useState<PublicBlawbyRouteData['localeRepresentations']>('public-locale-representations', () => []).value = document.value.route.localeRepresentations
+}
 provide('blawby-document', document)
 const identity = computed(() => document.value.shell.identity)
 const consultation = computed(() => document.value.shell.consultation)
@@ -87,6 +98,6 @@ const themeStyles = computed(() => {
 })
 
 useHead(() => ({
-  htmlAttrs: { class: 'blawby-document' },
+  htmlAttrs: { class: 'blawby-document', lang: publicLocale.value },
 }))
 </script>

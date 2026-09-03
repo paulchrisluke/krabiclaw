@@ -15,7 +15,7 @@
     <NuxtLink
       v-for="experience in experiences"
       :key="experience.id"
-      :to="`/experiences/${experience.slug}`"
+      :to="localePath(`/experiences/${experience.slug}`)"
       class="group block no-underline"
     >
       <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
@@ -80,6 +80,7 @@
 <script setup lang="ts">
 import type { Experience } from '~/server/utils/experiences'
 
+const { localePath } = useI18n()
 const props = defineProps<{
   experiences: Experience[]
   pending?: boolean

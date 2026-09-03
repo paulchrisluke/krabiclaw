@@ -19,12 +19,16 @@ export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
 
 const CACHE_INVALIDATION_RETRY_AFTER_MS = 5 * 60 * 1000
 
-export function publicResourceCacheInvalidationQuery(siteId: string, reason: string): BatchQuery {
+export function publicResourceCacheInvalidationQuery(
+  siteId: string,
+  reason: string,
+): BatchQuery {
+  const values = [crypto.randomUUID(), siteId, reason, new Date().toISOString()]
   return {
     query: `INSERT INTO public_resource_cache_invalidations
       (id, site_id, reason, status, attempt_count, created_at)
       VALUES (?, ?, ?, 'pending', 0, ?)`,
-    params: [crypto.randomUUID(), siteId, reason, new Date().toISOString()],
+    params: values,
   }
 }
 
@@ -105,14 +109,16 @@ export function buildPublicBlawbyDocumentCacheKey(
   siteId: string,
   recipe: string,
   slug?: string | null,
+  locale = 'en',
 ): string {
   return [
     'public',
     encodeKeyField(siteId),
-    'v2',
+    'v3',
     'blawby-document',
     encodeKeyField(recipe),
     encodeKeyField(slug),
+    encodeKeyField(locale),
   ].join('~')
 }
 

@@ -12,7 +12,7 @@
         v-for="(loc, locIdx) in locations"
         :key="loc.id"
         :ref="(el: Element | { $el?: Element } | null) => { const node = el && ('$el' in el ? el.$el : el); if (node) locCardRefs[locIdx] = node as HTMLElement; else locCardRefs[locIdx] = null; }"
-        :to="`/locations/${loc.slug}`"
+        :to="localePath(`/locations/${loc.slug}`)"
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
@@ -88,11 +88,12 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   data: () => ({})
 })
+const { localePath, t } = useI18n()
 
 type Location = NonNullable<NonNullable<Props['data']>['locations']>[number]
 const locations = computed(() => props.data?.locations || [])
 const locationMedia = (location: Location) => location.media?.find(item => item.slot === 'hero') ?? null
-const heading = computed(() => props.data?.heading || 'Our Locations')
+const heading = computed(() => props.data?.heading || t('saya.home.locations_heading'))
 
 // Load location card videos via IntersectionObserver when they scroll into
 // view instead of eagerly — the poster/thumbnail image is always in SSR HTML.
@@ -111,7 +112,7 @@ onMounted(() => {
   onUnmounted(() => obs.disconnect())
 })
 const isAuthenticated = computed(() => props.data?.isAuthenticated || false)
-const findUsKicker = computed(() => props.data?.findUsKicker || 'Find us')
-const visitLocationCta = computed(() => props.data?.visitLocationCta || 'Visit this location →')
-const connectGoogleCta = computed(() => props.data?.connectGoogleCta || 'Import from Google Maps →')
+const findUsKicker = computed(() => props.data?.findUsKicker || t('saya.location.find_us'))
+const visitLocationCta = computed(() => props.data?.visitLocationCta || t('saya.home.visit_location'))
+const connectGoogleCta = computed(() => props.data?.connectGoogleCta || t('saya.home.import_google_maps'))
 </script>

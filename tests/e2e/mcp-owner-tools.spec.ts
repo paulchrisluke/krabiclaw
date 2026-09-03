@@ -108,26 +108,10 @@ test.describe('stateless MCP server', () => {
 
   })
 
-  test('owner can use notification settings and submission inquiry tools', async ({ request, baseURL }) => {
+  test('owner can use submission inquiry tools', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
-
-    const notifications = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'update_notification_settings',
-      args: { site_id: siteId, whatsapp_phone: '+1 415 555 2671' },
-    })
-    expect(notifications.status()).toBe(200)
-    const notificationsBody = await notifications.json()
-    expect(mcpData<{ notifications: { whatsapp_phone: string } }>(notificationsBody).notifications.whatsapp_phone).toContain('+14155552671')
-
-    const notificationsRead = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_notification_settings',
-      args: { site_id: siteId },
-    })
-    expect(notificationsRead.status()).toBe(200)
 
     const publicContact = await request.post(`${baseURL}/api/public/sites/${siteId}/contact`, {
       data: { name: 'MCP Contact', email: `mcp-contact-${Date.now()}@example.test`, message: 'hello from MCP e2e' },
@@ -598,6 +582,12 @@ test.describe('stateless MCP server', () => {
       test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
       const siteId = MCP_GROWTH_SERVICE_SITE_ID
+      const locationList = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'list_locations',
+        args: { site_id: siteId },
+      })
+      const locationId = mcpData<{ locations: Array<{ id: string }> }>(await locationList.json()).locations[0]!.id
 
       const mediaList = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
@@ -609,7 +599,7 @@ test.describe('stateless MCP server', () => {
       const experience = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_experience',
-        args: { site_id: siteId, title: 'MCP Kayak Tour', body: 'Half-day tour', status: 'active', time_slots: ['14:00'], max_capacity: 6 },
+        args: { site_id: siteId, location_id: locationId, title: 'MCP Kayak Tour', body: 'Half-day tour', status: 'active', time_slots: ['14:00'], max_capacity: 6 },
       })
       expect(experience.status()).toBe(200)
       const experienceBody = await experience.json()
@@ -642,7 +632,7 @@ test.describe('stateless MCP server', () => {
       const invalidExperience = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_experience',
-        args: { site_id: siteId, title: 'Invalid MCP Experience', status: 'draft' },
+        args: { site_id: siteId, location_id: locationId, title: 'Invalid MCP Experience', status: 'draft' },
       })
       expect(invalidExperience.status()).toBe(200)
       const invalidExperienceBody = await invalidExperience.json()
@@ -690,7 +680,7 @@ test.describe('stateless MCP server', () => {
       const deleteExperienceCandidate = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_experience',
-        args: { site_id: siteId, title: 'Delete MCP Experience', body: 'Temporary experience', status: 'inactive' },
+        args: { site_id: siteId, location_id: locationId, title: 'Delete MCP Experience', body: 'Temporary experience', status: 'inactive' },
       })
       expect(deleteExperienceCandidate.status()).toBe(200)
       const deleteExperienceCandidateBody = await deleteExperienceCandidate.json()

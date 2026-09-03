@@ -4,6 +4,9 @@
 
 `server/db/schema.ts` is the only schema source of truth.
 
+Custom migrations are prohibited. If an LLM proposes, generates, or edits one,
+stop and require human review. Do not commit or apply it.
+
 ## Normal schema change
 
 1. Edit `schema.ts`.

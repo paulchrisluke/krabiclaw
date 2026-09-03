@@ -4,7 +4,7 @@ import { reservationSubmissionObject, siteTool, submissionObject } from './share
 export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_contact_inquiries',
-      description: 'List contact submissions.',
+      description: 'List contact submissions, including the submitter\'s name, email address, phone number, and message.',
       domain: 'submissions',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -16,7 +16,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'get_reservation_inquiries',
-      description: 'Use this when the user asks about table reservations — this is site-wide across all locations by default, and also answers "bookings from the past N days" for reservations. Filter to one location with location_id, or to a recent window with days (e.g. days=2 for "the past two days"). Returns a status-count summary alongside the raw list. For bookings on a bookable experience/activity instead of a table reservation, use list_all_experience_bookings.',
+      description: 'Use this when the user asks about table reservations — this is site-wide across all locations by default, and also answers "bookings from the past N days" for reservations. Results include the guest\'s name, contact details, and reservation details. Filter to one location with location_id, or to a recent window with days (e.g. days=2 for "the past two days"). Returns a status-count summary alongside the raw list. For bookings on a bookable experience/activity instead of a table reservation, use list_all_experience_bookings.',
       domain: 'submissions',
       minimumRole: 'editor',
       confirmRequired: false,

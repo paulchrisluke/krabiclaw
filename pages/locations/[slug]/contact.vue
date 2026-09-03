@@ -12,7 +12,7 @@
 
       <!-- Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-14 pb-10 sm:px-6 lg:px-8">
-        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+        <NuxtLink :to="localePath(`/locations/${slug}`)" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
           ← {{ t('saya.location.back_to', { title: location.title }) }}
         </NuxtLink>
         <h1 class="saya-display-md text-default mt-6">
@@ -148,7 +148,7 @@
       <section class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-24 sm:px-6 lg:px-8">
         <h3 class="saya-display-md saya-italic text-default">{{ t('saya.location.see_you_soon') }}</h3>
         <div class="flex flex-wrap gap-3">
-          <SayaButton :to="locationCopy.ctaRoute" size="lg">{{ locationCopy.reserveCta }}</SayaButton>
+          <SayaButton :to="localePath(locationCopy.ctaRoute)" size="lg">{{ locationCopy.reserveCta }}</SayaButton>
           <a
             v-if="location.phone"
             :href="`tel:${location.phone}`"
@@ -174,11 +174,10 @@ const DOMPurify = useHtmlSanitizer()
 
 definePageMeta({ layout: 'saya' })
 
-const { t } = useI18n()
+const { locale, localePath, t } = useI18n()
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
-const { locale } = useI18n()
 const locationCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 if (!siteId) throw createError({ statusCode: 404 })
 
@@ -209,13 +208,15 @@ const weekHours = computed(() => {
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   const timezone = location.value?.time_zone || location.value?.timezone || null
   const today = currentLocationWeekday(timezone)
-  return formatGoogleHours(hours).map((h: ApiValue, i: number) => ({ ...h, today: days[i] === today }))
+  return formatGoogleHours(hours, locale.value, t('saya.location.closed')).map((h: ApiValue, i: number) => ({ ...h, today: days[i] === today }))
 })
 
 const todayHours = computed(() => {
   const timezone = location.value?.time_zone || location.value?.timezone || null
   const today = currentLocationWeekday(timezone)
-  return getTodayGoogleHours(location.value?.opening_hours, today)
+  return locale.value === 'en'
+    ? getTodayGoogleHours(location.value?.opening_hours, today)
+    : weekHours.value.find(day => day.today)?.hours ?? ''
 })
 const isOpenNow = computed(() => {
   const h = todayHours.value

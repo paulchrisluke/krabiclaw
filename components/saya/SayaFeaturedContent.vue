@@ -7,24 +7,24 @@
       </div>
       <NuxtLink
         v-if="items.length && linkTarget"
-        :to="linkTarget"
+        :to="localePath(linkTarget)"
         class="border-b border-default pb-1 text-xs uppercase tracking-widest text-default no-underline transition hover:opacity-60"
       >
-        View all →
+        {{ t('saya.common.view_all') }} →
       </NuxtLink>
     </div>
     <div v-if="items.length" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <NuxtLink
         v-for="(item, i) in items"
         :key="i"
-        :to="item.href"
+        :to="localePath(item.href || '')"
         class="group relative block overflow-hidden bg-elevated no-underline text-default transition hover:opacity-90"
       >
         <div class="relative aspect-square overflow-hidden bg-muted">
           <SayaBadgeUnavailable
             v-if="item.unavailable"
             overlay
-            text="Temporarily unavailable"
+            :text="t('saya.common.temporarily_unavailable')"
           />
           <video
             v-if="item.imageKind === 'video' && item.image && clientReady"
@@ -72,8 +72,8 @@ interface Props {
       image?: string | null
       imageKind?: string
       alt?: string
-      price?: string
-      compareAtPrice?: string
+      price?: string | null
+      compareAtPrice?: string | null
       href?: string
       unavailable?: boolean
     }>
@@ -90,6 +90,7 @@ const props = withDefaults(defineProps<Props>(), {
   bg: 'default',
   padding: 'lg'
 })
+const { localePath, t } = useI18n()
 
 const items = computed(() => (props.data?.items || []).filter(item => Boolean(item.href)))
 // A location-wide closure marks every item unavailable at once — showing a

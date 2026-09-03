@@ -14,7 +14,7 @@
         :class="panelClass"
         @keydown.tab="onTabKeydown"
       >
-        <h2 :id="dialogTitleId" class="sr-only">Search {{ surfaceLabel.toLowerCase() }}</h2>
+        <h2 :id="dialogTitleId" class="sr-only">{{ dialogTitle }}</h2>
         <div class="flex items-center gap-3 border-b px-4 py-3 sm:px-5" :class="headerBorderClass">
           <PlatformSearchGlyph name="search" class="size-4 shrink-0" :class="mutedTextClass" />
           <input
@@ -43,16 +43,16 @@
 
         <div class="min-h-0 overflow-y-auto">
           <div v-if="query.trim() && loading" class="px-5 py-10 text-sm" :class="mutedTextClass">
-            Searching {{ surfaceLabel.toLowerCase() }}...
+            {{ searchingLabel }}
           </div>
 
           <div v-else-if="!query.trim()" class="px-5 py-10">
-            <p class="text-sm font-medium" :class="defaultTextClass">Search {{ surfaceLabel.toLowerCase() }}</p>
+            <p class="text-sm font-medium" :class="defaultTextClass">{{ dialogTitle }}</p>
             <p class="mt-2 text-sm leading-6" :class="mutedTextClass">{{ emptyStateHint }}</p>
           </div>
 
           <div v-else-if="results.length === 0" class="px-5 py-10">
-            <p class="text-sm font-medium" :class="defaultTextClass">No results found</p>
+            <p class="text-sm font-medium" :class="defaultTextClass">{{ noResultsLabel }}</p>
             <p class="mt-2 text-sm leading-6" :class="mutedTextClass">{{ noResultsHint }}</p>
           </div>
 
@@ -187,6 +187,7 @@ const badgeClass = computed(() => palette.value.badge)
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const { isOpen, open, close } = usePlatformSearchPalette(props.surface)
 const inputRef = ref<HTMLInputElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
@@ -208,25 +209,36 @@ const resultTypeMeta: Record<PublicSearchResult['type'], { badge: string, group:
 }
 
 const surfaceLabel = computed(() => {
+  if (props.surface === 'tenant_blog') return t('saya.footer.blog')
   if (props.surface === 'docs') return 'Documentation'
-  if (props.surface === 'blog' || props.surface === 'tenant_blog') return 'Blog'
+  if (props.surface === 'blog') return 'Blog'
   return 'Dashboard'
 })
 
+const dialogTitle = computed(() => props.surface === 'tenant_blog'
+  ? t('saya.search.dialog_title', { surface: surfaceLabel.value })
+  : `Search ${surfaceLabel.value.toLowerCase()}`)
+const searchingLabel = computed(() => props.surface === 'tenant_blog'
+  ? t('saya.search.searching', { surface: surfaceLabel.value })
+  : `Searching ${surfaceLabel.value.toLowerCase()}...`)
+const noResultsLabel = computed(() => props.surface === 'tenant_blog'
+  ? t('saya.search.no_results')
+  : 'No results found')
+
 const placeholder = computed(() => {
   if (props.surface === 'dashboard') return 'Search dashboard, docs, blog, help...'
-  if (props.surface === 'tenant_blog') return 'Search posts...'
+  if (props.surface === 'tenant_blog') return t('saya.search.placeholder')
   return 'Search docs, blog, help, platform pages...'
 })
 
 const emptyStateHint = computed(() => {
-  if (props.surface === 'tenant_blog') return 'Search by title, category, or keyword.'
+  if (props.surface === 'tenant_blog') return t('saya.search.hint')
   if (props.surface === 'dashboard') return 'Search docs, blog posts, support answers, and dashboard destinations.'
   return 'Search docs, blog posts, support answers, and platform pages.'
 })
 
 const noResultsHint = computed(() => {
-  if (props.surface === 'tenant_blog') return 'Try a different title, category, or keyword.'
+  if (props.surface === 'tenant_blog') return t('saya.search.no_results_hint')
   return 'Try a more specific task, page, or support question.'
 })
 
@@ -248,10 +260,12 @@ const flatIndexById = computed(() => {
 })
 
 function resultTypeLabel(type: PublicSearchResult['type']) {
+  if (props.surface === 'tenant_blog' && type === 'blog') return t('saya.search.article')
   return resultTypeMeta[type]?.badge ?? 'Result'
 }
 
 function groupLabel(type: PublicSearchResult['type']) {
+  if (props.surface === 'tenant_blog' && type === 'blog') return t('saya.search.articles')
   return resultTypeMeta[type]?.group ?? 'Results'
 }
 

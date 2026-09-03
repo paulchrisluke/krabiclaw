@@ -5,7 +5,7 @@
         <NuxtLink
           v-for="item in items"
           :key="item.key"
-          :to="item.href"
+          :to="localePath(item.href)"
           :aria-current="active === item.key ? 'page' : undefined"
           :class="[
             'shrink-0 rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-[0.2em] transition-all',
@@ -36,7 +36,7 @@ const props = defineProps<{
 
 const { products, experiencesList, location } = await usePublicPageData({ lazy: false })
 const { site } = useTenantSite()
-const { t } = useI18n()
+const { localePath, t } = useI18n()
 
 const productPresentation = computed(() => resolveProductPresentation((site as ApiRecord | null)?.vertical as string | null | undefined))
 

@@ -16,14 +16,14 @@
 
     <template v-if="remainingPosts.length > 0 || featuredPost === null">
       <div class="mb-8 flex flex-wrap items-center gap-3">
-        <h2 class="mr-2 text-xl font-bold" :class="headingClass">Latest articles</h2>
+        <h2 class="mr-2 text-xl font-bold" :class="headingClass">{{ t('saya.posts.title') }}</h2>
         <button
           type="button"
           class="rounded-full px-3 py-1.5 text-sm font-medium transition"
           :class="activeCategory === null ? activeChipClass : inactiveChipClass"
           @click="activeCategory = null"
         >
-          All topics
+          {{ t('saya.common.view_all') }}
         </button>
         <button
           v-for="group in categories"
@@ -38,8 +38,8 @@
       </div>
 
       <div v-if="pagedPosts.length === 0" class="py-16 text-center" :class="descriptionClass">
-        <p class="text-lg font-medium">No posts yet</p>
-        <p class="mt-1 text-sm">Check back soon — new articles are on the way.</p>
+        <p class="text-lg font-medium">{{ t('saya.posts.empty_title') }}</p>
+        <p class="mt-1 text-sm">{{ t('saya.posts.empty_desc') }}</p>
       </div>
       <div v-else class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
         <TenantBlogPostCard
@@ -76,6 +76,8 @@ const props = withDefaults(defineProps<{
   variant: 'saya',
   perPage: 9,
 })
+
+const { t } = useI18n()
 
 const activeCategory = ref<string | null>(null)
 const currentPage = ref(1)

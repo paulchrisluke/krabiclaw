@@ -21,13 +21,11 @@ import {
 import {
   assertConversationalToolEnabled,
   filterConversationalTools,
-  isConversationalToolGroupEnabled,
   normalizeChowBotToolForConversationalSurface,
 } from "~/server/utils/conversational-tool-surface";
 import { queryAll, queryFirst } from "~/server/db";
 import { searchPublicResources } from "~/server/utils/public-search";
 import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
-import { findOrganizationById } from '~/server/utils/member-access'
 
 const MAX_ITERATIONS = 10;
 export type JsonSerializable =
@@ -156,25 +154,12 @@ async function executeTool(
   if (!normalizedRole) {
     return { error: "Could not verify your permissions for this site." };
   }
-  const dashboardRouteContext = name === 'get_dashboard_link'
-    ? await Promise.all([
-        findOrganizationById(env as CloudflareEnv, orgId),
-        queryFirst<{ siteSlug: string | null }>(db, `
-          SELECT subdomain AS siteSlug FROM sites
-          WHERE organization_id = ? AND id = ? LIMIT 1
-        `, [orgId, siteId]),
-      ]).then(([organization, site]) => organization && site
-        ? { organizationSlug: organization.slug, siteSlug: site.siteSlug }
-        : null)
-    : null;
   const executorSite = {
     db,
     env: env as CloudflareEnv,
     userId,
     memberId: ctx.memberId,
     organizationId: orgId,
-    organizationSlug: dashboardRouteContext?.organizationSlug,
-    subdomain: dashboardRouteContext?.siteSlug ?? null,
     siteId,
     role: normalizedRole,
     sessionId: ctx.sessionId,
@@ -664,22 +649,6 @@ async function executeTool(
     }
 
     case "create_experience": {
-      // ChowBot-only convenience: MCP's create_experience only falls back
-      // from explicit location_id to the site's primary_location_id. ChowBot
-      // additionally tries the dashboard's current-page location first, and
-      // (if the site has no primary set) the first location by is_primary/id
-      // order, before giving up — preserved here rather than narrowed to
-      // MCP's simpler fallback.
-      if (!toSqlText(input.location_id)) {
-        const verifiedCtxLocationId = ctx.locationId
-          ? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`, [ctx.locationId, orgId, siteId]))?.id
-          : null;
-        const fallbackLocationId = verifiedCtxLocationId
-          ?? (await queryFirst<{ primary_location_id: string | null }>(db, `SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ?`, [siteId, orgId]))?.primary_location_id
-          ?? (await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE site_id = ? AND organization_id = ? ORDER BY is_primary DESC, id ASC LIMIT 1`, [siteId, orgId]))?.id
-          ?? null;
-        if (fallbackLocationId) input.location_id = fallbackLocationId;
-      }
       return runMcpExecutorToolForChowbot(executorSite, "create_experience", input);
     }
 
@@ -805,14 +774,6 @@ async function executeTool(
       return { overrides };
     }
 
-    // Both require the managed_service entitlement on MCP (tool.requiredEntitlement),
-    // which the adapter now enforces — the old case bodies here had no
-    // entitlement check at all.
-    case "create_work_request":
-    case "list_work_requests": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "search_public_resources": {
       const query = toSqlText(input.q)?.trim();
       const type = toSqlText(input.type);
@@ -863,11 +824,6 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_notification_settings":
-    case "update_notification_settings": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     case "update_location_qa":
     case "reorder_location_qa": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
@@ -880,14 +836,6 @@ async function executeTool(
 
     case "get_experience": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    // Domain management (create_domain, sync_domain, etc.) also lives in
-    // mcp-executor/settings.ts but is intentionally not exposed to ChowBot —
-    // ACME token rotation is a platform-admin concern.
-    // Only get_dashboard_link overlaps between the two surfaces.
-    case "get_dashboard_link": {
-      return runMcpExecutorToolForChowbot(executorSite, "get_dashboard_link", input);
     }
 
     default:
@@ -971,9 +919,6 @@ Rules in setup mode:
 `
     : "";
 
-  const managedServiceGuidance = isConversationalToolGroupEnabled(env, "managed_service")
-    ? "- Priority-support requests: submit work to the KrabiClaw support queue (content, SEO, Google Places, seasonal, photos, social media)\n"
-    : "";
   const localeGuidance = "- Localized content: use list_site_locales and the exact resource-localization tools. These tools never initiate billing, use AI credits, or return English fallback content.\n";
 
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Krabiclaw.
@@ -994,7 +939,7 @@ Capabilities (always use tools — never say you can't do something the tools su
 - Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read
 - Public help: search platform docs, blog posts, FAQs, and route guidance for direct links
-${managedServiceGuidance}${localeGuidance}- Site: rename (updates subdomain), set default Product currency, read/write site page content (including reservation policies via reservations page)
+${localeGuidance}- Site: rename (updates subdomain), set default Product currency, read/write site page content (including reservation policies via reservations page)
 - Stats: posts, Products, locations, reviews
 
 Guidelines:

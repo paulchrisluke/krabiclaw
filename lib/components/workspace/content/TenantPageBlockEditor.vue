@@ -17,6 +17,7 @@
     </template>
 
     <template v-else-if="block.type === 'gallery'">
+      <UFormField label="Caption"><UInput :model-value="stringField('caption')" @update:model-value="setString('caption', $event)" /></UFormField>
       <div class="space-y-3">
         <div v-for="(media, index) in mediaForSlot('gallery')" :key="`${media.asset_id}-${index}`" class="flex items-center gap-3">
           <span class="w-6 text-center text-xs text-muted">{{ index + 1 }}</span>

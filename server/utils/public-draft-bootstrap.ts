@@ -129,6 +129,7 @@ export function buildPublicDraftBlawbyDocument(
     },
     route: {
       recipe: 'home',
+      localeRepresentations: [],
       page: {
         id: 'draft-home',
         page_id: 'draft-home',

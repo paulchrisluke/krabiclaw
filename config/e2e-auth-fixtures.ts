@@ -13,6 +13,12 @@ export interface E2eAuthFixture {
 
 export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
   {
+    id: 'user-e2e-platform-admin',
+    name: 'E2E Platform Admin',
+    email: 'platform-admin@playwright.example',
+    platformRole: 'admin',
+  },
+  {
     id: 'user-e2e-demo-owner',
     name: 'E2E Demo Owner',
     email: 'demo-owner@playwright.example',

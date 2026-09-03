@@ -391,7 +391,7 @@ async function loadPublicPageSource(
     ? resolveLocalizedRouteResourceId(publicLocalizations, 'business_location', `/${localizedLocale}/locations/${locationSlug}`)
     : null
   if (localizedLocale && locationSlug && !localizedLocationId) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized location was not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Localized location was not found' })
   }
   const locationRow = locationSlug
     ? await queryFirst<{ id: string }>(
@@ -408,7 +408,7 @@ async function loadPublicPageSource(
     ? resolveLocalizedRouteResourceId(publicLocalizations, 'experience', `/${localizedLocale}/experiences/${experienceSlug}`)
     : null
   if (localizedLocale && experienceSlug && !localizedExperienceId) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized Experience was not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Localized Experience was not found' })
   }
   const normalizedVertical = normalizeVertical(site.vertical)
   const localizedBlogPostId = localizedLocale && blogSlug
@@ -419,7 +419,7 @@ async function loadPublicPageSource(
       )
     : null
   if (localizedLocale && blogSlug && !localizedBlogPostId) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized blog post was not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Localized blog post was not found' })
   }
 
   // Pages that render the sitewide reviews list
@@ -605,7 +605,7 @@ async function loadPublicPageSource(
 
   if (requestedDatasets.has("blog"))
     idxBlogList = push(
-      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.nav_title, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.updated_at, p.featured_order,
               mp.asset_id AS asset_id,
               ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height,
@@ -626,7 +626,7 @@ async function loadPublicPageSource(
 
   if (requestedDatasets.has("blogPost") && blogSlug)
     idxBlogPost = push(
-      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
+      `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.nav_title, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.created_at, p.updated_at,
               mp.asset_id AS asset_id,
               ma.public_url, ma.thumbnail_url, ma.kind, ma.width, ma.height
@@ -667,8 +667,9 @@ async function loadPublicPageSource(
   const shell = (() => {
     if (!localizedLocale) return sourceShell
     const siteLocalization = publicLocalizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
-    if (!siteLocalization) throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized site representation was not found' })
-    const localizedSite = projectExactLocalizedResource('site', site, siteLocalization)
+    const localizedSite = siteLocalization
+      ? projectExactLocalizedResource('site', site, siteLocalization)
+      : { ...site, brand_name: null, brand_description: null, seo_title: null, seo_description: null }
     const locations = projectExactLocalizedCollection('business_location', sourceShell.locations, publicLocalizations)
     const primary = locations.find(location => location.is_primary) ?? locations[0] ?? null
     const {
@@ -735,16 +736,17 @@ async function loadPublicPageSource(
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const sourceLocale = 'en';
-  const canonicalPath = requestedDatasets.has('content') ? canonicalTenantPagePath(page) : null
-  const tenantPage = canonicalPath
-    ? await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale, preview: isPreviewAuthorized })
+  const routePagePath = canonicalTenantPagePath(page)
+  const contentPagePath = requestedDatasets.has('content') ? routePagePath : null
+  const tenantPage = contentPagePath
+    ? await getPublicTenantPageForPath(db, siteId, contentPagePath, {
+        locale,
+        preview: isPreviewAuthorized,
+        localizations: localizedLocale ? publicLocalizations : null,
+      })
     : null
-  if (canonicalPath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized) {
-    // This paid localization feature never falls back to English content -
-    // a missing exact-locale variant must 404, not silently render the page
-    // shell with an empty content dataset (see localized-pages/[locale].get.ts,
-    // which enforces the same "exact locale or nothing" contract).
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized page was not found' })
+  if (contentPagePath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Localized page was not found' })
   }
   const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
 
@@ -1060,7 +1062,7 @@ async function loadPublicPageSource(
     ? (locRows.results ?? []).find(row => row.id === locationId)
     : null
   const sourceLocationSlug = typeof sourceLocationRow?.slug === 'string' ? sourceLocationRow.slug : null
-  let representationSourcePath = canonicalPath ?? '/'
+  let representationSourcePath = routePagePath ?? '/'
   let representationResource: { type: LocalizedResourceType; id: string; routeSuffix?: string } | undefined
   if (sourceExperienceDetail) {
     representationSourcePath = `/experiences/${sourceExperienceDetail.slug}`
@@ -1081,8 +1083,8 @@ async function loadPublicPageSource(
     sourceLabel,
     resource: representationResource,
     pageId: representationResource ? undefined : tenantPage?.page_id,
+    publishedLocaleRoute: !representationResource && !tenantPage && Boolean(routePagePath),
   })
-
   const pagePayload = {
     kind: page ?? 'home',
     success: true,

@@ -8,6 +8,8 @@ Database and release work must follow:
 
 Do not invent alternative deployment, migration, rollback, or environment-management mechanisms.
 
+Custom database migrations are prohibited. If an LLM proposes, generates, or edits one, stop and require human review. Do not commit or apply it.
+
 - Fix the canonical API, schema, or domain source of truth. Do not add frontend fallbacks, guards, shadow models, compatibility branches, or silent empty success states unless nullable behavior is intentional and documented.
 - Do not hand-mutate staging or production data or schema to mask application failures.
 - Do not broaden the task to adjacent defects. Report them unless they directly block the requested change; if they block it, fix them through the same canonical path rather than creating another mechanism.

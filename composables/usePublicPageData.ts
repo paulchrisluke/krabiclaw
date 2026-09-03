@@ -115,11 +115,13 @@ export const usePublicPageData = async (options: {
   }
   const { data, error, pending, refresh } = asyncData
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
-  watch(
-    () => data.value?.localeRepresentations,
-    representations => { localeRepresentations.value = representations ?? [] },
-    { immediate: true },
-  )
+  if (options.routeOwned !== false) {
+    watch(
+      () => data.value?.localeRepresentations,
+      representations => { localeRepresentations.value = representations ?? [] },
+      { immediate: true },
+    )
+  }
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
@@ -155,6 +157,7 @@ export const usePublicPageData = async (options: {
   const postsList = computed(() => (data.value?.postsList ?? []) as ApiRecord[]);
   const blogList = computed(() => (data.value?.blogList ?? []) as ApiRecord[]);
   const blogPost = computed(() => (data.value?.blogPost ?? null) as ApiRecord | null);
+  const tenantPage = computed(() => data.value?.tenant_page ?? null);
 
   const reservationPolicyByLocation = computed(() => data.value?.reservationPolicyByLocation ?? {});
   const experiencePolicySiteDefault = computed(() => data.value?.experiencePolicySiteDefault ?? null);
@@ -277,6 +280,9 @@ export const usePublicPageData = async (options: {
     await asyncData
     if (asyncData.error.value) throwPublicPageError(asyncData.error.value)
   }
+  if (options.routeOwned !== false) {
+    localeRepresentations.value = data.value?.localeRepresentations ?? []
+  }
   await shell.ready
   if (options.routeOwned !== false && shell.error.value) throwPublicPageError(shell.error.value)
 
@@ -297,6 +303,7 @@ export const usePublicPageData = async (options: {
     postsList,
     blogList,
     blogPost,
+    tenantPage,
     locales,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,

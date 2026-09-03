@@ -44,6 +44,7 @@
       </template>
 
       <template v-else-if="block.type === 'gallery'">
+        <p v-if="text(block.data.caption)" class="mb-4 text-center text-sm text-muted">{{ text(block.data.caption) }}</p>
         <div v-if="galleryImages(block).length" class="my-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <figure v-for="image in galleryImages(block)" :key="image.id || image.url">
             <video
@@ -112,7 +113,7 @@
               <p v-if="item.value" class="text-3xl font-bold text-primary">{{ item.value }}</p>
               <h3 v-if="item.title" class="text-lg font-semibold">{{ item.title }}</h3>
               <p v-if="item.description" class="mt-2 text-sm leading-6 text-muted">{{ item.description }}</p>
-              <TenantPageButton v-if="item.url && item.label" class="mt-4" :label="item.label" :url="item.url" />
+              <TenantPageButton v-if="item.url && itemLabel(item)" class="mt-4" :label="itemLabel(item)" :url="item.url" />
             </article>
           </div>
           <p v-if="!gridItems(block).length" class="rounded-2xl border border-dashed border-default p-6 text-sm text-muted">This section has no published items yet.</p>
@@ -150,11 +151,12 @@ import BlawbyCanonicalPage from './BlawbyCanonicalPage.vue'
 
 defineProps<{ page: PublicTenantPage; template: 'saya' | 'blawby' }>()
 const sanitizer = useHtmlSanitizer()
+const { t } = useI18n()
 
 const canonicalBlawbyPaths = new Set(['/about', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
 const isCanonicalBlawbyPage = (path: string) => canonicalBlawbyPaths.has(path)
 
-type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null }>; label?: string; url?: string; amount?: string }
+type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -187,9 +189,14 @@ function asItems(value: unknown): GridItem[] {
     value: text(item.value) || undefined,
     media: Array.isArray(item.media) ? item.media as GridItem['media'] : [],
     label: text(item.label) || text(item.cta_label) || undefined,
+    labelKey: text(item.labelKey) || undefined,
     url: text(item.url) || text(item.cta_url) || undefined,
     amount: item.amount == null ? undefined : String(item.amount),
   }))
+}
+
+function itemLabel(item: GridItem): string {
+  return item.labelKey ? t(item.labelKey) : item.label || ''
 }
 
 function gridItemMedia(item: GridItem) {

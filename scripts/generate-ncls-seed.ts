@@ -6,12 +6,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nclsFixture, type NclsSeedTable, type NclsSeedValue } from '../seed-definitions/ncls.ts'
+import { renderCanonicalBillingSql } from '../seed-definitions/billing-sql.ts'
 
 const wranglerCli = resolve('node_modules/wrangler/bin/wrangler.js')
 
-function sqlValue(value: NclsSeedValue): string {
+function sqlValue(value: NclsSeedValue | boolean): string {
   if (value === null) return 'NULL'
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
+  if (typeof value === 'boolean') return value ? '1' : '0'
   if (typeof value === 'string' && value.startsWith('strftime(')) return value
   return `'${value.replace(/'/g, "''")}'`
 }
@@ -88,6 +90,8 @@ INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES ('member-ncls-blawby', ${sqlValue(nclsFixture.organizationId)}, ${sqlValue(nclsFixture.user.id)}, 'owner', unixepoch());
 
 ${renderRows(table('sites'), initialSite)}
+
+${renderCanonicalBillingSql(nclsFixture.siteId, nclsFixture.organizationId, { status: 'active', plan: 'growth' }, sqlValue)}
 
   ${renderRows(table('business_locations'))}
 

@@ -39,6 +39,7 @@ export async function useBlawbyDocument(
   options: { server?: boolean; lazy?: boolean } = {},
 ) {
   const { siteId, draftId, isTenant } = useTenantSite()
+  const locale = useState<string>('public-locale', () => 'en')
   const entityId = siteId || draftId
   if (!isTenant || !entityId) {
     throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
@@ -47,7 +48,7 @@ export async function useBlawbyDocument(
   const normalizedSlug = slug?.trim() || ''
   const route = useRoute()
   const previewToken = draftId && typeof route.query.token === 'string' ? route.query.token : null
-  const key = `blawby-document-${entityId}-${recipe}-${normalizedSlug || 'index'}`
+  const key = `blawby-document-${entityId}-${recipe}-${normalizedSlug || 'index'}-${locale.value}`
   const asyncData = await useAsyncData<BlawbyDocumentPayload>(
     key,
     async () => {
@@ -62,6 +63,7 @@ export async function useBlawbyDocument(
         const { loadPublicBlawbyDocument } = await import('~/server/utils/public-blawby-document')
         return await loadPublicBlawbyDocument(requestEvent, siteId, recipe, {
           slug: normalizedSlug,
+          locale: locale.value,
           mutateResponseHeaders: false,
         })
       }
@@ -73,7 +75,7 @@ export async function useBlawbyDocument(
       }
       if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
       return await publicApiRequest<BlawbyDocumentPayload>('/api/public/sites/' + encodeURIComponent(siteId) + '/blawby/document', {
-        query: { recipe, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
+        query: { recipe, locale: locale.value, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
         validate: value => isBlawbyDocumentPayload(value, recipe),
       })
     },

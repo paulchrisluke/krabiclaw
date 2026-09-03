@@ -3,7 +3,7 @@
     <!-- Party size — pinned above the scroll -->
     <div class="flex shrink-0 items-center justify-between gap-4 border-y border-default px-1 py-3">
       <div>
-        <div class="text-[11px] font-medium uppercase tracking-[0.2em] text-default">{{ guestsLabel }}</div>
+        <div class="text-[11px] font-medium uppercase tracking-[0.2em] text-default">{{ resolvedGuestsLabel }}</div>
         <div v-if="guestsHint" class="mt-0.5 text-xs text-muted">{{ guestsHint }}</div>
       </div>
       <div class="flex shrink-0 items-center gap-3">
@@ -11,7 +11,7 @@
           type="button"
           class="flex size-9 items-center justify-center rounded-full border border-default text-default disabled:opacity-30"
           :disabled="guests <= guestsMin"
-          aria-label="Fewer guests"
+          :aria-label="t('saya.experience_detail.fewer_guests')"
           @click="$emit('update:guests', Math.max(guestsMin, guests - 1))"
         >
           <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
@@ -21,7 +21,7 @@
           type="button"
           class="flex size-9 items-center justify-center rounded-full border border-default text-default disabled:opacity-30"
           :disabled="guests >= guestsMax"
-          aria-label="More guests"
+          :aria-label="t('saya.experience_detail.more_guests')"
           @click="$emit('update:guests', Math.min(guestsMax, guests + 1))"
         >
           <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -36,7 +36,7 @@
         type="button"
         class="flex size-9 items-center justify-center rounded-full border border-default text-default transition-colors"
         :class="calOpen ? 'bg-inverted text-inverted border-inverted' : ''"
-        :aria-label="calOpen ? 'Show list' : 'Show calendar'"
+        :aria-label="calOpen ? t('saya.experience_detail.show_list') : t('saya.experience_detail.show_calendar')"
         @click="calOpen = !calOpen"
       >
         <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="2"/><path stroke-linecap="round" d="M8 3v4M16 3v4M3 10h18"/></svg>
@@ -73,7 +73,7 @@
 
     <!-- Day-grouped scrollable slot list -->
     <div v-else ref="scrollRef" class="flex-1 overflow-y-auto py-2">
-      <p v-if="days.length === 0" class="py-6 text-sm text-muted">No availability in the next {{ dates.length }} days.</p>
+      <p v-if="days.length === 0" class="py-6 text-sm text-muted">{{ t('saya.experience_detail.no_availability', { count: dates.length }) }}</p>
       <section v-for="day in days" :key="day.key" :ref="(el) => setDayRef(el, day.key)" class="pt-4 first:pt-0">
         <h3 class="saya-display mb-3 text-lg">{{ day.label }}</h3>
         <div class="flex flex-col gap-2">
@@ -108,12 +108,12 @@
       <div class="min-w-0">
         <template v-if="modelValue">
           <div class="saya-display saya-italic truncate text-lg">{{ selectedSummary }}</div>
-          <div class="mt-0.5 text-xs text-muted">{{ guests >= guestsMax ? `${guestsMax}+` : guests }} {{ guests === 1 ? guestSingular : guestPlural }}</div>
+          <div class="mt-0.5 text-xs text-muted">{{ guests >= guestsMax ? `${guestsMax}+` : guests }} {{ guests === 1 ? resolvedGuestSingular : resolvedGuestPlural }}</div>
         </template>
-        <div v-else class="text-sm text-muted">{{ chooseSeatingLabel }}</div>
+        <div v-else class="text-sm text-muted">{{ resolvedChooseSeatingLabel }}</div>
       </div>
       <SayaButton size="lg" :disabled="!modelValue" class="shrink-0" @click="$emit('next')">
-        {{ continueLabel }}
+        {{ resolvedContinueLabel }}
       </SayaButton>
     </div>
   </div>
@@ -158,13 +158,14 @@ const props = withDefaults(defineProps<{
   modelValue: null,
   guestsMin: 1,
   guestsMax: 8,
-  guestsLabel: 'Party size',
   guestsHint: '',
-  guestSingular: 'guest',
-  guestPlural: 'guests',
-  continueLabel: 'Continue',
-  chooseSeatingLabel: 'Choose a time to continue',
 })
+const { locale, t } = useI18n()
+const resolvedGuestsLabel = computed(() => props.guestsLabel || t('saya.experience_detail.party_size'))
+const resolvedGuestSingular = computed(() => props.guestSingular || t('saya.experience_detail.guest'))
+const resolvedGuestPlural = computed(() => props.guestPlural || t('saya.experience_detail.guests'))
+const resolvedContinueLabel = computed(() => props.continueLabel || t('saya.experience_detail.continue'))
+const resolvedChooseSeatingLabel = computed(() => props.chooseSeatingLabel || t('saya.experience_detail.choose_time'))
 
 const emit = defineEmits<{
   'update:modelValue': [value: TimeSlotSelection]
@@ -183,16 +184,16 @@ function formatTime(time: string): string {
   const [hStr, mStr] = time.split(':')
   const h = Number(hStr)
   const m = Number(mStr)
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12 = h % 12 || 12
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+  const date = new Date(2000, 0, 1, h, m)
+  return new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
 function dayLabelFor(dateStr: string, index: number): string {
   const d = new Date(`${dateStr}T00:00:00`)
-  if (index === 0) return `Today, ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`
-  if (index === 1) return `Tomorrow, ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`
-  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+  const formatted = d.toLocaleDateString(locale.value, { day: 'numeric', month: 'long' })
+  if (index === 0) return t('saya.experience_detail.today_date', { date: formatted })
+  if (index === 1) return t('saya.experience_detail.tomorrow_date', { date: formatted })
+  return d.toLocaleDateString(locale.value, { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
 const days = computed(() => {
@@ -203,14 +204,14 @@ const days = computed(() => {
       const scarce = !isClosedOrFull && !tooSmall && s.remaining !== null && s.remaining <= 3
       const disabled = isClosedOrFull || tooSmall
       const availabilityLabel = s.is_closed
-        ? 'Closed'
+        ? t('saya.location.closed')
         : s.is_full
-          ? 'Sold out'
+          ? t('saya.experience_detail.sold_out')
           : tooSmall
-            ? `Only ${s.remaining} left`
+            ? t('saya.experience_detail.only_left', { count: s.remaining })
             : scarce
-              ? `${s.remaining} left`
-              : 'Available'
+              ? t('saya.experience_detail.left', { count: s.remaining })
+              : t('saya.experience_detail.available')
       return { time_slot: s.time_slot, disabled, isClosedOrFull, scarce, availabilityLabel }
     })
     return { key: d.date, label: dayLabelFor(d.date, i), slots }
@@ -221,11 +222,11 @@ const monthLabel = computed(() => {
   if (props.dates.length === 0) return ''
   const first = new Date(`${props.dates[0]!.date}T00:00:00`)
   const last = new Date(`${props.dates[props.dates.length - 1]!.date}T00:00:00`)
-  const f = first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
-  const l = last.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+  const f = first.toLocaleDateString(locale.value, { month: 'long', year: 'numeric' })
+  const l = last.toLocaleDateString(locale.value, { month: 'long', year: 'numeric' })
   if (f === l) return f
   return first.getFullYear() === last.getFullYear()
-    ? `${first.toLocaleDateString('en-GB', { month: 'long' })} – ${l}`
+    ? `${first.toLocaleDateString(locale.value, { month: 'long' })} – ${l}`
     : `${f} – ${l}`
 })
 
@@ -252,7 +253,9 @@ function jumpToDay(key: string) {
 }
 
 // ── Calendar view ──────────────────────────────────────────────────────────
-const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const weekdayLabels = computed(() => Array.from({ length: 7 }, (_, index) =>
+  new Intl.DateTimeFormat(locale.value, { weekday: 'narrow' }).format(new Date(2024, 0, 7 + index)),
+))
 
 const calendarDays = computed(() => {
   if (props.dates.length === 0) return []

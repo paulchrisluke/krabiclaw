@@ -68,7 +68,7 @@
       <BlawbyArticleGrid :posts="routeData.posts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
     </div>
     <div v-if="routeData.posts.length" class="my-4 mb-8 flex justify-center" data-parity-section="articles-more">
-      <BlawbyButton to="/blog">See All</BlawbyButton>
+      <BlawbyButton :to="localePath('/blog')">See All</BlawbyButton>
     </div>
 
     <BlawbyConsultationCta
@@ -88,6 +88,7 @@
 import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
 
 const data = inject<Ref<BlawbyDocumentPayload>>('blawby-document')
+const { localePath } = useI18n()
 if (!data) throw createError({ statusCode: 500, statusMessage: 'Blawby document context is unavailable' })
 if (!data.value?.route.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
 const identity = computed(() => data.value!.shell.identity)

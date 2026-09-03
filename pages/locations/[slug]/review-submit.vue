@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-default text-default">
     <section class="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:px-8">
-      <NuxtLink :to="`/locations/${slug}`" class="saya-kicker text-muted no-underline hover:text-default">
+      <NuxtLink :to="localePath(`/locations/${slug}`)" class="saya-kicker text-muted no-underline hover:text-default">
         Back to {{ requestData?.location?.title || 'location' }}
       </NuxtLink>
 
@@ -120,6 +120,8 @@
 import { $fetch } from 'ofetch'
 import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-limits'
 import { authClient } from '~/lib/auth-client'
+
+const { localePath } = useI18n()
 
 definePageMeta({ layout: 'saya' })
 
