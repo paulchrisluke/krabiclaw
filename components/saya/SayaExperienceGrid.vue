@@ -56,7 +56,7 @@
         <div class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted">
           <span v-if="experience.price" class="flex items-center gap-1">
             <SayaIcon name="banknotes" class="size-3.5" />
-            {{ experience.price }}
+            {{ formatProductMoney(experience.price) }}
           </span>
           <span v-if="experience.duration_minutes" class="flex items-center gap-1">
             <SayaIcon name="clock" class="size-3.5" />
@@ -79,6 +79,7 @@
 
 <script setup lang="ts">
 import type { Experience } from '~/server/utils/experiences'
+import { formatProductMoney } from '~/utils/product-money'
 
 const { localePath } = useI18n()
 const props = defineProps<{

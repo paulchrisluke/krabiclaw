@@ -11,11 +11,11 @@
     "dev": "wrangler dev"
   },
   "dependencies": {
-    "postal-mime": "^2.2.7"
+    "postal-mime": "^3.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241004.0",
-    "typescript": "^5.6.0",
-    "wrangler": "^3.80.0"
+    "@cloudflare/workers-types": "5.20260827.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.127.0"
   }
 }
