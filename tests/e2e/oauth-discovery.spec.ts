@@ -30,6 +30,54 @@ function oauthMetadataBaseURL(baseURL: string) {
 }
 
 test.describe('OAuth discovery endpoints', () => {
+  test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!, 'user-e2e-kikuzuki-owner')
+    const clientId = `${baseURL}/oauth-clients/client-localization.json`
+    const metadata = await request.get(clientId)
+    expect(metadata.status()).toBe(200)
+    expect(metadata.headers()['content-type']).toContain('application/json')
+    const client = await metadata.json() as { client_id: string; redirect_uris: string[] }
+    expect(client.client_id).toBe(clientId)
+    const redirectUri = client.redirect_uris[0]!
+    const verifier = 'kikuzuki-localization-publisher-e2e-verifier-0123456789'
+    const authorization = await request.get(oauthAuthorizeUrl(baseURL!, {
+      client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
+      scope: 'openid tenant', state: 'kikuzuki-publisher', prompt: 'consent',
+      code_challenge: pkceChallenge(verifier), code_challenge_method: 'S256',
+      resource: `${baseURL}/api/mcp`,
+    }), { maxRedirects: 0 })
+    expect(authorization.status(), await authorization.text()).toBe(302)
+    const consentUrl = new URL(authorization.headers()['location']!, baseURL)
+    expect(consentUrl.pathname).toBe('/oauth/consent')
+    const consent = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
+      headers: { Origin: baseURL! },
+      data: { accept: true, oauth_query: consentUrl.search.slice(1) },
+    })
+    expect(consent.status()).toBe(200)
+    const callback = new URL((await consent.json() as { url: string }).url)
+    expect(callback.origin + callback.pathname).toBe(redirectUri)
+    expect(callback.searchParams.get('state')).toBe('kikuzuki-publisher')
+    const token = await request.post(`${baseURL}/api/auth/oauth2/token`, {
+      headers: { Origin: baseURL! },
+      form: { grant_type: 'authorization_code', client_id: clientId,
+        code: callback.searchParams.get('code')!, redirect_uri: redirectUri,
+        code_verifier: verifier, resource: `${baseURL}/api/mcp` },
+    })
+    expect(token.status()).toBe(200)
+    const authorizationResult = await token.json() as { access_token: string; refresh_token?: string }
+    expect(authorizationResult.refresh_token).toBeUndefined()
+    const workspace = await request.post(`${baseURL}/api/mcp`, {
+      headers: { Authorization: `Bearer ${authorizationResult.access_token}`, Accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+        name: 'get_workspace_context', arguments: {},
+      } },
+    })
+    expect(workspace.status()).toBe(200)
+    const result = await workspace.json() as { result: { isError: boolean; structuredContent: { sites: Array<{ id: string }> } } }
+    expect(result.result.isError).toBe(false)
+    expect(result.result.structuredContent.sites.some(site => site.id === 'site-kikuzuki')).toBe(true)
+  })
+
   test('/.well-known/oauth-protected-resource returns valid document', async ({ request, baseURL }) => {
     const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
     expect(res.status()).toBe(200)
