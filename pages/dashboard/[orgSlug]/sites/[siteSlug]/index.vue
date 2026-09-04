@@ -144,7 +144,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
 
-const { orgPaths } = useDashboardSiteLinks()
+const { orgPaths, sitePaths } = useDashboardSiteLinks()
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'My site | KrabiClaw', robots: 'noindex, nofollow' })
@@ -155,11 +155,16 @@ const requestEvent = useRequestEvent()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-const route = useRoute()
 const activeTab = ref<'site' | 'pages'>('site')
 const tabs = [{ label: 'My site', value: 'site' as const }, { label: 'Pages', value: 'pages' as const }]
-const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
-const locationsPath = computed(() => `${siteDashboardPath.value}/locations`)
+const siteDashboardPath = computed(() => {
+  if (!sitePaths.value) throw createError({ statusCode: 400, statusMessage: 'Dashboard site scope is required' })
+  return sitePaths.value.site
+})
+const locationsPath = computed(() => {
+  if (!sitePaths.value) throw createError({ statusCode: 400, statusMessage: 'Dashboard site scope is required' })
+  return sitePaths.value.locations
+})
 const siteName = computed(() => dashboard.site.value?.brand_name ?? '')
 const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
 const template = computed(() => resolvePublicTemplate({ vertical: dashboard.site.value?.vertical }).slug)
@@ -230,14 +235,14 @@ const pageIcons: Record<string, string> = { '/': 'i-lucide-house', '/about': 'i-
 const featureByRoute: Record<string, ProductFeature> = { '/menu': 'products', '/products': 'products', '/order': 'ordering', '/reservations': 'reservations', '/experiences': 'experiences', '/services': 'services', '/pricing': 'services', '/donate': 'services', '/schedule': 'services' }
 const primaryLocationPath = computed(() => {
   const location = locations.value.find(item => item.is_primary) ?? locations.value[0]
-  return location ? `${locationsPath.value}/${location.slug}` : locationsPath.value
+  return location ? `${locationsPath.value}/${location.slug}` : null
 })
 function pageDestination(path: string) {
   if (path === '/blog') return `${siteDashboardPath.value}/blog`
-  if (path === '/menu' || path === '/products') return `${primaryLocationPath.value}/products`
+  if (path === '/menu' || path === '/products') return primaryLocationPath.value ? `${primaryLocationPath.value}/products` : null
   if (path === '/order') return `${siteDashboardPath.value}/orders`
-  if (path === '/reservations') return `${primaryLocationPath.value}/reservations`
-  if (path === '/experiences') return `${primaryLocationPath.value}/experiences`
+  if (path === '/reservations') return primaryLocationPath.value ? `${primaryLocationPath.value}/reservations` : null
+  if (path === '/experiences') return primaryLocationPath.value ? `${primaryLocationPath.value}/experiences` : null
   if (['/services', '/pricing', '/donate', '/schedule'].includes(path)) return `${siteDashboardPath.value}/professional-services`
   return `${siteDashboardPath.value}/pages`
 }
@@ -253,10 +258,11 @@ const pageRows = computed(() => {
       enabled: true,
       to: `${siteDashboardPath.value}/pages/${page.id}`,
     }))
-  const managers = [...catalog.pages.filter(page => page.scope === 'site' && featureByRoute[page.route]), { id: 'blog', label: 'Blog', route: '/blog', feature: 'blog' as ProductFeature }].map(page => {
+  const managers = [...catalog.pages.filter(page => page.scope === 'site' && featureByRoute[page.route]), { id: 'blog', label: 'Blog', route: '/blog', feature: 'blog' as ProductFeature }].flatMap(page => {
     const module = featureByRoute[page.route]
     const enabled = !module || capabilities.value.pages.some(item => item.scope === 'site' && item.route === page.route)
-    return { id: page.id, label: page.label, icon: pageIcons[page.route] || 'i-lucide-file-text', module, enabled, to: pageDestination(page.route) }
+    const to = pageDestination(page.route)
+    return to ? [{ id: page.id, label: page.label, icon: pageIcons[page.route] || 'i-lucide-file-text', module, enabled, to }] : []
   })
   return [...documents, ...managers]
 })
