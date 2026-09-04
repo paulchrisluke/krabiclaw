@@ -389,13 +389,31 @@ test.describe('stateless MCP server', () => {
       const siteId = MCP_GROWTH_SERVICE_SITE_ID
       const locationId = await createScratchLocation(request, baseURL!, siteId)
 
+      // Categories are records now, so they are created before anything can
+      // reference them — the same order the CMS uses.
+      const mainsCategory = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'create_product_category',
+        args: { site_id: siteId, location_id: locationId, name: 'Mains' },
+      })
+      expect(mainsCategory.status()).toBe(200)
+      const mainsCategoryId = mcpData<{ category: { id: string } }>(await mainsCategory.json()).category.id
+
+      const dessertsCategory = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'create_product_category',
+        args: { site_id: siteId, location_id: locationId, name: 'Desserts' },
+      })
+      expect(dessertsCategory.status()).toBe(200)
+      const dessertsCategoryId = mcpData<{ category: { id: string } }>(await dessertsCategory.json()).category.id
+
       const product = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_product',
         args: {
           site_id: siteId,
           location_id: locationId,
-          category: 'Mains',
+          category_id: mainsCategoryId,
           name: 'MCP Curry',
           price: { amount_minor: 1250, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
           order_url: 'https://orders.example.com/mcp-curry',
@@ -412,8 +430,8 @@ test.describe('stateless MCP server', () => {
           site_id: siteId,
           location_id: locationId,
           products: [
-            { category: 'Mains', name: 'MCP Noodles', price: { amount_minor: 1125, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
-            { category: 'Desserts', name: 'MCP Mango Sticky Rice', price: { amount_minor: 800, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
+            { category_id: mainsCategoryId, name: 'MCP Noodles', price: { amount_minor: 1125, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
+            { category_id: dessertsCategoryId, name: 'MCP Mango Sticky Rice', price: { amount_minor: 800, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
           ],
         },
       })
@@ -474,19 +492,21 @@ test.describe('stateless MCP server', () => {
       const renameCategory = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'rename_product_category',
-        args: { site_id: siteId, location_id: locationId, old_category: 'Mains', new_category: 'Entrees' },
+        args: { site_id: siteId, location_id: locationId, category_id: mainsCategoryId, name: 'Entrees' },
       })
       expect(renameCategory.status()).toBe(200)
 
+      // Ordering takes the complete intended order for one category rather than
+      // an insert-before reference.
       const reorder = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'move_products',
+        toolName: 'reorder_products',
         idempotent: true,
         args: {
           site_id: siteId,
           location_id: locationId,
-          product_ids: [secondProductId],
-          before_product_id: productId,
+          category_id: mainsCategoryId,
+          product_ids: [secondProductId, productId],
         },
       })
       expect(reorder.status()).toBe(200)
@@ -505,7 +525,7 @@ test.describe('stateless MCP server', () => {
       const deleteDesserts = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'delete_product_category',
-        args: { site_id: siteId, location_id: locationId, category: 'Desserts' },
+        args: { site_id: siteId, location_id: locationId, category_id: dessertsCategoryId },
       })
       expect(deleteDesserts.status()).toBe(200)
 
