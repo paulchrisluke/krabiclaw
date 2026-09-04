@@ -9052,6 +9052,26 @@ __metadata:
   languageName: node
   linkType: hard
 
+"h3@npm:2.0.1-rc.29":
+  version: 2.0.1-rc.29
+  resolution: "h3@npm:2.0.1-rc.29"
+  dependencies:
+    rou3: "npm:^0.9.2"
+    srvx: "npm:^0.12.7"
+  peerDependencies:
+    crossws: ^0.4.12
+    ocache: ">=0.3.0"
+  peerDependenciesMeta:
+    crossws:
+      optional: true
+    ocache:
+      optional: true
+  bin:
+    h3: bin/h3.mjs
+  checksum: 10c0/1c5801977ca6414f5f0c858477841e6a12434381dd5c3902b1c14b9e3193978030dfdcb0cde17bda23809bf49e8d04858d593280aa857bde9fa7219080c89a6d
+  languageName: node
+  linkType: hard
+
 "h3@npm:^1.15.10, h3@npm:^1.15.11, h3@npm:^1.15.5":
   version: 1.15.11
   resolution: "h3@npm:1.15.11"
@@ -10903,7 +10923,7 @@ __metadata:
     drizzle-kit: "npm:0.31.10"
     drizzle-orm: "npm:^0.45.2"
     eslint: "npm:^10.9.1"
-    h3: "npm:2.0.1-rc.22"
+    h3: "npm:2.0.1-rc.29"
     isomorphic-dompurify: "npm:^3.23.0"
     libphonenumber-js: "npm:^1.13.12"
     lighthouse: "npm:^13.4.1"
@@ -12401,7 +12421,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rou3@npm:^0.9.1":
+"rou3@npm:^0.9.1, rou3@npm:^0.9.2":
   version: 0.9.2
   resolution: "rou3@npm:0.9.2"
   checksum: 10c0/4b0ab14fbd3a7c60ffee1af644f618a9e76dd218cd4fbb585b8fa3601a3f25857c2b1656a215389379a7aef1e1e1897fd55e835658e9c3a5d9683571b36b3bd6
@@ -12910,6 +12930,15 @@ __metadata:
   bin:
     srvx: bin/srvx.mjs
   checksum: 10c0/89d844b55c1858f567bb5dac8839d0a4d217fc25306c1c7caa4a6cc8236381812c3c84352d974ecfd5b655a690883c172f49d51b13f4181160a1da4e982ba792
+  languageName: node
+  linkType: hard
+
+"srvx@npm:^0.12.7":
+  version: 0.12.7
+  resolution: "srvx@npm:0.12.7"
+  bin:
+    srvx: bin/srvx.mjs
+  checksum: 10c0/924ba9153b40f438558fccfeb531158f628d27baa1e048674df8dd4cc768b34bdf244d710cfa97b10d1ac9d262066cd24dca67b73dd77c076c4d25762e294f85
   languageName: node
   linkType: hard
 

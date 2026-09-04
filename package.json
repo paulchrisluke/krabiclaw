@@ -173,7 +173,7 @@
     "@vue-email/text": "0.0.3",
     "better-auth": "1.7.0-beta.10",
     "drizzle-orm": "^0.45.2",
-    "h3": "2.0.1-rc.22",
+    "h3": "2.0.1-rc.29",
     "isomorphic-dompurify": "^3.23.0",
     "libphonenumber-js": "^1.13.12",
     "marked": "^18.0.11",
