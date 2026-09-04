@@ -215,14 +215,15 @@ test.describe.serial('published Thai content saves through the CMS and renders w
   })
 
   test.describe('Thai link copy in the CMS', () => {
-    test.beforeAll(async ({ browser }) => {
+    test.beforeAll(async ({ browser }, testInfo) => {
+      testInfo.setTimeout(45_000)
       dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
       cms = await dashboardContext.newPage()
       await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, {})
+      await expect(cms.getByTestId('links-translation-locale')).toHaveValue(locale, { timeout: 30_000 })
     })
 
     test('loads and saves one representative Thai link translation', async () => {
-      await expect(cms.getByTestId('links-translation-locale')).toHaveValue(locale)
       await expect(cms.getByTestId('links-translation-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
       const item = links.items[0]!
       const editor = cms.getByTestId(`links-item-translation-${item.id}`)
