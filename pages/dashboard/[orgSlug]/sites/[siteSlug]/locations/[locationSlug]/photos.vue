@@ -1,74 +1,102 @@
 <template>
   <UDashboardPanel id="location-photos">
     <template #header>
-      <UDashboardNavbar title="Photos">
+      <!--
+        The navbar carries the way out of the level and nothing else. Its filter,
+        Upload, Attach and Refresh all now live on the screen they act on, and
+        keeping a second copy here is how two sets of controls drift apart.
+      -->
+      <UDashboardNavbar title="Location" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="paths.project" label="Location" />
-        </template>
-        <template #trailing>
-          <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />
-          <UButton icon="i-lucide-upload" color="primary" variant="soft" :loading="uploading" :disabled="!locationId || galleryMutating" @click="openUploadPicker">Upload</UButton>
-          <UButton icon="i-lucide-paperclip" color="neutral" variant="soft" :disabled="!locationId || galleryMutating" @click="openAttachModal">Attach existing</UButton>
-          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadPhotos">Refresh</UButton>
-          <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
 
-      <div v-if="pendingRetryFile" class="mb-4">
-        <UButton size="sm" color="neutral" variant="soft" :loading="uploading" :disabled="uploading" @click="retryPendingUpload">
-          Retry confirm
-        </UButton>
-      </div>
+      <DashboardGridEditor
+        v-model:selecting="selecting"
+        v-model:selected="selectedIds"
+        title="Photos"
+        description="Upload images or videos here, or attach existing media to this location."
+        :items="gridItems"
+        :pending="loading"
+        :error="loadError"
+        empty-title="No location media yet"
+        empty-icon="i-lucide-image"
+        add-label="Add photos"
+        selection-title="Select photos"
+        grid-class="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-7"
+        :removing="galleryMutating"
+        @add="openAttachModal"
+        @open="openPhoto"
+        @remove-many="detachMany"
+      >
+        <template #actions>
+          <UButton icon="i-lucide-upload" color="neutral" variant="soft" :loading="uploading" aria-label="Upload a file" square @click="openUploadPicker" />
+        </template>
 
-      <div v-if="loading" class="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-7">
-        <USkeleton v-for="i in 14" :key="i" class="aspect-square rounded-lg" />
-      </div>
+        <template #filters>
+          <div class="flex flex-wrap items-center gap-2">
+            <UButton
+              v-for="item in categoryItems"
+              :key="item.id"
+              size="sm"
+              color="neutral"
+              :variant="categoryFilter === item.id ? 'soft' : 'ghost'"
+              @click="categoryFilter = item.id"
+            >
+              {{ item.label }}
+            </UButton>
+          </div>
 
-      <UAlert
-        v-else-if="loadError"
-        color="error"
-        variant="soft"
-        title="Photos could not be loaded"
-        :description="loadError"
-      />
+          <div v-if="pendingRetryFile" class="mt-4">
+            <UButton size="sm" color="neutral" variant="soft" :loading="uploading" :disabled="uploading" @click="retryPendingUpload">
+              Retry confirm
+            </UButton>
+          </div>
+          <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mt-4" />
+          <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
+        </template>
 
-      <div v-else-if="filteredAssets.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
-        <UIcon name="i-lucide-image" class="mx-auto size-9 text-muted" />
-        <p class="mt-3 text-sm font-medium text-highlighted">No location media yet</p>
-        <p class="mt-1 text-sm text-muted">Upload images or videos here, or attach existing media to this location.</p>
-        <div class="mt-5 flex justify-center gap-2">
-          <UButton icon="i-lucide-upload" :loading="uploading" @click="openUploadPicker">Upload file</UButton>
-          <UButton color="neutral" variant="soft" icon="i-lucide-paperclip" @click="openAttachModal">Attach existing</UButton>
-        </div>
-      </div>
-
-      <div v-else class="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-7">
-        <div v-for="asset in filteredAssets" :key="asset.id" class="group relative aspect-square overflow-hidden rounded-lg border border-default bg-elevated">
+        <template #tile="{ item }">
           <img
-            v-if="asset.thumbnail_url || asset.public_url"
-            :src="asset.thumbnail_url || asset.public_url || undefined"
-            :alt="asset.alt_text || asset.file_name || ''"
+            v-if="item.row.thumbnail_url || item.row.public_url"
+            :src="item.row.thumbnail_url || item.row.public_url || undefined"
+            :alt="item.row.alt_text || item.row.file_name || ''"
             class="h-full w-full object-cover"
             loading="lazy"
-          />
-          <div v-else class="flex h-full w-full items-center justify-center">
+          >
+          <div v-else class="flex h-full w-full items-center justify-center bg-elevated">
             <UIcon name="i-lucide-film" class="size-6 text-muted" />
           </div>
           <div class="absolute inset-x-0 bottom-0 bg-black/65 px-2 py-1 opacity-0 transition group-hover:opacity-100">
-            <p class="truncate text-xs text-white">{{ asset.file_name || asset.kind }}</p>
-            <p class="truncate text-xs text-white/70">{{ categoryLabel(asset.category) }}</p>
+            <p class="truncate text-xs text-white">{{ item.row.file_name || item.row.kind }}</p>
+            <p class="truncate text-xs text-white/70">{{ categoryLabel(item.row.category) }}</p>
           </div>
-          <div class="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition group-hover:opacity-100">
-            <UDropdownMenu :items="categoryMenu(asset)" :content="{ align: 'end' }">
-              <UButton size="xs" color="neutral" variant="solid" icon="i-lucide-tag" />
-            </UDropdownMenu>
-            <UButton size="xs" color="error" variant="solid" icon="i-lucide-x" :disabled="galleryMutating" @click="detachPhoto(asset)" />
-          </div>
-        </div>
-      </div>
+        </template>
+      </DashboardGridEditor>
+
+      <DashboardListItemDialog
+        v-model:open="photoOpen"
+        :title="openPhotoAsset?.file_name || 'Photo'"
+        removable
+        :saving="galleryMutating"
+        :removing="galleryMutating"
+        @save="savePhoto"
+        @remove="detachOpenPhoto"
+      >
+        <img
+          v-if="openPhotoAsset && (openPhotoAsset.thumbnail_url || openPhotoAsset.public_url)"
+          :src="openPhotoAsset.thumbnail_url || openPhotoAsset.public_url || undefined"
+          :alt="openPhotoAsset.alt_text || openPhotoAsset.file_name || ''"
+          class="mx-auto max-h-64 rounded-lg object-contain"
+        >
+        <UFormField label="Category">
+          <USelect v-model="photoCategory" :items="assignableCategories" value-key="id" label-key="label" class="w-full" />
+        </UFormField>
+      </DashboardListItemDialog>
 
       <UModal v-model:open="attachOpen" :ui="{ content: 'max-w-4xl' }">
         <template #content>
@@ -113,6 +141,9 @@
 </template>
 
 <script setup lang="ts">
+import DashboardGridEditor from '~/components/dashboard/DashboardGridEditor.vue'
+import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
 
@@ -144,6 +175,11 @@ const attachLoading = ref(false)
 const categoryFilter = ref('all')
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const galleryMutating = ref(false)
+const selecting = ref(false)
+const selectedIds = ref<string[]>([])
+const photoOpen = ref(false)
+const openPhotoAsset = ref<MediaAsset | null>(null)
+const photoCategory = ref<string>('other')
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
@@ -168,6 +204,48 @@ const filteredAssets = computed(() => {
   if (categoryFilter.value === 'all') return assets.value
   return assets.value.filter(asset => (asset.category || 'other') === categoryFilter.value)
 })
+
+const gridItems = computed(() => filteredAssets.value.map(row => ({
+  id: row.id,
+  title: row.file_name || row.kind,
+  row,
+})))
+
+const assignableCategories = computed(() => categoryItems.filter(item => item.id !== 'all'))
+
+// The photo's own screen: what it is, where it belongs, and the way to take it
+// off this location. It replaces a tag dropdown and a delete cross that both
+// lived on hover, at the corner of a tile you had to avoid clicking.
+function openPhoto(item: { id: string }) {
+  const asset = filteredAssets.value.find(entry => entry.id === item.id)
+  if (!asset) return
+  openPhotoAsset.value = asset
+  photoCategory.value = asset.category ?? 'other'
+  photoOpen.value = true
+}
+
+async function savePhoto() {
+  const asset = openPhotoAsset.value
+  if (!asset) return
+  if (photoCategory.value !== (asset.category ?? 'other')) {
+    // patchAsset reports its own failure and returns false. Closing regardless
+    // would show the toast and then take away the form still holding the change,
+    // so the only way back would be to find the photo and set it again.
+    const saved = await patchAsset(asset, { category: photoCategory.value }, 'Photo category updated')
+    if (!saved) return
+  }
+  photoOpen.value = false
+}
+
+async function detachOpenPhoto() {
+  const asset = openPhotoAsset.value
+  if (!asset) return
+  const before = filteredAssets.value.length
+  await detachMany([asset.id])
+  // Stay open if the photo is still attached: the detach failed, and closing
+  // would leave the grid contradicting the toast.
+  if (filteredAssets.value.length < before) photoOpen.value = false
+}
 
 function categoryLabel(category: string | null) {
   return categoryItems.find(item => item.id === (category || 'other'))?.label ?? 'Other'
@@ -307,31 +385,27 @@ async function attachPhoto(asset: MediaAsset) {
   }
 }
 
-async function detachPhoto(asset: MediaAsset) {
-  if (!locationId.value) return
+async function detachMany(ids: string[]) {
+  if (!locationId.value || !ids.length) return
   galleryMutating.value = true
   try {
-    await dashboardApi(`${siteApiBase}/media/placements/remove`, {
+    await Promise.all(ids.map(assetId => dashboardApi(`${siteApiBase}/media/placements/remove`, {
       method: 'POST',
-      body: { placement: GALLERY_PLACEMENT(), asset_id: asset.id },
+      body: { placement: GALLERY_PLACEMENT(), asset_id: assetId },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
-    })
-    toast.add({ description: 'Media detached from this location', color: 'success' })
-    await loadPhotos()
+    })))
+    toast.add({ description: `${ids.length} item(s) detached from this location`, color: 'success' })
+    selecting.value = false
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to remove media', color: 'error' })
   } finally {
     galleryMutating.value = false
+    // Reload whatever the outcome. A rejected batch may still have detached some
+    // of its photos, and the grid is the only thing telling the user which.
+    await loadPhotos()
   }
 }
 
-function categoryMenu(asset: MediaAsset) {
-  return [categoryItems.filter(item => item.id !== 'all').map(item => ({
-    label: item.label,
-    icon: asset.category === item.id ? 'i-lucide-check' : 'i-lucide-tag',
-    onSelect: () => patchAsset(asset, { category: item.id }, 'Photo category updated')
-  }))]
-}
 
 const requestEvent = useRequestEvent()
 const photosKey = computed(() => `dashboard-location-photos:${siteId}:${locationId.value ?? 'missing'}`)

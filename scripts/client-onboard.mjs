@@ -38,7 +38,6 @@ function parseIntakeYaml(content) {
   let currentList  = null
   let inMultiline  = false
   let multilineLines = []
-  const _baseIndent   = 0
 
   const flush = () => {
     if (inMultiline && currentKey) {

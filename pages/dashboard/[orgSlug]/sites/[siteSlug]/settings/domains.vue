@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Domains">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
+          <DashboardNavbarLeading :to="paths.siteSettings" label="Site settings" />
         </template>
         <template #right>
           <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
