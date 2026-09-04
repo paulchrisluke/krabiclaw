@@ -5,7 +5,7 @@
         :title="siteName"
         :toggle="false"
       >
-        <template #leading><DashboardNavbarLeading :to="`${paths.org}/sites`" label="Sites" /></template>
+        <template #leading><DashboardNavbarLeading :to="`${orgPaths.org}/sites`" label="Sites" /></template>
       </UDashboardNavbar>
     </template>
 
@@ -144,7 +144,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
 
-const { paths } = useDashboardSiteLinks()
+const { orgPaths } = useDashboardSiteLinks()
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'My site | KrabiClaw', robots: 'noindex, nofollow' })

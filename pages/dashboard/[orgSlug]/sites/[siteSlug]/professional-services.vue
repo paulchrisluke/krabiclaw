@@ -2,8 +2,8 @@
   <UDashboardPanel id="site-professional-services">
     <template #header>
       <UDashboardNavbar title="Services">
-        <template #leading><DashboardNavbarLeading :to="paths.site" label="Site" /></template>
-        <template #right><UButton :to="pagesPath" color="neutral" variant="soft">Pages</UButton></template>
+        <template #leading><DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" /></template>
+        <template #right><UButton v-if="sitePaths" :to="sitePaths.pages" color="neutral" variant="soft">Pages</UButton></template>
       </UDashboardNavbar>
     </template>
     <template #body>
@@ -36,20 +36,17 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.services' })
 
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Services | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface Offering { id: string; name: string; slug: string; summary: string; short_description: string; sort_order: number; featured: boolean }
 interface Response { offerings: Offering[] }
 const dashboardApi = useDashboardApi()
-const route = useRoute()
 const siteId = await useDashboardSiteId()
 const offerings = ref<Offering[]>([])
 const pending = ref(true)
 const saving = ref(false)
 const error = ref<string | null>(null)
-const pagesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`)
-
 const isResponse = (value: unknown): value is Response => isRecord(value) && Array.isArray(value.offerings)
 async function load() {
   try {

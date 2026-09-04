@@ -8,7 +8,7 @@
       -->
       <UDashboardNavbar title="Location" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.project" label="Location" />
+          <DashboardNavbarLeading v-if="locationPaths" :to="locationPaths.location" label="Location" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -147,7 +147,7 @@ import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDia
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
 
-const { paths } = useDashboardSiteLinks()
+const { locationPaths } = useDashboardSiteLinks()
 
 
 interface MediaAsset {

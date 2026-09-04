@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Media library">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
+          <DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -139,7 +139,7 @@ import DashboardGridEditor from '~/components/dashboard/DashboardGridEditor.vue'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 import { getErrorMessage } from '~/utils/errors'
