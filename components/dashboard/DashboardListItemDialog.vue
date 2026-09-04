@@ -60,7 +60,7 @@
       />
       <span v-else />
       <UButton
-        label="Save"
+        :label="saveLabel ?? 'Save'"
         :loading="saving"
         :disabled="saveDisabled"
         data-testid="list-item-save"
@@ -79,6 +79,8 @@ defineProps<{
   saving?: boolean
   removing?: boolean
   saveDisabled?: boolean
+  /** Names the commit for a sheet that does something other than save an edit. */
+  saveLabel?: string
 }>()
 
 defineEmits<{
