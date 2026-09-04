@@ -1,43 +1,47 @@
 import { defineHandler } from 'nitro'
-
-// Dev-only endpoint for E2E test notification verification
-// Returns notification records matching query params. 404 in production.
+import { getQuery } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { queryAll } from '~/server/db'
+import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 
 export default defineHandler(async (event) => {
   assertDevRouteAllowed(event)
-  const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = cloudflareEnv(event).DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const query = getQuery(event)
-  const siteId = query.site_id as string | undefined
-  const organizationId = query.organization_id as string | undefined
-  const locationId = query.location_id as string | undefined
-  const template = query.template as string | undefined
-  const channel = query.channel as string | undefined
-  const status = query.status as string | undefined
-  const since = query.since as string | undefined
+  const siteId = typeof query.site_id === 'string' ? query.site_id : null
+  const organizationId = typeof query.organization_id === 'string' ? query.organization_id : null
+  const locationId = typeof query.location_id === 'string' ? query.location_id : null
+  const since = typeof query.since === 'string' ? query.since : null
   const limit = Math.min(Math.max(Number.parseInt(String(query.limit ?? '200'), 10) || 200, 1), 500)
+  const filters: string[] = []
+  const binds: Array<string | number> = []
+  if (siteId) { filters.push('gt.site_id = ?'); binds.push(siteId) }
+  if (organizationId) { filters.push('gt.organization_id = ?'); binds.push(organizationId) }
+  if (locationId) { filters.push('gt.location_id = ?'); binds.push(locationId) }
+  if (since) { filters.push('d.created_at >= ?'); binds.push(since) }
 
-  let sql = `SELECT id, organization_id, site_id, location_id, channel, template, title, recipient, payload, provider_message_id, status, error, sent_at, created_at
-             FROM notifications WHERE 1=1`
-  const binds: string[] = []
+  const notifications = await queryAll(db, `
+    SELECT id, organization_id, site_id, location_id, guest_thread_id, source_entry_id,
+           scope, event_type, severity, template, title, payload, created_at
+    FROM notifications
+    WHERE (? IS NULL OR site_id = ?)
+      AND (? IS NULL OR organization_id = ?)
+      AND (? IS NULL OR location_id = ?)
+      AND (? IS NULL OR created_at >= ?)
+    ORDER BY created_at DESC
+    LIMIT ?
+  `, [siteId, siteId, organizationId, organizationId, locationId, locationId, since, since, limit])
+  const deliveries = await queryAll(db, `
+    SELECT d.id, d.thread_id, d.entry_id, d.channel, d.provider, d.purpose,
+           d.idempotency_key, d.status, d.provider_message_id, d.error, d.created_at, d.updated_at
+    FROM guest_thread_deliveries d
+    JOIN guest_threads gt ON gt.id = d.thread_id
+    ${filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : ''}
+    ORDER BY d.created_at DESC
+    LIMIT ?
+  `, [...binds, limit])
 
-  if (siteId) { sql += ' AND site_id = ?'; binds.push(siteId) }
-  if (organizationId) { sql += ' AND organization_id = ?'; binds.push(organizationId) }
-  if (locationId) { sql += ' AND location_id = ?'; binds.push(locationId) }
-  if (template) { sql += ' AND template = ?'; binds.push(template) }
-  if (channel) { sql += ' AND channel = ?'; binds.push(channel) }
-  if (status) { sql += ' AND status = ?'; binds.push(status) }
-  if (since) { sql += ' AND created_at >= ?'; binds.push(since) }
-
-  sql += ' ORDER BY created_at DESC LIMIT ?'
-  binds.push(String(limit))
-
-  const rows = await queryAll(db, sql, binds)
-  return jsonResponse({ notifications: rows ?? [] })
+  return jsonResponse({ notifications, deliveries })
 })
-import {  getQuery  } from 'nitro/h3';

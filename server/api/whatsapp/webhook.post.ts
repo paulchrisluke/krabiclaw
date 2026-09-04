@@ -4,10 +4,10 @@ import { parseMetaMsisdn } from '~/utils/phone'
 import {
   getChannelState, metaMessageExists, upsertChannelState, type JsonSerializable, } from '~/server/utils/chowbot-conversations'
 import { execute, queryAll, queryFirst } from '~/server/db'
-import { ensureGuestThread, getGuestThreadById, getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { ensureGuestThread, getGuestThreadById, updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threads/repository'
 import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
-import { appendEntry } from '~/server/domain/guest-threads/entries'
+import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
@@ -26,10 +26,8 @@ interface WhatsAppMessage {
   text?: { body?: string }
   image?: { id?: string; mime_type?: string; caption?: string }
   document?: { id?: string; mime_type?: string; filename?: string; caption?: string }
-  // Present when the manager replied by quoting (long-pressing) a prior outbound
-  // message — `id` is that message's WhatsApp message id, correlated back to
-  // notifications.provider_message_id (see issue #293 Section C.1). Like `statuses`
-  // before Workstream 4, this was parsed nowhere until now.
+  // Present when the manager replied by quoting a prior outbound message.
+  // The provider id correlates to a guest thread delivery receipt.
   context?: { id?: string; from?: string }
 }
 
@@ -124,7 +122,7 @@ function submissionTypeLabel(type: string): string {
   return 'Message'
 }
 
-interface QuotedNotificationMatch {
+interface QuotedDeliveryMatch {
   threadId: string
   siteId: string
   organizationId: string
@@ -132,45 +130,32 @@ interface QuotedNotificationMatch {
   guestEmail: string
 }
 
-// Resolves a manager's quoted-reply context.id back to the operational notification it
-// was sent from, then to the guest thread it correlates with — issue #293 Section C.1.
-// Returns null (never throws) for "no match yet" so the caller can treat it as
-// unmatched and fall through to the remaining routing tiers rather than erroring.
-async function resolveQuotedNotification(
-  db: D1Database, env: ApiRecord, providerMessageId: string, phone: string, ): Promise<QuotedNotificationMatch | null> {
-  const notification = await queryFirst<{
+async function resolveQuotedDelivery(
+  db: D1Database, env: ApiRecord, providerMessageId: string, phone: string, ): Promise<QuotedDeliveryMatch | null> {
+  const thread = await queryFirst<{
+    thread_id: string
     organization_id: string
-    site_id: string | null
+    site_id: string
     location_id: string | null
-    related_submission_type: 'contact' | 'reservation' | 'experience_booking' | 'invitation' | null
-    related_submission_id: string | null
+    guest_email: string | null
   }>(db, `
-    SELECT organization_id, site_id, location_id, related_submission_type, related_submission_id
-    FROM notifications
-    WHERE provider_message_id = ? AND related_submission_type IS NOT NULL AND related_submission_id IS NOT NULL
+    SELECT gt.id AS thread_id, gt.organization_id, gt.site_id, gt.location_id, gt.guest_email
+    FROM guest_thread_deliveries d
+    JOIN guest_threads gt ON gt.id = d.thread_id
+    WHERE d.provider = 'meta' AND d.provider_message_id = ?
     LIMIT 1
   `, [providerMessageId])
-  if (!notification || !notification.site_id || !notification.related_submission_type || !notification.related_submission_id) return null
-  // 'invitation' is a valid related_submission_type (Workstream 2) but has no guest thread.
-  if (notification.related_submission_type === 'invitation') return null
+  if (!thread?.guest_email) return null
 
   const authorized = await isAuthorizedWhatsAppRecipient(db, {
     env: env as CloudflareEnv,
-    phone, organizationId: notification.organization_id, siteId: notification.site_id, locationId: notification.location_id, requireSiteWide: false, })
+    phone, organizationId: thread.organization_id, siteId: thread.site_id, locationId: thread.location_id, requireSiteWide: false, })
   if (!authorized) return null
 
-  const thread = await getGuestThreadBySubmission(db, notification.related_submission_type, notification.related_submission_id)
-  if (!thread || !thread.guest_email) return null
-
-  return { threadId: thread.id, siteId: thread.site_id, organizationId: thread.organization_id, locationId: thread.location_id, guestEmail: thread.guest_email }
+  return { threadId: thread.thread_id, siteId: thread.site_id, organizationId: thread.organization_id, locationId: thread.location_id, guestEmail: thread.guest_email }
 }
 
-// Tier 3 candidate list: recent (24h) guest-related operational notifications scoped to
-// sites/locations the manager is authorized for (org-wide roles see everything in their
-// org; editor always needs matching resource team membership). Grouped by
-// guest thread so a guest with multiple notification events in the window (e.g. created
-// + a reply) only appears once, most recent first.
-async function listRecentGuestNotificationCandidates(db: D1Database, env: ApiRecord, userId: string): Promise<DisambiguationCandidate[]> {
+async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord, userId: string): Promise<DisambiguationCandidate[]> {
   const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const rows = await queryAll<{
     threadId: string
@@ -180,12 +165,10 @@ async function listRecentGuestNotificationCandidates(db: D1Database, env: ApiRec
     guestName: string
     submissionType: string
   }>(db, `
-    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId, gt.location_id AS locationId, gt.guest_name AS guestName, gt.submission_type AS submissionType, MAX(n.created_at) AS createdAt
-    FROM notifications n
-    JOIN guest_threads gt ON gt.submission_type = n.related_submission_type AND gt.submission_id = n.related_submission_id
-    WHERE n.channel = 'whatsapp'
-      AND n.related_submission_type IS NOT NULL AND n.related_submission_id IS NOT NULL
-      AND n.created_at > ?
+    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId, gt.location_id AS locationId, gt.guest_name AS guestName, gt.submission_type AS submissionType, MAX(d.created_at) AS createdAt
+    FROM guest_thread_deliveries d
+    JOIN guest_threads gt ON gt.id = d.thread_id
+    WHERE d.channel = 'whatsapp' AND d.created_at > ?
     GROUP BY gt.id
     ORDER BY createdAt DESC
     LIMIT 25
@@ -239,27 +222,27 @@ async function routeManagerWhatsAppMessage(
     })
 
   async function resolveFreshDispatch(): Promise<{
-    quotedMatch: 'authorized_thread_found' | 'unmatched' | null
-    quotedResolved: QuotedNotificationMatch | null
-    recentNotificationCount: number
+    quotedDeliveryMatch: 'authorized_thread_found' | 'unmatched' | null
+    quotedDelivery: QuotedDeliveryMatch | null
+    recentDeliveryCount: number
     recentCandidates: DisambiguationCandidate[]
   }> {
-    let quotedResolved: QuotedNotificationMatch | null = null
-    let quotedMatch: 'authorized_thread_found' | 'unmatched' | null = null
+    let quotedDelivery: QuotedDeliveryMatch | null = null
+    let quotedDeliveryMatch: 'authorized_thread_found' | 'unmatched' | null = null
     if (hasQuotedContext) {
-      quotedResolved = await resolveQuotedNotification(db, env, contextId!, opts.toPhone)
-      quotedMatch = quotedResolved ? 'authorized_thread_found' : 'unmatched'
+      quotedDelivery = await resolveQuotedDelivery(db, env, contextId!, opts.toPhone)
+      quotedDeliveryMatch = quotedDelivery ? 'authorized_thread_found' : 'unmatched'
     }
 
     let recentCandidates: DisambiguationCandidate[] = []
-    if (!quotedResolved) {
-      recentCandidates = await listRecentGuestNotificationCandidates(db, env, opts.userId)
+    if (!quotedDelivery) {
+      recentCandidates = await listRecentGuestDeliveryCandidates(db, env, opts.userId)
     }
 
     return {
-      quotedMatch,
-      quotedResolved,
-      recentNotificationCount: recentCandidates.length,
+      quotedDeliveryMatch,
+      quotedDelivery,
+      recentDeliveryCount: recentCandidates.length,
       recentCandidates,
     }
   }
@@ -269,9 +252,9 @@ async function routeManagerWhatsAppMessage(
 
     const decision = decideWhatsAppReplyRouting({
       hasQuotedContext,
-      quotedMatch: fresh.quotedMatch,
+      quotedDeliveryMatch: fresh.quotedDeliveryMatch,
       pendingState: null,
-      recentNotificationCount: fresh.recentNotificationCount,
+      recentDeliveryCount: fresh.recentDeliveryCount,
       text: rawText,
     })
 
@@ -280,12 +263,12 @@ async function routeManagerWhatsAppMessage(
         const trimmedText = rawText.trim()
         if (!trimmedText) {
           // Captionless media or empty reply — resend the prompt without advancing
-          const match = fresh.quotedResolved!
+          const match = fresh.quotedDelivery!
           const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
           await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
           return
         }
-        const match = fresh.quotedResolved!
+        const match = fresh.quotedDelivery!
         const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
         const newState: PendingWhatsAppReplyState = {
           kind: 'confirm_send',
@@ -343,9 +326,9 @@ async function routeManagerWhatsAppMessage(
   if (pendingState.kind === 'confirm_send') {
     const decision = decideWhatsAppReplyRouting({
       hasQuotedContext: false,
-      quotedMatch: null,
+      quotedDeliveryMatch: null,
       pendingState,
-      recentNotificationCount: 0,
+      recentDeliveryCount: 0,
       text: rawText,
     })
     if (decision.action === 'confirm_send_execute') {
@@ -373,7 +356,6 @@ async function routeManagerWhatsAppMessage(
             siteId: pendingState.siteId,
             action: 'reply',
             actorUserId: opts.userId,
-            actorMemberId,
             body: pendingState.replyBody,
             env,
             idempotencyKey: `whatsapp:${opts.messageId}:reply`,
@@ -395,9 +377,9 @@ async function routeManagerWhatsAppMessage(
   } else if (pendingState.kind === 'disambiguate') {
     const decision = decideWhatsAppReplyRouting({
       hasQuotedContext: false,
-      quotedMatch: null,
+      quotedDeliveryMatch: null,
       pendingState,
-      recentNotificationCount: 0,
+      recentDeliveryCount: 0,
       text: rawText,
     })
     if (decision.action === 'disambiguation_pick') {
@@ -473,15 +455,15 @@ async function routeManagerWhatsAppMessage(
 
   const decision = decideWhatsAppReplyRouting({
     hasQuotedContext,
-    quotedMatch: fresh.quotedMatch,
+    quotedDeliveryMatch: fresh.quotedDeliveryMatch,
     pendingState: null,
-    recentNotificationCount: fresh.recentNotificationCount,
+    recentDeliveryCount: fresh.recentDeliveryCount,
     text: rawText,
   })
 
   switch (decision.action) {
     case 'start_confirm_send': {
-      const match = fresh.quotedResolved!
+      const match = fresh.quotedDelivery!
       const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
       const newState: PendingWhatsAppReplyState = {
         kind: 'confirm_send',
@@ -528,7 +510,18 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
   if (!user) {
     // Not a verified owner/staff account — check whether this is a customer replying to an
     // open reservation/experience-booking thread rather than trying to talk to ChowBot.
-    const match = await findSubmissionByPhone(db, toPhone)
+    const existingEntry = await findEntryByDedupeKey(db, `whatsapp:${message.id}`)
+    const existingThread = existingEntry
+      ? await getGuestThreadById(db, existingEntry.thread_id)
+      : null
+    const match = existingThread
+      ? {
+          submissionType: existingThread.submission_type,
+          submissionId: existingThread.submission_id,
+          organizationId: existingThread.organization_id,
+          siteId: existingThread.site_id,
+        }
+      : await findSubmissionByPhone(db, toPhone)
     if (match) {
       const text = messageText(message)
       if (text) {
@@ -543,33 +536,33 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             actorKind: 'guest',
             channel: 'whatsapp',
             body: text,
-            externalId: message.id,
+            dedupeKey: `whatsapp:${message.id}`,
           })
-          if (entry.created) {
-            const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
-            await updateThreadProjection(db, thread.id, { conversationState })
-            await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
+          const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
+          await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState })
 
-            const source = await adapter.loadSource({ db }, match.submissionId)
-            if (source) {
-              const summary = adapter.summarize(source)
-              await notifyGuestThreadReply(env, db, {
-                organizationId: match.organizationId,
-                siteId: match.siteId,
-                locationId: summary.locationId,
-                threadId: thread.id,
-                submissionType: match.submissionType,
-                submissionId: match.submissionId,
-                guestName: summary.guestName,
-                guestEmail: summary.guestEmail,
-                guestPhone: summary.guestPhone,
-                inboundChannel: 'whatsapp',
-                messagePreview: text,
-              })
-            }
+          const source = await adapter.loadSource({ db }, match.submissionId)
+          if (source) {
+            const summary = adapter.summarize(source)
+            await notifyGuestThreadReply(env, db, {
+              organizationId: match.organizationId,
+              siteId: match.siteId,
+              locationId: summary.locationId,
+              threadId: thread.id,
+              sourceEntryId: entry.id,
+              submissionType: match.submissionType,
+              submissionId: match.submissionId,
+              guestName: summary.guestName,
+              guestEmail: summary.guestEmail,
+              guestPhone: summary.guestPhone,
+              inboundChannel: 'whatsapp',
+              messagePreview: text,
+            })
           }
+          await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
         } catch (err) {
           console.error('[whatsapp] Failed to insert guest reply for submission:', err)
+          throw err
         }
       }
       return
@@ -588,7 +581,6 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
     return
   }
 
-  // Issue #293 Section C: quoted-notification replies and guest-notification disambiguation.
   await routeManagerWhatsAppMessage(db, env, {
     message,
     toPhone,
@@ -607,56 +599,59 @@ function formatStatusError(errors: WhatsAppStatusError[] | undefined): string | 
   }
 }
 
-async function handleStatus(db: D1Database, status: WhatsAppStatus): Promise<void> {
+async function handleStatus(db: D1Database, env: ApiRecord, status: WhatsAppStatus): Promise<void> {
   const providerMessageId = status.id
   const incomingStatus = status.status
   if (!providerMessageId || !incomingStatus) return
+  if (!['sent', 'delivered', 'read', 'failed'].includes(incomingStatus)) return
 
-  const notification = await queryFirst<{ id: string; whatsapp_delivery_status: string | null }>(db, `
-    SELECT id, whatsapp_delivery_status
-    FROM notifications
-    WHERE provider_message_id = ?
+  const delivery = await queryFirst<{ id: string; thread_id: string; status: string }>(db, `
+    SELECT id, thread_id, status
+    FROM guest_thread_deliveries
+    WHERE provider = 'meta' AND provider_message_id = ?
     LIMIT 1
   `, [providerMessageId])
-  // No matching notification — either a message this app didn't send, or one
-  // that's since been pruned. Expected and silent, not an error.
-  if (!notification) return
+  if (!delivery) return
 
-  const shouldAdvanceStatus = compareWhatsAppDeliveryStatus(notification.whatsapp_delivery_status, incomingStatus)
+  const shouldAdvanceStatus = compareWhatsAppDeliveryStatus(delivery.status, incomingStatus)
   const errorText = formatStatusError(status.errors)
 
   if (shouldAdvanceStatus) {
-    let observedStatus = notification.whatsapp_delivery_status
+    let observedStatus = delivery.status
     for (let attempt = 0; attempt < 3; attempt += 1) {
       if (!compareWhatsAppDeliveryStatus(observedStatus, incomingStatus)) break
       const updateResult = await execute(db, `
-        UPDATE notifications
-        SET whatsapp_delivery_status = ?, whatsapp_delivery_error = ?
+        UPDATE guest_thread_deliveries
+        SET status = ?, error = ?, updated_at = ?
         WHERE id = ?
-          AND (whatsapp_delivery_status = ? OR (whatsapp_delivery_status IS NULL AND ? IS NULL))
-      `, [incomingStatus, errorText, notification.id, observedStatus, observedStatus])
-      if (updateResult.meta.changes > 0) return
+          AND status = ?
+      `, [incomingStatus, errorText, new Date().toISOString(), delivery.id, observedStatus])
+      if (updateResult.meta.changes > 0) break
 
-      const current = await queryFirst<{ whatsapp_delivery_status: string | null }>(db, `
-        SELECT whatsapp_delivery_status FROM notifications WHERE id = ? LIMIT 1
-      `, [notification.id])
+      const current = await queryFirst<{ status: string }>(db, `
+        SELECT status FROM guest_thread_deliveries WHERE id = ? LIMIT 1
+      `, [delivery.id])
       if (!current) return
-      observedStatus = current.whatsapp_delivery_status
+      observedStatus = current.status
     }
-    return
   }
 
   // A `failed` event arrived after a later success stage was already
   // recorded (or a same/earlier-stage replay) — never regress
-  // whatsapp_delivery_status, but still persist the raw provider error so a
+  // delivery status, but still persist the raw provider error so a
   // failure is never silently lost.
-  if (errorText) {
+  if (!shouldAdvanceStatus && errorText) {
     await execute(db, `
-      UPDATE notifications
-      SET whatsapp_delivery_error = ?
+      UPDATE guest_thread_deliveries
+      SET error = ?, updated_at = ?
       WHERE id = ?
-    `, [errorText, notification.id])
+    `, [errorText, new Date().toISOString(), delivery.id])
   }
+
+  await publishGuestInboxThreadEvent(env, db, {
+    threadId: delivery.thread_id,
+    type: 'delivery.changed',
+  })
 }
 
 export default defineHandler(async (event) => {
@@ -696,7 +691,7 @@ export default defineHandler(async (event) => {
     await handleMessage(db, env, message)
   }
   for (const status of statuses) {
-    await handleStatus(db, status)
+    await handleStatus(db, env, status)
   }
 
   return jsonResponse({ success: true })

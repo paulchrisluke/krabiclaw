@@ -3,9 +3,8 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyReservationCancelled } from '~/server/utils/notifications'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
-import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 
 const IP_HOURLY_LIMIT = 20
 const RESERVATION_HOURLY_LIMIT = 5
@@ -95,13 +94,8 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Reservation not found or already cancelled' }, { status: 404 })
   }
 
-  await fireOrganizationEventSafe({
-    db, organizationId: reservation.organization_id, siteId: reservation.site_id, locationId: reservation.location_id, eventType: 'reservation.cancelled', entityType: 'reservation_submission', entityId: reservationId, metadata: {
-      date: reservation.date, time: reservation.time, guests: reservation.guests, }, })
-
   const thread = await getGuestThreadBySubmission(db, 'reservation', reservationId)
   if (thread) {
-    await updateThreadProjection(db, thread.id, {})
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   }
 

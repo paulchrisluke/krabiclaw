@@ -35,7 +35,7 @@ export default defineHandler(async (event) => {
 
   const [rows, count] = await Promise.all([
     queryAll<NotificationRow>(access.db, `
-      SELECT n.id, n.scope, n.event_type, n.severity, n.organization_id, n.site_id, n.location_id, n.actor_user_id, n.target_user_id, n.title, n.message, n.deep_link, n.payload, n.created_at, COALESCE(nr.read_at, n.read_at) AS read_at
+      SELECT n.id, n.scope, n.event_type, n.severity, n.organization_id, n.site_id, n.location_id, n.actor_user_id, n.target_user_id, n.title, n.message, n.deep_link, n.payload, n.created_at, nr.read_at
       FROM notifications n
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
       WHERE ${access.whereSql}
@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
       SELECT COUNT(*) AS count
       FROM notifications n
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
-      WHERE ${access.whereSql} AND COALESCE(nr.read_at, n.read_at) IS NULL
+      WHERE ${access.whereSql} AND nr.read_at IS NULL
     `, [access.userId, ...access.whereParams]), ])
 
   return jsonResponse({

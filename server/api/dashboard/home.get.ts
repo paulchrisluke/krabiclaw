@@ -5,7 +5,7 @@ import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { defineHandler } from 'nitro'
 
 export default defineHandler(async (event) => {
-  const { env, db, organization, site } = await getDashboardContext(event, { requireSite: true })
+  const { env, db, organization, site, userId } = await getDashboardContext(event, { requireSite: true })
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 
   await assertSiteWideAccess(db, {
@@ -19,6 +19,7 @@ export default defineHandler(async (event) => {
   return jsonResponse(await getDashboardHomeData(db, organization.id, site.id, {
     env,
     memberId: organization.memberId,
+    userId,
     role: organization.role,
   }))
 })

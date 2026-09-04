@@ -4,7 +4,7 @@ import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
-import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 function attachExperienceViewUrl(experience: object, site: McpExecutorContext["site"]) {
@@ -150,7 +150,6 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       if (updated) {
         const thread = await getGuestThreadBySubmission(site.db, 'experience_booking', bookingId)
         if (thread) {
-          await updateThreadProjection(site.db, thread.id, {})
           await publishGuestInboxThreadEvent(site.env, site.db, { threadId: thread.id, type: 'thread.changed' })
         }
       }

@@ -224,22 +224,7 @@ export const guest_threads = sqliteTable("guest_threads", {
 	guest_name: text().notNull(),
 	guest_email: text(),
 	guest_phone: text(),
-	inbox_status: text().default("open").notNull(),
-	unread_count: integer().default(0).notNull(),
-	last_message_at: text(),
-	last_inbound_at: text(),
-	last_outbound_at: text(),
-	last_message_preview: text(),
-	owner_last_seen_at: text(),
-	// Conversation-state machine (issue #442). Independent of the source's operational status;
-	// updated only by server/domain/guest-threads/state-machine.ts via the canonical operation
-	// service, never inferred client-side from raw source status.
 	conversation_state: text().default("needs_attention").notNull(),
-	// Read-optimized projection of the underlying source record's operational status
-	// (e.g. reservation 'confirmed'). Not independently editable; refreshed only by
-	// server/domain/guest-threads/operations.ts after a successful source mutation.
-	operational_status: text(),
-	version: integer().default(0).notNull(),
 	resolved_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -247,11 +232,8 @@ export const guest_threads = sqliteTable("guest_threads", {
 	unique("guest_threads_submission_unique").on(table.submission_type, table.submission_id),
 	index("guest_threads_site_updated_idx").on(table.site_id, table.updated_at),
 	index("guest_threads_location_updated_idx").on(table.location_id, table.updated_at),
-	index("guest_threads_inbox_status_idx").on(table.site_id, table.inbox_status, table.updated_at),
 	index("guest_threads_conversation_state_idx").on(table.site_id, table.conversation_state, table.updated_at),
-	index("guest_threads_site_version_idx").on(table.site_id, table.version),
 	check("guest_threads_submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
-	check("guest_threads_inbox_status_check", sql`inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')`),
 	check("guest_threads_conversation_state_check", sql`conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved')`),
 	index("guest_threads_organization_id_idx").on(table.organization_id),
 ]);
@@ -271,136 +253,48 @@ export const guest_thread_entries = sqliteTable("guest_thread_entries", {
 	body: text(),
 	event_name: text(),
 	payload_json: text(),
-	external_id: text(),
-	sequence: integer(),
+	dedupe_key: text().notNull(),
+	sequence: integer().notNull(),
 	occurred_at: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("guest_thread_entries_thread_occurred_idx").on(table.thread_id, table.occurred_at),
+	unique("guest_thread_entries_id_thread_unique").on(table.id, table.thread_id),
 	unique("guest_thread_entries_thread_sequence_unique").on(table.thread_id, table.sequence),
-	uniqueIndex("guest_thread_entries_external_id_unique").on(table.external_id).where(sql`external_id IS NOT NULL`),
+	uniqueIndex("guest_thread_entries_dedupe_key_unique").on(table.dedupe_key),
 	index("guest_thread_entries_site_kind_occurred_idx").on(table.site_id, table.kind, table.occurred_at),
 	index("guest_thread_entries_organization_id_idx").on(table.organization_id),
-	check("guest_thread_entries_kind_check", sql`kind IN ('submission', 'message', 'operation', 'delivery', 'assignment', 'resolution')`),
+	check("guest_thread_entries_kind_check", sql`kind IN ('submission', 'message', 'operation', 'assignment', 'resolution')`),
 	check("guest_thread_entries_actor_kind_check", sql`actor_kind IN ('guest', 'member', 'system')`),
 	check("guest_thread_entries_channel_check", sql`channel IS NULL OR channel IN ('web', 'email', 'whatsapp', 'system')`),
 ]);
 
-export const guest_thread_sequence_counters = sqliteTable("guest_thread_sequence_counters", {
-	thread_id: text().primaryKey().references(() => guest_threads.id, { onDelete: "cascade" } ),
-	next_sequence: integer().default(1).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
-
-// Per-member read cursor for a thread (issue #442). Keyed on member.id (not raw user.id) to
-// match how server/utils/location-access.ts resolves identity everywhere else.
-export const guest_thread_member_state = sqliteTable("guest_thread_member_state", {
-	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
-	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" } ),
-	last_read_entry_id: text().references(() => guest_thread_entries.id, { onDelete: "set null" } ),
-	last_read_sequence: integer().default(0).notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	primaryKey({ columns: [table.thread_id, table.member_id] }),
-	index("guest_thread_member_state_member_updated_idx").on(table.member_id, table.updated_at),
-]);
-
-// Durable delivery outbox for guest-facing transactional sends tied to a thread entry
-// (issue #442). Intent is persisted before any external send attempt so a durable
-// message/intent record always exists even if the provider call fails.
 export const guest_thread_deliveries = sqliteTable("guest_thread_deliveries", {
 	id: text().primaryKey(),
 	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
-	entry_id: text().references(() => guest_thread_entries.id, { onDelete: "set null" } ),
+	entry_id: text().notNull(),
 	channel: text().notNull(),
-	provider: text(),
+	provider: text().notNull(),
+	purpose: text().notNull(),
 	idempotency_key: text().notNull(),
-	status: text().default("queued").notNull(),
-	attempt_count: integer().default(0).notNull(),
-	last_error: text(),
+	status: text().default("pending").notNull(),
 	provider_message_id: text(),
-	to_address: text(),
-	from_name: text(),
-	subject: text(),
-	text_body: text(),
-	reply_to: text(),
-	locale: text(),
-	template_version: text(),
-	source_snapshot_json: text(),
-	payload_hash: text(),
-	provider_idempotency_key: text(),
-	processing_lease_until: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	uniqueIndex("guest_thread_deliveries_idempotency_key_unique").on(table.idempotency_key),
-	index("guest_thread_deliveries_thread_status_idx").on(table.thread_id, table.status),
-	index("guest_thread_deliveries_status_updated_idx").on(table.status, table.updated_at),
-	check("guest_thread_deliveries_channel_check", sql`channel IN ('email', 'whatsapp')`),
-		check("guest_thread_deliveries_status_check", sql`status IN ('queued', 'sent', 'failed')`),
-]);
-
-export const guest_thread_commands = sqliteTable("guest_thread_commands", {
-	id: text().primaryKey(),
-	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	action: text().notNull(),
-	idempotency_key: text().notNull(),
-	actor_kind: text().notNull(),
-	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	actor_member_id: text().references(() => member.id, { onDelete: "set null" } ),
-	request_hash: text().notNull(),
-		status: text().default("pending").notNull(),
-	result_json: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	completed_at: text(),
-}, (table) => [
-	unique("guest_thread_commands_thread_idempotency_unique").on(table.thread_id, table.idempotency_key),
-	index("guest_thread_commands_site_created_idx").on(table.site_id, table.created_at),
-	check("guest_thread_commands_actor_kind_check", sql`actor_kind IN ('member', 'guest', 'system')`),
-		check("guest_thread_commands_status_check", sql`status IN ('pending', 'completed', 'failed')`),
-]);
-
-export const guest_thread_outbox = sqliteTable("guest_thread_outbox", {
-	id: text().primaryKey(),
-	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
-	delivery_id: text().references(() => guest_thread_deliveries.id, { onDelete: "cascade" } ),
-	event_type: text().notNull(),
-	status: text().default("pending").notNull(),
-	attempt_count: integer().default(0).notNull(),
-	next_attempt_at: text(),
-	locked_at: text(),
-	last_error: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("guest_thread_outbox_status_next_idx").on(table.status, table.next_attempt_at),
-	index("guest_thread_outbox_thread_idx").on(table.thread_id),
-		check("guest_thread_outbox_status_check", sql`status IN ('pending', 'publishing', 'published', 'failed', 'dead')`),
-]);
-
-
-export const notification_events = sqliteTable("notification_events", {
-	id: text().primaryKey(),
-	scope_type: text().notNull(),
-	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
-	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
-	submission_type: text().notNull(),
-	submission_id: text().notNull(),
-	event_type: text().notNull(),
-	channels: text(),
-	recipients: text(),
-	payload: text(),
-	status: text().default("pending").notNull(),
 	error: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	index("notification_events_scope_created_idx").on(table.scope_type, table.created_at),
-	index("notification_events_submission_idx").on(table.submission_type, table.submission_id),
-	index("notification_events_event_created_idx").on(table.event_type, table.created_at),
-	index("notification_events_org_site_idx").on(table.organization_id, table.site_id),
+	foreignKey({
+		columns: [table.entry_id, table.thread_id],
+		foreignColumns: [guest_thread_entries.id, guest_thread_entries.thread_id],
+		name: "guest_thread_deliveries_entry_thread_fk",
+	}).onDelete("cascade"),
+	uniqueIndex("guest_thread_deliveries_idempotency_key_unique").on(table.idempotency_key),
+	uniqueIndex("guest_thread_deliveries_provider_message_unique").on(table.provider, table.provider_message_id).where(sql`provider_message_id IS NOT NULL`),
+	index("guest_thread_deliveries_thread_status_idx").on(table.thread_id, table.status),
+	check("guest_thread_deliveries_channel_check", sql`channel IN ('email', 'whatsapp')`),
+	check("guest_thread_deliveries_provider_check", sql`(channel = 'email' AND provider IN ('resend', 'log_only')) OR (channel = 'whatsapp' AND provider IN ('meta', 'log_only'))`),
+	check("guest_thread_deliveries_purpose_check", sql`purpose IN ('owner_alert', 'guest_acknowledgement', 'member_reply', 'status_update')`),
+	check("guest_thread_deliveries_status_check", sql`status IN ('pending', 'accepted', 'sent', 'delivered', 'read', 'failed', 'unknown')`),
 ]);
 
 export const dashboard_preferences = sqliteTable("dashboard_preferences", {
@@ -781,42 +675,32 @@ export const notifications = sqliteTable("notifications", {
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	guest_thread_id: text().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	source_entry_id: text(),
 	scope: text().default("organization").notNull(),
-	event_type: text(),
+	event_type: text().notNull(),
 	severity: text().default("info").notNull(),
 	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	target_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	deep_link: text(),
 	message: text(),
-	channel: text().default("dashboard").notNull(),
 	template: text().notNull(),
-	recipient: text(),
 	title: text(),
 	payload: text(),
-	status: text().default("pending").notNull(),
-	provider_message_id: text(),
-	error: text(),
-	read_at: text(),
-	sent_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	// Resolves a WhatsApp quoted reply's context.id back to the guest thread it
-	// originated from (see docs/plan for issue #293's reply-routing contract).
-	related_submission_type: text(),
-	related_submission_id: text(),
-	// Meta Cloud API delivery status ingestion (value.statuses[]), kept separate
-	// from `status` (our own send-attempt lifecycle) since Meta's delivery
-	// lifecycle (accepted < sent < delivered < read, or failed) is a distinct,
-	// out-of-order-tolerant state machine layered on top of a message we already
-	// recorded as sent.
-	whatsapp_delivery_status: text(),
-	whatsapp_delivery_error: text(),
 }, (table) => [
+	foreignKey({
+		columns: [table.source_entry_id, table.guest_thread_id],
+		foreignColumns: [guest_thread_entries.id, guest_thread_entries.thread_id],
+		name: "notifications_source_entry_thread_fk",
+	}).onDelete("cascade"),
 	index("notifications_scope_created_at_idx").on(table.scope, table.created_at),
 	index("notifications_organization_created_at_idx").on(table.organization_id, table.created_at),
 	index("notifications_site_created_at_idx").on(table.site_id, table.created_at),
 	index("notifications_target_user_created_at_idx").on(table.target_user_id, table.created_at),
-	check("notifications_whatsapp_delivery_status_check", sql`whatsapp_delivery_status IS NULL OR whatsapp_delivery_status IN ('accepted', 'sent', 'delivered', 'read', 'failed')`),
-	check("notifications_related_submission_type_check", sql`related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking', 'invitation')`),
+	index("notifications_guest_thread_created_at_idx").on(table.guest_thread_id, table.created_at),
+	uniqueIndex("notifications_source_entry_unique").on(table.source_entry_id).where(sql`source_entry_id IS NOT NULL`),
+	check("notifications_thread_source_check", sql`(guest_thread_id IS NULL AND source_entry_id IS NULL) OR (guest_thread_id IS NOT NULL AND source_entry_id IS NOT NULL)`),
 ]);
 
 export const notification_reads = sqliteTable("notification_reads", {
@@ -826,20 +710,6 @@ export const notification_reads = sqliteTable("notification_reads", {
 }, (table) => [
 	primaryKey({ columns: [table.notification_id, table.user_id] }),
 	index("notification_reads_user_read_at_idx").on(table.user_id, table.read_at),
-]);
-
-export const notification_deliveries = sqliteTable("notification_deliveries", {
-	id: text().primaryKey(),
-	notification_id: text().notNull().references(() => notifications.id, { onDelete: "cascade" } ),
-	channel: text().notNull(),
-	status: text().default("pending").notNull(),
-	provider_message_id: text(),
-	error: text(),
-	sent_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("notification_deliveries_notification_idx").on(table.notification_id),
-	index("notification_deliveries_channel_status_idx").on(table.channel, table.status),
 ]);
 
 export const oauthAccessToken = sqliteTable("oauthAccessToken", {

@@ -1778,54 +1778,38 @@ VALUES
 
 INSERT OR REPLACE INTO guest_threads
   (id, organization_id, site_id, location_id, submission_type, submission_id,
-   guest_name, guest_email, guest_phone, inbox_status, unread_count,
-   last_message_at, last_inbound_at, last_outbound_at, last_message_preview,
-   conversation_state, operational_status, version, resolved_at, created_at, updated_at)
+   guest_name, guest_email, guest_phone, conversation_state, created_at, updated_at)
 VALUES
   ('thread-demo-contact-private-event', 'org-demo', 'site-demo', 'loc-demo', 'contact', 'contact-demo-private-event',
-   'Maya Chen', 'maya.chen@example.com', NULL, 'waiting_on_owner', 1,
-   '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z', NULL,
-   'Could you host a birthday dinner for 18 people next month?', 'needs_attention', 'new', 0, NULL,
+   'Maya Chen', 'maya.chen@example.com', NULL, 'needs_attention',
    '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z'),
   ('thread-demo-reservation-window-table', 'org-demo', 'site-demo', 'loc-demo-2', 'reservation', 'reservation-demo-window-table',
-   'Daniel Ortiz', 'daniel.ortiz@example.com', '+1 917 555 0142', 'waiting_on_owner', 1,
-   '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z', NULL,
-   '2026-08-23 19:30 · 4 guests · Window table if possible; one guest has a dairy allergy.', 'needs_attention', 'new', 0, NULL,
+   'Daniel Ortiz', 'daniel.ortiz@example.com', '+1 917 555 0142', 'needs_attention',
    '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z'),
   ('thread-demo-booking-pizza-class', 'org-demo', 'site-demo', 'loc-demo', 'experience_booking', 'booking-demo-pizza-class',
-   'Sophie Laurent', 'sophie.laurent@example.com', '+1 347 555 0109', 'waiting_on_guest', 1,
-   '2026-08-21T04:25:00.000Z', '2026-08-21T04:10:00.000Z', '2026-08-21T04:25:00.000Z',
-   'Yes—we can make the entire class vegetarian. We will reserve three places for you.', 'waiting_on_guest', 'confirmed', 0, NULL,
+   'Sophie Laurent', 'sophie.laurent@example.com', '+1 347 555 0109', 'waiting_on_guest',
    '2026-08-21T04:10:00.000Z', '2026-08-21T04:25:00.000Z'),
   ('thread-demo-reservation-completed', 'org-demo', 'site-demo', 'loc-demo', 'reservation', 'reservation-demo-completed',
-   'Priya Shah', 'priya.shah@example.com', '+1 646 555 0188', 'closed', 0,
-   '2026-08-20T13:30:00.000Z', '2026-08-19T08:45:00.000Z', NULL,
-   '2026-08-20 18:00 · 2 guests · Anniversary dinner.', 'resolved', 'completed', 1, '2026-08-20T13:30:00.000Z',
+   'Priya Shah', 'priya.shah@example.com', '+1 646 555 0188', 'resolved',
    '2026-08-19T08:45:00.000Z', '2026-08-20T13:30:00.000Z');
 
 INSERT OR REPLACE INTO guest_thread_entries
   (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel,
-   body, event_name, payload_json, sequence, occurred_at, created_at)
+   body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
 VALUES
   ('entry-demo-contact-private-event-submission', 'thread-demo-contact-private-event', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'contact_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'contact', submissionId: 'contact-demo-private-event', guestName: 'Maya Chen', guestEmail: 'maya.chen@example.com', subject: 'Private dinner inquiry', message: 'Hi! Could you host a birthday dinner for 18 people next month? We would love a family-style menu.', locationTitle: 'Ember & Slice Brooklyn', experienceTitle: null, submittedAt: '2026-08-21T02:15:00.000Z' })}, 1, '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z'),
+   ${sqlJson({ schemaVersion: 1, submissionType: 'contact', submissionId: 'contact-demo-private-event', guestName: 'Maya Chen', guestEmail: 'maya.chen@example.com', subject: 'Private dinner inquiry', message: 'Hi! Could you host a birthday dinner for 18 people next month? We would love a family-style menu.', locationTitle: 'Ember & Slice Brooklyn', experienceTitle: null, submittedAt: '2026-08-21T02:15:00.000Z' })}, 'submission:contact:contact-demo-private-event', 1, '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z'),
   ('entry-demo-reservation-window-table-submission', 'thread-demo-reservation-window-table', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'reservation', submissionId: 'reservation-demo-window-table', guestName: 'Daniel Ortiz', guestEmail: 'daniel.ortiz@example.com', guestPhone: '+1 917 555 0142', locationTitle: 'Ember & Slice West Village', date: '2026-08-23', time: '19:30', guests: '4', requests: 'Window table if possible; one guest has a dairy allergy.', submittedAt: '2026-08-21T03:20:00.000Z' })}, 1, '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z'),
+   ${sqlJson({ schemaVersion: 1, submissionType: 'reservation', submissionId: 'reservation-demo-window-table', guestName: 'Daniel Ortiz', guestEmail: 'daniel.ortiz@example.com', guestPhone: '+1 917 555 0142', locationTitle: 'Ember & Slice West Village', date: '2026-08-23', time: '19:30', guests: '4', requests: 'Window table if possible; one guest has a dairy allergy.', submittedAt: '2026-08-21T03:20:00.000Z' })}, 'submission:reservation:reservation-demo-window-table', 1, '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z'),
   ('entry-demo-booking-pizza-class-submission', 'thread-demo-booking-pizza-class', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'experience_booking_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'experience_booking', submissionId: 'booking-demo-pizza-class', guestName: 'Sophie Laurent', guestEmail: 'sophie.laurent@example.com', guestPhone: '+1 347 555 0109', locationTitle: 'Ember & Slice Brooklyn', experienceTitle: 'Pizza Making Class', bookingDate: '2026-08-24', timeSlot: '14:00', partySize: 3, notes: 'Two adults and one 12-year-old. Is vegetarian dough available?', submittedAt: '2026-08-21T04:10:00.000Z' })}, 1, '2026-08-21T04:10:00.000Z', '2026-08-21T04:10:00.000Z'),
+   ${sqlJson({ schemaVersion: 1, submissionType: 'experience_booking', submissionId: 'booking-demo-pizza-class', guestName: 'Sophie Laurent', guestEmail: 'sophie.laurent@example.com', guestPhone: '+1 347 555 0109', locationTitle: 'Ember & Slice Brooklyn', experienceTitle: 'Pizza Making Class', bookingDate: '2026-08-24', timeSlot: '14:00', partySize: 3, notes: 'Two adults and one 12-year-old. Is vegetarian dough available?', submittedAt: '2026-08-21T04:10:00.000Z' })}, 'submission:experience_booking:booking-demo-pizza-class', 1, '2026-08-21T04:10:00.000Z', '2026-08-21T04:10:00.000Z'),
   ('entry-demo-booking-pizza-class-reply', 'thread-demo-booking-pizza-class', 'org-demo', 'site-demo', 'message', 'member', 'user-demo', 'email',
-   'Yes—we can make the entire class vegetarian. We will reserve three places for you.', NULL, NULL, 2, '2026-08-21T04:25:00.000Z', '2026-08-21T04:25:00.000Z'),
+   'Yes—we can make the entire class vegetarian. We will reserve three places for you.', NULL, NULL, 'entry:entry-demo-booking-pizza-class-reply', 2, '2026-08-21T04:25:00.000Z', '2026-08-21T04:25:00.000Z'),
   ('entry-demo-reservation-completed-submission', 'thread-demo-reservation-completed', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'reservation', submissionId: 'reservation-demo-completed', guestName: 'Priya Shah', guestEmail: 'priya.shah@example.com', guestPhone: '+1 646 555 0188', locationTitle: 'Ember & Slice Brooklyn', date: '2026-08-20', time: '18:00', guests: '2', requests: 'Anniversary dinner.', submittedAt: '2026-08-19T08:45:00.000Z' })}, 1, '2026-08-19T08:45:00.000Z', '2026-08-19T08:45:00.000Z'),
+   ${sqlJson({ schemaVersion: 1, submissionType: 'reservation', submissionId: 'reservation-demo-completed', guestName: 'Priya Shah', guestEmail: 'priya.shah@example.com', guestPhone: '+1 646 555 0188', locationTitle: 'Ember & Slice Brooklyn', date: '2026-08-20', time: '18:00', guests: '2', requests: 'Anniversary dinner.', submittedAt: '2026-08-19T08:45:00.000Z' })}, 'submission:reservation:reservation-demo-completed', 1, '2026-08-19T08:45:00.000Z', '2026-08-19T08:45:00.000Z'),
   ('entry-demo-reservation-completed-resolution', 'thread-demo-reservation-completed', 'org-demo', 'site-demo', 'resolution', 'member', 'user-demo', 'system',
-   NULL, 'thread.resolved', ${sqlJson({ reason: 'completed' })}, 2, '2026-08-20T13:30:00.000Z', '2026-08-20T13:30:00.000Z');
+   NULL, 'thread.resolved', ${sqlJson({ reason: 'completed' })}, 'entry:entry-demo-reservation-completed-resolution', 2, '2026-08-20T13:30:00.000Z', '2026-08-20T13:30:00.000Z');
 
-INSERT OR REPLACE INTO guest_thread_sequence_counters (thread_id, next_sequence, updated_at)
-VALUES
-  ('thread-demo-contact-private-event', 2, '2026-08-21T02:15:00.000Z'),
-  ('thread-demo-reservation-window-table', 2, '2026-08-21T03:20:00.000Z'),
-  ('thread-demo-booking-pizza-class', 3, '2026-08-21T04:25:00.000Z'),
-  ('thread-demo-reservation-completed', 3, '2026-08-20T13:30:00.000Z');
 -- END GENERATED: demo_inbox`
 }
 

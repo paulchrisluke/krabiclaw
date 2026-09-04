@@ -10,6 +10,21 @@
     </template>
 
     <template #body>
+      <UAlert
+        v-if="realtimeFailed"
+        color="warning"
+        variant="soft"
+        icon="i-lucide-wifi-off"
+        title="Live inbox updates are unavailable"
+        description="This inbox may be out of date until the dashboard reconnects."
+        class="mx-auto mb-4 w-full max-w-5xl"
+      >
+        <template #actions>
+          <UButton color="warning" variant="soft" size="xs" :loading="loadingThreads || loadingDetail" @click="refreshInbox">
+            Refresh
+          </UButton>
+        </template>
+      </UAlert>
       <div v-if="!isDetailMode" class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
         <div class="rounded-lg border border-default bg-default p-3 shadow-sm">
           <UInput
@@ -82,6 +97,7 @@
             <GuestThreadConversation
               v-model:input="replyDraft"
               :entries="conversationEntries"
+              :delivery-failures="selectedDetail.deliveryFailures"
               :submission-type="selectedDetail.submissionType"
               :guest-email="selectedDetail.guestEmail"
               :guest-phone="selectedDetail.guestPhone"
@@ -124,11 +140,14 @@
 
 <script setup lang="ts">
 import { getErrorMessage } from '~/utils/errors'
-import GuestThreadConversation, { type GuestThreadEntryMessage } from '~/components/conversation/GuestThreadConversation.vue'
+import GuestThreadConversation, {
+  type GuestThreadDeliveryFailure,
+  type GuestThreadEntryMessage,
+} from '~/components/conversation/GuestThreadConversation.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
-import { useGuestInboxSocket, type GuestInboxSocketEvent } from '~/composables/useGuestInboxSocket'
+import { useDashboardInvalidations } from '~/composables/useDashboardInvalidations'
 
 const props = defineProps<{
   scope: 'organization' | 'site' | 'location'
@@ -161,7 +180,7 @@ interface ThreadListItem {
 
 interface ThreadEntry {
   id: string
-  kind: 'submission' | 'message' | 'operation' | 'delivery' | 'assignment' | 'resolution'
+  kind: 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
   actorKind: 'guest' | 'member' | 'system'
   actorUserId: string | null
   actorLabel: string | null
@@ -171,15 +190,6 @@ interface ThreadEntry {
   payload: Record<string, unknown> | null
   sequence: number | null
   occurredAt: string
-}
-
-interface DeliveryFailure {
-  id: string
-  channel: 'email' | 'whatsapp'
-  toAddress: string | null
-  lastError: string | null
-  attemptCount: number
-  createdAt: string
 }
 
 interface ThreadDetail {
@@ -202,8 +212,7 @@ interface ThreadDetail {
   }
   entries: ThreadEntry[]
   availableActions: string[]
-  deliveryFailures: DeliveryFailure[]
-  memberReadCursor: { lastReadEntryId: string | null; lastReadSequence: number }
+  deliveryFailures: GuestThreadDeliveryFailure[]
   createdAt: string
   updatedAt: string
   resolvedAt: string | null
@@ -284,25 +293,11 @@ const replyAttemptDraft = ref<string | null>(null)
 const operationAttemptKeys = ref<Record<string, string>>({})
 const retryAttemptKeys = ref<Record<string, string>>({})
 
-const inboxSocket = useGuestInboxSocket({
-  siteId: siteId.value ?? 'org',
-  onEvent: (event: GuestInboxSocketEvent) => {
-    if (siteId.value && event.siteId !== siteId.value) return
-    if (isDetailMode.value && event.threadId === props.threadId) {
-      void refreshThread(event.threadId)
-    } else if (!isDetailMode.value) {
-      void loadThreads()
-    }
-  },
-  onReconnect: () => {
-    if (isDetailMode.value && props.threadId) void refreshThread(props.threadId)
-    else void loadThreads()
-  },
-})
+const realtime = useDashboardInvalidations()
+const realtimeFailed = computed(() => realtime.status.value === 'failed')
 
 onMounted(() => {
   inboxHydrated.value = true
-  inboxSocket.connect()
 })
 
 const conversationEntries = computed<GuestThreadEntryMessage[]>(() => (selectedDetail.value?.entries ?? []).map(entry => ({
@@ -477,6 +472,24 @@ function isThreadDetailResponse(value: unknown): value is { thread: ThreadDetail
     && typeof value.thread.guestName === 'string'
     && Array.isArray(value.thread.entries)
     && Array.isArray(value.thread.availableActions)
+    && Array.isArray(value.thread.deliveryFailures)
+    && value.thread.deliveryFailures.every(isDeliveryFailure)
+}
+
+function isDeliveryFailure(value: unknown): value is GuestThreadDeliveryFailure {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && (value.channel === 'email' || value.channel === 'whatsapp')
+    && (
+      value.purpose === 'owner_alert'
+      || value.purpose === 'guest_acknowledgement'
+      || value.purpose === 'member_reply'
+      || value.purpose === 'status_update'
+    )
+    && (value.error === null || typeof value.error === 'string')
+    && (value.status === 'failed' || value.status === 'unknown')
+    && typeof value.retryable === 'boolean'
+    && typeof value.createdAt === 'string'
 }
 
 const isThreadOperationResponse = isThreadDetailResponse
@@ -577,6 +590,12 @@ async function refreshThread(threadId: string) {
   await loadThreadDetail(threadId)
 }
 
+function refreshInbox() {
+  realtime.connect()
+  if (isDetailMode.value && props.threadId) void refreshThread(props.threadId)
+  else void loadThreads()
+}
+
 async function sendReply() {
   if (!dashboardScope.value || !props.threadId || !replyDraft.value.trim()) return
   const idempotencyKey = activeReplyAttemptKey()
@@ -651,12 +670,13 @@ async function retryDelivery(deliveryId: string) {
       },
     )
     clearAttemptMapKey(retryAttemptKeys, attemptName)
-    await refreshThread(threadId)
+    toast.add({ description: 'Delivery retried', color: 'success' })
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Retry failed', color: 'error' })
   } finally {
     retryingDeliveryId.value = null
   }
+  await refreshThread(threadId)
 }
 
 function threadTypeLabel(type: SubmissionType) {
@@ -684,6 +704,17 @@ watch(search, () => {
   searchTimer = setTimeout(() => {
     void loadThreads()
   }, 250)
+})
+
+watch(realtime.event, (event) => {
+  if (!event || !('threadId' in event)) return
+  if (siteId.value && event.siteId !== siteId.value) return
+  if (isDetailMode.value && event.threadId === props.threadId) void refreshThread(event.threadId)
+  else if (!isDetailMode.value) void loadThreads()
+})
+
+watch(realtime.connectionEpoch, (epoch) => {
+  if (epoch > 0) refreshInbox()
 })
 
 watch(replyDraft, (draft) => {

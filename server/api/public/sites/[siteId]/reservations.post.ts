@@ -10,7 +10,6 @@ import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
@@ -151,9 +150,9 @@ export default defineHandler(async (event) => {
   // location has no max_capacity, the WHERE clause is unconditionally true.
   const insertResult = await execute(db, `
     INSERT INTO reservation_submissions (
-      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, requests, ip_hash, cancellation_token_hash, cancellation_token_expires_at, location_id
+      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, status, requests, ip_hash, cancellation_token_hash, cancellation_token_expires_at, location_id
     )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?
     WHERE ? IS NULL OR (
       COALESCE((
         SELECT SUM(CASE WHEN guests = '8+' THEN 8 ELSE CAST(guests AS INTEGER) END)
@@ -170,12 +169,7 @@ export default defineHandler(async (event) => {
   }
   await recordCustomerBooking(db, customer.id, customerInput)
 
-  const [, thread] = await Promise.all([
-    fireOrganizationEventSafe({
-      db, organizationId: site.organization_id, siteId, locationId: resolvedLocationId, eventType: 'reservation.created', entityType: 'reservation_submission', entityId: id, metadata: {
-        date, time, guests, }, }),
-    ensureGuestThread(db, reservationAdapter, id, { publishEnv: env }),
-  ])
+  const thread = await ensureGuestThread(db, reservationAdapter, id, { publishEnv: env })
 
   // Build absolute cancel URL for the confirmation email
   const cancelUrl = `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}`
@@ -221,5 +215,5 @@ export default defineHandler(async (event) => {
   ])
 
   return jsonResponse({
-    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation request has been received. We will confirm shortly.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
+    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
 })

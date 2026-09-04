@@ -1,27 +1,19 @@
 import { DurableObject } from 'cloudflare:workers'
-import type { GuestInboxEvent } from '../guest-inbox-events'
+import { isDashboardInvalidation, type DashboardInvalidation } from '~/shared/dashboard-invalidations'
 
 interface GuestInboxHubEnv {
   GUEST_INBOX_HUBS?: DurableObjectNamespace
 }
 
 interface InboxSocketAttachment {
-  siteId: string
-  memberId: string
-  allowedLocationIds: string[] | null
+  organizationId: string
+  userId: string
+  allowedSiteIds: string[] | null
+  allowedLocationIds: string[]
   connectedAt: string
 }
 
-const GUEST_INBOX_EVENT_TYPES = new Set<GuestInboxEvent['type']>([
-  'thread.created',
-  'thread.changed',
-  'entry.appended',
-  'delivery.changed',
-  'read-state.changed',
-])
-
-function parseAllowedLocationIds(value: string | null): string[] | null {
-  if (value === '*') return null
+function parseAllowedIds(value: string | null): string[] {
   if (!value) return []
 
   let parsed: unknown
@@ -36,19 +28,30 @@ function parseAllowedLocationIds(value: string | null): string[] | null {
   return [...new Set(parsed)]
 }
 
-function isGuestInboxEvent(value: unknown): value is GuestInboxEvent {
-  if (!value || typeof value !== 'object') return false
-  const event = value as Record<string, unknown>
-  return typeof event.eventId === 'string'
-    && typeof event.type === 'string'
-    && GUEST_INBOX_EVENT_TYPES.has(event.type as GuestInboxEvent['type'])
-    && typeof event.siteId === 'string'
-    && (typeof event.locationId === 'string' || event.locationId === null)
-    && typeof event.threadId === 'string'
-    && typeof event.threadVersion === 'number'
-    && Number.isInteger(event.threadVersion)
-    && event.threadVersion >= 0
-    && typeof event.occurredAt === 'string'
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isSocketAttachment(value: unknown): value is InboxSocketAttachment {
+  return isRecord(value)
+    && typeof value.organizationId === 'string'
+    && typeof value.userId === 'string'
+    && (value.allowedSiteIds === null
+      || Array.isArray(value.allowedSiteIds) && value.allowedSiteIds.every(id => typeof id === 'string'))
+    && Array.isArray(value.allowedLocationIds)
+    && value.allowedLocationIds.every(id => typeof id === 'string')
+    && typeof value.connectedAt === 'string'
+}
+
+function canReceive(attachment: InboxSocketAttachment, event: DashboardInvalidation): boolean {
+  if (attachment.organizationId !== event.organizationId) return false
+  if ('targetUserId' in event && event.targetUserId && event.targetUserId !== attachment.userId) return false
+  if (event.type === 'notification.read' && event.targetUserId === attachment.userId) return true
+  if (attachment.allowedSiteIds === null) return true
+  return Boolean(
+    event.siteId && attachment.allowedSiteIds.includes(event.siteId)
+    || event.locationId && attachment.allowedLocationIds.includes(event.locationId),
+  )
 }
 
 export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
@@ -67,13 +70,16 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
       return new Response('Expected WebSocket upgrade', { status: 426 })
     }
 
-    const siteId = request.headers.get('x-krabiclaw-site-id')
-    const memberId = request.headers.get('x-krabiclaw-member-id')
-    if (!siteId || !memberId) return new Response('Unauthorized', { status: 401 })
+    const organizationId = request.headers.get('x-krabiclaw-organization-id')
+    const userId = request.headers.get('x-krabiclaw-user-id')
+    if (!organizationId || !userId) return new Response('Unauthorized', { status: 401 })
 
-    let allowedLocationIds: string[] | null
+    let allowedSiteIds: string[] | null
+    let allowedLocationIds: string[]
     try {
-      allowedLocationIds = parseAllowedLocationIds(request.headers.get('x-krabiclaw-allowed-location-ids'))
+      const sites = request.headers.get('x-krabiclaw-allowed-site-ids')
+      allowedSiteIds = sites === '*' ? null : parseAllowedIds(sites)
+      allowedLocationIds = parseAllowedIds(request.headers.get('x-krabiclaw-allowed-location-ids'))
     } catch (error) {
       return new Response(error instanceof Error ? error.message : 'Invalid authorization payload', { status: 400 })
     }
@@ -84,8 +90,9 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
     if (!client || !server) return new Response('WebSocket pair unavailable', { status: 500 })
     this.ctx.acceptWebSocket(server)
     server.serializeAttachment({
-      siteId,
-      memberId,
+      organizationId,
+      userId,
+      allowedSiteIds,
       allowedLocationIds,
       connectedAt: new Date().toISOString(),
     } satisfies InboxSocketAttachment)
@@ -107,7 +114,7 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
   }
 
   override webSocketError(socket: WebSocket, error: unknown): void {
-    console.error('Guest inbox WebSocket error', error)
+    console.error('Dashboard WebSocket error', error)
     try {
       socket.close(1011, 'Guest inbox connection error')
     } catch {
@@ -116,21 +123,20 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
   }
 
   private async handleBroadcast(request: Request): Promise<Response> {
-    const event = await request.json().catch(() => null) as unknown
-    const siteId = request.headers.get('x-krabiclaw-site-id')
-    if (!siteId || !isGuestInboxEvent(event) || event.siteId !== siteId) {
-      return new Response('Invalid guest inbox event', { status: 400 })
+    const event: unknown = await request.json().catch(() => null)
+    const organizationId = request.headers.get('x-krabiclaw-organization-id')
+    if (!organizationId || !isDashboardInvalidation(event) || event.organizationId !== organizationId) {
+      return new Response('Invalid dashboard invalidation', { status: 400 })
     }
 
     const encoded = JSON.stringify(event)
     for (const socket of this.ctx.getWebSockets()) {
-      const attachment = socket.deserializeAttachment() as InboxSocketAttachment | null
-      if (!attachment || attachment.siteId !== event.siteId) continue
-      if (attachment.allowedLocationIds && (!event.locationId || !attachment.allowedLocationIds.includes(event.locationId))) continue
+      const attachment: unknown = socket.deserializeAttachment()
+      if (!isSocketAttachment(attachment) || !canReceive(attachment, event)) continue
       try {
         socket.send(encoded)
       } catch (error) {
-        console.error('Guest inbox event delivery failed', error)
+        console.error('Dashboard invalidation delivery failed', error)
       }
     }
 

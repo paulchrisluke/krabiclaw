@@ -1,6 +1,4 @@
-import { HTTPError } from 'nitro';
-
-import type { H3Event } from 'nitro'
+import { HTTPError, type H3Event } from 'nitro'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import {
   getGuestThreadById,
@@ -8,15 +6,16 @@ import {
   listGuestThreads,
   listOrganizationGuestThreads,
 } from '~/server/domain/guest-threads/repository'
-import { advanceMemberCursor } from '~/server/domain/guest-threads/read-state'
 import type {
   ConversationState,
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds } from '~/server/utils/member-access'
-import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
+import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { acknowledgeThreadNotifications } from '~/server/utils/notification-acknowledgement'
+import { getNotificationAccess } from '~/server/utils/notification-access'
 
 export interface DashboardGuestThreadListQuery {
   locationId?: string | null
@@ -35,7 +34,7 @@ export async function loadDashboardGuestThreads(
   siteId: string,
   query: DashboardGuestThreadListQuery,
 ) {
-  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
   if (query.locationId) {
     await assertMemberScope(db, {
       env,
@@ -56,7 +55,7 @@ export async function loadDashboardGuestThreads(
   const options = {
     locationId: query.locationId ?? null,
     principal,
-    memberId: site.member_id,
+    userId: session.user.id,
     search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
@@ -88,24 +87,20 @@ export async function loadDashboardGuestThread(
     locationId: thread.location_id,
   })
 
-  const detail = await getGuestThreadDetail(db, threadId, siteId, site.member_id)
+  const detail = await getGuestThreadDetail(db, threadId, siteId)
   if (!detail) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
 
-  try {
-    const latest = detail.entries[detail.entries.length - 1]
-    if (latest) {
-      const advanced = await advanceMemberCursor(db, threadId, site.member_id, latest.id)
-      if (advanced) {
-        await publishGuestInboxThreadEvent(env, db, { threadId, type: 'read-state.changed' })
-      }
-    }
-  } catch (error) {
-    console.error('advance_member_cursor_failed', {
-      threadId,
-      memberId: site.member_id,
-      error: error instanceof Error ? error.message : String(error),
+  const notificationAccess = await getNotificationAccess(event)
+  const acknowledged = await acknowledgeThreadNotifications(db, notificationAccess, threadId)
+  if (acknowledged > 0) {
+    await publishNotificationInvalidation(env, {
+      type: 'notification.read',
+      organizationId: thread.organization_id,
+      siteId: thread.site_id,
+      locationId: thread.location_id,
+      targetUserId: notificationAccess.userId,
     })
   }
   return { thread: detail }
@@ -138,7 +133,7 @@ export async function loadOrganizationGuestThreads(
     siteId: query.siteId ?? null,
     locationId: query.locationId ?? null,
     principal,
-    memberId: organization.memberId,
+    userId,
     search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,

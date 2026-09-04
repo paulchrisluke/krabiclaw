@@ -1,10 +1,7 @@
 import { queryFirst } from '~/server/db'
-import { updateReservationSubmissionStatus } from '~/server/utils/mcp-workflows'
 import type {
   AdapterLoadContext,
   GuestThreadSourceAdapter,
-  OperationExecutionContext,
-  OperationExecutionResult,
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
@@ -44,19 +41,11 @@ export interface ReservationOpeningSnapshot {
 
 export type ReservationAction = 'confirm' | 'cancel' | 'complete'
 
-// Locked Decision #7: fixed transition matrix. Terminal states (completed/cancelled)
-// expose no actions.
 const RESERVATION_TRANSITIONS: Record<string, ReservationAction[]> = {
   new: ['confirm', 'cancel'],
   confirmed: ['complete', 'cancel'],
   completed: [],
   cancelled: [],
-}
-
-const RESERVATION_ACTION_TARGET_STATUS: Record<ReservationAction, string> = {
-  confirm: 'confirmed',
-  cancel: 'cancelled',
-  complete: 'completed',
 }
 
 function normalizePreview(text: string | null | undefined, maxLength = 160): string {
@@ -132,27 +121,6 @@ export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, Res
 
   listAvailableActions(source: ReservationSource): ReservationAction[] {
     return RESERVATION_TRANSITIONS[source.status] ?? []
-  },
-
-  async executeAction(ctx: OperationExecutionContext, source: ReservationSource, action: ReservationAction): Promise<OperationExecutionResult> {
-    const allowed = RESERVATION_TRANSITIONS[source.status] ?? []
-    if (!allowed.includes(action)) {
-      return { ok: false, reason: 'invalid_transition', message: `Cannot ${action} a reservation in status "${source.status}"` }
-    }
-
-    const targetStatus = RESERVATION_ACTION_TARGET_STATUS[action]
-    await updateReservationSubmissionStatus(ctx.db, source.site_id, source.id, targetStatus, { locationId: source.location_id })
-
-    // Confirm/cancel trigger a guest-facing transactional notification; complete does not.
-    const requiresNotification = action === 'confirm' || action === 'cancel'
-
-    return {
-      ok: true,
-      beforeStatus: source.status,
-      afterStatus: targetStatus,
-      requiresNotification,
-      notifyChannel: requiresNotification ? 'email' : null,
-    }
   },
 
   buildCurrentDetail(source: ReservationSource): ThreadDetailSourceModel {

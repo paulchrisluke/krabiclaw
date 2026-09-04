@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "25b85b58-8733-4f1e-9ae5-1013be7630ed",
+  "id": "a78a21e4-4c7e-4261-88bf-91a5d03f0315",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -3616,208 +3616,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "guest_thread_commands": {
-      "name": "guest_thread_commands",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "action": {
-          "name": "action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "actor_kind": {
-          "name": "actor_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "actor_user_id": {
-          "name": "actor_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "actor_member_id": {
-          "name": "actor_member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "request_hash": {
-          "name": "request_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "result_json": {
-          "name": "result_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "guest_thread_commands_site_created_idx": {
-          "name": "guest_thread_commands_site_created_idx",
-          "columns": [
-            "site_id",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "guest_thread_commands_thread_idempotency_unique": {
-          "name": "guest_thread_commands_thread_idempotency_unique",
-          "columns": [
-            "thread_id",
-            "idempotency_key"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "guest_thread_commands_thread_id_guest_threads_id_fk": {
-          "name": "guest_thread_commands_thread_id_guest_threads_id_fk",
-          "tableFrom": "guest_thread_commands",
-          "tableTo": "guest_threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_commands_organization_id_organization_id_fk": {
-          "name": "guest_thread_commands_organization_id_organization_id_fk",
-          "tableFrom": "guest_thread_commands",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_commands_site_id_sites_id_fk": {
-          "name": "guest_thread_commands_site_id_sites_id_fk",
-          "tableFrom": "guest_thread_commands",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_commands_actor_user_id_user_id_fk": {
-          "name": "guest_thread_commands_actor_user_id_user_id_fk",
-          "tableFrom": "guest_thread_commands",
-          "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "guest_thread_commands_actor_member_id_member_id_fk": {
-          "name": "guest_thread_commands_actor_member_id_member_id_fk",
-          "tableFrom": "guest_thread_commands",
-          "tableTo": "member",
-          "columnsFrom": [
-            "actor_member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "guest_thread_commands_actor_kind_check": {
-          "name": "guest_thread_commands_actor_kind_check",
-          "value": "actor_kind IN ('member', 'guest', 'system')"
-        },
-        "guest_thread_commands_status_check": {
-          "name": "guest_thread_commands_status_check",
-          "value": "status IN ('pending', 'completed', 'failed')"
-        }
-      }
-    },
     "guest_thread_deliveries": {
       "name": "guest_thread_deliveries",
       "columns": {
@@ -3839,7 +3637,7 @@
           "name": "entry_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "channel": {
@@ -3853,7 +3651,14 @@
           "name": "provider",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "idempotency_key": {
@@ -3869,22 +3674,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'queued'"
-        },
-        "attempt_count": {
-          "name": "attempt_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "default": "'pending'"
         },
         "provider_message_id": {
           "name": "provider_message_id",
@@ -3893,78 +3683,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "to_address": {
-          "name": "to_address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "from_name": {
-          "name": "from_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "subject": {
-          "name": "subject",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "text_body": {
-          "name": "text_body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reply_to": {
-          "name": "reply_to",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "locale": {
-          "name": "locale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "template_version": {
-          "name": "template_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "source_snapshot_json": {
-          "name": "source_snapshot_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "payload_hash": {
-          "name": "payload_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "provider_idempotency_key": {
-          "name": "provider_idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "processing_lease_until": {
-          "name": "processing_lease_until",
+        "error": {
+          "name": "error",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -3995,19 +3715,20 @@
           ],
           "isUnique": true
         },
+        "guest_thread_deliveries_provider_message_unique": {
+          "name": "guest_thread_deliveries_provider_message_unique",
+          "columns": [
+            "provider",
+            "provider_message_id"
+          ],
+          "isUnique": true,
+          "where": "provider_message_id IS NOT NULL"
+        },
         "guest_thread_deliveries_thread_status_idx": {
           "name": "guest_thread_deliveries_thread_status_idx",
           "columns": [
             "thread_id",
             "status"
-          ],
-          "isUnique": false
-        },
-        "guest_thread_deliveries_status_updated_idx": {
-          "name": "guest_thread_deliveries_status_updated_idx",
-          "columns": [
-            "status",
-            "updated_at"
           ],
           "isUnique": false
         }
@@ -4026,17 +3747,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "guest_thread_deliveries_entry_id_guest_thread_entries_id_fk": {
-          "name": "guest_thread_deliveries_entry_id_guest_thread_entries_id_fk",
+        "guest_thread_deliveries_entry_thread_fk": {
+          "name": "guest_thread_deliveries_entry_thread_fk",
           "tableFrom": "guest_thread_deliveries",
           "tableTo": "guest_thread_entries",
           "columnsFrom": [
-            "entry_id"
+            "entry_id",
+            "thread_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "thread_id"
           ],
-          "onDelete": "set null",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -4047,9 +3770,17 @@
           "name": "guest_thread_deliveries_channel_check",
           "value": "channel IN ('email', 'whatsapp')"
         },
+        "guest_thread_deliveries_provider_check": {
+          "name": "guest_thread_deliveries_provider_check",
+          "value": "(channel = 'email' AND provider IN ('resend', 'log_only')) OR (channel = 'whatsapp' AND provider IN ('meta', 'log_only'))"
+        },
+        "guest_thread_deliveries_purpose_check": {
+          "name": "guest_thread_deliveries_purpose_check",
+          "value": "purpose IN ('owner_alert', 'guest_acknowledgement', 'member_reply', 'status_update')"
+        },
         "guest_thread_deliveries_status_check": {
           "name": "guest_thread_deliveries_status_check",
-          "value": "status IN ('queued', 'sent', 'failed')"
+          "value": "status IN ('pending', 'accepted', 'sent', 'delivered', 'read', 'failed', 'unknown')"
         }
       }
     },
@@ -4133,18 +3864,18 @@
           "notNull": false,
           "autoincrement": false
         },
-        "external_id": {
-          "name": "external_id",
+        "dedupe_key": {
+          "name": "dedupe_key",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "sequence": {
           "name": "sequence",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "occurred_at": {
@@ -4172,13 +3903,12 @@
           ],
           "isUnique": false
         },
-        "guest_thread_entries_external_id_unique": {
-          "name": "guest_thread_entries_external_id_unique",
+        "guest_thread_entries_dedupe_key_unique": {
+          "name": "guest_thread_entries_dedupe_key_unique",
           "columns": [
-            "external_id"
+            "dedupe_key"
           ],
-          "isUnique": true,
-          "where": "external_id IS NOT NULL"
+          "isUnique": true
         },
         "guest_thread_entries_site_kind_occurred_idx": {
           "name": "guest_thread_entries_site_kind_occurred_idx",
@@ -4195,6 +3925,14 @@
             "organization_id"
           ],
           "isUnique": false
+        },
+        "guest_thread_entries_id_thread_unique": {
+          "name": "guest_thread_entries_id_thread_unique",
+          "columns": [
+            "id",
+            "thread_id"
+          ],
+          "isUnique": true
         },
         "guest_thread_entries_thread_sequence_unique": {
           "name": "guest_thread_entries_thread_sequence_unique",
@@ -4264,7 +4002,7 @@
       "checkConstraints": {
         "guest_thread_entries_kind_check": {
           "name": "guest_thread_entries_kind_check",
-          "value": "kind IN ('submission', 'message', 'operation', 'delivery', 'assignment', 'resolution')"
+          "value": "kind IN ('submission', 'message', 'operation', 'assignment', 'resolution')"
         },
         "guest_thread_entries_actor_kind_check": {
           "name": "guest_thread_entries_actor_kind_check",
@@ -4275,304 +4013,6 @@
           "value": "channel IS NULL OR channel IN ('web', 'email', 'whatsapp', 'system')"
         }
       }
-    },
-    "guest_thread_member_state": {
-      "name": "guest_thread_member_state",
-      "columns": {
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "member_id": {
-          "name": "member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_read_entry_id": {
-          "name": "last_read_entry_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_read_sequence": {
-          "name": "last_read_sequence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "guest_thread_member_state_member_updated_idx": {
-          "name": "guest_thread_member_state_member_updated_idx",
-          "columns": [
-            "member_id",
-            "updated_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "guest_thread_member_state_thread_id_guest_threads_id_fk": {
-          "name": "guest_thread_member_state_thread_id_guest_threads_id_fk",
-          "tableFrom": "guest_thread_member_state",
-          "tableTo": "guest_threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_member_state_member_id_member_id_fk": {
-          "name": "guest_thread_member_state_member_id_member_id_fk",
-          "tableFrom": "guest_thread_member_state",
-          "tableTo": "member",
-          "columnsFrom": [
-            "member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_member_state_last_read_entry_id_guest_thread_entries_id_fk": {
-          "name": "guest_thread_member_state_last_read_entry_id_guest_thread_entries_id_fk",
-          "tableFrom": "guest_thread_member_state",
-          "tableTo": "guest_thread_entries",
-          "columnsFrom": [
-            "last_read_entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "guest_thread_member_state_thread_id_member_id_pk": {
-          "columns": [
-            "thread_id",
-            "member_id"
-          ],
-          "name": "guest_thread_member_state_thread_id_member_id_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "guest_thread_outbox": {
-      "name": "guest_thread_outbox",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "delivery_id": {
-          "name": "delivery_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "attempt_count": {
-          "name": "attempt_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "next_attempt_at": {
-          "name": "next_attempt_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "locked_at": {
-          "name": "locked_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "guest_thread_outbox_status_next_idx": {
-          "name": "guest_thread_outbox_status_next_idx",
-          "columns": [
-            "status",
-            "next_attempt_at"
-          ],
-          "isUnique": false
-        },
-        "guest_thread_outbox_thread_idx": {
-          "name": "guest_thread_outbox_thread_idx",
-          "columns": [
-            "thread_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "guest_thread_outbox_thread_id_guest_threads_id_fk": {
-          "name": "guest_thread_outbox_thread_id_guest_threads_id_fk",
-          "tableFrom": "guest_thread_outbox",
-          "tableTo": "guest_threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_outbox_delivery_id_guest_thread_deliveries_id_fk": {
-          "name": "guest_thread_outbox_delivery_id_guest_thread_deliveries_id_fk",
-          "tableFrom": "guest_thread_outbox",
-          "tableTo": "guest_thread_deliveries",
-          "columnsFrom": [
-            "delivery_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "guest_thread_outbox_status_check": {
-          "name": "guest_thread_outbox_status_check",
-          "value": "status IN ('pending', 'publishing', 'published', 'failed', 'dead')"
-        }
-      }
-    },
-    "guest_thread_sequence_counters": {
-      "name": "guest_thread_sequence_counters",
-      "columns": {
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "next_sequence": {
-          "name": "next_sequence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "guest_thread_sequence_counters_thread_id_guest_threads_id_fk": {
-          "name": "guest_thread_sequence_counters_thread_id_guest_threads_id_fk",
-          "tableFrom": "guest_thread_sequence_counters",
-          "tableTo": "guest_threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     },
     "guest_threads": {
       "name": "guest_threads",
@@ -4640,57 +4080,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "inbox_status": {
-          "name": "inbox_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'open'"
-        },
-        "unread_count": {
-          "name": "unread_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "last_message_at": {
-          "name": "last_message_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_inbound_at": {
-          "name": "last_inbound_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_outbound_at": {
-          "name": "last_outbound_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_message_preview": {
-          "name": "last_message_preview",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "owner_last_seen_at": {
-          "name": "owner_last_seen_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "conversation_state": {
           "name": "conversation_state",
           "type": "text",
@@ -4698,21 +4087,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'needs_attention'"
-        },
-        "operational_status": {
-          "name": "operational_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
         },
         "resolved_at": {
           "name": "resolved_at",
@@ -4755,29 +4129,12 @@
           ],
           "isUnique": false
         },
-        "guest_threads_inbox_status_idx": {
-          "name": "guest_threads_inbox_status_idx",
-          "columns": [
-            "site_id",
-            "inbox_status",
-            "updated_at"
-          ],
-          "isUnique": false
-        },
         "guest_threads_conversation_state_idx": {
           "name": "guest_threads_conversation_state_idx",
           "columns": [
             "site_id",
             "conversation_state",
             "updated_at"
-          ],
-          "isUnique": false
-        },
-        "guest_threads_site_version_idx": {
-          "name": "guest_threads_site_version_idx",
-          "columns": [
-            "site_id",
-            "version"
           ],
           "isUnique": false
         },
@@ -4844,10 +4201,6 @@
         "guest_threads_submission_type_check": {
           "name": "guest_threads_submission_type_check",
           "value": "submission_type IN ('contact', 'reservation', 'experience_booking')"
-        },
-        "guest_threads_inbox_status_check": {
-          "name": "guest_threads_inbox_status_check",
-          "value": "inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')"
         },
         "guest_threads_conversation_state_check": {
           "name": "guest_threads_conversation_state_check",
@@ -6223,267 +5576,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "notification_deliveries": {
-      "name": "notification_deliveries",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "notification_id": {
-          "name": "notification_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "channel": {
-          "name": "channel",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "provider_message_id": {
-          "name": "provider_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sent_at": {
-          "name": "sent_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "notification_deliveries_notification_idx": {
-          "name": "notification_deliveries_notification_idx",
-          "columns": [
-            "notification_id"
-          ],
-          "isUnique": false
-        },
-        "notification_deliveries_channel_status_idx": {
-          "name": "notification_deliveries_channel_status_idx",
-          "columns": [
-            "channel",
-            "status"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "notification_deliveries_notification_id_notifications_id_fk": {
-          "name": "notification_deliveries_notification_id_notifications_id_fk",
-          "tableFrom": "notification_deliveries",
-          "tableTo": "notifications",
-          "columnsFrom": [
-            "notification_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "notification_events": {
-      "name": "notification_events",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "scope_type": {
-          "name": "scope_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "submission_type": {
-          "name": "submission_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "submission_id": {
-          "name": "submission_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "channels": {
-          "name": "channels",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "recipients": {
-          "name": "recipients",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "payload": {
-          "name": "payload",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "notification_events_scope_created_idx": {
-          "name": "notification_events_scope_created_idx",
-          "columns": [
-            "scope_type",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "notification_events_submission_idx": {
-          "name": "notification_events_submission_idx",
-          "columns": [
-            "submission_type",
-            "submission_id"
-          ],
-          "isUnique": false
-        },
-        "notification_events_event_created_idx": {
-          "name": "notification_events_event_created_idx",
-          "columns": [
-            "event_type",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "notification_events_org_site_idx": {
-          "name": "notification_events_org_site_idx",
-          "columns": [
-            "organization_id",
-            "site_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "notification_events_organization_id_organization_id_fk": {
-          "name": "notification_events_organization_id_organization_id_fk",
-          "tableFrom": "notification_events",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "notification_events_site_id_sites_id_fk": {
-          "name": "notification_events_site_id_sites_id_fk",
-          "tableFrom": "notification_events",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "notification_reads": {
       "name": "notification_reads",
       "columns": {
@@ -6591,6 +5683,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "guest_thread_id": {
+          "name": "guest_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_entry_id": {
+          "name": "source_entry_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "scope": {
           "name": "scope",
           "type": "text",
@@ -6603,7 +5709,7 @@
           "name": "event_type",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "severity": {
@@ -6642,26 +5748,11 @@
           "notNull": false,
           "autoincrement": false
         },
-        "channel": {
-          "name": "channel",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'dashboard'"
-        },
         "template": {
           "name": "template",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "recipient": {
-          "name": "recipient",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "title": {
@@ -6678,42 +5769,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "provider_message_id": {
-          "name": "provider_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "read_at": {
-          "name": "read_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sent_at": {
-          "name": "sent_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -6721,34 +5776,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "related_submission_type": {
-          "name": "related_submission_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "related_submission_id": {
-          "name": "related_submission_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "whatsapp_delivery_status": {
-          "name": "whatsapp_delivery_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "whatsapp_delivery_error": {
-          "name": "whatsapp_delivery_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -6783,6 +5810,22 @@
             "created_at"
           ],
           "isUnique": false
+        },
+        "notifications_guest_thread_created_at_idx": {
+          "name": "notifications_guest_thread_created_at_idx",
+          "columns": [
+            "guest_thread_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "notifications_source_entry_unique": {
+          "name": "notifications_source_entry_unique",
+          "columns": [
+            "source_entry_id"
+          ],
+          "isUnique": true,
+          "where": "source_entry_id IS NOT NULL"
         }
       },
       "foreignKeys": {
@@ -6825,6 +5868,19 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
+        "notifications_guest_thread_id_guest_threads_id_fk": {
+          "name": "notifications_guest_thread_id_guest_threads_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "guest_threads",
+          "columnsFrom": [
+            "guest_thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "notifications_actor_user_id_user_id_fk": {
           "name": "notifications_actor_user_id_user_id_fk",
           "tableFrom": "notifications",
@@ -6850,18 +5906,29 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "notifications_source_entry_thread_fk": {
+          "name": "notifications_source_entry_thread_fk",
+          "tableFrom": "notifications",
+          "tableTo": "guest_thread_entries",
+          "columnsFrom": [
+            "source_entry_id",
+            "guest_thread_id"
+          ],
+          "columnsTo": [
+            "id",
+            "thread_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "notifications_whatsapp_delivery_status_check": {
-          "name": "notifications_whatsapp_delivery_status_check",
-          "value": "whatsapp_delivery_status IS NULL OR whatsapp_delivery_status IN ('accepted', 'sent', 'delivered', 'read', 'failed')"
-        },
-        "notifications_related_submission_type_check": {
-          "name": "notifications_related_submission_type_check",
-          "value": "related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking', 'invitation')"
+        "notifications_thread_source_check": {
+          "name": "notifications_thread_source_check",
+          "value": "(guest_thread_id IS NULL AND source_entry_id IS NULL) OR (guest_thread_id IS NOT NULL AND source_entry_id IS NOT NULL)"
         }
       }
     },

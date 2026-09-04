@@ -6,11 +6,11 @@ import Database from 'better-sqlite3'
 function baselineDatabase() {
   const database = new Database(':memory:')
   database.pragma('foreign_keys = ON')
-  database.exec(readFileSync('migrations/0000_epoch_4_baseline.sql', 'utf8'))
+  database.exec(readFileSync('migrations/0000_epoch_5_baseline.sql', 'utf8'))
   return database
 }
 
-test('epoch-4 baseline creates the complete schema from zero', () => {
+test('epoch-5 baseline creates the complete schema from zero', () => {
   const database = baselineDatabase()
   try {
     const objectCounts = database.prepare(`
@@ -20,8 +20,8 @@ test('epoch-4 baseline creates the complete schema from zero', () => {
       GROUP BY type
     `).all() as Array<{ type: string; count: number }>
     assert.deepEqual(Object.fromEntries(objectCounts.map(row => [row.type, row.count])), {
-      index: 249,
-      table: 104,
+      index: 239,
+      table: 98,
     })
     const ledgerCount = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE name = 'd1_migrations'").get() as { count: number }
     assert.equal(ledgerCount.count, 0)
@@ -35,7 +35,7 @@ test('epoch-4 baseline creates the complete schema from zero', () => {
   }
 })
 
-test('epoch-4 baseline enforces canonical cross-scope and value constraints', () => {
+test('epoch-5 baseline enforces canonical cross-scope and value constraints', () => {
   const database = baselineDatabase()
   try {
     database.prepare("INSERT INTO themes (id, name, slug) VALUES ('saya-theme-v1', 'Saya', 'saya')").run()
@@ -101,7 +101,7 @@ test('epoch-4 baseline enforces canonical cross-scope and value constraints', ()
   }
 })
 
-test('epoch-4 leaves extensible application registries out of database CHECK constraints', () => {
+test('epoch-5 leaves extensible application registries out of database CHECK constraints', () => {
   const database = baselineDatabase()
   try {
     const definitions = database.prepare(`

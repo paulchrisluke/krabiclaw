@@ -4,7 +4,9 @@ import {
 } from './helpers'
 import { devLoginHeaders, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
-type NotificationRow = { channel: string; template: string; status: string; recipient: string | null }
+type NotificationRow = { template: string }
+type DeliveryRow = { channel: 'email' | 'whatsapp'; purpose: string; status: string }
+type NotificationState = { notifications: NotificationRow[]; deliveries: DeliveryRow[] }
 const executionHost = new URL(testBaseUrl()).hostname
 const writableEnvironment = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(executionHost)
 
@@ -20,21 +22,21 @@ async function waitForNotifications(
   baseURL: string,
   siteId: string,
   since: string,
-  complete: (_rows: NotificationRow[]) => boolean,
+  complete: (_state: NotificationState) => boolean,
 ) {
-  let rows: NotificationRow[] = []
+  let state: NotificationState = { notifications: [], deliveries: [] }
   await expect.poll(async () => {
     const response = await request.get(notificationUrl(baseURL, siteId, since), { headers: devLoginHeaders() })
-    rows = response.ok() ? ((await response.json()) as { notifications: NotificationRow[] }).notifications : []
-    return complete(rows)
+    state = response.ok() ? await response.json() as NotificationState : { notifications: [], deliveries: [] }
+    return complete(state)
   }, { timeout: 8_000 }).toBe(true)
-  return rows
+  return state
 }
 
-function expectOwnerDispatch(rows: NotificationRow[], guestEmail: string) {
-  expect(rows.some(row => row.channel === 'dashboard' && row.status === 'sent')).toBe(true)
-  expect(rows.some(row => row.channel === 'whatsapp' && row.status === 'sent')).toBe(true)
-  expect(rows.some(row => row.channel !== 'dashboard' && row.recipient !== guestEmail && row.status === 'sent')).toBe(true)
+function expectOwnerDispatch(state: NotificationState) {
+  expect(state.notifications.length).toBeGreaterThan(0)
+  expect(state.deliveries.some(row => row.purpose === 'owner_alert' && row.status === 'sent')).toBe(true)
+  expect(state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent')).toBe(true)
 }
 
 async function chooseFirstAvailableTime(page: Page) {
@@ -63,12 +65,12 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect((await response.json() as { booking_id?: string }).booking_id).toEqual(expect.any(String))
     await expect(page).toHaveURL(/\/experiences\/confirmed/)
     await expect(page.locator('main')).toContainText(/booking|received|confirmed/i)
-    const rows = await waitForNotifications(request, potteryHouseBaseURL, 'site-pottery-house', since, rows =>
-      rows.some(row => row.template === 'experience_booking_customer_received' && row.recipient === email)
-      && rows.some(row => row.channel === 'whatsapp' && row.template === 'new_reservation' && row.status === 'sent'),
+    const state = await waitForNotifications(request, potteryHouseBaseURL, 'site-pottery-house', since, state =>
+      state.notifications.some(row => row.template === 'new_reservation')
+      && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
+      && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
     )
-    expectOwnerDispatch(rows, email)
-    expect(rows.some(row => row.template === 'experience_booking_customer_received' && row.recipient === email)).toBe(true)
+    expectOwnerDispatch(state)
   })
 
   test('Kikuzuki restaurant reservation persists and creates log-only owner dispatch', async ({ page, request }) => {
@@ -82,17 +84,31 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     await page.getByLabel('Email address').fill(email)
     await page.getByLabel(/Phone number/i).fill('+66812345679')
     const submission = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/public/sites/site-kikuzuki/reservations'))
-    await page.getByLabel('Your details').getByRole('button', { name: /request reservation|ขอจอง/i }).click()
+    await page.getByLabel('Your details').getByRole('button', { name: /confirm reservation|ยืนยันการจอง/i }).click()
     const response = await submission
     expect(response.status()).toBe(201)
-    expect((await response.json() as { id?: string }).id).toEqual(expect.any(String))
+    const reservation: { id?: unknown; cancellationToken?: unknown; message?: unknown } = await response.json()
+    expect(reservation.message).toBe('Your reservation is confirmed.')
+    expect(reservation.id).toEqual(expect.any(String))
+    expect(reservation.cancellationToken).toEqual(expect.any(String))
+    if (typeof reservation.id !== 'string' || typeof reservation.cancellationToken !== 'string') {
+      throw new Error('Reservation response omitted its lookup credentials')
+    }
+    const persisted = await request.get(`${baseURL}/api/public/sites/site-kikuzuki/reservations/${reservation.id}`, {
+      headers: { ...kikuzukiTestExtraHeaders(), Authorization: `Bearer ${reservation.cancellationToken}` },
+    })
+    expect(persisted.status()).toBe(200)
+    const persistedBody: { reservation?: { status?: unknown } } = await persisted.json()
+    expect(persistedBody.reservation?.status).toBe('confirmed')
     await expect(page).toHaveURL(/\/reservations\/confirmed/)
-    const rows = await waitForNotifications(request, baseURL, 'site-kikuzuki', since, rows =>
-      rows.some(row => row.template === 'reservation_customer_received' && row.recipient === email)
-      && rows.some(row => row.channel === 'whatsapp' && row.template === 'new_reservation' && row.status === 'sent'),
+    await expect(page.locator('main')).toContainText('Reservation confirmed')
+    await expect(page.locator('main')).not.toContainText(/confirm your .* shortly/i)
+    const state = await waitForNotifications(request, baseURL, 'site-kikuzuki', since, state =>
+      state.notifications.some(row => row.template === 'new_reservation')
+      && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
+      && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
     )
-    expectOwnerDispatch(rows, email)
-    expect(rows.some(row => row.template === 'reservation_customer_received' && row.recipient === email)).toBe(true)
+    expectOwnerDispatch(state)
   })
 
   test('Pottery House contact persists and creates an owner notification', async ({ page, request }) => {
@@ -106,12 +122,12 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     await page.getByRole('button', { name: /send a message/i }).click()
     expect((await submission).status()).toBe(201)
     await expect(page).toHaveURL(/\/contact\/confirmed/)
-    const rows = await waitForNotifications(request, potteryHouseBaseURL, 'site-pottery-house', since, rows =>
-      rows.some(row => row.template === 'contact_customer_received' && row.recipient === email)
-      && rows.some(row => row.channel === 'whatsapp' && row.template === 'new_contact_msg' && row.status === 'sent'),
+    const state = await waitForNotifications(request, potteryHouseBaseURL, 'site-pottery-house', since, state =>
+      state.notifications.some(row => row.template === 'new_contact_msg')
+      && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
+      && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
     )
-    expect(rows.some(row => row.channel === 'dashboard' && row.template === 'new_contact_msg' && row.status === 'sent')).toBe(true)
-    expect(rows.some(row => row.channel === 'email' && row.template === 'contact_customer_received' && row.recipient === email)).toBe(true)
+    expectOwnerDispatch(state)
   })
 
   test('guest validation rejects invalid input and re-used cancellation tokens', async ({ request }) => {

@@ -19,8 +19,6 @@ export interface NotificationVisibilityPrincipal {
 
 export function buildNotificationVisibilityFilter(principal: NotificationVisibilityPrincipal) {
   const clauses = [
-    `n.channel = 'dashboard'`,
-    `n.event_type IS NOT NULL`,
     `(n.target_user_id IS NULL OR n.target_user_id = ?)`,
   ]
   const params: unknown[] = [principal.userId]

@@ -2,8 +2,6 @@ import { queryFirst } from '~/server/db'
 import type {
   AdapterLoadContext,
   GuestThreadSourceAdapter,
-  OperationExecutionContext,
-  OperationExecutionResult,
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
@@ -112,10 +110,6 @@ export const contactAdapter: GuestThreadSourceAdapter<ContactSource, ContactOpen
 
   listAvailableActions(): ContactAction[] {
     return []
-  },
-
-  async executeAction(_ctx: OperationExecutionContext, _source: ContactSource): Promise<OperationExecutionResult> {
-    return { ok: false, reason: 'invalid_transition', message: 'Contact submissions have no operational actions' }
   },
 
   buildCurrentDetail(source: ContactSource): ThreadDetailSourceModel {

@@ -473,65 +473,30 @@ CREATE TABLE `google_analytics_connections` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `google_analytics_connections_organization_id_site_id_unique` ON `google_analytics_connections` (`organization_id`,`site_id`);--> statement-breakpoint
-CREATE TABLE `guest_thread_commands` (
-	`id` text PRIMARY KEY NOT NULL,
-	`thread_id` text NOT NULL,
-	`organization_id` text NOT NULL,
-	`site_id` text NOT NULL,
-	`action` text NOT NULL,
-	`idempotency_key` text NOT NULL,
-	`actor_kind` text NOT NULL,
-	`actor_user_id` text,
-	`actor_member_id` text,
-	`request_hash` text NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`result_json` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`completed_at` text,
-	FOREIGN KEY (`thread_id`) REFERENCES `guest_threads`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`actor_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`actor_member_id`) REFERENCES `member`(`id`) ON UPDATE no action ON DELETE set null,
-	CONSTRAINT "guest_thread_commands_actor_kind_check" CHECK(actor_kind IN ('member', 'guest', 'system')),
-	CONSTRAINT "guest_thread_commands_status_check" CHECK(status IN ('pending', 'completed', 'failed'))
-);
---> statement-breakpoint
-CREATE INDEX `guest_thread_commands_site_created_idx` ON `guest_thread_commands` (`site_id`,`created_at`);--> statement-breakpoint
-CREATE UNIQUE INDEX `guest_thread_commands_thread_idempotency_unique` ON `guest_thread_commands` (`thread_id`,`idempotency_key`);--> statement-breakpoint
 CREATE TABLE `guest_thread_deliveries` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
-	`entry_id` text,
+	`entry_id` text NOT NULL,
 	`channel` text NOT NULL,
-	`provider` text,
+	`provider` text NOT NULL,
+	`purpose` text NOT NULL,
 	`idempotency_key` text NOT NULL,
-	`status` text DEFAULT 'queued' NOT NULL,
-	`attempt_count` integer DEFAULT 0 NOT NULL,
-	`last_error` text,
+	`status` text DEFAULT 'pending' NOT NULL,
 	`provider_message_id` text,
-	`to_address` text,
-	`from_name` text,
-	`subject` text,
-	`text_body` text,
-	`reply_to` text,
-	`locale` text,
-	`template_version` text,
-	`source_snapshot_json` text,
-	`payload_hash` text,
-	`provider_idempotency_key` text,
-	`processing_lease_until` text,
+	`error` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`thread_id`) REFERENCES `guest_threads`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`entry_id`) REFERENCES `guest_thread_entries`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`entry_id`,`thread_id`) REFERENCES `guest_thread_entries`(`id`,`thread_id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "guest_thread_deliveries_channel_check" CHECK(channel IN ('email', 'whatsapp')),
-	CONSTRAINT "guest_thread_deliveries_status_check" CHECK(status IN ('queued', 'sent', 'failed'))
+	CONSTRAINT "guest_thread_deliveries_provider_check" CHECK((channel = 'email' AND provider IN ('resend', 'log_only')) OR (channel = 'whatsapp' AND provider IN ('meta', 'log_only'))),
+	CONSTRAINT "guest_thread_deliveries_purpose_check" CHECK(purpose IN ('owner_alert', 'guest_acknowledgement', 'member_reply', 'status_update')),
+	CONSTRAINT "guest_thread_deliveries_status_check" CHECK(status IN ('pending', 'accepted', 'sent', 'delivered', 'read', 'failed', 'unknown'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `guest_thread_deliveries_idempotency_key_unique` ON `guest_thread_deliveries` (`idempotency_key`);--> statement-breakpoint
+CREATE UNIQUE INDEX `guest_thread_deliveries_provider_message_unique` ON `guest_thread_deliveries` (`provider`,`provider_message_id`) WHERE provider_message_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `guest_thread_deliveries_thread_status_idx` ON `guest_thread_deliveries` (`thread_id`,`status`);--> statement-breakpoint
-CREATE INDEX `guest_thread_deliveries_status_updated_idx` ON `guest_thread_deliveries` (`status`,`updated_at`);--> statement-breakpoint
 CREATE TABLE `guest_thread_entries` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
@@ -544,64 +509,25 @@ CREATE TABLE `guest_thread_entries` (
 	`body` text,
 	`event_name` text,
 	`payload_json` text,
-	`external_id` text,
-	`sequence` integer,
+	`dedupe_key` text NOT NULL,
+	`sequence` integer NOT NULL,
 	`occurred_at` text NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`thread_id`) REFERENCES `guest_threads`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`actor_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
-	CONSTRAINT "guest_thread_entries_kind_check" CHECK(kind IN ('submission', 'message', 'operation', 'delivery', 'assignment', 'resolution')),
+	CONSTRAINT "guest_thread_entries_kind_check" CHECK(kind IN ('submission', 'message', 'operation', 'assignment', 'resolution')),
 	CONSTRAINT "guest_thread_entries_actor_kind_check" CHECK(actor_kind IN ('guest', 'member', 'system')),
 	CONSTRAINT "guest_thread_entries_channel_check" CHECK(channel IS NULL OR channel IN ('web', 'email', 'whatsapp', 'system'))
 );
 --> statement-breakpoint
 CREATE INDEX `guest_thread_entries_thread_occurred_idx` ON `guest_thread_entries` (`thread_id`,`occurred_at`);--> statement-breakpoint
-CREATE UNIQUE INDEX `guest_thread_entries_external_id_unique` ON `guest_thread_entries` (`external_id`) WHERE external_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `guest_thread_entries_dedupe_key_unique` ON `guest_thread_entries` (`dedupe_key`);--> statement-breakpoint
 CREATE INDEX `guest_thread_entries_site_kind_occurred_idx` ON `guest_thread_entries` (`site_id`,`kind`,`occurred_at`);--> statement-breakpoint
 CREATE INDEX `guest_thread_entries_organization_id_idx` ON `guest_thread_entries` (`organization_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `guest_thread_entries_id_thread_unique` ON `guest_thread_entries` (`id`,`thread_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `guest_thread_entries_thread_sequence_unique` ON `guest_thread_entries` (`thread_id`,`sequence`);--> statement-breakpoint
-CREATE TABLE `guest_thread_member_state` (
-	`thread_id` text NOT NULL,
-	`member_id` text NOT NULL,
-	`last_read_entry_id` text,
-	`last_read_sequence` integer DEFAULT 0 NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	PRIMARY KEY(`thread_id`, `member_id`),
-	FOREIGN KEY (`thread_id`) REFERENCES `guest_threads`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`member_id`) REFERENCES `member`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`last_read_entry_id`) REFERENCES `guest_thread_entries`(`id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE INDEX `guest_thread_member_state_member_updated_idx` ON `guest_thread_member_state` (`member_id`,`updated_at`);--> statement-breakpoint
-CREATE TABLE `guest_thread_outbox` (
-	`id` text PRIMARY KEY NOT NULL,
-	`thread_id` text NOT NULL,
-	`delivery_id` text,
-	`event_type` text NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`attempt_count` integer DEFAULT 0 NOT NULL,
-	`next_attempt_at` text,
-	`locked_at` text,
-	`last_error` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`thread_id`) REFERENCES `guest_threads`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`delivery_id`) REFERENCES `guest_thread_deliveries`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "guest_thread_outbox_status_check" CHECK(status IN ('pending', 'publishing', 'published', 'failed', 'dead'))
-);
---> statement-breakpoint
-CREATE INDEX `guest_thread_outbox_status_next_idx` ON `guest_thread_outbox` (`status`,`next_attempt_at`);--> statement-breakpoint
-CREATE INDEX `guest_thread_outbox_thread_idx` ON `guest_thread_outbox` (`thread_id`);--> statement-breakpoint
-CREATE TABLE `guest_thread_sequence_counters` (
-	`thread_id` text PRIMARY KEY NOT NULL,
-	`next_sequence` integer DEFAULT 1 NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`thread_id`) REFERENCES `guest_threads`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
 CREATE TABLE `guest_threads` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -612,16 +538,7 @@ CREATE TABLE `guest_threads` (
 	`guest_name` text NOT NULL,
 	`guest_email` text,
 	`guest_phone` text,
-	`inbox_status` text DEFAULT 'open' NOT NULL,
-	`unread_count` integer DEFAULT 0 NOT NULL,
-	`last_message_at` text,
-	`last_inbound_at` text,
-	`last_outbound_at` text,
-	`last_message_preview` text,
-	`owner_last_seen_at` text,
 	`conversation_state` text DEFAULT 'needs_attention' NOT NULL,
-	`operational_status` text,
-	`version` integer DEFAULT 0 NOT NULL,
 	`resolved_at` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
@@ -629,15 +546,12 @@ CREATE TABLE `guest_threads` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "guest_threads_submission_type_check" CHECK(submission_type IN ('contact', 'reservation', 'experience_booking')),
-	CONSTRAINT "guest_threads_inbox_status_check" CHECK(inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')),
 	CONSTRAINT "guest_threads_conversation_state_check" CHECK(conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved'))
 );
 --> statement-breakpoint
 CREATE INDEX `guest_threads_site_updated_idx` ON `guest_threads` (`site_id`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `guest_threads_location_updated_idx` ON `guest_threads` (`location_id`,`updated_at`);--> statement-breakpoint
-CREATE INDEX `guest_threads_inbox_status_idx` ON `guest_threads` (`site_id`,`inbox_status`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `guest_threads_conversation_state_idx` ON `guest_threads` (`site_id`,`conversation_state`,`updated_at`);--> statement-breakpoint
-CREATE INDEX `guest_threads_site_version_idx` ON `guest_threads` (`site_id`,`version`);--> statement-breakpoint
 CREATE INDEX `guest_threads_organization_id_idx` ON `guest_threads` (`organization_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `guest_threads_submission_unique` ON `guest_threads` (`submission_type`,`submission_id`);--> statement-breakpoint
 CREATE TABLE `invitation` (
@@ -823,42 +737,6 @@ CREATE TABLE `member` (
 --> statement-breakpoint
 CREATE INDEX `member_userId_organizationId_idx` ON `member` (`userId`,`organizationId`);--> statement-breakpoint
 CREATE INDEX `member_organizationId_idx` ON `member` (`organizationId`);--> statement-breakpoint
-CREATE TABLE `notification_deliveries` (
-	`id` text PRIMARY KEY NOT NULL,
-	`notification_id` text NOT NULL,
-	`channel` text NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`provider_message_id` text,
-	`error` text,
-	`sent_at` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`notification_id`) REFERENCES `notifications`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `notification_deliveries_notification_idx` ON `notification_deliveries` (`notification_id`);--> statement-breakpoint
-CREATE INDEX `notification_deliveries_channel_status_idx` ON `notification_deliveries` (`channel`,`status`);--> statement-breakpoint
-CREATE TABLE `notification_events` (
-	`id` text PRIMARY KEY NOT NULL,
-	`scope_type` text NOT NULL,
-	`organization_id` text,
-	`site_id` text,
-	`submission_type` text NOT NULL,
-	`submission_id` text NOT NULL,
-	`event_type` text NOT NULL,
-	`channels` text,
-	`recipients` text,
-	`payload` text,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`error` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE INDEX `notification_events_scope_created_idx` ON `notification_events` (`scope_type`,`created_at`);--> statement-breakpoint
-CREATE INDEX `notification_events_submission_idx` ON `notification_events` (`submission_type`,`submission_id`);--> statement-breakpoint
-CREATE INDEX `notification_events_event_created_idx` ON `notification_events` (`event_type`,`created_at`);--> statement-breakpoint
-CREATE INDEX `notification_events_org_site_idx` ON `notification_events` (`organization_id`,`site_id`);--> statement-breakpoint
 CREATE TABLE `notification_reads` (
 	`notification_id` text NOT NULL,
 	`user_id` text NOT NULL,
@@ -874,41 +752,35 @@ CREATE TABLE `notifications` (
 	`organization_id` text,
 	`site_id` text,
 	`location_id` text,
+	`guest_thread_id` text,
+	`source_entry_id` text,
 	`scope` text DEFAULT 'organization' NOT NULL,
-	`event_type` text,
+	`event_type` text NOT NULL,
 	`severity` text DEFAULT 'info' NOT NULL,
 	`actor_user_id` text,
 	`target_user_id` text,
 	`deep_link` text,
 	`message` text,
-	`channel` text DEFAULT 'dashboard' NOT NULL,
 	`template` text NOT NULL,
-	`recipient` text,
 	`title` text,
 	`payload` text,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`provider_message_id` text,
-	`error` text,
-	`read_at` text,
-	`sent_at` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`related_submission_type` text,
-	`related_submission_id` text,
-	`whatsapp_delivery_status` text,
-	`whatsapp_delivery_error` text,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`guest_thread_id`) REFERENCES `guest_threads`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`actor_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`target_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
-	CONSTRAINT "notifications_whatsapp_delivery_status_check" CHECK(whatsapp_delivery_status IS NULL OR whatsapp_delivery_status IN ('accepted', 'sent', 'delivered', 'read', 'failed')),
-	CONSTRAINT "notifications_related_submission_type_check" CHECK(related_submission_type IS NULL OR related_submission_type IN ('contact', 'reservation', 'experience_booking', 'invitation'))
+	FOREIGN KEY (`source_entry_id`,`guest_thread_id`) REFERENCES `guest_thread_entries`(`id`,`thread_id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "notifications_thread_source_check" CHECK((guest_thread_id IS NULL AND source_entry_id IS NULL) OR (guest_thread_id IS NOT NULL AND source_entry_id IS NOT NULL))
 );
 --> statement-breakpoint
 CREATE INDEX `notifications_scope_created_at_idx` ON `notifications` (`scope`,`created_at`);--> statement-breakpoint
 CREATE INDEX `notifications_organization_created_at_idx` ON `notifications` (`organization_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `notifications_site_created_at_idx` ON `notifications` (`site_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `notifications_target_user_created_at_idx` ON `notifications` (`target_user_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `notifications_guest_thread_created_at_idx` ON `notifications` (`guest_thread_id`,`created_at`);--> statement-breakpoint
+CREATE UNIQUE INDEX `notifications_source_entry_unique` ON `notifications` (`source_entry_id`) WHERE source_entry_id IS NOT NULL;--> statement-breakpoint
 CREATE TABLE `oauthAccessToken` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,

@@ -1,6 +1,8 @@
+import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3';
-import { execute, queryFirst } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
+import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
+import { acknowledgeNotification } from '~/server/utils/notification-acknowledgement'
 import { getNotificationAccess } from '~/server/utils/notification-access'
 
 export default defineHandler(async (event) => {
@@ -8,19 +10,17 @@ export default defineHandler(async (event) => {
   if (!notificationId) return jsonResponse({ error: 'Notification id is required' }, { status: 400 })
 
   const access = await getNotificationAccess(event)
-  const visible = await queryFirst<{ id: string }>(access.db, `
-    SELECT n.id FROM notifications n
-    WHERE n.id = ? AND ${access.whereSql}
-    LIMIT 1
-  `, [notificationId, ...access.whereParams])
-  if (!visible) {
+  if (!await acknowledgeNotification(access.db, access, notificationId)) {
     return jsonResponse({ error: 'Notification not found' }, { status: 404 })
   }
-  await execute(access.db, `
-    INSERT INTO notification_reads (notification_id, user_id, read_at)
-    VALUES (?, ?, ?)
-    ON CONFLICT(notification_id, user_id) DO UPDATE SET read_at = excluded.read_at
-  `, [notificationId, access.userId, new Date().toISOString()])
+  if (access.organization) {
+    await publishNotificationInvalidation(access.env, {
+      type: 'notification.read',
+      organizationId: access.organization.id,
+      siteId: null,
+      locationId: null,
+      targetUserId: access.userId,
+    })
+  }
   return jsonResponse({ success: true })
 })
-import { defineHandler } from 'nitro';

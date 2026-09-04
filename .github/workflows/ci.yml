@@ -33,18 +33,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock', 'workers/email-inbound/yarn.lock') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - name: Hardened immutable installs
         env:
           YARN_ENABLE_HARDENED_MODE: "1"
-        run: |
-          corepack yarn install --immutable
-          corepack yarn --cwd workers/email-inbound install --immutable
-      - name: Check inbound email Worker
-        run: |
-          corepack yarn --cwd workers/email-inbound tsc --noEmit
-          corepack yarn --cwd workers/email-inbound wrangler deploy --dry-run
+        run: corepack yarn install --immutable
       - run: yarn quality
       - run: yarn test:unit
       - run: yarn test:d1
@@ -110,7 +104,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock', 'workers/email-inbound/yarn.lock') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
       - run: yarn build
@@ -166,7 +160,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock', 'workers/email-inbound/yarn.lock') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
       - run: corepack yarn playwright install chromium
@@ -191,7 +185,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           corepack yarn wrangler secret list --env preview --format json > "$RUNNER_TEMP/preview-secrets.json"
-          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET; do
+          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET; do
             jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$RUNNER_TEMP/preview-secrets.json" >/dev/null
           done
       - name: Generate preview fixtures
@@ -283,9 +277,16 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock', 'workers/email-inbound/yarn.lock') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
+      - name: Verify staging database epoch binding
+        run: node scripts/check-database-epoch-binding.mjs staging
+      - name: Verify prepared staging Epoch 5 database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/check-remote-database-epoch.mjs staging
       - run: corepack yarn playwright install --with-deps chromium
       - name: Build staging Worker
         run: yarn build
@@ -358,9 +359,16 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock', 'workers/email-inbound/yarn.lock') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
+      - name: Verify production database epoch binding
+        run: node scripts/check-database-epoch-binding.mjs production
+      - name: Verify prepared production Epoch 5 database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/check-remote-database-epoch.mjs production
       - name: Build production Worker
         run: yarn build
       - name: Capture Nuxt build ID
@@ -418,7 +426,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock', 'workers/email-inbound/yarn.lock') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
       - run: corepack yarn playwright install --with-deps chromium

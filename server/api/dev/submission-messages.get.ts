@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
   // guest_threads so specs that only know the source submission type/id (not the
   // thread id) can still filter, the same way the old submission_messages table did.
   let sql = `
-    SELECT e.id, gt.submission_type, gt.submission_id, e.organization_id, e.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.external_id, e.occurred_at, e.created_at
+    SELECT e.id, gt.submission_type, gt.submission_id, e.organization_id, e.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
     FROM guest_thread_entries e
     JOIN guest_threads gt ON gt.id = e.thread_id
     WHERE e.kind = 'message'

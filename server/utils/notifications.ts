@@ -1,7 +1,8 @@
 import { renderEmail } from '~/server/emails/vue-email'
-import { execute, queryFirst, type DbClient } from '~/server/db'
-import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { queryFirst, type DbClient } from '~/server/db'
+import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { getWhatsAppDeliveryMode } from '~/server/utils/whatsapp-delivery'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { isAuthorizedWhatsAppRecipient, getOrganizationOwnerEmail  } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -22,6 +23,11 @@ import BookingReviewReminder from '~/server/emails/templates/BookingReviewRemind
 import OrganizationInvite from '~/server/emails/templates/OrganizationInvite'
 import { createCanonicalNotification, tenantEventTypeForTemplate } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
+import { createDeliveryReceipt, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
+import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
+import type { GuestThreadDeliveryPurpose } from '~/server/domain/guest-threads/types'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -92,20 +98,6 @@ interface PlatformContactNotificationInput {
   suggestedSummary?: string | null
 }
 
-interface NotificationEventInput {
-  scopeType: 'platform' | 'site'
-  organizationId?: string | null
-  siteId?: string | null
-  submissionType: 'platform_contact' | 'contact' | 'reservation' | 'experience_booking'
-  submissionId: string
-  eventType: string
-  channels?: string[]
-  recipients?: string[]
-  payload?: Record<string, string>
-  status: 'pending' | 'sent' | 'partial' | 'failed' | 'logged'
-  error?: string | null
-}
-
 interface ExperienceBookingNotificationInput extends SiteContext {
   locationId?: string | null
   bookingId: string
@@ -152,9 +144,17 @@ interface EmailTemplate {
   text: string
 }
 
+interface ThreadDeliveryContext {
+  threadId: string
+  entryId: string
+  purpose: GuestThreadDeliveryPurpose
+  idempotencyKey: string
+}
+
 interface GuestThreadReplyNotificationInput extends SiteContext {
   locationId?: string | null
   threadId: string
+  sourceEntryId: string
   submissionType: 'contact' | 'reservation' | 'experience_booking'
   submissionId: string
   guestName: string
@@ -308,34 +308,31 @@ async function getOwnerNotificationChannels(
 }
 
 export async function insertDashboardNotification(
+  env: NotificationEnv,
   db: DbClient,
   opts: Omit<SiteContext, 'siteId'> & { siteId: string | null } & {
     locationId?: string | null
     template: string
     title: string
     payload: Record<string, string>
+    guestThreadId?: string | null
+    sourceEntryId?: string | null
   }
 ): Promise<void> {
-  try {
-    await createCanonicalNotification(db, {
-      scope: 'site',
-      eventType: tenantEventTypeForTemplate(opts.template, opts.payload),
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      locationId: opts.locationId ?? null,
-      title: opts.title,
-      deepLink: opts.payload.deep_link || null,
-      payload: opts.payload,
-      template: opts.template,
-    })
-  } catch (error) {
-    console.error('dashboard_notification_failed', {
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      template: opts.template,
-      error: error instanceof Error ? error.message : String(error)
-    })
-  }
+  await createCanonicalNotification(db, {
+    publishEnv: env,
+    scope: 'site',
+    eventType: tenantEventTypeForTemplate(opts.template, opts.payload),
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId ?? null,
+    guestThreadId: opts.guestThreadId ?? null,
+    sourceEntryId: opts.sourceEntryId ?? null,
+    title: opts.title,
+    deepLink: opts.payload.deep_link || null,
+    payload: opts.payload,
+    template: opts.template,
+  })
 }
 
 async function sendEmailNotification(
@@ -349,112 +346,165 @@ async function sendEmailNotification(
     title: string
     payload: Record<string, string>
     email: EmailTemplate
+    delivery?: ThreadDeliveryContext | null
   }
 ): Promise<boolean> {
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  const payloadWithPreview = {
-    ...opts.payload,
-    email_subject: opts.email.subject,
-    email_html: opts.email.html,
-    email_text: opts.email.text,
+  const provider = getEmailDeliveryMode(env) === 'provider' && !isReservedTestDomain(opts.to)
+    ? 'resend'
+    : 'log_only'
+  const delivery = opts.delivery
+    ? await createDeliveryReceipt(db, {
+        threadId: opts.delivery.threadId,
+        entryId: opts.delivery.entryId,
+        channel: 'email',
+        provider,
+        purpose: opts.delivery.purpose,
+        idempotencyKey: opts.delivery.idempotencyKey,
+      })
+    : null
+  if (delivery && delivery.status !== 'pending') {
+    return delivery.status === 'sent' || delivery.status === 'delivered' || delivery.status === 'read'
   }
-  await execute(db, `
-    INSERT INTO notifications
-    (id, organization_id, site_id, location_id, channel, template, recipient, title, payload, status, created_at)
-    VALUES (?, ?, ?, ?, 'email', ?, ?, ?, ?, 'pending', ?)
-  `, [
-    id,
-    opts.organizationId,
-    opts.siteId,
-    opts.locationId ?? null,
-    opts.template,
-    opts.to,
-    opts.title,
-    JSON.stringify(payloadWithPreview),
-    now
-  ])
 
-  if (!shouldSendRealEmail(env) || isReservedTestDomain(opts.to)) {
-    await execute(
-      db,
-      `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`,
-      [logOnlyEmailProviderId('notification'), new Date().toISOString(), id],
-    )
-    console.info('email_delivery_log_only', {
-      notificationId: id,
+  const result = await sendEmail(env, {
+    to: opts.to,
+    replyTo: opts.replyTo,
+    subject: opts.email.subject,
+    html: opts.email.html,
+    text: opts.email.text,
+    idempotencyKey: delivery?.idempotency_key,
+  })
+  if (delivery) {
+    await recordDeliveryOutcome(db, {
+      deliveryId: delivery.id,
+      status: result.status,
+      providerMessageId: result.status === 'sent' ? result.messageId : null,
+      error: result.status === 'sent' ? null : result.error,
+    })
+    await publishGuestInboxThreadEvent(env, db, { threadId: delivery.thread_id, type: 'delivery.changed' })
+  }
+  if (result.status === 'sent') {
+    console.info(provider === 'log_only' ? 'email_delivery_log_only' : 'email_delivery_sent', {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       template: opts.template,
       recipient: hashEmail(opts.to),
       title: opts.title,
-      reservedTestDomain: isReservedTestDomain(opts.to),
+      providerMessageId: result.messageId,
     })
     return true
   }
+  console.error('email_delivery_failed', {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    template: opts.template,
+    status: result.status,
+    error: result.error,
+  })
+  return false
+}
 
-  if (!env.RESEND_API_KEY) {
-    await execute(
-      db,
-      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
-      ['RESEND_API_KEY not configured', new Date().toISOString(), id],
-    )
-    return false
+async function sendWhatsAppThreadNotification(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: {
+    organizationId: string
+    siteId: string
+    locationId?: string | null
+    toPhone: string
+    template: WhatsAppTemplate
+    vars: Record<string, string>
+    delivery: ThreadDeliveryContext
+  },
+): Promise<boolean> {
+  const delivery = await createDeliveryReceipt(db, {
+    threadId: opts.delivery.threadId,
+    entryId: opts.delivery.entryId,
+    channel: 'whatsapp',
+    provider: getWhatsAppDeliveryMode(env) === 'provider' ? 'meta' : 'log_only',
+    purpose: opts.delivery.purpose,
+    idempotencyKey: opts.delivery.idempotencyKey,
+  })
+  if (delivery.status !== 'pending') {
+    return delivery.status === 'sent' || delivery.status === 'delivered' || delivery.status === 'read'
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10000)
-
-  const fromValue = env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>'
-
-  let response: Response
   try {
-    response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: fromValue,
-        to: [opts.to],
-        ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
-        subject: opts.email.subject,
-        html: opts.email.html,
-        text: opts.email.text
-      }),
-      signal: controller.signal
+    const result = await sendWhatsAppNotification(env, db, opts)
+    await recordDeliveryOutcome(db, {
+      deliveryId: delivery.id,
+      status: result.status,
+      providerMessageId: result.success ? result.messageId ?? null : null,
+      error: result.success ? null : result.error,
     })
+    await publishGuestInboxThreadEvent(env, db, { threadId: delivery.thread_id, type: 'delivery.changed' })
+    return result.success
   } catch (error) {
-    clearTimeout(timeout)
-    const message = error instanceof Error ? error.message : 'Email request failed'
-    await execute(
-      db,
-      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
-      [message, new Date().toISOString(), id],
-    )
-    return false
+    await recordDeliveryOutcome(db, {
+      deliveryId: delivery.id,
+      status: 'unknown',
+      error: error instanceof Error ? error.message : String(error),
+    })
+    await publishGuestInboxThreadEvent(env, db, { threadId: delivery.thread_id, type: 'delivery.changed' })
+    throw error
   }
+}
 
-  clearTimeout(timeout)
+async function getOpeningThreadContext(
+  db: DbClient,
+  submissionType: 'contact' | 'reservation' | 'experience_booking',
+  submissionId: string,
+): Promise<{ guestThreadId: string; sourceEntryId: string } | null> {
+  const thread = await getGuestThreadBySubmission(db, submissionType, submissionId)
+  if (!thread) return null
+  const entry = await findEntryByDedupeKey(db, `submission:${submissionType}:${submissionId}`)
+  if (!entry) return null
+  return { guestThreadId: thread.id, sourceEntryId: entry.id }
+}
 
-  if (!response.ok) {
-    const error = await response.text()
-    await execute(
-      db,
-      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
-      [error, new Date().toISOString(), id],
-    )
-    return false
+function threadDelivery(
+  context: { guestThreadId: string; sourceEntryId: string } | null,
+  purpose: GuestThreadDeliveryPurpose,
+  channel: NotificationChannel,
+  template: string,
+  recipient: string,
+): ThreadDeliveryContext | null {
+  if (!context) return null
+  return {
+    threadId: context.guestThreadId,
+    entryId: context.sourceEntryId,
+    purpose,
+    idempotencyKey: `${context.sourceEntryId}:${purpose}:${channel}:${template}:${hashEmail(recipient)}`,
   }
+}
 
-  const data = await response.json().catch(() => ({})) as { id?: string }
-  await execute(
-    db,
-    `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
-    [data.id ?? null, new Date().toISOString(), id],
-  )
-  return true
+async function recordGuestCancellation(
+  db: DbClient,
+  input: {
+    submissionType: 'reservation' | 'experience_booking'
+    submissionId: string
+    organizationId: string
+    siteId: string
+    subject: string
+    body: string
+    wasConfirmed: boolean
+  },
+): Promise<{ guestThreadId: string; sourceEntryId: string } | null> {
+  const thread = await getGuestThreadBySubmission(db, input.submissionType, input.submissionId)
+  if (!thread) return null
+  const entry = await appendEntry(db, {
+    threadId: thread.id,
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    kind: 'operation',
+    actorKind: 'guest',
+    channel: 'web',
+    body: input.body,
+    eventName: `${input.submissionType}.guest_cancelled`,
+    payloadJson: { subject: input.subject, wasConfirmed: input.wasConfirmed },
+    dedupeKey: `guest-cancellation:${input.submissionType}:${input.submissionId}`,
+  })
+  return { guestThreadId: thread.id, sourceEntryId: entry.id }
 }
 
 async function getLocationNotificationPhone(db: DbClient, locationId: string, organizationId: string, siteId: string): Promise<string | null> {
@@ -477,18 +527,15 @@ async function notifyOwner(
       template: WhatsAppTemplate
       vars: Record<string, string>
     }
-    // Correlates this owner notification back to the guest-thread submission that
-    // triggered it, so a manager quoting the resulting WhatsApp message can be routed
-    // back to the exact guest thread (see issue #293 Section C.1). Only set for
-    // submission types the `notifications.related_submission_type` CHECK constraint
-    // allows ('contact' | 'reservation' | 'experience_booking' | 'invitation') —
-    // omit for notification kinds (e.g. reviews) that have no guest thread.
     submissionType?: 'contact' | 'reservation' | 'experience_booking' | 'invitation' | null
     submissionId?: string | null
   }
 ) {
+  const threadContext = opts.submissionType && opts.submissionType !== 'invitation' && opts.submissionId
+    ? await getOpeningThreadContext(db, opts.submissionType, opts.submissionId)
+    : null
   const [, sitePhone, locationPhone, ownerEmail] = await Promise.all([
-    insertDashboardNotification(db, opts),
+    insertDashboardNotification(env, db, { ...opts, ...threadContext }),
     getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId),
     opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null,
     getOrganizationOwnerEmail(env, opts.organizationId),
@@ -513,7 +560,11 @@ async function notifyOwner(
 
   if (channels.includes('email') && emails.length > 0) {
     await Promise.allSettled(emails.map(to =>
-      sendEmailNotification(env, db, { ...opts, to })
+      sendEmailNotification(env, db, {
+        ...opts,
+        to,
+        delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
+      })
     ))
   }
 
@@ -528,22 +579,28 @@ async function notifyOwner(
         requireSiteWide: target.requireSiteWide,
       })
       if (!authorized) {
-        await execute(db, `
-          INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, error, created_at)
-          VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'blocked', 'recipient_access_pending', ?)
-        `, [crypto.randomUUID(), opts.organizationId, opts.siteId, opts.locationId ?? null, opts.whatsapp!.template, target.phone, JSON.stringify(opts.whatsapp!.vars), new Date().toISOString()])
+        console.error('whatsapp_delivery_blocked', {
+          organizationId: opts.organizationId,
+          siteId: opts.siteId,
+          locationId: opts.locationId ?? null,
+          reason: 'recipient_access_pending',
+        })
         return
       }
-      await sendWhatsAppNotification(env, db, {
+      const sendOptions = {
         organizationId: opts.organizationId,
         siteId: opts.siteId,
         locationId: opts.locationId ?? null,
         toPhone: target.phone,
         template: opts.whatsapp!.template,
         vars: opts.whatsapp!.vars,
-        relatedSubmissionType: opts.submissionType ?? null,
-        relatedSubmissionId: opts.submissionId ?? null,
-      })
+      }
+      const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', opts.template, target.phone)
+      if (delivery) {
+        await sendWhatsAppThreadNotification(env, db, { ...sendOptions, delivery })
+      } else {
+        await sendWhatsAppNotification(env, db, sendOptions)
+      }
     }))
   }
 }
@@ -600,130 +657,14 @@ async function sendPlatformEmailNotification(
     email: EmailTemplate
   }
 ) {
-  const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
-
-  if (!shouldSendRealEmail(env)) {
-    const redactedPayload: Record<string, string> = {}
-    for (const [key, value] of Object.entries(opts.payload)) {
-      const isIdKey = /_id$/i.test(key) || key === 'id'
-      if (!isIdKey && /email/i.test(key) && typeof value === 'string' && value) {
-        redactedPayload[key] = hashEmail(value)
-      } else if (
-        !isIdKey && (
-          key === 'message' || key === 'subject' || key === 'message_preview' ||
-          /phone|name|address|contact/i.test(key)
-        )
-      ) {
-        redactedPayload[key] = `[redacted:len=${String(value).length}]`
-      } else {
-        redactedPayload[key] = value
-      }
-    }
-    console.info('email_delivery_log_only', {
-      channel: 'platform',
-      recipient: storedRecipient,
-      title: opts.title,
-      template: opts.template,
-      payload: redactedPayload,
-    })
-    return
-  }
-
-  if (!env.RESEND_API_KEY) {
-    throw new Error('RESEND_API_KEY not configured')
-  }
-
-  const fromValue = env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>'
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10_000)
-
-  try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        from: fromValue,
-        to: [opts.to],
-        subject: opts.email.subject,
-        html: opts.email.html,
-        text: opts.email.text,
-        ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
-      }),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => `HTTP ${response.status}`)
-      throw new Error(`Resend send failed: ${errorText || `HTTP ${response.status}`}`)
-    }
-  } finally {
-    clearTimeout(timeoutId)
-  }
-}
-
-// notification_events is a retained audit table, not a delivery log — guest
-// emails and free-text message content must not be stored raw here.
-const AUDIT_MESSAGE_KEYS = new Set(['message', 'message_preview', 'requests', 'suggested_summary', 'subject', 'route_context'])
-const AUDIT_MESSAGE_PREVIEW_LENGTH = 40
-
-function redactAuditPayload(payload?: Record<string, string>): Record<string, string> | undefined {
-  if (!payload) return payload
-  const redacted: Record<string, string> = {}
-  for (const [key, value] of Object.entries(payload)) {
-    if (key === 'email' && typeof value === 'string' && value) {
-      redacted[key] = hashEmail(value)
-    } else if (AUDIT_MESSAGE_KEYS.has(key) && typeof value === 'string' && value.length > AUDIT_MESSAGE_PREVIEW_LENGTH) {
-      redacted[key] = `${value.slice(0, AUDIT_MESSAGE_PREVIEW_LENGTH)}… [truncated]`
-    } else {
-      redacted[key] = value
-    }
-  }
-  return redacted
-}
-
-async function logNotificationEvent(
-  db: DbClient,
-  opts: NotificationEventInput,
-) {
-  const redactedRecipients = opts.recipients?.map(hashEmail)
-  const redactedPayload = redactAuditPayload(opts.payload)
-  await execute(db, `
-    INSERT INTO notification_events
-    (id, scope_type, organization_id, site_id, submission_type, submission_id, event_type, channels, recipients, payload, status, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    crypto.randomUUID(),
-    opts.scopeType,
-    opts.organizationId ?? null,
-    opts.siteId ?? null,
-    opts.submissionType,
-    opts.submissionId,
-    opts.eventType,
-    opts.channels?.length ? JSON.stringify(opts.channels) : null,
-    redactedRecipients?.length ? JSON.stringify(redactedRecipients) : null,
-    redactedPayload ? JSON.stringify(redactedPayload) : null,
-    opts.status,
-    opts.error ?? null,
-    new Date().toISOString(),
-  ])
-}
-
-function summarizeNotificationResults(results: PromiseSettledResult<unknown>[]) {
-  const rejected = results.filter((result) => result.status === 'rejected')
-  if (rejected.length === 0) return { status: 'sent' as const, error: null }
-  if (rejected.length === results.length) {
-    const joined = rejected
-      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
-      .join(' | ')
-    return { status: 'failed' as const, error: joined }
-  }
-  const joined = rejected
-    .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
-    .join(' | ')
-  return { status: 'partial' as const, error: joined }
+  const result = await sendEmail(env, {
+    to: opts.to,
+    replyTo: opts.replyTo,
+    subject: opts.email.subject,
+    html: opts.email.html,
+    text: opts.email.text,
+  })
+  if (result.status !== 'sent') throw new Error(result.error)
 }
 
 export async function notifyReservationCreated(
@@ -747,6 +688,7 @@ export async function notifyReservationCreated(
           submissionId: opts.reservationId,
         }),
   ])
+  const threadContext = await getOpeningThreadContext(db, 'reservation', opts.reservationId)
 
   const payload = {
     reservation_id: opts.reservationId,
@@ -773,9 +715,9 @@ export async function notifyReservationCreated(
       submissionType: 'reservation',
       submissionId: opts.reservationId,
       template: 'new_reservation',
-      title: `New reservation request from ${opts.guestName}`,
+      title: `New confirmed reservation from ${opts.guestName}`,
       payload,
-      email: { subject: `New reservation request from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
+      email: { subject: `New confirmed reservation from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
       whatsapp: {
         template: 'new_reservation',
         vars: {
@@ -796,9 +738,10 @@ export async function notifyReservationCreated(
       to: opts.email,
       replyTo,
       template: 'reservation_customer_received',
-      title: 'Your reservation request was sent',
+      title: 'Your reservation is confirmed',
       payload,
-      email: { subject: 'Your reservation request was sent', html: guestEmail.html, text: guestEmail.text },
+      email: { subject: 'Your reservation is confirmed', html: guestEmail.html, text: guestEmail.text },
+      delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'reservation_customer_received', opts.email),
     }),
   ])
 
@@ -853,6 +796,15 @@ export async function notifyReservationCancelled(
     renderEmail(ReservationOwnerCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
     renderEmail(ReservationGuestCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain }),
   ])
+  const threadContext = await recordGuestCancellation(db, {
+    submissionType: 'reservation',
+    submissionId: opts.reservationId,
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    subject: guestCancelTitle,
+    body: guestEmail.text,
+    wasConfirmed: confirmed,
+  })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -884,6 +836,7 @@ export async function notifyReservationCancelled(
       title: guestCancelTitle,
       payload,
       email: { subject: guestCancelTitle, html: guestEmail.html, text: guestEmail.text },
+      delivery: threadDelivery(threadContext, 'status_update', 'email', 'reservation_customer_cancelled', opts.email),
     }),
   ])
 
@@ -913,6 +866,7 @@ export async function notifyContactSubmitted(
     tab: 'contact',
     submissionId: opts.contactId,
   })
+  const threadContext = await getOpeningThreadContext(db, 'contact', opts.contactId)
   const payload = {
     contact_id: opts.contactId,
     guest_name: opts.guestName,
@@ -958,6 +912,7 @@ export async function notifyContactSubmitted(
       title: 'Your message was sent',
       payload,
       email: { subject: 'Your message was sent', html: guestEmail.html, text: guestEmail.text },
+      delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'contact_customer_received', opts.email),
     }),
   ])
 
@@ -971,30 +926,6 @@ export async function notifyContactSubmitted(
     }
   })
 
-  const ownerWhatsAppPhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
-  const ownerChannels = await getOwnerNotificationChannels(db, opts, Boolean(ownerWhatsAppPhone))
-  const eventSummary = summarizeNotificationResults(results)
-  try {
-    await logNotificationEvent(db, {
-      scopeType: 'site',
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      submissionType: 'contact',
-      submissionId: opts.contactId,
-      eventType: 'contact_submitted',
-      channels: [...new Set([...ownerChannels, 'email'])],
-      recipients: [opts.email],
-      payload,
-      status: eventSummary.status,
-      error: eventSummary.error,
-    })
-  } catch (error) {
-    console.error('notification_event_log_failed', {
-      submissionType: 'contact',
-      submissionId: opts.contactId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 }
 
 export async function notifyPlatformContactSubmitted(
@@ -1075,26 +1006,6 @@ export async function notifyPlatformContactSubmitted(
     }
   })
 
-  const eventSummary = summarizeNotificationResults(results)
-  try {
-    await logNotificationEvent(db, {
-      scopeType: 'platform',
-      submissionType: 'platform_contact',
-      submissionId: opts.contactId,
-      eventType: 'contact_submitted',
-      channels: ['email'],
-      recipients: [...supportEmails, opts.email],
-      payload,
-      status: eventSummary.status,
-      error: eventSummary.error,
-    })
-  } catch (error) {
-    console.error('notification_event_log_failed', {
-      submissionType: 'platform_contact',
-      submissionId: opts.contactId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 }
 
 export async function notifyReviewReceived(
@@ -1216,6 +1127,7 @@ export async function notifyExperienceBookingCreated(
           submissionId: opts.bookingId,
         }),
   ])
+  const threadContext = await getOpeningThreadContext(db, 'experience_booking', opts.bookingId)
 
   const payload = {
     booking_id: opts.bookingId,
@@ -1267,6 +1179,7 @@ export async function notifyExperienceBookingCreated(
       title: `Your booking request was sent — ${opts.experienceTitle}`,
       payload,
       email: { subject: `Your booking request was sent — ${opts.experienceTitle}`, html: guestEmail.html, text: guestEmail.text },
+      delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'experience_booking_customer_received', opts.email),
     }),
   ])
 
@@ -1320,6 +1233,15 @@ export async function notifyExperienceBookingCancelled(
     renderEmail(BookingOwnerCancelled, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
     renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain }),
   ])
+  const threadContext = await recordGuestCancellation(db, {
+    submissionType: 'experience_booking',
+    submissionId: opts.bookingId,
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    subject: guestCancelTitle,
+    body: guestEmail.text,
+    wasConfirmed: confirmed,
+  })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -1351,6 +1273,7 @@ export async function notifyExperienceBookingCancelled(
       title: guestCancelTitle,
       payload,
       email: { subject: guestCancelTitle, html: guestEmail.html, text: guestEmail.text },
+      delivery: threadDelivery(threadContext, 'status_update', 'email', 'experience_booking_customer_cancelled', opts.email),
     }),
   ])
 
@@ -1379,6 +1302,7 @@ export async function notifyGuestThreadReply(
       submissionId: opts.submissionId,
       error: error instanceof Error ? error.message : String(error),
     })
+    throw error
   }
 }
 
@@ -1387,6 +1311,7 @@ async function notifyGuestThreadReplyInner(
   db: DbClient,
   opts: GuestThreadReplyNotificationInput,
 ) {
+  const threadContext = { guestThreadId: opts.threadId, sourceEntryId: opts.sourceEntryId }
   const replyUrl = await buildOwnerThreadInboxUrl(env, db, {
     organizationId: opts.organizationId,
     siteId: opts.siteId,
@@ -1412,16 +1337,20 @@ async function notifyGuestThreadReplyInner(
     replyUrl,
   })
 
-  // Guarantees a dashboard bell entry for the guest reply itself, independent of whether
-  // the owner's configured delivery channels below are enabled/succeed — each channel send
-  // further down logs its own separate delivery-attempt notification record.
-  await insertDashboardNotification(db, {
+  const template = opts.inboundChannel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
+  await createCanonicalNotification(db, {
+    publishEnv: env,
+    scope: 'site',
+    eventType: tenantEventTypeForTemplate(template, payload),
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     locationId: opts.locationId ?? null,
-    template: opts.inboundChannel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp',
+    guestThreadId: opts.threadId,
+    sourceEntryId: opts.sourceEntryId,
     title,
+    deepLink: payload.deep_link || null,
     payload,
+    template,
   })
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
@@ -1435,11 +1364,8 @@ async function notifyGuestThreadReplyInner(
     siteName: opts.siteName ?? null,
   }, phones.length > 0)
 
-  let emailOutcomes: boolean[] = []
-  let whatsappOutcomes: boolean[] = []
-
   if (channels.includes('email') && emails.length > 0) {
-    const results = await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
+    await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       siteName: opts.siteName ?? null,
@@ -1449,61 +1375,32 @@ async function notifyGuestThreadReplyInner(
       title,
       payload,
       email,
+      delivery: threadDelivery(threadContext, 'owner_alert', 'email', 'guest_thread_reply_email', to),
     })))
-    emailOutcomes = results.map(result => result.status === 'fulfilled' && result.value === true)
   }
 
   if (channels.includes('whatsapp') && phones.length > 0) {
-    const results = await Promise.allSettled(phones.map(toPhone => sendWhatsAppNotification(env, db, {
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      locationId: opts.locationId ?? null,
-      toPhone,
-      template: 'guest_thread_reply_whatsapp',
-      vars: {
-        guest_name: opts.guestName,
-        email: opts.guestEmail ?? 'No email provided',
-        subject: opts.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : 'Email reply',
-        message_preview: opts.messagePreview,
-        reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
-      },
-    })))
-    whatsappOutcomes = results.map(result => result.status === 'fulfilled' && result.value.success === true)
+    await Promise.allSettled(phones.map(async (toPhone) => {
+      const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', 'guest_thread_reply_whatsapp', toPhone)
+      if (!delivery) throw new Error('Guest reply delivery context is missing')
+      await sendWhatsAppThreadNotification(env, db, {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        locationId: opts.locationId ?? null,
+        toPhone,
+        template: 'guest_thread_reply_whatsapp',
+        vars: {
+          guest_name: opts.guestName,
+          email: opts.guestEmail ?? 'No email provided',
+          subject: opts.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : 'Email reply',
+          message_preview: opts.messagePreview,
+          reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
+        },
+        delivery,
+      })
+    }))
   }
 
-  const attempted = [...emailOutcomes, ...whatsappOutcomes]
-  const deliveryStatus: 'sent' | 'partial' | 'failed' = attempted.length === 0 || attempted.every(succeeded => !succeeded)
-    ? 'failed'
-    : attempted.every(succeeded => succeeded)
-      ? 'sent'
-      : 'partial'
-  const deliveryError = deliveryStatus === 'sent'
-    ? undefined
-    : attempted.length === 0
-      ? 'No notification channels or recipients available'
-      : 'One or more delivery attempts failed'
-
-  try {
-    await logNotificationEvent(db, {
-      scopeType: 'site',
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      submissionType: opts.submissionType,
-      submissionId: opts.submissionId,
-      eventType: 'guest_thread_reply',
-      channels: ['dashboard', ...channels],
-      recipients: [...emails, ...phones],
-      payload,
-      status: deliveryStatus,
-      error: deliveryError,
-    })
-  } catch (error) {
-    console.error('notification_event_log_failed', {
-      submissionType: opts.submissionType,
-      submissionId: opts.submissionId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 }
 
 export interface OrganizationInvitationInput {
@@ -1589,7 +1486,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       channel: 'email',
       template: 'new_reservation',
       title: 'Owner alert — new reservation',
-      subject: 'New reservation request from Alex Carter',
+      subject: 'New confirmed reservation from Alex Carter',
       html: ownerReservation.html,
       text: ownerReservation.text,
     },
@@ -1598,8 +1495,8 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       audience: 'guest',
       channel: 'email',
       template: 'reservation_customer_received',
-      title: 'Guest confirmation — reservation request sent',
-      subject: 'Your reservation request was sent',
+      title: 'Guest confirmation — reservation confirmed',
+      subject: 'Your reservation is confirmed',
       html: guestReservationReceived.html,
       text: guestReservationReceived.text,
     },
@@ -1677,7 +1574,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       channel: 'whatsapp',
       template: 'new_reservation',
       title: 'Owner WhatsApp — new reservation',
-      text: 'New reservation request: Alex Carter, Tue, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
+      text: 'New confirmed reservation: Alex Carter, Tue, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
     },
     {
       id: 'owner-reservation-cancelled-whatsapp',

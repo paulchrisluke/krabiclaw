@@ -1,5 +1,5 @@
 import { queryFirst, type DbClient } from '~/server/db'
-import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { sendEmail } from '~/server/utils/email-delivery'
 import {
   buildReplyLocalPart,
   buildReplyToken,
@@ -155,7 +155,7 @@ export async function findSubmissionByPhone(db: DbClient, phone: string, organiz
 }
 
 export interface SendReplyEmailResult {
-  success: boolean
+  status: 'sent' | 'failed' | 'unknown'
   messageId?: string
   error?: string
 }
@@ -173,52 +173,15 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
   idempotencyKey?: string
 }): Promise<SendReplyEmailResult> {
   const replyTo = await buildReplyToAddress(env, opts.submissionType, opts.submissionId)
-
-  if (!shouldSendRealEmail(env)) {
-    return { success: true, messageId: logOnlyEmailProviderId('reply') }
-  }
-
-  if (!env.RESEND_API_KEY) {
-    return { success: false, error: 'RESEND_API_KEY not configured' }
-  }
-
-  const fromValue = env.EMAIL_FROM
-    ? env.EMAIL_FROM.includes('<')
-      ? env.EMAIL_FROM.replace(/^[^<]*(?=<)/, `${opts.fromName} `)
-      : `${opts.fromName} <${env.EMAIL_FROM}>`
-    : `${opts.fromName} <hello@krabiclaw.com>`
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10000)
-
-  let response: Response
-  try {
-    response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-        ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
-      },
-      body: JSON.stringify({
-        from: fromValue,
-        to: [opts.to],
-        ...(replyTo ? { reply_to: replyTo } : {}),
-        subject: opts.subject,
-        text: opts.body,
-      }),
-      signal: controller.signal,
-    })
-  } catch (error) {
-    clearTimeout(timeout)
-    return { success: false, error: error instanceof Error ? error.message : 'Email request failed' }
-  }
-  clearTimeout(timeout)
-
-  if (!response.ok) {
-    return { success: false, error: await response.text() }
-  }
-
-  const data = await response.json().catch(() => ({})) as { id?: string }
-  return { success: true, messageId: data.id }
+  const result = await sendEmail(env, {
+    to: opts.to,
+    fromName: opts.fromName,
+    subject: opts.subject,
+    text: opts.body,
+    replyTo,
+    idempotencyKey: opts.idempotencyKey,
+  })
+  return result.status === 'sent'
+    ? { status: 'sent', ...(result.messageId ? { messageId: result.messageId } : {}) }
+    : { status: result.status, error: result.error }
 }

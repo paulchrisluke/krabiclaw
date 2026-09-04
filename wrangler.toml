@@ -70,14 +70,11 @@ DISCORD_DELIVERY_MODE = "provider"
 # EMAIL_REPLY_SECRET signs reply+<type>-<id>-<token>@reply.<platform-domain> addresses
 # (server/utils/submission-messages.ts) so a customer's inbound reply can be matched back to the
 # right reservation/contact/experience-booking thread without a DB lookup by address alone.
-# EMAIL_INBOUND_SECRET authenticates the separate krabiclaw-email-inbound Worker
-# (workers/email-inbound/) calling POST /api/email/inbound. Both must stay stable across
-# deploys — rotating them invalidates reply-to addresses already sent out in guest emails.
-# staging syncs from the fixed EMAIL_REPLY_SECRET_STAGING / EMAIL_INBOUND_SECRET_STAGING repo
-# secrets on every run (see .github/workflows/ci.yml); production is set once manually and not
+# It must stay stable across deploys because rotating it invalidates reply-to addresses already
+# sent out in guest emails. Staging syncs it from the fixed EMAIL_REPLY_SECRET_STAGING repo
+# secret on every run (see .github/workflows/ci.yml); production is set once manually and not
 # touched by CI:
 #   yarn wrangler secret put EMAIL_REPLY_SECRET
-#   yarn wrangler secret put EMAIL_INBOUND_SECRET
 # PLATFORM_SEARCH_REINDEX_SECRET protects POST /api/internal/search/reindex and is required for
 # yarn ai-search:sync. Production CI syncs it from the PLATFORM_SEARCH_REINDEX_SECRET repo
 # secret and rebuilds the production index. Preview and staging deploys do not rebuild search
@@ -92,10 +89,6 @@ migrations_dir = "migrations"
 remote = false
 
 [[durable_objects.bindings]]
-name = "GUEST_THREAD_COMMANDS"
-class_name = "GuestThreadCommandObject"
-
-[[durable_objects.bindings]]
 name = "GUEST_INBOX_HUBS"
 class_name = "GuestInboxHubObject"
 
@@ -103,14 +96,9 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-[[queues.producers]]
-binding = "GUEST_DELIVERY_QUEUE"
-queue = "krabiclaw-guest-delivery"
-
-[[queues.consumers]]
-queue = "krabiclaw-guest-delivery"
-dead_letter_queue = "krabiclaw-guest-delivery-dlq"
-max_retries = 5
+[[migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
@@ -188,10 +176,6 @@ migrations_dir = "migrations"
 remote = false
 
 [[env.preview.durable_objects.bindings]]
-name = "GUEST_THREAD_COMMANDS"
-class_name = "GuestThreadCommandObject"
-
-[[env.preview.durable_objects.bindings]]
 name = "GUEST_INBOX_HUBS"
 class_name = "GuestInboxHubObject"
 
@@ -199,14 +183,9 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-[[env.preview.queues.producers]]
-binding = "GUEST_DELIVERY_QUEUE"
-queue = "krabiclaw-guest-delivery-preview"
-
-[[env.preview.queues.consumers]]
-queue = "krabiclaw-guest-delivery-preview"
-dead_letter_queue = "krabiclaw-guest-delivery-preview-dlq"
-max_retries = 5
+[[env.preview.migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
 
 [[env.preview.r2_buckets]]
 binding = "MEDIA_BUCKET"
@@ -283,10 +262,6 @@ migrations_dir = "migrations"
 remote = false
 
 [[env.staging.durable_objects.bindings]]
-name = "GUEST_THREAD_COMMANDS"
-class_name = "GuestThreadCommandObject"
-
-[[env.staging.durable_objects.bindings]]
 name = "GUEST_INBOX_HUBS"
 class_name = "GuestInboxHubObject"
 
@@ -294,14 +269,9 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-[[env.staging.queues.producers]]
-binding = "GUEST_DELIVERY_QUEUE"
-queue = "krabiclaw-guest-delivery-staging"
-
-[[env.staging.queues.consumers]]
-queue = "krabiclaw-guest-delivery-staging"
-dead_letter_queue = "krabiclaw-guest-delivery-staging-dlq"
-max_retries = 5
+[[env.staging.migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
 
 [[env.staging.r2_buckets]]
 binding = "MEDIA_BUCKET"

@@ -10,19 +10,9 @@ permissions:
 
 jobs:
   dependency-security:
-    name: Audit ${{ matrix.graph.name }} dependencies
+    name: Audit application dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        graph:
-          - name: application
-            directory: .
-            lockfile: yarn.lock
-          - name: email Worker
-            directory: workers/email-inbound
-            lockfile: workers/email-inbound/yarn.lock
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -35,10 +25,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock', 'workers/email-inbound/yarn.lock') }}
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - name: Hardened immutable install
         env:
           YARN_ENABLE_HARDENED_MODE: "1"
-        run: corepack yarn --cwd "${{ matrix.graph.directory }}" install --immutable
-      - run: corepack yarn --cwd "${{ matrix.graph.directory }}" npm audit --all --recursive --severity high
+        run: corepack yarn install --immutable
+      - run: corepack yarn npm audit --all --recursive --severity high

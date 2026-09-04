@@ -57,7 +57,7 @@ local development, CI, type definitions, and Worker builds move together.
 
 Yarn accepts new direct and transitive package releases only after seven days.
 Routine `yarn add` and `yarn up` commands apply this rule automatically. CI
-installs both package graphs immutably and rechecks registry metadata in its
+installs the package graph immutably and rechecks registry metadata in its
 hardened job.
 
 For an urgent reviewed security fix, update only the affected package:
@@ -65,9 +65,6 @@ For an urgent reviewed security fix, update only the affected package:
 ```bash
 corepack yarn up <package>@<fixed-version> --no-time-gate
 ```
-
-For the independent inbound-email Worker graph, add
-`--cwd workers/email-inbound` immediately after `yarn`.
 
 Record the advisory and the reason for bypassing the wait in the pull request.
 Do not add a package to `npmPreapprovedPackages` or disable the age gate in

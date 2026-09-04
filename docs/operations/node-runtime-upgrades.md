@@ -41,12 +41,11 @@ them with a Node upgrade; those require their own demonstrated reason.
 
    The two Node versions must match exactly. A convenient system Node or a
    bundled agent runtime at a different version is not equivalent evidence.
-4. Enable Corepack, install both package graphs immutably, and run:
+4. Enable Corepack, install the package graph immutably, and run:
 
    ```bash
    corepack enable
    corepack yarn install --immutable
-   corepack yarn --cwd workers/email-inbound install --immutable
    corepack yarn quality
    corepack yarn test:unit
    corepack yarn build

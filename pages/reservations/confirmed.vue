@@ -8,7 +8,7 @@
 
     <BookingConfirmation
       v-else-if="confirmation"
-      kicker="Request received"
+      kicker="Reservation confirmed"
       :receipt-kicker="resCopy.reservationWord"
       :receipt-rows="receiptRows"
       :next-steps-kicker="resolvedPolicySummary?.heading ?? resCopy.reservationPoliciesHeading"
@@ -27,7 +27,6 @@
           readableDate,
           fmt12Hour(confirmation.time)
         ) }}
-        {{ resCopy.confirmSoonLabel(resCopy.reservationWord) }}
       </template>
       <template #actions>
         <SayaButton variant="soft" @click="share">

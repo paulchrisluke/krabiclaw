@@ -1,10 +1,7 @@
 import { queryFirst } from '~/server/db'
-import { updateBookingStatusForSite } from '~/server/utils/experiences'
 import type {
   AdapterLoadContext,
   GuestThreadSourceAdapter,
-  OperationExecutionContext,
-  OperationExecutionResult,
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
@@ -46,21 +43,11 @@ export interface ExperienceBookingOpeningSnapshot {
 
 export type ExperienceBookingAction = 'confirm' | 'cancel'
 
-// updateBookingStatusForSite only supports pending/confirmed/cancelled — there is no
-// backend-supported "complete" transition for experience bookings through the canonical
-// operation path (that state is only reachable via the separate, out-of-scope
-// complete.post.ts route). This is "the equivalent supported source states" referenced
-// by issue #442 Locked Decision #7.
 const EXPERIENCE_BOOKING_TRANSITIONS: Record<string, ExperienceBookingAction[]> = {
   pending: ['confirm', 'cancel'],
   confirmed: ['cancel'],
   completed: [],
   cancelled: [],
-}
-
-const EXPERIENCE_BOOKING_ACTION_TARGET_STATUS: Record<ExperienceBookingAction, 'confirmed' | 'cancelled'> = {
-  confirm: 'confirmed',
-  cancel: 'cancelled',
 }
 
 function normalizePreview(text: string | null | undefined, maxLength = 160): string {
@@ -139,29 +126,6 @@ export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookin
 
   listAvailableActions(source: ExperienceBookingSource): ExperienceBookingAction[] {
     return EXPERIENCE_BOOKING_TRANSITIONS[source.status] ?? []
-  },
-
-  async executeAction(ctx: OperationExecutionContext, source: ExperienceBookingSource, action: ExperienceBookingAction): Promise<OperationExecutionResult> {
-    const allowed = EXPERIENCE_BOOKING_TRANSITIONS[source.status] ?? []
-    if (!allowed.includes(action)) {
-      return { ok: false, reason: 'invalid_transition', message: `Cannot ${action} a booking in status "${source.status}"` }
-    }
-
-    const targetStatus = EXPERIENCE_BOOKING_ACTION_TARGET_STATUS[action]
-    const updated = await updateBookingStatusForSite(ctx.db, source.site_id, source.id, targetStatus)
-    if (!updated) {
-      return { ok: false, reason: 'not_found', message: 'Booking not found' }
-    }
-
-    const requiresNotification = action === 'confirm' || action === 'cancel'
-
-    return {
-      ok: true,
-      beforeStatus: source.status,
-      afterStatus: targetStatus,
-      requiresNotification,
-      notifyChannel: requiresNotification ? 'email' : null,
-    }
   },
 
   buildCurrentDetail(source: ExperienceBookingSource): ThreadDetailSourceModel {

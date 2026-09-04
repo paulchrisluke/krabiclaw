@@ -19,12 +19,12 @@ export default defineComponent({
   },
   setup(props) {
     return () => h(EmailShell, {
-      preheader: `Your reservation request was sent to ${props.siteName}`,
-      title: 'Your reservation request was sent',
+      preheader: `Your reservation at ${props.siteName} is confirmed`,
+      title: 'Your reservation is confirmed',
       siteName: props.siteName,
       platformDomain: props.platformDomain,
     }, () => [
-      h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Hi ${props.guestName}, your reservation request has been sent to ${props.siteName}.`),
+      h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Hi ${props.guestName}, your reservation at ${props.siteName} is confirmed.`),
       h(EmailDetails, {
         rows: [
           ['Venue', props.locationName ? `${props.siteName} — ${props.locationName}` : props.siteName],

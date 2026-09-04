@@ -1,22 +1,3 @@
-// Pure decision logic for issue #293 Section C's "direct-WhatsApp-reply routing
-// contract" — deliberately free of D1/network I/O so the three-tier priority order
-// (and the pending-state resume paths layered on top of it) can be unit tested without
-// a live webhook or database. server/api/whatsapp/webhook.post.ts is the only caller;
-// it resolves the I/O inputs below (notification/thread lookups, authorization,
-// channel state) and then executes whatever action this function returns.
-//
-// Priority order (see issue #293 "Direct-message routing contract"), evaluated only for
-// messages from a resolveUser-verified platform user (managers) — guests are handled by
-// the pre-existing findSubmissionByPhone path elsewhere in the webhook:
-//   1. Quoted operational notification (message.context.id) that resolves to an
-//      authorized, correlated guest thread.
-//   2. Unquoted text while recent (24h) guest notifications exist for the manager's
-//      authorized sites — numbered disambiguation.
-//   3. Unquoted text with no relevant guest context — prompt to quote notification.
-// A pending confirm-send or disambiguation/collect-reply state (stored via the existing
-// chowbot_channel_state.pending_confirmation column) takes priority over all of the
-// above until it resolves or is explicitly abandoned.
-
 export interface DisambiguationCandidate {
   threadId: string
   siteId: string
@@ -51,19 +32,10 @@ export type PendingWhatsAppReplyState =
 export interface RoutingDecisionInput {
   /** message.context?.id was present on the inbound message. */
   hasQuotedContext: boolean
-  /**
-   * Result of resolving message.context.id → notifications.provider_message_id →
-   * related_submission_type/id → guest_threads, plus isAuthorizedWhatsAppRecipient.
-   * Only meaningful when hasQuotedContext is true. A notification match with no
-   * guest thread yet, or an unauthorized sender, is 'unmatched' — never an error, just
-   * falls through to the remaining tiers per issue #293 ("If no matching thread exists
-   * yet, treat as unmatched rather than erroring").
-   */
-  quotedMatch: 'authorized_thread_found' | 'unmatched' | null
+  quotedDeliveryMatch: 'authorized_thread_found' | 'unmatched' | null
   /** Existing multi-turn state for this user's whatsapp channel, if any. */
   pendingState: PendingWhatsAppReplyState | null
-  /** Count of candidate recent (24h) guest notifications for tier 3, scoped to the manager's authorized sites. */
-  recentNotificationCount: number
+  recentDeliveryCount: number
   /** Raw trimmed inbound message text. */
   text: string
 }
@@ -179,16 +151,13 @@ export function decideWhatsAppReplyRouting(input: RoutingDecisionInput): Routing
     return { action: 'collect_reply_body' }
   }
 
-  // Tier 1: quoted operational notification.
-  if (input.hasQuotedContext && input.quotedMatch === 'authorized_thread_found') {
+  if (input.hasQuotedContext && input.quotedDeliveryMatch === 'authorized_thread_found') {
     return { action: 'start_confirm_send' }
   }
 
-  // Tier 2: unquoted text with recent guest notifications in scope.
-  if (input.recentNotificationCount > 0) {
+  if (input.recentDeliveryCount > 0) {
     return { action: 'start_disambiguation' }
   }
 
-  // Tier 3: unquoted text, no relevant guest context.
   return { action: 'prompt_quote_notification' }
 }
