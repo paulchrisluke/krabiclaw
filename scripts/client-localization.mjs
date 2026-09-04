@@ -4,8 +4,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import { chmod, readFile, writeFile } from 'node:fs/promises'
-import { parseArgs } from 'node:util'
-import { isDeepStrictEqual } from 'node:util'
+import { isDeepStrictEqual, parseArgs } from 'node:util'
 import { normalizeTenantPageBlocks } from '../utils/tenant-page-blocks.ts'
 
 const { values: options } = parseArgs({ options: {
