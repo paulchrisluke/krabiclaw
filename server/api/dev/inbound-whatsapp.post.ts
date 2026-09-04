@@ -2,6 +2,7 @@ import { HTTPError, defineHandler  } from 'nitro';
 
 import type { H3Event } from 'nitro'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
@@ -11,20 +12,7 @@ import { nextConversationState } from '~/server/domain/guest-threads/state-machi
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 
-const enc = new TextEncoder()
 
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = enc.encode(a)
-  const right = enc.encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
 
 function ensureDevAccess(event: H3Event, env: ReturnType<typeof cloudflareEnv>) {
   const devMode = import.meta.dev

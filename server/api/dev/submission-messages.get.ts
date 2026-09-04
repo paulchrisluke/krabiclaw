@@ -1,22 +1,10 @@
 import { HTTPError, defineHandler  } from 'nitro';
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { queryAll } from '~/server/db'
 
-const enc = new TextEncoder()
 
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = enc.encode(a)
-  const right = enc.encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)

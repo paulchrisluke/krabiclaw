@@ -125,15 +125,12 @@
   </section>
 </template>
 
-<script setup lang="ts">
-export interface ListEditorItem {
-  id: string
-  title: string
-  summary?: string | null
-}
-
+<script setup lang="ts" generic="T extends ListEditorItem">
+// Generic so a caller can hang its own row on the item and read it straight off
+// the `#item` slot. Without it every custom row had to look its record back up
+// by id for each field it rendered, which is both noisy and quadratic.
 defineProps<{
-  items: ListEditorItem[]
+  items: T[]
   title: string
   description?: string
   emptyTitle: string
@@ -150,10 +147,22 @@ defineProps<{
 
 defineEmits<{
   add: []
-  open: [item: ListEditorItem]
-  remove: [item: ListEditorItem]
-  move: [item: ListEditorItem, direction: -1 | 1]
+  open: [item: T]
+  remove: [item: T]
+  move: [item: T, direction: -1 | 1]
 }>()
 
 const editing = defineModel<boolean>('editing', { default: false })
+</script>
+
+<script lang="ts">
+// Declared in a plain block so the `generic` attribute above can constrain to it:
+// a type used by `<script setup generic>` has to exist before that block is
+// compiled.
+export interface ListEditorItem {
+  id: string
+  /** Names the row in the remove, reorder and open controls' labels. */
+  title: string
+  summary?: string | null
+}
 </script>

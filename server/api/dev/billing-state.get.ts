@@ -1,24 +1,12 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { HTTPError, defineHandler  } from 'nitro';
 import {  getQuery  } from 'nitro/h3';
 import { queryFirst, queryAll } from '~/server/db'
 import { validateOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import type { OrganizationBillingProjectionRow } from '~/server/utils/organization-billing'
 
-const textEncoder = new TextEncoder()
 
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = textEncoder.encode(a)
-  const right = textEncoder.encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)

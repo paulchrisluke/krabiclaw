@@ -154,14 +154,12 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
-const _config = useRuntimeConfig()
-const { data: sessionData, refreshSession, signOut: _signOut } = useAuth()
+const { data: sessionData, refreshSession } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
-const _chowBot = useChowBot()
 const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
 

@@ -75,10 +75,6 @@ interface QaRow {
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const saving = ref(false)
-const editing = ref(false)
-const dialogOpen = ref(false)
-const editingId = ref<string | null>(null)
-const removingId = ref<string | null>(null)
 const selectedPagePath = ref('general')
 
 const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'] as const
@@ -145,11 +141,6 @@ const existingQaScopesAsyncData = useAsyncData(
 
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const form = reactive({ question: '', answer: '', published: true })
-watch(selectedPagePath, () => {
-  dialogOpen.value = false
-  editing.value = false
-  reset()
-})
 const qaAsyncData = useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
   async () => {
@@ -221,31 +212,32 @@ const listItems = computed(() => qaRows.value.map(row => ({
   summary: row.answer || 'No answer yet.',
 })))
 
-function rowFor(id: string) {
-  return qaRows.value.find(row => row.id === id) ?? null
-}
-
-function reset() {
-  editingId.value = null
-  form.question = ''
-  form.answer = ''
-  form.published = true
-}
-
-function openNew() {
-  reset()
-  dialogOpen.value = true
-}
-
-function openExisting(item: { id: string }) {
-  const row = rowFor(item.id)
-  if (!row) return
-  editingId.value = row.id
-  form.question = row.question
-  form.answer = row.answer ?? ''
-  form.published = row.status === 'published'
-  dialogOpen.value = true
-}
+const { editing, dialogOpen, editingId, removingId, openNew, openExisting, close, removeItem, removeEditing } = useListEditor<QaRow>({
+  find: id => qaRows.value.find(row => row.id === id) ?? null,
+  fill: (row) => {
+    form.question = row.question
+    form.answer = row.answer ?? ''
+    form.published = row.status === 'published'
+  },
+  clear: () => {
+    form.question = ''
+    form.answer = ''
+    form.published = true
+  },
+  destroy: async (id) => {
+    try {
+      await dashboardApi(`/api/editor/sites/${siteId}/qa/${id}`, {
+        method: 'DELETE',
+        query: pagePath.value ? { page_path: pagePath.value } : undefined,
+        validate: (value): value is { qa_id: string; deleted: true } =>
+          isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
+      })
+      await refresh()
+    } catch (error) {
+      toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+    }
+  },
+})
 
 async function save() {
   saving.value = true
@@ -269,8 +261,7 @@ async function save() {
           && typeof value.sort_order === 'number',
       })
     }
-    dialogOpen.value = false
-    reset()
+    close()
     await refresh()
     toast.add({ description: 'Site Q&A saved', color: 'success' })
   } catch (error) {
@@ -294,32 +285,10 @@ async function move(item: { id: string }, direction: -1 | 1) {
   await refresh()
 }
 
-// Removing is immediate. The edit state is the confirmation: you switched the
-// list into it deliberately, and the row names what it is about to remove. A
-// second dialog on top of that is the pattern this redesign is replacing.
-async function removeItem(item: { id: string }) {
-  removingId.value = item.id
-  try {
-    await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, {
-      method: 'DELETE',
-      query: pagePath.value ? { page_path: pagePath.value } : undefined,
-      validate: (value): value is { qa_id: string; deleted: true } =>
-        isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
-    })
-    if (editingId.value === item.id) {
-      dialogOpen.value = false
-      reset()
-    }
-    await refresh()
-  } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
-  } finally {
-    removingId.value = null
-  }
-}
-
-async function removeEditing() {
-  if (!editingId.value) return
-  await removeItem({ id: editingId.value })
-}
+// Switching scope shows a different list, so anything the old one had open goes
+// with it.
+watch(selectedPagePath, () => {
+  editing.value = false
+  close()
+})
 </script>

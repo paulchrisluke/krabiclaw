@@ -3,21 +3,9 @@ import { HTTPError, defineHandler  } from 'nitro';
 // Dev-only endpoint for E2E test notification verification
 // Returns notification records matching query params. 404 in production.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { queryAll } from '~/server/db'
 
-const _enc = new TextEncoder()
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = _enc.encode(a)
-  const right = _enc.encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)

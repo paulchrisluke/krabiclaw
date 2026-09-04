@@ -104,12 +104,6 @@ if (!ORGANIZATION_ID || !SLUG_SAFE_PATTERN.test(ORGANIZATION_ID)) {
 const OUT_DIR = join(process.cwd(), "client-imports", SLUG);
 await mkdir(OUT_DIR, { recursive: true });
 
-function _uid(prefix = "") {
-  return `${prefix}${createHash("sha256")
-    .update(SLUG + Date.now() + Math.random())
-    .digest("hex")
-    .slice(0, 12)}`;
-}
 
 // ── Route parity check ────────────────────────────────────────────────────────
 
@@ -530,7 +524,6 @@ function generateSeedSql(places, mediaManifest) {
   const now = new Date().toISOString();
 
   const primary = places[0];
-  const _secondary = places.slice(1);
 
   const brandName = primary?.name ?? SLUG;
 
@@ -1214,7 +1207,6 @@ console.log("\n→ Building generated-copy inventory...");
 
 function buildGeneratedCopyInventory(places, mediaManifest) {
   const inventory = [];
-  const _now = new Date().toISOString();
 
   // Location slugs — computed from business name, not from Google Places directly
   for (const place of places.filter((p) => !p.error)) {

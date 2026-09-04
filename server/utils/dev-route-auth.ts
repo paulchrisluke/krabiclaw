@@ -9,8 +9,13 @@ export function timingSafeEqualText(a: string, b: string): boolean {
   const left = textEncoder.encode(a)
   const right = textEncoder.encode(b)
   if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
+    // Walk the input anyway so a wrong-length secret takes the same time as a
+    // wrong-value one, rather than returning early and leaking the length. The
+    // accumulator is deliberately write-only; that is the point of it, so say so
+    // here instead of hiding it behind a name the linter happens to skip.
+    let sink = 0
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for (let i = 0; i < left.length; i += 1) sink |= left[i]!
     return false
   }
   let diff = 0
