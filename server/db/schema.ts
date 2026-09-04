@@ -650,13 +650,46 @@ export const teamMember = sqliteTable("teamMember", {
 	index("teamMember_userId_idx").on(table.userId),
 ]);
 
+// A category is a record, not a string on each Product. Category order lives in
+// product_categories.sort_order, and products.sort_order orders items *within*
+// one category. Categories are scoped by product_type so the single hardcoded
+// 'Experiences' category never collides with a restaurant's menu sections.
+export const product_categories = sqliteTable("product_categories", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
+	product_type: text().$type<'standard' | 'experience'>().default("standard").notNull(),
+	name: text().notNull(),
+	slug: text().notNull(),
+	sort_order: integer().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id],
+		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
+		name: "product_categories_location_scope_fk",
+	}).onDelete("cascade"),
+	unique("product_categories_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
+	unique("product_categories_location_type_slug_unique").on(table.site_id, table.location_id, table.product_type, table.slug),
+	unique("product_categories_location_type_name_unique").on(table.site_id, table.location_id, table.product_type, table.name),
+	index("product_categories_location_type_sort_idx").on(table.site_id, table.location_id, table.product_type, table.sort_order),
+	check("product_categories_name_not_blank_check", sql`trim(${table.name}) <> ''`),
+	check("product_categories_slug_check", sql`${table.slug} <> '' AND ${table.slug} = lower(${table.slug}) AND ${table.slug} NOT GLOB '*[^a-z0-9-]*' AND ${table.slug} NOT LIKE '-%' AND ${table.slug} NOT LIKE '%-' AND ${table.slug} NOT LIKE '%--%'`),
+	check("product_categories_sort_order_check", sql`${table.sort_order} >= 0`),
+	check("product_categories_type_check", sql`${table.product_type} IN ('standard', 'experience')`),
+]);
+
 export const products = sqliteTable("products", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
 	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
 	product_type: text().$type<'standard' | 'experience'>().default("standard").notNull(),
-	category: text().notNull(),
+	category_id: text().notNull(),
 	name: text().notNull(),
 	slug: text().notNull(),
 	description: text().default("").notNull(),
@@ -683,13 +716,18 @@ export const products = sqliteTable("products", {
 		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
 		name: "products_location_scope_fk",
 	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.location_id, table.category_id],
+		foreignColumns: [product_categories.organization_id, product_categories.site_id, product_categories.location_id, product_categories.id],
+		name: "products_category_scope_fk",
+	}).onDelete("cascade"),
 	unique("products_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
 	unique("products_site_location_slug_unique").on(table.site_id, table.location_id, table.slug),
+	index("products_category_sort_order_idx").on(table.category_id, table.sort_order),
 	index("products_site_location_type_sort_order_idx").on(table.site_id, table.location_id, table.product_type, table.sort_order),
 	index("products_site_location_visible_sort_idx").on(table.site_id, table.location_id, table.is_visible, table.sort_order),
 	index("products_site_location_featured_sort_idx").on(table.site_id, table.location_id, table.featured, table.featured_sort_order),
 	index("products_organization_site_idx").on(table.organization_id, table.site_id),
-	check("products_category_not_blank_check", sql`trim(${table.category}) <> ''`),
 	check("products_name_not_blank_check", sql`trim(${table.name}) <> ''`),
 	check("products_slug_check", sql`${table.slug} <> '' AND ${table.slug} = lower(${table.slug}) AND ${table.slug} NOT GLOB '*[^a-z0-9-]*' AND ${table.slug} NOT LIKE '-%' AND ${table.slug} NOT LIKE '%-' AND ${table.slug} NOT LIKE '%--%'`),
 	check("products_sort_order_check", sql`${table.sort_order} >= 0`),

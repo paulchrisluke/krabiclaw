@@ -10,13 +10,34 @@ export interface ProductDetail {
 
 export type ProductSource = 'manual' | 'template' | 'ai' | 'import' | 'copy'
 
+export interface ProductCategory {
+  id: string
+  location_id: string
+  name: string
+  slug: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+  created_by: string
+  updated_by: string
+}
+
+/** The category as it is carried on a read. Writes reference it by category_id. */
+export interface ProductCategoryRef {
+  id: string
+  name: string
+  slug: string
+  sort_order: number
+}
+
 export interface Product {
   id: string
   organization_id: string
   site_id: string
   location_id: string
   product_type: 'standard' | 'experience'
-  category: string
+  category_id: string
+  category: ProductCategoryRef
   name: string
   slug: string
   description: string
@@ -46,7 +67,7 @@ export interface Product {
 }
 
 export interface CreateProductInput {
-  category: string
+  category_id: string
   name: string
   description?: string
   price: PriceInput | null
@@ -66,7 +87,6 @@ export interface CreateProductInput {
 }
 
 export interface UpdateProductInput {
-  category?: string
   name?: string
   description?: string
   price?: PriceInput | null
@@ -86,24 +106,35 @@ export interface UpdateProductInput {
 
 export interface MoveProductsInput {
   product_ids: string[]
-  before_product_id: string | null
+  category_id: string
 }
 
-export interface MoveProductCategoryInput {
-  category: string
-  before_category: string | null
+/** The complete intended order. Partial orders are rejected. */
+export interface ReorderProductsInput {
+  category_id: string
+  product_ids: string[]
+}
+
+export interface ReorderProductCategoriesInput {
+  category_ids: string[]
+}
+
+export interface CreateProductCategoryInput {
+  name: string
 }
 
 export interface RenameProductCategoryInput {
-  old_category: string
-  new_category: string
-}
-
-export interface DeleteProductCategoryInput {
-  category: string
+  name: string
 }
 
 export type SyncProductInput = CreateProductInput & { product_id?: string }
+
+/**
+ * What AI extraction produces: a category *name*, because the model reads a
+ * printed menu and cannot know category IDs. The import layer resolves these
+ * to real categories before any Product is written.
+ */
+export type ExtractedProductCandidate = Omit<CreateProductInput, 'category_id'> & { category: string }
 
 export interface ProductPresentation {
   feature: 'products'

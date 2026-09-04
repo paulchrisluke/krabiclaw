@@ -1,8 +1,8 @@
 import { callAiGateway, documentBlock, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { chargeCredits, hasCredits } from '~/server/utils/ai-credits'
-import { createProductsBatch } from '~/server/utils/product-management'
+import { createProductsBatch, resolveProductCategoriesByName } from '~/server/utils/product-management'
 import { PRODUCT_DETAILS_INPUT_SCHEMA, validateProductDetails } from '~/server/utils/product-validation'
-import type { CreateProductInput, Product } from '~/server/types/products'
+import type { CreateProductInput, ExtractedProductCandidate, Product } from '~/server/types/products'
 import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { buildR2Key, uploadToR2 } from '~/server/utils/cloudflare-r2'
 import { createMediaAsset, getMediaAsset, type MediaAsset } from '~/server/utils/media-asset-manager'
@@ -87,7 +87,7 @@ function parseExtractedPrice(input: unknown): ExtractedPrice | null {
   return input.kind === 'unreadable' && keys === 'kind' ? { kind: 'unreadable' } : null
 }
 
-export function parseProductExtraction(input: unknown, currency: CurrencyCode): CreateProductInput[] {
+export function parseProductExtraction(input: unknown, currency: CurrencyCode): ExtractedProductCandidate[] {
   if (!isRecord(input)) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction tool input must be an object')
   }
@@ -103,7 +103,7 @@ export function parseProductExtraction(input: unknown, currency: CurrencyCode): 
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction exceeds the 100 item batch limit')
   }
   const errors: Array<{ index: number; fields: string[]; message: string }> = []
-  const products: CreateProductInput[] = []
+  const products: ExtractedProductCandidate[] = []
   const duplicateKeys = new Set<string>()
   for (const [index, value] of payload.items.entries()) {
     if (!isRecord(value)) {
@@ -328,7 +328,18 @@ export async function extractProductsFromMediaAsset(
   ) {
     localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'Product extraction must return exactly one structured tool call')
   }
-  const accepted = parseProductExtraction(toolBlocks[0].input, site.default_currency)
+  const candidates = parseProductExtraction(toolBlocks[0].input, site.default_currency)
+  // The extraction names sections; turn those names into real categories once,
+  // then every candidate references a category the same way the CMS does.
+  const categories = await resolveProductCategoriesByName({
+    db,
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId,
+    names: candidates.map(candidate => candidate.category),
+    actor: opts.userId,
+  })
+  const accepted = candidates.map(({ category, ...candidate }) => ({ ...candidate, category_id: categories.get(category)!.id }))
   try {
     const products = await createProductsBatch(db, opts.organizationId, opts.siteId, opts.locationId, accepted, {
       actorId: opts.userId,
