@@ -123,7 +123,7 @@
             >
               <UIcon :name="page.icon" class="size-5 text-dimmed" /><span class="min-w-0 flex-1 font-medium text-dimmed">{{ page.label }}</span>
             </button>
-            <NuxtLink v-else :to="page.to" class="flex min-h-[66px] items-center gap-4 border-b border-default px-4 last:border-0 hover:bg-elevated">
+            <NuxtLink v-else-if="page.to" :to="page.to" class="flex min-h-[66px] items-center gap-4 border-b border-default px-4 last:border-0 hover:bg-elevated">
               <UIcon :name="page.icon" class="size-5 text-muted" /><span class="min-w-0 flex-1 font-medium text-highlighted">{{ page.label }}</span><UIcon name="i-lucide-chevron-right" class="size-4 text-muted" />
             </NuxtLink>
           </template>
@@ -140,6 +140,7 @@
 
 <script setup lang="ts">
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, resolveCmsCapabilities, templateCapabilityCatalog, type ProductFeature } from '~/config/cms-registry'
+import { resolveDashboardPrimaryLocationPath, resolveDashboardSitePageDestination } from '~/composables/useDashboardSiteLinks'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
@@ -233,18 +234,9 @@ const siteType = computed(() => `${vertical.value.replaceAll('_', ' ')} · ${tem
 const mediaSummary = computed(() => media.value.length ? `${media.value.length}${media.value.length === 6 ? '+' : ''} photos` : 'No media yet')
 const pageIcons: Record<string, string> = { '/': 'i-lucide-house', '/about': 'i-lucide-info', '/contact': 'i-lucide-mail', '/menu': 'i-lucide-utensils', '/order': 'i-lucide-shopping-bag', '/reservations': 'i-lucide-calendar-check', '/experiences': 'i-lucide-ticket', '/services': 'i-lucide-briefcase', '/pricing': 'i-lucide-badge-dollar-sign', '/donate': 'i-lucide-heart-handshake', '/schedule': 'i-lucide-calendar-days', '/blog': 'i-lucide-newspaper' }
 const featureByRoute: Record<string, ProductFeature> = { '/menu': 'products', '/products': 'products', '/order': 'ordering', '/reservations': 'reservations', '/experiences': 'experiences', '/services': 'services', '/pricing': 'services', '/donate': 'services', '/schedule': 'services' }
-const primaryLocationPath = computed(() => {
-  const location = locations.value.find(item => item.is_primary) ?? locations.value[0]
-  return location ? `${locationsPath.value}/${location.slug}` : null
-})
+const primaryLocationPath = computed(() => resolveDashboardPrimaryLocationPath(locations.value, locationsPath.value))
 function pageDestination(path: string) {
-  if (path === '/blog') return `${siteDashboardPath.value}/blog`
-  if (path === '/menu' || path === '/products') return primaryLocationPath.value ? `${primaryLocationPath.value}/products` : null
-  if (path === '/order') return `${siteDashboardPath.value}/orders`
-  if (path === '/reservations') return primaryLocationPath.value ? `${primaryLocationPath.value}/reservations` : null
-  if (path === '/experiences') return primaryLocationPath.value ? `${primaryLocationPath.value}/experiences` : null
-  if (['/services', '/pricing', '/donate', '/schedule'].includes(path)) return `${siteDashboardPath.value}/professional-services`
-  return `${siteDashboardPath.value}/pages`
+  return resolveDashboardSitePageDestination(path, siteDashboardPath.value, primaryLocationPath.value)
 }
 const pageRows = computed(() => {
   const catalog = templateCapabilityCatalog[template.value]
@@ -258,11 +250,10 @@ const pageRows = computed(() => {
       enabled: true,
       to: `${siteDashboardPath.value}/pages/${page.id}`,
     }))
-  const managers = [...catalog.pages.filter(page => page.scope === 'site' && featureByRoute[page.route]), { id: 'blog', label: 'Blog', route: '/blog', feature: 'blog' as ProductFeature }].flatMap(page => {
+  const managers = [...catalog.pages.filter(page => page.scope === 'site' && featureByRoute[page.route]), { id: 'blog', label: 'Blog', route: '/blog', feature: 'blog' as ProductFeature }].map(page => {
     const module = featureByRoute[page.route]
     const enabled = !module || capabilities.value.pages.some(item => item.scope === 'site' && item.route === page.route)
-    const to = pageDestination(page.route)
-    return to ? [{ id: page.id, label: page.label, icon: pageIcons[page.route] || 'i-lucide-file-text', module, enabled, to }] : []
+    return { id: page.id, label: page.label, icon: pageIcons[page.route] || 'i-lucide-file-text', module, enabled, to: pageDestination(page.route) }
   })
   return [...documents, ...managers]
 })
