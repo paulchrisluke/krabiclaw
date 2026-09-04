@@ -94,7 +94,7 @@ async function publish() {
     return envelope.result
   }
   async function call(name, args = {}) {
-    const result = await rpc('tools/call', { name, arguments: { site_id: bundle.site_id, ...args } })
+    const result = await rpc('tools/call', { name, arguments: { ...args, site_id: bundle.site_id } })
     if (result.structuredContent) return result.structuredContent
     const content = result.content?.find(item => item.type === 'text')?.text
     if (!content) throw new Error(`${name} omitted its result`)
@@ -138,7 +138,7 @@ async function publish() {
   if (!options.apply && !options.verify) { console.log('Preflight passed. No writes. Use --apply to publish this exact bundle.'); return }
   if (options.apply) {
     for (const item of bundle.resources) {
-      await call('put_resource_localization', { locale: bundle.locale, ...item })
+      await call('put_resource_localization', { ...item, locale: bundle.locale })
       console.log(`Saved ${item.resource_type} ${item.resource_id}`)
     }
     for (let offset = 0; offset < bundle.products.length; offset += 200) {
@@ -148,7 +148,7 @@ async function publish() {
     }
     for (const page of bundle.pages) {
       if (existingPages.has(page.page_id)) continue
-      await call('create_tenant_page', { locale: bundle.locale, ...page })
+      await call('create_tenant_page', { ...page, locale: bundle.locale })
       console.log(`Created Thai page ${page.path}`)
     }
   }
