@@ -77,7 +77,7 @@ export const PLATFORM_KNOWLEDGE_FAQ_ENTRIES: PlatformKnowledgeFaqEntry[] = [
   {
     id: 'create-first-website',
     title: 'How do I create my first website?',
-    answer: 'Create an account, choose your site name and subdomain, and then use the dashboard or ChowBot to add locations, offerings, photos, and content.',
+    answer: 'Create an account, choose your site name and subdomain, and then use the dashboard or ChatGPT to add locations, offerings, photos, and content.',
     keywords: ['first website', 'create site', 'signup', 'subdomain', 'launch'],
   },
   {
@@ -89,7 +89,7 @@ export const PLATFORM_KNOWLEDGE_FAQ_ENTRIES: PlatformKnowledgeFaqEntry[] = [
   {
     id: 'menu-updates',
     title: 'How do I add or update menu items?',
-    answer: 'Use the dashboard Offerings area or ask ChowBot to add items, adjust prices, rewrite descriptions, or import from a menu photo.',
+    answer: 'Use the dashboard Offerings area or use the ChatGPT connector to add items, adjust prices, rewrite descriptions, or import from a menu photo.',
     keywords: ['menu', 'offerings', 'menu items', 'prices', 'import menu'],
   },
   {
@@ -155,11 +155,11 @@ export const PLATFORM_KNOWLEDGE_ROUTE_ENTRIES: PlatformKnowledgeRouteEntry[] = [
     id: 'help',
     title: 'Support',
     path: '/help',
-    snippet: 'Talk to ChowBot support, browse docs, and send a support case if you are blocked.',
+    snippet: 'Talk to support, browse docs, and send a support case if you are blocked.',
     icon: 'circle-help',
     section: 'Support',
-    keywords: ['support', 'help', 'contact support', 'agent', 'chowbot'],
-    surfaces: ['public', 'docs', 'blog', 'help', 'chowbot'],
+    keywords: ['support', 'help', 'contact support', 'agent'],
+    surfaces: ['public', 'docs', 'blog', 'help'],
   },
   {
     id: 'pricing',
@@ -169,17 +169,17 @@ export const PLATFORM_KNOWLEDGE_ROUTE_ENTRIES: PlatformKnowledgeRouteEntry[] = [
     icon: 'credit-card',
     section: 'Platform',
     keywords: ['pricing', 'plans', 'billing', 'cost', 'subscription'],
-    surfaces: ['public', 'docs', 'blog', 'help', 'chowbot'],
+    surfaces: ['public', 'docs', 'blog', 'help'],
   },
   {
     id: 'login',
     title: 'Login',
     path: '/login',
-    snippet: 'Sign in to access the dashboard, ChowBot, billing, and site settings.',
+    snippet: 'Sign in to access the dashboard, billing, and site settings.',
     icon: 'log-in',
     section: 'Platform',
     keywords: ['login', 'sign in', 'account', 'dashboard access'],
-    surfaces: ['public', 'help', 'chowbot'],
+    surfaces: ['public', 'help'],
   },
   {
     id: 'dashboard',
@@ -189,7 +189,7 @@ export const PLATFORM_KNOWLEDGE_ROUTE_ENTRIES: PlatformKnowledgeRouteEntry[] = [
     icon: 'layout-dashboard',
     section: 'Dashboard',
     keywords: ['dashboard', 'workspace', 'manage site', 'admin'],
-    surfaces: ['dashboard', 'help', 'chowbot'],
+    surfaces: ['dashboard', 'help'],
   },
 ]
 
@@ -199,7 +199,7 @@ export const PLATFORM_KNOWLEDGE_PAGE_ENTRIES: PlatformKnowledgePageEntry[] = [
     title: 'KrabiClaw Home',
     path: '/',
     snippet: 'Overview of the AI website platform for restaurants, experiences, and local businesses.',
-    body: 'KrabiClaw helps local businesses launch fast websites, manage content through ChowBot and the dashboard, and convert organic traffic directly on their own site.',
+    body: 'KrabiClaw helps local businesses launch fast websites, manage content through ChatGPT and the dashboard, and convert organic traffic directly on their own site.',
     icon: 'sparkles',
     section: 'Platform',
     keywords: ['home', 'overview', 'krabiclaw', 'platform', 'what is krabiclaw'],
@@ -333,18 +333,6 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
     icon: 'file-stack',
     section: 'Site',
     keywords: ['site overview', 'site', 'summary'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'site-conversations',
-    title: 'Conversations',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/conversations',
-    fallbackPath: '/dashboard',
-    snippet: 'Browse site conversations and ChowBot history.',
-    body: 'Conversations shows cross-channel discussions and authenticated ChowBot-related message history.',
-    icon: 'messages-square',
-    section: 'Site',
-    keywords: ['conversations', 'messages', 'chat', 'history'],
     surfaces: ['dashboard'],
   },
   {

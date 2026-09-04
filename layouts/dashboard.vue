@@ -61,8 +61,6 @@
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
       <slot />
-
-      <ChowBot v-if="showChowBot" />
     </UDashboardGroup>
 
     <nav
@@ -103,7 +101,6 @@
 </template>
 
 <script setup lang="ts">
-import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
 import DashboardTopNav from '~/lib/components/workspace/dashboard/DashboardTopNav.vue'
 import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/DashboardMenuSlideover.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
@@ -153,7 +150,6 @@ const toast = useToast()
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
-const _chowBot = useChowBot()
 const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
 
@@ -278,9 +274,6 @@ const locationBase = computed(() => locationsBase.value && currentLocationSlug.v
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
-const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
-const showChowBot = computed(() => !isConversationsRoute.value
-  && (dashboard.siteAccess.value !== 'location' || scope.value === 'location'))
 
 const vertical = computed(() => {
   const raw = site.value?.vertical
