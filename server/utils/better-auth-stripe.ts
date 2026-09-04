@@ -232,10 +232,10 @@ export async function projectOrganizationSubscription(
   })
   await execute(db, `
     INSERT INTO organization_billing
-      (id, organization_id, stripe_customer_id, stripe_subscription_id,
+      (organization_id, stripe_customer_id, stripe_subscription_id,
        payment_status, paid_through, past_due_since, last_paid_invoice_id,
        access_plan, access_expires_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id) DO UPDATE SET
       stripe_customer_id = excluded.stripe_customer_id,
       stripe_subscription_id = excluded.stripe_subscription_id,
@@ -244,7 +244,6 @@ export async function projectOrganizationSubscription(
       access_expires_at = excluded.access_expires_at,
       updated_at = excluded.updated_at
   `, [
-    `billing-${input.organizationId}`,
     input.organizationId,
     input.customerId,
     input.subscriptionId,
@@ -904,10 +903,10 @@ export async function markOrganizationPayment(
     {
       query: `
         INSERT INTO organization_billing
-          (id, organization_id, stripe_customer_id, stripe_subscription_id,
+          (organization_id, stripe_customer_id, stripe_subscription_id,
            payment_status, paid_through, past_due_since, last_paid_invoice_id,
            last_payment_event_created, last_payment_event_id, updated_at)
-        VALUES (?, ?, ?, ?,
+        VALUES (?, ?, ?,
           (SELECT status FROM stripe_invoice_payments WHERE organization_id = ? ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
           (SELECT period_end FROM stripe_invoice_payments WHERE organization_id = ? AND status = 'paid' AND base_plan_price_id IS NOT NULL AND period_end IS NOT NULL ORDER BY period_end DESC, last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
           (SELECT past_due_since FROM stripe_invoice_payments WHERE organization_id = ? AND status = 'failed' ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
@@ -927,7 +926,6 @@ export async function markOrganizationPayment(
           updated_at = excluded.updated_at
       `,
       params: [
-        `billing-${input.organizationId}`,
         input.organizationId,
         input.customerId,
         input.subscriptionId,
