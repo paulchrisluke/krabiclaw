@@ -55,7 +55,7 @@ For migration safety, preview reset behavior, database epoch transitions, incide
 Open Dependabot PRs are a bounded queue, not a complete inventory of outdated
 dependencies. Before assembling a batch, inspect both application and inbound
 email Worker manifests and lockfiles against registry release metadata. Respect
-the seven-day release-age gate, pinned toolchain versions, dependency patches,
+the 30-day release-age gate, pinned toolchain versions, dependency patches,
 and peer requirements. Record the exact included versions and every deferred
 upgrade with its reason in the integration PR.
 
@@ -63,10 +63,24 @@ upgrade with its reason in the integration PR.
 after Nuxt finishes. Yarn 4 does not execute arbitrary `postbuild` hooks; keep
 required build steps in the command CI actually invokes.
 
-Dependabot groups routine minor and patch updates across both manifests. Better
-Auth packages move together in a separate group. Major updates and explicitly
-excluded framework, compiler, migration-generator, and pre-1.0 library updates
-remain independently reviewable.
+Dependabot checks every other Monday at 02:00 UTC using its supported Fugit
+cron expression (`0 2 * * mon%2`). Routine npm updates, including majors, form
+one group across both manifests. Better Auth and TypeScript remain separate
+because their documented blockers require independent qualification. GitHub
+Actions updates form one group on the same schedule.
+
+Routine releases must be at least 30 days old. Dependabot's cooldown and the
+root Yarn configuration enforce the same window; the email package inherits
+that Yarn configuration. Existing locked versions are retained, not downgraded
+merely because this policy became stricter. Preserve pinned runtime versions,
+reviewed dependency patches, and their peer requirements when selecting a batch.
+
+Security updates bypass Dependabot's routine schedule/cooldown, and the existing
+weekly dependency security audit remains enabled. If an urgent security fix is
+younger than 30 days, review the exact advisory, package, and fixed version before
+using Yarn's per-command age-gate exception. Do not disable the repository gate
+or add a permanent blanket preapproval to make the update install.
+
 Grouping does not authorize merging or waive validation.
 
 Qualify the combined branch through local checks and one full preview run before
