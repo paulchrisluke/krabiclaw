@@ -52,17 +52,14 @@
               </span>
             </span>
             <span class="min-w-0 flex-1">
-              <span class="flex items-center gap-2">
-                <span class="truncate text-sm font-semibold text-highlighted">{{ item.row.title }}</span>
-                <UBadge :color="statusColor(item.row.status)" variant="soft" size="xs" class="shrink-0">
-                  {{ item.row.status === 'sold_out' ? 'Sold out' : item.row.status }}
-                </UBadge>
-              </span>
-              <span v-if="item.row.tagline" class="mt-0.5 block truncate text-sm text-muted">{{ item.row.tagline }}</span>
-              <span class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                <span v-if="item.row.price">{{ priceLabel(item.row) }}</span>
-                <span v-if="item.row.duration_minutes">{{ item.row.duration_minutes }} min</span>
-                <span v-if="item.row.max_capacity">{{ item.row.max_capacity }} max guests</span>
+              <span class="block truncate text-sm font-semibold text-highlighted">{{ item.row.title }}</span>
+              <!--
+                A summary line, the way the menu lists a dish's price — not a
+                badge. Nothing else in the CMS badges a row's state, and an
+                experience that is off reads as a fact about it, not an alert.
+              -->
+              <span class="mt-1 block truncate text-sm" :class="summary(item.row) ? 'text-muted' : 'italic text-muted'">
+                {{ summary(item.row) || 'Nothing set yet' }}
               </span>
             </span>
           </button>
@@ -126,9 +123,16 @@ function openExperience(item: { row: Experience }) {
   return navigateTo(`${experiencesPath.value}/${item.row.id}`)
 }
 
-function statusColor(status: string | null | undefined) {
-  if (status === 'active') return 'success'
-  return status === 'sold_out' ? 'warning' : 'neutral'
+/** Price, then length, then the state — but only when the state is worth saying. */
+function summary(experience: Experience): string {
+  const parts: string[] = []
+  const price = priceLabel(experience)
+  if (price) parts.push(price)
+  if (experience.duration_minutes) parts.push(`${experience.duration_minutes} min`)
+  if (experience.max_capacity) parts.push(`${experience.max_capacity} guests`)
+  if (experience.status === 'sold_out') parts.push('Sold out')
+  else if (experience.status === 'inactive') parts.push('Not bookable')
+  return parts.join(' · ')
 }
 
 function coverUrl(experience: Experience): string | null {

@@ -27,9 +27,20 @@
         <UFormField label="Description">
           <UTextarea v-model="editor.form.body" :rows="6" class="w-full" />
         </UFormField>
-        <p class="text-sm text-muted">
-          You'll add photos, pricing and times next.
-        </p>
+        <!--
+          Photos, pricing, times, policy and translations all need a saved id,
+          so they are sections of the experience rather than a wall of fields
+          before it exists. Naming them here means Create is not a leap.
+        -->
+        <div class="rounded-xl border border-default p-4">
+          <p class="text-sm font-medium text-highlighted">After you create it</p>
+          <p class="mt-1 text-sm text-muted">
+            You'll land on this experience's own page, where photos, pricing, duration and
+            capacity, time slots, its booking policy and translations are each a section you
+            can fill in. It goes on your site straight away — set its status to Inactive
+            under Duration and capacity if you'd rather finish it first.
+          </p>
+        </div>
       </div>
     </template>
   </UDashboardPanel>

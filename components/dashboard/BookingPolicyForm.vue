@@ -4,7 +4,7 @@
       <UFormField label="Confirmation SLA (minutes)">
         <UInputNumber :model-value="value.host_confirmation_sla_minutes" :min="0" class="w-full" @update:model-value="updateNumber('host_confirmation_sla_minutes', $event)" />
       </UFormField>
-      <UFormField label="Free cancellation cutoff (minutes)">
+      <UFormField v-if="!hideCancellation" label="Free cancellation cutoff (minutes)">
         <UInputNumber :model-value="value.free_cancellation_until_minutes" :min="0" class="w-full" @update:model-value="updateNumber('free_cancellation_until_minutes', $event)" />
       </UFormField>
       <UFormField label="Advance notice (minutes)">
@@ -22,7 +22,7 @@
     </div>
 
     <div class="space-y-3">
-      <UCheckbox :model-value="Boolean(value.reschedule_allowed)" label="Allow rescheduling" @update:model-value="updateBoolean('reschedule_allowed', $event)" />
+      <UCheckbox v-if="!hideCancellation" :model-value="Boolean(value.reschedule_allowed)" label="Allow rescheduling" @update:model-value="updateBoolean('reschedule_allowed', $event)" />
       <UFormField v-if="value.reschedule_allowed" label="Reschedule cutoff (minutes)">
         <UInputNumber :model-value="value.reschedule_cutoff_minutes" :min="0" class="w-full" @update:model-value="updateNumber('reschedule_cutoff_minutes', $event)" />
       </UFormField>
@@ -73,6 +73,8 @@ const props = defineProps<{
   modelValue: BookingPolicyPatch
   policyType: 'reservation' | 'experience'
   summary?: RenderedBookingPolicySummary | null
+  /** Set where a named cancellation preset already owns these fields. */
+  hideCancellation?: boolean
 }>()
 
 const emit = defineEmits<{

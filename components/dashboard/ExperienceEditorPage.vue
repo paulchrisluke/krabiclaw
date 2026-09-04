@@ -214,12 +214,48 @@
 
           <!-- Booking policy -->
           <div v-else-if="editorKey === 'policy'" class="space-y-6">
-            <p class="text-base text-muted">The guest-facing policy shared with the public experience and confirmation pages.</p>
-            <BookingPolicyForm
-              v-model="editor.bookingPolicyDraft.value"
-              policy-type="experience"
-              :summary="editor.bookingPolicySummary.value"
-            />
+            <p class="text-base text-muted">What happens when a guest needs to cancel or move their booking.</p>
+
+            <!--
+              Named terms, not a minutes field: the tenant picks a position a
+              guest can understand, and each card states its own consequences.
+            -->
+            <div class="space-y-3">
+              <button
+                v-for="preset in policyPresets"
+                :key="preset.id"
+                type="button"
+                class="w-full rounded-xl border px-4 py-3 text-left transition-colors"
+                :class="activePresetId === preset.id ? 'border-2 border-inverted' : 'border border-default hover:border-accented'"
+                :aria-pressed="activePresetId === preset.id"
+                @click="selectPreset(preset)"
+              >
+                <span class="block font-semibold text-highlighted">{{ preset.label }}</span>
+                <ul class="mt-1 space-y-0.5">
+                  <li v-for="term in preset.terms" :key="term" class="text-sm text-muted">• {{ term }}</li>
+                </ul>
+              </button>
+
+              <div
+                v-if="!activePresetId"
+                class="rounded-xl border-2 border-inverted px-4 py-3"
+              >
+                <span class="block font-semibold text-highlighted">Custom</span>
+                <p class="mt-1 text-sm text-muted">
+                  This experience has terms that were set before these options existed. Choosing one above replaces them.
+                </p>
+              </div>
+            </div>
+
+            <div class="border-t border-default pt-6">
+              <p class="mb-4 text-sm font-semibold text-highlighted">Other booking rules</p>
+              <BookingPolicyForm
+                v-model="editor.bookingPolicyDraft.value"
+                policy-type="experience"
+                :summary="editor.bookingPolicySummary.value"
+                hide-cancellation
+              />
+            </div>
           </div>
 
           <!-- Availability -->
@@ -377,6 +413,8 @@ import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vu
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardPhotoManager from '~/components/dashboard/DashboardPhotoManager.vue'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
+import type { BookingPolicyPreset } from '~/utils/booking-policy-presets'
+import { BOOKING_POLICY_PRESETS, applyBookingPolicyPreset, matchBookingPolicyPreset } from '~/utils/booking-policy-presets'
 import {
   WEEKDAY_NAMES,
   provideExperienceEditor,
@@ -471,6 +509,23 @@ watch(data, value => {
   void editor.loadPolicy(value.experience.id)
 }, { immediate: true })
 
+// ── Booking policy ──────────────────────────────────────
+const policyPresets = BOOKING_POLICY_PRESETS
+const activePresetId = computed(() => matchBookingPolicyPreset(editor.bookingPolicyDraft.value)?.id ?? null)
+
+const policySummary = computed(() => {
+  const preset = matchBookingPolicyPreset(editor.bookingPolicyDraft.value)
+  if (preset) return preset.label
+  return editor.bookingPolicyId.value ? 'Custom' : 'Using the location default'
+})
+
+function selectPreset(preset: BookingPolicyPreset) {
+  editor.bookingPolicyDraft.value = {
+    ...editor.bookingPolicyDraft.value,
+    ...applyBookingPolicyPreset(preset),
+  }
+}
+
 // ── Photos ──────────────────────────────────────────────
 // The editor holds one ordered media list; the manager speaks in asset ids, so
 // the two are mapped here rather than teaching either about the other.
@@ -559,7 +614,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
       { id: 'booking', label: 'Duration and capacity', summary: bookingSummary.value, icon: 'i-lucide-users', to: `${experiencePath.value}/booking` },
       { id: 'slots', label: 'Time slots', summary: slotsSummary.value, icon: 'i-lucide-clock-3', to: `${experiencePath.value}/slots` },
       { id: 'availability', label: 'Availability', summary: 'Close times or change capacity by date', icon: 'i-lucide-calendar-days', to: `${experiencePath.value}/availability` },
-      { id: 'policy', label: 'Booking policy', summary: editor.bookingPolicyId.value ? 'Custom policy' : 'Using the location default', icon: 'i-lucide-shield-check', to: `${experiencePath.value}/policy` },
+      { id: 'policy', label: 'Booking policy', summary: policySummary.value, icon: 'i-lucide-shield-check', to: `${experiencePath.value}/policy` },
     ],
   },
   {
