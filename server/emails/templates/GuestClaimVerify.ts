@@ -1,5 +1,5 @@
 import { defineComponent, h } from 'vue'
-import { ESection, EText, ELink } from 'vue-email'
+import { ESection, EText, ELink } from '../vue-email'
 import EmailShell from '../layouts/EmailShell'
 
 export default defineComponent({

@@ -48,7 +48,7 @@ export interface BlogEditorBlock {
   updated_at?: string
 }
 
-export interface PlatformBlogCreateInput {
+export interface BlogPostCreateInput {
   title: string
   slug?: string | null
   content_blocks: BlogEditorBlock[]
@@ -71,7 +71,7 @@ export interface PlatformBlogCreateInput {
   scheduled_for?: string | null
 }
 
-export interface PlatformBlogUpdateInput {
+export interface BlogPostUpdateInput {
   title?: string
   excerpt?: string | null
   category?: string | null
@@ -110,8 +110,8 @@ export interface BlogPostRepository {
   listUrl: string
   editUrl(_postId: string): string
   get(_postId: string): Promise<BlogPost>
-  create(_input: PlatformBlogCreateInput): Promise<BlogPost & { id: string }>
-  update(_postId: string, _input: PlatformBlogUpdateInput): Promise<BlogPost>
+  create(_input: BlogPostCreateInput): Promise<BlogPost & { id: string }>
+  update(_postId: string, _input: BlogPostUpdateInput): Promise<BlogPost>
   delete(_postId: string): Promise<void>
   publish(_postId: string, _input: { expected_updated_at: string; expected_document_updated_at: string; scheduled_for?: string | null }): Promise<BlogLifecycleState>
 }

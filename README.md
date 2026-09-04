@@ -11,6 +11,7 @@ Multi-tenant platform SaaS. Nuxt 5 nightly + Nitro 3 + Cloudflare Workers + D1.
 | Command | What it does |
 |---|---|
 | `yarn dev` | Nuxt development server with HMR and locally emulated Cloudflare bindings at `http://localhost:3000`. |
+| `yarn local:setup` | Apply local migrations, refresh all curated fixtures, provision the local developer login, and verify D1. |
 | `yarn dev:worker` | Build and run the production-like Worker locally with Wrangler at `http://localhost:3000`. |
 | `yarn dev:worker:start` | Run the existing `.output` Worker build locally without rebuilding it. |
 | `yarn build` | Production build → `.output/` |
@@ -48,13 +49,31 @@ submission paths send for real in production.
 ### 1. Install
 
 ```bash
-yarn install
+corepack yarn install
 ```
 
 The repository uses Node.js 24.18.1. Use the exact version declared in
 `.nvmrc` before installing dependencies. When changing Node, follow the
 [Node runtime upgrade runbook](docs/operations/node-runtime-upgrades.md) so
 local development, CI, type definitions, and Worker builds move together.
+
+Yarn accepts new direct and transitive package releases only after seven days.
+Routine `yarn add` and `yarn up` commands apply this rule automatically. CI
+installs both package graphs immutably and rechecks registry metadata in its
+hardened job.
+
+For an urgent reviewed security fix, update only the affected package:
+
+```bash
+corepack yarn up <package>@<fixed-version> --no-time-gate
+```
+
+For the independent inbound-email Worker graph, add
+`--cwd workers/email-inbound` immediately after `yarn`.
+
+Record the advisory and the reason for bypassing the wait in the pull request.
+Do not add a package to `npmPreapprovedPackages` or disable the age gate in
+`.yarnrc.yml`.
 
 ### 2. Environment
 
@@ -68,52 +87,40 @@ GOOGLE_CLIENT_ID=          # Google Cloud Console — OAuth client
 GOOGLE_CLIENT_SECRET=
 ```
 
-### 3. Database
+### 3. Prepare local development
 
 ```bash
-yarn schema:local
-yarn seed:local
+corepack yarn local:setup
 ```
 
-The seed creates site and content fixtures, but it does not create a usable
-Better Auth password. For an authenticated dashboard session in a normal
-browser, choose a local-only password and provision the synthetic accounts:
+The command is safe to repeat. It leaves local D1 at the current migration,
+fixture, credential, and foreign-key baseline, then prints the local login email
+and a newly generated password.
 
-```bash
-E2E_TEST_PASSWORD='choose-a-local-only-password' yarn auth:e2e:local:provision
-```
+Open the prefilled login page at
+`http://localhost:3000/login?email=demo-owner%40playwright.example`. The demo
+owner can access the `ember-slice-demo` organization and its demo site. Other
+scoped fixture identities are declared in `config/e2e-auth-fixtures.ts` and use
+the same local password.
 
-Then sign in at `http://localhost:3000/login` with:
-
-```text
-Email: demo-owner@playwright.example
-Password: the value supplied as E2E_TEST_PASSWORD above
-```
-
-The demo owner can access the `ember-slice-demo` organization and its demo
-site. Other scoped fixture identities are declared in
-`config/e2e-auth-fixtures.ts` and use the same provisioned password.
-
-The password is deliberately not committed or stored in fixture data. Better
-Auth stores only its hash in local D1. Running the provisioning command again
-replaces the fixture passwords and deletes their existing sessions, so sign in
-again with the newly supplied value. Do not use this command with `--preview`
-or `--staging` during ordinary local development.
+Better Auth stores only the generated password's hash in local D1. Set
+`E2E_TEST_PASSWORD` before `corepack yarn local:setup` when you need a stable
+local credential. A repeated setup replaces fixture passwords and deletes their
+existing sessions, so sign in again afterward.
 
 ### 4. Run
 
 ```bash
-yarn dev
+corepack yarn dev
 ```
 
 App at `http://localhost:3000`.
 
 `yarn dev` is the normal application-development loop. Nitro reads the bindings
 declared in `wrangler.toml`, emulates local D1/KV/R2 resources, and preserves
-Nuxt hot module replacement. Run `yarn schema:local` and the required local seed
-before starting when the local database is empty. Run
-`auth:e2e:local:provision` after a fresh seed or whenever the fixture password
-needs to change.
+Nuxt hot module replacement. It never seeds or resets D1. Run
+`corepack yarn local:setup` when you want to restore the deterministic local
+fixture baseline.
 
 For production-runtime browser verification, use the generated Worker locally.
 Wrangler reads `.env` and `.dev.vars` using its documented local-development
@@ -139,7 +146,7 @@ Cloudflare Worker, and starts it under local workerd. Authenticated tests sign
 in through Better Auth with a random password generated inside the Playwright
 process; no email inbox or authentication bypass route is involved. That random
 password is not a reusable manual-browser credential. Use the explicit
-`auth:e2e:local:provision` command above for manual browser work.
+`corepack yarn local:setup` command above for manual browser work.
 
 Local tenant tests use a shared-host routing contract: the browser targets
 `localhost` and the test helper supplies `x-preview-tenant` for the selected

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +19,7 @@ import {
 } from '../seed-definitions/demo.ts'
 import { renderCanonicalBillingSql } from '../seed-definitions/billing-sql.ts'
 import { renderTenantPagesSeedSql } from '../seed-definitions/tenant-pages.ts'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 function escapeSql(value: string) {
   return value.replace(/'/g, "''")
@@ -262,9 +262,11 @@ if (isStdout) {
 
   try {
     writeFileSync(sqlPath, sql, 'utf8')
-    const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
-    console.log(`[seed:demo] Applying: ${cmd}`)
-    execSync(cmd, { stdio: 'inherit' })
+    const args = ['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath]
+    console.log(`[seed:demo] Applying: corepack yarn ${args.join(' ')}`)
+    const result = spawnYarn(args)
+    if (result.error) throw result.error
+    if (result.status !== 0) process.exit(result.status ?? 1)
     console.log('[seed:demo] Done.')
   } finally {
     rmSync(dir, { recursive: true, force: true })

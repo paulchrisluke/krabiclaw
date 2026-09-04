@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { tenantBlogRepository } from '~/lib/components/workspace/blog/tenantBlogRepository'
+import { isBlogPostResponse } from '~/lib/components/workspace/blog/blog-response-contracts'
 import BlogPostEditor from '~/lib/components/workspace/blog/BlogPostEditor.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { BlogEditorBlock, BlogPost } from '~/lib/components/workspace/blog/types'
@@ -72,14 +73,6 @@ const siteId = await useDashboardSiteId()
 const postId = String(route.params.postId || '')
 if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID is required' })
 
-const isPostResponse = (value: unknown): value is { post: BlogPost } =>
-  isRecord(value)
-  && isRecord(value.post)
-  && typeof value.post.id === 'string'
-  && typeof value.post.title === 'string'
-  && isRecord(value.post.content_document)
-  && Array.isArray(value.post.content_document.blocks)
-
 const requestEvent = useRequestEvent()
 const { data: postResource, error: postError } = await useAsyncData(
   `dashboard-blog-post:${siteId}:${postId}`,
@@ -92,7 +85,7 @@ const { data: postResource, error: postError } = await useAsyncData(
     return await dashboardFetch<{ post: BlogPost }>(
       `/api/editor/sites/${siteId}/blog/${postId}`,
       { orgSlug, siteSlug },
-      { validate: isPostResponse },
+      { validate: isBlogPostResponse },
     )
   },
   { lazy: import.meta.client },

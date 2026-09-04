@@ -2,9 +2,9 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-function resolveYarnCommand(args) {
-  const npmExecPath = process.env.npm_execpath
-  if (npmExecPath && existsSync(npmExecPath)) {
+export function resolveYarnCommand(args, env = process.env) {
+  const npmExecPath = env.npm_execpath
+  if (npmExecPath && /\.(?:cjs|mjs|js)$/i.test(npmExecPath) && existsSync(npmExecPath)) {
     return {
       command: process.execPath,
       args: [npmExecPath, ...args],
@@ -28,11 +28,12 @@ function resolveYarnCommand(args) {
   }
 }
 
-export function spawnYarn(args) {
+export function spawnYarn(args, options = {}) {
   const invocation = resolveYarnCommand(args.map(arg => String(arg)))
+  const normalizedOptions = Object.keys(options).length === 0 ? { stdio: 'inherit' } : options
   return spawnSync(invocation.command, invocation.args, {
-    stdio: 'inherit',
     cwd: process.cwd(),
+    ...normalizedOptions,
     shell: invocation.shell,
   })
 }

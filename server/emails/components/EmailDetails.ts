@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { ESection } from 'vue-email'
+import { ESection } from '../vue-email'
 
 // Nuxt UI-inspired color tokens (email-safe inline styles)
 const FG = '#18181b' // zinc-900

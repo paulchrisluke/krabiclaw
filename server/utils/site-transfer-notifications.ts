@@ -1,4 +1,4 @@
-import { useRender } from 'vue-email'
+import { renderEmail } from '~/server/emails/vue-email'
 import { execute } from '~/server/db'
 import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import SiteTransferReminder from '~/server/emails/templates/SiteTransferReminder'
@@ -192,15 +192,13 @@ export async function notifySiteTransferReminder(
   const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
   if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  const { html, text } = await useRender(SiteTransferReminder, {
-    props: {
-      siteName: opts.siteName,
-      transferUrl: opts.transferUrl,
-      domain: opts.invitedDomain ?? null,
-      planLabel: opts.invitedPlan ? (planLabel[opts.invitedPlan] ?? 'Unsupported plan') : null,
-      customDomainsPaused: opts.customDomainsPaused,
-      platformDomain,
-    },
+  const { html, text } = await renderEmail(SiteTransferReminder, {
+    siteName: opts.siteName,
+    transferUrl: opts.transferUrl,
+    domain: opts.invitedDomain ?? null,
+    planLabel: opts.invitedPlan ? (planLabel[opts.invitedPlan] ?? 'Unsupported plan') : null,
+    customDomainsPaused: opts.customDomainsPaused,
+    platformDomain,
   })
 
   await sendReminderEmail(env, db, {

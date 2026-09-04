@@ -2,10 +2,8 @@
 // directory (see utils/organization-access.ts for precedent). Every phone read/write
 // boundary in the app should go through this file rather than a bespoke regex.
 //
-// Uses libphonenumber-js's `/min` metadata build (smaller, less-precise-by-carrier
-// metadata) instead of the full build so this file stays light in the client bundle
-// — this file is imported from client components (e.g. components/PhoneInput.vue,
-// pages/login.vue), not just server code.
+// Uses libphonenumber-js's `/min` metadata build so this shared client and server
+// utility stays light in the client bundle.
 import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/min'
 
 export type { CountryCode }
