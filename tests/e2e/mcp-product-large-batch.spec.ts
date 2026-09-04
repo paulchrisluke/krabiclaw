@@ -14,8 +14,18 @@ test('Product batches validate and commit atomically at the supported limit', as
   })
   const locationId = mcpData<{ id: string }>(await locationResponse.json()).id
 
+  const categoryIds: string[] = []
+  for (const name of ['First', 'Second']) {
+    const response = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'create_product_category',
+      args: { site_id: siteId, location_id: locationId, name },
+    })
+    categoryIds.push(mcpData<{ category: { id: string } }>(await response.json()).category.id)
+  }
+
   const products = Array.from({ length: 100 }, (_, index) => ({
-    category: index < 50 ? 'First' : 'Second',
+    category_id: index < 50 ? categoryIds[0]! : categoryIds[1]!,
     name: `Batch Product ${String(index + 1).padStart(3, '0')}`,
     description: `Original ${index + 1}`,
     price: { amount_minor: (100 + index) * 100, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
@@ -43,7 +53,7 @@ test('Product batches validate and commit atomically at the supported limit', as
   const created = mcpData<{ products: Array<{ id: string }> }>(await validCreate.json()).products
   const desired = created.slice(0, 95).map((product, index) => ({
     product_id: product.id,
-    category: index < 50 ? 'First' : 'Second',
+    category_id: index < 50 ? categoryIds[0]! : categoryIds[1]!,
     name: `Batch Product ${String(index + 1).padStart(3, '0')}`,
     description: index === 0 ? 'Updated atomically' : `Original ${index + 1}`,
     price: { amount_minor: (100 + index) * 100, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },

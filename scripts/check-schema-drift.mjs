@@ -49,7 +49,7 @@ try {
   if (!result.stdout.includes('No schema changes, nothing to migrate')) {
     throw new Error(`Schema generation did not confirm a clean diff:\n${result.stdout}`)
   }
-  console.log('Schema and committed epoch-3 migration metadata are in sync.')
+  console.log('Schema and committed epoch-4 migration metadata are in sync.')
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true })
 }

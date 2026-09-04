@@ -4,6 +4,7 @@ import test from 'node:test'
 import { Miniflare } from 'miniflare'
 
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
+import { englishManifestHash, getProductCatalogLocalization } from '../../server/utils/localization.ts'
 import {
   createProduct,
   createProductsBatch,
@@ -35,19 +36,39 @@ async function migratedD1() {
   await db.prepare("INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('secondary', 'org', 'site', 'secondary', 'Secondary')").run()
   await db.prepare("INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('other-site-location', 'org', 'other-site', 'other', 'Other')").run()
   await db.prepare("UPDATE sites SET primary_location_id = 'primary' WHERE id = 'site'").run()
+  // Products need a category at their own location, so the fixture creates one
+  // per location up front and every seeded Product references it.
+  for (const [categoryId, siteId, locationId] of [
+    ['cat-primary', 'site', 'primary'],
+    ['cat-secondary', 'site', 'secondary'],
+    ['cat-other-site', 'other-site', 'other-site-location'],
+  ]) {
+    await db.prepare(`
+      INSERT INTO product_categories (id, organization_id, site_id, location_id, name, slug, sort_order, created_by, updated_by)
+      VALUES (?, 'org', ?, ?, 'Food', 'food', 0, 'actor', 'actor')
+    `).bind(categoryId, siteId, locationId).run()
+  }
   return { miniflare, db }
+}
+
+const CATEGORY_FOR_LOCATION: Record<string, string> = {
+  primary: 'cat-primary',
+  secondary: 'cat-secondary',
+  'other-site-location': 'cat-other-site',
 }
 
 async function seedProduct(db: D1Database, id: string, locationId = 'secondary', withPrice = false) {
   await db.prepare(`
-    INSERT INTO products (id, organization_id, site_id, location_id, category, name, slug, sort_order, created_by, updated_by, created_at, updated_at)
-    VALUES (?, 'org', 'site', ?, 'Food', ?, ?, 0, 'actor', 'actor', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
-  `).bind(id, locationId, id, id).run()
+    INSERT INTO products (id, organization_id, site_id, location_id, category_id, name, slug, sort_order, created_by, updated_by, created_at, updated_at)
+    SELECT ?, organization_id, site_id, location_id, id, ?, ?, 0, 'actor', 'actor', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'
+      FROM product_categories WHERE id = ?
+  `).bind(id, id, id, CATEGORY_FOR_LOCATION[locationId]).run()
   if (withPrice) {
     await db.prepare(`
       INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, valid_from, provenance, created_by)
-      VALUES (?, 'org', 'site', ?, ?, 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'manual', 'actor')
-    `).bind(`${id}-price`, locationId, id).run()
+      SELECT ?, organization_id, site_id, location_id, id, 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'manual', 'actor'
+        FROM products WHERE id = ?
+    `).bind(`${id}-price`, id).run()
   }
 }
 
@@ -184,8 +205,14 @@ test('location-scoped Product writes never fall back to the primary location', a
   const { miniflare, db } = await migratedD1()
   try {
     await seedProduct(db, 'secondary-owned')
+    await seedProduct(db, 'other-site-owned', 'other-site-location', true)
+    assert.equal((await db.prepare("SELECT site_id FROM prices WHERE product_id = 'other-site-owned'").first<{ site_id: string }>())?.site_id, 'other-site')
     await assert.rejects(
-      syncProducts(db, 'org', 'site', 'primary', [{ product_id: 'secondary-owned', category: 'Food', name: 'Wrong target', price: null }], { actorId: 'actor' }),
+      syncProducts(db, 'org', 'site', 'secondary', [{ product_id: 'other-site-owned', category_id: 'cat-secondary', name: 'Wrong site', price: null }], { actorId: 'actor' }),
+      /not found at this location/i,
+    )
+    await assert.rejects(
+      syncProducts(db, 'org', 'site', 'primary', [{ product_id: 'secondary-owned', category_id: 'cat-secondary', name: 'Wrong target', price: null }], { actorId: 'actor' }),
       /not found at this location/i,
     )
     await assert.rejects(
@@ -197,7 +224,7 @@ test('location-scoped Product writes never fall back to the primary location', a
       /Location not found/i,
     )
     await assert.rejects(
-      syncProducts(db, 'org', 'site', 'secondary', [{ product_id: '   ', category: 'Food', name: 'Blank ID', price: null }], { actorId: 'actor' }),
+      syncProducts(db, 'org', 'site', 'secondary', [{ product_id: '   ', category_id: 'cat-secondary', name: 'Blank ID', price: null }], { actorId: 'actor' }),
       /non-empty string/i,
     )
 
@@ -221,7 +248,7 @@ test('Product writes preserve nullable Price semantics through D1', async () => 
     await db.prepare("UPDATE sites SET default_currency = 'THB' WHERE id = 'site'").run()
 
     const created = await createProduct(db, 'org', 'site', 'secondary', {
-      category: 'Food',
+      category_id: 'cat-secondary',
       name: 'Market fish',
       price: null,
       details: [{ key: 'price-note', label: 'Price', values: ['Market Price'] }],
@@ -233,7 +260,7 @@ test('Product writes preserve nullable Price semantics through D1', async () => 
 
     const fixed = await syncProducts(db, 'org', 'site', 'secondary', [{
       product_id: created.id,
-      category: created.category,
+      category_id: created.category_id,
       name: created.name,
       price: { amount_minor: 0, valid_from: '2026-01-02T00:00:00.000Z' },
       details: [],
@@ -245,7 +272,7 @@ test('Product writes preserve nullable Price semantics through D1', async () => 
 
     const cleared = await syncProducts(db, 'org', 'site', 'secondary', [{
       product_id: created.id,
-      category: created.category,
+      category_id: created.category_id,
       name: created.name,
       price: null,
     }], attribution)
@@ -253,8 +280,8 @@ test('Product writes preserve nullable Price semantics through D1', async () => 
     assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM prices WHERE product_id = ? AND valid_until IS NULL').bind(created.id).first<{ count: number }>())?.count, 0)
 
     const batched = await createProductsBatch(db, 'org', 'site', 'secondary', [
-      { category: 'Food', name: 'Fixed', price: { amount_minor: 500, valid_from: '2026-01-03T00:00:00.000Z' } },
-      { category: 'Food', name: 'No fixed price', price: null },
+      { category_id: 'cat-secondary', name: 'Fixed', price: { amount_minor: 500, valid_from: '2026-01-03T00:00:00.000Z' } },
+      { category_id: 'cat-secondary', name: 'No fixed price', price: null },
     ], attribution)
     assert.equal(batched.length, 2)
     const fixedProduct = batched[0]
@@ -266,6 +293,62 @@ test('Product writes preserve nullable Price semantics through D1', async () => 
     assert.equal(unchanged.price?.amount_minor, 500)
     const removed = await updateProduct(db, 'org', 'site', 'secondary', fixedProduct.id, { price: null }, attribution, env)
     assert.equal(removed.price, null)
+  } finally {
+    await Promise.race([miniflare.dispose(), new Promise(resolve => setTimeout(resolve, 2_000))])
+  }
+})
+
+test('Product imports commit categories and Products atomically, including concurrent conflicts', async () => {
+  const { miniflare, db } = await migratedD1()
+  const attribution = { actorId: 'actor', priceProvenance: 'ai-import' as const }
+  try {
+    for (const rejected of [
+      [{ category: 'New section', name: 'Valid', price: null }, { category: 'x'.repeat(201), name: 'Invalid category', price: null }],
+      [{ category: 'New section', name: 'x'.repeat(241), price: null }],
+    ]) {
+      await assert.rejects(createProductsBatch(db, 'org', 'site', 'secondary', rejected, attribution))
+      assert.equal((await db.prepare("SELECT COUNT(*) count FROM product_categories WHERE location_id = 'secondary'").first<{ count: number }>())?.count, 1)
+      assert.equal((await db.prepare('SELECT COUNT(*) count FROM products').first<{ count: number }>())?.count, 0)
+    }
+
+    const imported = await createProductsBatch(db, 'org', 'site', 'secondary', [
+      { category: 'Small Plates', name: 'One', price: { amount_minor: 100, valid_from: '2026-01-01T00:00:00.000Z' } },
+      { category: 'small-plates', name: 'Two', price: null },
+      { category: 'Small Plates', name: 'Three', price: null },
+    ], attribution)
+    assert.deepEqual(imported.map(product => [product.category.slug, product.sort_order]), [['small-plates', 0], ['small-plates', 1], ['small-plates-2', 0]])
+    assert.equal(imported[0]?.price?.amount_minor, 100)
+
+    const racers = batchBarrierDatabases(db)
+    const outcomes = await Promise.allSettled(racers.map((connection, index) => createProductsBatch(connection, 'org', 'site', 'secondary', [
+      { category: `Import ${index}`, name: `Private ${index}`, price: null },
+      { category: 'Shared section', name: `Shared ${index}`, price: null },
+    ], attribution)))
+    assert.equal(outcomes.filter(outcome => outcome.status === 'fulfilled').length, 1)
+    const winner = outcomes.findIndex(outcome => outcome.status === 'fulfilled')
+    const names = (await db.prepare("SELECT name FROM product_categories WHERE name LIKE 'Import %' OR name = 'Shared section' ORDER BY name").all<{ name: string }>()).results.map(row => row.name)
+    assert.deepEqual(names, [`Import ${winner}`, 'Shared section'])
+    assert.equal((await db.prepare('SELECT COUNT(*) count FROM products').first<{ count: number }>())?.count, 5)
+    assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, [])
+  } finally {
+    await Promise.race([miniflare.dispose(), new Promise(resolve => setTimeout(resolve, 2_000))])
+  }
+})
+
+test('Product catalog localization reads category records from the current schema', async () => {
+  const { miniflare, db } = await migratedD1()
+  try {
+    await seedProduct(db, 'localized-product')
+    await db.prepare("INSERT INTO organization_billing (organization_id, access_plan) VALUES ('org', 'growth')").run()
+    await db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES ('en', 'org', 'site', 'en', 1, 'published'), ('th', 'org', 'site', 'th', 0, 'published')").run()
+    await db.prepare("INSERT INTO platform_locale_catalogs (locale, label, direction, status, source_manifest_hash, created_by_user_id, updated_by_user_id) VALUES ('th', 'Thai', 'ltr', 'available', ?, 'actor', 'actor')").bind(await englishManifestHash()).run()
+    await db.prepare("INSERT INTO site_language_licenses (id, organization_id, site_id, locale, status) VALUES ('license', 'org', 'site', 'th', 'active')").run()
+    const catalog = await getProductCatalogLocalization(db, 'org', 'site', 'th')
+    assert.deepEqual(catalog.products, [{
+      id: 'localized-product', location_id: 'secondary', category_id: 'cat-secondary',
+      category: { id: 'cat-secondary', name: 'Food', slug: 'food', sort_order: 0 },
+      source: { name: 'localized-product', description: '' }, localization: null,
+    }])
   } finally {
     await Promise.race([miniflare.dispose(), new Promise(resolve => setTimeout(resolve, 2_000))])
   }
@@ -284,8 +367,8 @@ test('concurrent Price mutations remain atomic under D1 batch semantics', async 
     let [firstDb, secondDb] = batchBarrierDatabases(db)
     let invalidationsBefore = await countCacheInvalidations(db, 'site')
     const replaceReplaceWinner = await assertOneWinner(
-      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'replace-replace', category: 'Food', name: 'replace-replace-A', price: fixedPrice(11000) }], { actorId: 'actor' }),
-      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'replace-replace', category: 'Food', name: 'replace-replace-B', price: fixedPrice(12000) }], { actorId: 'actor' }),
+      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'replace-replace', category_id: 'cat-secondary', name: 'replace-replace-A', price: fixedPrice(11000) }], { actorId: 'actor' }),
+      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'replace-replace', category_id: 'cat-secondary', name: 'replace-replace-B', price: fixedPrice(12000) }], { actorId: 'actor' }),
     )
     await assertPriceRows(db, 'replace-replace', { total: 2, active: 1, ended: 1, scheduled: 0 })
     await assertWinnerOnly(db, 'replace-replace', replaceReplaceWinner === 0 ? 'replace-replace-A' : 'replace-replace-B')
@@ -297,8 +380,8 @@ test('concurrent Price mutations remain atomic under D1 batch semantics', async 
     ;[firstDb, secondDb] = batchBarrierDatabases(db)
     invalidationsBefore = await countCacheInvalidations(db, 'site')
     const replaceClearWinner = await assertOneWinner(
-      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'replace-clear', category: 'Food', name: 'replace-clear-A', price: fixedPrice(11000) }], { actorId: 'actor' }),
-      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'replace-clear', category: 'Food', name: 'replace-clear-B', price: null }], { actorId: 'actor' }),
+      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'replace-clear', category_id: 'cat-secondary', name: 'replace-clear-A', price: fixedPrice(11000) }], { actorId: 'actor' }),
+      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'replace-clear', category_id: 'cat-secondary', name: 'replace-clear-B', price: null }], { actorId: 'actor' }),
     )
     await assertPriceRows(db, 'replace-clear', replaceClearWinner === 0
       ? { total: 2, active: 1, ended: 1, scheduled: 0 }
@@ -310,8 +393,8 @@ test('concurrent Price mutations remain atomic under D1 batch semantics', async 
     ;[firstDb, secondDb] = batchBarrierDatabases(db)
     invalidationsBefore = await countCacheInvalidations(db, 'site')
     const nullFixedWinner = await assertOneWinner(
-      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'null-fixed', category: 'Food', name: 'null-fixed-A', price: fixedPrice(11000) }], { actorId: 'actor' }),
-      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'null-fixed', category: 'Food', name: 'null-fixed-B', price: fixedPrice(12000) }], { actorId: 'actor' }),
+      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'null-fixed', category_id: 'cat-secondary', name: 'null-fixed-A', price: fixedPrice(11000) }], { actorId: 'actor' }),
+      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'null-fixed', category_id: 'cat-secondary', name: 'null-fixed-B', price: fixedPrice(12000) }], { actorId: 'actor' }),
     )
     await assertPriceRows(db, 'null-fixed', { total: 1, active: 1, ended: 0, scheduled: 0 })
     await assertWinnerOnly(db, 'null-fixed', nullFixedWinner === 0 ? 'null-fixed-A' : 'null-fixed-B')
@@ -321,8 +404,8 @@ test('concurrent Price mutations remain atomic under D1 batch semantics', async 
     ;[firstDb, secondDb] = batchBarrierDatabases(db)
     invalidationsBefore = await countCacheInvalidations(db, 'site')
     const scheduledWinner = await assertOneWinner(
-      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'scheduled', category: 'Food', name: 'scheduled-A', price: fixedPrice(11000, { valid_from: '2030-01-01T00:00:00.000Z', valid_until: '2030-12-01T00:00:00.000Z' }) }], { actorId: 'actor' }),
-      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'scheduled', category: 'Food', name: 'scheduled-B', price: fixedPrice(12000, { valid_from: '2030-06-01T00:00:00.000Z', valid_until: '2031-01-01T00:00:00.000Z' }) }], { actorId: 'actor' }),
+      syncProducts(firstDb, 'org', 'site', 'secondary', [{ product_id: 'scheduled', category_id: 'cat-secondary', name: 'scheduled-A', price: fixedPrice(11000, { valid_from: '2030-01-01T00:00:00.000Z', valid_until: '2030-12-01T00:00:00.000Z' }) }], { actorId: 'actor' }),
+      syncProducts(secondDb, 'org', 'site', 'secondary', [{ product_id: 'scheduled', category_id: 'cat-secondary', name: 'scheduled-B', price: fixedPrice(12000, { valid_from: '2030-06-01T00:00:00.000Z', valid_until: '2031-01-01T00:00:00.000Z' }) }], { actorId: 'actor' }),
     )
     await assertPriceRows(db, 'scheduled', { total: 1, active: 0, ended: 0, scheduled: 1 })
     await assertWinnerOnly(db, 'scheduled', scheduledWinner === 0 ? 'scheduled-A' : 'scheduled-B')
@@ -355,8 +438,8 @@ test('concurrent Price mutations remain atomic under D1 batch semantics', async 
     let ordered = orderedBatchBarrier(db)
     invalidationsBefore = await countCacheInvalidations(db, 'site')
     const [samePriceFirstOutcome, replacementAfterOutcome] = await Promise.allSettled([
-      syncProducts(ordered.earlier, 'org', 'site', 'secondary', [{ product_id: 'same-price-first', category: 'Food', name: 'same-price-first-A', price: fixedPrice(10000) }], { actorId: 'actor' }),
-      syncProducts(ordered.later, 'org', 'site', 'secondary', [{ product_id: 'same-price-first', category: 'Food', name: 'same-price-first-B', price: fixedPrice(15000) }], { actorId: 'actor' }),
+      syncProducts(ordered.earlier, 'org', 'site', 'secondary', [{ product_id: 'same-price-first', category_id: 'cat-secondary', name: 'same-price-first-A', price: fixedPrice(10000) }], { actorId: 'actor' }),
+      syncProducts(ordered.later, 'org', 'site', 'secondary', [{ product_id: 'same-price-first', category_id: 'cat-secondary', name: 'same-price-first-B', price: fixedPrice(15000) }], { actorId: 'actor' }),
     ])
     assert.equal(samePriceFirstOutcome.status, 'fulfilled', JSON.stringify(samePriceFirstOutcome))
     assert.equal(replacementAfterOutcome.status, 'fulfilled', JSON.stringify(replacementAfterOutcome))
@@ -373,8 +456,8 @@ test('concurrent Price mutations remain atomic under D1 batch semantics', async 
     ordered = orderedBatchBarrier(db)
     invalidationsBefore = await countCacheInvalidations(db, 'site')
     const [replacementFirstOutcome, samePriceAfterOutcome] = await Promise.allSettled([
-      syncProducts(ordered.earlier, 'org', 'site', 'secondary', [{ product_id: 'replacement-first', category: 'Food', name: 'replacement-first-B', price: fixedPrice(15000) }], { actorId: 'actor' }),
-      syncProducts(ordered.later, 'org', 'site', 'secondary', [{ product_id: 'replacement-first', category: 'Food', name: 'replacement-first-A', price: fixedPrice(10000) }], { actorId: 'actor' }),
+      syncProducts(ordered.earlier, 'org', 'site', 'secondary', [{ product_id: 'replacement-first', category_id: 'cat-secondary', name: 'replacement-first-B', price: fixedPrice(15000) }], { actorId: 'actor' }),
+      syncProducts(ordered.later, 'org', 'site', 'secondary', [{ product_id: 'replacement-first', category_id: 'cat-secondary', name: 'replacement-first-A', price: fixedPrice(10000) }], { actorId: 'actor' }),
     ])
     assert.equal(replacementFirstOutcome.status, 'fulfilled', JSON.stringify(replacementFirstOutcome))
     assert.equal(samePriceAfterOutcome.status, 'rejected', JSON.stringify(samePriceAfterOutcome))
@@ -399,12 +482,12 @@ test('concurrent Price mutations remain atomic under D1 batch semantics', async 
     invalidationsBefore = await countCacheInvalidations(db, 'site')
     const [atomicityWinnerOutcome, atomicityLoserOutcome] = await Promise.allSettled([
       syncProducts(ordered.earlier, 'org', 'site', 'secondary', [
-        { product_id: 'atomicity-target', category: 'Food', name: 'atomicity-target-winner', price: fixedPrice(20000) },
-        { product_id: 'atomicity-sibling', category: 'Food', name: 'atomicity-sibling', price: null },
+        { product_id: 'atomicity-target', category_id: 'cat-secondary', name: 'atomicity-target-winner', price: fixedPrice(20000) },
+        { product_id: 'atomicity-sibling', category_id: 'cat-secondary', name: 'atomicity-sibling', price: null },
       ], { actorId: 'actor' }),
       syncProducts(ordered.later, 'org', 'site', 'secondary', [
-        { product_id: 'atomicity-sibling', category: 'Food', name: 'atomicity-sibling', price: null, available: false },
-        { product_id: 'atomicity-target', category: 'Food', name: 'atomicity-target-loser', price: fixedPrice(30000) },
+        { product_id: 'atomicity-sibling', category_id: 'cat-secondary', name: 'atomicity-sibling', price: null, available: false },
+        { product_id: 'atomicity-target', category_id: 'cat-secondary', name: 'atomicity-target-loser', price: fixedPrice(30000) },
       ], { actorId: 'actor' }),
     ])
     assert.equal(atomicityWinnerOutcome.status, 'fulfilled', JSON.stringify(atomicityWinnerOutcome))

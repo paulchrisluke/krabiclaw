@@ -797,28 +797,35 @@ export async function getProductCatalogLocalization(
   const rows = await queryAll<{
     id: string
     location_id: string
-    category: string
+    category_id: string
+    category_name: string
+    category_slug: string
+    category_sort_order: number
     name: string
     description: string
     localization_id: string | null
     values_json: string | null
     route_path: string | null
   }>(db, `
-    SELECT p.id, p.location_id, p.category, p.name, p.description,
+    SELECT p.id, p.location_id, p.category_id, pc.name AS category_name,
+           pc.slug AS category_slug, pc.sort_order AS category_sort_order, p.name, p.description,
            rl.id AS localization_id, rl.values_json, rl.route_path
       FROM products p
+      JOIN product_categories pc ON pc.id = p.category_id
       LEFT JOIN resource_localizations rl
         ON rl.organization_id = p.organization_id AND rl.site_id = p.site_id
        AND rl.resource_type = 'product' AND rl.resource_id = p.id AND rl.locale = ?
      WHERE p.organization_id = ? AND p.site_id = ?
-     ORDER BY p.location_id, p.sort_order, p.id
+     ORDER BY p.location_id, pc.sort_order, p.sort_order, p.id
   `, [locale, organizationId, siteId])
   return {
     locale,
     products: rows.map(row => ({
       id: row.id,
       location_id: row.location_id,
-      source: { category: row.category, name: row.name, description: row.description },
+      category_id: row.category_id,
+      category: { id: row.category_id, name: row.category_name, slug: row.category_slug, sort_order: row.category_sort_order },
+      source: { name: row.name, description: row.description },
       localization: row.localization_id
         ? { values: JSON.parse(row.values_json!), route_path: row.route_path }
         : null,

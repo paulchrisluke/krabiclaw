@@ -467,7 +467,8 @@ async function loadPublicPageSource(
       ? [orgId, siteId, locationId ?? '__missing-location__']
       : [orgId, siteId]
     idxProducts = push(
-      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category, p.name, p.slug, p.description,
+      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category_id, p.name, p.slug, p.description,
+              pc.name AS category_name, pc.slug AS category_slug, pc.sort_order AS category_sort_order,
               p.order_url, p.is_visible, p.available, p.featured, p.featured_sort_order, p.sort_order, p.tags_json,
               p.details_json, p.seo_title, p.seo_description, p.canonical_url, p.robots, p.source,
               p.created_at, p.updated_at, p.created_by, p.updated_by,
@@ -475,10 +476,11 @@ async function loadPublicPageSource(
               pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
               pr.created_by AS price_created_by, pr.created_at AS price_created_at
          FROM products p
+         JOIN product_categories pc ON pc.id = p.category_id
          LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
            AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard' AND p.is_visible = 1 ${locationClause.replace('location_id', 'p.location_id')}
-        ORDER BY p.location_id, p.sort_order, p.id`,
+        ORDER BY p.location_id, pc.sort_order, p.sort_order, p.id`,
       productParams,
     )
 

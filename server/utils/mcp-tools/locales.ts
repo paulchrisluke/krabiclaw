@@ -3,7 +3,7 @@ import { siteTool } from './shared'
 
 const localizedValuesSchema = {
   type: 'object',
-  description: 'Localized scalar values. Allowed fields depend on resource_type.',
+  description: 'Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.',
   additionalProperties: true,
 } as const
 
@@ -88,7 +88,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_product_catalog_localization',
-    description: 'List canonical Product IDs and their existing localization for one licensed secondary locale so a batch can be prepared.',
+    description: 'List canonical Product IDs, category_id and category records, source Product fields, and existing Product localizations for one licensed secondary locale. Localize category names separately with get_resource_localization and put_resource_localization using resource_type product_category, resource_id category_id, and values { name }.',
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: false,

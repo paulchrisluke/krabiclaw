@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
+import { buildSeedExperienceCategories } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -1049,13 +1050,22 @@ UPDATE sites SET primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.
 
 export function renderCompiledPotteryHouseExperiencesBlock(): string {
   const experienceMedia = compiledPotteryHouseSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const { categories: experienceCategories, categoryIdForLocation, sortOrderFor } = buildSeedExperienceCategories(compiledPotteryHouseSeed.experiences, compiledPotteryHouseSeed.identity)
+  const experienceCategoryRows = experienceCategories
+    .map(category => `  (${[
+      sqlValue(category.id), sqlValue(category.organizationId), sqlValue(category.siteId),
+      sqlValue(category.locationId), sqlValue('experience'), sqlValue(category.name),
+      sqlValue(category.slug), sqlValue(category.sortOrder),
+      sqlValue('seed:pottery-house'), sqlValue('seed:pottery-house'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceProductRows = compiledPotteryHouseSeed.experiences
     .map(experience => `  (${[
       sqlValue(experience.id), sqlValue(experience.organizationId), sqlValue(experience.siteId),
-      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue(categoryIdForLocation(experience.locationId)),
       sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
       sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
-      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(sortOrderFor(experience.id)),
       sqlValue('[]'), sqlValue('[]'), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
       sqlValue('template'), sqlValue('seed:pottery-house'), sqlValue('seed:pottery-house'),
     ].join(', ')})`)
@@ -1105,8 +1115,13 @@ ${experienceMedia
 
   return `-- BEGIN GENERATED: pottery_experiences
 -- Experiences for Pottery House Krabi.
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${experienceCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
    seo_title, seo_description, source, created_by, updated_by)
 VALUES

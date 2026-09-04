@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "023e6885-0229-4b59-9171-42ee2eddb548",
+  "id": "25b85b58-8733-4f1e-9ae5-1013be7630ed",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -9651,6 +9651,219 @@
         }
       }
     },
+    "product_categories": {
+      "name": "product_categories",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "product_type": {
+          "name": "product_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'standard'"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "product_categories_location_type_sort_idx": {
+          "name": "product_categories_location_type_sort_idx",
+          "columns": [
+            "site_id",
+            "location_id",
+            "product_type",
+            "sort_order"
+          ],
+          "isUnique": false
+        },
+        "product_categories_scope_id_unique": {
+          "name": "product_categories_scope_id_unique",
+          "columns": [
+            "organization_id",
+            "site_id",
+            "location_id",
+            "product_type",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "product_categories_location_type_slug_unique": {
+          "name": "product_categories_location_type_slug_unique",
+          "columns": [
+            "site_id",
+            "location_id",
+            "product_type",
+            "slug"
+          ],
+          "isUnique": true
+        },
+        "product_categories_location_type_name_unique": {
+          "name": "product_categories_location_type_name_unique",
+          "columns": [
+            "site_id",
+            "location_id",
+            "product_type",
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "product_categories_organization_id_organization_id_fk": {
+          "name": "product_categories_organization_id_organization_id_fk",
+          "tableFrom": "product_categories",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "product_categories_site_id_sites_id_fk": {
+          "name": "product_categories_site_id_sites_id_fk",
+          "tableFrom": "product_categories",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "product_categories_location_id_business_locations_id_fk": {
+          "name": "product_categories_location_id_business_locations_id_fk",
+          "tableFrom": "product_categories",
+          "tableTo": "business_locations",
+          "columnsFrom": [
+            "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "product_categories_location_scope_fk": {
+          "name": "product_categories_location_scope_fk",
+          "tableFrom": "product_categories",
+          "tableTo": "business_locations",
+          "columnsFrom": [
+            "organization_id",
+            "site_id",
+            "location_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "site_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "product_categories_name_not_blank_check": {
+          "name": "product_categories_name_not_blank_check",
+          "value": "trim(\"product_categories\".\"name\") <> ''"
+        },
+        "product_categories_slug_check": {
+          "name": "product_categories_slug_check",
+          "value": "\"product_categories\".\"slug\" <> '' AND \"product_categories\".\"slug\" = lower(\"product_categories\".\"slug\") AND \"product_categories\".\"slug\" NOT GLOB '*[^a-z0-9-]*' AND \"product_categories\".\"slug\" NOT LIKE '-%' AND \"product_categories\".\"slug\" NOT LIKE '%-' AND \"product_categories\".\"slug\" NOT LIKE '%--%'"
+        },
+        "product_categories_sort_order_check": {
+          "name": "product_categories_sort_order_check",
+          "value": "\"product_categories\".\"sort_order\" >= 0"
+        },
+        "product_categories_type_check": {
+          "name": "product_categories_type_check",
+          "value": "\"product_categories\".\"product_type\" IN ('standard', 'experience')"
+        }
+      }
+    },
     "products": {
       "name": "products",
       "columns": {
@@ -9690,8 +9903,8 @@
           "autoincrement": false,
           "default": "'standard'"
         },
-        "category": {
-          "name": "category",
+        "category_id": {
+          "name": "category_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -9849,6 +10062,24 @@
         }
       },
       "indexes": {
+        "products_category_sort_order_idx": {
+          "name": "products_category_sort_order_idx",
+          "columns": [
+            "category_id",
+            "sort_order"
+          ],
+          "isUnique": false
+        },
+        "products_site_location_type_sort_order_idx": {
+          "name": "products_site_location_type_sort_order_idx",
+          "columns": [
+            "site_id",
+            "location_id",
+            "product_type",
+            "sort_order"
+          ],
+          "isUnique": false
+        },
         "products_site_location_visible_sort_idx": {
           "name": "products_site_location_visible_sort_idx",
           "columns": [
@@ -9893,16 +10124,6 @@
             "site_id",
             "location_id",
             "slug"
-          ],
-          "isUnique": true
-        },
-        "products_site_location_type_sort_order_unique": {
-          "name": "products_site_location_type_sort_order_unique",
-          "columns": [
-            "site_id",
-            "location_id",
-            "product_type",
-            "sort_order"
           ],
           "isUnique": true
         }
@@ -9963,15 +10184,32 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "products_category_scope_fk": {
+          "name": "products_category_scope_fk",
+          "tableFrom": "products",
+          "tableTo": "product_categories",
+          "columnsFrom": [
+            "organization_id",
+            "site_id",
+            "location_id",
+            "product_type",
+            "category_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "site_id",
+            "location_id",
+            "product_type",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "products_category_not_blank_check": {
-          "name": "products_category_not_blank_check",
-          "value": "trim(\"products\".\"category\") <> ''"
-        },
         "products_name_not_blank_check": {
           "name": "products_name_not_blank_check",
           "value": "trim(\"products\".\"name\") <> ''"
@@ -17107,7 +17345,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 0
+          "default": false
         },
         "image": {
           "name": "image",

@@ -3,7 +3,7 @@ import { execute, type DbClient } from '~/server/db'
 export type OrganizationEventType =
   | 'contact.created' | 'post.created' | 'post.published'
   | 'product.created' | 'product.updated' | 'product.deleted' | 'product.reordered'
-  | 'product.category_renamed' | 'product.category_deleted'
+  | 'product.category_created' | 'product.category_renamed' | 'product.category_deleted'
   | 'content.updated' | 'content.published' | 'media.uploaded' | 'media.deleted'
   | 'review.received' | 'review.replied'
   | 'reservation.created' | 'reservation.confirmed' | 'reservation.cancelled'

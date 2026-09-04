@@ -75,7 +75,9 @@ guards or change expected history to make an upgrade pass.
 
 ## Preview
 
-- Preview is disposable.
+- Preview is disposable. It is reset in place for an ordinary migration change
+  **and for a database epoch** — an epoch reprovisions staging and production
+  because they hold rollback state, and preview holds none.
 - When an in-flight migration changes after preview has applied it, reset the existing preview database in place using the repository command, replay the complete migration chain, and reseed.
 - Never alter `d1_migrations` manually.
 - Never patch preview schema manually.

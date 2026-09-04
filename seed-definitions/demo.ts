@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedProductDefinition, CuratedSiteDefinition } from './contracts.ts'
+import { buildSeedExperienceCategories, buildSeedProductCategories } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -1414,6 +1415,21 @@ ${reviewRows};
 }
 
 export function renderCompiledDemoProductsBlock(): string {
+  const { categories, categoryIdByProductId, sortOrderByProductId } = buildSeedProductCategories(compiledDemoSeed.products)
+  const productCategoryRows = categories
+    .map(category => `  (${[
+      sqlValue(category.id),
+      sqlValue(category.organizationId),
+      sqlValue(category.siteId),
+      sqlValue(category.locationId),
+      sqlValue('standard'),
+      sqlValue(category.name),
+      sqlValue(category.slug),
+      sqlValue(category.sortOrder),
+      sqlValue('seed:demo'),
+      sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
   const productRows = compiledDemoSeed.products
     .map((product) => `  (${[
       sqlValue(product.id),
@@ -1421,7 +1437,7 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue(product.siteId),
       sqlValue(product.locationId),
       sqlValue('standard'),
-      sqlValue(product.category),
+      sqlValue(categoryIdByProductId.get(product.id)!),
       sqlValue(product.name),
       sqlValue(product.slug),
       sqlValue(product.description),
@@ -1429,7 +1445,7 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue(product.available),
       sqlValue(product.featured),
       sqlValue(product.featuredSortOrder),
-      sqlValue(product.sortOrder),
+      sqlValue(sortOrderByProductId.get(product.id)!),
       sqlJson([]),
       sqlJson([
         ...(product.allergens ? [{ key: 'allergens', label: 'Allergens', values: JSON.parse(product.allergens) }] : []),
@@ -1470,8 +1486,13 @@ ${productMediaRows};`
     : ''
 
   return `-- BEGIN GENERATED: demo_products
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${productCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order,
    tags_json, details_json, source, created_by, updated_by)
 VALUES
@@ -1631,13 +1652,22 @@ VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL
 
 export function renderDemoExperienceSeedBlock(): string {
   const experienceMedia = compiledDemoSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const { categories: experienceCategories, categoryIdForLocation, sortOrderFor } = buildSeedExperienceCategories(compiledDemoSeed.experiences, compiledDemoSeed.identity)
+  const experienceCategoryRows = experienceCategories
+    .map(category => `  (${[
+      sqlValue(category.id), sqlValue(category.organizationId), sqlValue(category.siteId),
+      sqlValue(category.locationId), sqlValue('experience'), sqlValue(category.name),
+      sqlValue(category.slug), sqlValue(category.sortOrder),
+      sqlValue('seed:demo'), sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceProductRows = compiledDemoSeed.experiences
     .map(experience => `  (${[
       sqlValue(experience.id), sqlValue(experience.organizationId), sqlValue(experience.siteId),
-      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue(categoryIdForLocation(experience.locationId)),
       sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
       sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
-      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(sortOrderFor(experience.id)),
       sqlJson([]), sqlJson([]), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
       sqlValue('template'), sqlValue('seed:demo'), sqlValue('seed:demo'),
     ].join(', ')})`)
@@ -1696,8 +1726,13 @@ ${experienceMedia
 
   return `-- BEGIN GENERATED: demo_experiences
 -- Hybrid restaurant + experiences showcase for the platform demo.
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${experienceCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
    seo_title, seo_description, source, created_by, updated_by)
 VALUES

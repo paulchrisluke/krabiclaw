@@ -39,13 +39,20 @@ test('deployed MCP transport preserves an explicit no-fixed-price Product', asyn
   })
   const locationId = mcpData<{ id: string }>(await locationResponse.json()).id
 
+  const categoryResponse = await mcpRequest(request, baseURL!, {
+    method: 'tools/call',
+    toolName: 'create_product_category',
+    args: { site_id: siteId, location_id: locationId, name: 'Sushi' },
+  })
+  const categoryId = mcpData<{ category: { id: string } }>(await categoryResponse.json()).category.id
+
   const create = await mcpRequest(request, baseURL!, {
     method: 'tools/call',
     toolName: 'create_product',
     args: {
       site_id: siteId,
       location_id: locationId,
-      category: 'Sushi',
+      category_id: categoryId,
       name: 'Chef\'s Choice',
       price: null,
       details: [{ key: 'price-note', label: 'Price', values: ['Market Price'] }],
@@ -63,7 +70,7 @@ test('deployed MCP transport preserves an explicit no-fixed-price Product', asyn
     args: {
       site_id: siteId,
       location_id: locationId,
-      category: 'Sushi',
+      category_id: categoryId,
       name: 'Salmon Roll',
       price: { amount_minor: 500 },
     },
