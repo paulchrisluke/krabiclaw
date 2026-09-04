@@ -34,9 +34,12 @@ function cfImg(cloudflareImageId: string, slug: string, mimeType: 'image/jpeg' |
 }
 
 const aoNangProducts: Array<Omit<CuratedProductDefinition, 'locationId'>> = [
+  // Soup and Salad
+  { id: 'item-kiku-donbin-mushi', category: 'Soup and Salad', name: 'Donbin Mushi Mixed Seafood Soup', slug: 'donbin-mushi-mixed-seafood-soup', description: 'Mixed seafood soup served in a traditional donbin pot.', priceAmount: 280, media: [], allergens: null, dietaryNotes: null, available: true, sortOrder: 0, featured: true, featuredSortOrder: 1 },
+  { id: 'item-kiku-miso-soup', category: 'Soup and Salad', name: 'Miso Soup', slug: 'miso-soup', description: 'Traditional Japanese soybean paste soup with tofu and wakame.', priceAmount: 60, media: [], allergens: null, dietaryNotes: null, available: true, sortOrder: 1, featured: true, featuredSortOrder: 2 },
   // Sushi
-  { id: 'item-kiku-tuna-sushi', category: 'Sushi', name: 'Tuna Sushi', slug: 'tuna-sushi', description: 'Tuna', priceAmount: 75, media: [{ asset_id: 'media-kiku-tuna-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-  { id: 'item-kiku-salmon-sushi', category: 'Sushi', name: 'Salmon Sushi', slug: 'salmon-sushi', description: 'Salmon', priceAmount: 65, media: [{ asset_id: 'media-kiku-salmon-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tuna-sushi', category: 'Sushi', name: 'Tuna Sushi', slug: 'tuna-sushi', description: 'Tuna', priceAmount: 75, media: [{ asset_id: 'media-kiku-tuna-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0, featured: true, featuredSortOrder: 3 },
+  { id: 'item-kiku-salmon-sushi', category: 'Sushi', name: 'Salmon Sushi', slug: 'salmon-sushi', description: 'Salmon', priceAmount: 65, media: [{ asset_id: 'media-kiku-salmon-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0, featured: true, featuredSortOrder: 4 },
   { id: 'item-kiku-chutoro-sushi', category: 'Sushi', name: 'Chutoro Sushi', slug: 'chutoro-sushi', description: 'Medium-fatty bluefin tuna', priceAmount: 210, media: [{ asset_id: 'media-kiku-chutoro-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
   { id: 'item-kiku-ama-ebi-sushi', category: 'Sushi', name: 'Ama Ebi Sushi', slug: 'ama-ebi-sushi', description: 'Sweet shrimp', priceAmount: 100, media: [{ asset_id: 'media-kiku-ama-ebi-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
   { id: 'item-kiku-a4-beef-sushi-tamago', category: 'Sushi', name: 'A4 Beef Sushi Tamago', slug: 'a4-beef-sushi-tamago', description: 'A4 wagyu beef with egg', priceAmount: 300, media: [{ asset_id: 'media-kiku-a4-beef-sushi-tamago', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
@@ -807,8 +810,8 @@ export function renderKikuzukiProductsBlock(): string {
       sqlValue(product.description),
       sqlValue(true),
       sqlValue(product.available),
-      sqlValue(false),
-      sqlValue(0),
+      sqlValue(product.featured),
+      sqlValue(product.featuredSortOrder),
       sqlValue(product.sortOrder),
       sqlJson([]),
       sqlJson([

@@ -204,6 +204,8 @@ export interface CuratedProductDefinition {
   dietaryNotes: string | null
   available: boolean
   sortOrder: number
+  featured?: boolean
+  featuredSortOrder?: number
 }
 
 export interface CuratedLocationQaDefinition {
@@ -368,6 +370,8 @@ export interface CompiledSeedProduct {
   dietaryNotes: string | null
   available: boolean
   sortOrder: number
+  featured: boolean
+  featuredSortOrder: number
 }
 
 export interface CompiledSeedLocationQa {

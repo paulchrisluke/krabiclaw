@@ -432,6 +432,8 @@ const featuredProductItems = computed(() => {
     .slice(0, 4)
     .map(product => ({
       name: product.name,
+      category: product.category,
+      description: product.description,
       price: formatProductPriceLabel(product),
       compareAtPrice: product.price?.compare_at_amount_minor
         ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })

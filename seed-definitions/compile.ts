@@ -192,6 +192,8 @@ export function compileCuratedSiteFixture(
       dietaryNotes: product.dietaryNotes,
       available: product.available,
       sortOrder: product.sortOrder,
+      featured: product.featured ?? false,
+      featuredSortOrder: product.featuredSortOrder ?? 0,
     }
   })
 
