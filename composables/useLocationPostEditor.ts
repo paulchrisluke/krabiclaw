@@ -86,7 +86,11 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
       slug: form.slug,
       seo_title: form.seo_title,
       seo_description: form.seo_description,
-      media: form.media.map(item => ({ asset_id: item.asset_id, slot: item.slot, alt_text: item.alt_text })),
+      // A freshly added gallery row has no asset yet; sending it would write a
+      // placement with an empty asset_id.
+      media: form.media
+        .filter(item => item.asset_id)
+        .map(item => ({ asset_id: item.asset_id, slot: item.slot, alt_text: item.alt_text })),
     })
   }
 
@@ -140,8 +144,10 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
       })
     }
 
-    const originalGalleryIds = new Set(originalMedia.filter(item => item.slot === 'gallery').map(item => item.asset_id))
-    const currentGalleryIds = new Set(form.media.filter(item => item.slot === 'gallery').map(item => item.asset_id))
+    const originalGallery = originalMedia.filter(item => item.slot === 'gallery').map(item => item.asset_id).filter(Boolean)
+    const currentGallery = form.media.filter(item => item.slot === 'gallery').map(item => item.asset_id).filter(Boolean)
+    const originalGalleryIds = new Set(originalGallery)
+    const currentGalleryIds = new Set(currentGallery)
     const placement = { owner_type: 'post', owner_id: postId, slot: 'gallery' }
     for (const assetId of originalGalleryIds) {
       if (currentGalleryIds.has(assetId)) continue
@@ -153,6 +159,19 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
       if (originalGalleryIds.has(assetId)) continue
       await dashboardApi(`/api/editor/sites/${siteId}/media/placements/attach`, {
         method: 'POST', body: { placement, asset_id: assetId }, validate: isPlacementResponse,
+      })
+    }
+
+    // Attach and remove do not carry order, and the post PATCH excludes media,
+    // so without this a reorder looks saved and comes back in its old order.
+    const orderChanged = currentGallery.length > 1
+      && currentGallery.some((assetId, index) => originalGallery[index] !== assetId)
+    if (orderChanged) {
+      const moves = currentGallery.map((assetId, index) => index === currentGallery.length - 1
+        ? { asset_id: assetId }
+        : { asset_id: assetId, before_asset_id: currentGallery[index + 1]! })
+      await dashboardApi(`/api/editor/sites/${siteId}/media/placements/reorder`, {
+        method: 'POST', body: { placement, moves: moves.reverse() }, validate: isPlacementResponse,
       })
     }
   }

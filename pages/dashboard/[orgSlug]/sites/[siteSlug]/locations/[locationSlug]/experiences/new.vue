@@ -38,7 +38,7 @@
             You'll land on this experience's own page, where photos, pricing, duration and
             capacity, time slots, its booking policy and translations are each a section you
             can fill in. It goes on your site straight away — set its status to Inactive
-            under Duration and capacity if you'd rather finish it first.
+            under Details if you'd rather finish it first.
           </p>
         </div>
       </div>

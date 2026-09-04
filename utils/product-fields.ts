@@ -100,7 +100,10 @@ export function fromProductDetailDrafts(drafts: readonly ProductDetailDraft[]): 
 
     // A key saved before this editor existed may not match what we would derive
     // today, so it is kept as-is unless it is unusable.
-    const existing = draft.key && PRODUCT_DETAIL_KEY.test(draft.key) && draft.key !== PRICE_NOTE_KEY
+    const existing = draft.key
+      && PRODUCT_DETAIL_KEY.test(draft.key)
+      && draft.key.length <= PRODUCT_LIMITS.detailKey
+      && draft.key !== PRICE_NOTE_KEY
       ? draft.key
       : null
     const key = uniqueKey(existing ?? deriveDetailKey(label), taken)

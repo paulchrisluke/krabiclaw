@@ -58,7 +58,7 @@
 
     <div v-else-if="!loadError && filteredAssets.length === 0" class="py-10 text-center">
       <UIcon name="i-lucide-image" class="mx-auto size-8 text-muted" />
-      <p class="mt-3 text-sm text-muted">No media yet. Upload your first image.</p>
+      <p class="mt-3 text-sm text-muted">No media yet. Upload your first file.</p>
     </div>
 
     <div v-else class="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-6 overflow-y-auto max-h-80">

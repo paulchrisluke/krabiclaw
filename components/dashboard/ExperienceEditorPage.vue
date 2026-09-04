@@ -413,7 +413,7 @@ import {
   useExperienceEditor,
 } from '~/composables/useExperienceEditor'
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
-import { formatMinorAmount } from '~/shared/prices'
+import { formatMinorAmount, majorAmountToMinor } from '~/shared/prices'
 import type { CurrencyCode } from '~/shared/currencies'
 import { getErrorMessage } from '~/utils/errors'
 
@@ -496,6 +496,13 @@ const { data, error, refresh } = await useAsyncData(
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Could not load this experience') : null))
 
+// The list validator only asserts `id`, so a slug can be missing. A localization
+// route built on an empty slug would publish `/th/experiences/`.
+const experienceSlug = computed(() => {
+  const slug = data.value?.experience.slug
+  return typeof slug === 'string' && slug.trim() ? slug : ''
+})
+
 watch(data, value => {
   if (!value) return
   editor.loadFrom(value.experience)
@@ -531,28 +538,45 @@ const managedPhotos = computed(() => editor.form.media
     kind: item.kind,
   })))
 
+// Photo edits save as you act, so they queue: each save reads form.media and
+// reconciles against originalMediaIds, and two in flight would let the older
+// response remove an asset the newer one just added.
+let photoWrites: Promise<unknown> = Promise.resolve()
+
+function queuePhotoWrite(mutate: () => void) {
+  photoWrites = photoWrites
+    .then(() => {
+      mutate()
+      return editor.save(experienceId.value)
+    })
+    .catch(() => undefined)
+}
+
 function addPhoto(assetId: string) {
-  if (editor.form.media.some(item => item.asset_id === assetId)) return
-  editor.addMedia()
-  editor.setMediaAsset(editor.form.media.length - 1, {
-    asset_id: assetId, public_url: null, thumbnail_url: null, kind: 'image',
+  queuePhotoWrite(() => {
+    if (editor.form.media.some(item => item.asset_id === assetId)) return
+    editor.addMedia()
+    editor.setMediaAsset(editor.form.media.length - 1, {
+      asset_id: assetId, public_url: null, thumbnail_url: null, kind: 'image',
+    })
   })
-  void editor.save(experienceId.value)
 }
 
 function removePhotos(assetIds: string[]) {
-  const drop = new Set(assetIds)
-  editor.form.media = editor.form.media.filter(item => !item.asset_id || !drop.has(item.asset_id))
-  void editor.save(experienceId.value)
+  queuePhotoWrite(() => {
+    const drop = new Set(assetIds)
+    editor.form.media = editor.form.media.filter(item => !item.asset_id || !drop.has(item.asset_id))
+  })
 }
 
 function reorderPhotos(assetIds: string[]) {
-  const byId = new Map(editor.form.media.map(item => [item.asset_id, item]))
-  editor.form.media = assetIds.flatMap(assetId => {
-    const item = byId.get(assetId)
-    return item ? [item] : []
+  queuePhotoWrite(() => {
+    const byId = new Map(editor.form.media.map(item => [item.asset_id, item]))
+    editor.form.media = assetIds.flatMap(assetId => {
+      const item = byId.get(assetId)
+      return item ? [item] : []
+    })
   })
-  void editor.save(experienceId.value)
 }
 
 // ── Hub rows ────────────────────────────────────────────
@@ -563,8 +587,10 @@ function listSummary(values: string[], empty: string) {
 
 const priceSummary = computed(() => {
   if (editor.form.price_major !== null) {
-    const minor = Math.round(editor.form.price_major * 100)
     try {
+      // Not price_major * 100: JPY and VND are zero-decimal, so the multiplier
+      // is currency-dependent and majorAmountToMinor owns that rule.
+      const minor = majorAmountToMinor(String(editor.form.price_major), currency.value as CurrencyCode)
       return formatMinorAmount(minor, currency.value as CurrencyCode)
     } catch {
       return String(editor.form.price_major)
@@ -778,6 +804,10 @@ watch(translationLocale, () => {
 
 async function saveTranslation() {
   if (translationLocale.value === 'en') return
+  if (!experienceSlug.value) {
+    translationError.value = 'This experience has no slug yet, so its translated page has no address. Save it once in English first.'
+    return
+  }
   translationSaving.value = true
   translationError.value = null
   try {
@@ -790,7 +820,7 @@ async function saveTranslation() {
 
     await dashboardApi(`/api/editor/sites/${siteId}/localization/experience/${experienceId.value}/${encodeURIComponent(translationLocale.value)}`, {
       method: 'PUT',
-      body: { values, route_path: `/${translationLocale.value}/experiences/${data.value?.experience.slug ?? ''}` },
+      body: { values, route_path: `/${translationLocale.value}/experiences/${experienceSlug.value}` },
       validate: isRecord,
     })
     await savePolicyTranslation()

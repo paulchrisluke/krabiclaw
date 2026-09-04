@@ -76,7 +76,14 @@ export function matchBookingPolicyPreset(policy: BookingPolicyPatch | null | und
   if (!policy) return null
   const minutes = policy.free_cancellation_until_minutes
   if (minutes === null || minutes === undefined) return null
-  return BOOKING_POLICY_PRESETS.find(preset => preset.freeCancellationUntilMinutes === minutes) ?? null
+  // Every field the preset owns has to agree. Matching on the cutoff alone
+  // would report "Flexible" for a policy that cancels at 24 hours but forbids
+  // rescheduling — and then silently rewrite the reschedule rule on save.
+  return BOOKING_POLICY_PRESETS.find(preset => (
+    preset.freeCancellationUntilMinutes === minutes
+    && Boolean(preset.rescheduleAllowed) === Boolean(policy.reschedule_allowed)
+    && (preset.rescheduleCutoffMinutes ?? null) === (policy.reschedule_cutoff_minutes ?? null)
+  )) ?? null
 }
 
 /** The fields a preset owns, to merge over whatever else the policy carries. */
