@@ -53,13 +53,13 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
 const { settingsPath: orgSettingsPath, groups, activeItem } = useOrganizationSettingsNavigation()
-const { paths } = useDashboardSiteLinks()
+const { orgPaths } = useDashboardSiteLinks()
 
 // The navbar's back leaves settings for the menu that opened it. The open
 // section's own way out is the sheet's close control, which lands on the index
 // beside it — at `lg` that index is already on screen, so the navbar has no
 // reason to point at it.
-const levelBackTo = computed(() => `${paths.value.org}/menu`)
+const levelBackTo = computed(() => `${orgPaths.value.org}/menu`)
 
 // Leaving a section resets the form. This used to hang off the back button's
 // click handler, which meant browser back left the previous section's edits in

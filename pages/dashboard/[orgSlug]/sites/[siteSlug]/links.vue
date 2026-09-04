@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Links page">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
+          <DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" />
         </template>
         <template #right>
           <div class="flex items-center gap-2">
@@ -170,7 +170,7 @@ import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDia
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.links' })
 
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 type ItemStatus = 'active' | 'hidden'
