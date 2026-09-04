@@ -81,7 +81,9 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       pageType: value.socialType || value.pageType || 'website',
       canonicalUrl,
     }
-    const sourceImage = value.socialImage ?? null
+    const sourceImage = Object.hasOwn(value, 'socialImage')
+      ? value.socialImage ?? null
+      : tenant.site?.social_image ?? null
     const resolvedImage = sourceImage
       ? { ...sourceImage, url: resolveSeoUrl(sourceImage.url, origin), alt: sourceImage.alt || value.title }
       : null
