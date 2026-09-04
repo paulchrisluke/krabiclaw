@@ -35,6 +35,7 @@ pr_body.txt
 /watch-*.mjs
 
 # AI tool local state (like .claude/ — never commit)
+/.agents/skills/
 .codex/*
 !.codex/config.toml
 !.codex/hooks/

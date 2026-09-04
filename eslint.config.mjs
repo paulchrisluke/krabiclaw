@@ -49,5 +49,29 @@ export default withNuxt(
       'vue/no-v-text-v-html-on-component': 'error',
       'vue/require-default-prop': 'off'
     }
+  },
+  {
+    files: [
+      'components/**/*.{js,mjs,ts,vue}',
+      'composables/**/*.{js,mjs,ts}',
+      'config/**/*.{js,mjs,ts}',
+      'layouts/**/*.{js,mjs,ts,vue}',
+      'lib/**/*.{js,mjs,ts}',
+      'middleware/**/*.{js,mjs,ts}',
+      'pages/**/*.{js,mjs,ts,vue}',
+      'plugins/**/*.{js,mjs,ts}',
+      'server/**/*.{js,mjs,ts}',
+      'shared/**/*.{js,mjs,ts}',
+      'types/**/*.{js,mjs,ts}',
+      'utils/**/*.{js,mjs,ts}'
+    ],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['**/config/development-auth-fixtures', '**/config/development-auth-fixtures.*'],
+          message: 'Development auth fixtures belong to scripts and tests; production code must use Better Auth runtime contracts.'
+        }]
+      }]
+    }
   }
 )

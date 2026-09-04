@@ -162,20 +162,10 @@ async function main() {
   }
 
   console.log('# Preparing local D1 and the versioned widget asset')
-  await runYarn(['local:setup'], preparationEnv)
-  const localCredentials = values
-  if (runChatGPTGate) {
-    const localEmail = process.env.LOCAL_MCP_TEST_EMAIL || localCredentials.get('LOCAL_MCP_TEST_EMAIL') || ''
-    const localPassword = process.env.LOCAL_MCP_TEST_PASSWORD || localCredentials.get('LOCAL_MCP_TEST_PASSWORD') || ''
-    await run('node', ['scripts/provision-local-mcp-test-user.mjs'], {
-      ...preparationEnv,
-      LOCAL_MCP_TEST_EMAIL: localEmail,
-      LOCAL_MCP_TEST_PASSWORD: localPassword,
-      MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service',
-    })
-    localCredentials.set('LOCAL_MCP_TEST_EMAIL', localEmail)
-    localCredentials.set('LOCAL_MCP_TEST_PASSWORD', localPassword)
-  }
+  await runYarn(['schema:local'], preparationEnv)
+  await runYarn(['seed:local'], preparationEnv)
+  await run('node', ['--experimental-strip-types', 'scripts/provision-development-auth.ts'], preparationEnv)
+  await runYarn(['fixtures:verify:local'], preparationEnv)
 
   const port = await availablePort()
   const localOrigin = `http://127.0.0.1:${port}`
@@ -213,9 +203,7 @@ async function main() {
     PLAYWRIGHT_WORKERS: '1',
     PORT: String(port),
     MCP_CHATGPT_SITE_ID: process.env.MCP_CHATGPT_SITE_ID || 'site-mcp-growth-service',
-    MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service',
-    LOCAL_MCP_TEST_EMAIL: localCredentials.get('LOCAL_MCP_TEST_EMAIL') || '',
-    LOCAL_MCP_TEST_PASSWORD: localCredentials.get('LOCAL_MCP_TEST_PASSWORD') || '',
+    MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-e2e-growth-service-owner',
   }
 
   console.log('# Building and starting the local Cloudflare Worker')

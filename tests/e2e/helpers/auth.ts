@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
-import { findE2eAuthFixture } from '../../../config/e2e-auth-fixtures'
+import { findE2eAuthFixture } from '../../../config/development-auth-fixtures'
 import { devLoginHeaders } from '../test-env'
 
 export async function loginAs(request: APIRequestContext, baseURL: string, userId?: string) {
