@@ -12,11 +12,11 @@
       <DashboardListEditor
         v-model:editing="editing"
         :title="presentation.collectionLabel"
-        :description="`Group ${presentation.itemLabel.toLowerCase()}s into ${presentation.categoryLabel.toLowerCase()}s. Customers see them in this order.`"
+        :description="`Group ${presentation.itemLabelPlural.toLowerCase()} into ${presentation.categoryLabelPlural.toLowerCase()}. Customers see them in this order.`"
         :items="listItems"
         :pending="pending"
         :error="loadError"
-        :empty-title="`No ${presentation.categoryLabel.toLowerCase()}s yet`"
+        :empty-title="`No ${presentation.categoryLabelPlural.toLowerCase()} yet`"
         empty-icon="i-lucide-layout-list"
         :add-label="`Add a ${presentation.categoryLabel.toLowerCase()}`"
         reorderable
@@ -33,7 +33,7 @@
           -->
           <NuxtLink :to="`${productsPath}/${item.id}`" class="block no-underline" :data-testid="`product-category-${item.id}`">
             <p class="truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</p>
-            <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? `1 ${presentation.itemLabel.toLowerCase()}` : `${item.row.product_count} ${presentation.itemLabel.toLowerCase()}s` }}</p>
+            <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? `1 ${presentation.itemLabel.toLowerCase()}` : `${item.row.product_count} ${presentation.itemLabelPlural.toLowerCase()}` }}</p>
           </NuxtLink>
         </template>
       </DashboardListEditor>
@@ -115,7 +115,7 @@ async function load() {
     for (const product of productResponse.products) counts.set(product.category_id, (counts.get(product.category_id) ?? 0) + 1)
     categories.value = categoryResponse.categories.map(row => ({ ...row, product_count: counts.get(row.id) ?? 0 }))
   } catch (error) {
-    loadError.value = getErrorMessage(error, `Failed to load ${presentation.categoryLabel.toLowerCase()}s`)
+    loadError.value = getErrorMessage(error, `Failed to load ${presentation.categoryLabelPlural.toLowerCase()}`)
   } finally {
     pending.value = false
   }
@@ -158,7 +158,7 @@ async function removeCategory(item: { row: CategoryRow }) {
   if (!id) return
   const count = item.row.product_count
   const warning = count
-    ? `Delete "${item.row.name}" and its ${count} ${count === 1 ? presentation.itemLabel.toLowerCase() : `${presentation.itemLabel.toLowerCase()}s`}?`
+    ? `Delete "${item.row.name}" and its ${count} ${count === 1 ? presentation.itemLabel.toLowerCase() : `${presentation.itemLabelPlural.toLowerCase()}`}?`
     : `Delete "${item.row.name}"?`
   if (!confirm(warning)) return
   removingId.value = item.row.id

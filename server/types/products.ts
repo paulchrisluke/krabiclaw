@@ -143,6 +143,10 @@ export interface ProductPresentation {
   productPath: (_locationSlug: string, _productSlug: string) => string
   collectionLabel: 'Menu' | 'Products'
   itemLabel: 'Dish' | 'Product'
+  // English plurals are irregular enough here ("Dish" -> "Dishes",
+  // "Category" -> "Categories") that appending an "s" produces visible typos.
+  itemLabelPlural: 'Dishes' | 'Products'
   categoryLabel: 'Section' | 'Category'
+  categoryLabelPlural: 'Sections' | 'Categories'
   structuredDataType: 'MenuItem' | 'Product'
 }

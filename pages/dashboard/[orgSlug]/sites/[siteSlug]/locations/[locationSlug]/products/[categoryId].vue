@@ -13,11 +13,11 @@
         v-model:editing="editing"
         v-model:selected="selected"
         :title="category?.name ?? presentation.collectionLabel"
-        :description="`Customers see ${presentation.itemLabel.toLowerCase()}s in this order.`"
+        :description="`Customers see ${presentation.itemLabelPlural.toLowerCase()} in this order.`"
         :items="listItems"
         :pending="pending"
         :error="loadError"
-        :empty-title="`No ${presentation.itemLabel.toLowerCase()}s here yet`"
+        :empty-title="`No ${presentation.itemLabelPlural.toLowerCase()} here yet`"
         empty-icon="i-lucide-utensils"
         :add-label="`Add a ${presentation.itemLabel.toLowerCase()}`"
         reorderable
@@ -44,7 +44,7 @@
            category items belong to, never their order inside one. -->
       <DashboardListItemDialog
         v-model:open="moveDialogOpen"
-        :title="`Move ${selected.length === 1 ? presentation.itemLabel.toLowerCase() : `${selected.length} ${presentation.itemLabel.toLowerCase()}s`}`"
+        :title="`Move ${selected.length === 1 ? presentation.itemLabel.toLowerCase() : `${selected.length} ${presentation.itemLabelPlural.toLowerCase()}`}`"
         :removable="false"
         :saving="moving"
         :save-disabled="!moveTargetId"
@@ -243,7 +243,7 @@ async function load() {
       throw createError({ statusCode: 404, statusMessage: 'Product category not found' })
     }
   } catch (error) {
-    loadError.value = getErrorMessage(error, `Failed to load ${presentation.itemLabel.toLowerCase()}s`)
+    loadError.value = getErrorMessage(error, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`)
   } finally {
     pending.value = false
   }
@@ -312,7 +312,7 @@ async function moveSelected() {
     editing.value = false
     await load()
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to move ${presentation.itemLabel.toLowerCase()}s`), color: 'error' })
+    toast.add({ description: getErrorMessage(error, `Failed to move ${presentation.itemLabelPlural.toLowerCase()}`), color: 'error' })
   } finally {
     moving.value = false
   }
