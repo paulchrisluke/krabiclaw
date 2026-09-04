@@ -47,6 +47,7 @@
     "cloudflare:resources": "node scripts/check-cloudflare-resources.mjs",
     "dev": "nuxt dev",
     "local:setup": "yarn schema:local && yarn seed:local && yarn auth:e2e:local:provision --local-dev && yarn fixtures:verify:local",
+    "dev:login": "node --experimental-strip-types scripts/provision-e2e-auth.ts --local-dev",
     "dev:worker": "yarn build && yarn dev:worker:start",
     "dev:worker:start": "wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000 --live-reload",
     "auth:e2e:local:provision": "node --experimental-strip-types scripts/provision-e2e-auth.ts",
