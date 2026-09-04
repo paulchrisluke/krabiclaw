@@ -492,3 +492,50 @@ export interface SerializedCompiledCuratedSiteBundle
   extends Omit<CompiledCuratedSiteBundle, 'publicRoutes'> {
   publicRoutes: SerializedSeedPublicRouteExpectation[]
 }
+
+export interface CompiledSeedProductCategory {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string
+  name: string
+  slug: string
+  sortOrder: number
+}
+
+/**
+ * Derives the product_categories rows a seed needs from the category names its
+ * Products carry. IDs are derived from the location and slug rather than
+ * generated, so re-running a seed produces the same rows.
+ *
+ * Category order follows first appearance in Product sort order, which is how
+ * the flat pre-category seeds already read on the public site.
+ */
+export function buildSeedProductCategories(
+  products: Pick<CompiledSeedProduct, 'id' | 'organizationId' | 'siteId' | 'locationId' | 'category' | 'sortOrder'>[],
+): { categories: CompiledSeedProductCategory[]; categoryIdByProductId: Map<string, string> } {
+  const categories: CompiledSeedProductCategory[] = []
+  const byKey = new Map<string, CompiledSeedProductCategory>()
+  const categoryIdByProductId = new Map<string, string>()
+  const sortOrderByLocation = new Map<string, number>()
+  for (const product of [...products].sort((a, b) => a.locationId.localeCompare(b.locationId) || a.sortOrder - b.sortOrder)) {
+    const key = `${product.locationId}::${product.category}`
+    let category = byKey.get(key)
+    if (!category) {
+      const slug = product.category
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      if (!slug) throw new Error(`Product category "${product.category}" does not produce a usable slug`)
+      const sortOrder = sortOrderByLocation.get(product.locationId) ?? 0
+      sortOrderByLocation.set(product.locationId, sortOrder + 1)
+      category = { id: `category-${product.locationId}-${slug}`, organizationId: product.organizationId, siteId: product.siteId, locationId: product.locationId, name: product.category, slug, sortOrder }
+      byKey.set(key, category)
+      categories.push(category)
+    }
+    categoryIdByProductId.set(product.id, category.id)
+  }
+  return { categories, categoryIdByProductId }
+}

@@ -14,7 +14,7 @@ const PLATFORM_SITE_ID = 'platform'
 const DELETION_CENSUS = ['client_import_artifacts', 'customer_claims', 'google_place_snapshots', 'platform_analytics']
 const CUSTOM_TABLES = new Set([
   'blog_posts', 'experiences', 'organization_billing', 'organization_events', 'platform_locale_catalogs',
-  'onboarding_drafts', 'platform_locale_messages', 'prices', 'products', 'resource_localizations', 'site_language_licenses',
+  'onboarding_drafts', 'platform_locale_messages', 'prices', 'product_categories', 'products', 'resource_localizations', 'site_language_licenses',
   'site_pageview_events', 'site_redirects',
   'usage_events', 'usage_quota_grants',
 ])
@@ -23,7 +23,7 @@ const BETTER_AUTH_TABLES = [
   'oauthClientResource', 'oauthConsent', 'oauthRefreshToken', 'oauthResource', 'organization', 'session',
   'subscription', 'team', 'teamMember', 'user', 'verification',
 ]
-const RESOURCE_TYPES = new Set(['site', 'business_location', 'product', 'experience', 'offering', 'site_post', 'tenant_blog_post', 'location_qa', 'media_asset', 'booking_policy', 'site_link_page', 'site_link_item', 'tenant_compliance', 'site_consultation_settings'])
+const RESOURCE_TYPES = new Set(['site', 'business_location', 'product', 'product_category', 'experience', 'offering', 'site_post', 'tenant_blog_post', 'location_qa', 'media_asset', 'booking_policy', 'site_link_page', 'site_link_item', 'tenant_compliance', 'site_consultation_settings'])
 const CONTENT_OWNER_TYPES = new Set(['platform_blog', 'platform_doc', 'tenant_blog', 'tenant_page'])
 const CONTENT_BLOCK_TYPES = new Set(['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid'])
 const FRACTION_DIGITS = { THB: 2, USD: 2, EUR: 2, GBP: 2, JPY: 0, AUD: 2, CAD: 2, SGD: 2, HKD: 2, MYR: 2, IDR: 2, PHP: 2, VND: 0, INR: 2 }

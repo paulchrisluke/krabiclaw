@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedProductDefinition, CuratedSiteDefinition } from './contracts.ts'
+import { buildSeedProductCategories } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -1414,6 +1415,21 @@ ${reviewRows};
 }
 
 export function renderCompiledDemoProductsBlock(): string {
+  const { categories, categoryIdByProductId } = buildSeedProductCategories(compiledDemoSeed.products)
+  const productCategoryRows = categories
+    .map(category => `  (${[
+      sqlValue(category.id),
+      sqlValue(category.organizationId),
+      sqlValue(category.siteId),
+      sqlValue(category.locationId),
+      sqlValue('standard'),
+      sqlValue(category.name),
+      sqlValue(category.slug),
+      sqlValue(category.sortOrder),
+      sqlValue('seed:demo'),
+      sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
   const productRows = compiledDemoSeed.products
     .map((product) => `  (${[
       sqlValue(product.id),
@@ -1421,7 +1437,7 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue(product.siteId),
       sqlValue(product.locationId),
       sqlValue('standard'),
-      sqlValue(product.category),
+      sqlValue(categoryIdByProductId.get(product.id)!),
       sqlValue(product.name),
       sqlValue(product.slug),
       sqlValue(product.description),
@@ -1470,8 +1486,13 @@ ${productMediaRows};`
     : ''
 
   return `-- BEGIN GENERATED: demo_products
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${productCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order,
    tags_json, details_json, source, created_by, updated_by)
 VALUES
