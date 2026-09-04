@@ -7,7 +7,7 @@
       inside it — not a field called "late_arrival_grace_minutes".
     -->
     <div
-      v-for="rule in rules"
+      v-for="rule in visibleRules"
       :key="rule.id"
       class="rounded-xl border border-default px-4 py-3"
     >
@@ -43,7 +43,7 @@
     </div>
 
     <UFormField
-      v-if="policyType === 'experience'"
+      v-if="shows('weather') && policyType === 'experience'"
       label="Weather"
       help="Shown to guests as “Weather: …”. Say what happens if it rains."
     >
@@ -56,7 +56,7 @@
       />
     </UFormField>
 
-    <UFormField label="Anything else" help="Shown at the end of the list on your public page.">
+    <UFormField v-if="shows('notes')" label="Anything else" help="Shown at the end of the list on your public page.">
       <UTextarea
         :model-value="value.additional_notes_html ?? ''"
         :rows="3"
@@ -74,6 +74,13 @@ const props = defineProps<{
   modelValue: BookingPolicyPatch
   policyType: 'reservation' | 'experience'
   summary?: RenderedBookingPolicySummary | null
+  /**
+   * Which notes this surface owns. The policy is one row, but its sentences
+   * belong to different parts of the editor — a deposit is a pricing fact, a
+   * minimum age is a guest fact — so each leaf renders its own subset and the
+   * wording still lives in one place.
+   */
+  only?: readonly string[]
 }>()
 
 const emit = defineEmits<{
@@ -91,9 +98,6 @@ function updateString(field: keyof BookingPolicyPatch, next: string | number | n
   patch({ [field]: normalized || null })
 }
 
-function hours(count: number) {
-  return { label: count === 1 ? '1 hour' : `${count} hours`, value: count * 60 }
-}
 function minutes(count: number) {
   return { label: `${count} minutes`, value: count }
 }
@@ -104,16 +108,6 @@ const startWord = computed(() => (props.policyType === 'experience' ? 'the sched
 /** Each rule owns the sentence it produces, so the two cannot drift apart. */
 const rules = computed(() => {
   const list = [
-    {
-      id: 'confirmation',
-      aria: 'Confirmation time',
-      on: Boolean(value.value.host_confirmation_sla_minutes),
-      value: value.value.host_confirmation_sla_minutes ?? 1440,
-      choices: [hours(1), hours(4), hours(12), hours(24)],
-      sentence: `We confirm by email, usually within ${formatDuration(value.value.host_confirmation_sla_minutes ?? 1440)}.`,
-      toggle: (on: boolean) => patch({ host_confirmation_sla_minutes: on ? 1440 : null }),
-      set: (next: number | null) => patch({ host_confirmation_sla_minutes: next }),
-    },
     {
       id: 'late_arrival',
       aria: 'How long the booking is held',
@@ -171,6 +165,12 @@ const rules = computed(() => {
 
   return list
 })
+
+function shows(id: string) {
+  return !props.only || props.only.includes(id)
+}
+
+const visibleRules = computed(() => rules.value.filter(rule => shows(rule.id)))
 
 function formatDuration(totalMinutes: number): string {
   if (totalMinutes % 60 === 0) {

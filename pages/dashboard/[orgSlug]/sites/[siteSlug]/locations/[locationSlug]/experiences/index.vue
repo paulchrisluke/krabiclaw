@@ -30,8 +30,10 @@
         empty-title="No experiences yet"
         empty-icon="i-lucide-ticket"
         add-label="Add an experience"
+        :removing-id="removingId"
         @add="openCreate"
         @open="openExperience"
+        @remove="removeExperience"
       >
         <template #item="{ item }">
           <button
@@ -74,6 +76,7 @@ import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import type { Experience } from '~/server/utils/experiences'
 import { formatMinorAmount } from '~/shared/prices'
 import { getErrorMessage } from '~/utils/errors'
+import { useExperienceEditor } from '~/composables/useExperienceEditor'
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' })
 
@@ -81,10 +84,13 @@ const dashboardApi = useDashboardApi()
 const { locationPaths } = useDashboardSiteLinks()
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
+const dashboard = useDashboardSite()
 
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const experiencesPath = computed(() => locationPaths.value?.experiences ?? '')
 const editing = ref(false)
+const editor = useExperienceEditor(siteId, currentLocationId, computed(() => dashboard.site.value?.default_currency || 'USD'))
+const removingId = ref<string | null>(null)
 
 const isExperiencesResponse = (value: unknown): value is { experiences: Experience[] } =>
   isRecord(value)
@@ -92,7 +98,7 @@ const isExperiencesResponse = (value: unknown): value is { experiences: Experien
   && value.experiences.every(experience => isRecord(experience) && typeof experience.id === 'string')
 
 const requestEvent = useRequestEvent()
-const { data, pending, error } = await useAsyncData(
+const { data, pending, error, refresh } = await useAsyncData(
   computed(() => `dashboard-location-experiences-${siteId}-${currentLocationId.value ?? 'missing'}`),
   async () => {
     const locationId = currentLocationId.value
@@ -114,6 +120,17 @@ const { data, pending, error } = await useAsyncData(
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Could not load experiences') : null))
 const listItems = computed(() => (data.value?.experiences ?? []).map(row => ({ id: row.id, title: row.title, row })))
+
+/** Removal lives in the list's edit state, the way photos and media do it —
+ *  a destructive action is not a section of the thing it destroys. */
+async function removeExperience(item: { row: Experience }) {
+  removingId.value = item.row.id
+  try {
+    if (await editor.remove(item.row.id)) await refresh()
+  } finally {
+    removingId.value = null
+  }
+}
 
 function openCreate() {
   return navigateTo(`${experiencesPath.value}/new`)

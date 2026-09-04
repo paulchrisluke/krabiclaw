@@ -6,6 +6,7 @@
       :items="gridItems"
       :title="title"
       :description="description"
+      :grid-class="gridClass"
       :empty-title="emptyTitle"
       empty-icon="i-lucide-images"
       :add-label="addLabel"
@@ -123,6 +124,8 @@ const props = withDefaults(defineProps<{
   photos: ManagedPhoto[]
   siteId: string
   title: string
+  /** Photos are the point of the surface, so tiles stay large in a narrow pane. */
+  gridClass?: string
   addLabel: string
   emptyTitle: string
   description?: string
@@ -135,6 +138,7 @@ const props = withDefaults(defineProps<{
   max?: number
 }>(), {
   description: undefined,
+  gridClass: 'grid grid-cols-2 gap-3 sm:grid-cols-3',
   locationId: null,
   accept: 'image',
   pending: false,

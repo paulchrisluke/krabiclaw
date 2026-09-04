@@ -47,6 +47,39 @@
             <UFormField label="Description">
               <UTextarea v-model="editor.form.body" :rows="8" class="w-full" />
             </UFormField>
+            <UFormField label="Highlights" help="The few things that make this worth booking.">
+              <UInputTags
+                v-model="editor.form.highlights"
+                placeholder="Hands-on dough stretching with a live instructor"
+                add-on-blur
+                add-on-paste
+                class="w-full"
+              />
+            </UFormField>
+            <UFormField label="Status">
+              <USelect v-model="editor.form.status" :items="statusOptions" class="w-full" />
+            </UFormField>
+            <UCheckbox
+              v-model="editor.form.featured"
+              label="Featured"
+              description="Show on homepage and location pages when no menu exists"
+            />
+            <UFormField v-if="editor.form.featured" label="Featured sort order" help="Lower numbers appear first">
+              <UInputNumber v-model="editor.form.featured_sort_order" :min="0" class="w-full" />
+            </UFormField>
+          </div>
+
+          <!-- Location -->
+          <div v-else-if="editorKey === 'location'" class="space-y-6">
+            <p class="text-base text-muted">Where a guest goes when they arrive.</p>
+            <UFormField label="Meeting point" help="Short arrival or check-in instruction.">
+              <UTextarea
+                v-model="editor.form.meeting_point"
+                :rows="3"
+                placeholder="Meet at the main studio reception 10 minutes before your start time."
+                class="w-full"
+              />
+            </UFormField>
           </div>
 
           <!-- Photos -->
@@ -54,7 +87,7 @@
             <DashboardPhotoManager
               :photos="managedPhotos"
               :site-id="siteId"
-              title="Photos"
+              title=""
               description="The first photo leads on your site."
               add-label="Add photos"
               empty-title="No photos yet"
@@ -75,7 +108,20 @@
             <UFormField label="Inquiry pricing note" help='Used only when no active Price exists, e.g. "Ask us about monthly pricing".'>
               <UInput v-model="editor.form.pricing_note" placeholder="Ask us about pricing" class="w-full" />
             </UFormField>
-            <UFormField label="Compare-at price" :help="`Optional. Regular price in ${currency}, shown struck through when running a sale.`">
+            <BookingPolicyForm
+              v-model="editor.bookingPolicyDraft.value"
+              policy-type="experience"
+              :only="['deposit']"
+            />
+          </div>
+
+          <!-- Discounts -->
+          <div v-else-if="editorKey === 'discounts'" class="space-y-6">
+            <p class="text-base text-muted">
+              Show a higher price struck through while a sale runs. Leave the dates empty to run it
+              until you stop it.
+            </p>
+            <UFormField label="Compare-at price" :help="`The regular price in ${currency}, shown struck through.`">
               <UInputNumber v-model="editor.form.compare_at_major" :min="0" :step="0.01" class="w-full" />
             </UFormField>
             <div class="grid gap-5 sm:grid-cols-2">
@@ -88,33 +134,32 @@
             </div>
           </div>
 
-          <!-- Booking -->
-          <div v-else-if="editorKey === 'booking'" class="space-y-6">
-            <p class="text-base text-muted">How long it runs, how many can come, and whether it is taking bookings.</p>
-            <div class="grid gap-5 sm:grid-cols-2">
-              <UFormField label="Duration (minutes)">
-                <UInputNumber v-model="editor.form.duration_minutes" :min="0" class="w-full" />
-              </UFormField>
-              <UFormField label="Max capacity">
-                <UInputNumber v-model="editor.form.max_capacity" :min="1" class="w-full" />
-              </UFormField>
-            </div>
-            <UFormField label="Status">
-              <USelect v-model="editor.form.status" :items="statusOptions" class="w-full" />
+          <!-- Guests -->
+          <div v-else-if="editorKey === 'guests'" class="space-y-6">
+            <p class="text-base text-muted">Who can come, and how many.</p>
+            <UFormField label="Max capacity" help="The most guests one session can take.">
+              <UInputNumber v-model="editor.form.max_capacity" :min="1" class="w-full" />
             </UFormField>
-            <UCheckbox
-              v-model="editor.form.featured"
-              label="Featured"
-              description="Show on homepage and location pages when no menu exists"
+            <BookingPolicyForm
+              v-model="editor.bookingPolicyDraft.value"
+              policy-type="experience"
+              :only="['minimum_guest_age', 'accessibility']"
             />
-            <UFormField v-if="editor.form.featured" label="Featured sort order" help="Lower numbers appear first">
-              <UInputNumber v-model="editor.form.featured_sort_order" :min="0" class="w-full" />
-            </UFormField>
           </div>
 
-          <!-- Time slots -->
-          <div v-else-if="editorKey === 'slots'" class="space-y-6">
-            <p class="text-base text-muted">The times a guest can choose when they book.</p>
+          <!-- Itinerary -->
+          <div v-else-if="editorKey === 'itinerary'" class="space-y-6">
+            <p class="text-base text-muted">How long it runs, and the times a guest can choose.</p>
+            <UFormField label="Duration (minutes)">
+              <UInputNumber v-model="editor.form.duration_minutes" :min="0" class="w-full" />
+            </UFormField>
+            <UFormField
+              label="When it runs"
+              help="A stable note shown beside the duration, e.g. “Runs weekends”. Remaining capacity is shown automatically from real bookings."
+            >
+              <UInput v-model="editor.form.available_note" class="w-full" />
+            </UFormField>
+            <p class="border-t border-default pt-6 text-sm font-semibold text-highlighted">Times</p>
             <UTabs v-model="editor.slotsMode.value" :items="slotModes" :content="false" />
 
             <UCard :ui="{ body: 'p-4 sm:p-4' }">
@@ -184,36 +229,31 @@
             </template>
           </div>
 
-          <!-- What guests get -->
-          <div v-else-if="editorKey === 'guests'" class="space-y-6">
-            <p class="text-base text-muted">What the experience includes and how a guest should arrive prepared.</p>
-            <UFormField label="Highlights">
-              <UInputTags v-model="editor.form.highlights" placeholder="Hands-on clay shaping" add-on-blur add-on-paste class="w-full" />
-            </UFormField>
+          <!-- What's included -->
+          <div v-else-if="editorKey === 'included'" class="space-y-6">
+            <p class="text-base text-muted">What you provide, and what a guest should bring themselves.</p>
             <UFormField label="What's included">
-              <UInputTags v-model="editor.form.included_items" placeholder="Materials and tools" add-on-blur add-on-paste class="w-full" />
-            </UFormField>
-            <UFormField label="What to bring">
-              <UInputTags v-model="editor.form.what_to_bring" placeholder="Comfortable clothes" add-on-blur add-on-paste class="w-full" />
-            </UFormField>
-            <UFormField label="Meeting point" help="Short arrival or check-in instruction.">
-              <UTextarea
-                v-model="editor.form.meeting_point"
-                :rows="3"
-                placeholder="Meet at the main studio reception 10 minutes before your start time."
+              <UInputTags
+                v-model="editor.form.included_items"
+                placeholder="Materials and tools"
+                add-on-blur
+                add-on-paste
                 class="w-full"
               />
             </UFormField>
-            <UFormField
-              label="Availability note"
-              help="Stable note shown on the listing, e.g. 'Runs weekends'. Remaining capacity is shown automatically from real bookings."
-            >
-              <UInput v-model="editor.form.available_note" class="w-full" />
+            <UFormField label="What to bring">
+              <UInputTags
+                v-model="editor.form.what_to_bring"
+                placeholder="Comfortable clothes"
+                add-on-blur
+                add-on-paste
+                class="w-full"
+              />
             </UFormField>
           </div>
 
           <!-- Booking policy -->
-          <div v-else-if="editorKey === 'policy'" class="space-y-6">
+          <div v-else-if="editorKey === 'policies'" class="space-y-6">
             <p class="text-base text-muted">What happens when a guest needs to cancel or move their booking.</p>
 
             <!--
@@ -247,19 +287,15 @@
               </div>
             </div>
 
-          </div>
 
-          <!-- Things to know -->
-          <div v-else-if="editorKey === 'knowledge'" class="space-y-6">
-            <p class="text-base text-muted">
-              The practical notes that appear on this experience's page. Turn on the ones that
-              are true for you — each is shown to guests exactly as written here.
-            </p>
-            <BookingPolicyForm
-              v-model="editor.bookingPolicyDraft.value"
-              policy-type="experience"
-              :summary="editor.bookingPolicySummary.value"
-            />
+            <div class="border-t border-default pt-6">
+              <p class="mb-3 text-sm font-semibold text-highlighted">Other notes on your page</p>
+              <BookingPolicyForm
+                v-model="editor.bookingPolicyDraft.value"
+                policy-type="experience"
+                :only="['late_arrival', 'special_requests', 'weather', 'notes']"
+              />
+            </div>
           </div>
 
           <!-- Availability -->
@@ -391,20 +427,6 @@
             </template>
           </div>
 
-          <!-- Danger zone -->
-          <div v-else-if="editorKey === 'delete'" class="space-y-6">
-            <p class="text-base text-muted">
-              Deleting removes this experience and its bookings history from your site. This cannot be undone.
-            </p>
-            <UButton
-              color="error"
-              variant="soft"
-              icon="i-lucide-trash-2"
-              :loading="deleting"
-              :label="`Delete ${editor.form.title || 'this experience'}`"
-              @click="doDelete"
-            />
-          </div>
         </template>
       </EditorPaneShell>
     </template>
@@ -449,16 +471,16 @@ const weekdayNames = WEEKDAY_NAMES
 // ── Which leaf is open ──────────────────────────────────
 const sectionLabels: Record<string, string> = {
   details: 'Details',
+  location: 'Location',
   photos: 'Photos',
+  itinerary: 'Itinerary',
+  guests: 'Guests',
   pricing: 'Pricing',
-  booking: 'Booking',
-  slots: 'Time slots',
-  guests: 'What guests get',
-  policy: 'Booking policy',
-  knowledge: 'Things to know',
+  discounts: 'Discounts',
+  included: "What's included",
+  policies: 'Policies',
   availability: 'Availability',
   translations: 'Translations',
-  delete: 'Delete',
 }
 const validSectionKeys = new Set(Object.keys(sectionLabels))
 
@@ -478,7 +500,7 @@ if (routeSegments.value.length > 1 || (detailKey.value && !validSectionKeys.has(
 
 // Photos, availability and delete each commit as you act, so they have no
 // pending draft for a footer to save.
-const showActions = computed(() => hasDetail.value && !['photos', 'availability', 'delete'].includes(editorKey.value))
+const showActions = computed(() => hasDetail.value && !['photos', 'availability'].includes(editorKey.value))
 const saveDisabled = computed(() => editorKey.value === 'details' && !editor.form.title.trim())
 const saving = computed(() => editor.saving.value || translationSaving.value)
 
@@ -517,23 +539,6 @@ watch(data, value => {
 // ── Booking policy ──────────────────────────────────────
 const policyPresets = BOOKING_POLICY_PRESETS
 const activePresetId = computed(() => matchBookingPolicyPreset(editor.bookingPolicyDraft.value)?.id ?? null)
-
-/** Counts the notes a guest will actually see, so the row says what is on. */
-const knowledgeSummary = computed(() => {
-  const policy = editor.bookingPolicyDraft.value
-  const count = [
-    policy.host_confirmation_sla_minutes,
-    policy.late_arrival_grace_minutes,
-    policy.deposit_required,
-    policy.special_requests_allowed,
-    policy.minimum_guest_age,
-    policy.accessibility_contact_required,
-    policy.weather_policy,
-    policy.additional_notes_html,
-  ].filter(Boolean).length
-  if (!count) return 'Nothing shown yet'
-  return count === 1 ? '1 note on your page' : `${count} notes on your page`
-})
 
 const policySummary = computed(() => {
   const preset = matchBookingPolicyPreset(editor.bookingPolicyDraft.value)
@@ -602,20 +607,31 @@ const priceSummary = computed(() => {
   return editor.form.pricing_note || 'No price set'
 })
 
-const bookingSummary = computed(() => {
+const guestsSummary = computed(() => {
   const parts: string[] = []
-  if (editor.form.duration_minutes) parts.push(`${editor.form.duration_minutes} min`)
-  if (editor.form.max_capacity) parts.push(`${editor.form.max_capacity} guests`)
-  parts.push(editor.form.status === 'sold_out' ? 'Sold out' : editor.form.status)
-  return parts.join(' · ')
+  if (editor.form.max_capacity) parts.push(`Up to ${editor.form.max_capacity} guests`)
+  const age = editor.bookingPolicyDraft.value.minimum_guest_age
+  if (age) parts.push(`${age}+`)
+  return parts.join(' · ') || 'No limit set'
 })
 
-const slotsSummary = computed(() => {
+const itinerarySummary = computed(() => {
+  const parts: string[] = []
+  if (editor.form.duration_minutes) parts.push(`${editor.form.duration_minutes} min`)
   if (editor.slotsMode.value === 'flat') {
-    return editor.timeSlots.value.length ? `${editor.timeSlots.value.length} times, every day` : 'No times set'
+    if (editor.timeSlots.value.length) parts.push(`${editor.timeSlots.value.length} times daily`)
+  } else {
+    const days = weekdayNames.filter(day => editor.recurringSlots[day].length).length
+    if (days) parts.push(`${days} ${days === 1 ? 'day' : 'days'} a week`)
   }
-  const days = weekdayNames.filter(day => editor.recurringSlots[day].length).length
-  return days ? `${days} ${days === 1 ? 'day' : 'days'} with times` : 'No times set'
+  if (editor.form.available_note) parts.push(editor.form.available_note)
+  return parts.join(' · ') || 'No times set'
+})
+
+const discountSummary = computed(() => {
+  if (editor.form.compare_at_major === null) return 'No sale running'
+  const window = editor.form.valid_until ? `until ${editor.form.valid_until}` : 'no end date'
+  return `Was ${editor.form.compare_at_major}, ${window}`
 })
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
@@ -624,20 +640,21 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
     label: 'Content',
     items: [
       { id: 'details', label: 'Details', summary: editor.form.tagline || editor.form.title, icon: 'i-lucide-align-left', to: `${experiencePath.value}/details` },
-      { id: 'photos', label: 'Photos', summary: editor.form.media.length ? `${editor.form.media.length} in the gallery` : 'No photos yet', icon: 'i-lucide-images', to: `${experiencePath.value}/photos` },
-      { id: 'guests', label: 'What guests get', summary: listSummary(editor.form.highlights, 'No highlights yet'), icon: 'i-lucide-list-checks', to: `${experiencePath.value}/guests` },
+      { id: 'photos', label: 'Photos', summary: editor.form.media.length ? `${editor.form.media.length} photos` : 'No photos yet', icon: 'i-lucide-images', to: `${experiencePath.value}/photos` },
+      { id: 'location', label: 'Location', summary: editor.form.meeting_point || 'No meeting point set', icon: 'i-lucide-map-pin', to: `${experiencePath.value}/location` },
+      { id: 'itinerary', label: 'Itinerary', summary: itinerarySummary.value, icon: 'i-lucide-clock-3', to: `${experiencePath.value}/itinerary` },
+      { id: 'included', label: "What's included", summary: listSummary(editor.form.included_items, 'Nothing listed yet'), icon: 'i-lucide-list-checks', to: `${experiencePath.value}/included` },
     ],
   },
   {
     id: 'booking',
     label: 'Booking',
     items: [
+      { id: 'guests', label: 'Guests', summary: guestsSummary.value, icon: 'i-lucide-users', to: `${experiencePath.value}/guests` },
       { id: 'pricing', label: 'Pricing', summary: priceSummary.value, icon: 'i-lucide-tag', to: `${experiencePath.value}/pricing` },
-      { id: 'booking', label: 'Duration and capacity', summary: bookingSummary.value, icon: 'i-lucide-users', to: `${experiencePath.value}/booking` },
-      { id: 'slots', label: 'Time slots', summary: slotsSummary.value, icon: 'i-lucide-clock-3', to: `${experiencePath.value}/slots` },
+      { id: 'discounts', label: 'Discounts', summary: discountSummary.value, icon: 'i-lucide-percent', to: `${experiencePath.value}/discounts` },
       { id: 'availability', label: 'Availability', summary: 'Close times or change capacity by date', icon: 'i-lucide-calendar-days', to: `${experiencePath.value}/availability` },
-      { id: 'policy', label: 'Booking policy', summary: policySummary.value, icon: 'i-lucide-shield-check', to: `${experiencePath.value}/policy` },
-      { id: 'knowledge', label: 'Things to know', summary: knowledgeSummary.value, icon: 'i-lucide-info', to: `${experiencePath.value}/knowledge` },
+      { id: 'policies', label: 'Policies', summary: policySummary.value, icon: 'i-lucide-shield-check', to: `${experiencePath.value}/policies` },
     ],
   },
   {
@@ -645,7 +662,6 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
     label: 'Manage',
     items: [
       { id: 'translations', label: 'Translations', summary: translationLocales.value.length ? `${translationLocales.value.length} languages` : 'No other languages', icon: 'i-lucide-languages', to: `${experiencePath.value}/translations` },
-      { id: 'delete', label: 'Delete experience', summary: 'Remove it from your site', icon: 'i-lucide-trash-2', to: `${experiencePath.value}/delete` },
     ],
   },
 ])
@@ -714,18 +730,6 @@ function copyRecurring(mode: 'all' | 'weekdays' | 'weekend') {
   } else {
     const friday = [...slots.Friday]
     for (const day of ['Friday', 'Saturday'] as WeekdayName[]) slots[day] = [...friday]
-  }
-}
-
-// ── Delete ──────────────────────────────────────────────
-const deleting = ref(false)
-
-async function doDelete() {
-  deleting.value = true
-  try {
-    if (await editor.remove(experienceId.value)) await navigateTo(experiencesPath.value)
-  } finally {
-    deleting.value = false
   }
 }
 
