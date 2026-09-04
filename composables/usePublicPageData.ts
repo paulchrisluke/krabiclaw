@@ -135,7 +135,7 @@ export const usePublicPageData = async (options: {
   const products = computed(() => data.value?.products ?? []);
   const productsByCategory = computed(() => {
     return products.value.reduce<Record<string, Product[]>>((groups, product) => {
-      (groups[product.category] ??= []).push(product);
+      (groups[product.category.name] ??= []).push(product);
       return groups;
     }, {});
   });

@@ -16,6 +16,7 @@ import {
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
+import { ensureExperienceCategory } from '~/server/utils/product-management'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import type { SocialImageSource } from '~/utils/social-metadata'
@@ -486,17 +487,18 @@ export async function createExperience(
   const includedItemsJson = input.included_items?.length ? JSON.stringify(input.included_items) : null
   const whatToBringJson = input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null
   const status = input.status !== undefined ? assertExperienceStatus(input.status, 'status') : 'active'
+  const experienceCategoryId = await ensureExperienceCategory(db, organizationId, siteId, input.location_id, userId)
 
   const queries: BatchQuery[] = [
     {
       query: `INSERT INTO products
-       (id, organization_id, site_id, location_id, product_type, category, name, slug,
+       (id, organization_id, site_id, location_id, product_type, category_id, name, slug,
         description, order_url, is_visible, available, featured, featured_sort_order,
         sort_order, tags_json, details_json, seo_title, seo_description, canonical_url,
         robots, source, created_at, updated_at, created_by, updated_by)
-       VALUES (?,?,?,?, 'experience', 'Experiences', ?,?,?, NULL,?,?,?,?,?,'[]','[]',?,?,?,?, 'manual',?,?,?,?)`,
+       VALUES (?,?,?,?, 'experience', ?, ?,?,?, NULL,?,?,?,?,?,'[]','[]',?,?,?,?, 'manual',?,?,?,?)`,
       params: [
-        id, organizationId, siteId, input.location_id, input.title, slug, input.body ?? '',
+        id, organizationId, siteId, input.location_id, experienceCategoryId, input.title, slug, input.body ?? '',
         status === 'inactive' ? 0 : 1, status === 'sold_out' ? 0 : 1,
         input.featured ? 1 : 0, input.featured_sort_order ?? 0, input.sort_order ?? 0,
         input.seo_title ?? null, input.seo_description ?? null, input.canonical_url ?? null, input.robots ?? null,

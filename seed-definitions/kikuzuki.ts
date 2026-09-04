@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedProductDefinition, CuratedSiteDefinition } from './contracts.ts'
+import { buildSeedExperienceCategories, buildSeedProductCategories } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -797,6 +798,21 @@ UPDATE sites SET primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.prim
 export function renderKikuzukiProductsBlock(): string {
   const { identity } = compiledKikuzukiSeed
 
+  const { categories, categoryIdByProductId, sortOrderByProductId } = buildSeedProductCategories(compiledKikuzukiSeed.products)
+  const productCategoryRows = categories
+    .map(category => `  (${[
+      sqlValue(category.id),
+      sqlValue(category.organizationId),
+      sqlValue(category.siteId),
+      sqlValue(category.locationId),
+      sqlValue('standard'),
+      sqlValue(category.name),
+      sqlValue(category.slug),
+      sqlValue(category.sortOrder),
+      sqlValue('seed:kikuzuki'),
+      sqlValue('seed:kikuzuki'),
+    ].join(', ')})`)
+    .join(',\n')
   const productRows = compiledKikuzukiSeed.products
     .map((product) => `  (${[
       sqlValue(product.id),
@@ -804,7 +820,7 @@ export function renderKikuzukiProductsBlock(): string {
       sqlValue(identity.siteId),
       sqlValue(product.locationId),
       sqlValue('standard'),
-      sqlValue(product.category),
+      sqlValue(categoryIdByProductId.get(product.id)!),
       sqlValue(product.name),
       sqlValue(product.slug),
       sqlValue(product.description),
@@ -812,7 +828,7 @@ export function renderKikuzukiProductsBlock(): string {
       sqlValue(product.available),
       sqlValue(product.featured),
       sqlValue(product.featuredSortOrder),
-      sqlValue(product.sortOrder),
+      sqlValue(sortOrderByProductId.get(product.id)!),
       sqlJson([]),
       sqlJson([
         ...(product.allergens ? [{ key: 'allergens', label: 'Allergens', values: JSON.parse(product.allergens) }] : []),
@@ -854,8 +870,13 @@ ${productMediaRows};`
     : ''
 
   return `-- BEGIN GENERATED: kikuzuki_products
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${productCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order,
    tags_json, details_json, source, created_by, updated_by)
 VALUES
@@ -888,13 +909,22 @@ export function renderKikuzukiExperienceBlock(): string {
   if (compiledKikuzukiSeed.experiences.length === 0) return '-- No experiences defined for Kikuzuki'
 
   const experienceMedia = compiledKikuzukiSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const { categories: experienceCategories, categoryIdForLocation, sortOrderFor } = buildSeedExperienceCategories(compiledKikuzukiSeed.experiences, identity)
+  const experienceCategoryRows = experienceCategories
+    .map(category => `  (${[
+      sqlValue(category.id), sqlValue(category.organizationId), sqlValue(category.siteId),
+      sqlValue(category.locationId), sqlValue('experience'), sqlValue(category.name),
+      sqlValue(category.slug), sqlValue(category.sortOrder),
+      sqlValue('seed:kikuzuki'), sqlValue('seed:kikuzuki'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceProductRows = compiledKikuzukiSeed.experiences
     .map(experience => `  (${[
       sqlValue(experience.id), sqlValue(identity.organizationId), sqlValue(identity.siteId),
-      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue(categoryIdForLocation(experience.locationId)),
       sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
       sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
-      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(sortOrderFor(experience.id)),
       sqlValue('[]'), sqlValue('[]'), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
       sqlValue('template'), sqlValue('seed:kikuzuki'), sqlValue('seed:kikuzuki'),
     ].join(', ')})`)
@@ -951,8 +981,13 @@ ${experienceMedia
     : ''
 
   return `-- BEGIN GENERATED: kikuzuki_experiences
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${experienceCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
    seo_title, seo_description, source, created_by, updated_by)
 VALUES

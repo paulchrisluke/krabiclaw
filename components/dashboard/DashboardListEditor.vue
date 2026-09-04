@@ -17,6 +17,7 @@
 
         <div class="flex shrink-0 items-center gap-2">
           <slot name="actions" />
+          <slot v-if="editing && selected.length" name="selection-actions" :selected="selected" />
           <UButton
             v-if="items.length"
             :label="editing ? 'Done' : 'Edit'"
@@ -37,7 +38,14 @@
         </div>
       </div>
 
-      <p v-if="description" class="mt-2 text-sm text-muted">{{ description }}</p>
+      <!--
+        In the edit state the description gives way to the selection count, so
+        the row that told you what the list is tells you what you are acting on.
+      -->
+      <p v-if="editing && selectable" class="mt-2 text-sm text-muted" data-testid="list-editor-selection-count">
+        {{ selected.length ? `${selected.length} selected` : 'Select items to move them' }}
+      </p>
+      <p v-else-if="description" class="mt-2 text-sm text-muted">{{ description }}</p>
     </header>
 
     <UAlert
@@ -68,8 +76,16 @@
           position and grows controls. Nothing navigates, so there is no way to
           strand a half-edited list behind a back button.
         -->
+        <UCheckbox
+          v-if="editing && selectable"
+          :model-value="selected.includes(item.id)"
+          :aria-label="`Select ${item.title}`"
+          :data-testid="`list-editor-select-${item.id}`"
+          @update:model-value="toggleSelected(item.id)"
+        />
+
         <UButton
-          v-if="editing"
+          v-if="editing && !selectable"
           icon="i-lucide-circle-minus"
           :aria-label="`Remove ${item.title}`"
           color="neutral"
@@ -143,6 +159,8 @@ defineProps<{
   reorderable?: boolean
   /** Marks the row whose removal is in flight. */
   removingId?: string | null
+  /** Swaps the per-row remove control for a checkbox so several rows act at once. */
+  selectable?: boolean
 }>()
 
 defineEmits<{
@@ -153,6 +171,19 @@ defineEmits<{
 }>()
 
 const editing = defineModel<boolean>('editing', { default: false })
+const selected = defineModel<string[]>('selected', { default: () => [] })
+
+function toggleSelected(id: string) {
+  selected.value = selected.value.includes(id)
+    ? selected.value.filter(candidate => candidate !== id)
+    : [...selected.value, id]
+}
+
+// Leaving the edit state drops the selection: the controls that act on it are
+// gone, so a selection surviving out of sight could be acted on by surprise.
+watch(editing, (value) => {
+  if (!value) selected.value = []
+})
 </script>
 
 <script lang="ts">

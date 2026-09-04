@@ -1,0 +1,281 @@
+#!/usr/bin/env node
+/**
+ * Epoch 4 data transform: Product categories become records.
+ *
+ * Epoch 4 begins from `migrations/0000_epoch_4_baseline.sql` and must never be
+ * applied to an Epoch 3 resource. This transforms an Epoch 3 export into an
+ * empty Epoch 4 candidate, and verifies the result against the source.
+ *
+ * The only model change is Product categories. Every other table is copied
+ * column-for-column, and the verifier rejects every unexpected table/column, so
+ * an unnoticed schema change fails the transform rather than silently dropping
+ * data.
+ *
+ * Usage:
+ *   node scripts/epoch4-data.mjs transform /abs/epoch3.sqlite /abs/epoch4.sqlite
+ *   node scripts/epoch4-data.mjs verify    /abs/epoch3.sqlite /abs/epoch4.sqlite
+ */
+
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { join, resolve } from 'node:path'
+import Database from 'better-sqlite3'
+import { planCategories } from './product-category-plan.mjs'
+
+const repoRoot = resolve(import.meta.dirname, '..')
+const migrationsDirectory = resolve(repoRoot, 'migrations')
+const baselineSql = readdirSync(migrationsDirectory)
+  .filter(name => /^\d{4}_.+\.sql$/u.test(name))
+  .sort()
+  .map(name => ({ name, sql: readFileSync(join(migrationsDirectory, name), 'utf8') }))
+
+/** Tables this transform rewrites rather than copies. */
+const TRANSFORMED_TABLES = new Set(['products', 'product_categories'])
+
+function qi(value) { return `"${String(value).replaceAll('"', '""')}"` }
+function tableExists(db, table) { return Boolean(db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)) }
+function columns(db, table) { return db.prepare(`PRAGMA table_info(${qi(table)})`).all() }
+function count(db, table) { return db.prepare(`SELECT count(*) count FROM ${qi(table)}`).get().count }
+function rows(db, table) { return db.prepare(`SELECT * FROM ${qi(table)}`).all() }
+function assert(condition, message) { if (!condition) throw new Error(message) }
+
+function tables(db) {
+  return db.prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name").all()
+    .map(row => row.name).filter(name => name !== 'd1_migrations' && !name.startsWith('sqlite_') && !name.startsWith('_cf_'))
+}
+
+function openDatabase(path) {
+  if (!path.endsWith('.sql')) return new Database(path, { readonly: true, fileMustExist: true })
+  const db = new Database(':memory:')
+  // D1 exports interleave child inserts and parent definitions.
+  db.pragma('foreign_keys = OFF')
+  db.exec(readFileSync(path, 'utf8'))
+  return db
+}
+
+function hashRows(records, names) {
+  // Sorted, typed JSON tuples avoid row-order sensitivity and delimiter/null
+  // collisions. BLOBs retain their bytes through Buffer's JSON representation.
+  const logical = records.map(record => JSON.stringify(names.map(name => record[name]))).sort()
+  return createHash('sha256').update(logical.join('\n')).digest('hex')
+}
+
+function assertSchemaParity(source, target) {
+  assert(tableExists(source, 'products') && columns(source, 'products').some(column => column.name === 'category'), 'Source must be Epoch 3 with products.category')
+  assert(!tableExists(source, 'product_categories'), 'Source already contains product_categories')
+  const sourceTables = tables(source)
+  const targetTables = tables(target).filter(table => table !== 'product_categories')
+  assert(JSON.stringify(sourceTables) === JSON.stringify(targetTables), 'Application table census changed outside product_categories')
+  for (const table of sourceTables) {
+    const before = columns(source, table).map(column => column.name).filter(name => table !== 'products' || name !== 'category').sort()
+    const after = columns(target, table).map(column => column.name).filter(name => table !== 'products' || name !== 'category_id').sort()
+    assert(JSON.stringify(before) === JSON.stringify(after), `${table}: unexpected source/destination columns`)
+  }
+  assert(columns(target, 'products').some(column => column.name === 'category_id'), 'Target must be Epoch 4 with products.category_id')
+  // Category translations need an explicit, reviewed mapping; silently retaining
+  // the retired Product field would create invalid canonical localization data.
+  const legacyTranslations = source.prepare("SELECT count(*) count FROM resource_localizations WHERE resource_type = 'product' AND json_type(values_json, '$.category') IS NOT NULL").get().count
+  assert(legacyTranslations === 0, `${legacyTranslations} legacy Product category translations require an explicit transformation`)
+}
+
+function tableParity(source, target) {
+  return tables(source).map((table) => {
+    const names = columns(source, table).map(column => column.name)
+      .filter(name => table !== 'products' || !['category', 'sort_order'].includes(name)).sort()
+    const sourceRows = rows(source, table)
+    const targetRows = rows(target, table)
+    const sourceHash = hashRows(sourceRows, names)
+    const targetHash = hashRows(targetRows, names)
+    assert(sourceRows.length === targetRows.length && sourceHash === targetHash, `${table}: row count or content changed outside the category transformation`)
+    return { table, columns: names, source_count: sourceRows.length, target_count: targetRows.length, source_hash: sourceHash, target_hash: targetHash }
+  })
+}
+
+function insertRows(db, table, values) {
+  if (!values.length) return
+  const names = Object.keys(values[0])
+  const statement = db.prepare(`INSERT INTO ${qi(table)} (${names.map(qi).join(',')}) VALUES (${names.map(() => '?').join(',')})`)
+  const insertAll = db.transaction((records) => {
+    for (const record of records) statement.run(names.map(name => record[name] ?? null))
+  })
+  insertAll(values)
+}
+
+/**
+ * The rendered order a customer sees, as one flat list per location: category
+ * name followed by its Products, in display order. Computed from each schema's
+ * own rules so the verifier can prove the two agree.
+ */
+function renderedOrderBefore(db) {
+  const products = db.prepare(`
+    SELECT id, location_id, product_type, category, sort_order FROM products WHERE is_visible = 1
+     ORDER BY location_id, product_type, sort_order, id
+  `).all()
+  // The public collection page groups by category in first-appearance order and
+  // renders each group's Products in their existing order, so the comparison
+  // has to interleave the same way rather than list categories then Products.
+  const rendered = []
+  const emitted = new Set()
+  for (const product of products) {
+    const scope = `${product.location_id}::${product.product_type}`
+    const key = `${scope}::${product.category}`
+    if (emitted.has(key)) continue
+    emitted.add(key)
+    rendered.push(`${scope}|category|${product.category}`)
+    for (const member of products) {
+      if (member.location_id !== product.location_id) continue
+      if (member.product_type !== product.product_type) continue
+      if (member.category !== product.category) continue
+      rendered.push(`${scope}|product|${product.category}|${member.id}`)
+    }
+  }
+  return rendered
+}
+
+function renderedOrderAfter(db) {
+  const categories = db.prepare(`
+    SELECT id, location_id, product_type, name FROM product_categories
+     ORDER BY location_id, product_type, sort_order, id
+  `).all()
+  const products = db.prepare(`
+    SELECT id, category_id FROM products WHERE is_visible = 1 ORDER BY sort_order, id
+  `).all()
+  const rendered = []
+  for (const category of categories) {
+    if (!products.some(product => product.category_id === category.id)) continue
+    const scope = `${category.location_id}::${category.product_type}`
+    rendered.push(`${scope}|category|${category.name}`)
+    for (const product of products) {
+      if (product.category_id !== category.id) continue
+      rendered.push(`${scope}|product|${category.name}|${product.id}`)
+    }
+  }
+  return rendered
+}
+
+function transformProducts(source, target, now) {
+  const legacy = rows(source, 'products')
+  const { categories, assignments } = planCategories(legacy)
+  const categoryById = new Map(categories.map(category => [category.id, category]))
+  const assignmentByProduct = new Map(assignments.map(assignment => [assignment.product_id, assignment]))
+
+  insertRows(target, 'product_categories', categories.map(category => ({
+    id: category.id,
+    organization_id: category.organization_id,
+    site_id: category.site_id,
+    location_id: category.location_id,
+    product_type: category.product_type,
+    name: category.name,
+    slug: category.slug,
+    sort_order: category.sort_order,
+    created_at: now,
+    updated_at: now,
+    created_by: 'migration:epoch4',
+    updated_by: 'migration:epoch4',
+  })))
+
+  const destinationNames = columns(target, 'products').map(column => column.name)
+  insertRows(target, 'products', legacy.map((product) => {
+    const assignment = assignmentByProduct.get(product.id)
+    assert(assignment, `Product ${product.id} was not assigned a category`)
+    const category = categoryById.get(assignment.category_id)
+    assert(category, `Product ${product.id} references an unplanned category`)
+    assert(
+      category.location_id === product.location_id && category.site_id === product.site_id,
+      `Product ${product.id} was assigned a category from another location or site`,
+    )
+    const record = {}
+    for (const name of destinationNames) {
+      if (name === 'category_id') record[name] = assignment.category_id
+      else if (name === 'sort_order') record[name] = assignment.sort_order
+      else record[name] = product[name] ?? null
+    }
+    return record
+  }))
+}
+
+function verifyDatabases(source, target) {
+  assertSchemaParity(source, target)
+  const parity = tableParity(source, target)
+  const planned = planCategories(rows(source, 'products'))
+  const actualCategories = rows(target, 'product_categories')
+  const categoryColumns = ['id', 'organization_id', 'site_id', 'location_id', 'product_type', 'name', 'slug', 'sort_order']
+  assert(hashRows(planned.categories, categoryColumns) === hashRows(actualCategories, categoryColumns), 'Category identity, scope, names, slugs or order differ from the source mapping')
+  const actualAssignments = target.prepare('SELECT id AS product_id, category_id, sort_order FROM products').all()
+  const assignmentColumns = ['product_id', 'category_id', 'sort_order']
+  assert(hashRows(planned.assignments, assignmentColumns) === hashRows(actualAssignments, assignmentColumns), 'Product category membership or relative order changed')
+  assert(JSON.stringify(renderedOrderBefore(source)) === JSON.stringify(renderedOrderAfter(target)), 'Customer-visible sections or Product order changed')
+  for (const [label, db] of [['source', source], ['target', target]]) {
+    const violations = db.pragma('foreign_key_check')
+    assert(violations.length === 0, `${label}: ${violations.length} foreign key violations`)
+    assert(db.pragma('integrity_check', { simple: true }) === 'ok', `${label}: SQLite integrity check failed`)
+  }
+  return {
+    epoch: 4,
+    generated_at: new Date().toISOString(),
+    baseline: baselineSql.map(migration => ({ name: migration.name, sha256: createHash('sha256').update(migration.sql).digest('hex') })),
+    tables: parity,
+    products: { source: count(source, 'products'), target: count(target, 'products') },
+    product_categories: actualCategories.length,
+    category_hash: hashRows(actualCategories, categoryColumns),
+    assignment_hash: hashRows(actualAssignments, assignmentColumns),
+  }
+}
+
+function transform(sourcePath, targetPath) {
+  assert(existsSync(sourcePath), `Source database not found: ${sourcePath}`)
+  assert(!existsSync(targetPath), `Refusing to overwrite an existing target: ${targetPath}`)
+
+  const source = openDatabase(sourcePath)
+  const target = new Database(targetPath)
+  target.pragma('foreign_keys = OFF')
+  for (const migration of baselineSql) target.exec(migration.sql)
+
+  assertSchemaParity(source, target)
+  const now = new Date().toISOString()
+  const destinationTables = tables(target)
+  const copiedTables = []
+  for (const table of destinationTables) {
+    if (TRANSFORMED_TABLES.has(table)) continue
+    insertRows(target, table, rows(source, table))
+    copiedTables.push(table)
+  }
+
+  transformProducts(source, target, now)
+
+  target.pragma('foreign_keys = ON')
+  const violations = target.pragma('foreign_key_check')
+  assert(violations.length === 0, `Foreign key violations after transform: ${JSON.stringify(violations.slice(0, 5))}`)
+
+  const manifest = verifyDatabases(source, target)
+  writeFileSync(`${targetPath}.manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
+  source.close()
+  target.close()
+  console.log(`Epoch 4 transform wrote ${targetPath}`)
+  console.log(`  ${manifest.products.target} Products in ${manifest.product_categories} categories across ${copiedTables.length} copied tables`)
+}
+
+function verify(sourcePath, targetPath) {
+  const source = openDatabase(sourcePath)
+  const target = openDatabase(targetPath)
+  try {
+    const manifest = verifyDatabases(source, target)
+    writeFileSync(`${targetPath}.verification.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
+    console.log(`Epoch 4 verification passed: ${manifest.tables.length} tables, ${manifest.products.target} Products, all content and visible ordering preserved.`)
+  } finally {
+    source.close()
+    target.close()
+  }
+}
+
+const [command, sourcePath, targetPath] = process.argv.slice(2)
+if (!command || !sourcePath || !targetPath) {
+  console.error('Usage: epoch4-data.mjs <transform|verify> <epoch3.sqlite|export.sql> <epoch4.sqlite|export.sql>')
+  process.exit(1)
+}
+if (command === 'transform') transform(resolve(sourcePath), resolve(targetPath))
+else if (command === 'verify') verify(resolve(sourcePath), resolve(targetPath))
+else {
+  console.error(`Unknown command "${command}"`)
+  process.exit(1)
+}

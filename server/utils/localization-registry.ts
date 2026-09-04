@@ -5,6 +5,7 @@ export const LOCALIZED_RESOURCE_TYPES = [
   'site',
   'business_location',
   'product',
+  'product_category',
   'experience',
   'offering',
   'site_post',
@@ -58,7 +59,6 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   product: {
     table: 'products',
     fields: {
-      category: 'text',
       name: 'text',
       description: 'text',
       tags_json: 'string_array',
@@ -67,6 +67,15 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
       seo_description: 'text',
     },
     route: 'product',
+  },
+  // The category name lives on the category row, so it is translated once per
+  // category instead of once per Product that happens to sit in it.
+  product_category: {
+    table: 'product_categories',
+    fields: {
+      name: 'text',
+    },
+    route: 'none',
   },
   experience: {
     table: 'experiences',

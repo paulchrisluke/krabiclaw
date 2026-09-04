@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:2f78a4188e1d5266a2ebdf7c025afffccc5e1432d74d3e8fd14740ddd077b491",
+  "fingerprint": "sha256:73a898c0a98294b3b85d6e1a42030dd0d101ea0496f67057d1fc2e21023fb2a3",
   "tools": [
     {
       "name": "analyze_document",
@@ -284,7 +284,8 @@
                     "null"
                   ]
                 },
-                "category": {
+                "category_id": {
+                  "description": "ID of a category at the selected location. Read list_product_categories first; use create_product_category when the intended section does not exist. Never send a category name in place of this ID.",
                   "type": "string"
                 },
                 "description": {
@@ -442,7 +443,7 @@
                 }
               },
               "required": [
-                "category",
+                "category_id",
                 "name",
                 "price"
               ],
@@ -478,6 +479,29 @@
                   ]
                 },
                 "category": {
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "sort_order"
+                  ],
+                  "type": "object"
+                },
+                "category_id": {
                   "type": "string"
                 },
                 "created_at": {
@@ -807,6 +831,7 @@
               "required": [
                 "id",
                 "location_id",
+                "category_id",
                 "category",
                 "name",
                 "slug",
@@ -2248,7 +2273,8 @@
               "null"
             ]
           },
-          "category": {
+          "category_id": {
+            "description": "ID of a category at the selected location. Read list_product_categories first; use create_product_category when the intended section does not exist. Never send a category name in place of this ID.",
             "type": "string"
           },
           "description": {
@@ -2414,7 +2440,7 @@
         },
         "required": [
           "location_id",
-          "category",
+          "category_id",
           "name",
           "price"
         ],
@@ -2434,6 +2460,29 @@
                 ]
               },
               "category": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "sort_order": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug",
+                  "sort_order"
+                ],
+                "type": "object"
+              },
+              "category_id": {
                 "type": "string"
               },
               "created_at": {
@@ -2763,6 +2812,7 @@
             "required": [
               "id",
               "location_id",
+              "category_id",
               "category",
               "name",
               "slug",
@@ -2788,6 +2838,80 @@
         },
         "required": [
           "product"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_product_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "category": {
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "number"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "updated_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "location_id",
+              "name",
+              "slug",
+              "sort_order",
+              "created_at",
+              "updated_at",
+              "created_by",
+              "updated_by"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "category"
         ],
         "type": "object"
       }
@@ -3312,7 +3436,7 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "category": {
+          "category_id": {
             "type": "string"
           },
           "location_id": {
@@ -3325,7 +3449,7 @@
         },
         "required": [
           "location_id",
-          "category"
+          "category_id"
         ],
         "type": "object"
       },
@@ -4891,6 +5015,29 @@
                 ]
               },
               "category": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "sort_order": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug",
+                  "sort_order"
+                ],
+                "type": "object"
+              },
+              "category_id": {
                 "type": "string"
               },
               "created_at": {
@@ -5220,6 +5367,7 @@
             "required": [
               "id",
               "location_id",
+              "category_id",
               "category",
               "name",
               "slug",
@@ -5519,7 +5667,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Localized scalar values. Allowed fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
                 "type": "object"
               }
             },
@@ -6712,6 +6860,29 @@
                   ]
                 },
                 "category": {
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "sort_order"
+                  ],
+                  "type": "object"
+                },
+                "category_id": {
                   "type": "string"
                 },
                 "created_at": {
@@ -7041,6 +7212,7 @@
               "required": [
                 "id",
                 "location_id",
+                "category_id",
                 "category",
                 "name",
                 "slug",
@@ -8166,6 +8338,29 @@
                   "type": "boolean"
                 },
                 "category": {
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "sort_order"
+                  ],
+                  "type": "object"
+                },
+                "category_id": {
                   "type": "string"
                 },
                 "description": {
@@ -8233,6 +8428,7 @@
               "required": [
                 "id",
                 "location_id",
+                "category_id",
                 "category",
                 "name",
                 "description",
@@ -8878,6 +9074,79 @@
       }
     },
     {
+      "name": "list_product_categories",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "categories": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "updated_by": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "location_id",
+                "name",
+                "slug",
+                "sort_order",
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_site_locales",
       "inputSchema": {
         "additionalProperties": false,
@@ -9309,56 +9578,12 @@
       }
     },
     {
-      "name": "move_product_category",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "before_category": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "category": {
-            "type": "string"
-          },
-          "location_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id",
-          "category",
-          "before_category"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "moved": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "moved"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "move_products",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "before_product_id": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "category_id": {
+            "type": "string"
           },
           "location_id": {
             "type": "string"
@@ -9368,8 +9593,7 @@
               "type": "string"
             },
             "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
+            "type": "array"
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -9379,7 +9603,7 @@
         "required": [
           "location_id",
           "product_ids",
-          "before_product_id"
+          "category_id"
         ],
         "type": "object"
       },
@@ -10240,7 +10464,7 @@
           },
           "values": {
             "additionalProperties": true,
-            "description": "Localized scalar values. Allowed fields depend on resource_type.",
+            "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
             "type": "object"
           }
         },
@@ -10291,7 +10515,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Localized scalar values. Allowed fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
                 "type": "object"
               }
             },
@@ -10514,13 +10738,13 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "category_id": {
+            "type": "string"
+          },
           "location_id": {
             "type": "string"
           },
-          "new_category": {
-            "type": "string"
-          },
-          "old_category": {
+          "name": {
             "type": "string"
           },
           "site_id": {
@@ -10530,19 +10754,59 @@
         },
         "required": [
           "location_id",
-          "old_category",
-          "new_category"
+          "category_id",
+          "name"
         ],
         "type": "object"
       },
       "outputSchema": {
         "properties": {
-          "updated": {
-            "type": "number"
+          "category": {
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "created_by": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "number"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "updated_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "location_id",
+              "name",
+              "slug",
+              "sort_order",
+              "created_at",
+              "updated_at",
+              "created_by",
+              "updated_by"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "updated"
+          "category"
         ],
         "type": "object"
       }
@@ -11117,6 +11381,129 @@
           "asset_ids",
           "media",
           "cleared"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "reorder_product_categories",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "category_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "categories": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "updated_by": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "location_id",
+                "name",
+                "slug",
+                "sort_order",
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "reorder_products",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "product_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "category_id",
+          "product_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "reordered": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reordered"
         ],
         "type": "object"
       }
@@ -12477,7 +12864,7 @@
                 },
                 "values": {
                   "additionalProperties": true,
-                  "description": "Localized scalar values. Allowed fields depend on resource_type.",
+                  "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
                   "type": "object"
                 }
               },
@@ -12547,7 +12934,8 @@
                     "null"
                   ]
                 },
-                "category": {
+                "category_id": {
+                  "description": "ID of a category at the selected location. Read list_product_categories first; use create_product_category when the intended section does not exist. Never send a category name in place of this ID.",
                   "type": "string"
                 },
                 "description": {
@@ -12709,7 +13097,7 @@
                 }
               },
               "required": [
-                "category",
+                "category_id",
                 "name",
                 "price"
               ],
@@ -12748,6 +13136,29 @@
                   ]
                 },
                 "category": {
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "sort_order"
+                  ],
+                  "type": "object"
+                },
+                "category_id": {
                   "type": "string"
                 },
                 "created_at": {
@@ -13077,6 +13488,7 @@
               "required": [
                 "id",
                 "location_id",
+                "category_id",
                 "category",
                 "name",
                 "slug",
@@ -15287,9 +15699,6 @@
               "null"
             ]
           },
-          "category": {
-            "type": "string"
-          },
           "description": {
             "type": "string"
           },
@@ -15470,6 +15879,29 @@
                 ]
               },
               "category": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "sort_order": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug",
+                  "sort_order"
+                ],
+                "type": "object"
+              },
+              "category_id": {
                 "type": "string"
               },
               "created_at": {
@@ -15799,6 +16231,7 @@
             "required": [
               "id",
               "location_id",
+              "category_id",
               "category",
               "name",
               "slug",

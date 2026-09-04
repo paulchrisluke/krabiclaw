@@ -7,7 +7,7 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 // params instead of host + pathname — public resources are looked up by siteId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: public~<siteId>~v2~<contract>~<page>~<location>~<experience>~<datasets>~<blogSlug>~<locale>,
+// Cache key: public~<siteId>~v3~<contract>~<page>~<location>~<experience>~<datasets>~<blogSlug>~<locale>,
 // each field percent-encoded (mirrors composables/usePublicPageRequest.ts's
 // usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the preview authorization guard in the shell and page services).
@@ -126,7 +126,7 @@ export function buildPublicResourceCacheKey(siteId: string, params: PublicResour
   return [
     'public',
     encodeKeyField(siteId),
-    'v2',
+    'v3',
     params.contract,
     encodeKeyField(params.page),
     encodeKeyField(params.location),

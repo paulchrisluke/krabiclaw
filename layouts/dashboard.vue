@@ -407,6 +407,18 @@ function isActivePath(path?: string, exact = false) {
   return route.path === path || (!exact && route.path.startsWith(`${path}/`))
 }
 
+/**
+ * Only the most specific matching item is active. Nav paths nest — a location's
+ * Inbox lives under the Locations path — so plain prefix matching lit up both
+ * Inbox and Locations at once. The longest matching path is the one the route
+ * actually belongs to.
+ */
+function withActiveItem<T extends { to?: string; exact?: boolean }>(items: T[]): Array<T & { active: boolean }> {
+  const depths = items.map(item => isActivePath(item.to, item.exact) ? (item.to?.length ?? 0) : -1)
+  const deepest = Math.max(...depths)
+  return items.map((item, index) => ({ ...item, active: depths[index] === deepest && depths[index] >= 0 }))
+}
+
 const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   if (!routeOrgSlug) return []
@@ -430,7 +442,7 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
     { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },
   ]
-  return items.map(item => ({ ...item, active: isActivePath(item.to, item.exact) }))
+  return withActiveItem(items)
 })
 
 // The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below

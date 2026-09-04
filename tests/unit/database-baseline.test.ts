@@ -6,11 +6,11 @@ import Database from 'better-sqlite3'
 function baselineDatabase() {
   const database = new Database(':memory:')
   database.pragma('foreign_keys = ON')
-  database.exec(readFileSync('migrations/0000_epoch_3_baseline.sql', 'utf8'))
+  database.exec(readFileSync('migrations/0000_epoch_4_baseline.sql', 'utf8'))
   return database
 }
 
-test('epoch-3 baseline creates the complete schema from zero', () => {
+test('epoch-4 baseline creates the complete schema from zero', () => {
   const database = baselineDatabase()
   try {
     const objectCounts = database.prepare(`
@@ -20,8 +20,8 @@ test('epoch-3 baseline creates the complete schema from zero', () => {
       GROUP BY type
     `).all() as Array<{ type: string; count: number }>
     assert.deepEqual(Object.fromEntries(objectCounts.map(row => [row.type, row.count])), {
-      index: 244,
-      table: 103,
+      index: 249,
+      table: 104,
     })
     const ledgerCount = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE name = 'd1_migrations'").get() as { count: number }
     assert.equal(ledgerCount.count, 0)
@@ -35,7 +35,7 @@ test('epoch-3 baseline creates the complete schema from zero', () => {
   }
 })
 
-test('epoch-3 baseline enforces canonical cross-scope and value constraints', () => {
+test('epoch-4 baseline enforces canonical cross-scope and value constraints', () => {
   const database = baselineDatabase()
   try {
     database.prepare("INSERT INTO themes (id, name, slug) VALUES ('saya-theme-v1', 'Saya', 'saya')").run()
@@ -44,11 +44,33 @@ test('epoch-3 baseline enforces canonical cross-scope and value constraints', ()
     database.prepare("INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('location', 'org', 'site', 'location', 'Location')").run()
     database.prepare("INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('other-location', 'org', 'site', 'other-location', 'Other location')").run()
     database.prepare(`
-      INSERT INTO products (
-        id, organization_id, site_id, location_id, category, name, slug,
-        sort_order, created_by, updated_by
-      ) VALUES ('product', 'org', 'site', 'location', 'food', 'Product', 'product', 0, 'user', 'user')
+      INSERT INTO product_categories (
+        id, organization_id, site_id, location_id, name, slug, sort_order, created_by, updated_by
+      ) VALUES ('category', 'org', 'site', 'location', 'Food', 'food', 0, 'user', 'user')
     `).run()
+    database.prepare(`
+      INSERT INTO products (
+        id, organization_id, site_id, location_id, category_id, name, slug,
+        sort_order, created_by, updated_by
+      ) VALUES ('product', 'org', 'site', 'location', 'category', 'Product', 'product', 0, 'user', 'user')
+    `).run()
+
+    // A Product may only reference a category at its own location: the composite
+    // foreign key is what stops a move or copy from crossing locations.
+    database.prepare(`
+      INSERT INTO product_categories (
+        id, organization_id, site_id, location_id, name, slug, sort_order, created_by, updated_by
+      ) VALUES ('other-category', 'org', 'site', 'other-location', 'Food', 'food', 0, 'user', 'user')
+    `).run()
+    assert.throws(
+      () => database.prepare(`
+        INSERT INTO products (
+          id, organization_id, site_id, location_id, category_id, name, slug,
+          sort_order, created_by, updated_by
+        ) VALUES ('cross-location', 'org', 'site', 'location', 'other-category', 'Cross', 'cross', 0, 'user', 'user')
+      `).run(),
+      /FOREIGN KEY constraint failed/,
+    )
     database.prepare(`INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, valid_from, provenance, created_by)
       VALUES ('price', 'org', 'site', 'location', 'product', 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'test', 'user')`).run()
 
@@ -79,7 +101,7 @@ test('epoch-3 baseline enforces canonical cross-scope and value constraints', ()
   }
 })
 
-test('epoch-3 leaves extensible application registries out of database CHECK constraints', () => {
+test('epoch-4 leaves extensible application registries out of database CHECK constraints', () => {
   const database = baselineDatabase()
   try {
     const definitions = database.prepare(`

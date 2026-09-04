@@ -3,6 +3,7 @@ import { HTTPError, defineHandler  } from 'nitro';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, executeBatch, queryFirst, type BatchQuery } from '~/server/db'
+import { planProductCategories } from '~/server/utils/product-management'
 import { updateLocation } from '~/server/utils/location-management'
 import { getDraftMedia, parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
@@ -198,7 +199,12 @@ export default defineHandler(async (event) => {
     // never leaves the site with half-cleared content — see incident notes for why
     // sequential execute() calls here are unsafe.
     const now = new Date().toISOString()
-    const batchQueries: BatchQuery[] = []
+    const orderedProducts = [...payload.preview.products].sort((a, b) => a.sort_order - b.sort_order)
+    const categoryPlan = await planProductCategories({
+      db, organizationId, siteId, locationId: locationRow.id, actor: session.user.id,
+      names: [...orderedProducts.filter(product => product.is_visible), ...orderedProducts.filter(product => !product.is_visible)].map(product => product.category),
+    })
+    const batchQueries: BatchQuery[] = [...categoryPlan.inserts]
 
     batchQueries.push({
       query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id IN (SELECT id FROM products WHERE site_id = ?)`,
@@ -206,19 +212,21 @@ export default defineHandler(async (event) => {
     })
     batchQueries.push({ query: `DELETE FROM reviews WHERE product_id IN (SELECT id FROM products WHERE site_id = ? AND product_type = 'standard')`, params: [siteId] })
     batchQueries.push({ query: `DELETE FROM products WHERE organization_id = ? AND site_id = ? AND product_type = 'standard'`, params: [organizationId, siteId] })
-    for (const product of payload.preview.products) {
+    for (const product of orderedProducts) {
+      const category = categoryPlan.resolved.get(product.category)!
       batchQueries.push({
         query: `
           INSERT INTO products
-            (id, organization_id, site_id, location_id, product_type, category, name, slug, description, order_url,
+            (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url,
              is_visible, available, featured, featured_sort_order, sort_order, tags_json,
              details_json, source, created_at, updated_at, created_by, updated_by)
-          VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM products WHERE category_id = ?), ?, ?, ?, ?, ?, ?, ?)
         `, params: [
-          product.id, organizationId, siteId, locationRow.id, product.category, product.name,
+          product.id, organizationId, siteId, locationRow.id, category.id, product.name,
           product.slug, product.description, product.order_url,
           product.is_visible ? 1 : 0, product.available ? 1 : 0, product.featured ? 1 : 0,
-          product.featured_sort_order, product.sort_order, JSON.stringify(product.tags),
+          product.featured_sort_order, category.id, JSON.stringify(product.tags),
           JSON.stringify(product.details), product.source, now, now, session.user.id, session.user.id,
         ],
       })

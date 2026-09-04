@@ -29,7 +29,9 @@ function fixture(t) {
   symlinkSync(join(root, 'node_modules'), join(directory, 'node_modules'), 'dir')
   writeFileSync(join(directory, 'drizzle.config.ts'), "export default { schema: './schema.ts', out: './migrations', dialect: 'sqlite' }\n")
   writeFileSync(join(directory, 'schema.ts'), schema())
-  const result = generate(directory, 'epoch_3_baseline')
+  // Tracks the current epoch: lint-migrations requires the chain to start with
+  // the epoch baseline it is pinned to, so the fixture is named for that epoch.
+  const result = generate(directory, 'epoch_4_baseline')
   assert.equal(result.status, 0, result.stderr + result.stdout)
   return directory
 }

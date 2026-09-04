@@ -12,7 +12,7 @@
             >
           </div>
           <div class="py-2">
-            <p class="saya-kicker">{{ product.category }}</p>
+            <p class="saya-kicker">{{ product.category.name }}</p>
             <h1 class="saya-display saya-italic mt-3 text-3xl sm:text-4xl lg:text-5xl text-default leading-tight">{{ product.name }}</h1>
             <p class="mt-2 text-sm sm:text-base text-muted">{{ location.title }}</p>
             <div v-if="formatProductPriceLabel(product)" class="mt-6 flex items-baseline gap-3 text-2xl font-semibold tabular-nums">
