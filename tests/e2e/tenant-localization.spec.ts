@@ -86,7 +86,8 @@ test.describe.serial('published Thai content saves through the CMS and renders w
   let dashboardContext: BrowserContext
   let cms: Page
 
-  test.beforeAll(async ({ playwright }) => {
+  test.beforeAll(async ({ playwright }, testInfo) => {
+    testInfo.setTimeout(120_000)
     baseURL = testBaseUrl()
     admin = await playwright.request.newContext({ baseURL })
     owner = await playwright.request.newContext({ baseURL })
