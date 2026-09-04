@@ -47,15 +47,6 @@
             <UFormField label="Description">
               <UTextarea v-model="editor.form.body" :rows="8" class="w-full" />
             </UFormField>
-            <UFormField label="Highlights" help="The few things that make this worth booking.">
-              <UInputTags
-                v-model="editor.form.highlights"
-                placeholder="Hands-on dough stretching with a live instructor"
-                add-on-blur
-                add-on-paste
-                class="w-full"
-              />
-            </UFormField>
             <UFormField label="Status">
               <USelect v-model="editor.form.status" :items="statusOptions" class="w-full" />
             </UFormField>
@@ -108,11 +99,6 @@
             <UFormField label="Inquiry pricing note" help='Used only when no active Price exists, e.g. "Ask us about monthly pricing".'>
               <UInput v-model="editor.form.pricing_note" placeholder="Ask us about pricing" class="w-full" />
             </UFormField>
-            <BookingPolicyForm
-              v-model="editor.bookingPolicyDraft.value"
-              policy-type="experience"
-              :only="['deposit']"
-            />
           </div>
 
           <!-- Discounts -->
@@ -152,12 +138,6 @@
             <p class="text-base text-muted">How long it runs, and the times a guest can choose.</p>
             <UFormField label="Duration (minutes)">
               <UInputNumber v-model="editor.form.duration_minutes" :min="0" class="w-full" />
-            </UFormField>
-            <UFormField
-              label="When it runs"
-              help="A stable note shown beside the duration, e.g. “Runs weekends”. Remaining capacity is shown automatically from real bookings."
-            >
-              <UInput v-model="editor.form.available_note" class="w-full" />
             </UFormField>
             <p class="border-t border-default pt-6 text-sm font-semibold text-highlighted">Times</p>
             <UTabs v-model="editor.slotsMode.value" :items="slotModes" :content="false" />
@@ -288,14 +268,6 @@
             </div>
 
 
-            <div class="border-t border-default pt-6">
-              <p class="mb-3 text-sm font-semibold text-highlighted">Other notes on your page</p>
-              <BookingPolicyForm
-                v-model="editor.bookingPolicyDraft.value"
-                policy-type="experience"
-                :only="['late_arrival', 'special_requests', 'weather', 'notes']"
-              />
-            </div>
           </div>
 
           <!-- Availability -->
@@ -390,12 +362,6 @@
               </UFormField>
               <UFormField :label="`Price note (${translationLocale})`">
                 <UInput v-model="translationFields.price" class="w-full" />
-              </UFormField>
-              <UFormField :label="`Availability note (${translationLocale})`">
-                <UInput v-model="translationFields.available_note" class="w-full" />
-              </UFormField>
-              <UFormField :label="`Highlights (${translationLocale})`">
-                <UInputTags v-model="translationFields.highlights" add-on-blur add-on-paste class="w-full" />
               </UFormField>
               <UFormField :label="`Included items (${translationLocale})`">
                 <UInputTags v-model="translationFields.included_items" add-on-blur add-on-paste class="w-full" />
@@ -624,7 +590,6 @@ const itinerarySummary = computed(() => {
     const days = weekdayNames.filter(day => editor.recurringSlots[day].length).length
     if (days) parts.push(`${days} ${days === 1 ? 'day' : 'days'} a week`)
   }
-  if (editor.form.available_note) parts.push(editor.form.available_note)
   return parts.join(' · ') || 'No times set'
 })
 
@@ -738,8 +703,8 @@ const translationLocale = ref('en')
 const translationLocales = ref<string[]>([])
 const localeItems = computed(() => ['en', ...translationLocales.value])
 const translationFields = reactive({
-  title: '', tagline: '', body: '', price: '', available_note: '',
-  highlights: [] as string[], included_items: [] as string[], what_to_bring: [] as string[],
+  title: '', tagline: '', body: '', price: '',
+  included_items: [] as string[], what_to_bring: [] as string[],
   meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '',
 })
 const translationError = ref<string | null>(null)
@@ -765,8 +730,8 @@ async function loadTranslationLocales() {
 
 function resetTranslationFields() {
   Object.assign(translationFields, {
-    title: '', tagline: '', body: '', price: '', available_note: '',
-    highlights: [], included_items: [], what_to_bring: [],
+    title: '', tagline: '', body: '', price: '',
+    included_items: [], what_to_bring: [],
     meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '',
   })
   policyTranslationFields.weather_policy = ''
@@ -788,8 +753,6 @@ async function loadTranslationFields() {
       tagline: text('tagline'),
       body: text('body'),
       price: text('price'),
-      available_note: text('available_note'),
-      highlights: list('highlights_json'),
       included_items: list('included_items_json'),
       what_to_bring: list('what_to_bring'),
       meeting_point: text('meeting_point'),
@@ -819,10 +782,9 @@ async function saveTranslation() {
   translationError.value = null
   try {
     const values: Record<string, unknown> = {}
-    for (const field of ['title', 'tagline', 'body', 'price', 'available_note', 'meeting_point', 'cancellation_policy', 'seo_title', 'seo_description'] as const) {
+    for (const field of ['title', 'tagline', 'body', 'price', 'meeting_point', 'cancellation_policy', 'seo_title', 'seo_description'] as const) {
       if (translationFields[field].trim()) values[field] = translationFields[field].trim()
     }
-    if (translationFields.highlights.length) values.highlights_json = translationFields.highlights
     if (translationFields.included_items.length) values.included_items_json = translationFields.included_items
     if (translationFields.what_to_bring.length) values.what_to_bring = translationFields.what_to_bring
 

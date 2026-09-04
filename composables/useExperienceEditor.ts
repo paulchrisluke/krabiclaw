@@ -48,9 +48,7 @@ function emptyForm() {
     valid_until: '',
     duration_minutes: null as number | null,
     max_capacity: null as number | null,
-    available_note: '',
-    highlights: [] as string[],
-    included_items: [] as string[],
+        included_items: [] as string[],
     what_to_bring: [] as string[],
     meeting_point: '',
     status: 'active' as 'active' | 'inactive' | 'sold_out',
@@ -143,9 +141,7 @@ export function useExperienceEditor(
       valid_until: experience.price?.valid_until ? String(experience.price.valid_until).slice(0, 10) : '',
       duration_minutes: experience.duration_minutes ?? null,
       max_capacity: experience.max_capacity ?? null,
-      available_note: experience.available_note ?? '',
-      highlights: Array.isArray(experience.highlights) ? [...experience.highlights] : [],
-      included_items: Array.isArray(experience.included_items) ? [...experience.included_items] : [],
+            included_items: Array.isArray(experience.included_items) ? [...experience.included_items] : [],
       what_to_bring: Array.isArray(experience.what_to_bring) ? [...experience.what_to_bring] : [],
       meeting_point: experience.meeting_point ?? '',
       status: experience.status ?? 'active',
@@ -285,7 +281,6 @@ export function useExperienceEditor(
       tagline: form.tagline,
       body: form.body,
       location_id: ownerLocationId,
-      available_note: form.available_note,
       meeting_point: form.meeting_point,
       status: form.status,
       featured: form.featured,
@@ -313,7 +308,6 @@ export function useExperienceEditor(
       recurring_slots: slotsMode.value === 'recurring'
         ? Object.fromEntries(WEEKDAY_NAMES.filter(day => recurringSlots[day].length).map(day => [day, [...recurringSlots[day]]]))
         : null,
-      highlights: [...form.highlights],
       included_items: [...form.included_items],
       what_to_bring: [...form.what_to_bring],
       // A brand-new experience seeds its gallery inline; an edit reconciles it
