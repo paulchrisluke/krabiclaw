@@ -223,7 +223,7 @@ VALUES ('member-demo', 'org-demo', 'user-demo', 'owner', unixepoch());
 ${renderCompiledDemoCoreSeedBlock()}
 
 -- Preserve the canonical credentialed local browser owner across demo-only reseeds.
--- The user/session is provisioned separately by scripts/provision-e2e-auth.ts, while
+-- The user/session is provisioned separately by scripts/provision-development-auth.ts, while
 -- deleting org-demo above cascades its membership; restore that membership when the
 -- credentialed user already exists without inventing another auth path.
 INSERT INTO member (id, organizationId, userId, role, createdAt)

@@ -95,8 +95,20 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
 ]
 
 export const DEFAULT_E2E_USER_ID = 'user-e2e-demo-owner'
-export const LOCAL_DEVELOPER_EMAIL = 'demo-owner@playwright.example'
-export const LOCAL_DEVELOPER_LOGIN_URL = `http://localhost:3000/login?email=${encodeURIComponent(LOCAL_DEVELOPER_EMAIL)}`
+
+export const LOCAL_DEVELOPER_AUTH_FIXTURE: E2eAuthFixture = {
+  id: 'user-local-developer',
+  name: 'Local Developer',
+  email: 'developer@playwright.example',
+  platformRole: 'admin',
+  memberships: [
+    { organizationId: 'org-demo', role: 'owner' },
+    { organizationId: 'org-pottery-house', role: 'owner' },
+    { organizationId: 'org-kikuzuki', role: 'owner' },
+    { organizationId: 'org-ncls-blawby', role: 'owner' },
+  ],
+}
+export const LOCAL_DEVELOPER_LOGIN_URL = `http://localhost:3000/login?email=${encodeURIComponent(LOCAL_DEVELOPER_AUTH_FIXTURE.email)}`
 
 export function findE2eAuthFixture(userId = DEFAULT_E2E_USER_ID): E2eAuthFixture {
   const fixture = E2E_AUTH_FIXTURES.find(candidate => candidate.id === userId)

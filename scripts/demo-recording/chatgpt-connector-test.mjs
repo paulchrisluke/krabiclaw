@@ -13,7 +13,7 @@ const devSecret = process.env.E2E_DEV_ROUTE_SECRET ?? ''
 const connectorName = process.env.CHATGPT_CONNECTOR_NAME ?? 'devkrabiclaw'
 const siteId = process.env.MCP_CHATGPT_SITE_ID ?? 'site-mcp-growth-service'
 const fixtureName = process.env.MCP_CHATGPT_FIXTURE_NAME ?? 'MCP Growth Service Fixture'
-const userId = process.env.MCP_CHATGPT_USER_ID ?? 'user-mcp-growth-service'
+const userId = process.env.MCP_CHATGPT_USER_ID ?? 'user-e2e-growth-service-owner'
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const artifactDir = path.join(rootDir, '.wrangler', 'chatgpt-connector', runId)
 const MCP_VERSION = '2025-06-18'
@@ -136,8 +136,7 @@ async function runNoMutationPrompt(browserRunner, title, prompt, { expectedReadT
 
 async function cleanupSession() {
   return credentialCookie(baseUrl, {
-    email: required(process.env.LOCAL_MCP_TEST_EMAIL, 'LOCAL_MCP_TEST_EMAIL'),
-    password: required(process.env.LOCAL_MCP_TEST_PASSWORD, 'LOCAL_MCP_TEST_PASSWORD'),
+    userId,
     organizationId: 'org-mcp-growth-service',
   })
 }

@@ -58,3 +58,11 @@ Use the approved client onboarding and import pipeline. Never manually seed or p
 - Domain context and ADRs: root `CONTEXT.md` and `docs/adr/`
 - Local setup and signing in: [docs/local-development.md](docs/local-development.md)
 - CMS navigation and editing patterns: root `DESIGN.md`
+
+## Local development contract
+
+Use `corepack yarn local:setup`, then `corepack yarn dev`. Sign in only as
+`developer@playwright.example` with the freshly generated password and prefilled
+URL printed by setup. Do not run seed or auth-provisioning scripts individually.
+Dashboard `siteSlug` URL segments contain `sites.subdomain`, not `sites.slug`;
+follow dashboard links instead of guessing a route.

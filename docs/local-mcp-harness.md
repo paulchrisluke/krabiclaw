@@ -28,7 +28,7 @@ WHATSAPP_DELIVERY_MODE=log_only
 Do not change those origins for tunnel testing. The harness passes its public
 origin directly to the build, Worker, and test processes for that run.
 Because the tunnel is public, `E2E_TEST_PASSWORD` must be set explicitly and
-must not use the documented `krabiclaw-local-dev` localhost fixture password.
+must not reuse the localhost credential printed by `local:setup`.
 
 ## Automated gate
 
@@ -57,21 +57,21 @@ Cloudflared reads the existing tunnel credential from the user's standard
 
 ## Real ChatGPT gate
 
-Add the dedicated local test account to `.env`:
-
-```env
-LOCAL_MCP_TEST_EMAIL=<test-email>
-LOCAL_MCP_TEST_PASSWORD=<test-password>
-```
-
-Then run:
+Run:
 
 ```bash
 yarn test:mcp:chatgpt
 ```
 
-The command runs the automated gate first, provisions the local Better Auth
-credential account, and prints the connector URL:
+The command runs the automated gate first and uses the same credentialed fixture
+provisioning as the other MCP tests. When ChatGPT requests connector login, use:
+
+```text
+Email: growth-service-owner@playwright.example
+Password: the E2E_TEST_PASSWORD value from .env
+```
+
+The connector URL is:
 
 ```text
 https://local.krabiclaw.com/api/mcp

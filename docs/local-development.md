@@ -2,97 +2,86 @@
 
 **Status: Contract**
 
-The whole local loop is four commands. If something here does not work, fix this
-document or the scripts it names — do not invent a second way in.
+There is one local setup path for humans and agents:
 
 ```sh
-yarn install
-yarn schema:local   # apply the migration chain to a local D1
-yarn seed:local     # load the demo, Kikuzuki, Pottery House, and NCLS fixtures
-yarn dev            # http://localhost:3000
+corepack yarn install
+corepack yarn local:setup
+corepack yarn dev
 ```
 
-`yarn install` runs `patch-package` through `postinstall`. If it is skipped —
-Yarn does not always re-run `postinstall` when nothing else changed — the
-patches in `patches/` silently do not apply, and `yarn test:migrations` fails
-while everything else looks fine. Re-apply them directly:
-
-```sh
-npx patch-package --error-on-fail
-```
+Copy `.env.example` to `.env` and fill the required application secrets before
+setup. `local:setup` is safe to repeat: it applies the migration chain, refreshes
+the demo, Kikuzuki, Pottery House, and NCLS fixtures, provisions local auth, and
+verifies the resulting D1 database. Do not replace its steps with direct
+Wrangler writes or a hand-edited local database.
 
 ## Signing in
 
-```sh
-yarn dev:login
+After `local:setup`, start the app and use the URL, email, and password printed
+under `Local developer sign-in`. Setup generates a fresh password on every run,
+prints it once, and stores only its hash in local D1. No reusable local password
+is recorded in the repository.
+
+The account exists only in local D1. It is a platform admin and an owner in each
+curated tenant organization, so it is the single manual sign-in for platform,
+demo, Pottery House, Kikuzuki, and NCLS work. Better Auth handles the normal
+email/password request and stores only the password hash; there is no auth
+bypass, magic header, or cookie to paste.
+
+`local:setup` refreshes the fixture users and sessions. If local data or auth is
+stale, run the whole command again and then sign in again. Do not run an
+individual seed or provisioning script as an alternate repair path.
+
+Automated Playwright, preview, and public-tunnel gates generate or require their
+own test secrets internally. Those are test inputs, not additional local
+developer accounts. The public ChatGPT tunnel contract is documented separately
+in [local-mcp-harness.md](local-mcp-harness.md).
+
+## Dashboard URLs
+
+Follow links rendered by the dashboard whenever possible. When constructing a
+dashboard route, the URL segment named `siteSlug` contains the site's
+**subdomain**, not the `sites.slug` database value.
+
+| Tenant | Organization segment | Site segment (`subdomain`) |
+| --- | --- | --- |
+| Ember & Slice | `ember-slice-demo` | `demo` |
+| Pottery House | `pottery-house-krabi` | `pottery-house` |
+| Kikuzuki | `kikuzuki-krabi-thailand` | `kikuzuki-krabi-thailand` |
+| NCLS | `north-carolina-legal-services` | `ncls` |
+
+For example, Kikuzuki starts at:
+
+```text
+http://localhost:3000/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand
 ```
 
-It provisions Better Auth credential accounts for every seeded fixture user and
-prints the login URL, email, and password. Sign in at that URL like a normal
-user. There is no dev bypass, no magic header, and no cookie to paste.
-
-The password comes from `E2E_TEST_PASSWORD` when that is set, and is otherwise
-generated per run and printed. The same script provisions preview
-(`--preview`), so local and CI sign in through one code path.
-
-Re-run `yarn dev:login` after `yarn seed:local` or any local database rebuild:
-both replace the `user` rows, which drops the credentials and every session
-with them.
-
-### Dashboard URLs
-
-The dashboard's `siteSlug` route parameter matches the site's **subdomain**,
-not its `slug`. For Kikuzuki that is `kikuzuki-krabi-thailand`, not `kikuzuki`:
-
-```
-/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/products
-```
-
-A mismatched `siteSlug` resolves no site and the capability guard in
-`middleware/dashboard.global.ts` returns a 404 rather than an error naming the
-cause, so a 404 on a dashboard route is usually this and not a missing page.
-
-## Rebuilding the database
-
-```sh
-rm -f .wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite*
-yarn schema:local && yarn seed:local && yarn dev:login
-```
-
-Local D1 is disposable. Never hand-edit it to work around an application bug —
-see [operations/release-and-outage-prevention.md](operations/release-and-outage-prevention.md).
+Using `kikuzuki` for the site segment returns 404 because the capability guard
+resolves that segment against `sites.subdomain`.
 
 ## Before pushing
 
 ```sh
-yarn quality && yarn test:unit && yarn test:d1 && yarn test:migrations && yarn test:mcp
-yarn chatgpt:submission:check && yarn lint:migrations && yarn lint:schema-drift && yarn lint:seeds
+corepack yarn quality && corepack yarn test:unit && corepack yarn test:d1 && corepack yarn test:migrations && corepack yarn test:mcp
+corepack yarn chatgpt:submission:check && corepack yarn lint:migrations && corepack yarn lint:schema-drift && corepack yarn lint:seeds
 ```
 
-That is every CI check that runs without a deployed environment. `yarn test:unit`
-alone is not enough — `test:d1` and `test:migrations` cover schema and
-persistence behaviour that typecheck and unit tests cannot see.
+That is every CI check that runs without a deployed environment. `test:unit`
+alone is not enough: D1 and migration checks cover persistence behavior that
+typecheck and unit tests cannot see.
 
 Changing the MCP tool surface makes two generated artifacts stale. Regenerate
 and commit both:
 
 ```sh
-yarn mcp:catalog:write
-yarn chatgpt:submission:write
+corepack yarn mcp:catalog:write
+corepack yarn chatgpt:submission:write
 ```
 
-## Which credential belongs to which job
+`yarn install` normally runs `patch-package` through `postinstall`. If Yarn did
+not rerun it after a dependency change, use:
 
-Three separate things exist. They are not interchangeable, and only the first is
-part of ordinary local development:
-
-| Purpose | Command | Environment |
-| --- | --- | --- |
-| Sign in to the local dashboard | `yarn dev:login` | `E2E_TEST_PASSWORD` (optional) |
-| Playwright end-to-end runs | `yarn e2e:local:prepare` | `E2E_TEST_PASSWORD` |
-| The real ChatGPT MCP gate | `yarn test:mcp:chatgpt` | `LOCAL_MCP_TEST_EMAIL`, `LOCAL_MCP_TEST_PASSWORD` |
-
-The MCP row needs its own account because a human completes OAuth and consent in
-a real ChatGPT session against it — see
-[local-mcp-harness.md](local-mcp-harness.md). Ordinary dashboard work does not
-need it, and leaving those two variables empty is normal.
+```sh
+corepack yarn patch-package --error-on-fail
+```

@@ -9,9 +9,9 @@ import { parseArgs } from 'node:util'
 import { hashPassword } from 'better-auth/crypto'
 import {
   E2E_AUTH_FIXTURES,
-  LOCAL_DEVELOPER_EMAIL,
+  LOCAL_DEVELOPER_AUTH_FIXTURE,
   LOCAL_DEVELOPER_LOGIN_URL,
-} from '../config/e2e-auth-fixtures.ts'
+} from '../config/development-auth-fixtures.ts'
 
 const { values: options } = parseArgs({
   options: {
@@ -29,15 +29,23 @@ if (persistTo && isPreview) {
   throw new Error('--persist-to is available only for local D1 fixture provisioning.')
 }
 
-const password = process.env.E2E_TEST_PASSWORD || (isLocalDev ? randomUUID() : '')
-if (!password) {
+const e2ePassword = process.env.E2E_TEST_PASSWORD || (isLocalDev ? randomUUID() : '')
+if (!e2ePassword) {
   throw new Error('E2E_TEST_PASSWORD is required when provisioning Better Auth E2E credentials.')
 }
+const localDeveloperPassword = isLocalDev ? randomUUID() : ''
 
 const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`
-const passwordHash = await hashPassword(password)
+const credentialFixtures = isLocalDev
+  ? [...E2E_AUTH_FIXTURES, LOCAL_DEVELOPER_AUTH_FIXTURE]
+  : E2E_AUTH_FIXTURES
+const e2ePasswordHash = await hashPassword(e2ePassword)
+const localDeveloperPasswordHash = isLocalDev ? await hashPassword(localDeveloperPassword) : ''
 
-const fixtureSql = E2E_AUTH_FIXTURES.map((fixture) => {
+const fixtureSql = credentialFixtures.map((fixture) => {
+  const passwordHash = fixture.id === LOCAL_DEVELOPER_AUTH_FIXTURE.id
+    ? localDeveloperPasswordHash
+    : e2ePasswordHash
   const platformRole = fixture.platformRole ?? 'user'
   const memberships = (fixture.memberships ?? []).map((membership) => `
 INSERT INTO member (id, organizationId, userId, role, createdAt)
@@ -80,7 +88,10 @@ VALUES (${sqlString(`account-${fixture.id}-credential`)}, ${sqlString(fixture.id
 ${memberships}${teamMemberships}`
 }).join('\n')
 
-const sql = `PRAGMA foreign_keys = ON;\n${fixtureSql}`
+const localDeveloperCleanupSql = isLocalDev
+  ? ''
+  : `DELETE FROM user WHERE id = ${sqlString(LOCAL_DEVELOPER_AUTH_FIXTURE.id)};\n`
+const sql = `PRAGMA foreign_keys = ON;\n${localDeveloperCleanupSql}${fixtureSql}`
 const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-e2e-auth-'))
 const sqlPath = join(directory, 'e2e-auth.sql')
 
@@ -96,9 +107,11 @@ try {
   execFileSync(process.execPath, args, { cwd: process.cwd(), stdio: 'inherit' })
   console.log(`Provisioned ${E2E_AUTH_FIXTURES.length} verified Better Auth E2E credentials (${isPreview ? 'preview' : 'local'}).`)
   if (isLocalDev) {
-    console.log(`Local login: ${LOCAL_DEVELOPER_LOGIN_URL}`)
-    console.log(`Email: ${LOCAL_DEVELOPER_EMAIL}`)
-    console.log(`Password: ${process.env.E2E_TEST_PASSWORD ? 'the E2E_TEST_PASSWORD value from your environment' : password}`)
+    console.log('\nLocal developer sign-in')
+    console.log(`URL: ${LOCAL_DEVELOPER_LOGIN_URL}`)
+    console.log(`Email: ${LOCAL_DEVELOPER_AUTH_FIXTURE.email}`)
+    console.log(`Password: ${localDeveloperPassword}`)
+    console.log('Use dashboard links after sign-in. When constructing one manually, its site segment is the site subdomain.')
   }
 } finally {
   rmSync(directory, { recursive: true, force: true })
