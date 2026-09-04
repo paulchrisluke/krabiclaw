@@ -744,8 +744,8 @@ export async function syncProducts(
       const updatedAtParams = guardParts.length ? [...guardParts.flatMap(part => part.params), now] : [now]
 
       writes.push({
-        query: `UPDATE products SET category=?, name=?, description=?, order_url=?, is_visible=?, available=?, featured=?, featured_sort_order=?, tags_json=?, details_json=?, seo_title=?, seo_description=?, canonical_url=?, robots=?, source='manual', updated_at=${updatedAtClause}, updated_by=? WHERE id=? AND organization_id=? AND site_id=? AND location_id=? AND product_type='standard'`,
-        params: [category, name, input.description === undefined ? current.description : description,
+        query: `UPDATE products SET category_id=?, name=?, description=?, order_url=?, is_visible=?, available=?, featured=?, featured_sort_order=?, tags_json=?, details_json=?, seo_title=?, seo_description=?, canonical_url=?, robots=?, source='manual', updated_at=${updatedAtClause}, updated_by=? WHERE id=? AND organization_id=? AND site_id=? AND location_id=? AND product_type='standard'`,
+        params: [category.id, name, input.description === undefined ? current.description : description,
           input.order_url === undefined ? current.order_url : orderUrl,
           validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, current.is_visible),
           validateOptionalBoolean(input.available, `products[${index}].available`, current.available),

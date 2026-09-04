@@ -56,3 +56,5 @@ Use the approved client onboarding and import pipeline. Never manually seed or p
 ## Agent documentation
 
 - Domain context and ADRs: root `CONTEXT.md` and `docs/adr/`
+- Local setup and signing in: [docs/local-development.md](docs/local-development.md)
+- CMS navigation and editing patterns: root `DESIGN.md`

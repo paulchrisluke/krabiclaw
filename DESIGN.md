@@ -6,10 +6,15 @@ The vocabulary the dashboard CMS is built from. It exists so a new screen is a
 choice between named, already-built patterns rather than a fresh invention, and
 so review can say "that is a hub, hubs do X" instead of arguing from taste.
 
-Airbnb's host tools are the reference, captured in
-[cms-redesign-packet](cms-redesign-packet/). The goal is **parity of behaviour**,
-not pixel copying, and where Airbnb has no equivalent this document says so
-rather than forcing an analogy.
+Airbnb's host tools are the reference. The goal is **parity of behaviour**, not
+pixel copying, and where Airbnb has no equivalent this document says so rather
+than forcing an analogy.
+
+The screenshots the patterns were derived from are in
+[docs/design/cms-redesign-packet](docs/design/cms-redesign-packet/). That packet
+is working reference for the refactor and is expected to be deleted once the
+refactor lands; this document is the permanent record, so it must stand on its
+own without it.
 
 ## The two axes
 
