@@ -31,11 +31,14 @@
         </template>
 
         <template #item="{ item }">
-          <button type="button" class="block w-full text-left" :data-testid="`product-${item.id}`" @click="openExisting(item)">
-            <p class="truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</p>
-            <p class="mt-1 text-sm tabular-nums" :class="priceLabel(item.row) ? 'text-muted' : 'italic text-muted'">
-              {{ priceLabel(item.row) || 'No price set' }}
-            </p>
+          <button type="button" class="flex w-full items-center gap-4 text-left" :data-testid="`product-${item.id}`" @click="openExisting(item)">
+            <DashboardMediaThumb :asset="item.row.image" :label="item.row.name" fallback-icon="i-lucide-image" />
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</span>
+              <span class="mt-1 block text-sm tabular-nums" :class="priceLabel(item.row) ? 'text-muted' : 'italic text-muted'">
+                {{ priceLabel(item.row) || 'No price set' }}
+              </span>
+            </span>
           </button>
         </template>
       </DashboardListEditor>
@@ -75,7 +78,7 @@
         :removable="Boolean(editingId)"
         :saving="saving"
         :removing="removing"
-        :save-disabled="!form.name.trim() || Boolean(form.has_fixed_price && form.price_note.trim())"
+        :save-disabled="!form.name.trim() || (form.price_mode === 'amount' && !form.price_major.trim())"
         @save="locale === 'en' ? save() : saveLocalized()"
         @remove="removeEditing"
       >
@@ -87,6 +90,55 @@
         </UFormField>
 
         <template v-if="locale === 'en'">
+          <!--
+            The photo leads the sheet the way it leads the row and the way it
+            leads Airbnb's own photo detail: it is the thing you recognise the
+            dish by, so it is the thing you see first and largest.
+          -->
+          <UFormField v-if="editingId && locationId">
+            <MediaPicker
+              :site-id="siteId"
+              :location-id="locationId"
+              :model-value="form.image_asset_id"
+              accept="image"
+              title="Dish photo"
+              @update:model-value="setPrimaryImage"
+            >
+              <div class="group relative overflow-hidden rounded-xl" data-testid="product-photo">
+                <img
+                  v-if="editingImage"
+                  :src="editingImage.public_url"
+                  :alt="editingImage.alt_text || form.name"
+                  class="aspect-[4/3] w-full bg-elevated object-cover"
+                >
+                <div
+                  v-else
+                  class="grid aspect-[4/3] w-full place-items-center rounded-xl border border-dashed border-default bg-elevated text-center"
+                >
+                  <div>
+                    <UIcon name="i-lucide-images" class="mx-auto size-8 text-muted" />
+                    <p class="mt-2 text-sm font-medium text-highlighted">Add a photo</p>
+                    <p class="mt-1 text-xs text-muted">Browse your media library</p>
+                  </div>
+                </div>
+                <span
+                  v-if="editingImage"
+                  class="absolute bottom-3 right-3 rounded-full bg-default/90 px-3 py-1.5 text-xs font-medium text-highlighted shadow-sm"
+                >Change</span>
+              </div>
+            </MediaPicker>
+            <UButton
+              v-if="editingImage"
+              label="Remove photo"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              class="mt-2"
+              data-testid="product-photo-remove"
+              @click="setPrimaryImage(null)"
+            />
+          </UFormField>
+
           <UFormField label="Name">
             <UInput v-model="form.name" autofocus class="w-full" />
           </UFormField>
@@ -106,17 +158,24 @@
             />
           </UFormField>
 
-          <UFormField>
-            <UCheckbox v-model="form.has_fixed_price" label="Fixed price" />
+          <!--
+            A dish shows an amount, or wording in place of one, or nothing. Those
+            are the only three states the server accepts, so they are the only
+            three the form offers: the old "fixed price" checkbox let you build
+            an amount and wording together and then refused to save it.
+          -->
+          <UFormField label="Price">
+            <URadioGroup v-model="form.price_mode" :items="priceModes" :ui="{ fieldset: 'flex flex-wrap gap-4' }" />
           </UFormField>
-          <UFormField v-if="form.has_fixed_price" :label="`Price (${currency})`">
-            <UInput v-model="form.price_major" inputmode="decimal" class="w-full" />
+          <UFormField v-if="form.price_mode === 'amount'" :label="`Amount (${currency})`">
+            <UInput v-model="form.price_major" inputmode="decimal" placeholder="280" class="w-full" />
           </UFormField>
-          <UFormField label="Price wording" :description="form.has_fixed_price ? undefined : 'Shown instead of a number. Leave blank to show no price.'">
+          <UFormField
+            v-else-if="form.price_mode === 'wording'"
+            label="Wording"
+            description="Shown to customers in place of a number."
+          >
             <UInput v-model="form.price_note" placeholder="Market price" class="w-full" />
-            <p v-if="form.has_fixed_price && form.price_note.trim()" class="mt-1 text-xs text-error">
-              Clear this wording before saving a fixed price.
-            </p>
           </UFormField>
 
           <UFormField label="Description">
@@ -127,17 +186,6 @@
           </UFormField>
           <UFormField label="Tags">
             <UInput v-model="form.tags_text" placeholder="tag one, tag two" class="w-full" />
-          </UFormField>
-
-          <UFormField v-if="editingId && locationId" label="Photo">
-            <MediaPicker
-              :site-id="siteId"
-              :location-id="locationId"
-              :model-value="form.image_asset_id"
-              accept="image"
-              title="Product primary image"
-              @update:model-value="setPrimaryImage"
-            />
           </UFormField>
 
           <div class="grid grid-cols-3 gap-3">
@@ -169,6 +217,7 @@
 
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
+import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import type { Product, ProductCategory } from '~/server/types/products'
@@ -210,6 +259,9 @@ const orderDirty = ref(false)
 const category = computed(() => categories.value.find(row => row.id === categoryId.value) ?? null)
 const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, row })))
 const moveTargets = computed(() => categories.value.filter(row => row.id !== categoryId.value))
+// The picker's own trigger is a small row; the open dish shows its photo large,
+// so the preview reads from the loaded Product rather than the picker's state.
+const editingImage = computed(() => products.value.find(row => row.id === editingId.value)?.image ?? null)
 
 useSeoMeta({ title: () => `${category.value?.name ?? presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
@@ -325,10 +377,18 @@ const removing = ref(false)
 const locale = ref('en')
 const translationLocales = ref<string[]>([])
 const localizedFields = ref({ name: '', description: '', seo_title: '', seo_description: '' })
+/** The three states the server accepts; nothing else is representable. */
+type PriceMode = 'amount' | 'wording' | 'none'
+const priceModes = [
+  { label: 'Amount', value: 'amount' },
+  { label: 'Wording', value: 'wording' },
+  { label: 'No price', value: 'none' },
+]
+
 const form = reactive({
   name: '',
   price_major: '',
-  has_fixed_price: true,
+  price_mode: 'amount' as PriceMode,
   price_note: '',
   description: '',
   order_url: '',
@@ -342,7 +402,7 @@ const form = reactive({
 function resetForm() {
   form.name = ''
   form.price_major = ''
-  form.has_fixed_price = true
+  form.price_mode = 'amount'
   form.price_note = ''
   form.description = ''
   form.order_url = ''
@@ -366,8 +426,8 @@ function openExisting(item: { row: Product }) {
   editingId.value = product.id
   form.name = product.name
   form.price_major = product.price ? minorAmountToMajor(product.price.amount_minor, product.price.currency) : ''
-  form.has_fixed_price = product.price !== null
   form.price_note = product.details.find(detail => detail.key === 'price-note')?.values[0] ?? ''
+  form.price_mode = product.price !== null ? 'amount' : (form.price_note ? 'wording' : 'none')
   form.description = product.description
   form.order_url = product.order_url ?? ''
   form.tags_text = product.tags.join(', ')
@@ -379,12 +439,14 @@ function openExisting(item: { row: Product }) {
 }
 
 function payload() {
-  const price = form.has_fixed_price
+  const price = form.price_mode === 'amount'
     ? { amount_minor: majorAmountToMinor(form.price_major, currency), currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }
     : null
   const existing = products.value.find(row => row.id === editingId.value)
   const details = (existing?.details ?? []).filter(detail => detail.key !== 'price-note')
-  const priceNote = form.price_note.trim()
+  // Wording is dropped unless it is the chosen mode, so switching to an amount
+  // cannot leave a stale note behind for the server to reject.
+  const priceNote = form.price_mode === 'wording' ? form.price_note.trim() : ''
   return {
     name: form.name.trim(),
     description: form.description,

@@ -31,9 +31,12 @@
             The row body is the way in. Reordering and renaming live in the edit
             state beside it, so browsing never has to step around edit controls.
           -->
-          <NuxtLink :to="`${productsPath}/${item.id}`" class="block no-underline" :data-testid="`product-category-${item.id}`">
+          <NuxtLink :to="`${productsPath}/${item.id}`" class="flex items-center gap-4 no-underline" :data-testid="`product-category-${item.id}`">
+            <DashboardMediaThumb :asset="item.row.cover" :label="item.row.name" fallback-icon="i-lucide-layout-list" />
+            <span class="min-w-0 flex-1">
             <p class="truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</p>
             <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? `1 ${presentation.itemLabel.toLowerCase()}` : `${item.row.product_count} ${presentation.itemLabelPlural.toLowerCase()}` }}</p>
+            </span>
           </NuxtLink>
         </template>
       </DashboardListEditor>
@@ -56,8 +59,10 @@
 
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
+import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
-import type { ProductCategory } from '~/server/types/products'
+import type { Product, ProductCategory } from '~/server/types/products'
+import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import { getErrorMessage } from '~/utils/errors'
 import { requireProductPresentation } from '~/utils/product-presentation'
 
@@ -78,7 +83,9 @@ useSeoMeta({ title: `${presentation.collectionLabel} | KrabiClaw Dashboard`, rob
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 const productsPath = computed(() => locationPaths.value?.products ?? '')
 
-interface CategoryRow extends ProductCategory { product_count: number }
+// The cover is the first Product in the category that has a photo, which is how
+// the category reads on the public site too.
+interface CategoryRow extends ProductCategory { product_count: number; cover: ResolvedMediaAsset | null }
 
 const categories = ref<CategoryRow[]>([])
 const pending = ref(true)
@@ -95,7 +102,7 @@ const listItems = computed(() => categories.value.map(row => ({ id: row.id, titl
 function isCategoryList(value: unknown): value is { categories: ProductCategory[] } {
   return isRecord(value) && Array.isArray(value.categories)
 }
-function isProductList(value: unknown): value is { success: true; products: Array<{ category_id: string }> } {
+function isProductList(value: unknown): value is { success: true; products: Product[] } {
   return isRecord(value) && Array.isArray(value.products)
 }
 
@@ -112,8 +119,16 @@ async function load() {
       dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products`, { validate: isProductList }),
     ])
     const counts = new Map<string, number>()
-    for (const product of productResponse.products) counts.set(product.category_id, (counts.get(product.category_id) ?? 0) + 1)
-    categories.value = categoryResponse.categories.map(row => ({ ...row, product_count: counts.get(row.id) ?? 0 }))
+    const covers = new Map<string, ResolvedMediaAsset>()
+    for (const product of productResponse.products) {
+      counts.set(product.category_id, (counts.get(product.category_id) ?? 0) + 1)
+      if (product.image && !covers.has(product.category_id)) covers.set(product.category_id, product.image)
+    }
+    categories.value = categoryResponse.categories.map(row => ({
+      ...row,
+      product_count: counts.get(row.id) ?? 0,
+      cover: covers.get(row.id) ?? null,
+    }))
   } catch (error) {
     loadError.value = getErrorMessage(error, `Failed to load ${presentation.categoryLabelPlural.toLowerCase()}`)
   } finally {
