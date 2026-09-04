@@ -69,6 +69,13 @@ one group across both manifests. Better Auth and TypeScript remain separate
 because their documented blockers require independent qualification. GitHub
 Actions updates form one group on the same schedule.
 
+Known major-version holds belong in Dependabot's `ignore` rules as well as the
+integration PR. `@types/node` stays on its proven major until a toolchain upgrade
+is qualified; `better-sqlite3` stays on version 12 while pinned Better Auth
+requires `^12`. Minor and patch updates remain eligible. Remove each major hold
+when the corresponding toolchain or auth upgrade is qualified. Group exclusions
+alone do not hold a dependency: they allow it to return as an individual PR.
+
 Routine releases must be at least 30 days old. Dependabot's cooldown and the
 root Yarn configuration enforce the same window; the email package inherits
 that Yarn configuration. Existing locked versions are retained, not downgraded

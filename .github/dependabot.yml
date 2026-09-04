@@ -11,6 +11,14 @@ updates:
     cooldown:
       default-days: 30
 
+    ignore:
+      # Keep the proven Node typings major until a toolchain upgrade is qualified (#814).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Pinned Better Auth requires better-sqlite3 ^12; revisit with the auth upgrade (#809).
+      - dependency-name: "better-sqlite3"
+        update-types: ["version-update:semver-major"]
+
     groups:
       better-auth:
         patterns: ["better-auth", "@better-auth/*"]
