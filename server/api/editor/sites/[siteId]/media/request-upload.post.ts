@@ -54,7 +54,7 @@ export default defineHandler(async (event) => {
           await deleteImage(env, imageId)
         } catch (cleanupError) {
           throw new AggregateError(
-            [error, cleanupError], `Image upload setup failed: ${error instanceof Error ? error.message : String(error)}; Cloudflare Images cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`, )
+            [error, cleanupError], `Image upload setup failed: ${error instanceof Error ? error.message : String(error)}; Cloudflare Images cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`, { cause: cleanupError }, )
         }
       }
       throw error

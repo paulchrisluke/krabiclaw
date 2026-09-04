@@ -82,7 +82,7 @@ export async function uploadResolvedMediaToAssetStore(
       } catch (cleanupError) {
         throw new AggregateError(
           [uploadFailure(persistError), uploadFailure(cleanupError)],
-          `Media asset ${assetId} could not be persisted or cleaned up`,
+          `Media asset ${assetId} could not be persisted or cleaned up`, { cause: cleanupError },
         );
       }
       throw persistError;
@@ -148,7 +148,7 @@ export async function uploadResolvedMediaToAssetStore(
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [uploadFailure(persistError), ...cleanupErrors],
-        `Media asset ${assetId} could not be stored or cleaned up`,
+        `Media asset ${assetId} could not be stored or cleaned up`, { cause: persistError },
       );
     }
     throw persistError;

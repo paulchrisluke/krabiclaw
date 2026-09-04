@@ -1,18 +1,21 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /
+    directories:
+      - /
+      - /workers/email-inbound
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
 
-  - package-ecosystem: npm
-    directory: /workers/email-inbound
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
+    groups:
+      better-auth:
+        patterns: ["better-auth", "@better-auth/*"]
+      compatible-dependencies:
+        patterns: ["*"]
+        exclude-patterns: ["better-auth", "@better-auth/*", "typescript", "nuxt", "nuxt-nightly", "h3", "drizzle-kit", "sharp", "satori"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -20,3 +23,6 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]

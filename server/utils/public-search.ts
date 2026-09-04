@@ -687,7 +687,7 @@ export async function rebuildPlatformKnowledgeIndex(
       // cause (a real blog slug embedded in its DB id), surfaced via the error-detail
       // passthrough in server/api/internal/search/reindex.post.ts.
       const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`uploadIndexItem failed for key "${record.key}" (length ${record.key.length}): ${message}`)
+      throw new Error(`uploadIndexItem failed for key "${record.key}" (length ${record.key.length}): ${message}`, { cause: error })
     }
   })
   console.warn(`[ai-search] uploads done at ${elapsed()}`)

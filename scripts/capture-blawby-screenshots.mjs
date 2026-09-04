@@ -350,7 +350,7 @@ try {
         } catch (error) {
           throw new Error(
             `Section capture failed for ${routeName}/${viewportName}/${section.slot}-${section.name} `
-            + `at ${JSON.stringify(section.clip)}: ${error instanceof Error ? error.message : String(error)}`,
+            + `at ${JSON.stringify(section.clip)}: ${error instanceof Error ? error.message : String(error)}`, { cause: error },
           )
         } finally {
           if (section.slot !== 'header') {

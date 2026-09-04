@@ -261,7 +261,7 @@ async function uploadImage(file: File) {
     try {
       await discardReviewMedia(requestId, upload.asset_id)
     } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], 'Image upload and cleanup failed.')
+      throw new AggregateError([error, cleanupError], 'Image upload and cleanup failed.', { cause: cleanupError })
     }
     throw error
   }
@@ -328,7 +328,7 @@ async function uploadVideo(file: File) {
       try {
         await discardReviewMedia(requestId, assetId)
       } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], 'Video upload and cleanup failed.')
+        throw new AggregateError([error, cleanupError], 'Video upload and cleanup failed.', { cause: cleanupError })
       }
     }
     throw normalizeApiError(error, 'Video upload failed.')

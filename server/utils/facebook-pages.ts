@@ -94,7 +94,7 @@ async function graphFetch<T>(url: string, init?: RequestInit): Promise<T> {
   } catch (err) {
     clearTimeout(timer)
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`Facebook API request timed out after ${GRAPH_TIMEOUT_MS}ms`)
+      throw new Error(`Facebook API request timed out after ${GRAPH_TIMEOUT_MS}ms`, { cause: err })
     }
     throw err
   }

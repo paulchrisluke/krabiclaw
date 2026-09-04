@@ -683,7 +683,7 @@ export default defineHandler(async (event) => {
     }
   }
 
-  let payload: WhatsAppPayload = {}
+  let payload: WhatsAppPayload
   try {
     payload = rawBody ? JSON.parse(rawBody) : {}
   } catch {

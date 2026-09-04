@@ -154,7 +154,7 @@ export async function copyLocationBatch(
       } catch (cleanupError) {
         throw new AggregateError(
           [new Error(result.error), cleanupError],
-          'Location copy failed and the new location could not be removed',
+          'Location copy failed and the new location could not be removed', { cause: cleanupError },
         )
       }
     }

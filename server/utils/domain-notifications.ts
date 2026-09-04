@@ -145,7 +145,7 @@ async function sendEmail(
     return
   }
 
-  let data: ResendResponse | null = null
+  let data: ResendResponse | null
   try {
     data = await response.clone().json() as ResendResponse
   } catch (error) {

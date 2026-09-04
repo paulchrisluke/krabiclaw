@@ -259,7 +259,7 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
     } catch (lookupError) {
       throw new AggregateError(
         [asError(error), asError(lookupError)],
-        `Organization creation failed and partial organization ${slug} could not be inspected`,
+        `Organization creation failed and partial organization ${slug} could not be inspected`, { cause: lookupError },
       )
     }
     if (partial) {
@@ -272,7 +272,7 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
       } catch (lookupError) {
         throw new AggregateError(
           [asError(error), asError(lookupError)],
-          `Organization creation failed and owner state for ${partial.id} could not be inspected`,
+          `Organization creation failed and owner state for ${partial.id} could not be inspected`, { cause: lookupError },
         )
       }
       const metadata = organizationMetadata(partial.metadata)
@@ -283,7 +283,7 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
         } catch (cleanupError) {
           throw new AggregateError(
             [asError(error), asError(cleanupError)],
-            `Organization creation failed and partial organization ${partial.id} could not be deleted`,
+            `Organization creation failed and partial organization ${partial.id} could not be deleted`, { cause: cleanupError },
           )
         }
       }

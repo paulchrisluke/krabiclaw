@@ -92,9 +92,7 @@ export default defineHandler(async (event) => {
   }
 
   const payload = parseOnboardingDraftPayload(draft.payload_json)
-  let organizationId: string | null = null
   let siteId: string | null = null
-  let siteSlug: string | null = null
   let draftCommitted = false
 
   try {
@@ -112,9 +110,9 @@ export default defineHandler(async (event) => {
         error: typeof result.data.error === 'string' ? result.data.error : 'Could not create site. Please try again.', }, { status: result.status || 500 })
     }
 
-    organizationId = result.data.organizationId as string
+    const organizationId = result.data.organizationId as string
     siteId = result.data.siteId as string
-    siteSlug = result.data.subdomain as string | null
+    const siteSlug = result.data.subdomain as string | null
     await execute(db, `
       UPDATE sites
       SET default_currency = ?, updated_at = ?

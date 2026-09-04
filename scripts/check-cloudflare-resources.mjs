@@ -110,7 +110,7 @@ async function cloudflare(endpoint, options = {}) {
     }
     return body
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error(`Cloudflare API request timed out: ${endpoint}`)
+    if (error?.name === 'AbortError') throw new Error(`Cloudflare API request timed out: ${endpoint}`, { cause: error })
     throw error
   } finally {
     clearTimeout(timeout)

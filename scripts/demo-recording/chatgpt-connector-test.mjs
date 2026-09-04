@@ -64,9 +64,8 @@ async function telemetry(since, toolName, sessionIdHash) {
 
 async function waitForTelemetry(since, predicate, sessionIdHash, timeoutMs = TELEMETRY_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs
-  let events = []
   while (Date.now() < deadline) {
-    events = await telemetry(since, undefined, sessionIdHash)
+    const events = await telemetry(since, undefined, sessionIdHash)
     if (predicate(events)) return events
     await pause(500)
   }
@@ -78,9 +77,8 @@ async function waitForTelemetryQuietPeriod({ since, sessionIdHash, quietMs = 5_0
   const deadline = Date.now() + timeoutMs
   let lastChange = Date.now()
   let lastFingerprint = ''
-  let events = []
   while (Date.now() < deadline) {
-    events = await telemetry(since, undefined, sessionIdHash)
+    const events = await telemetry(since, undefined, sessionIdHash)
     const fingerprint = events.map(event => `${event.id}:${event.status}`).sort().join('|')
     if (fingerprint !== lastFingerprint) {
       lastFingerprint = fingerprint

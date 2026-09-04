@@ -367,7 +367,7 @@ async function attemptSiteUpdate(
     }
 
     let allowedModules: readonly ProductFeature[] = []
-    let newEffectiveFeatures: readonly ProductFeature[] = []
+    let newEffectiveFeatures: readonly ProductFeature[]
     try {
       const { template, capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
         siteEnabledFeatures: newDelta ? JSON.stringify(newDelta) : null,

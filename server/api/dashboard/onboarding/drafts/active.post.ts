@@ -123,7 +123,7 @@ export default defineHandler(async (event) => {
     }
   }
 
-  let dashboard: Awaited<ReturnType<typeof getDashboardContext>> | null = null
+  let dashboard: Awaited<ReturnType<typeof getDashboardContext>> | null
   try {
     dashboard = await getDashboardContext(event, { requireSite: false })
   } catch {

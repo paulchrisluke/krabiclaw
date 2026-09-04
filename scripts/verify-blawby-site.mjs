@@ -278,7 +278,7 @@ async function checkRoute(base, route, options = {}) {
   const url = resolveUrl(base, route)
   const started = Date.now()
   const { response, timer, attempts } = await fetchRouteResponseWithRetries(url, { redirect: options.redirect || 'follow' })
-  let html = ''
+  let html
   try {
     html = await response.text().catch(() => '')
   } finally {

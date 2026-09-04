@@ -33,3 +33,28 @@ or production data and write restrictions.
 Production deployment and verification are separate jobs in the same workflow. The deploy job builds once, performs the single Wrangler deployment, then applies forward-compatible migrations and refreshes search. The verification job waits until all three custom domains expose that exact Nuxt build and its referenced assets, then runs read-only browser coverage. Retrying a failed verification job never redeploys production.
 
 For migration safety, preview reset behavior, database epoch transitions, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md). For the canonical migration workflow, see [docs/database/migrations.md](../database/migrations.md).
+
+## Dependency batches
+
+Open Dependabot PRs are a bounded queue, not a complete inventory of outdated
+dependencies. Before assembling a batch, inspect both application and inbound
+email Worker manifests and lockfiles against registry release metadata. Respect
+the seven-day release-age gate, pinned toolchain versions, dependency patches,
+and peer requirements. Record the exact included versions and every deferred
+upgrade with its reason in the integration PR.
+
+`yarn build` explicitly runs the existing Worker patch and generated-code check
+after Nuxt finishes. Yarn 4 does not execute arbitrary `postbuild` hooks; keep
+required build steps in the command CI actually invokes.
+
+Dependabot groups routine minor and patch updates across both manifests. Better
+Auth packages move together in a separate group. Major updates and explicitly
+excluded framework, compiler, migration-generator, and pre-1.0 library updates
+remain independently reviewable.
+Grouping does not authorize merging or waive validation.
+
+Qualify the combined branch through local checks and one full preview run before
+merging to staging. Close superseded bot PRs only after the integration lands.
+An auth update that changes schema or network-security contracts requires that
+work to be designed and qualified explicitly; never upgrade one auth plugin in
+isolation or suppress its incompatible peer requirements.

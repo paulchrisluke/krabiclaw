@@ -838,7 +838,7 @@ export async function createCustomDomainPair(
       })
     }
 
-    throw new Error(message)
+    throw new Error(message, { cause: error })
   }
 
   return records

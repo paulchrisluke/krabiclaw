@@ -87,13 +87,10 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }
 
-  let creditsCharged = 0
-  let newBalance = 0
+  let charged: Awaited<ReturnType<typeof chargeCredits>>
   try {
-    const charged = await chargeCredits(db, orgId, {
+    charged = await chargeCredits(db, orgId, {
       siteId, sessionId: session.session.id, action: 'post_generate', model: 'claude-sonnet-4-6', inputTokens: aiResponse.usage.input_tokens, outputTokens: aiResponse.usage.output_tokens, cfGatewayLogId: aiResponse.cfLogId, })
-    creditsCharged = charged.creditsCharged
-    newBalance = charged.newBalance
   } catch (err) {
     console.error('Failed to charge credits for post generation:', err)
     return jsonResponse({ error: err instanceof Error ? err.message : 'AI usage could not be charged.' }, { status: 402 })
@@ -126,6 +123,6 @@ export default defineHandler(async (event) => {
   }
 
   return jsonResponse({
-    success: true, generated: { title: parsed.title ?? null, body: parsed.body ?? '' }, credits: { charged: creditsCharged, remaining: newBalance }, })
+    success: true, generated: { title: parsed.title ?? null, body: parsed.body ?? '' }, credits: { charged: charged.creditsCharged, remaining: charged.newBalance }, })
 })
 import { getRouterParam  } from 'nitro/h3';
