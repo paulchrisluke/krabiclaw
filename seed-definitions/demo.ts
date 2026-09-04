@@ -1427,8 +1427,8 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue(product.description),
       sqlValue(true),
       sqlValue(product.available),
-      sqlValue(false),
-      sqlValue(0),
+      sqlValue(product.featured),
+      sqlValue(product.featuredSortOrder),
       sqlValue(product.sortOrder),
       sqlJson([]),
       sqlJson([
