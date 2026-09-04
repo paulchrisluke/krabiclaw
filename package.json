@@ -146,10 +146,10 @@
     "wrangler": "4.127.0"
   },
   "dependencies": {
-    "@better-auth/cimd": "1.7.0-beta.10",
-    "@better-auth/core": "1.7.0-beta.10",
-    "@better-auth/oauth-provider": "1.7.0-beta.10",
-    "@better-auth/stripe": "1.7.0-beta.10",
+    "@better-auth/cimd": "1.7.0-rc.4",
+    "@better-auth/core": "1.7.0-rc.4",
+    "@better-auth/oauth-provider": "1.7.0-rc.4",
+    "@better-auth/stripe": "1.7.0-rc.4",
     "@jsquash/png": "^3.1.1",
     "@jsquash/webp": "^1.5.0",
     "@noble/hashes": "^2.4.0",
@@ -171,7 +171,7 @@
     "@vue-email/section": "0.0.3",
     "@vue-email/style": "0.0.3",
     "@vue-email/text": "0.0.3",
-    "better-auth": "1.7.0-beta.10",
+    "better-auth": "1.7.0-rc.4",
     "drizzle-orm": "^0.45.2",
     "h3": "2.0.1-rc.26",
     "isomorphic-dompurify": "^3.23.0",
