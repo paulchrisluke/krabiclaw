@@ -237,8 +237,11 @@ const locationTitle = (id: string) => {
 const groups = computed(() => {
   const grouped = new Map<string, { id: string; category: string; sort_order: number; products: Product[] }>()
   for (const product of props.products) {
+    // Category slugs are unique per location, not per site, so an all-location
+    // collection would emit the same anchor twice. The category ID is the only
+    // identity that stays unique across the whole page.
     const group = grouped.get(product.category_id)
-      ?? { id: product.category.slug, category: product.category.name, sort_order: product.category.sort_order, products: [] }
+      ?? { id: product.category_id, category: product.category.name, sort_order: product.category.sort_order, products: [] }
     group.products.push(product)
     grouped.set(product.category_id, group)
   }

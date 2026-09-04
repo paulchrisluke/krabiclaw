@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8165d07d-914c-44cb-9480-baf436b77401",
+  "id": "25b85b58-8733-4f1e-9ae5-1013be7630ed",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -9759,6 +9759,7 @@
             "organization_id",
             "site_id",
             "location_id",
+            "product_type",
             "id"
           ],
           "isUnique": true
@@ -10192,12 +10193,14 @@
             "organization_id",
             "site_id",
             "location_id",
+            "product_type",
             "category_id"
           ],
           "columnsTo": [
             "organization_id",
             "site_id",
             "location_id",
+            "product_type",
             "id"
           ],
           "onDelete": "cascade",

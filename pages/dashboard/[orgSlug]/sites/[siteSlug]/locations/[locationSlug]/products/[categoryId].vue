@@ -354,6 +354,10 @@ async function moveSelected() {
   if (!id || !moveTargetId.value || !selected.value.length) return
   moving.value = true
   try {
+    // Commit any pending reorder first. Closing the edit state below would
+    // otherwise fire commitOrder with the pre-move list, sending IDs that no
+    // longer belong to this category.
+    await commitOrder()
     await dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products/move`, {
       method: 'POST',
       body: { product_ids: selected.value, category_id: moveTargetId.value },

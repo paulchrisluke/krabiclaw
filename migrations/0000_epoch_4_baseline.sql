@@ -1330,7 +1330,7 @@ CREATE TABLE `product_categories` (
 );
 --> statement-breakpoint
 CREATE INDEX `product_categories_location_type_sort_idx` ON `product_categories` (`site_id`,`location_id`,`product_type`,`sort_order`);--> statement-breakpoint
-CREATE UNIQUE INDEX `product_categories_scope_id_unique` ON `product_categories` (`organization_id`,`site_id`,`location_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_categories_scope_id_unique` ON `product_categories` (`organization_id`,`site_id`,`location_id`,`product_type`,`id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `product_categories_location_type_slug_unique` ON `product_categories` (`site_id`,`location_id`,`product_type`,`slug`);--> statement-breakpoint
 CREATE UNIQUE INDEX `product_categories_location_type_name_unique` ON `product_categories` (`site_id`,`location_id`,`product_type`,`name`);--> statement-breakpoint
 CREATE TABLE `products` (
@@ -1344,9 +1344,9 @@ CREATE TABLE `products` (
 	`slug` text NOT NULL,
 	`description` text DEFAULT '' NOT NULL,
 	`order_url` text,
-	`is_visible` integer DEFAULT true NOT NULL,
-	`available` integer DEFAULT true NOT NULL,
-	`featured` integer DEFAULT false NOT NULL,
+	`is_visible` integer DEFAULT 1 NOT NULL,
+	`available` integer DEFAULT 1 NOT NULL,
+	`featured` integer DEFAULT 0 NOT NULL,
 	`featured_sort_order` integer DEFAULT 0 NOT NULL,
 	`sort_order` integer NOT NULL,
 	`tags_json` text DEFAULT '[]' NOT NULL,
@@ -1364,7 +1364,7 @@ CREATE TABLE `products` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`site_id`,`location_id`,`category_id`) REFERENCES `product_categories`(`organization_id`,`site_id`,`location_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`site_id`,`location_id`,`product_type`,`category_id`) REFERENCES `product_categories`(`organization_id`,`site_id`,`location_id`,`product_type`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "products_name_not_blank_check" CHECK(trim("products"."name") <> ''),
 	CONSTRAINT "products_slug_check" CHECK("products"."slug" <> '' AND "products"."slug" = lower("products"."slug") AND "products"."slug" NOT GLOB '*[^a-z0-9-]*' AND "products"."slug" NOT LIKE '-%' AND "products"."slug" NOT LIKE '%-' AND "products"."slug" NOT LIKE '%--%'),
 	CONSTRAINT "products_sort_order_check" CHECK("products"."sort_order" >= 0),
@@ -2350,7 +2350,7 @@ CREATE TABLE `user` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`email` text NOT NULL,
-	`emailVerified` integer DEFAULT false NOT NULL,
+	`emailVerified` integer DEFAULT 0 NOT NULL,
 	`image` text,
 	`phoneNumber` text,
 	`phoneNumberVerified` integer DEFAULT 0 NOT NULL,

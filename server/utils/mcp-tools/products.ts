@@ -89,6 +89,9 @@ const productListItemObject = {
   required: ['id', 'location_id', 'category_id', 'category', 'name', 'description', 'price', 'is_visible', 'available', 'sort_order'],
 } as const
 
+// Category membership is set on create and changed only by move_products, so
+// the update surface deliberately has no category_id: accepting one that
+// updateProduct ignores would report a move that never happened.
 const productWrite = {
   category_id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, price: priceWrite,
   order_url: { type: ['string', 'null'] }, is_visible: { type: 'boolean' }, available: { type: 'boolean' }, featured: { type: 'boolean' },
@@ -96,13 +99,15 @@ const productWrite = {
   seo_title: { type: ['string', 'null'] }, seo_description: { type: ['string', 'null'] }, canonical_url: { type: ['string', 'null'] }, robots: { type: ['string', 'null'] },
 } as const
 
+const { category_id: _createOnlyCategoryId, ...productUpdate } = productWrite
+
 const productResult = { type: 'object', properties: { product: productObject }, required: ['product'] } as const
 
 export const PRODUCTS_TOOLS: McpToolDefinition[] = [
   siteTool({ name: 'list_location_products', description: 'Use this when you need the compact ordered Product list for one explicit location. Returns identity, category, name, description, current price, visibility, availability, and sort order. Call get_product for media, SEO, audit fields, or other full details.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
   siteTool({ name: 'get_product', description: 'Get a Product by ID.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),
   siteTool({ name: 'create_product', description: 'Create a Product at one explicit location.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, ...productWrite }, required: ['location_id', 'category_id', 'name', 'price'], outputSchema: productResult }),
-  siteTool({ name: 'update_product', description: 'Update a Product after resolving its stored owning location. Omit price to leave pricing unchanged. Use price: null to close the active fixed Price without creating a replacement.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, ...productWrite }, required: ['product_id'], outputSchema: productResult }),
+  siteTool({ name: 'update_product', description: 'Update a Product after resolving its stored owning location. Omit price to leave pricing unchanged. Use price: null to close the active fixed Price without creating a replacement. Use move_products to change which category a Product belongs to.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, ...productUpdate }, required: ['product_id'], outputSchema: productResult }),
   siteTool({ name: 'delete_product', description: 'Delete a Product after resolving its stored owning location.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
   siteTool({ name: 'move_products', description: 'Use this when the user wants Products to belong to a different category or menu section. The Products are appended to the end of the target category in the order given. This changes category membership only; use reorder_products to change the order inside a category.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, product_ids: { type: 'array', items: { type: 'string' }, minItems: 1 }, category_id: { type: 'string' } }, required: ['location_id', 'product_ids', 'category_id'], outputSchema: { type: 'object', properties: { moved: { type: 'boolean' } }, required: ['moved'] } }),
   siteTool({ name: 'reorder_products', description: 'Use this when the user wants to change the order of Products inside one category. Send every Product ID in that category exactly once, in the intended order. Read list_location_products first; a partial order is rejected.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, category_id: { type: 'string' }, product_ids: { type: 'array', items: { type: 'string' }, minItems: 1 } }, required: ['location_id', 'category_id', 'product_ids'], outputSchema: { type: 'object', properties: { reordered: { type: 'boolean' } }, required: ['reordered'] } }),

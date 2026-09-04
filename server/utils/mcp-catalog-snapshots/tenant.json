@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9c40488f85e7f237a9a1d916174d8cd106cfc0a5f4cc96f6410a3acf8c57f5dc",
+  "fingerprint": "sha256:1923e8d3fc44aee6b4c3a0ba53ebae4584d82285bb0f588093f526c31fb3f2a3",
   "tools": [
     {
       "name": "analyze_document",
@@ -15695,9 +15695,6 @@
               "string",
               "null"
             ]
-          },
-          "category_id": {
-            "type": "string"
           },
           "description": {
             "type": "string"

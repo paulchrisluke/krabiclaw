@@ -1,6 +1,6 @@
 import { callAiGateway, documentBlock, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { chargeCredits, hasCredits } from '~/server/utils/ai-credits'
-import { createProductsBatch, resolveProductCategoriesByName } from '~/server/utils/product-management'
+import { createProductsBatch, deleteProductCategory, resolveProductCategoriesByName } from '~/server/utils/product-management'
 import { PRODUCT_DETAILS_INPUT_SCHEMA, validateProductDetails } from '~/server/utils/product-validation'
 import type { CreateProductInput, ExtractedProductCandidate, Product } from '~/server/types/products'
 import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
@@ -331,7 +331,7 @@ export async function extractProductsFromMediaAsset(
   const candidates = parseProductExtraction(toolBlocks[0].input, site.default_currency)
   // The extraction names sections; turn those names into real categories once,
   // then every candidate references a category the same way the CMS does.
-  const categories = await resolveProductCategoriesByName({
+  const { resolved: categories, createdIds: createdCategoryIds } = await resolveProductCategoriesByName({
     db,
     organizationId: opts.organizationId,
     siteId: opts.siteId,
@@ -347,6 +347,19 @@ export async function extractProductsFromMediaAsset(
     })
     return { products, creditsRemaining: charged.newBalance }
   } catch (error) {
+    // The batch is all-or-nothing, so a rejection leaves the categories this
+    // import just created holding nothing. Remove them so a failed import does
+    // not add empty sections to the owner's menu.
+    for (const categoryId of createdCategoryIds) {
+      try {
+        await deleteProductCategory(db, opts.organizationId, opts.siteId, opts.locationId, categoryId, opts.userId)
+      } catch (cleanupError) {
+        console.error('product_import_category_cleanup_failed', {
+          categoryId,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        })
+      }
+    }
     if (error && typeof error === 'object' && 'statusCode' in error) {
       localizationError(422, 'PRODUCT_IMPORT_VALIDATION_FAILED', 'The complete Product import batch was rejected', {
         error: error instanceof Error ? error.message : String(error),

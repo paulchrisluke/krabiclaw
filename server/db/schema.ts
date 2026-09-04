@@ -673,7 +673,10 @@ export const product_categories = sqliteTable("product_categories", {
 		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
 		name: "product_categories_location_scope_fk",
 	}).onDelete("cascade"),
-	unique("product_categories_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
+	// product_type is part of the parent key so the Products foreign key below can
+	// match on it: without that, a 'standard' Product could reference the
+	// location's 'experience' category and only application code would object.
+	unique("product_categories_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.product_type, table.id),
 	unique("product_categories_location_type_slug_unique").on(table.site_id, table.location_id, table.product_type, table.slug),
 	unique("product_categories_location_type_name_unique").on(table.site_id, table.location_id, table.product_type, table.name),
 	index("product_categories_location_type_sort_idx").on(table.site_id, table.location_id, table.product_type, table.sort_order),
@@ -717,8 +720,8 @@ export const products = sqliteTable("products", {
 		name: "products_location_scope_fk",
 	}).onDelete("cascade"),
 	foreignKey({
-		columns: [table.organization_id, table.site_id, table.location_id, table.category_id],
-		foreignColumns: [product_categories.organization_id, product_categories.site_id, product_categories.location_id, product_categories.id],
+		columns: [table.organization_id, table.site_id, table.location_id, table.product_type, table.category_id],
+		foreignColumns: [product_categories.organization_id, product_categories.site_id, product_categories.location_id, product_categories.product_type, product_categories.id],
 		name: "products_category_scope_fk",
 	}).onDelete("cascade"),
 	unique("products_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),

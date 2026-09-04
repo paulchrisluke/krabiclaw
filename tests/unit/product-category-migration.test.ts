@@ -152,3 +152,15 @@ test('the rendered order is identical before and after the migration', () => {
 
   assert.deepEqual(after, before)
 })
+
+test('category names that differ only by whitespace stay separate', () => {
+  // They render as two sections before the migration, so collapsing them would
+  // change the customer-visible order the transform is verified against.
+  const { categories, assignments } = planCategories([
+    product({ id: 'p1', category: 'Mains', sort_order: 0 }),
+    product({ id: 'p2', category: ' Mains ', sort_order: 1 }),
+  ])
+
+  assert.equal(categories.length, 2)
+  assert.equal(new Set(assignments.map((row: { category_id: string }) => row.category_id)).size, 2)
+})

@@ -51,7 +51,12 @@ export function planCategories(products) {
   ))
 
   for (const product of ordered) {
-    const name = String(product.category).trim()
+    // Identity is the stored string exactly as it is, not a trimmed copy. Two
+    // legacy values that differ only by whitespace render as two sections
+    // today, so merging them here would change what customers see — which is
+    // the one thing this migration must not do. The owner can merge them in
+    // the CMS afterwards.
+    const name = String(product.category)
     const scope = `${product.location_id}::${product.product_type}`
     const key = `${scope}::${name}`
     let category = categoryByKey.get(key)

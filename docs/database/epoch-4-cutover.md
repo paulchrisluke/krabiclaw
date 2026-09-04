@@ -83,16 +83,27 @@ requires a transformation it does not have, or any foreign-key violation.
 `transform` refuses to run against a source that has already been transformed,
 because an Epoch 4 source has no `products.category` column to map from.
 
-## Preview
+## Preview is reset, not reprovisioned
 
-1. Create a new APAC preview D1 and record its name and ID in the release evidence.
-2. Apply only the Epoch 4 baseline through `wrangler d1 migrations apply`; never
-   edit `d1_migrations`.
-3. Transform the approved Epoch 3 preview export locally, import it into the
-   empty candidate, and run the verifier against the imported candidate export.
-4. Bind only the preview Worker configuration to the new preview D1.
-5. Open the CMS Products hub and one category, and the public collection page for
-   Kikuzuki. Confirm the sections and their order match the pre-cutover site.
+Preview does not get a new D1 resource. It is reset in place:
+
+```sh
+yarn db:reset:preview   # drops application objects, replays the chain, reseeds
+```
+
+The rule that a baseline must never be applied to a prior-epoch resource exists
+to protect **rollback state**. Staging and production hold the only copy of data
+that a failed cutover has to fall back to, so they are reprovisioned and the old
+resource is retained. Preview holds fixtures, is rebuilt from seeds on demand,
+and is declared disposable in [migrations.md](migrations.md) — there is nothing
+to roll back to and nothing to protect. Reprovisioning it every epoch would
+strand resources and force a binding change for no benefit.
+
+After the reset, the preview database is structurally a fresh Epoch 4 database.
+There is no Epoch 3 data to transform, because preview data comes from seeds.
+
+Then open the CMS Products hub and one category, and the public collection page
+for Kikuzuki. Confirm the sections and their order match the pre-cutover site.
 
 ## Staging
 

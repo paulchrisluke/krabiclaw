@@ -1133,20 +1133,24 @@ export async function ensureExperienceCategory(
  */
 export async function resolveProductCategoriesByName({ db, organizationId, siteId, locationId, names, actor }: ProductOrderScope & {
   names: string[]
-}): Promise<Map<string, ProductCategory>> {
+}): Promise<{ resolved: Map<string, ProductCategory>; createdIds: string[] }> {
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const existing = await listProductCategories({ db, organizationId, siteId, locationId })
   const byName = new Map(existing.map(category => [category.name, category]))
   const resolved = new Map<string, ProductCategory>()
+  // Reported so a caller whose own write then fails can remove the categories
+  // this call brought into existence, rather than leaving empty sections behind.
+  const createdIds: string[] = []
   for (const rawName of names) {
     const name = requireTrimmedProductString(rawName, 'category', PRODUCT_LIMITS.category)
     if (resolved.has(rawName)) continue
     const found = byName.get(name)
     const category = found ?? await createProductCategory({ db, organizationId, siteId, locationId, name, actor })
+    if (!found) createdIds.push(category.id)
     byName.set(name, category)
     resolved.set(rawName, category)
   }
-  return resolved
+  return { resolved, createdIds }
 }
 
 export async function renameProductCategory(
