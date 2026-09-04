@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-4">
-    <div v-if="block.type === 'heading'" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem]">
+    <div v-if="block.type === 'heading'" class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
       <UFormField label="Heading text"><UInput :model-value="stringField('text')" @update:model-value="setString('text', $event)" /></UFormField>
       <UFormField label="Heading level"><USelect :model-value="numberField('level', 2)" :items="headingLevels" @update:model-value="setNumber('level', $event)" /></UFormField>
     </div>
@@ -17,6 +17,7 @@
     </template>
 
     <template v-else-if="block.type === 'gallery'">
+      <UFormField label="Caption"><UInput :model-value="stringField('caption')" @update:model-value="setString('caption', $event)" /></UFormField>
       <div class="space-y-3">
         <div v-for="(media, index) in mediaForSlot('gallery')" :key="`${media.asset_id}-${index}`" class="flex items-center gap-3">
           <span class="w-6 text-center text-xs text-muted">{{ index + 1 }}</span>
@@ -52,16 +53,16 @@
     </template>
 
     <template v-else-if="isCtaBlock">
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2">
         <UFormField label="Title"><UInput :model-value="stringField('title')" @update:model-value="setString('title', $event)" /></UFormField>
         <UFormField label="Button label"><UInput :model-value="stringField('label')" @update:model-value="setString('label', $event)" /></UFormField>
-        <UFormField class="md:col-span-2" label="Description"><UTextarea :model-value="stringField('description')" :rows="3" autoresize @update:model-value="setString('description', $event)" /></UFormField>
-        <UFormField class="md:col-span-2" label="Button URL"><UInput :model-value="stringField('url')" placeholder="/contact or https://..." @update:model-value="setString('url', $event)" /></UFormField>
+        <UFormField class="sm:col-span-2" label="Description"><UTextarea :model-value="stringField('description')" :rows="3" autoresize @update:model-value="setString('description', $event)" /></UFormField>
+        <UFormField class="sm:col-span-2" label="Button URL"><UInput :model-value="stringField('url')" placeholder="/contact or https://..." @update:model-value="setString('url', $event)" /></UFormField>
       </div>
     </template>
 
     <template v-else-if="block.type === 'callout'">
-      <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
+      <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
         <UFormField label="Title"><UInput :model-value="stringField('title')" @update:model-value="setString('title', $event)" /></UFormField>
         <UFormField label="Tone"><USelect :model-value="stringField('tone') || 'neutral'" :items="toneOptions" @update:model-value="setString('tone', $event)" /></UFormField>
       </div>
@@ -70,15 +71,15 @@
     </template>
 
     <template v-else-if="block.type === 'hero'">
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2">
         <UFormField label="Eyebrow"><UInput :model-value="stringField('eyebrow')" @update:model-value="setString('eyebrow', $event)" /></UFormField>
         <UFormField label="Title"><UInput :model-value="stringField('title')" @update:model-value="setString('title', $event)" /></UFormField>
-        <UFormField class="md:col-span-2" label="Subtitle"><UTextarea :model-value="stringField('subtitle')" :rows="3" autoresize @update:model-value="setString('subtitle', $event)" /></UFormField>
+        <UFormField class="sm:col-span-2" label="Subtitle"><UTextarea :model-value="stringField('subtitle')" :rows="3" autoresize @update:model-value="setString('subtitle', $event)" /></UFormField>
       </div>
       <UFormField label="Hero image">
         <MediaPicker :site-id="siteId" :model-value="mediaAt('media', 0)?.asset_id" accept="image" @change="setAsset" />
       </UFormField>
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2">
         <UFormField label="CTA label"><UInput :model-value="stringField('cta_label')" @update:model-value="setString('cta_label', $event)" /></UFormField>
         <UFormField label="CTA URL"><UInput :model-value="stringField('cta_url')" placeholder="/contact or https://..." @update:model-value="setString('cta_url', $event)" /></UFormField>
       </div>
@@ -98,14 +99,14 @@
       <template v-if="sourceValue === 'calculator'">
         <UFormField label="Calculator note"><UInput :model-value="calculatorNote" @update:model-value="setCalculatorNote($event)" /></UFormField>
         <div class="space-y-3">
-          <div v-for="(row, rowIndex) in calculatorRows" :key="rowIndex" class="grid gap-2 md:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
+          <div v-for="(row, rowIndex) in calculatorRows" :key="rowIndex" class="grid gap-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
             <UInput :model-value="cellValue(row, 0)" type="number" min="1" max="8" aria-label="Household size" @update:model-value="setCalculatorCell(rowIndex, 0, $event)" />
             <UInput :model-value="cellValue(row, 1)" type="number" aria-label="250 percent limit" placeholder="250%" @update:model-value="setCalculatorCell(rowIndex, 1, $event)" />
             <UInput :model-value="cellValue(row, 2)" type="number" aria-label="350 percent limit" placeholder="350%" @update:model-value="setCalculatorCell(rowIndex, 2, $event)" />
             <UInput :model-value="cellValue(row, 3)" type="number" aria-label="400 percent limit" placeholder="400%" @update:model-value="setCalculatorCell(rowIndex, 3, $event)" />
             <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove calculator row" @click="removeCalculatorRow(rowIndex)" />
           </div>
-          <div class="grid grid-cols-4 gap-2 text-xs text-muted"><span>Household size</span><span>250% limit</span><span>350% limit</span><span>400% limit</span></div>
+          <div class="grid gap-2 text-xs text-muted lg:grid-cols-4"><span>Household size</span><span>250% limit</span><span>350% limit</span><span>400% limit</span></div>
           <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" @click="addCalculatorRow">Add calculator row</UButton>
         </div>
       </template>
@@ -114,10 +115,10 @@
         <div class="space-y-3">
           <div v-for="(item, index) in objectArray('items')" :key="itemKey(item, index)" class="rounded-lg border border-default p-3">
             <div class="mb-3 flex items-center justify-between gap-3"><p class="text-sm font-medium text-highlighted">Item {{ index + 1 }}</p><UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove grid item" @click="removeObjectItem('items', index)" /></div>
-            <div class="grid gap-3 md:grid-cols-2">
+            <div class="grid gap-3 sm:grid-cols-2">
               <UFormField label="Title"><UInput :model-value="objectField(index, 'items', 'title', ['name'])" @update:model-value="setObjectField('items', index, 'title', $event)" /></UFormField>
               <UFormField label="Value"><UInput :model-value="objectField(index, 'items', 'value')" @update:model-value="setObjectField('items', index, 'value', $event)" /></UFormField>
-              <UFormField class="md:col-span-2" label="Description"><UTextarea :model-value="objectField(index, 'items', 'description', ['summary', 'body'])" :rows="2" autoresize @update:model-value="setObjectField('items', index, 'description', $event)" /></UFormField>
+              <UFormField class="sm:col-span-2" label="Description"><UTextarea :model-value="objectField(index, 'items', 'description', ['summary', 'body'])" :rows="2" autoresize @update:model-value="setObjectField('items', index, 'description', $event)" /></UFormField>
               <UFormField label="Image"><MediaPicker :site-id="siteId" :model-value="mediaAt(`items.${index}.image`, 0)?.asset_id" accept="image" @update:model-value="setMediaAt(`items.${index}.image`, 0, $event)" /></UFormField>
               <UFormField label="Link URL"><UInput :model-value="objectField(index, 'items', 'url', ['cta_url'])" @update:model-value="setObjectField('items', index, 'url', $event)" /></UFormField>
               <UFormField label="Link label"><UInput :model-value="objectField(index, 'items', 'label', ['cta_label'])" @update:model-value="setObjectField('items', index, 'label', $event)" /></UFormField>
@@ -136,15 +137,15 @@
     </template>
 
     <template v-else-if="block.type === 'donation_choices'">
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2">
         <UFormField label="Section title"><UInput :model-value="stringField('title')" @update:model-value="setString('title', $event)" /></UFormField>
         <UFormField label="Donation destination"><UInput :model-value="stringField('destination')" placeholder="https://..." @update:model-value="setString('destination', $event)" /></UFormField>
-        <UFormField class="md:col-span-2" label="Description"><UTextarea :model-value="stringField('description')" :rows="3" autoresize @update:model-value="setString('description', $event)" /></UFormField>
+        <UFormField class="sm:col-span-2" label="Description"><UTextarea :model-value="stringField('description')" :rows="3" autoresize @update:model-value="setString('description', $event)" /></UFormField>
       </div>
       <div class="space-y-3">
         <div v-for="(item, index) in objectArray('tiers')" :key="itemKey(item, index)" class="rounded-lg border border-default p-3">
           <div class="mb-3 flex items-center justify-between gap-3"><p class="text-sm font-medium text-highlighted">Tier {{ index + 1 }}</p><UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove donation tier" @click="removeObjectItem('tiers', index)" /></div>
-          <div class="grid gap-3 md:grid-cols-3">
+          <div class="grid gap-3 sm:grid-cols-3">
             <UFormField label="Amount"><UInput :model-value="objectField(index, 'tiers', 'amount')" @update:model-value="setObjectField('tiers', index, 'amount', $event)" /></UFormField>
             <UFormField label="Title"><UInput :model-value="objectField(index, 'tiers', 'title')" @update:model-value="setObjectField('tiers', index, 'title', $event)" /></UFormField>
             <UFormField label="Description"><UInput :model-value="objectField(index, 'tiers', 'description')" @update:model-value="setObjectField('tiers', index, 'description', $event)" /></UFormField>

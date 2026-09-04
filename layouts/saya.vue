@@ -48,26 +48,27 @@ const route = useRoute()
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
-const isHome = computed(() => route.path === '/' || getPreviewSubpath(route.path) === '/')
+const isHome = computed(() => route.path === '/'
+  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`)
+  || getPreviewSubpath(route.path) === '/')
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
 const sayaStylesheetForRoute = computed(() => {
   return sayaStylesheetHref
 })
 
 useHead(() => {
-  const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
   return {
     htmlAttrs: { lang: activeLocale.value },
     link: [
       { rel: 'preconnect', href: 'https://imagedelivery.net' },
       { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
       {
-        key: isHome ? 'saya-home-stylesheet' : 'saya-surface-stylesheet',
+        key: isHome.value ? 'saya-home-stylesheet' : 'saya-surface-stylesheet',
         rel: 'stylesheet',
         href: sayaStylesheetForRoute.value,
       },
     ],
-    style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
+    style: isHome.value ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }
 })
 
@@ -173,9 +174,6 @@ useSocialMetadata(() => ({
   description: config.value?.seo_description || config.value?.brand_description || '',
   brand: {
     siteName: config.value?.brand_name || resolvedSite.value?.brand_name || '',
-    logoUrl: resolvedSite.value?.media?.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: resolvedSite.value?.media?.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
   robots: siteRobots.value,
 }))

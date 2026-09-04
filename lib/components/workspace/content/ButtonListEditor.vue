@@ -4,7 +4,7 @@
       <p class="text-sm font-medium text-highlighted">{{ label }}</p>
       <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="xs" @click="add">Add button</UButton>
     </div>
-    <div v-for="(button, index) in buttons" :key="buttonKey(button, index)" class="grid gap-3 rounded-lg border border-default p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+    <div v-for="(button, index) in buttons" :key="buttonKey(button, index)" class="grid gap-3 rounded-lg border border-default p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
       <UFormField label="Label"><UInput :model-value="field(index, 'label')" @update:model-value="update(index, 'label', $event)" /></UFormField>
       <UFormField label="URL"><UInput :model-value="field(index, 'url')" placeholder="/contact or https://..." @update:model-value="update(index, 'url', $event)" /></UFormField>
       <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Remove button" class="self-end" @click="remove(index)" />

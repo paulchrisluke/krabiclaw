@@ -15,9 +15,19 @@
           class="aspect-[40/21] w-full rounded-2xl border border-default bg-elevated object-cover shadow-sm transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-[1.01] group-hover:shadow-lg"
           loading="lazy"
           decoding="async"
-        />
-        <div v-else class="flex aspect-[40/21] items-center justify-center rounded-2xl border border-default bg-elevated text-muted">
-          <UIcon name="i-lucide-image-off" class="size-8" />
+        >
+        <!-- Not a placeholder standing in for the image: the image is genuinely
+             absent, and this says so. A social card is generated from the
+             tenant's own title and logo, so a missing one is a data problem to
+             fix rather than something to decorate over. -->
+        <div
+          v-else
+          class="flex aspect-[40/21] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-error/50 bg-elevated px-4 text-center"
+          data-testid="selector-missing-social-image"
+        >
+          <UIcon name="i-lucide-image-off" class="size-6 text-error" />
+          <p class="text-sm font-medium text-highlighted">No social image for {{ item.label }}</p>
+          <p class="text-xs text-muted">Its social card has not been generated.</p>
         </div>
       </UCard>
     </NuxtLink>

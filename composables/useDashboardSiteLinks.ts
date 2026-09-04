@@ -12,8 +12,7 @@ export interface DashboardActionLink {
   onClick?: () => void
 }
 
-export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
-  void siteId
+export function useDashboardSiteLinks(sitePublicUrl?: MaybeRef<string | null | undefined>, orgSlug?: MaybeRef<string | null | undefined>) {
   const dashboard = useDashboardSite()
   const dashboardLocation = useDashboardLocation()
   const route = useRoute()
@@ -57,7 +56,6 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       settingsBilling: `${orgSettingsBase}/billing`,
       // Account-level (no slug)
       accountProfile: `${base}/account/profile`,
-      accountAuth: `${base}/account/authentication`,
     }
   })
 

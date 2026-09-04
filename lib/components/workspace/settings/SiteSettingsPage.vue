@@ -6,11 +6,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading
-            :action-icon="navbarActionIcon"
-            :action-label="navbarActionLabel"
-            @action="navigateFromNavbar"
-          />
+          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -49,6 +45,14 @@
           <div v-else-if="detailKey === 'logo'" class="space-y-6">
             <p class="text-base text-muted">Choose an image from the site media library or upload a new logo.</p>
             <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
+          </div>
+
+          <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
+            <p class="text-base text-muted">Choose the image used as the source for generated social sharing cards.</p>
+            <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="outline" :loading="regeneratingCards" @click="regenerateSocialCards">Regenerate social cards</UButton>
+            </div>
           </div>
 
           <div v-else-if="detailKey === 'description'" class="space-y-6">
@@ -117,6 +121,25 @@
             </template>
           </div>
 
+          <div v-else-if="detailKey === 'site-translations'" class="space-y-6">
+            <p class="text-base text-muted">Edit the site's brand name and description in another published language. The default-language values are unaffected.</p>
+            <UFormField label="Language">
+              <select v-model="siteTranslationLocale" aria-label="Translation language" class="rounded-lg border border-default bg-default px-3 py-2">
+                <option v-for="option in siteTranslationLocaleOptions" :key="option" :value="option">{{ option }}</option>
+              </select>
+            </UFormField>
+            <p v-if="siteTranslationLocaleOptions.length === 0" class="text-sm text-muted">No additional languages are enabled for this site yet.</p>
+            <template v-else>
+              <p class="text-xs text-muted">Source (English): {{ form.brand_name }}</p>
+              <UFormField :label="`Brand name (${siteTranslationLocale})`"><UInput v-model="siteTranslationFields.brand_name" size="xl" class="w-full" /></UFormField>
+              <UFormField :label="`Description (${siteTranslationLocale})`"><UTextarea v-model="siteTranslationFields.brand_description" :rows="6" class="w-full" /></UFormField>
+              <UFormField :label="`SEO title (${siteTranslationLocale})`"><UInput v-model="siteTranslationFields.seo_title" size="xl" class="w-full" /></UFormField>
+              <UFormField :label="`SEO description (${siteTranslationLocale})`"><UTextarea v-model="siteTranslationFields.seo_description" :rows="3" class="w-full" /></UFormField>
+              <p v-if="siteTranslationError" class="text-sm text-error">{{ siteTranslationError }}</p>
+              <UButton :loading="siteTranslationSaving" label="Save translation" @click="saveSiteTranslation" />
+            </template>
+          </div>
+
           <div v-else-if="detailKey === 'notifications'" class="space-y-8">
             <p class="text-base text-muted">Choose the default channels used when a location has no notification override.</p>
             <UFormField label="Alert channels">
@@ -174,6 +197,7 @@ import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { isSocialCardRegenerationResponse, socialCardRefreshNotice, type SocialCardRegenerationResponse } from '~/utils/social-card-refresh'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -225,6 +249,17 @@ const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
 const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
 const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
+
+// Up one level: out of a section back to the settings index, out of the index
+// back to the site overview.
+const backTo = computed(() => {
+  if (!hasDetail.value) return siteDashboardPath.value
+  // "Search and analytics" nests one level deeper, so its children go up to it
+  // rather than skipping the whole way out to the settings index.
+  if (secondSegment.value) return `${settingsPath.value}/${firstSegment.value}`
+  return settingsPath.value
+})
+const backLabel = computed(() => hasDetail.value ? 'Site settings' : 'Site overview')
 const routeSegments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.map(String)
@@ -233,8 +268,8 @@ const routeSegments = computed(() => {
 const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
-const validBrandKeys = new Set(['name', 'logo', 'description', 'color', 'contact', 'social'])
-const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization'])
+const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'contact', 'social'])
+const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization', 'site-translations'])
 const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
 const routeIsCanonical = computed(() => {
   const segments = routeSegments.value
@@ -250,6 +285,7 @@ watchEffect(() => {
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
+const regeneratingCards = ref(false)
 const connectingFacebook = ref(false)
 const notificationChannels = ref<string[]>([])
 const whatsappPhone = ref('')
@@ -263,9 +299,23 @@ const newLocale = ref('')
 const loadedSettings = ref<SiteSettingsResponse | null>(null)
 const loadedNotifications = ref<{ whatsapp_phone: string | null; channels: string[] } | null>(null)
 const originalSignature = ref('')
-const form = reactive({
-  brand_name: '', brand_description: '', logoAssetId: null as string | null, contact_email: '', brand_color: '',
-  default_currency: DEFAULT_CURRENCY as CurrencyCode, google_analytics_measurement_id: '', google_site_verification: '',
+interface SiteSettingsForm {
+  brand_name: string
+  brand_description: string
+  logoAssetId: string | null
+  socialShareAssetId: string | null
+  contact_email: string
+  brand_color: string
+  default_currency: CurrencyCode
+  google_analytics_measurement_id: string
+  google_site_verification: string
+  social_facebook_url: string
+  social_instagram_url: string
+  social_tiktok_url: string
+}
+const form = reactive<SiteSettingsForm>({
+  brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '',
+  default_currency: DEFAULT_CURRENCY, google_analytics_measurement_id: '', google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
@@ -291,6 +341,7 @@ const domainSummary = computed(() => dashboard.site.value?.custom_domain || dash
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.brand_name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
+  { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Uses the site logo', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
@@ -299,6 +350,7 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
 const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'domains', label: 'Domain', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${siteDashboardPath.value}/domains` },
   { id: 'localization', label: 'Localization', summary: 'Languages and localized content', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
+  { id: 'site-translations', label: 'Translations', summary: 'Brand name and description in other languages', icon: 'i-lucide-languages', to: `${settingsPath.value}/site-translations` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
   { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
   { id: 'search', label: 'Search and analytics', summary: searchSummary.value, icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/search` },
@@ -319,25 +371,22 @@ const navigationGroups = computed(() => {
 })
 const activeNavigationId = computed(() => surface.value === 'brand' ? detailKey.value : firstSegment.value === 'search' && secondSegment.value ? detailKey.value : firstSegment.value)
 const hasDetail = computed(() => detailKey.value !== null)
-const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization' }
+const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization', 'site-translations': 'Translations' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
 const navbarTitle = computed(() => detailTitle.value ?? (surface.value === 'brand' ? 'Brand' : 'Site Settings'))
-const navbarActionIcon = computed(() => hasDetail.value && !secondSegment.value ? 'i-lucide-x' : 'i-lucide-arrow-left')
-const navbarActionLabel = computed(() => hasDetail.value && !secondSegment.value ? 'Close editor' : 'Go back')
 const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing'].includes(detailKey.value)))
 
-function navigateFromNavbar() {
-  if (hasDetail.value) {
-    cancelEditor()
-    return
-  }
-  router.push(siteDashboardPath.value)
-}
+// Leaving a section resets its editor. This used to hang off the back button's
+// click handler, which left browser back with stale editor state.
+watch(() => route.path, (next, previous) => {
+  if (previous && previous !== next) resetDraft()
+})
 
 function editorSignature(key: string | null) {
   switch (key) {
     case 'name': return JSON.stringify(form.brand_name)
     case 'logo': return JSON.stringify(form.logoAssetId)
+    case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
     case 'color': return JSON.stringify(form.brand_color)
     case 'contact': return JSON.stringify(form.contact_email)
@@ -369,13 +418,87 @@ const validationMessage = computed(() => {
     default: return null
   }
 })
-const saveDisabled = computed(() => !dirty.value || validationMessage.value !== null)
+const saveDisabled = computed(() => {
+  if (detailKey.value === 'site-translations') return siteTranslationLocaleOptions.value.length === 0
+  return !dirty.value || validationMessage.value !== null
+})
+
+// ── Site translations (resource_localizations, same API as the editor CRUD) ──
+const siteTranslationLocale = ref('')
+const siteTranslationLocales = ref<string[]>([])
+const siteTranslationLocaleOptions = computed(() => siteTranslationLocales.value)
+const siteTranslationError = ref<string | null>(null)
+const siteTranslationSaving = ref(false)
+const siteTranslationFields = reactive({ brand_name: '', brand_description: '', seo_title: '', seo_description: '' })
+function isSiteTranslationLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
+  return isRecord(value) && Array.isArray(value.languages)
+}
+async function loadSiteTranslationLocales() {
+  try {
+    const response = await dashboardApi<{ languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> }>(
+      `/api/editor/sites/${siteId}/locales`,
+      { validate: isSiteTranslationLocalesResponse },
+    )
+    siteTranslationLocales.value = response.languages.filter(item => item.locale_status === 'published' && !item.is_source).map(item => item.locale)
+    if (siteTranslationLocales.value.length && !siteTranslationLocale.value) siteTranslationLocale.value = siteTranslationLocales.value[0]!
+  } catch (cause) {
+    siteTranslationLocales.value = []
+    siteTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load site languages'
+  }
+}
+function isSiteTranslationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
+}
+async function loadSiteTranslationFields() {
+  if (!siteTranslationLocale.value) return
+  siteTranslationError.value = null
+  try {
+    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
+      `/api/editor/sites/${siteId}/localization/site/${siteId}/${encodeURIComponent(siteTranslationLocale.value)}`,
+      { validate: isSiteTranslationResponse },
+    )
+    const values = response.localization.values
+    siteTranslationFields.brand_name = typeof values.brand_name === 'string' ? values.brand_name : ''
+    siteTranslationFields.brand_description = typeof values.brand_description === 'string' ? values.brand_description : ''
+    siteTranslationFields.seo_title = typeof values.seo_title === 'string' ? values.seo_title : ''
+    siteTranslationFields.seo_description = typeof values.seo_description === 'string' ? values.seo_description : ''
+  } catch (cause) {
+    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
+    if (statusCode !== 404) siteTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
+    siteTranslationFields.brand_name = ''; siteTranslationFields.brand_description = ''
+    siteTranslationFields.seo_title = ''; siteTranslationFields.seo_description = ''
+  }
+}
+watch(siteTranslationLocale, () => { void loadSiteTranslationFields() })
+watch(detailKey, key => { if (key === 'site-translations' && !siteTranslationLocales.value.length) loadSiteTranslationLocales() }, { immediate: true })
+async function saveSiteTranslation() {
+  if (!siteTranslationLocale.value) return
+  siteTranslationSaving.value = true; siteTranslationError.value = null
+  try {
+    const values: Record<string, string> = {}
+    if (siteTranslationFields.brand_name.trim()) values.brand_name = siteTranslationFields.brand_name.trim()
+    if (siteTranslationFields.brand_description.trim()) values.brand_description = siteTranslationFields.brand_description.trim()
+    if (siteTranslationFields.seo_title.trim()) values.seo_title = siteTranslationFields.seo_title.trim()
+    if (siteTranslationFields.seo_description.trim()) values.seo_description = siteTranslationFields.seo_description.trim()
+    await dashboardApi(`/api/editor/sites/${siteId}/localization/site/${siteId}/${encodeURIComponent(siteTranslationLocale.value)}`, {
+      method: 'PUT',
+      body: { values },
+      validate: isRecord,
+    })
+    toast.add({ description: 'Translation saved', color: 'success' })
+  } catch (cause) {
+    siteTranslationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
+  } finally {
+    siteTranslationSaving.value = false
+  }
+}
 
 function fillForm(settings: SiteSettingsResponse) {
   loadedSettings.value = settings
   form.brand_name = settings.brand_name ?? ''
   form.brand_description = settings.brand_description ?? ''
   form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
+  form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : DEFAULT_CURRENCY
@@ -441,13 +564,30 @@ async function patchSettings(body: Record<string, unknown>, successMessage: stri
   toast.add({ description: successMessage, color: 'success' })
   await dashboard.refresh()
 }
+async function regenerateSocialCards() {
+  regeneratingCards.value = true
+  try {
+    const response = await dashboardApi<SocialCardRegenerationResponse>(`/api/editor/sites/${siteId}/social-cards/regenerate`, {
+      method: 'POST',
+      validate: isSocialCardRegenerationResponse,
+    })
+    const notice = socialCardRefreshNotice(response.summary)
+    toast.add({ description: notice.message, color: notice.color })
+  } catch (error) {
+    toast.add({ description: errorMessage(error, 'Failed to regenerate social cards'), color: 'error' })
+  } finally {
+    regeneratingCards.value = false
+  }
+}
 async function saveCurrentEditor() {
   if (saveDisabled.value || !detailKey.value) return
+  if (detailKey.value === 'site-translations') { await saveSiteTranslation(); return }
   saving.value = true
   try {
     switch (detailKey.value) {
       case 'name': await patchSettings({ brand_name: form.brand_name.trim() }, 'Brand name saved'); break
-      case 'logo': await patchSettings({ media: form.logoAssetId ? [{ asset_id: form.logoAssetId, slot: 'logo' }] : [] }, 'Logo saved'); break
+      case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }, 'Logo saved'); break
+      case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }, 'Social sharing image saved'); break
       case 'description': await patchSettings({ brand_description: form.brand_description }, 'Description saved'); break
       case 'color': await patchSettings({ brand_color: form.brand_color }, 'Brand color saved'); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }, 'Contact details saved'); break

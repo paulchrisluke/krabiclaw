@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Orders">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="paths.site" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -36,7 +36,7 @@
             </div>
           </template>
 
-          <div class="grid gap-4 md:grid-cols-3">
+          <div class="grid gap-4 sm:grid-cols-3">
             <UFormField label="Grab" :error="urlError(location.form.grab_url)">
               <UInput v-model="location.form.grab_url" type="url" placeholder="https://grab.onelink.me/..." />
             </UFormField>
@@ -77,6 +77,7 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.ordering' })
 
+
 interface LocationRow {
   id: string
   title: string
@@ -93,14 +94,13 @@ interface OrderForm {
   foodpanda_url: string
 }
 
-const siteId = await useDashboardSiteId()
 const route = useRoute()
 const toast = useToast()
 const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm }>>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const savingId = ref<string | null>(null)
-const { paths, locationPath } = useDashboardSiteLinks(siteId)
+const { paths, locationPath } = useDashboardSiteLinks()
 
 function addressText(address: LocationRow['address']) {
   return address?.addressLines?.filter(Boolean).join(', ') ?? ''

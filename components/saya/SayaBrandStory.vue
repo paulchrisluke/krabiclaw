@@ -18,7 +18,7 @@
           {{ body }}
         </p>
         <NuxtLink
-          to="/about"
+          :to="localePath('/about')"
           class="mt-8 inline-block border-b border-inverted pb-1 text-xs uppercase tracking-widest text-inverted no-underline transition hover:opacity-60"
         >
           {{ readMoreCta }}
@@ -30,6 +30,8 @@
 
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
+
+const { localePath } = useI18n()
 
 interface Props {
   data?: {

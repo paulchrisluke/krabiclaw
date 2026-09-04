@@ -45,11 +45,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/blog',
   title: page.value?.seo_title || `Articles | ${identity.value.brand_name}`,
   description: page.value?.seo_description || page.value?.summary || '',
-  label: 'Blog',
   brand: {
     siteName: identity.value.brand_name,
-    logoUrl: identity.value.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: identity.value.media.find(item => item.slot === 'favicon')?.public_url || null,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

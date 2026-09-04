@@ -6,18 +6,18 @@
           <img
             v-if="profileImageUrl"
             :src="profileImageUrl"
-            :alt="`${brandName} profile image`"
+            :alt="brandName"
             :class="profileImageClass"
           >
-          <p v-if="isBlawby" class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--blawby-token-accent-strong)]">Links</p>
+          <p v-if="isBlawby" class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--blawby-token-accent-strong)]">{{ linksPage.page.title }}</p>
           <h1 :class="headingClass">{{ linksPage.page.title }}</h1>
         </div>
 
-        <nav id="featured-links" aria-label="Featured links" class="mt-8">
+        <nav id="featured-links" :aria-label="linksPage.page.title" class="mt-8">
           <ol class="space-y-3">
             <li v-for="item in linksPage.items" :key="item.id">
               <a
-                :href="item.destination"
+                :href="localizedDestination(item.destination)"
                 :target="externalTarget(item.destination)"
                 :rel="externalRel(item.destination)"
                 :class="linkClass"
@@ -44,6 +44,9 @@ import { isPublicLinksPayload, isPublicLinksResponse, type PublicLinksItem, type
 definePageMeta({ layout: false })
 
 const tenantState = useTenantSite()
+const route = useRoute()
+const { localePath } = useI18n()
+const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
 const requestEvent = useRequestEvent()
 const siteId = import.meta.server
   ? (requestEvent?.context.siteId as string | null | undefined) ?? tenantState.siteId
@@ -56,7 +59,7 @@ if (!isTenant || !siteId) {
 }
 
 const { data, error } = await useAsyncData<PublicLinksPayload | null>(
-  `public-links-page-${siteId}`,
+  `public-links-page-${siteId}-${locale}`,
   async (_nuxtApp, { signal }) => {
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
@@ -66,15 +69,15 @@ const { data, error } = await useAsyncData<PublicLinksPayload | null>(
       ])
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      const response = await getPublicLinksPage(db, siteId)
+      const response = await getPublicLinksPage(db, siteId, locale)
       if (response !== null && !isPublicLinksPayload(response)) {
         throw new ApiClientError('Public links response did not match its contract', 502, 'INVALID_PUBLIC_LINKS_RESPONSE', null)
       }
       return response
     }
-    return await publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/links-page`, {
+    return await publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/links-page?locale=${encodeURIComponent(locale)}`, {
       signal,
-      coalesceKey: `public-links-page-${siteId}`,
+      coalesceKey: `public-links-page-${siteId}-${locale}`,
       validate: isPublicLinksResponse,
     })
   },
@@ -83,11 +86,12 @@ const { data, error } = await useAsyncData<PublicLinksPayload | null>(
 
 if (error.value) throw error.value
 if (!data.value) throw createError({ statusCode: 404, statusMessage: 'Links page not found' })
+useState<PublicLinksPayload['localeRepresentations']>('public-locale-representations', () => []).value = data.value.localeRepresentations
 
 const linksPage = computed(() => data.value)
 const isBlawby = computed(() => linksPage.value?.site.template === 'blawby')
 const layoutName = computed(() => isBlawby.value ? 'blawby' : 'saya')
-const brandName = computed(() => linksPage.value?.site.brand_name || linksPage.value?.page.title || 'Links')
+const brandName = computed(() => linksPage.value?.site.brand_name || linksPage.value?.page.title || '')
 const profileImageUrl = computed(() => linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null)
 const { trackLinkClick: recordLinkClick } = useSiteConversionTracking()
 
@@ -125,6 +129,10 @@ function externalRel(destination: string) {
   return isHttpDestination(destination) ? 'noopener noreferrer' : undefined
 }
 
+function localizedDestination(destination: string) {
+  return destination.startsWith('/') ? localePath(destination) : destination
+}
+
 function trackLinkClick(item: PublicLinksItem) {
   if (!import.meta.client) return
   recordLinkClick(item.id)
@@ -132,10 +140,9 @@ function trackLinkClick(item: PublicLinksItem) {
 
 useSocialMetadata(() => ({
   path: '/links',
-  title: linksPage.value?.page.seo_title || `${brandName.value} Links`,
+  title: linksPage.value?.page.seo_title || linksPage.value?.page.title || brandName.value,
   description: linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || '',
   robots: linksPage.value?.page.robots || 'noindex,follow',
-  brand: { siteName: brandName.value, logoUrl: linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null },
-  heroImage: profileImageUrl.value ? { url: profileImageUrl.value } : null,
+  brand: { siteName: brandName.value },
 }))
 </script>

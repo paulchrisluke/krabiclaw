@@ -3,6 +3,9 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { cleanString } from '~/server/utils/api-response'
 import { resolvePublicTemplate, type PublicTemplateSlug } from '~/utils/template-registry'
 import { getMediaPlacements } from '~/server/utils/media-placement'
+import { loadExactPublicLocalizations, projectExactLocalizedCollection, projectExactLocalizedResource } from '~/server/utils/public-localization'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 const ROBOTS_DIRECTIVES = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] as const
 const LINK_ITEM_STATUSES = ['active', 'hidden'] as const
@@ -52,6 +55,7 @@ export interface PublicSiteLinksPayload {
   }
   page: SiteLinksPage
   items: SiteLinkItem[]
+  localeRepresentations: PublicLocaleRepresentation[]
 }
 
 export interface LinksPageUpdateInput {
@@ -215,7 +219,7 @@ export async function getLinksPage(db: DbClient, siteId: string): Promise<{ page
   return { page: mapPage(pageRow), items: items.map(mapItem) }
 }
 
-export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<PublicSiteLinksPayload | null> {
+export async function getPublicLinksPage(db: DbClient, siteId: string, locale = 'en'): Promise<PublicSiteLinksPayload | null> {
   const site = await queryFirst<ApiRecord>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
            s.theme_id, s.vertical,
@@ -228,9 +232,32 @@ export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<
   if (!site) return null
   const media = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
 
-  const { page, items } = await getLinksPage(db, siteId)
-  const publicItems = items.filter(item => item.status === 'active')
-  if (!page || page.path !== '/links' || publicItems.length === 0) return null
+  const { page: sourcePage, items } = await getLinksPage(db, siteId)
+  const sourceItems = items.filter(item => item.status === 'active')
+  if (!sourcePage || sourcePage.path !== '/links' || sourceItems.length === 0) return null
+  const organizationId = String(site.organization_id)
+  const sourceLanguage = await queryFirst<{ label: string | null }>(db, `
+    SELECT label
+      FROM site_locales
+     WHERE site_id = ? AND is_source = 1
+     LIMIT 1
+  `, [siteId])
+  const localizations = locale === 'en'
+    ? []
+    : await loadExactPublicLocalizations(db, organizationId, siteId, locale)
+  const pageLocalization = localizations.find(item => item.resourceType === 'site_link_page' && item.resourceId === sourcePage.id)
+  const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
+  if (locale !== 'en' && !pageLocalization) return null
+  const page = pageLocalization
+    ? projectExactLocalizedResource('site_link_page', sourcePage, pageLocalization)
+    : sourcePage
+  const publicItems = locale === 'en'
+    ? sourceItems
+    : projectExactLocalizedCollection('site_link_item', sourceItems, localizations)
+  if (publicItems.length === 0) return null
+  const localizedSite = siteLocalization
+    ? projectExactLocalizedResource('site', { ...site, id: siteId }, siteLocalization)
+    : { ...site, brand_name: null, brand_description: null }
 
   const template = resolvePublicTemplate({
     themeId: typeof site.theme_id === 'string' ? site.theme_id : null,
@@ -241,8 +268,8 @@ export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<
     site: {
       id: String(site.id),
       organization_id: String(site.organization_id),
-      brand_name: typeof site.brand_name === 'string' ? site.brand_name : null,
-      brand_description: typeof site.brand_description === 'string' ? site.brand_description : null,
+      brand_name: typeof localizedSite.brand_name === 'string' ? localizedSite.brand_name : null,
+      brand_description: typeof localizedSite.brand_description === 'string' ? localizedSite.brand_description : null,
       media: (media.get(siteId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
       brand_color: typeof site.brand_color === 'string' ? site.brand_color : null,
       theme_id: typeof site.theme_id === 'string' ? site.theme_id : null,
@@ -251,6 +278,13 @@ export async function getPublicLinksPage(db: DbClient, siteId: string): Promise<
     },
     page,
     items: publicItems,
+    localeRepresentations: await listPublicLocaleRepresentations(db, {
+      organizationId,
+      siteId,
+      sourcePath: '/links',
+      sourceLabel: sourceLanguage?.label || 'English',
+      resource: { type: 'site_link_page', id: sourcePage.id },
+    }),
   }
 }
 

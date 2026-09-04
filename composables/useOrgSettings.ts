@@ -16,6 +16,5 @@ export function useOrgSettings() {
     billing: computed(() => settingsBase.value ? `${settingsBase.value}/billing` : null),
     members: computed(() => settingsBase.value ? `${settingsBase.value}/members` : null),
     accountProfile: computed(() => '/dashboard/account/profile'),
-    accountAuth: computed(() => '/dashboard/account/authentication'),
   }
 }

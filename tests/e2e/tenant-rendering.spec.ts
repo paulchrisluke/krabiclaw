@@ -127,6 +127,18 @@ test('Pottery House preserves dark-theme hydration and booking context', async (
   await expect(page.locator('.tenant-layout')).not.toHaveCSS('--saya-bg', '')
 })
 
+test('an English-only tenant does not classify one-segment CMS paths as locales', async ({ page }) => {
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    for (const path of ['/th', '/th/about', '/th/experiences', '/th/links']) {
+      const response = await openTenantPage(page, `${potteryHouseBaseURL}${path}`, potteryHouseExtraHeaders)
+      expect(response?.status()).toBe(404)
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+      await expect(page.locator('body')).not.toContainText(/เนื้อหาภาษาไทย/)
+    }
+  }
+})
+
 test('Kikuzuki keeps customer identity, locations, and reservation entry point', async ({ page }) => {
   const baseURL = kikuzukiTestBaseUrl()
   await openTenantPage(page, `${baseURL}/menu`, kikuzukiTestExtraHeaders())
@@ -140,9 +152,9 @@ test('Kikuzuki keeps customer identity, locations, and reservation entry point',
 
 test('NCLS exposes header, footer, pricing, article, contact, taxonomy, and donation journeys', async ({ page, context }) => {
   await openTenantPage(page, `${blawbyBaseURL}/`, blawbyExtraHeaders)
-  for (const label of ['Services', 'Pricing', 'About', 'Contact', 'Blog', 'Donate'])
+  for (const label of ['Legal Services Offered', 'Pricing and Fees', 'About Us', 'Contact Us', 'Our Blog', 'Support Equal Access to Justice'])
     await expect(page.locator('header').getByRole('link', { name: label, exact: true })).toBeVisible()
-  for (const label of ['Family law', 'Request a Consultation', 'About', 'Privacy'])
+  for (const label of ['Family law', 'Request a Legal Consultation', 'About Us', 'Privacy Policy'])
     await expect(page.locator('footer').getByRole('link', { name: label, exact: true })).toBeVisible()
   await Promise.all([
     { path: '/pricing', text: /pricing|income|calculator/i },

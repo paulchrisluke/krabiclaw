@@ -43,43 +43,21 @@
       </UCard>
     </div>
 
-    <UDashboardGroup v-else unit="rem" :min-size="14" :default-size="18" :max-size="24">
-      <UDashboardSidebar
-        v-model:collapsed="sidebarCollapsed"
-        resizable
-        collapsible
-        class="hidden lg:flex"
-        :menu="{ close: false }"
-        :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
-      >
-        <template #header="{ collapsed }">
-          <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
-        </template>
+    <div v-else>
+    <DashboardTopNav
+      v-if="showDashboardChrome"
+      :items="primaryNavItems"
+      :home-to="topNavHomeTo"
+      @menu="menuOpen = true"
+    />
 
-        <template #default="{ collapsed }">
-          <div class="flex flex-col gap-2">
-            <UDashboardSearchButton
-              :collapsed="collapsed"
-              label="Search dashboard, docs, help..."
-              :kbds="[]"
-              class="w-full"
-            />
-            <UNavigationMenu
-              :collapsed="collapsed"
-              :items="navigationItems"
-              orientation="vertical"
-              :ui="{ link: 'hover:before:bg-accented/80 hover:text-highlighted before:transition-colors' }"
-            />
-          </div>
-        </template>
-
-        <template #footer="{ collapsed }">
-          <div class="flex flex-col w-full gap-1.5">
-            <DashboardAccountMenu :collapsed="collapsed" />
-          </div>
-        </template>
-      </UDashboardSidebar>
-
+    <UDashboardGroup
+      unit="rem"
+      :min-size="14"
+      :default-size="18"
+      :max-size="24"
+      :ui="{ base: showDashboardChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : '' }"
+    >
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
       <slot />
@@ -87,28 +65,37 @@
       <ChowBot v-if="showChowBot" />
     </UDashboardGroup>
 
-    <div
-      v-if="mobileNavItems.length && !isAccountRoute"
-      class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden"
+    <nav
+      v-if="showDashboardChrome"
+      class="fixed inset-x-0 bottom-0 z-40 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
+      aria-label="Dashboard"
       data-testid="dashboard-mobile-nav"
     >
-      <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
-        <UButton
-          v-for="item in mobileNavItems"
-          :key="item.key"
-          :to="item.to"
-          :icon="item.icon"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          square
-          :aria-label="item.label"
-          :title="item.label"
-          :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
-        />
-        <DashboardAccountMenu mobile-only />
-      </nav>
+      <NuxtLink
+        v-for="item in primaryNavItems"
+        :key="item.key"
+        :to="item.to"
+        class="flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2 no-underline transition-colors"
+        :class="item.active ? 'text-primary' : 'text-dimmed hover:text-highlighted'"
+        :aria-current="item.active ? 'page' : undefined"
+      >
+        <UIcon :name="item.icon" class="size-6 shrink-0" />
+        <span class="text-[10px] leading-tight font-medium">{{ item.label }}</span>
+      </NuxtLink>
+      <NuxtLink
+        :to="menuPageTo"
+        class="flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2 no-underline transition-colors"
+        :class="isMenuPageActive ? 'text-primary' : 'text-dimmed hover:text-highlighted'"
+        :aria-current="isMenuPageActive ? 'page' : undefined"
+        data-testid="dashboard-mobile-nav-menu-link"
+      >
+        <UIcon name="i-lucide-menu" class="size-6 shrink-0" />
+        <span class="text-[10px] leading-tight font-medium">Menu</span>
+      </NuxtLink>
+    </nav>
     </div>
+
+    <DashboardMenuSlideover v-model:open="menuOpen" />
 
     <BillingServiceUpsellModal />
     </div>
@@ -117,41 +104,38 @@
 
 <script setup lang="ts">
 import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
-import DashboardScopeHeader from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
+import DashboardTopNav from '~/lib/components/workspace/dashboard/DashboardTopNav.vue'
+import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/DashboardMenuSlideover.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
-import { dashboardAccountRouteQueryKey, dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
+import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
+import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import '~/assets/css/dashboard.css'
 
 // ─────────────────────────────────────────────────────────────────────────
-// Dashboard shell architecture (issue #316 + its "Authoritative clarification:
-// progressive sidebar scope navigation" comment — read that comment before
-// changing anything here, it settles a design dispute this file went through).
+// Dashboard shell architecture.
+//
+// The sidebar this layout used to carry is gone, along with the scope-grouped
+// manager nav that issue #316 designed. That nav had already stopped rendering
+// before it was removed — its groups were declared, underscore-prefixed to
+// silence the unused-vars rule, and referenced by nothing. Site-level nav lives
+// on the site overview page itself, which links Media, Settings, Links, Pages
+// and Locations directly.
 //
 // Invariants that must hold no matter what gets added later:
-// - Exactly one layout, one <UDashboardSidebar>, one <UNavigationMenu>. Never
-//   fork a second sidebar/layout per scope, per vertical, or per feature.
+// - One layout, one nav source. mobileNavItems feeds both the top nav and the
+//   bottom bar; never build a second list for one of them.
 // - `scope` is derived ONLY from explicit route params (locationSlug > siteSlug
 //   > orgSlug), never from route.path regexes, residual dashboard-context state,
 //   or a "last visited" fallback — those misclassify scope at ancestor routes
 //   once state has been populated from a deeper page in the same session.
-// - Nav is strictly scope-exclusive: a manager only appears when its OWN
-//   registry `scope` matches the current drill-in level (see managerNavItems).
-//   Site items must not leak into location scope and vice versa — this was a
-//   real bug here once, caused by checking "does siteBase/locationBase exist"
-//   instead of "does the manager's scope match the CURRENT scope".
-// - At lg and above, the parent row is a normal UNavigationMenu item built from
-//   scopeHeaderModel.parent. Below lg the same model is provided to
-//   DashboardNavbarLeading because the sidebar is hidden.
-// - New verticals/templates need zero changes here — add the combination to
-//   cmsCapabilityRegistry and nav/capabilities update automatically. A new
-//   manager id (not just a new vertical reusing existing ids) needs an entry
-//   in MANAGER_GROUP/MANAGER_ICON below, nothing else.
+// - New verticals/templates need zero changes here: capabilities come from
+//   resolveCmsCapabilities, and the only thing this layout reads from them is
+//   locationVocabulary, for the children label.
 // ─────────────────────────────────────────────────────────────────────────
 
 interface AuthOrganization {
@@ -163,7 +147,6 @@ interface AuthOrganization {
 
 const route = useRoute()
 const _config = useRuntimeConfig()
-const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
 const { data: sessionData, refreshSession, signOut: _signOut } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
@@ -254,32 +237,21 @@ const organization = dashboard.organization
 const site = dashboard.site
 const sites = dashboard.sites
 const activeSiteId = dashboard.siteId
-const canManageSite = computed(() => dashboard.siteAccess.value === 'organization' || dashboard.siteAccess.value === 'site')
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(organization.value?.role ?? ''))
 const dashboardLocation = useDashboardLocation()
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
-const requestedAccountOrganizationSlug = computed(() => {
-  const slug = routeName.value.startsWith('dashboard-account') ? route.query.organization : null
-  return typeof slug === 'string' && /^[a-z0-9-]+$/.test(slug) ? slug : null
-})
-const requestedAccountOrganizationName = computed(() => {
-  const name = routeName.value.startsWith('dashboard-account') ? route.query.organizationName : null
-  return typeof name === 'string' && name.trim().length <= 100 ? name.trim() : null
-})
 const activeOrganizationId = computed(() => {
   const session = sessionData.value?.session as { activeOrganizationId?: string | null } | undefined
   return session?.activeOrganizationId ?? null
 })
-const accountOrganization = computed(() => organizations.value.find(org => org.slug === requestedAccountOrganizationSlug.value)
-  ?? organizations.value.find(org => org.id === activeOrganizationId.value)
+// The account pages are user-scoped, not organization-scoped, so they carry no
+// organization in the path. They used to carry one in the query string purely so
+// a back-link could render a label without a fetch; the top nav is the way back
+// now, and the session's active organization answers "back to which org?".
+const accountOrganization = computed(() => organizations.value.find(org => org.id === activeOrganizationId.value)
   ?? organizations.value[0]
   ?? null)
-const accountRouteQuery = computed((): Record<string, string> => {
-  const target = accountOrganization.value
-  if (!target?.slug) return {}
-  return { organization: target.slug, organizationName: target.name }
-})
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
@@ -398,130 +370,9 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   }
 })
 
-type NavGroupId = 'Content' | 'Operate' | 'Reputation' | 'Publishing'
-
-// A NEW VERTICAL never requires touching this layout: add its combination to
-// verticalDefaultFeatures (config/cms-registry.ts) and nav updates automatically
-// via resolveCmsCapabilities. The one exception is a genuinely NEW feature id
-// (not just a new vertical using existing ids like products/reviews/blog) — that
-// needs an entry in both maps below. managerNavItems filters on
-// `MANAGER_GROUP[manager.id] !== group`, so a ProductFeature missing from this map
-// matches no group at all and is omitted from every group's nav — not rendered
-// with a missing icon, simply never rendered.
-// 'locations' and 'settings' are deliberately absent — they're always-on infra
-// features rendered directly by overviewGroup/siteOverviewGroup/locationOverviewGroup
-// below, not through the toggleable manager nav.
-const MANAGER_GROUP: Partial<Record<ProductFeature, NavGroupId>> = {
-  media: 'Content',
-  links: 'Content',
-  posts: 'Content',
-  photos: 'Content',
-  products: 'Operate',
-  ordering: 'Operate',
-  reservations: 'Operate',
-  experiences: 'Operate',
-  services: 'Operate',
-  testimonials: 'Reputation',
-  reviews: 'Reputation',
-  qa: 'Reputation',
-  blog: 'Publishing',
-}
-
-const MANAGER_ICON: Partial<Record<ProductFeature, string>> = {
-  media: 'i-lucide-image',
-  links: 'i-lucide-link',
-  posts: 'i-lucide-megaphone',
-  photos: 'i-lucide-image',
-  products: 'i-lucide-package',
-  ordering: 'i-lucide-shopping-bag',
-  reservations: 'i-lucide-calendar-check',
-  experiences: 'i-lucide-ticket',
-  services: 'i-lucide-briefcase',
-  testimonials: 'i-lucide-star',
-  reviews: 'i-lucide-star',
-  qa: 'i-lucide-message-circle-question',
-  blog: 'i-lucide-pencil',
-}
-
-function managerHref(manager: CmsManagerCapability): string | null {
-  if (manager.id === 'settings') {
-    if (manager.scope === 'location') return locationBase.value ? `${locationBase.value}/settings` : null
-    return siteBase.value ? `${siteBase.value}/settings` : null
-  }
-  if (manager.scope === 'location') {
-    if (!locationBase.value) return null
-    const rel = manager.route.replace(/^:location\/?/, '')
-    return rel ? `${locationBase.value}/${rel}` : locationBase.value
-  }
-  if (!siteBase.value) return null
-  return manager.route ? `${siteBase.value}/${manager.route}` : siteBase.value
-}
-
-// Strict scope-exclusivity: a manager only appears in nav when its OWN
-// registry scope ('site' | 'location') matches the current drill-in level.
-// Without this, a manager still resolves an href whenever siteBase/locationBase
-// merely *exist* — which they do at every deeper scope too — so site-scoped
-// items (Blog, Reviews, Settings) would keep showing while drilled into a
-// location, and org-level items would keep showing at site scope. Each scope
-// must show only its own level's nav, not the union of it and its ancestors.
-function managerNavItems(group: NavGroupId) {
-  const managers = capabilities.value?.managers ?? []
-  const seen = new Set<string>()
-  const items: { label: string; icon?: string; to: string }[] = []
-  for (const manager of managers) {
-    if (scope.value === 'site' && !canManageSite.value) continue
-    if (MANAGER_GROUP[manager.id] !== group) continue
-    if (manager.scope !== scope.value) continue
-    const href = managerHref(manager)
-    if (!href || seen.has(href)) continue
-    seen.add(href)
-    items.push({ label: manager.label, icon: MANAGER_ICON[manager.id], to: href })
-  }
-  return items
-}
-
-function _managerAction(manager: CmsManagerCapability, href: string) {
-  return {
-    label: manager.label,
-    to: href,
-    icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle',
-    feature: manager.id,
-  }
-}
-
-function _revenueLabel(item: ReturnType<typeof _managerAction>) {
-  if (item.feature === 'reservations') return 'Bookings'
-  if (item.feature === 'services') return 'Schedule'
-  return item.label
-}
-
-const organizationNavigationItems = computed(() => {
-  if (!orgBase.value) return []
-  return [
-    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: orgBase.value },
-    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
-    { key: 'sites', label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
-    { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${orgBase.value}/inbox` },
-  ]
-})
-
-const _overviewGroup = computed(() => {
-  if (scope.value !== 'organization' || !orgBase.value) return []
-  return organizationNavigationItems.value.map(({ key: _key, ...item }) => item)
-})
-
-// The parent row renders as a plain UNavigationMenu item (same size/padding as
-// every other item) rather than custom-styled markup in the switcher header —
-// guarantees visual consistency by construction instead of hand-matching CSS.
-function parentNavItem() {
-  const parent = scopeHeaderModel.value.parent
-  return parent ? [{ label: parent.label, icon: 'i-lucide-chevron-left', to: parent.to }] : []
-}
-
-// 'locations' and 'settings' are always-on infra features (see MANAGER_GROUP's comment) so they
-// render here directly rather than through managerNavItems — the label still comes from the
-// resolved capabilities (locationVocabulary), not a hardcoded string, so a professional_service
-// site correctly reads "Offices / Service Areas" instead of "Locations".
+// The children label comes from the resolved capabilities (locationVocabulary), not a
+// hardcoded string, so a professional_service site correctly reads "Offices / Service
+// Areas" instead of "Locations".
 const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
 const locationsNavTarget = computed(() => {
   if (!locationsBase.value) return null
@@ -530,118 +381,11 @@ const locationsNavTarget = computed(() => {
   return firstLocation?.slug ? `${locationsBase.value}/${firstLocation.slug}` : `${locationsBase.value}/new`
 })
 
-const _siteOverviewGroup = computed(() => {
-  if (scope.value !== 'site' || !siteBase.value) return []
-  const items = [
-    { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
-    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${siteBase.value}/inbox` },
-    { label: locationsNavLabel.value, icon: 'i-lucide-map-pin', to: locationsNavTarget.value ?? `${siteBase.value}/locations/new` },
-  ]
-  if (!canManageSite.value) return items
-  return [
-    ...items,
-    { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
-    { label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${siteBase.value}/analytics` },
-    { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
-    { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
-  ]
-})
-
-// Posts/Photos/Q&A used to be hardcoded here regardless of capability — moved to
-// managerNavItems('Content'/'Reputation') (location.posts/location.photos/location.qa in
-// config/cms-registry.ts) so a location override can actually turn them off. Overview/Content/
-// Inbox/Settings stay here: universal chrome with no ProductFeature toggle.
-const _locationOverviewGroup = computed(() => {
-  if (scope.value !== 'location' || !locationBase.value) return []
-  return [
-    { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
-    { label: 'Location settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings` },
-    ...(siteBase.value && canManageSite.value ? [{ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` }] : []),
-    { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
-  ]
-})
-
-const _parentGroup = computed(() => parentNavItem())
-
-const _contentGroup = computed(() => {
-  const items: { label: string; icon?: string; to?: string; type?: string }[] = []
-  const managerItems = managerNavItems('Content')
-  if (scope.value === 'site' && siteBase.value && canManageSite.value) {
-    items.push({ label: 'Content', type: 'label' })
-    items.push({ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` })
-  }
-  if (managerItems.length > 0) {
-    if (items.length === 0) items.push({ label: 'Content', type: 'label' })
-    items.push(...managerItems)
-  }
-  return items
-})
-
-const _operateGroup = computed(() => {
-  const items = managerNavItems('Operate')
-  if (items.length === 0) return items
-  return [{ label: 'Operate', type: 'label' }, ...items]
-})
-const _reputationGroup = computed(() => {
-  const items = managerNavItems('Reputation')
-  if (items.length === 0) return items
-  return [{ label: 'Reputation', type: 'label' }, ...items]
-})
-const _publishingGroup = computed(() => {
-  const items = managerNavItems('Publishing')
-  if (items.length === 0) return items
-  return [{ label: 'Publishing', type: 'label' }, ...items]
-})
-
-const settingsGroup = computed(() => {
-  if (routeName.value.startsWith('dashboard-account')) {
-    return [
-      { label: 'Account', type: 'label' },
-      { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: accountRouteQuery.value } },
-      { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: accountRouteQuery.value } },
-    ]
-  }
-  return []
-})
-
-
-const adminGroup = computed(() => [
-  ...(dashboard.managedServiceEnabled.value ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin/work' }] : []),
-  { label: 'Clients', icon: 'i-lucide-building-2', to: '/admin/clients' },
-  { label: 'Members', icon: 'i-lucide-user-plus', to: '/admin/members' },
-  { label: 'Analytics', icon: 'i-lucide-chart-bar', to: '/admin/analytics' },
-  { label: 'Domains', icon: 'i-lucide-globe', to: '/admin/domains' },
-  { label: 'Users', icon: 'i-lucide-users', to: '/admin/users' },
-  { label: 'Content', icon: 'i-lucide-file-text', to: '/admin/content' },
-  { label: 'Localization', icon: 'i-lucide-languages', to: '/admin/localization' },
-  { label: 'Blog', icon: 'i-lucide-pencil', to: '/admin/blog' },
-  { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
-])
-
-const navigationItems = computed(() => {
-  if (isAdminRoute.value) return [adminGroup.value]
-  if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
-  return [
-    mobileNavItems.value
-      .filter(item => !(scope.value === 'site' && ['children', 'inbox'].includes(item.key))
-        && !(scope.value === 'location' && item.key === 'inbox'))
-      .map(({ key: _key, active: _active, exact: _exact, ...item }) => item),
-    _siteOverviewGroup.value,
-    _locationOverviewGroup.value,
-  ]
-})
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
   const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
-  if (target) return { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` }
-  return requestedAccountOrganizationSlug.value
-    ? {
-        label: requestedAccountOrganizationName.value ?? requestedAccountOrganizationSlug.value,
-        to: `/dashboard/${encodeURIComponent(requestedAccountOrganizationSlug.value)}`,
-      }
-    : null
+  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` } : null
 }))
-provide(dashboardAccountRouteQueryKey, accountRouteQuery)
 
 interface DashboardMobileNavItem {
   key: string
@@ -682,6 +426,22 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   ]
   return items.map(item => ({ ...item, active: isActivePath(item.to, item.exact) }))
 })
+
+// The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below
+// md) render the same list — one nav source, two presentations. useDashboardMenu
+// owns which list that is, so admin is a different link set, not a second layout.
+// "Menu" opens the slideover at md and up and navigates to the menu page below
+// it, because a slideover is the wrong control on a phone.
+const menuOpen = ref(false)
+const { primaryNavItems: adminPrimaryNavItems, menuPageTo } = useDashboardMenu()
+const primaryNavItems = computed(() => adminPrimaryNavItems.value ?? mobileNavItems.value)
+const showDashboardChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
+const topNavHomeTo = computed(() => {
+  if (isAdminRoute.value) return '/admin'
+  const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+  return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
+})
+const isMenuPageActive = computed(() => isActivePath(menuPageTo.value, isAdminRoute.value))
 
 watch(
   () => dashboard.contextKey.value,

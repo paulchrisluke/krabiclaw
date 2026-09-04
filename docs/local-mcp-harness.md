@@ -86,7 +86,7 @@ An MCP auth pass requires all of the following:
 - Authorization redirects to Better Auth consent.
 - PKCE token exchange returns access, refresh, and ID tokens.
 - Bearer-authenticated MCP `initialize` succeeds.
-- `tools/list`, `get_current_user`, and `list_sites` succeed.
+- `tools/list`, `get_workspace_context`, and `list_sites` succeed.
 - The affected write or media flow succeeds when applicable.
 - The real ChatGPT gate passes when the defect involves ChatGPT connection,
   tool selection, attachment delivery, or host-provided file arguments.

@@ -16,7 +16,7 @@ import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
-  assertConversationalToolEnabled, filterConversationalTools, normalizeMcpToolForConversationalSurface, } from "~/server/utils/conversational-tool-surface";
+  assertConversationalToolEnabled, visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
 import {
   dispatchStandardMcpMethod, respondToMcpError, resolveMissingMcpCredential, unsupportedMcpMethodError, type McpToolMeta, } from "~/server/utils/mcp-runtime";
 import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
@@ -125,13 +125,12 @@ export default defineHandler(async (event) => {
 Whenever an image is needed (hero, logo, post thumbnail, Product photo, experience cover, story image, or any content section):
 
 **AI-generated (user asks you to generate or create an image):**
-1. Call resolve_agent_guidance({ site_id, task: "image.generate" }) and use every returned skill document separately.
-2. Prepare the exact image brief and call review_agent_guidance_candidate({ site_id, task: "image.generate", candidate_type: "image_brief", candidate: <brief> }). Revise the brief when the review recommends it.
-3. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the reviewed prompt tailored to the business.
-4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
-5. Call show_generated_images with the asset_id and public_url returned by save_generated_image_file.
-6. After the user approves, assign with set_media using placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
-7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
+1. Prepare an image prompt tailored to the business.
+2. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the prepared prompt.
+3. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
+4. Call show_generated_images with the asset_id and public_url returned by save_generated_image_file.
+5. After the user approves, assign with set_media using placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
+6. If the user wants changes, revise the prompt and repeat from step 2.
 
 For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For Products, each show_generated_images and set_media call must include that Product's exact id; use slot image for the explicit primary and gallery for the ordered detail gallery. Finish every requested item before reporting completion.
 
@@ -161,8 +160,6 @@ KrabiClaw has three distinct content-creation tools — do not default to whiche
 - **create_experience** — a permanent, bookable offering with its own page: a class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if inquiry-only) CTA. Use for "we want a dedicated page for X" when X is something people book or inquire about. For inquiry-only pricing, send price: null and a concise pricing_note rather than writing a post or blog entry about it.
 If a request is ambiguous, ask a brief clarifying question rather than guessing.
 
-For create_blog_post, update_blog_post, or replace_blog_content, call resolve_agent_guidance({ site_id, task: "blog.write" }) before composing and review_agent_guidance_candidate({ site_id, task: "blog.write", candidate_type: "blog_article", candidate: <exact approved article> }) before writing newly generated or materially rewritten content. Skill guidance is advisory and scoped; tool schemas, authorization, publication approval, and content_blocks remain enforced by backend code.
-
 ## Session start
 Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
 - If they have 0 sites, start the Onboarding Flow:
@@ -171,7 +168,7 @@ Start every conversation by calling get_workspace_context. If no active site is 
   3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one. Follow the Image work rules above.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for Products, detailed services, or social links yet (defer until the site is live).
-  6. Call create_site and create_location, then show_site_preview.
+  6. Call create_site and create_location.
 - If they have exactly one site, treat it as confirmed automatically. Say "Working with [site name]." in your first reply before doing anything else, then call set_workspace_context so later tool calls can omit the site_id.
 - If they have multiple sites, present them clearly and wait for the user to select one — do not assume or guess.
 
@@ -205,7 +202,7 @@ After applying, always confirm: "[Placement] updated for [site name]." — never
 
 When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
 
-All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
+All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains.
 
 For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. Product batch and sync tools are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. For ordering, call move_products with only the Products being moved, or move_product_category for an entire category section; never resend the full catalog.
 
@@ -233,8 +230,7 @@ Common workflows: manage location-scoped Products, create and publish site posts
         ? await getVisibleSiteContext(event, siteId)
         : null;
 
-      const visibleSurfaceTools = filterConversationalTools(MCP_PUBLIC_TOOLS, cfEnv)
-        .map((tool) => normalizeMcpToolForConversationalSurface(tool, cfEnv));
+      const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
 
       const entitlementKeys = siteCtx
         ? [

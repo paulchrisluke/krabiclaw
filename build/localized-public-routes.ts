@@ -1,12 +1,23 @@
-import { isLocalizedPublicAliasPath, LOCALE_ROUTE_SEGMENT } from '../shared/public-locale-routes'
+import { readdirSync } from 'node:fs'
+
+import { isLocalizedPublicAliasPath } from '../shared/public-locale-routes'
+
+const localizedCatalogLocales = readdirSync(new URL('../i18n/catalogs/', import.meta.url))
+  .flatMap(file => /^([a-z]{2}(?:-[A-Z]{2})?)\.json$/.exec(file)?.[1] ?? [])
+
+if (!localizedCatalogLocales.length) throw new Error('At least one reviewed localized platform catalog is required')
+
+const localeRouteSegment = `:locale(${localizedCatalogLocales.join('|')})`
 
 export function localizedPublicRouteAliases<T extends { name?: string; path: string }>(pages: readonly T[]): T[] {
   return pages.flatMap((page) => {
-    if (!page.name || !isLocalizedPublicAliasPath(page.path)) return []
+    // A one-segment path is ambiguous with a tenant CMS page. The catch-all
+    // resolves that path against the tenant's published locales at runtime.
+    if (!page.name || page.path === '/' || !isLocalizedPublicAliasPath(page.path)) return []
     return [{
       ...page,
       name: `localized-${page.name}`,
-      path: `/${LOCALE_ROUTE_SEGMENT}${page.path === '/' ? '' : page.path}`,
+      path: `/${localeRouteSegment}${page.path}`,
     }]
   })
 }

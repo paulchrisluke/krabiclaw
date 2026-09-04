@@ -1,4 +1,5 @@
 import { isRecord } from './api-clients'
+import type { PublicLocaleRepresentation } from './public-resource-contracts'
 
 export interface PublicLinksItem {
   id: string
@@ -24,6 +25,7 @@ export interface PublicLinksPayload {
     seo_description: string | null
   }
   items: PublicLinksItem[]
+  localeRepresentations: PublicLocaleRepresentation[]
 }
 
 export type PublicLinksResponse = { success: true } & PublicLinksPayload
@@ -56,6 +58,12 @@ export function isPublicLinksPayload(value: unknown): value is PublicLinksPayloa
       && typeof item.destination === 'string'
       && item.status === 'active',
     )
+    && Array.isArray(value.localeRepresentations)
+    && value.localeRepresentations.every(item => isRecord(item)
+      && typeof item.locale === 'string'
+      && typeof item.label === 'string'
+      && typeof item.route_path === 'string'
+      && (item.source === 'source' || item.source === 'localized'))
 }
 
 export function isPublicLinksResponse(value: unknown): value is PublicLinksResponse {

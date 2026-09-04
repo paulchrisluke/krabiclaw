@@ -9,7 +9,7 @@
 
   <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
     <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
-      <PlatformCommandSearchTrigger surface="tenant_blog" variant="saya" label="Search stories..." aria-label="Open story search" class="mb-6" />
+      <PlatformCommandSearchTrigger v-if="locale === 'en'" surface="tenant_blog" variant="saya" :label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" :aria-label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" class="mb-6" />
       <BlogCategoryNav :categories="categories" :base-path="blogBasePath" :active-slug="post?.slug" />
     </aside>
 
@@ -20,19 +20,19 @@
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
         <p v-if="authorName" class="text-sm font-semibold text-default">{{ authorName }}</p>
-        <p class="text-sm text-dimmed">More stories and updates from {{ siteName }}</p>
+        <p class="text-sm text-dimmed">{{ t('saya.posts.subtitle') }} · {{ siteName }}</p>
       </div>
-      <PlatformButton :to="blogBasePath" variant="outline" size="sm">More Posts</PlatformButton>
+      <PlatformButton :to="blogBasePath" variant="outline" size="sm">{{ t('saya.posts.view_all') }}</PlatformButton>
     </div>
     </div>
 
     <div v-if="relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
-      <h2 class="mb-6 text-xl font-bold text-default">More from {{ siteName }}</h2>
+      <h2 class="mb-6 text-xl font-bold text-default">{{ t('saya.posts.title') }} · {{ siteName }}</h2>
       <div class="grid gap-6 sm:grid-cols-2">
         <NuxtLink
           v-for="relatedPost in relatedPosts"
           :key="relatedPost.id"
-          :to="`${blogBasePath}/${relatedPost.slug}`"
+          :to="localePath(`${sourceBlogBasePath}/${relatedPost.slug}`)"
           class="block rounded-xl border border-default bg-elevated p-5 no-underline transition-shadow hover:shadow-md"
         >
           <h3 class="text-base font-semibold text-default">{{ relatedPost.title }}</h3>
@@ -44,12 +44,12 @@
   </div>
 
   <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
-    <h1 class="text-2xl font-bold text-default">Post not found</h1>
-    <p class="mt-3 text-muted">This post may have been moved or removed.</p>
-    <PlatformButton :to="blogBasePath" variant="outline" size="sm" class="mt-6">More Posts</PlatformButton>
+    <h1 class="text-2xl font-bold text-default">{{ t('saya.posts.empty_title') }}</h1>
+    <p class="mt-3 text-muted">{{ t('saya.posts.empty_desc') }}</p>
+    <PlatformButton :to="blogBasePath" variant="outline" size="sm" class="mt-6">{{ t('saya.posts.view_all') }}</PlatformButton>
   </div>
 
-  <PlatformCommandSearchModal surface="tenant_blog" variant="saya" />
+  <PlatformCommandSearchModal v-if="locale === 'en'" surface="tenant_blog" variant="saya" />
 </template>
 
 <script setup lang="ts">
@@ -57,7 +57,6 @@ import PlatformCommandSearchModal from '~/components/platform/search/PlatformCom
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
-import { splitLocalePrefix } from '~/utils/tenant-locale-path'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 const { isTenant, siteId, site } = useTenantSite()
@@ -66,6 +65,7 @@ if (!isTenant || !siteId) throw createError({ statusCode: 404 })
 definePageMeta({ layout: 'saya', middleware: 'tenant-blog-canonical' })
 
 const { resolveMedia } = useMedia()
+const { localePath, t } = useI18n()
 
 interface TenantBlogPost {
   id: string
@@ -85,16 +85,16 @@ interface TenantBlogPost {
   featured_order?: number | null
   author?: { id: string; name: string | null; image: string | null } | null
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; width: number | null; height: number | null }>
+  social_image?: import('~/utils/social-metadata').SocialImageSource | null
   components?: ContentComponent[]
   content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
 const route = useRoute()
-const parsedRoute = splitLocalePrefix(route.path)
-const locale = parsedRoute.localeSegment ?? 'en'
+const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
 useState<string>('public-locale', () => 'en').value = locale
-const blogSection = parsedRoute.sourcePath.startsWith('/article/') ? 'article' : 'blog'
+const blogSection = route.path.includes('/article/') ? 'article' : 'blog'
 const sourceBlogBasePath = `/${blogSection}`
 const blogBasePath = locale === 'en' ? sourceBlogBasePath : `/${locale}${sourceBlogBasePath}`
 const requestEvent = useRequestEvent()
@@ -172,13 +172,15 @@ if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_bl
 useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = data.value.post.localeRepresentations
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList, config, site: publicSite } = await usePublicPageData()
-const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
+const shell = useSiteShellState()
+await shell.ready
+const sourceBlogData = await usePublicPageData({ datasets: ['blog'], routeOwned: false })
+const allPosts = computed(() => (sourceBlogData.blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
 const siteName = computed(() => locale === 'en'
-  ? (publicSite.value?.brand_name?.trim() ?? site?.brand_name?.trim() ?? '')
-  : (publicSite.value?.brand_name?.trim() ?? ''))
+  ? (shell.site.value?.brand_name?.trim() ?? site?.brand_name?.trim() ?? '')
+  : (shell.site.value?.brand_name?.trim() ?? ''))
 const authorName = computed(() => post.value?.author?.name ?? null)
 const authorImage = computed(() => post.value?.author?.image ?? null)
 const readTime = computed(() => {
@@ -212,7 +214,7 @@ const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.valu
 const postPath = computed(() => `${blogBasePath}/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
 const resolvedSeo = computed(() => resolveBlogSeo({
-  title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
+  title: post.value?.title || t('saya.footer.blog'), seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
   seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
   baseUrl: requestURL.origin, publicPath: postPath.value, siteName: siteName.value,
   robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
@@ -223,17 +225,13 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
   pageType: 'article',
-  label: post.value?.category || null,
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
   robots: resolvedSeo.value.robots,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
-  heroImage: postImageUrl.value ? { url: postImageUrl.value } : null,
+  socialImage: post.value?.social_image ?? null,
 }))
 
 useHead(() => ({
@@ -259,13 +257,13 @@ useContentPageSchema(computed(() => {
     keywords: post.value.seo_keywords || undefined,
     inLanguage: locale === 'en' ? 'en-US' : locale,
     breadcrumbs: [
-      { name: blogSection === 'article' ? 'Articles' : 'Blog', url: blogBasePath },
+      { name: blogSection === 'article' ? t('saya.search.articles') : t('saya.footer.blog'), url: blogBasePath },
       { name: post.value.title, url: postPath.value },
     ],
     components: renderableComponents.value,
     siteName: siteName.value,
-    siteLogoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || undefined,
-    siteDescription: site?.brand_description || undefined,
+    siteLogoUrl: shell.site.value?.media.find(item => item.slot === 'logo')?.public_url || undefined,
+    siteDescription: shell.site.value?.brand_description || undefined,
   }
 }))
 </script>

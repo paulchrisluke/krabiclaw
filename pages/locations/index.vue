@@ -33,7 +33,7 @@
         <NuxtLink
           v-for="loc in locations"
           :key="loc.id"
-          :to="`/locations/${loc.slug}`"
+          :to="localePath(`/locations/${loc.slug}`)"
           class="group block overflow-hidden border border-default text-default no-underline transition-colors hover:border-muted"
         >
           <!-- Photo -->
@@ -86,7 +86,7 @@
       <div v-else>
         <div class="border border-dashed border-default px-8 py-16 text-center">
           <SayaIcon name="map-pin" class="mx-auto size-10 text-muted" />
-          <p class="mt-4 text-sm text-muted">No locations are published yet.</p>
+          <p class="mt-4 text-sm text-muted">{{ locale === 'en' ? 'No locations are published yet.' : t('saya.common.temporarily_unavailable') }}</p>
         </div>
         <div v-if="isAuthenticated" class="mt-8 text-center">
           <SayaButton to="/dashboard">
@@ -106,10 +106,10 @@ type AddressInput = string | { addressLines?: string[]; locality?: string; admin
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 const { isAuthenticated } = useAuth()
-const { locale } = useI18n()
+const { locale, localePath, t } = useI18n()
 const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 
-const { locations, pending, config, site: publicSite } = await usePublicPageData()
+const { locations, pending } = await usePublicPageData()
 const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
   : null
@@ -124,14 +124,10 @@ const siteName = computed(() => unref(site)?.brand_name || '')
 
 useSocialMetadata(() => ({
   path: '/locations',
-  title: `Locations · ${siteName.value}`,
-  description: 'Find all our locations.',
-  label: 'Locations',
+  title: t('saya.locations.collection_title', { site: siteName.value }),
+  description: t('saya.locations.meta_description'),
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 </script>

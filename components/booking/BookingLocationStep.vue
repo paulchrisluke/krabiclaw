@@ -74,8 +74,8 @@
           </p>
 
           <!-- Today's hours -->
-          <p v-if="getTodayHoursLabel(loc.opening_hours, 'Closed', loc.timezone)" class="text-sm text-muted">
-            <span class="text-default font-medium">Today: </span>{{ getTodayHoursLabel(loc.opening_hours, 'Closed', loc.timezone) }}
+          <p v-if="getTodayHoursLabel(loc.opening_hours, t('saya.location.closed'), loc.timezone)" class="text-sm text-muted">
+            <span class="text-default font-medium">{{ t('saya.location.today') }}: </span>{{ getTodayHoursLabel(loc.opening_hours, t('saya.location.closed'), loc.timezone) }}
           </p>
 
           <!-- Phone -->
@@ -87,7 +87,7 @@
     <!-- Continue button -->
     <div class="pt-6">
       <SayaButton size="lg" block :disabled="!modelValue" @click="$emit('next')">
-        Continue
+        {{ t('saya.experience_detail.continue') }}
       </SayaButton>
     </div>
   </div>
@@ -95,6 +95,8 @@
 
 <script setup lang="ts">
 import { getTodayHoursLabel } from '@/shared/reservation-hours'
+
+const { t } = useI18n()
 
 export interface BookingLocation {
   id: string

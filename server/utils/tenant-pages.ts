@@ -23,6 +23,8 @@ import {
   type TenantPageType,
 } from '~/utils/tenant-page-blocks'
 import { hasSiteEntitlement } from '~/server/utils/billing'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { refreshSocialCard } from '~/server/utils/social-card'
 import { normalizeDomain } from '~/server/utils/domain-shared'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
@@ -816,7 +818,7 @@ export async function applyOnboardingTenantPages(
   return { updated, created }
 }
 
-export async function createTenantPage(db: DbClient, input: { organizationId: string; siteId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean }) {
+export async function createTenantPage(db: DbClient, input: { organizationId: string; siteId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean; env: CloudflareEnv }) {
   const locale = await resolveLocale(db, input.siteId, input.data.locale)
   const existingPage = input.data.pageId
     ? await queryFirst<{ id: string; organization_id: string; site_id: string; page_type: TenantPageType; recipe: string | null } | null>(db, `
@@ -831,6 +833,16 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     SELECT is_source FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1
   `, [input.siteId, locale])
   if (!existingPage && !localeRow?.is_source) badRequest('Translated tenant-page variants must reference an existing source page')
+  const sourceVariant = existingPage
+    ? await queryFirst<{ path: string } | null>(db, `
+        SELECT v.path
+          FROM tenant_page_variants v
+          JOIN site_locales l ON l.site_id = v.site_id AND l.locale = v.locale AND l.is_source = 1
+         WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ?
+         LIMIT 1
+      `, [existingPage.id, input.organizationId, input.siteId])
+    : null
+  if (existingPage && !sourceVariant) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page source variant is missing' })
   const existingIdentity = existingPage
     ? await canonicalTenantPageIdentity(db, {
         site_id: input.siteId,
@@ -849,8 +861,15 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       recipe: existingIdentity?.recipe ?? existingPage.recipe,
     } : {}),
   }
-  if (effectiveData.pageType === 'system' && !input.trustedSystemPage) badRequest('System pages are managed by the site template')
-  const path = await assertTenantPagePathAvailable(db, { siteId: input.siteId, locale, path: input.data.path, allowSystemPath: input.trustedSystemPage === true })
+  const existingSystemPage = existingPage?.page_type === 'system'
+  if (effectiveData.pageType === 'system' && !input.trustedSystemPage && !existingSystemPage) badRequest('System pages are managed by the site template')
+  const requestedPath = existingPage ? sourceVariant!.path : input.data.path
+  const path = await assertTenantPagePathAvailable(db, {
+    siteId: input.siteId,
+    locale,
+    path: requestedPath,
+    allowSystemPath: input.trustedSystemPage === true || existingSystemPage,
+  })
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
   await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)
@@ -878,10 +897,16 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       params: [now, input.userId, variantId],
     }, publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-create')],
   })
+  if (path === '/') {
+    // The homepage is represented by the site card. Refresh the site card only.
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.siteId }, actorId: input.userId })
+  } else {
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
+  }
   return { page: await getTenantPageForEditor(db, variantId) }
 }
 
-export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope }) {
+export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope; env: CloudflareEnv }) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
   if (!row.document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
@@ -970,6 +995,12 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
     expected_document_updated_at: input.data.expectedDocumentUpdatedAt,
     additionalQueriesAfter: [...placementQueries, updateVariant, updatePage, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-update')],
   })
+  if (row.path === '/' || path === '/') {
+    // The homepage is represented by the site card. Refresh the site card only.
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'site', owner_id: input.scope.siteId }, actorId: input.userId })
+  } else {
+    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'tenant_page', owner_id: variantId }, actorId: input.userId })
+  }
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }
 }
 

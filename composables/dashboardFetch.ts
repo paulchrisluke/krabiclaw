@@ -80,6 +80,14 @@ export async function dashboardFetch<T>(
   if (!scope.orgSlug) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
   }
+  // `request` is always a relative path. `ofetch` is imported directly here
+  // (not Nuxt's magic `$fetch`), so it has no implicit notion of the current
+  // origin. That's harmless in a real browser (relative fetches resolve
+  // against the page URL) but fatal during SSR on Cloudflare Workers, whose
+  // `fetch()` has no page context and throws "Invalid URL" on a bare path.
+  // `useRequestURL()` must be read synchronously (before any `await`) so it
+  // still has access to the current request/window context.
+  const baseURL = useRequestURL().origin
   const headers = buildDashboardRequestHeaders(
     Object.fromEntries(new Headers(options.headers as HeadersInit).entries()),
   )
@@ -89,6 +97,7 @@ export async function dashboardFetch<T>(
   // itself doesn't already have that value to assert.
   const scopedOptions: DashboardFetchOptions<T> = {
     ...options,
+    baseURL,
     query: { ...(options.query as Record<string, unknown> | undefined), ...buildDashboardRequestQuery(scope) },
   }
   return await executeApiFetch(request, scopedOptions, headers)
@@ -120,11 +129,14 @@ export async function applicationFetch<T>(
   request: string,
   options: DashboardFetchOptions<T>,
 ): Promise<T> {
+  // See the comment in dashboardFetch above: a bare relative path is only
+  // resolvable during SSR when we give ofetch an explicit baseURL.
+  const baseURL = useRequestURL().origin
   const headers = new Headers(options.headers as HeadersInit)
   if (import.meta.server) {
     for (const [key, value] of Object.entries(useRequestHeaders(['cookie']))) {
       if (value) headers.set(key, value)
     }
   }
-  return await executeApiFetch(request, options, headers)
+  return await executeApiFetch(request, { ...options, baseURL }, headers)
 }

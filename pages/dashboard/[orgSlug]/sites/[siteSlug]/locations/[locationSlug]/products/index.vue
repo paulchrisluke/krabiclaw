@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="location-products">
-    <template #header><UDashboardNavbar :title="presentation.collectionLabel"><template #leading><DashboardNavbarLeading /></template></UDashboardNavbar></template>
-    <template #body><UPage><UPageBody><ProductEditor v-if="location" :site-id="siteId" :location-id="location.id" :location-title="location.title" :currency="currency" :presentation="presentation" /></UPageBody></UPage></template>
+    <template #header><UDashboardNavbar :title="presentation.collectionLabel"><template #leading><DashboardNavbarLeading :to="paths.project" label="Location" /></template></UDashboardNavbar></template>
+    <template #body><UPage><UPageBody><ProductEditor v-if="location" :site-id="siteId" :location-id="location.id" :location-slug="location.slug" :location-title="location.title" :currency="currency" :presentation="presentation" :vertical="vertical" /></UPageBody></UPage></template>
   </UDashboardPanel>
 </template>
 
@@ -10,6 +10,8 @@ import ProductEditor from '~/components/products/ProductEditor.vue'
 import { isCurrencyCode } from '~/shared/currencies'
 import { requireProductPresentation } from '~/utils/product-presentation'
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })
+
+const { paths } = useDashboardSiteLinks()
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()

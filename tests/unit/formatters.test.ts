@@ -45,12 +45,9 @@ test('formatDate: ISO datetime strings are also formatted in UTC, not the runtim
   assert.equal(result, 'Jul 25, 2026')
 })
 
-test('formatDate: null/empty returns em-dash', () => {
+test('formatDate: missing or invalid input returns em-dash', () => {
   assert.equal(formatDate(null), '—')
   assert.equal(formatDate(undefined), '—')
   assert.equal(formatDate(''), '—')
-})
-
-test('formatDate: invalid date string returns em-dash', () => {
   assert.equal(formatDate('not-a-date'), '—')
 })

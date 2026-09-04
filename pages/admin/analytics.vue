@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Analytics">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading to="/admin" label="Admin" />
         </template>
       </UDashboardNavbar>
     </template>

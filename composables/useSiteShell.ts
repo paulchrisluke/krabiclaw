@@ -82,6 +82,12 @@ export const useSiteShellState = () => {
   const locales = computed(() => data.value?.locales ?? []);
   const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
+  const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
+  watch(
+    () => data.value?.platformMessages,
+    messages => { platformMessages.value = messages ?? null },
+    { immediate: true },
+  )
   return {
     locations,
     config,

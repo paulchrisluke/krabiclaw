@@ -30,6 +30,7 @@ function pickIcons(collection: string, names: string[]) {
 // Optional build analysis for bundle inspection; it has no runtime effect.
 const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
+const workerWasmExternal = /(?:index_bg|yoga|webp_dec|squoosh_png_bg)\.wasm$/
 
 const publicSurfaceCssPaths = {
   'platform-entry': 'surfaces/platform.css',
@@ -176,6 +177,7 @@ export default defineNuxtConfig({
     build: {
       modulePreload: false,
       rollupOptions: {
+        external: [workerWasmExternal],
         output: {
           assetFileNames: publicSurfaceCssAssetFileName,
         },
@@ -398,11 +400,16 @@ export default defineNuxtConfig({
     // module. Nitro's Rollup pass cannot parse the binary, and Workers cannot compile raw
     // R2 bytes at runtime.
     rollupConfig: {
-      external: [/(?:index_bg|yoga|webp_dec|squoosh_png_bg)\.wasm$/]
+      external: [workerWasmExternal]
     },
     serverAssets: [{
       baseName: 'docs',
-      dir: './docs'
+      dir: './docs',
+      // Only .md files are ever read (server/api/docs.get.ts, server/api/docs/[slug].get.ts
+      // both filter/fetch by the .md extension) - without this, every binary file anywhere
+      // under docs/ (screenshots, PDFs, etc.) gets embedded into the SSR Worker bundle for
+      // nothing, which is what pushed the bundle over Cloudflare's 10 MiB script size limit.
+      pattern: '**/*.md'
     }, {
       baseName: 'platform',
       dir: '..',

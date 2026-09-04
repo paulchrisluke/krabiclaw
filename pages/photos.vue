@@ -71,7 +71,7 @@ definePageMeta({ layout: 'saya' })
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
-const { locations, media: photos, pending, config, site: publicSite } = await usePublicPageData()
+const { locations, media: photos, pending } = await usePublicPageData()
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
 
 const locationsById = computed(() => Object.fromEntries(locations.value.map(l => [l.id, l])))
@@ -118,12 +118,8 @@ useSocialMetadata(() => ({
   path: '/photos',
   title: `Photos | ${siteName.value}`,
   description: `Photo gallery from ${siteName.value}.`,
-  label: 'Gallery',
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 </script>

@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="location?.title || 'Location'" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :detail-to="sitePath" detail-label="Site overview" />
+          <DashboardNavbarLeading :to="sitePath" label="Site overview" />
         </template>
       </UDashboardNavbar>
     </template>

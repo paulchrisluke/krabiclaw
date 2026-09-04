@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Assistant">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="paths.site" label="Site" />
         </template>
         <template #right>
           <UButton
@@ -72,10 +72,11 @@ import { useChowBotHistory } from '~/composables/useChowBotHistory'
 
 definePageMeta({ layout: 'dashboard' })
 
+const { paths } = useDashboardSiteLinks()
+
 const dashboard = useDashboardSite()
 const chowBotHistory = useChowBotHistory()
 const activeSiteId = dashboard.siteId
-const { paths } = useDashboardSiteLinks('')
 
 const siteConversations = computed(() => activeSiteId.value ? chowBotHistory.forSite(activeSiteId.value) : [])
 const newConversationPath = computed(() => `${paths.value.conversations}/new`)

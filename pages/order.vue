@@ -81,7 +81,7 @@ if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not fo
 
 const { locale } = useI18n()
 const orderCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const { getField, locations, config, site: publicSite } = await usePublicPageData()
+const { getField, locations } = await usePublicPageData()
 
 const allLocations = computed(() => locations.value)
 
@@ -103,9 +103,6 @@ useSocialMetadata(() => ({
   description: orderCopy.value.seoOrderDescription(site?.brand_name?.trim() ?? ''),
   brand: {
     siteName: site?.brand_name?.trim() ?? '',
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 </script>

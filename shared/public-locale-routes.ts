@@ -1,12 +1,10 @@
 export const PUBLIC_SOURCE_ROUTE_ROOTS = new Set([
   'about', 'article', 'blog', 'contact', 'experiences', 'help', 'links', 'locations',
-  'menu', 'order', 'photos', 'posts', 'privacy', 'products', 'qa', 'reservations',
-  'reviews', 'services', 'terms',
+  'donate', 'menu', 'order', 'photos', 'policies', 'posts', 'pricing', 'privacy', 'products',
+  'qa', 'reservations', 'reviews', 'schedule', 'services', 'terms', 'third-party-notices',
 ])
 
 export const RESERVED_PUBLIC_ROUTE_ROOTS = new Set(['admin', 'api', 'dashboard', 'preview'])
-
-export const LOCALE_ROUTE_SEGMENT = ':locale([A-Za-z][A-Za-z0-9-]{1,34})'
 
 export function isPublicSourceRouteRoot(value: string): boolean {
   return PUBLIC_SOURCE_ROUTE_ROOTS.has(value)

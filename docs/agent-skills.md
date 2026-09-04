@@ -11,12 +11,7 @@ The first MCP-exposed scaffold supports two tasks:
 - `blog.write`
 - `image.generate`
 
-Both tenant MCP and platform MCP use the same resolver and review contract in `server/utils/agent-skills/`. Tenant tools are:
-
-- `resolve_agent_guidance`
-- `review_agent_guidance_candidate`
-
-Platform tools use platform naming:
+The tenant MCP app no longer exposes these as callable tools — `resolve_agent_guidance` and `review_agent_guidance_candidate` were removed from the ChatGPT-facing tool surface. Platform MCP (internal-only) still uses the same resolver and review contract in `server/utils/agent-skills/` via platform-named tools:
 
 - `resolve_platform_agent_guidance`
 - `review_platform_agent_guidance_candidate`

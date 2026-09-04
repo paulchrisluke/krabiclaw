@@ -44,8 +44,8 @@
         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
         <div class="relative flex min-h-160 items-end">
           <div class="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-            <NuxtLink to="/locations" class="saya-kicker mb-8 inline-block text-white/60 no-underline hover:text-white">
-              ← All locations
+            <NuxtLink :to="localePath('/locations')" class="saya-kicker mb-8 inline-block text-white/60 no-underline hover:text-white">
+              ← {{ t('saya.footer.all_locations') }}
             </NuxtLink>
             <p class="saya-eyebrow mb-5 text-white/80">{{ location.neighborhood || location.city }}</p>
             <h1 class="saya-display-lg text-white">
@@ -63,11 +63,11 @@
             </div>
             <div v-else-if="isOpenNow === true" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-green-400" />
-              Open now · {{ todayHours }}
+              {{ t('saya.location.open_now') }} · {{ todayHours }}
             </div>
             <div v-else-if="isOpenNow === false" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-zinc-400" />
-              Closed · {{ todayHours }}
+              {{ t('saya.location.closed') }} · {{ todayHours }}
             </div>
             <div v-else-if="todayHours" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-amber-400" />
@@ -75,13 +75,13 @@
             </div>
             <div v-else class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-zinc-300" />
-              <a v-if="displayPhone" :href="`tel:${dialablePhone}`" class="text-white/80 no-underline hover:text-white">Call for hours · {{ displayPhone }}</a>
-              <span v-else>Contact us for hours</span>
+              <a v-if="displayPhone" :href="`tel:${dialablePhone}`" class="text-white/80 no-underline hover:text-white">{{ t('saya.location.call_us') }} · {{ displayPhone }}</a>
+              <span v-else>{{ t('saya.location.contact_us_for_hours') }}</span>
             </div>
             <div class="mt-10 flex flex-wrap gap-3">
               <SayaButton
                 v-if="primaryCtaPath"
-                :to="primaryCtaPath"
+                :to="localePath(primaryCtaPath)"
                 size="lg"
                 class="bg-white! text-black! hover:bg-zinc-100!"
               >
@@ -89,7 +89,7 @@
               </SayaButton>
               <NuxtLink
                 v-if="secondaryCtaPath"
-                :to="secondaryCtaPath"
+                :to="localePath(secondaryCtaPath)"
                 class="inline-flex items-center rounded-full border border-white/50 px-6 py-2.5 text-sm font-medium uppercase tracking-widest text-white transition hover:bg-white/10"
               >
                 {{ secondaryCtaLabel }}
@@ -103,7 +103,7 @@
       <section class="border-b border-default">
         <div class="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 sm:grid-cols-2 lg:grid-cols-3 lg:px-8">
           <div>
-            <p class="saya-eyebrow mb-4 text-muted">Address</p>
+            <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.address') }}</p>
             <p class="text-sm leading-relaxed text-default">{{ formattedAddress }}</p>
             <a
               v-if="location.maps_url"
@@ -112,11 +112,11 @@
               rel="noopener noreferrer"
               class="mt-3 inline-block text-xs uppercase tracking-widest text-default no-underline transition hover:opacity-60"
             >
-              Get directions →
+              {{ t('saya.location.get_directions') }} →
             </a>
           </div>
           <div>
-            <p class="saya-eyebrow mb-4 text-muted">Hours</p>
+            <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.hours') }}</p>
             <div class="space-y-1">
               <div
                 v-for="day in weekHours"
@@ -127,11 +127,11 @@
                 <span>{{ day.day }}</span>
                 <span>{{ day.hours }}</span>
               </div>
-              <div v-if="!weekHours.length" class="text-sm text-muted">Contact us for hours</div>
+              <div v-if="!weekHours.length" class="text-sm text-muted">{{ t('saya.location.contact_us_for_hours') }}</div>
             </div>
           </div>
           <div>
-            <p class="saya-eyebrow mb-4 text-muted">Contact</p>
+            <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.header.contact') }}</p>
             <a v-if="displayPhone" :href="`tel:${dialablePhone}`" class="block text-sm text-default no-underline hover:underline">
               {{ displayPhone }}
             </a>
@@ -147,11 +147,11 @@
         <div class="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:px-8">
           <!-- eslint-disable vue/no-v-html -->
           <div v-if="sanitizedParkingInfo">
-            <p class="saya-eyebrow mb-4 text-muted">Parking</p>
+            <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.parking') }}</p>
             <div class="prose prose-sm max-w-none text-default" v-html="sanitizedParkingInfo" />
           </div>
           <div v-if="sanitizedExtraNotes">
-            <p class="saya-eyebrow mb-4 text-muted">Additional Notes</p>
+            <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.additional_notes') }}</p>
             <div class="prose prose-sm max-w-none text-default" v-html="sanitizedExtraNotes" />
           </div>
           <!-- eslint-enable vue/no-v-html -->
@@ -162,18 +162,18 @@
         v-if="isExperienceTenant && featuredExperienceItems.length"
         :data="{
           items: featuredExperienceItems,
-          kicker: 'Experiences',
-          heading: `Experiences at ${location.title}.`,
-          linkTarget: locationExperienceHref
+          kicker: t('saya.footer.experiences'),
+          heading: `${t('saya.footer.experiences')} · ${location.title}`,
+          linkTarget: locationExperienceHref ? localePath(locationExperienceHref) : null
         }"
       />
       <LazySayaFeaturedContent
         v-if="productPresentation && featuredProductItems.length"
         :data="{
           items: featuredProductItems,
-          kicker: productPresentation.collectionLabel,
-          heading: productPresentation.locationCollectionSegment === 'menu' ? `The menu at ${location.title}.` : `Products at ${location.title}.`,
-          linkTarget: productCollectionPath
+          kicker: productPresentation.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : productPresentation.collectionLabel,
+          heading: `${productPresentation.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : productPresentation.collectionLabel} · ${location.title}`,
+          linkTarget: productCollectionPath ? localePath(productCollectionPath) : null
         }"
       />
 
@@ -184,23 +184,23 @@
         :limit="3"
         :show-view-more="true"
         :show-empty-state="false"
-        :view-more-to="`/locations/${slug}/posts`"
+        :view-more-to="localePath(`/locations/${slug}/posts`)"
       />
 
       <!-- Reviews preview -->
       <section v-if="reviewsPreview.length" class="bg-elevated">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-16 max-w-2xl">
-            <p class="saya-kicker mb-6">From our guests</p>
+            <p class="saya-kicker mb-6">{{ t('saya.reviews.subtitle') }}</p>
             <h2 class="saya-display-md flex items-center gap-3 text-default">
               <SayaIcon name="star" solid class="size-8 text-primary" aria-hidden="true" />
               {{ location.rating ? Number(location.rating).toFixed(1) : '—' }}
-              <span v-if="location.review_count" class="text-muted">· {{ location.review_count }} reviews</span>
+              <span v-if="location.review_count" class="text-muted">· {{ t('saya.reviews_page.based_on', { count: location.review_count }) }}</span>
             </h2>
           </div>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <div v-for="review in reviewsPreview" :key="review.id" class="border border-default bg-default p-8">
-              <div class="mb-3 flex gap-1" :aria-label="`${review.rating} out of 5 stars`">
+              <div class="mb-3 flex gap-1" :aria-label="t('saya.reviews.stars_aria', { rating: review.rating })">
                 <SayaIcon
                   v-for="s in 5"
                   :key="s"
@@ -210,7 +210,7 @@
                   class="size-3.5"
                   :class="s <= review.rating ? 'text-primary' : 'text-muted'"
                 />
-                <span class="sr-only">{{ review.rating }} out of 5 stars</span>
+                <span class="sr-only">{{ t('saya.reviews.stars_aria', { rating: review.rating }) }}</span>
               </div>
               <p class="text-sm leading-relaxed text-default">"{{ review.content }}"</p>
               <div class="mt-6 border-t border-default pt-4">
@@ -227,22 +227,20 @@
           <div class="mb-12 flex flex-wrap items-end justify-between gap-8">
             <div>
               <p class="saya-kicker mb-6">{{ locationIndexCopy.otherLocationsHeading }}</p>
-              <h2 class="saya-display-md text-inverted">
-                Also part of <em class="saya-italic">{{ siteName }}</em>.
-              </h2>
+              <h2 class="saya-display-md text-inverted"><em class="saya-italic">{{ siteName }}</em></h2>
             </div>
             <NuxtLink
-              to="/locations"
+              :to="localePath('/locations')"
               class="border-b border-inverted/40 pb-1 text-xs uppercase tracking-widest text-inverted no-underline transition hover:opacity-70"
             >
-              All locations →
+              {{ t('saya.footer.all_locations') }} →
             </NuxtLink>
           </div>
           <div :class="['grid gap-6', otherLocations.length === 1 ? 'max-w-xl' : 'sm:grid-cols-2 lg:grid-cols-3']">
             <NuxtLink
               v-for="loc in otherLocations"
               :key="loc.id"
-              :to="`/locations/${loc.slug}`"
+              :to="localePath(`/locations/${loc.slug}`)"
               class="block overflow-hidden border border-inverted/10 bg-inverted/5 no-underline transition hover:border-inverted/20"
             >
               <div class="aspect-video overflow-hidden bg-inverted/10">
@@ -262,7 +260,7 @@
               <div class="p-7">
                 <p class="saya-eyebrow mb-3 text-inverted/50">{{ loc.neighborhood || loc.city }}</p>
                 <div class="saya-display saya-italic text-3xl text-inverted leading-none">{{ loc.title }}</div>
-                <p class="mt-4 text-xs uppercase tracking-widest text-inverted/50">Visit this room →</p>
+                <p class="mt-4 text-xs uppercase tracking-widest text-inverted/50">{{ t('saya.footer.visit_page') }}</p>
               </div>
             </NuxtLink>
           </div>
@@ -272,16 +270,16 @@
       <!-- Plan a visit CTA — map lives on /contact -->
       <section class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
         <div class="flex flex-wrap items-center justify-between gap-8">
-          <h2 class="saya-display-md saya-italic text-default">See you soon.</h2>
+          <h2 class="saya-display-md saya-italic text-default">{{ t('saya.location.see_you_soon') }}</h2>
           <div class="flex flex-wrap gap-3">
-            <SayaButton v-if="primaryCtaPath" :to="primaryCtaPath" size="lg">
+            <SayaButton v-if="primaryCtaPath" :to="localePath(primaryCtaPath)" size="lg">
               {{ primaryCtaLabel }}
             </SayaButton>
             <NuxtLink
-              :to="`/locations/${slug}/contact`"
+              :to="localePath(`/locations/${slug}/contact`)"
               class="inline-flex items-center rounded-full border border-default px-6 py-2.5 text-xs font-medium uppercase tracking-widest text-default transition hover:bg-muted"
             >
-              Plan a visit →
+              {{ t('saya.location.plan_a_visit') }} →
             </NuxtLink>
           </div>
         </div>
@@ -302,15 +300,15 @@
     <!-- Not found -->
     <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
       <SayaIcon name="map-pin" class="mx-auto mb-4 size-12 text-muted" />
-      <h1 class="saya-display-sm text-default">Location Not Found</h1>
-      <SayaButton to="/locations" class="mt-8">View all locations</SayaButton>
+      <h1 class="saya-display-sm text-default">{{ t('saya.location.not_found') }}</h1>
+      <SayaButton :to="localePath('/locations')" class="mt-8">{{ t('saya.location.view_all_locations') }}</SayaButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage, nowInTimezone } from '~/utils/formatters'
-import { formatProductMoney } from '~/utils/product-money'
+import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
@@ -324,7 +322,7 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
-const { locale } = useI18n()
+const { locale, localePath, t } = useI18n()
 const locationIndexCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 if (!siteId) throw createError({ statusCode: 404 })
 
@@ -340,7 +338,6 @@ const {
   locationReviews,
   pending,
   config: pageConfig,
-  site: publicSite,
   experiencesList,
   contentBlocks,
   postsList,
@@ -373,8 +370,8 @@ const secondaryCtaPath = computed(() => {
 })
 
 const secondaryCtaLabel = computed(() => {
-  if (locationProducts.value.length > 0) return productPresentation.value?.locationCollectionSegment === 'menu' ? 'View menu' : 'View products'
-  if (!isExperienceTenant.value && locationExperienceHref.value) return 'View experiences'
+  if (locationProducts.value.length > 0) return locationIndexCopy.value.viewMenuCta
+  if (!isExperienceTenant.value && locationExperienceHref.value) return t('saya.menu_page.view_experiences')
   return null
 })
 
@@ -435,14 +432,14 @@ const featuredProductItems = computed(() => {
     .slice(0, 4)
     .map(product => ({
       name: product.name,
-      price: formatProductMoney(product.price),
+      price: formatProductPriceLabel(product),
       compareAtPrice: product.price?.compare_at_amount_minor
         ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })
-        : '',
+        : null,
       image: product.image?.public_url || null,
       imageKind: 'image',
       alt: product.image?.alt_text || product.name,
-      href: presentation.productPath(slug.value, product.slug),
+      href: localePath(presentation.productPath(slug.value, product.slug)),
       unavailable: !product.available,
     }))
 })
@@ -456,11 +453,11 @@ const featuredExperienceItems = computed(() => {
     price: formatProductMoney(experience.price),
     compareAtPrice: experience.price?.compare_at_amount_minor
       ? formatProductMoney({ ...experience.price, amount_minor: experience.price.compare_at_amount_minor, compare_at_amount_minor: null })
-      : '',
+      : null,
     image: experienceCoverImage(experience),
     imageKind: 'image',
-    alt: experience.title ? `${experience.title} experience` : 'Featured experience image',
-    href: experience.slug ? `/experiences/${experience.slug}` : locationExperienceHref.value || undefined,
+    alt: experience.title || '',
+    href: experience.slug ? localePath(`/experiences/${experience.slug}`) : locationExperienceHref.value ? localePath(locationExperienceHref.value) : undefined,
     unavailable: Boolean(activeClosureMessage.value),
   }))
 })
@@ -479,6 +476,7 @@ const heroMedia = computed(() => {
   if (contentHero.value.image) return resolveMedia({ public_url: contentHero.value.image, kind: contentHero.value.imageKind || 'image' })
   return resolveMedia(location.value ? locationMedia(location.value as ApiRecord) : null)
 })
+const locationSocialCard = computed(() => location.value?.social_image ?? null)
 const heroTitle = computed(() => contentHero.value.title || null)
 const heroSubtitle = computed(() => contentHero.value.subtitle || null)
 
@@ -488,7 +486,7 @@ const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 // Derived location data
-const formattedAddress = computed(() => {
+const canonicalFormattedAddress = computed(() => {
   const loc = location.value
   if (!loc) return ''
   if (loc.address && typeof loc.address === 'object') {
@@ -497,47 +495,45 @@ const formattedAddress = computed(() => {
   }
   return loc.address || loc.city || ''
 })
+const formattedAddress = computed(() => locale.value === 'en'
+  ? canonicalFormattedAddress.value
+  : location.value?.address_translated ?? '')
 
 const weekHours = computed(() => {
-  const hours = location.value?.opening_hours
+  const hours = locale.value === 'en'
+    ? location.value?.opening_hours
+    : location.value?.opening_hours_translated
   if (!hours) return []
   const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
   const today = nowInTimezone(location.value?.timezone).weekday
-  return formatGoogleHours(hours).map((h: ApiValue, i: number) => ({
+  return formatGoogleHours(hours, locale.value, t('saya.location.closed')).map((h: ApiValue, i: number) => ({
     ...h,
     today: days[i] === today
   }))
 })
 
-const todayHours = computed(() => getTodayGoogleHours(location.value?.opening_hours, nowInTimezone(location.value?.timezone).weekday))
+const todayHours = computed(() => locale.value === 'en'
+  ? getTodayGoogleHours(location.value?.opening_hours, nowInTimezone(location.value?.timezone).weekday)
+  : weekHours.value.find(day => day.today)?.hours ?? '')
 const isOpenNow = computed(() => getIsOpenNow(location.value?.opening_hours, location.value?.timezone))
 
 const activeClosure = computed(() => getActiveSpecialClosure(location.value?.special_hours, location.value?.timezone))
-const activeClosureMessage = computed(() => formatClosureMessage(activeClosure.value))
+const activeClosureMessage = computed(() => locale.value === 'en'
+  ? formatClosureMessage(activeClosure.value)
+  : activeClosure.value ? locationIndexCopy.value.temporarilyUnavailableLabel : '')
 
 
 
-const runtimeConfig = useRuntimeConfig()
-const siteUrl = runtimeConfig.public.siteUrl
+const tenantOrigin = useRequestURL().origin.replace(/\/$/, '')
 useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
-  title: location.value?.seo_title || (location.value ? `${location.value.title} | Locations` : 'Location'),
-  description: location.value?.seo_description || (location.value ? `Visit ${location.value.title}. ${formattedAddress.value}` : ''),
-  location: location.value?.title || null,
+  title: location.value?.seo_title || location.value?.title || '',
+  description: location.value?.seo_description || '',
   robots: location.value?.robots || null,
+  socialImage: locationSocialCard.value,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: heroMedia.value.url
-    ? {
-        url: heroMedia.value.url,
-        kind: heroMedia.value.kind === 'video' ? 'video' : 'image',
-        thumbnailUrl: heroMedia.value.thumb,
-      }
-    : null,
 }))
 
 useSchemaOrg([
@@ -550,10 +546,10 @@ useSchemaOrg([
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
-      description: formattedAddress.value,
-      address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
+      description: canonicalFormattedAddress.value,
+      address: { '@type': 'PostalAddress', streetAddress: canonicalFormattedAddress.value },
       telephone: loc.phone,
-      url: `${siteUrl}/locations/${loc.slug}`,
+      url: `${tenantOrigin}${localePath(`/locations/${loc.slug}`)}`,
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),
       ...(loc.rating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: loc.rating, reviewCount: loc.review_count ?? 0 } } : {})
     }
@@ -561,9 +557,9 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` }
+      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${tenantOrigin}${localePath('/')}` },
+      { '@type': 'ListItem', position: 2, name: t('saya.header.locations'), item: `${tenantOrigin}${localePath('/locations')}` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${tenantOrigin}${localePath(`/locations/${slug.value}`)}` }
     ]
   }))
 ])

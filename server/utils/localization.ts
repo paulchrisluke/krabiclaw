@@ -1,5 +1,5 @@
 import { HTTPError } from 'nitro'
-import englishManifest from '~/i18n/locales/en.json' with { type: 'json' }
+import englishManifest from '~/i18n/locales/en'
 import {
   flattenLocaleManifest,
   localeManifestHash,
@@ -7,6 +7,13 @@ import {
 } from '~/shared/platform-locale-catalog'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import {
+  createContentDocumentWithBlocks,
+  getContentDocumentById,
+  getContentEditorSnapshotForDocument,
+  replaceContentDocumentBlocks,
+  type ContentBlockInput,
+} from '~/server/utils/content-documents'
 import { localizationError } from '~/server/utils/localization-errors'
 import {
   RESOURCE_LOCALIZATION_REGISTRY,
@@ -16,6 +23,8 @@ import {
   type LocalizedResourceType,
   type LocalizedValues,
 } from '~/server/utils/localization-registry'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 export type PlatformLocaleDirection = 'ltr' | 'rtl'
 export type PlatformLocaleStatus = 'unavailable' | 'available'
@@ -49,11 +58,15 @@ export interface ResourceLocalizationRecord {
   updated_by_user_id: string
 }
 
+export interface ResourceLocalizationAuthoringRecord extends ResourceLocalizationRecord {
+  content_document?: Awaited<ReturnType<typeof getContentEditorSnapshotForDocument>>
+}
+
 export interface LocalizedPublicRoute {
   locale: string
   route_path: string
   platform_messages: Record<string, string>
-  site: ResourceLocalizationRecord
+  locale_representations: PublicLocaleRepresentation[]
   representation:
     | { kind: 'tenant_page'; resource_type: 'tenant_page'; resource_id: string }
     | { kind: 'resource'; resource_type: LocalizedResourceType; resource_id: string; localization: ResourceLocalizationRecord }
@@ -363,6 +376,36 @@ export async function assertSiteLanguageEntitlement(
   return { locale, source: false, platform_messages: Object.fromEntries(messages.map(message => [message.message_key, message.message_value])) }
 }
 
+export async function assertPublicSiteLanguageEntitlement(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  locale: string,
+) {
+  try {
+    return await assertSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  } catch (error) {
+    const status = error && typeof error === 'object' && 'status' in error
+      ? error.status
+      : null
+    const data = error && typeof error === 'object' && 'data' in error
+      ? error.data
+      : null
+    const code = data && typeof data === 'object' && 'code' in data
+      ? data.code
+      : null
+    if (
+      status === 402
+      || code === 'LANGUAGE_LICENSE_REQUIRED'
+      || code === 'LANGUAGE_LICENSE_SYNCING'
+      || code === 'PLATFORM_LOCALE_UNAVAILABLE'
+    ) {
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Localized route was not found' })
+    }
+    throw error
+  }
+}
+
 function mapLocalization(row: ResourceLocalizationRow): ResourceLocalizationRecord {
   const parsed = JSON.parse(row.values_json) as unknown
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -412,8 +455,32 @@ export async function getResourceLocalization(
      WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ?
      LIMIT 1
   `, [organizationId, siteId, resourceType, resourceId, locale])
-  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: resourceType, resource_id: resourceId, locale })
+  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized representation was not found', { resource_type: resourceType, resource_id: resourceId, locale })
   return mapLocalization(row)
+}
+
+export async function getResourceLocalizationForAuthoring(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  resourceTypeInput: unknown,
+  resourceId: string,
+  localeInput: unknown,
+): Promise<ResourceLocalizationAuthoringRecord> {
+  const localization = await getResourceLocalization(
+    db,
+    organizationId,
+    siteId,
+    resourceTypeInput,
+    resourceId,
+    localeInput,
+  )
+  if (localization.resource_type !== 'tenant_blog_post' || !localization.document_id) return localization
+  const document = await getContentDocumentById(db, localization.document_id)
+  if (!document) {
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Localized blog content document is missing' })
+  }
+  return { ...localization, content_document: await getContentEditorSnapshotForDocument(db, document) }
 }
 
 export async function resolveLocalizedPublicRoute(
@@ -428,21 +495,17 @@ export async function resolveLocalizedPublicRoute(
   const routePath = routePathInput.length > 1 ? routePathInput.replace(/\/+$/, '') : routePathInput
   const firstSegment = routePath.split('/')[1]
   const locale = assertExactCanonicalLocale(firstSegment)
-  const entitlement = await assertSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(db, organizationId, siteId, locale)
   if (entitlement.source) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'English source routes are unprefixed', { locale, route_path: routePath })
   }
-  // Reuse the entitlement already checked above instead of re-deriving it
-  // via getResourceLocalization - this runs on every localized page request.
-  const siteRow = await queryFirst<ResourceLocalizationRow>(db, `
-    SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
-           document_id, created_at, created_by_user_id, updated_at, updated_by_user_id
-      FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND resource_type = 'site' AND resource_id = ? AND locale = ?
+  const sourceLocale = await queryFirst<{ label: string | null }>(db, `
+    SELECT label FROM site_locales
+     WHERE organization_id = ? AND site_id = ? AND is_source = 1
      LIMIT 1
-  `, [organizationId, siteId, siteId, locale])
-  if (!siteRow) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: 'site', resource_id: siteId, locale })
-  const site = mapLocalization(siteRow)
+  `, [organizationId, siteId])
+  const sourceLabel = sourceLocale?.label ?? 'English'
+  const { listPublicLocaleRepresentations, listPublicResourceLocaleRepresentations } = await import('~/server/utils/public-locale-representations')
   const resource = await queryFirst<ResourceLocalizationRow>(db, `
     SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
            document_id, created_at, created_by_user_id, updated_at, updated_by_user_id
@@ -457,7 +520,12 @@ export async function resolveLocalizedPublicRoute(
       locale,
       route_path: routePath,
       platform_messages: entitlement.platform_messages ?? {},
-      site,
+      locale_representations: await listPublicResourceLocaleRepresentations(db, {
+        organizationId,
+        siteId,
+        sourceLabel,
+        resource: { type: localization.resource_type, id: localization.resource_id },
+      }),
       representation: {
         kind: 'resource',
         resource_type: localization.resource_type,
@@ -471,20 +539,26 @@ export async function resolveLocalizedPublicRoute(
   // whose route_path column stores the full '/locale/...' path. Strip the
   // locale segment back off before matching.
   const tenantPagePath = routePath.slice(locale.length + 1) || '/'
-  const page = await queryFirst<{ id: string }>(db, `
-    SELECT v.id
+  const page = await queryFirst<{ id: string; page_id: string }>(db, `
+    SELECT v.id, v.page_id
       FROM tenant_page_variants v
       JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
      WHERE v.organization_id = ? AND v.site_id = ? AND v.locale = ? AND v.path = ?
      LIMIT 1
   `, [organizationId, siteId, locale, tenantPagePath])
-  if (!page) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized route was not found', { locale, route_path: routePath })
+  if (!page) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
   return {
     locale,
     route_path: routePath,
     platform_messages: entitlement.platform_messages ?? {},
-    site,
-    representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.id },
+    locale_representations: await listPublicLocaleRepresentations(db, {
+      organizationId,
+      siteId,
+      sourcePath: tenantPagePath,
+      sourceLabel,
+      pageId: page.page_id,
+    }),
+    representation: { kind: 'tenant_page', resource_type: 'tenant_page', resource_id: page.page_id },
   }
 }
 
@@ -556,6 +630,7 @@ export async function putResourceLocalization(
     params: [id, input.organizationId, input.siteId, resourceType, input.resourceId, locale, JSON.stringify(values), routePath,
       existing?.created_at ?? now, existing?.created_by_user_id ?? input.userId, now, input.userId],
   })
+  statements.push(publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-put'))
   try {
     await executeBatch(db, statements, { operation: 'replace resource localization' })
   } catch (error) {
@@ -565,6 +640,113 @@ export async function putResourceLocalization(
     throw error
   }
   return await getResourceLocalization(db, input.organizationId, input.siteId, resourceType, input.resourceId, locale)
+}
+
+function remapNewLocalizedBlockIds(blocks: ContentBlockInput[]): ContentBlockInput[] {
+  const ids = new Map<string, string>()
+  for (const block of blocks) {
+    if (block.id) ids.set(block.id, crypto.randomUUID())
+  }
+  return blocks.map(block => ({
+    ...block,
+    id: block.id ? ids.get(block.id) : crypto.randomUUID(),
+    parent_block_id: block.parent_block_id ? ids.get(block.parent_block_id) ?? null : null,
+  }))
+}
+
+export async function putResourceLocalizationForAuthoring(
+  db: D1Database,
+  input: Parameters<typeof putResourceLocalization>[1] & {
+    contentBlocks?: unknown
+    expectedDocumentUpdatedAt?: unknown
+  },
+): Promise<ResourceLocalizationAuthoringRecord> {
+  const resourceType = parseLocalizedResourceType(input.resourceType)
+  if (resourceType !== 'tenant_blog_post' || input.contentBlocks === undefined) {
+    return await putResourceLocalization(db, input)
+  }
+  if (!Array.isArray(input.contentBlocks) || input.contentBlocks.length === 0) {
+    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Translated blog content blocks are required')
+  }
+  if (input.expectedDocumentUpdatedAt !== undefined && typeof input.expectedDocumentUpdatedAt !== 'string') {
+    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'expected_document_updated_at must be a string')
+  }
+
+  const { locale, source } = await assertSiteLanguageEntitlement(db, input.organizationId, input.siteId, input.locale)
+  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
+  await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
+  const values = validateLocalizedValues(resourceType, input.values)
+  const vertical = await getSiteVertical(db, input.organizationId, input.siteId)
+  const routePath = validateLocalizedRoutePath(resourceType, locale, input.routePath, vertical)
+  const existing = await queryFirst<{
+    id: string
+    route_path: string | null
+    document_id: string | null
+    created_at: number
+    created_by_user_id: string
+  }>(db, `
+    SELECT id, route_path, document_id, created_at, created_by_user_id
+      FROM resource_localizations
+     WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ?
+     LIMIT 1
+  `, [input.organizationId, input.siteId, resourceType, input.resourceId, locale])
+  const id = existing?.id ?? crypto.randomUUID()
+  const now = Math.floor(Date.now() / 1000)
+  const nowIso = new Date().toISOString()
+  const rawBlocks = input.contentBlocks as ContentBlockInput[]
+  const requestedBlocks = existing?.document_id ? rawBlocks : remapNewLocalizedBlockIds(rawBlocks)
+  const { prepareTenantBlogContentBlocks } = await import('~/server/utils/platform-content')
+  const prepared = await prepareTenantBlogContentBlocks(db, requestedBlocks, input.siteId, input.organizationId, nowIso)
+  const documentId = existing?.document_id ?? crypto.randomUUID()
+  const statements: BatchQuery[] = []
+  if (existing?.route_path && existing.route_path !== routePath && routePath) {
+    statements.push({
+      query: `INSERT INTO site_redirects
+        (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'resource_localization', ?, ?, ?, 301, 'redirect', 'localized_route_change', 'localization', ?, ?)
+        ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
+          to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
+      params: [crypto.randomUUID(), input.organizationId, input.siteId, locale, id, existing.route_path, routePath, nowIso, nowIso],
+    })
+  }
+  statements.push({
+    query: `INSERT INTO resource_localizations
+      (id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path, document_id,
+       created_at, created_by_user_id, updated_at, updated_by_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, site_id, resource_type, resource_id, locale) DO UPDATE SET
+        values_json = excluded.values_json, route_path = excluded.route_path, document_id = excluded.document_id,
+        updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id`,
+    params: [id, input.organizationId, input.siteId, resourceType, input.resourceId, locale, JSON.stringify(values), routePath,
+      documentId, existing?.created_at ?? now, existing?.created_by_user_id ?? input.userId, now, input.userId],
+  })
+
+  try {
+    if (existing?.document_id) {
+      if (!input.expectedDocumentUpdatedAt) {
+        localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'expected_document_updated_at is required')
+      }
+      const document = await getContentDocumentById(db, existing.document_id)
+      if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Localized blog content document is missing' })
+      await replaceContentDocumentBlocks(db, document.owner_type, document.owner_id, prepared.blocks, {
+        expected_document_updated_at: input.expectedDocumentUpdatedAt,
+        additionalQueriesBefore: statements,
+        additionalQueriesAfter: [...prepared.placementQueries, publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-blog-put')],
+      })
+    } else {
+      await createContentDocumentWithBlocks(db, 'tenant_blog', id, prepared.blocks, {
+        documentId,
+        additionalQueriesBefore: statements,
+        additionalQueriesAfter: [...prepared.placementQueries, publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-blog-put')],
+      })
+    }
+  } catch (error) {
+    if (error instanceof Error && /resource_localizations_site_locale_route_unique|UNIQUE constraint failed: resource_localizations\.site_id/.test(error.message)) {
+      localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'Localized route path is already owned by another resource', { route_path: routePath })
+    }
+    throw error
+  }
+  return await getResourceLocalizationForAuthoring(db, input.organizationId, input.siteId, resourceType, input.resourceId, locale)
 }
 
 export async function deleteResourceLocalization(
@@ -578,12 +760,21 @@ export async function deleteResourceLocalization(
     SELECT id, document_id FROM resource_localizations
      WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ? LIMIT 1
   `, [input.organizationId, input.siteId, resourceType, input.resourceId, locale])
-  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Exact localized representation was not found', { resource_type: resourceType, resource_id: input.resourceId, locale })
+  if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized representation was not found', { resource_type: resourceType, resource_id: input.resourceId, locale })
   const statements: BatchQuery[] = [
     { query: `DELETE FROM site_redirects WHERE owner_type = 'resource_localization' AND owner_id = ?`, params: [row.id] },
     { query: 'DELETE FROM resource_localizations WHERE id = ?', params: [row.id] },
   ]
-  if (row.document_id) statements.push({ query: 'DELETE FROM content_documents WHERE id = ?', params: [row.document_id] })
+  if (row.document_id) {
+    statements.push({
+      query: `DELETE FROM media_placements
+        WHERE owner_type = 'content_block'
+          AND owner_id IN (SELECT id FROM content_blocks WHERE document_id = ?)`,
+      params: [row.document_id],
+    })
+    statements.push({ query: 'DELETE FROM content_documents WHERE id = ?', params: [row.document_id] })
+  }
+  statements.push(publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-delete'))
   await executeBatch(db, statements, { operation: 'delete resource localization' })
   return { deleted: true, resource_type: resourceType, resource_id: input.resourceId, locale }
 }

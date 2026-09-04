@@ -10,6 +10,7 @@ import {
 } from '~/server/utils/public-resource-cache'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { BLAWBY_ROUTE_RECIPES, type BlawbyRouteRecipe } from '~/types/blawby'
 import {
   isBlawbyDocumentPayload,
@@ -21,6 +22,7 @@ const SLUG_PATTERN = /^[a-z0-9_-]+$/
 
 export interface PublicBlawbyDocumentLoadOptions {
   slug?: string | null
+  locale?: string
   mutateResponseHeaders?: boolean
   signal?: AbortSignal
 }
@@ -42,6 +44,7 @@ export async function loadPublicBlawbyDocument(
 ): Promise<BlawbyDocumentPayload> {
   options.signal?.throwIfAborted()
   const slug = options.slug?.trim() || null
+  const locale = assertExactCanonicalLocale(options.locale === undefined ? 'en' : options.locale)
   if (!RECIPES.has(recipe)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Valid Blawby route recipe required' })
   }
@@ -59,7 +62,7 @@ export async function loadPublicBlawbyDocument(
   const host = event.req.headers.get('host') ?? ''
   const cache = env.SITE_CACHE
   const useCache = !isPreviewContext(host) && Boolean(cache)
-  const cacheKey = buildPublicBlawbyDocumentCacheKey(siteId, recipe, slug)
+  const cacheKey = buildPublicBlawbyDocumentCacheKey(siteId, recipe, slug, locale)
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true
 
   if (useCache && cache) {
@@ -96,7 +99,7 @@ export async function loadPublicBlawbyDocument(
   }
 
   const loadStartedAt = performance.now()
-  const payload = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug }, env)
+  const payload = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug, locale }, env)
   recordRequestPhase(event, 'document', loadStartedAt)
   options.signal?.throwIfAborted()
 

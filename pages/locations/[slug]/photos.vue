@@ -11,12 +11,12 @@
 
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
-        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
-          ← Back to {{ location?.title }}
+        <NuxtLink :to="localePath(`/locations/${slug}`)" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+          ← {{ t('saya.location.back_to', { title: location?.title }) }}
         </NuxtLink>
         
         <div class="flex flex-col gap-2">
-          <h1 class="saya-display-md text-default">Inside <em class="saya-italic">the room</em></h1>
+          <h1 class="saya-display-md text-default">{{ locale === 'en' ? 'Inside the room' : t('saya.subnav.photos') }}</h1>
           <p class="text-sm text-muted">
             {{ location?.title }}
           </p>
@@ -26,6 +26,7 @@
 
     <!-- Category filter tabs -->
     <SayaFilterTabs
+      v-if="locale === 'en'"
       v-model="activeCategory"
       :tabs="cats"
     />
@@ -34,8 +35,8 @@
       <div class="mx-auto max-w-7xl px-4 pt-12 pb-24 sm:px-6 lg:px-8">
         <!-- Empty -->
         <div v-if="sorted.length === 0" class="py-24 text-center">
-          <div class="saya-display saya-italic text-3xl text-default">No photos yet.</div>
-          <p class="mt-2 text-sm text-muted">Photos added by the team will appear here.</p>
+          <div class="saya-display saya-italic text-3xl text-default">{{ locale === 'en' ? 'No photos yet.' : t('saya.common.temporarily_unavailable') }}</div>
+          <p v-if="locale === 'en'" class="mt-2 text-sm text-muted">Photos added by the team will appear here.</p>
         </div>
 
         <!-- Masonry -->
@@ -55,7 +56,7 @@
             <!-- If the sticky tab/header div is needed, move it here, outside the <img> -->
             <!-- <div class="sticky top-0 z-40 border-b border-default bg-default"> ... </div> -->
             <div class="absolute inset-0 flex items-end bg-linear-to-t from-black/60 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-              <span class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
+              <span v-if="locale === 'en'" class="saya-eyebrow rounded-full bg-white/25 px-4 py-1.5 text-[10px] font-bold tracking-widest text-white backdrop-blur-md border border-white/20">
                 {{ photo.category || 'Gallery' }}
               </span>
             </div>
@@ -70,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+const { locale, localePath, t } = useI18n()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
@@ -79,7 +81,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, media: photos, config: pageConfig, site: publicSite } = await usePublicPageData({ lazy: false })
+const { location, media: photos } = await usePublicPageData({ lazy: false })
 
 const cats = [
   { key: 'ALL', label: 'All' },
@@ -133,24 +135,22 @@ function toAbsoluteUrl(value?: string | null): string | null {
 
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/photos`,
-  title: `Photos · ${location.value?.title || slug.value}`,
-  description: `${photos.value.length} photos from ${location.value?.title || slug.value} at ${siteName.value}.`,
-  location: location.value?.title || null,
+  title: locale.value === 'en' ? `Photos · ${location.value?.title || slug.value}` : t('saya.subnav.photos'),
+  description: t('saya.photos.meta_description', {
+    count: photos.value.length,
+    location: location.value?.title || slug.value,
+    site: siteName.value,
+  }),
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
-  heroImage: photos.value[0]?.public_url
-    ? { url: photos.value[0].public_url }
-    : null,
 }))
 
 useSchemaOrg([
   computed(() => ({
     '@type': 'ImageGallery',
-    name: `${location.value?.title ?? ''} Photos`,
+    name: `${location.value?.title ?? ''} · ${t('saya.subnav.photos')}`,
     image: photos.value.slice(0, 20).map((p: ApiValue) => {
       const contentUrl = toAbsoluteUrl(p.public_url)
       const thumbnailUrl = toAbsoluteUrl(p.thumbnail_url)

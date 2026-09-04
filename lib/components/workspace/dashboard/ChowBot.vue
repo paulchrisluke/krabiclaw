@@ -217,7 +217,7 @@ const setupMode = computed(() => Boolean(props.setupMode))
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
-const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
+const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks()
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 const { periodRemaining, unlimited, reconciliationRequired, isLow, isDepleted, isBlocked, fetch: fetchCredits } = useAiCredits(siteId)
@@ -656,9 +656,10 @@ const toolLabel = (name: string): string => {
 
 // --- markdown ---
 
-// Tool results like get_dashboard_link hand the model a bare URL, which it
-// then either writes as a markdown link or just drops inline — both need to
-// render as an actual <a>, not literal text, for a deep link to be useful.
+// Tool results like get_facebook_connection's connectUrl hand the model a
+// bare URL, which it then either writes as a markdown link or just drops
+// inline — both need to render as an actual <a>, not literal text, for a
+// deep link to be useful.
 function linkifyMarkdown(text: string): string {
   const anchors: string[] = []
   const withPlaceholders = text.replace(

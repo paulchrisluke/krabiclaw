@@ -7,7 +7,7 @@ import {
 } from '~/server/utils/localization-registry'
 import { HTTPError } from 'nitro'
 import { queryAll, type DbClient } from '~/server/db'
-import { assertSiteLanguageEntitlement } from '~/server/utils/localization'
+import { assertPublicSiteLanguageEntitlement } from '~/server/utils/localization'
 
 export interface StoredPublicLocalizationRow {
   resource_type: string
@@ -15,6 +15,7 @@ export interface StoredPublicLocalizationRow {
   locale: string
   values_json: string
   route_path: string | null
+  document_id: string | null
 }
 
 export interface ExactPublicLocalization {
@@ -23,6 +24,7 @@ export interface ExactPublicLocalization {
   locale: string
   values: LocalizedValues
   routePath: string | null
+  documentId: string | null
 }
 
 export async function loadExactPublicLocalizations(
@@ -31,22 +33,22 @@ export async function loadExactPublicLocalizations(
   siteId: string,
   locale: string,
 ): Promise<ExactPublicLocalization[]> {
-  const entitlement = await assertSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(db, organizationId, siteId, locale)
   if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
-    SELECT resource_type, resource_id, locale, values_json, route_path
+    SELECT resource_type, resource_id, locale, values_json, route_path, document_id
       FROM resource_localizations
      WHERE organization_id = ? AND site_id = ? AND locale = ?
      ORDER BY resource_type, resource_id
   `, [organizationId, siteId, locale])
-  const localizations = indexStoredPublicLocalizations(rows)
-  if (!localizations.some(item => item.resourceType === 'site' && item.resourceId === siteId)) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Exact localized site representation was not found' })
-  }
-  return localizations
+  return indexStoredPublicLocalizations(rows)
 }
 
 const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {
+  business_location: {
+    address: 'address_translated',
+    opening_hours: 'opening_hours_translated',
+  },
   product: {
     tags_json: 'tags',
     details_json: 'details',
@@ -68,13 +70,6 @@ function localizedSlug(routePath: string | null): string | null {
   return routePath.split('/').filter(Boolean).at(-1) ?? null
 }
 
-function emptyLocalizedValue(sourceValue: unknown, structured = false): unknown {
-  if (structured) return []
-  if (Array.isArray(sourceValue)) return []
-  if (typeof sourceValue === 'string') return ''
-  return null
-}
-
 export function indexStoredPublicLocalizations(rows: readonly StoredPublicLocalizationRow[]): ExactPublicLocalization[] {
   return rows.map((row) => {
     const resourceType = parseLocalizedResourceType(row.resource_type)
@@ -85,6 +80,7 @@ export function indexStoredPublicLocalizations(rows: readonly StoredPublicLocali
       locale: row.locale,
       values: validateLocalizedValues(resourceType, parsedValues),
       routePath: row.route_path,
+      documentId: row.document_id,
     }
   })
 }
@@ -100,17 +96,11 @@ export function projectExactLocalizedResource<T extends { id: string }>(
   const fieldNames = PROJECTED_FIELD_NAMES[resourceType] ?? {}
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
   const clearedValues = Object.fromEntries(
-    [...definition.required, ...definition.optional].map((field) => {
-      const target = fieldNames[field] ?? field
-      return [target, emptyLocalizedValue(
-        (canonical as Record<string, unknown>)[target],
-        Boolean(definition.shapes?.[field]),
-      )]
-    }),
+    Object.keys(definition.fields).map(field => [fieldNames[field] ?? field, undefined]),
   )
   if (resourceType === 'site_post') {
-    clearedValues.body = emptyLocalizedValue((canonical as Record<string, unknown>).body)
-    clearedValues.summary = emptyLocalizedValue((canonical as Record<string, unknown>).summary)
+    clearedValues.body = undefined
+    clearedValues.summary = undefined
   }
   const projectedValues = Object.fromEntries(Object.entries(localization.values).map(([field, value]) => [
     fieldNames[field] ?? field,
@@ -121,13 +111,16 @@ export function projectExactLocalizedResource<T extends { id: string }>(
     projectedValues.summary = localization.values.body
   }
   const slug = localizedSlug(localization.routePath)
+  const routeFields = {
+    ...(slug && 'slug' in canonical ? { slug } : {}),
+    ...(localization.routePath && 'public_path' in canonical ? { public_path: localization.routePath } : {}),
+    ...(localization.routePath && 'canonical_url' in canonical ? { canonical_url: null } : {}),
+  }
   return {
     ...canonical,
     ...clearedValues,
     ...projectedValues,
-    ...(slug && 'slug' in canonical ? { slug } : {}),
-    ...(localization.routePath && 'public_path' in canonical ? { public_path: localization.routePath } : {}),
-    ...(localization.routePath && 'canonical_url' in canonical ? { canonical_url: null } : {}),
+    ...routeFields,
   }
 }
 
@@ -143,7 +136,9 @@ export function projectExactLocalizedCollection<T extends { id: string }>(
   )
   return canonical.flatMap((resource) => {
     const localization = byResourceId.get(resource.id)
-    return localization ? [projectExactLocalizedResource(resourceType, resource, localization)] : []
+    return localization
+      ? [projectExactLocalizedResource(resourceType, resource, localization)]
+      : []
   })
 }
 

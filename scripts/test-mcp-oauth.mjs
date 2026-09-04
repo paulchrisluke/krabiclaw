@@ -418,7 +418,7 @@ async function main() {
   if (listResp.status === 200 && Array.isArray(listBody?.result?.tools)) {
     pass(`tools/list returned ${listBody.result.tools.length} tools`);
     const names = listBody.result.tools.map((tool) => tool.name);
-    for (const requiredTool of ["get_current_user", "list_sites"]) {
+    for (const requiredTool of ["get_workspace_context", "list_sites"]) {
       if (names.includes(requiredTool)) pass(`${requiredTool} tool present`);
       else fail(`${requiredTool} missing from tools/list`, names);
     }
@@ -428,7 +428,7 @@ async function main() {
 
   // 7. Authenticated identity and tenant tool calls
   for (const [id, toolName] of [
-    [3, "get_current_user"],
+    [3, "get_workspace_context"],
     [4, "list_sites"],
   ]) {
     section(`MCP tools/call ${toolName}`);

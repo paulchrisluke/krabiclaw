@@ -19,6 +19,7 @@ export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unkno
         organizationId: site.organizationId,
         siteId: site.siteId,
         enteredByUserId: site.userId,
+        env: site.env,
       }, args as never);
       return { ...result, context: await mutationContextPayload(site) };
     }
@@ -27,6 +28,7 @@ export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unkno
       const result = await updateOwnerEnteredSiteReview(site.db, {
         organizationId: site.organizationId,
         siteId: site.siteId,
+        env: site.env,
       }, reviewId, omit(args, ["review_id"]));
       return { ...result, context: await mutationContextPayload(site) };
     }

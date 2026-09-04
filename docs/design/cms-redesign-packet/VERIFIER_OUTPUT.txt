@@ -1,0 +1,7 @@
+Checked 154 manifest rows, 139 captured screenshots, 139 files on disk.
+
+2 FAILURE(S):
+  - unresolved blocked row: locations/[locationSlug]/products selected-item edit state (both locations) (blocker: #723 (product list not loading; cause unknown, needs direct re-test against current production))
+  - unresolved blocked row: locations/[locationSlug]/settings/features working screen (both locations) (blocker: #720 (500 error, unresolved))
+
+RESULT: FAIL

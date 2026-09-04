@@ -17,7 +17,7 @@
 
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
-        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+        <NuxtLink :to="localePath(`/locations/${slug}`)" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
           ← {{ t('saya.reviews_page.back_to', { title: location?.title }) }}
         </NuxtLink>
         
@@ -130,7 +130,7 @@
               source: review.source
             }"
           >
-            <NuxtLink :to="`/locations/${slug}/reviews/${review.id}`" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
+            <NuxtLink :to="localePath(`/locations/${slug}/reviews/${review.id}`)" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
               Read review
             </NuxtLink>
 
@@ -172,7 +172,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'saya' })
 
-const { t } = useI18n()
+const { localePath, t } = useI18n()
 
 const route = useRoute()
 const { siteId, site } = useTenantSite()
@@ -181,7 +181,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, reviewsAggregate, reviewsList, pending, config, site: publicSite } = await usePublicPageData()
+const { location, reviewsAggregate, reviewsList, pending } = await usePublicPageData()
 const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList
@@ -240,12 +240,9 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/reviews`,
   title: `Reviews · ${location.value?.title || slug.value}`,
   description: `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`,
-  location: location.value?.title || null,
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: config.value?.brand_color || null,
   },
 }))
 

@@ -19,6 +19,9 @@ import { verifyScopedPreviewToken } from "../utils/preview-token";
 import { isPlatformPath } from "~/utils/platform-routes";
 import { getDraftMedia, parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
 import { resolvePublicTemplate } from "~/utils/template-registry";
+import { PLATFORM_SITE_ID } from '~/shared/platform-scope'
+import { publicSocialMediaFromJson } from '~/server/utils/public-social-image'
+import { ensurePlatformMediaScope } from '~/server/utils/platform-media'
 
 interface TenantSiteRow {
   id: string;
@@ -32,15 +35,6 @@ interface TenantSiteRow {
   vertical: string | null;
 }
 
-interface TenantSiteMedia {
-  asset_id: string
-  slot: string
-  public_url: string | null
-  thumbnail_url: string | null
-  kind: string
-  mime_type: string | null
-}
-
 const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
   'asset_id', ordered.asset_id, 'slot', ordered.slot, 'public_url', ordered.public_url,
   'thumbnail_url', ordered.thumbnail_url, 'kind', ordered.kind, 'mime_type', ordered.mime_type
@@ -51,8 +45,24 @@ const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
   ORDER BY mp.slot, mp.sort_order, mp.id
 ) ordered)`
 
-function tenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>): TenantSiteMedia[] {
-  return JSON.parse(site.media_json) as TenantSiteMedia[]
+type PlatformSiteRow = Pick<TenantSiteRow, 'brand_name' | 'media_json' | 'vertical'> & { has_logo: number }
+
+async function loadPlatformSite(db: DbClient): Promise<PlatformSiteRow | null> {
+  return await queryFirst<PlatformSiteRow>(db, `
+    SELECT s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical,
+      EXISTS (
+        SELECT 1 FROM media_placements mp
+        JOIN media_assets ma ON ma.id = mp.asset_id
+        WHERE mp.organization_id = s.organization_id AND mp.site_id = s.id
+          AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.slot = 'logo'
+          AND mp.status = 'active' AND ma.status = 'active' AND ma.generation_key IS NULL
+      ) AS has_logo
+    FROM sites s WHERE s.id = ? AND s.status = 'active' LIMIT 1
+  `, [PLATFORM_SITE_ID])
+}
+
+function publicTenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>) {
+  return publicSocialMediaFromJson(site.media_json)
 }
 
 export interface SpentSubdomainResolution {
@@ -123,6 +133,7 @@ function setResolvedTenantContext(
   canonicalDomain: string | null,
 ) {
   const metadata = requireTenantMetadata(site, site.id)
+  const socialMedia = publicTenantSiteMedia(site)
   event.context.siteId = site.id
   event.context.organizationId = site.organization_id
   event.context.themeId = metadata.themeId
@@ -132,7 +143,7 @@ function setResolvedTenantContext(
   event.context.canonicalDomain = canonicalDomain
   event.context.site = {
     brand_name: metadata.brandName,
-    media: tenantSiteMedia(site),
+    ...socialMedia,
     vertical: metadata.vertical,
   }
 }
@@ -220,6 +231,7 @@ export default defineHandler(async (event) => {
       );
       if (previewSite) {
         const metadata = requireTenantMetadata(previewSite, previewSite.id)
+        const socialMedia = publicTenantSiteMedia(previewSite)
         event.context.siteId = previewSite.id;
         event.context.organizationId = previewSite.organization_id;
         event.context.themeId = metadata.themeId;
@@ -227,7 +239,7 @@ export default defineHandler(async (event) => {
         setTenantType(event, TENANT_TYPES.TENANT);
         event.context.site = {
           brand_name: metadata.brandName,
-          media: tenantSiteMedia(previewSite),
+          ...socialMedia,
           vertical: metadata.vertical,
         };
         return;
@@ -305,6 +317,22 @@ export default defineHandler(async (event) => {
   if (isPlatform) {
     setTenantType(event, TENANT_TYPES.PLATFORM);
     event.context.siteId = null;
+    let platformSite = env.db ? await loadPlatformSite(env.db) : null
+    if (env.db && (
+      platformSite?.brand_name?.trim() !== 'KrabiClaw'
+      || platformSite.has_logo !== 1
+    )) {
+      await ensurePlatformMediaScope(env, env.db)
+      platformSite = await loadPlatformSite(env.db)
+    }
+    if (!platformSite || platformSite.brand_name?.trim() !== 'KrabiClaw' || platformSite.has_logo !== 1) {
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Platform scope is missing canonical identity or logo media' })
+    }
+    event.context.site = {
+      brand_name: platformSite.brand_name.trim(),
+      ...publicTenantSiteMedia(platformSite),
+      vertical: platformSite.vertical ?? null,
+    }
     return;
   }
 

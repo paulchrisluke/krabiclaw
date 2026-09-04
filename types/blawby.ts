@@ -1,3 +1,6 @@
+import type { SocialImageSource } from '~/utils/social-metadata'
+import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+
 export interface PublicOfferingFeature {
   title: string
   description: string
@@ -18,6 +21,7 @@ export interface PublicOffering {
   cta_label: string | null
   cta_url: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string; alt_text: string | null; width: number | null; height: number | null }>
+  social_image: SocialImageSource | null
   schema_type: string | null
   seo_title: string | null
   seo_description: string | null
@@ -94,6 +98,7 @@ export interface PublicBlogSummary {
     width: number | null
     height: number | null
   }>
+  social_image: SocialImageSource | null
 }
 
 export interface PublicBlogPost extends PublicBlogSummary {
@@ -139,6 +144,7 @@ export function isBlawbyShellOnlyRouteRecipe(recipe: BlawbyRouteRecipe): recipe 
 
 export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe
+  localeRepresentations: PublicLocaleRepresentation[]
   page: PublicTenantPage | null
   offerings: PublicOfferingSummary[]
   offering: PublicOffering | null
@@ -148,21 +154,7 @@ export interface PublicBlawbyRouteData {
   post: PublicBlogPost | null
 }
 
-export interface PublicTenantPage {
-  id: string
-  path: string
-  title: string
-  page_type: string
-  recipe: string | null
-  locale: string
-  summary: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_url: string | null
-  robots: string | null
-  blocks: import('~/utils/tenant-page-blocks').TenantPageBlock[]
-  updated_at: string
-}
+export type PublicTenantPage = import('~/server/utils/public-tenant-pages').PublicTenantPage
 
 export interface PublicConsultationSettings {
   mode: 'external_url' | 'native_disabled'
@@ -223,6 +215,7 @@ export interface PublicBlawbyIdentity {
   brand_name: string
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
+  social_image: SocialImageSource | null
   phone: string | null
   banner_content: string | null
   banner_dismissible: boolean

@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="`Edit ${page}`">
         <template #leading>
-          <DashboardNavbarLeading detail-to="/admin/content" detail-label="Content" />
+          <DashboardNavbarLeading to="/admin/content" label="Content" />
         </template>
       </UDashboardNavbar>
     </template>

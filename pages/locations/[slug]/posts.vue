@@ -10,7 +10,7 @@
 
       <!-- Compact Page header -->
       <header class="mx-auto max-w-7xl px-4 pt-12 pb-10 sm:px-6 lg:px-8 text-center">
-        <NuxtLink :to="`/locations/${slug}`" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
+        <NuxtLink :to="localePath(`/locations/${slug}`)" class="saya-kicker mb-8 inline-block text-muted no-underline hover:text-default">
           ← {{ t('saya.location.back_to', { title: location?.title }) }}
         </NuxtLink>
 
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-const { t } = useI18n()
+const { localePath, t } = useI18n()
 
 definePageMeta({ layout: 'saya' })
 
@@ -53,7 +53,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
-const { location, postsList, config: pageConfig, site: publicSite } = await usePublicPageData()
+const { location, postsList } = await usePublicPageData()
 const posts = postsList
 
 const runtimeConfig = useRuntimeConfig()
@@ -63,12 +63,9 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/posts`,
   title: `Updates · ${location.value?.title || slug.value}`,
   description: `Latest news and updates from ${location.value?.title || slug.value} at ${siteName.value}.`,
-  location: location.value?.title || null,
+  socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
-    logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-    faviconUrl: publicSite.value?.media.find(item => item.slot === 'favicon')?.public_url || null,
-    primaryColor: pageConfig.value?.brand_color || null,
   },
 }))
 

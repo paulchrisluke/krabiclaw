@@ -1,3 +1,6 @@
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
+
 /**
  * Shared global OG/social SEO contract (#259).
  *
@@ -29,7 +32,46 @@ export interface SocialImageSource {
   alt?: string
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function parseSocialImageSource(value: unknown): SocialImageSource | null {
+  if (value === null || value === undefined) return null
+  if (!isRecord(value) || typeof value.url !== 'string' || !value.url.trim()) {
+    throw new Error('Social image source requires a URL')
+  }
+  if (value.kind !== undefined && value.kind !== 'image' && value.kind !== 'video') {
+    throw new Error('Social image source kind must be image or video')
+  }
+  if (value.thumbnailUrl !== undefined && value.thumbnailUrl !== null && typeof value.thumbnailUrl !== 'string') {
+    throw new Error('Social image thumbnail URL must be a string or null')
+  }
+  if (value.width !== undefined && (typeof value.width !== 'number' || !Number.isFinite(value.width))) {
+    throw new Error('Social image width must be a finite number')
+  }
+  if (value.height !== undefined && (typeof value.height !== 'number' || !Number.isFinite(value.height))) {
+    throw new Error('Social image height must be a finite number')
+  }
+  if (value.type !== undefined && value.type !== 'image/jpeg' && value.type !== 'image/png' && value.type !== 'image/gif') {
+    throw new Error('Social image MIME type is invalid')
+  }
+  if (value.alt !== undefined && typeof value.alt !== 'string') {
+    throw new Error('Social image alt text must be a string')
+  }
+  return {
+    url: value.url,
+    ...(value.kind === undefined ? {} : { kind: value.kind }),
+    ...(value.thumbnailUrl === undefined ? {} : { thumbnailUrl: value.thumbnailUrl }),
+    ...(value.width === undefined ? {} : { width: value.width }),
+    ...(value.height === undefined ? {} : { height: value.height }),
+    ...(value.type === undefined ? {} : { type: value.type }),
+    ...(value.alt === undefined ? {} : { alt: value.alt }),
+  }
+}
+
 export interface SocialMediaSource {
+  slot?: string
   kind?: string | null
   public_url?: string | null
   thumbnail_url?: string | null
@@ -54,17 +96,59 @@ export function resolveSocialImageUrl(source: SocialMediaSource | null | undefin
     : null
 }
 
+function toSocialImageSource(source: SocialMediaSource | null | undefined): SocialImageSource | null {
+  const url = resolveSocialImageUrl(source)
+  if (!url) return null
+  return {
+    url,
+    width: source?.slot === 'social_card' ? OG_IMAGE_WIDTH : undefined,
+    height: source?.slot === 'social_card' ? OG_IMAGE_HEIGHT : undefined,
+    type: source?.slot === 'social_card' ? 'image/png' : undefined,
+  }
+}
+
+export function resolveSocialImageFromMedia(
+  ownerMedia: readonly SocialMediaSource[],
+  siteMedia: readonly SocialMediaSource[],
+): SocialImageSource | null {
+  const candidates = [
+    ownerMedia.find(item => item.slot === 'social_card'),
+    siteMedia.find(item => item.slot === 'social_card'),
+    siteMedia.find(item => item.slot === 'social_share'),
+    siteMedia.find(item => item.slot === 'logo'),
+  ]
+  for (const candidate of candidates) {
+    const resolved = toSocialImageSource(candidate)
+    if (resolved) return resolved
+  }
+  return null
+}
+
+export interface PublicSocialMedia<T extends SocialMediaSource = SocialMediaSource> {
+  media: T[]
+  social_image: SocialImageSource | null
+}
+
+export function publicSocialMediaFromPlacements<T extends SocialMediaSource>(
+  ownerMedia: readonly T[],
+  siteMedia: readonly T[],
+): PublicSocialMedia<T> {
+  return {
+    media: ownerMedia.filter(item => item.slot !== 'social_card'),
+    social_image: resolveSocialImageFromMedia(ownerMedia, siteMedia),
+  }
+}
+
+export function resolvePublicSocialImage(
+  ownerImage: SocialImageSource | null,
+  siteImage: SocialImageSource | null,
+): SocialImageSource | null {
+  return ownerImage ?? siteImage
+}
+
 export interface SocialBrand {
   /** og:site_name and the name rendered on generated OG image cards. */
   siteName: string
-  logoUrl?: string | null
-  /** Square icon (favicon) — preferred over logoUrl for the small brand mark on generated
-   * OG cards, since logoUrl is often a non-square wordmark that distorts when forced into
-   * a square slot. Falls back to logoUrl when unset. */
-  faviconUrl?: string | null
-  /** Hex color, e.g. '#0f172a'. Used as the generated-card background/accent. */
-  primaryColor?: string | null
-  secondaryColor?: string | null
 }
 
 export interface SocialPageMetadataInput {
@@ -76,11 +160,7 @@ export interface SocialPageMetadataInput {
   /** Absolute or root-relative path/URL; resolved against the correct origin by the adapter. */
   canonicalUrl: string
   brand: SocialBrand
-  /** A real photo to feature (article hero, offering photo, location photo). */
-  heroImage?: SocialImageSource | null
-  /** Short eyebrow/category shown on the generated card (e.g. "Service", "Blog"). */
-  label?: string | null
-  location?: string | null
+  socialImage?: SocialImageSource | null
   author?: string | null
   /** ISO 8601 date string. Only meaningful when pageType is 'article'. */
   publishedAt?: string | null
@@ -99,17 +179,17 @@ export interface ComposedSocialTags {
   ogDescription: string | undefined
   ogType: SocialPageType
   ogUrl: string
-  ogSiteName: string
-  ogImage: string
+  ogSiteName: string | undefined
+  ogImage: string | undefined
   ogImageWidth: number | undefined
   ogImageHeight: number | undefined
   ogImageType: SocialImageMimeType | undefined
-  ogImageAlt: string
+  ogImageAlt: string | undefined
   twitterCard: 'summary_large_image'
   twitterTitle: string
   twitterDescription: string | undefined
-  twitterImage: string
-  twitterImageAlt: string
+  twitterImage: string | undefined
+  twitterImageAlt: string | undefined
   /** Only set when pageType is 'article' and the corresponding input field is present. */
   articleAuthor: string[] | undefined
   articlePublishedTime: string | undefined
@@ -143,12 +223,12 @@ export function resolveRobots(input: Pick<SocialPageMetadataInput, 'robots' | 'i
  */
 export function composeSocialMetadata(
   input: SocialPageMetadataInput,
-  resolvedOgImage: SocialImageSource,
+  resolvedOgImage: SocialImageSource | null,
 ): ComposedSocialTags {
   const title = truncateForSeo(input.title, TITLE_MAX_LENGTH) || input.title
   const description = truncateForSeo(input.description, DESCRIPTION_MAX_LENGTH)
   const pageType = input.pageType || 'website'
-  const alt = resolvedOgImage.alt || input.title
+  const alt = resolvedOgImage?.alt || (resolvedOgImage ? input.title : undefined)
 
   return {
     title,
@@ -159,30 +239,27 @@ export function composeSocialMetadata(
     ogDescription: description,
     ogType: pageType,
     ogUrl: input.canonicalUrl,
-    ogSiteName: input.brand.siteName,
-    ogImage: resolvedOgImage.url,
-    ogImageWidth: resolvedOgImage.width,
-    ogImageHeight: resolvedOgImage.height,
-    ogImageType: resolvedOgImage.type,
+    ogSiteName: firstNonBlank(input.brand.siteName) ?? undefined,
+    ogImage: resolvedOgImage?.url,
+    ogImageWidth: resolvedOgImage?.width,
+    ogImageHeight: resolvedOgImage?.height,
+    ogImageType: resolvedOgImage?.type,
     ogImageAlt: alt,
     twitterCard: 'summary_large_image',
     twitterTitle: title,
     twitterDescription: description,
-    twitterImage: resolvedOgImage.url,
+    twitterImage: resolvedOgImage?.url,
     twitterImageAlt: alt,
     articleAuthor: pageType === 'article' && input.author ? [input.author] : undefined,
     articlePublishedTime: pageType === 'article' && input.publishedAt ? input.publishedAt : undefined,
   }
 }
 
-/** Deterministic SHA-256 key shared by browser URL generation and server KV lookup. */
-export function hashOgImagePayload(value: string): string {
+export function hashSocialCardGenerationInput(value: string): string {
   return bytesToHex(sha256(new TextEncoder().encode(value)))
 }
 
-/** Payload the OG image render route/pipeline consumes. Kept separate from the page-level
- * SocialPageMetadataInput because it only carries what the visual renderer needs. */
-export interface OgImageRenderPayload {
+export interface SocialCardRenderPayload {
   template: SocialTemplate
   title: string
   description?: string | null
@@ -190,111 +267,5 @@ export interface OgImageRenderPayload {
   label?: string | null
   location?: string | null
   logoUrl?: string | null
-  faviconUrl?: string | null
-  backgroundImageUrl?: string | null
-  primaryColor?: string | null
-  secondaryColor?: string | null
+  backgroundImageUrl: string
 }
-
-// Root-level (not under /api/) — @nuxt/robots disallows crawler access to /api/** by
-// default, and this route must stay fetchable by social-platform crawlers.
-const OG_IMAGE_ROUTE = '/og-image-render.png'
-
-function buildOgImageQueryParams(payload: OgImageRenderPayload): URLSearchParams {
-  const params = new URLSearchParams()
-  params.set('template', payload.template)
-  params.set('title', payload.title)
-  if (payload.description) params.set('description', payload.description)
-  params.set('siteName', payload.siteName)
-  if (payload.label) params.set('label', payload.label)
-  if (payload.location) params.set('location', payload.location)
-  if (payload.logoUrl && payload.logoUrl.startsWith('https://')) params.set('logoUrl', payload.logoUrl)
-  if (payload.faviconUrl && payload.faviconUrl.startsWith('https://')) params.set('faviconUrl', payload.faviconUrl)
-  if (payload.backgroundImageUrl && payload.backgroundImageUrl.startsWith('https://')) params.set('backgroundImageUrl', payload.backgroundImageUrl)
-  if (payload.primaryColor) params.set('primaryColor', payload.primaryColor)
-  if (payload.secondaryColor) params.set('secondaryColor', payload.secondaryColor)
-  // Sort so the query string — and therefore the cache key — is stable regardless of
-  // insertion order.
-  params.sort()
-  return params
-}
-
-/** Cache key shared between the render route's KV lookup and the URL's own querystring. */
-export function computeOgImageCacheKey(payload: OgImageRenderPayload): string {
-  return hashOgImagePayload(buildOgImageQueryParams(payload).toString())
-}
-
-/** Builds the absolute URL to the dynamic OG image render route for a given payload. */
-export function buildOgImageUrl(origin: string, payload: OgImageRenderPayload): string {
-  const params = buildOgImageQueryParams(payload)
-  const key = hashOgImagePayload(params.toString())
-  params.set('k', key)
-  return new URL(`${OG_IMAGE_ROUTE}?${params.toString()}`, origin).toString()
-}
-
-/** Every page gets a template-aware generated 1200×630 card. Media is composited as
- * background input; no raw asset can bypass the title/description/brand renderer. */
-export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: string): SocialImageSource {
-  const renderPayload: OgImageRenderPayload = {
-    template: input.template,
-    title: input.title,
-    description: truncateForSeo(input.description, DESCRIPTION_MAX_LENGTH),
-    siteName: input.brand.siteName,
-    label: input.label,
-    location: input.location,
-    logoUrl: input.brand.logoUrl,
-    faviconUrl: input.brand.faviconUrl,
-    backgroundImageUrl: input.heroImage?.kind === 'video'
-      ? firstNonBlank(input.heroImage.thumbnailUrl)
-      : firstNonBlank(input.heroImage?.url),
-    primaryColor: input.brand.primaryColor,
-    secondaryColor: input.brand.secondaryColor,
-  }
-
-  return {
-    url: buildOgImageUrl(origin, renderPayload),
-    width: OG_IMAGE_WIDTH,
-    height: OG_IMAGE_HEIGHT,
-    type: 'image/png',
-    alt: input.title,
-  }
-}
-
-// This route is public/unauthenticated (social-platform crawlers hit it directly), so
-// these caps bound the cost of processing a crafted, oversized query string before any
-// rendering work starts — independent of buildOgImageCard's own display-length clipping,
-// which only bounds what gets laid out, not what gets read/trimmed off the query first.
-const MAX_QUERY_TEXT_LENGTH = 500
-const MAX_QUERY_URL_LENGTH = 2000
-
-/** Server-side counterpart: parses the render route's query string back into a payload. */
-export function parseOgImageQuery(query: Record<string, string | string[] | undefined>): OgImageRenderPayload {
-  const get = (key: string, maxLength = MAX_QUERY_TEXT_LENGTH): string | undefined => {
-    const value = query[key]
-    const raw = Array.isArray(value) ? value[0] : value
-    return raw ? raw.slice(0, maxLength) : raw
-  }
-  const template = get('template')
-  const title = get('title')?.trim()
-  const siteName = get('siteName')?.trim()
-  if (template !== 'platform' && template !== 'saya' && template !== 'blawby') {
-    throw new Error('OG image template is required')
-  }
-  if (!title) throw new Error('OG image title is required')
-  if (!siteName) throw new Error('OG image site name is required')
-  return {
-    template,
-    title,
-    description: get('description') || null,
-    siteName,
-    label: get('label') || null,
-    location: get('location') || null,
-    logoUrl: get('logoUrl', MAX_QUERY_URL_LENGTH) || null,
-    faviconUrl: get('faviconUrl', MAX_QUERY_URL_LENGTH) || null,
-    backgroundImageUrl: get('backgroundImageUrl', MAX_QUERY_URL_LENGTH) || null,
-    primaryColor: get('primaryColor') || null,
-    secondaryColor: get('secondaryColor') || null,
-  }
-}
-import { sha256 } from '@noble/hashes/sha2.js'
-import { bytesToHex } from '@noble/hashes/utils.js'

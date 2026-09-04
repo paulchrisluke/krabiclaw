@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="conversationTitle">
         <template #leading>
-          <DashboardNavbarLeading :detail-to="assistantPath" detail-label="Assistant" />
+          <DashboardNavbarLeading :to="assistantPath" label="Assistant" />
         </template>
         <template #right>
           <UButton
@@ -51,7 +51,7 @@ const route = useRoute()
 const dashboard = useDashboardSite()
 const chowBot = useChowBot()
 const activeSiteId = dashboard.siteId
-const { paths } = useDashboardSiteLinks('')
+const { paths } = useDashboardSiteLinks()
 
 const assistantPath = computed(() => paths.value.conversations)
 const newConversationPath = computed(() => `${assistantPath.value}/new`)

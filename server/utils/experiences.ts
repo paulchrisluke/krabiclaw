@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro';
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -15,7 +16,9 @@ import {
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
-import { getMediaPlacements } from '~/server/utils/media-placement'
+import { refreshSocialCard } from '~/server/utils/social-card'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
+import type { SocialImageSource } from '~/utils/social-metadata'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -36,6 +39,7 @@ export interface Experience {
   tagline: string | null
   body: string | null
   media: ResolvedMediaAsset[]
+  social_image: SocialImageSource | null
   price: Price | null
   scheduled_prices?: Price[]
   pricing_note: string | null
@@ -147,20 +151,17 @@ function parseRow(row: ExperienceRow): Experience {
     time_slots,
     recurring_slots,
     media: [],
+    social_image: null,
     featured: Boolean(row.featured)
   }
 }
 
-async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
-  const mediaByExperience = await getMediaPlacements(db, {
-    siteId,
-    ownerType: 'experience',
-    ownerIds: experiences.map(experience => experience.id),
-    slot: 'gallery',
-  })
+export async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
+  const mediaByExperience = await loadPublicSocialMedia(db, siteId, 'experience', experiences.map(experience => experience.id))
   return experiences.map(experience => ({
     ...experience,
-    media: mediaByExperience.get(experience.id) ?? [],
+    media: mediaByExperience.get(experience.id)?.media ?? [],
+    social_image: mediaByExperience.get(experience.id)?.social_image ?? null,
   }))
 }
 
@@ -455,6 +456,7 @@ export async function createExperience(
   siteId: string,
   input: CreateExperienceInput,
   userId: string,
+  env: CloudflareEnv,
 ): Promise<Experience> {
   if (!input.location_id) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'location_id is required' })
@@ -569,6 +571,7 @@ export async function createExperience(
       status: created.status,
     },
   })
+  await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id }, actorId: userId })
   return created
 }
 
@@ -578,6 +581,7 @@ export async function updateExperience(
   siteId: string,
   idOrSlug: string,
   input: UpdateExperienceInput,
+  env: CloudflareEnv,
 ): Promise<Experience | null> {
   const id = (await resolveExperienceId(db, siteId, idOrSlug)) ?? idOrSlug
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
@@ -673,8 +677,9 @@ export async function updateExperience(
   }
   if (!queries.length) return getExperienceById(db, siteId, id)
   await executeBatch(db, queries)
-
-  return getExperienceById(db, siteId, id)
+  const updated = await getExperienceById(db, siteId, id)
+  await refreshSocialCard({ db, env, owner: { owner_type: 'experience', owner_id: id } })
+  return updated
 }
 
 export async function deleteExperience(

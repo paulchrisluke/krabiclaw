@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-default text-default">
     <section class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-      <NuxtLink :to="`/locations/${slug}/reviews`" class="saya-kicker text-muted no-underline hover:text-default">
+      <NuxtLink :to="localePath(`/locations/${slug}/reviews`)" class="saya-kicker text-muted no-underline hover:text-default">
         Back to reviews
       </NuxtLink>
 
@@ -57,6 +57,7 @@
 </template>
 
 <script setup lang="ts">
+const { localePath } = useI18n()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
@@ -148,13 +149,7 @@ useSocialMetadata(() => ({
   path: `/locations/${slug.value}/reviews/${reviewId.value}`,
   title: review.value ? `${review.value.rating}-star review from ${review.value.author_name || 'Guest'}` : 'Review',
   description: String(review.value?.content || '').slice(0, 150),
-  heroImage: mediaItems.value[0]
-    ? {
-        url: String(mediaItems.value[0].public_url),
-        kind: mediaItems.value[0].kind === 'video' ? 'video' : 'image',
-        thumbnailUrl: typeof mediaItems.value[0].thumbnail_url === 'string' ? mediaItems.value[0].thumbnail_url : null,
-      }
-    : null,
+  socialImage: review.value?.social_image ?? null,
   brand: {
     siteName: String(review.value?.site_name || ''),
   },

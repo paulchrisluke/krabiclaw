@@ -34,6 +34,7 @@ test('a Saya presentation change selects tenant-public coverage', () => {
   assert.deepEqual(plan.groups, ['tenant-public'])
   assert.deepEqual(plan.specs, [
     'tests/e2e/tenant-client-navigation.spec.ts',
+    'tests/e2e/tenant-localization.spec.ts',
     'tests/e2e/tenant-rendering.spec.ts'
   ])
   assert.equal(plan.specs.includes('tests/e2e/mcp-owner-tools.spec.ts'), false)
@@ -120,6 +121,7 @@ test('deleting a mapped runtime file still selects its preview coverage', async 
     assert.deepEqual(plan.groups, ['tenant-public'])
     assert.deepEqual(plan.specs, [
       'tests/e2e/tenant-client-navigation.spec.ts',
+      'tests/e2e/tenant-localization.spec.ts',
       'tests/e2e/tenant-rendering.spec.ts'
     ])
   } finally {

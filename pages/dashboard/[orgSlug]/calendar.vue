@@ -2,9 +2,6 @@
   <UDashboardPanel id="org-calendar">
     <template #header>
       <UDashboardNavbar title="Calendar">
-        <template #leading>
-          <DashboardNavbarLeading :detail-to="orgBase" :detail-label="organizationName" />
-        </template>
       </UDashboardNavbar>
     </template>
 
@@ -102,12 +99,9 @@ useSeoMeta({ title: 'Calendar | KrabiClaw', robots: 'noindex, nofollow' })
 const FILTER_ALL = '__all__'
 const route = useRoute()
 const router = useRouter()
-const dashboard = useDashboardSite()
 const dashboardApi = useDashboardApi()
 const requestEvent = useRequestEvent()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
-const orgBase = computed(() => `/dashboard/${encodeURIComponent(orgSlug.value)}`)
-const organizationName = computed(() => dashboard.organization.value?.name ?? 'Organization')
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'experience_booking', 'post', 'thread'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
 const filters = reactive({ siteId: FILTER_ALL, locationId: FILTER_ALL, kind: routeKind })

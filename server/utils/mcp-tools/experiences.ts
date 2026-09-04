@@ -30,12 +30,12 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_experience',
-      description: `Create an experience. Use this — not create_post or create_blog_post — whenever the request is for a permanent, bookable offering with its own page: a new class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if priceless) CTA. Use the dedicated fields below (see their individual descriptions) rather than collapsing everything into body. Use update_booking_policy after creation for cancellation/refund rules — status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must belong to a location; omit location_id only if the site already has a primary location, otherwise call list_locations or create_location first.`,
+      description: `Create an experience. Use this — not create_post or create_blog_post — whenever the request is for a permanent, bookable offering with its own page: a new class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if priceless) CTA. Use the dedicated fields below (see their individual descriptions) rather than collapsing everything into body. Use update_booking_policy after creation for cancellation/refund rules — status must be one of: ${EXPERIENCE_STATUSES.join(', ')}. Every experience must include its explicit owning location_id.`,
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: experienceWriteSchema,
-      required: ['title'],
+      required: ['title', 'location_id'],
       outputSchema: experienceMutationResultObject,
     }),
   siteTool({
@@ -71,7 +71,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'list_experience_bookings',
-      description: 'List bookings for one specific experience. Use list_all_experience_bookings instead when the user asks about bookings across the whole site, not just one experience.',
+      description: 'List bookings for one specific experience, including each guest\'s name, email, and phone number. Use list_all_experience_bookings instead when the user asks about bookings across the whole site, not just one experience.',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -85,7 +85,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'list_all_experience_bookings',
-      description: 'Use this when the user asks about bookings site-wide — "how many bookings do we have", "bookings from the past two days", "site-wide bookings" — without naming a specific experience. Returns bookings across every experience on the site plus a summary (total, counts by status, counts by experience). Optionally filter by location_id and/or days (e.g. days=2 for "the past two days", based on when the booking was made).',
+      description: 'Use this when the user asks about bookings site-wide — "how many bookings do we have", "bookings from the past two days", "site-wide bookings" — without naming a specific experience. Returns bookings across every experience on the site, including each guest\'s name, email, and phone number, plus a summary (total, counts by status, counts by experience). Optionally filter by location_id and/or days (e.g. days=2 for "the past two days", based on when the booking was made).',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -106,7 +106,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_experience_booking',
-      description: 'Update a booking status.',
+      description: 'Update a booking\'s status (pending, confirmed, or cancelled) and refresh its guest-inbox thread. Returns the full booking, including the guest\'s name, email, and phone number.',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,

@@ -149,6 +149,65 @@ test.describe('OAuth discovery endpoints', () => {
     expect(secondRedirect.searchParams.get('state')).toBe('second-pass')
   })
 
+  test('requesting the email scope makes email and email_verified available through UserInfo', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!, 'user-e2e-oauth-cimd')
+
+    const cimdClientId = `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}-email-scope`
+    const redirectUri = new URL('/oauth/test-callback', cimdClientId).toString()
+    const verifier = 'krabiclaw-email-scope-e2e-verifier-0123456789'
+    const authorizeParams = {
+      client_id: cimdClientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid email offline_access tenant',
+      state: 'email-scope-pass',
+      code_challenge: pkceChallenge(verifier),
+      code_challenge_method: 'S256',
+      resource: `${baseURL}/api/mcp`,
+    }
+
+    const authorize = await request.get(oauthAuthorizeUrl(baseURL!, {
+      ...authorizeParams,
+      prompt: 'consent',
+    }), { maxRedirects: 0 })
+    expect(authorize.status()).toBe(302)
+    const consentLocation = authorize.headers()['location']
+    expect(consentLocation).toContain('/oauth/consent?')
+
+    const consentUrl = new URL(consentLocation!, baseURL)
+    const consentRes = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
+      headers: { Origin: baseURL! },
+      data: { accept: true, oauth_query: consentUrl.search.slice(1) },
+    })
+    expect(consentRes.status()).toBe(200)
+    const consentBody = await consentRes.json() as { url?: string }
+    const code = new URL(consentBody.url!).searchParams.get('code')
+    expect(code).toBeTruthy()
+
+    const token = await request.post(`${baseURL}/api/auth/oauth2/token`, {
+      headers: { Origin: baseURL! },
+      form: {
+        grant_type: 'authorization_code',
+        client_id: cimdClientId,
+        code: code!,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      },
+    })
+    expect(token.status()).toBe(200)
+    const tokenBody = await token.json() as { access_token?: string, scope?: string }
+    expect(tokenBody.access_token).toBeTruthy()
+    expect(tokenBody.scope).toContain('email')
+
+    const userinfo = await request.get(`${baseURL}/api/auth/oauth2/userinfo`, {
+      headers: { Authorization: `Bearer ${tokenBody.access_token}` },
+    })
+    expect(userinfo.status()).toBe(200)
+    const userinfoBody = await userinfo.json() as { email?: string, email_verified?: boolean }
+    expect(userinfoBody.email).toBeTruthy()
+    expect(userinfoBody.email_verified).toBe(true)
+  })
+
   test('ChatGPT-shaped CIMD uses private_key_jwt and rejects assertion replay', async ({ request, baseURL }) => {
     test.skip(new URL(baseURL!).protocol !== 'https:', 'CIMD requires an HTTPS client metadata and JWKS URI')
     await loginAs(request, baseURL!, 'user-e2e-oauth-private-cimd')
