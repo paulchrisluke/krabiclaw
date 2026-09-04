@@ -11105,7 +11105,7 @@ __metadata:
     satori: "npm:^0.26.0"
     sharp: "npm:^0.33.5"
     slugify: "npm:^1.6.9"
-    stripe: "npm:^22.1.0"
+    stripe: "npm:^22.6.0"
     tailwindcss: "npm:^4.2.4"
     typescript: "npm:^6.0.3"
     vite: "npm:^8.0.16"
@@ -13324,15 +13324,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"stripe@npm:^22.1.0":
-  version: 22.1.0
-  resolution: "stripe@npm:22.1.0"
+"stripe@npm:^22.6.0":
+  version: 22.6.0
+  resolution: "stripe@npm:22.6.0"
   peerDependencies:
     "@types/node": ">=18"
   peerDependenciesMeta:
     "@types/node":
       optional: true
-  checksum: 10c0/f83ab4338225b4f56d69afda804193ced8df70db50ba00ecb83188905f8d132dc0c5172a53f1eb77c559d4b32d7b61283534de6e6cf2aa2b6ddab205b4fbcd44
+  checksum: 10c0/6cb344d5b674f8cf7987506e921d8af55f138af2d4da7a3d176401387aacde2929e3b42bddb429fb53205abdd7466a59ab37ca409122bf3b8246c051d6c10796
   languageName: node
   linkType: hard
 

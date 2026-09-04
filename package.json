@@ -180,7 +180,7 @@
     "nuxt-schema-org": "^6.0.4",
     "satori": "^0.26.0",
     "slugify": "^1.6.9",
-    "stripe": "^22.1.0",
+    "stripe": "^22.6.0",
     "vue-i18n": "11.4.8"
   }
 }
