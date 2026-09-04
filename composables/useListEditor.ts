@@ -51,6 +51,12 @@ export function useListEditor<T extends { id: string }>(host: ListEditorHost<T>)
     try {
       await host.destroy(item.id)
       if (editingId.value === item.id) close()
+    } catch {
+      // The sheet stays open on the record that is still there. The page has
+      // already reported the failure — that is what `destroy` throwing means —
+      // so there is nothing to add here beyond not closing over it. Caught
+      // rather than rethrown because the only caller is a template handler,
+      // where it would surface as an unhandled rejection instead.
     } finally {
       removingId.value = null
     }

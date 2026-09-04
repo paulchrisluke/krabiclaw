@@ -288,18 +288,27 @@ async function deleteMany(ids: string[]) {
   if (!ids.length) return
   deleting.value = true
   try {
-    await Promise.all(ids.map(id =>
+    // allSettled, not all: `all` rejects on the first failure and skips the
+    // filter below, so a batch where nine of ten deletions succeeded left all ten
+    // on screen and told the user nothing had happened.
+    const outcomes = await Promise.allSettled(ids.map(id =>
       dashboardApi(`${siteApiBase}/media/${id}`, {
         method: 'DELETE',
         validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
     ))
-    const deleted = new Set(ids)
+    const deleted = new Set(ids.filter((_, index) => outcomes[index]?.status === 'fulfilled'))
     assets.value = assets.value.filter(asset => !deleted.has(asset.id))
     // Close selection rather than clear it: leaving the takeover open would show
     // a count for rows that no longer exist.
     selecting.value = false
-    toast.add({ title: `${ids.length} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
+
+    const failed = ids.length - deleted.size
+    if (failed) {
+      toast.add({ title: `${deleted.size} of ${ids.length} deleted, ${failed} failed`, color: 'error' })
+    } else {
+      toast.add({ title: `${ids.length} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
+    }
   } catch (error) {
     toast.add({ title: getErrorMessage(error, 'Failed to delete media'), color: 'error' })
   } finally { deleting.value = false }

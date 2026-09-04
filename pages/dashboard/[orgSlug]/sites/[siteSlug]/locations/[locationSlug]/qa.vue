@@ -132,6 +132,10 @@ const { editing, dialogOpen, editingId, removingId, openNew, openExisting, close
       await loadQa()
     } catch (error) {
       toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+      // Rethrow so the sheet stays open on the record that is still there.
+      // Swallowing it here let useListEditor treat the delete as done and close
+      // over a row the server had refused to remove.
+      throw error
     }
   },
 })
@@ -320,10 +324,12 @@ async function moveQa(item: { id: string }, direction: -1 | 1) {
 }
 
 
+// A different location has a different list, so anything the old one had open
+// goes with it. Blanking the fields while leaving the sheet up meant a Save
+// would have written the previous location's draft against the new one.
 watch(locationId, () => {
-  editingId.value = null
-  form.question = ''
-  form.answer = ''
+  editing.value = false
+  close()
 })
 
 useSeoMeta({ title: 'Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

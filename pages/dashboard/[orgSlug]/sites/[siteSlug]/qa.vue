@@ -235,6 +235,10 @@ const { editing, dialogOpen, editingId, removingId, openNew, openExisting, close
       await refresh()
     } catch (error) {
       toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+      // Rethrow so the sheet stays open on the record that is still there.
+      // Swallowing it here let useListEditor treat the delete as done and close
+      // over a row the server had refused to remove.
+      throw error
     }
   },
 })

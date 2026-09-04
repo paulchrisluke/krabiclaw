@@ -228,7 +228,11 @@ async function savePhoto() {
   const asset = openPhotoAsset.value
   if (!asset) return
   if (photoCategory.value !== (asset.category ?? 'other')) {
-    await patchAsset(asset, { category: photoCategory.value }, 'Photo category updated')
+    // patchAsset reports its own failure and returns false. Closing regardless
+    // would show the toast and then take away the form still holding the change,
+    // so the only way back would be to find the photo and set it again.
+    const saved = await patchAsset(asset, { category: photoCategory.value }, 'Photo category updated')
+    if (!saved) return
   }
   photoOpen.value = false
 }
@@ -236,8 +240,11 @@ async function savePhoto() {
 async function detachOpenPhoto() {
   const asset = openPhotoAsset.value
   if (!asset) return
-  photoOpen.value = false
+  const before = filteredAssets.value.length
   await detachMany([asset.id])
+  // Stay open if the photo is still attached: the detach failed, and closing
+  // would leave the grid contradicting the toast.
+  if (filteredAssets.value.length < before) photoOpen.value = false
 }
 
 function categoryLabel(category: string | null) {
@@ -389,11 +396,13 @@ async function detachMany(ids: string[]) {
     })))
     toast.add({ description: `${ids.length} item(s) detached from this location`, color: 'success' })
     selecting.value = false
-    await loadPhotos()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to remove media', color: 'error' })
   } finally {
     galleryMutating.value = false
+    // Reload whatever the outcome. A rejected batch may still have detached some
+    // of its photos, and the grid is the only thing telling the user which.
+    await loadPhotos()
   }
 }
 
