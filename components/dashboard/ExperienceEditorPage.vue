@@ -247,15 +247,19 @@
               </div>
             </div>
 
-            <div class="border-t border-default pt-6">
-              <p class="mb-4 text-sm font-semibold text-highlighted">Other booking rules</p>
-              <BookingPolicyForm
-                v-model="editor.bookingPolicyDraft.value"
-                policy-type="experience"
-                :summary="editor.bookingPolicySummary.value"
-                hide-cancellation
-              />
-            </div>
+          </div>
+
+          <!-- Things to know -->
+          <div v-else-if="editorKey === 'knowledge'" class="space-y-6">
+            <p class="text-base text-muted">
+              The practical notes that appear on this experience's page. Turn on the ones that
+              are true for you — each is shown to guests exactly as written here.
+            </p>
+            <BookingPolicyForm
+              v-model="editor.bookingPolicyDraft.value"
+              policy-type="experience"
+              :summary="editor.bookingPolicySummary.value"
+            />
           </div>
 
           <!-- Availability -->
@@ -451,6 +455,7 @@ const sectionLabels: Record<string, string> = {
   slots: 'Time slots',
   guests: 'What guests get',
   policy: 'Booking policy',
+  knowledge: 'Things to know',
   availability: 'Availability',
   translations: 'Translations',
   delete: 'Delete',
@@ -512,6 +517,23 @@ watch(data, value => {
 // ── Booking policy ──────────────────────────────────────
 const policyPresets = BOOKING_POLICY_PRESETS
 const activePresetId = computed(() => matchBookingPolicyPreset(editor.bookingPolicyDraft.value)?.id ?? null)
+
+/** Counts the notes a guest will actually see, so the row says what is on. */
+const knowledgeSummary = computed(() => {
+  const policy = editor.bookingPolicyDraft.value
+  const count = [
+    policy.host_confirmation_sla_minutes,
+    policy.late_arrival_grace_minutes,
+    policy.deposit_required,
+    policy.special_requests_allowed,
+    policy.minimum_guest_age,
+    policy.accessibility_contact_required,
+    policy.weather_policy,
+    policy.additional_notes_html,
+  ].filter(Boolean).length
+  if (!count) return 'Nothing shown yet'
+  return count === 1 ? '1 note on your page' : `${count} notes on your page`
+})
 
 const policySummary = computed(() => {
   const preset = matchBookingPolicyPreset(editor.bookingPolicyDraft.value)
@@ -615,6 +637,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
       { id: 'slots', label: 'Time slots', summary: slotsSummary.value, icon: 'i-lucide-clock-3', to: `${experiencePath.value}/slots` },
       { id: 'availability', label: 'Availability', summary: 'Close times or change capacity by date', icon: 'i-lucide-calendar-days', to: `${experiencePath.value}/availability` },
       { id: 'policy', label: 'Booking policy', summary: policySummary.value, icon: 'i-lucide-shield-check', to: `${experiencePath.value}/policy` },
+      { id: 'knowledge', label: 'Things to know', summary: knowledgeSummary.value, icon: 'i-lucide-info', to: `${experiencePath.value}/knowledge` },
     ],
   },
   {
