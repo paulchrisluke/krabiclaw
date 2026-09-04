@@ -1,6 +1,6 @@
 <template>
   <header
-    class="fixed inset-x-0 top-0 z-40 hidden h-(--kc-dashboard-top-nav) items-center gap-4 border-b border-default bg-default px-(--kc-nav-gutter) md:grid md:grid-cols-[1fr_auto_1fr]"
+    class="fixed inset-x-0 top-0 z-30 hidden h-(--kc-dashboard-top-nav) items-center gap-4 border-b border-default bg-default px-(--kc-nav-gutter) md:grid md:grid-cols-[1fr_auto_1fr]"
     data-testid="dashboard-top-nav"
   >
     <NuxtLink :to="homeTo" class="group flex w-fit shrink-0 items-center gap-2.5 no-underline">

@@ -6,7 +6,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
+          <DashboardNavbarLeading :to="levelBackTo" :label="levelBackLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -24,6 +24,8 @@
         :show-actions="showActions"
         :saving="saving"
         :save-disabled="saveDisabled"
+        :detail-title="detailTitle"
+        :dismiss-to="dismissTo"
         @cancel="cancelEditor"
         @save="saveCurrentEditor"
       >
@@ -250,16 +252,23 @@ const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSl
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
 const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
 
-// Up one level: out of a section back to the settings index, out of the index
-// back to the site overview.
-const backTo = computed(() => {
-  if (!hasDetail.value) return siteDashboardPath.value
-  // "Search and analytics" nests one level deeper, so its children go up to it
-  // rather than skipping the whole way out to the settings index.
-  if (secondSegment.value) return `${settingsPath.value}/${firstSegment.value}`
-  return settingsPath.value
+// Two different "up"s, and they are not the same destination.
+//
+// The navbar's back control leaves the *level* — the index column and everything
+// reachable from it. At `lg` that index is on screen beside the open section, so
+// leaving the level means leaving settings entirely.
+//
+// The sheet's close control leaves the open *section* and lands on the index it
+// was opened from. It only exists below `lg`, where that index is covered.
+//
+// Conflating them sent the navbar to the settings index while the settings index
+// was already the thing on screen.
+const levelBackTo = computed(() => isSearchLevel.value ? settingsPath.value : siteDashboardPath.value)
+const levelBackLabel = computed(() => isSearchLevel.value ? 'Site settings' : 'Site overview')
+const dismissTo = computed(() => {
+  if (isSearchLevel.value) return `${settingsPath.value}/search`
+  return surface.value === 'brand' ? brandPath.value : settingsPath.value
 })
-const backLabel = computed(() => hasDetail.value ? 'Site settings' : 'Site overview')
 const routeSegments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.map(String)
@@ -361,19 +370,33 @@ const searchItems = computed<EditorNavigationItem[]>(() => [
   { id: 'verification', label: 'Search verification', summary: loadedSettings.value?.google_site_verification ? 'Configured' : 'Not configured', icon: 'i-lucide-badge-check', to: `${settingsPath.value}/search/verification` },
   { id: 'visibility', label: 'Search visibility', summary: searchSummary.value, icon: 'i-lucide-scan-search', to: `${settingsPath.value}/search/visibility` },
 ])
+// Standing inside "Search and analytics" rather than on the settings index: the
+// pair re-roots here, so the index column lists the search sections and the back
+// control, navbar title and active row all belong to that level rather than the
+// one above it.
+const isSearchLevel = computed(() => surface.value !== 'brand' && firstSegment.value === 'search' && Boolean(secondSegment.value))
+
 const navigationGroups = computed(() => {
   if (surface.value === 'brand') return [{ id: 'brand', items: brandItems.value }]
-  if (firstSegment.value === 'search' && secondSegment.value) return [{ id: 'search', items: searchItems.value }]
+  if (isSearchLevel.value) return [{ id: 'search', items: searchItems.value }]
   return [
     { id: 'site', label: 'Site', items: settingsItems.value.slice(0, 3) },
     { id: 'connections', label: 'Connections', items: settingsItems.value.slice(3) },
   ]
 })
-const activeNavigationId = computed(() => surface.value === 'brand' ? detailKey.value : firstSegment.value === 'search' && secondSegment.value ? detailKey.value : firstSegment.value)
+const activeNavigationId = computed(() => surface.value === 'brand' || isSearchLevel.value ? detailKey.value : firstSegment.value)
 const hasDetail = computed(() => detailKey.value !== null)
 const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization', 'site-translations': 'Translations' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
-const navbarTitle = computed(() => detailTitle.value ?? (surface.value === 'brand' ? 'Brand' : 'Site Settings'))
+
+// The navbar names the level, not the open section — at `lg` the section's own
+// title is a heading on its pane, with the index list still beside it. Naming the
+// section twice made the navbar claim to be the page the pane was showing.
+const levelTitle = computed(() => {
+  if (surface.value === 'brand') return 'Brand'
+  return isSearchLevel.value ? 'Search and analytics' : 'Site Settings'
+})
+const navbarTitle = computed(() => levelTitle.value)
 const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing'].includes(detailKey.value)))
 
 // Leaving a section resets its editor. This used to hang off the back button's

@@ -51,12 +51,20 @@
       @menu="menuOpen = true"
     />
 
+    <!--
+      The group sits above the nav chrome, not below it. UDashboardGroup is
+      `position: fixed`, which makes it a stacking context, so anything inside it
+      composites at the group's level no matter how high its own z-index is. With
+      the navs at z-40 a leaf sheet at z-50 still painted underneath them. The
+      group's box is inset away from both navs, so nothing overlaps in the normal
+      case; only an element that deliberately spans the viewport reaches them.
+    -->
     <UDashboardGroup
       unit="rem"
       :min-size="14"
       :default-size="18"
       :max-size="24"
-      :ui="{ base: showDashboardChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : '' }"
+      :ui="{ base: showDashboardChrome ? 'z-40 md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : '' }"
     >
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
@@ -67,7 +75,7 @@
 
     <nav
       v-if="showDashboardChrome"
-      class="fixed inset-x-0 bottom-0 z-40 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
+      class="fixed inset-x-0 bottom-0 z-30 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Dashboard"
       data-testid="dashboard-mobile-nav"
     >
