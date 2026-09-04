@@ -86,8 +86,8 @@ DISCORD_DELIVERY_MODE = "provider"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-epoch3"
-database_id = "4a02e2ec-6fb0-4bed-96ab-925ec1e508df"
+database_name = "krabiclaw-db-epoch4"
+database_id = "73d8e172-b7a0-45b3-b200-ae052de52e57"
 migrations_dir = "migrations"
 remote = false
 
@@ -266,8 +266,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-staging-epoch3"
-database_id = "61af16e5-0873-49b9-90ce-aea2ff1991e4"
+database_name = "krabiclaw-db-staging-epoch4"
+database_id = "3b5f3f59-0800-407a-837d-c9c306396c68"
 migrations_dir = "migrations"
 remote = false
 

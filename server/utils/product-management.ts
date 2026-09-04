@@ -1116,7 +1116,7 @@ export async function ensureExperienceCategory(
  * inserts in its own atomic batch, so failed imports cannot leave categories
  * behind or require a compensating delete of shared data.
  */
-async function planProductCategories({ db, organizationId, siteId, locationId, names, actor }: ProductOrderScope & {
+export async function planProductCategories({ db, organizationId, siteId, locationId, names, actor }: ProductOrderScope & {
   names: string[]
 }): Promise<{ resolved: Map<string, ProductCategory>; inserts: BatchQuery[] }> {
   const resolved = new Map<string, ProductCategory>()

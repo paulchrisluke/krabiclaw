@@ -7,12 +7,14 @@
  * location. This maps that onto real category rows and per-category ordering.
  *
  * The safety property is that customers see no change: category order follows
- * each category's first appearance in the location's existing flat order, which
+ * each category's first visible appearance in the location's existing flat order, which
  * is exactly what the public collection page renders today.
  *
  * No I/O lives here so the mapping can be tested directly and reused by the
  * epoch transform.
  */
+
+function compareText(a, b) { return Buffer.compare(Buffer.from(String(a)), Buffer.from(String(b))) }
 
 function slugify(value) {
   return String(value)
@@ -26,7 +28,7 @@ function slugify(value) {
 }
 
 /**
- * Category order follows each category's first appearance in the location's
+ * Category order follows each category's first visible appearance in the location's
  * existing flat order, which is exactly what the public site renders today. The
  * migration is therefore invisible to customers: same sections, same order.
  */
@@ -44,13 +46,17 @@ export function planCategories(products) {
   const assignments = []
 
   const ordered = [...products].sort((a, b) => (
-    String(a.location_id).localeCompare(String(b.location_id))
-    || String(a.product_type).localeCompare(String(b.product_type))
+    compareText(a.location_id, b.location_id)
+    || compareText(a.product_type, b.product_type)
     || Number(a.sort_order) - Number(b.sort_order)
-    || String(a.id).localeCompare(String(b.id))
+    || compareText(a.id, b.id)
   ))
 
-  for (const product of ordered) {
+  // Hidden Products must not move a visible section ahead of another section.
+  // Hidden-only sections follow visible sections; member ordering is assigned
+  // separately from the original complete stream below.
+  const categoryOrder = [...ordered.filter(product => product.is_visible === 1), ...ordered.filter(product => product.is_visible !== 1)]
+  for (const product of categoryOrder) {
     // Identity is the stored string exactly as it is, not a trimmed copy. Two
     // legacy values that differ only by whitespace render as two sections
     // today, so merging them here would change what customers see — which is
@@ -86,6 +92,9 @@ export function planCategories(products) {
       categoryByKey.set(key, category)
       categories.push(category)
     }
+  }
+  for (const product of ordered) {
+    const category = categoryByKey.get(`${product.location_id}::${product.product_type}::${product.category}`)
     // sort_order restarts inside each category, which is what makes the
     // per-category dense ordering the new model relies on correct.
     const position = productSortOrder.get(category.id) ?? 0

@@ -11,6 +11,7 @@ interface LegacyProduct {
   location_id: string
   product_type: string
   category: string
+  is_visible: number
   sort_order: number
 }
 
@@ -20,6 +21,7 @@ function product(overrides: Partial<LegacyProduct> & Pick<LegacyProduct, 'id' | 
     site_id: 'site',
     location_id: 'loc-1',
     product_type: 'standard',
+    is_visible: 1,
     ...overrides,
   }
 }
@@ -163,4 +165,18 @@ test('category names that differ only by whitespace stay separate', () => {
 
   assert.equal(categories.length, 2)
   assert.equal(new Set(assignments.map((row: { category_id: string }) => row.category_id)).size, 2)
+})
+
+
+test('hidden Products preserve member order without moving visible sections', () => {
+  const { categories, assignments } = planCategories([
+    product({ id: 'hidden-only', category: 'Seasonal', sort_order: 0, is_visible: 0 }),
+    product({ id: 'hidden-main', category: 'Mains', sort_order: 1, is_visible: 0 }),
+    product({ id: 'starter', category: 'Starters', sort_order: 2 }),
+    product({ id: 'main', category: 'Mains', sort_order: 3 }),
+  ])
+  assert.deepEqual(categories.map((category: { name: string }) => category.name), ['Starters', 'Mains', 'Seasonal'])
+  const order = new Map(assignments.map((row: { product_id: string; sort_order: number }) => [row.product_id, row.sort_order]))
+  assert.equal(order.get('hidden-main'), 0)
+  assert.equal(order.get('main'), 1)
 })
