@@ -1,74 +1,61 @@
 <template>
   <UDashboardPanel id="site-qa">
     <template #header>
-      <UDashboardNavbar title="Site Q&A">
+      <UDashboardNavbar title="Site" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="paths.site" label="Site" />
         </template>
         <template #trailing>
           <USelect v-model="selectedPagePath" :items="pageScopes" class="w-48" aria-label="Q&A page scope" />
-          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh Q&A" @click="refresh()" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <p class="mb-5 text-sm text-muted">Manage general questions or questions tailored to a public page.</p>
+      <DashboardListEditor
+        v-model:editing="editing"
+        title="Q&A"
+        description="Manage general questions or questions tailored to a public page."
+        :items="listItems"
+        :pending="pending"
+        :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"
+        empty-title="No site Q&A yet"
+        empty-icon="i-lucide-circle-help"
+        add-label="Add a question"
+        reorderable
+        :removing-id="removingId"
+        @add="openNew"
+        @open="openExisting"
+        @remove="removeItem"
+        @move="move"
+      >
+        <template #item="{ item }">
+          <p class="text-sm font-medium text-highlighted">{{ item.title }}</p>
+          <p class="mt-1 line-clamp-2 text-sm text-muted">{{ item.summary }}</p>
+        </template>
+      </DashboardListEditor>
 
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <section class="space-y-3">
-          <UAlert
-            v-if="qaError"
-            color="error"
-            variant="soft"
-            title="Q&A could not be loaded"
-            :description="getErrorMessage(qaError, 'Q&A request failed')"
-          />
-          <USkeleton v-if="pending" class="h-32" />
-          <div v-else-if="!qaError && qaRows.length === 0" class="border border-dashed border-default px-6 py-12 text-center">
-            <UIcon name="i-lucide-circle-help" class="mx-auto size-9 text-muted" />
-            <p class="mt-3 text-sm font-medium text-highlighted">No site Q&A yet</p>
-          </div>
-          <template v-else>
-            <article v-for="item in qaRows" :key="item.id" class="border-b border-default py-4 first:pt-0">
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <div class="flex flex-wrap gap-2">
-                    <UBadge :color="item.status === 'published' ? 'success' : 'neutral'" variant="soft">{{ item.status }}</UBadge>
-                    <span class="text-xs text-muted">Order {{ item.sort_order }}</span>
-                  </div>
-                  <h2 class="mt-3 text-sm font-semibold text-highlighted">{{ item.question }}</h2>
-                  <p class="mt-2 text-sm text-muted">{{ item.answer || 'No answer yet.' }}</p>
-                </div>
-                <div class="flex shrink-0 gap-1">
-                  <UButton icon="i-lucide-arrow-up" size="sm" color="neutral" variant="ghost" aria-label="Move up" @click="move(item, -1)" />
-                  <UButton icon="i-lucide-arrow-down" size="sm" color="neutral" variant="ghost" aria-label="Move down" @click="move(item, 1)" />
-                  <UButton icon="i-lucide-square-pen" size="sm" color="neutral" variant="ghost" aria-label="Edit" @click="edit(item)" />
-                  <UButton icon="i-lucide-trash-2" size="sm" color="error" variant="ghost" aria-label="Delete" @click="remove(item)" />
-                </div>
-              </div>
-            </article>
-          </template>
-        </section>
-
-        <UCard>
-          <template #header><h2 class="font-semibold text-highlighted">{{ editingId ? 'Edit Q&A' : 'Add Q&A' }}</h2></template>
-          <div class="space-y-4">
-            <UFormField label="Question"><UTextarea v-model="form.question" :rows="3" /></UFormField>
-            <UFormField label="Answer"><UTextarea v-model="form.answer" :rows="5" /></UFormField>
-            <UCheckbox v-model="form.published" label="Published" />
-            <div class="flex gap-2">
-              <UButton v-if="editingId" block color="neutral" variant="ghost" @click="reset">Cancel</UButton>
-              <UButton block :loading="saving" :disabled="!form.question.trim()" @click="save">{{ editingId ? 'Save' : 'Add question' }}</UButton>
-            </div>
-          </div>
-        </UCard>
-      </div>
+      <DashboardListItemDialog
+        v-model:open="dialogOpen"
+        :title="editingId ? 'Edit question' : 'Add a question'"
+        :removable="Boolean(editingId)"
+        :saving="saving"
+        :removing="removingId === editingId"
+        :save-disabled="!form.question.trim()"
+        @save="save"
+        @remove="removeEditing"
+      >
+        <UFormField label="Question"><UTextarea v-model="form.question" :rows="3" autofocus class="w-full" /></UFormField>
+        <UFormField label="Answer"><UTextarea v-model="form.answer" :rows="6" class="w-full" /></UFormField>
+        <UCheckbox v-model="form.published" label="Published" />
+      </DashboardListItemDialog>
     </template>
   </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
+import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
+import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.qa' })
@@ -88,7 +75,10 @@ interface QaRow {
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const saving = ref(false)
+const editing = ref(false)
+const dialogOpen = ref(false)
 const editingId = ref<string | null>(null)
+const removingId = ref<string | null>(null)
 const selectedPagePath = ref('general')
 
 const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'] as const
@@ -156,10 +146,9 @@ const existingQaScopesAsyncData = useAsyncData(
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const form = reactive({ question: '', answer: '', published: true })
 watch(selectedPagePath, () => {
-  editingId.value = null
-  form.question = ''
-  form.answer = ''
-  form.published = true
+  dialogOpen.value = false
+  editing.value = false
+  reset()
 })
 const qaAsyncData = useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
@@ -226,6 +215,15 @@ const pageScopes = computed(() => {
   return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
 })
 const qaRows = computed(() => data.value?.qa ?? [])
+const listItems = computed(() => qaRows.value.map(row => ({
+  id: row.id,
+  title: row.question,
+  summary: row.answer || 'No answer yet.',
+})))
+
+function rowFor(id: string) {
+  return qaRows.value.find(row => row.id === id) ?? null
+}
 
 function reset() {
   editingId.value = null
@@ -234,11 +232,19 @@ function reset() {
   form.published = true
 }
 
-function edit(item: QaRow) {
-  editingId.value = item.id
-  form.question = item.question
-  form.answer = item.answer ?? ''
-  form.published = item.status === 'published'
+function openNew() {
+  reset()
+  dialogOpen.value = true
+}
+
+function openExisting(item: { id: string }) {
+  const row = rowFor(item.id)
+  if (!row) return
+  editingId.value = row.id
+  form.question = row.question
+  form.answer = row.answer ?? ''
+  form.published = row.status === 'published'
+  dialogOpen.value = true
 }
 
 async function save() {
@@ -263,6 +269,7 @@ async function save() {
           && typeof value.sort_order === 'number',
       })
     }
+    dialogOpen.value = false
     reset()
     await refresh()
     toast.add({ description: 'Site Q&A saved', color: 'success' })
@@ -273,28 +280,46 @@ async function save() {
   }
 }
 
-async function move(item: QaRow, direction: -1 | 1) {
+async function move(item: { id: string }, direction: -1 | 1) {
   const index = qaRows.value.findIndex(row => row.id === item.id)
+  const current = qaRows.value[index]
   const target = qaRows.value[index + direction]
-  if (!target) return
+  if (!current || !target) return
   await dashboardApi(`/api/editor/sites/${siteId}/qa/reorder`, {
     method: 'POST',
-    body: { page_path: pagePath.value, updates: [{ id: item.id, sort_order: target.sort_order }, { id: target.id, sort_order: item.sort_order }] },
+    body: { page_path: pagePath.value, updates: [{ id: current.id, sort_order: target.sort_order }, { id: target.id, sort_order: current.sort_order }] },
     validate: (value): value is { updated: number } =>
       isRecord(value) && typeof value.updated === 'number',
   })
   await refresh()
 }
 
-async function remove(item: QaRow) {
-  if (!confirm(`Delete this question?\n\n${item.question}`)) return
-  await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, {
-    method: 'DELETE',
-    query: pagePath.value ? { page_path: pagePath.value } : undefined,
-    validate: (value): value is { qa_id: string; deleted: true } =>
-      isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
-  })
-  if (editingId.value === item.id) reset()
-  await refresh()
+// Removing is immediate. The edit state is the confirmation: you switched the
+// list into it deliberately, and the row names what it is about to remove. A
+// second dialog on top of that is the pattern this redesign is replacing.
+async function removeItem(item: { id: string }) {
+  removingId.value = item.id
+  try {
+    await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, {
+      method: 'DELETE',
+      query: pagePath.value ? { page_path: pagePath.value } : undefined,
+      validate: (value): value is { qa_id: string; deleted: true } =>
+        isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
+    })
+    if (editingId.value === item.id) {
+      dialogOpen.value = false
+      reset()
+    }
+    await refresh()
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+  } finally {
+    removingId.value = null
+  }
+}
+
+async function removeEditing() {
+  if (!editingId.value) return
+  await removeItem({ id: editingId.value })
 }
 </script>
