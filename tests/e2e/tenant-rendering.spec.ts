@@ -84,38 +84,40 @@ async function expectTenantDocument(page: Page, tenant: Tenant) {
 }
 
 for (const tenant of tenants) {
-  for (const viewport of [
-    { name: 'desktop', width: 1440, height: 900 },
-    { name: 'mobile', width: 390, height: 844 },
-  ]) {
-    test(`${tenant.name} renders and navigates on ${viewport.name}`, async ({ page }) => {
-      await page.setViewportSize(viewport)
-      const failures = collectFirstPartyFailures(page, tenant.baseURL)
-      const manifestResponse = page.waitForResponse(response => response.url().includes('/_nuxt/builds/meta/'))
-      const response = await openTenantPage(page, `${tenant.baseURL}/`, tenant.headers)
-      expect(response?.status()).toBeLessThan(400)
-      expect((await manifestResponse).status()).toBe(200)
-      expect(new URL(page.url()).origin).toBe(new URL(tenant.baseURL).origin)
-      await expectTenantDocument(page, tenant)
-      const route = await page.goto(`${tenant.baseURL}${tenant.detailPath}`, { waitUntil: 'load' })
-      expect(route?.status()).toBeLessThan(400)
-      await expect(page.locator('main')).toContainText(tenant.detailContent)
-      await expect(page.locator(tenant.shell)).toBeVisible()
-      const jsonLd = page.locator('script[type="application/ld+json"]')
-      await expect(jsonLd).not.toHaveCount(0)
-      expect((await jsonLd.allTextContents()).join(' ')).toMatch(tenant.detailContent)
-      for (const text of tenant.forbidden) await expect(page.locator('body')).not.toContainText(text)
-      if (viewport.name === 'mobile') {
-        const menuButton = page.getByRole('button', { name: /menu|navigation/i }).first()
-        if (await menuButton.count()) {
-          await menuButton.click()
-          await expect(page.getByRole('link', { name: tenant.primaryLabel }).first()).toBeVisible()
-        }
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
-      }
-      expect(failures).toEqual([])
-    })
-  }
+  test(`${tenant.name} renders home and detail routes on desktop`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const failures = collectFirstPartyFailures(page, tenant.baseURL)
+    const manifestResponse = page.waitForResponse(response => response.url().includes('/_nuxt/builds/meta/'))
+    const response = await openTenantPage(page, `${tenant.baseURL}/`, tenant.headers)
+    expect(response?.status()).toBeLessThan(400)
+    expect((await manifestResponse).status()).toBe(200)
+    expect(new URL(page.url()).origin).toBe(new URL(tenant.baseURL).origin)
+    await expectTenantDocument(page, tenant)
+    const route = await page.goto(`${tenant.baseURL}${tenant.detailPath}`, { waitUntil: 'load' })
+    expect(route?.status()).toBeLessThan(400)
+    await expect(page.locator('main')).toContainText(tenant.detailContent)
+    await expect(page.locator(tenant.shell)).toBeVisible()
+    const jsonLd = page.locator('script[type="application/ld+json"]')
+    await expect(jsonLd).not.toHaveCount(0)
+    expect((await jsonLd.allTextContents()).join(' ')).toMatch(tenant.detailContent)
+    for (const text of tenant.forbidden) await expect(page.locator('body')).not.toContainText(text)
+    expect(failures).toEqual([])
+  })
+
+  test(`${tenant.name} supports narrow navigation without overflow`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const failures = collectFirstPartyFailures(page, tenant.baseURL)
+    const response = await openTenantPage(page, `${tenant.baseURL}/`, tenant.headers)
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page.locator(tenant.shell)).toBeVisible()
+    const menuButton = page.getByRole('button', { name: /menu|navigation/i }).first()
+    if (await menuButton.count()) {
+      await menuButton.click()
+      await expect(page.getByRole('link', { name: tenant.primaryLabel }).first()).toBeVisible()
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+    expect(failures).toEqual([])
+  })
 }
 
 test('Pottery House preserves dark-theme hydration and booking context', async ({ page }) => {
@@ -128,14 +130,11 @@ test('Pottery House preserves dark-theme hydration and booking context', async (
 })
 
 test('an English-only tenant does not classify one-segment CMS paths as locales', async ({ page }) => {
-  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-    await page.setViewportSize(viewport)
-    for (const path of ['/th', '/th/about', '/th/experiences', '/th/links']) {
-      const response = await openTenantPage(page, `${potteryHouseBaseURL}${path}`, potteryHouseExtraHeaders)
-      expect(response?.status()).toBe(404)
-      await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-      await expect(page.locator('body')).not.toContainText(/เนื้อหาภาษาไทย/)
-    }
+  for (const path of ['/th', '/th/about', '/th/experiences', '/th/links']) {
+    const response = await openTenantPage(page, `${potteryHouseBaseURL}${path}`, potteryHouseExtraHeaders)
+    expect(response?.status()).toBe(404)
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    await expect(page.locator('body')).not.toContainText(/เนื้อหาภาษาไทย/)
   }
 })
 

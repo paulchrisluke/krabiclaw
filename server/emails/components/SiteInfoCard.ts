@@ -1,5 +1,5 @@
 import { defineComponent, h, type PropType } from 'vue'
-import { EText, ELink } from 'vue-email'
+import { EText, ELink } from '../vue-email'
 
 const BRAND = '#FB7461'
 

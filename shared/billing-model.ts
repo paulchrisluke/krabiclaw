@@ -37,9 +37,6 @@ export function normalizeBillingPlanId(value: unknown): string | null {
   return normalized || null
 }
 
-/** Backwards-friendly short alias for shared callers. */
-export const normalizePlanId = normalizeBillingPlanId
-
 export function isKnownBillingPlan(value: unknown): value is BillingPlanId {
   return value === STARTER_PLAN_ID || isKnownRecurringPlan(value)
 }

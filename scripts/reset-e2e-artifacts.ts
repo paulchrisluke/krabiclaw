@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 // Sweeps rows that Playwright E2E specs leave behind on local/preview disposable data.
 //
@@ -343,9 +343,11 @@ if (isStdout) {
 
   try {
     writeFileSync(sqlPath, sql, 'utf8')
-    const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
-    console.log(`[reset-e2e-artifacts] Applying: ${cmd}`)
-    execSync(cmd, { stdio: 'inherit' })
+    const args = ['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath]
+    console.log(`[reset-e2e-artifacts] Applying: corepack yarn ${args.join(' ')}`)
+    const result = spawnYarn(args)
+    if (result.error) throw result.error
+    if (result.status !== 0) process.exit(result.status ?? 1)
     console.log('[reset-e2e-artifacts] Done.')
   } finally {
     rmSync(dir, { recursive: true, force: true })

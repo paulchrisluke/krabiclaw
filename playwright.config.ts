@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { Buffer } from 'node:buffer'
 import { defineConfig, devices } from '@playwright/test'
 
 const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
@@ -12,7 +13,7 @@ const optionalWorkerVars = ['CF_ACCOUNT_ID', 'CLOUDFLARE_IMAGES_API_TOKEN', 'CLO
   .flatMap(name => process.env[name] ? ['--var', `${name}:${shellQuote(process.env[name]!)}`] : [])
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
-  process.env.E2E_TEST_PASSWORD = randomBytes(32).toString('hex')
+  process.env.E2E_TEST_PASSWORD = Buffer.from(randomBytes(32)).toString('hex')
 }
 if (!previewUrl) {
   process.env.E2E_DEV_ROUTE_SECRET = localDevRouteSecret

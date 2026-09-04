@@ -1,8 +1,6 @@
-import { HTTPError, defineHandler  } from 'nitro';
-
-import type { H3Event } from 'nitro'
+import { defineHandler } from 'nitro'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
+import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
@@ -12,27 +10,9 @@ import { nextConversationState } from '~/server/domain/guest-threads/state-machi
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 
-
-
-function ensureDevAccess(event: H3Event, env: ReturnType<typeof cloudflareEnv>) {
-  const devMode = import.meta.dev
-  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
-  if (!devMode && !e2eOverride) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
-  }
-
-  if (!devMode && e2eOverride) {
-    const expected = env.E2E_DEV_ROUTE_SECRET || ''
-    const provided = (event.req.headers.get('x-dev-route-secret')) || ''
-    if (!expected || !provided || !timingSafeEqualText(provided, expected)) {
-      throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
-    }
-  }
-}
-
 export default defineHandler(async (event) => {
+  assertDevRouteAllowed(event)
   const env = cloudflareEnv(event)
-  ensureDevAccess(event, env)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 

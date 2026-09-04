@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hashPassword } from 'better-auth/crypto'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const email = (process.env.LOCAL_MCP_TEST_EMAIL || '').trim().toLowerCase()
 const password = process.env.LOCAL_MCP_TEST_PASSWORD || ''
@@ -49,7 +49,7 @@ VALUES
 
 try {
   writeFileSync(sqlPath, sql, { mode: 0o600 })
-  const result = spawnSync('yarn', ['wrangler', 'd1', 'execute', 'DB', '--local', '--file', sqlPath], {
+  const result = spawnYarn(['wrangler', 'd1', 'execute', 'DB', '--local', '--file', sqlPath], {
     cwd: process.cwd(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
