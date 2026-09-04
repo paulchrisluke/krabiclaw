@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1923e8d3fc44aee6b4c3a0ba53ebae4584d82285bb0f588093f526c31fb3f2a3",
+  "fingerprint": "sha256:73a898c0a98294b3b85d6e1a42030dd0d101ea0496f67057d1fc2e21023fb2a3",
   "tools": [
     {
       "name": "analyze_document",
@@ -285,6 +285,7 @@
                   ]
                 },
                 "category_id": {
+                  "description": "ID of a category at the selected location. Read list_product_categories first; use create_product_category when the intended section does not exist. Never send a category name in place of this ID.",
                   "type": "string"
                 },
                 "description": {
@@ -2273,6 +2274,7 @@
             ]
           },
           "category_id": {
+            "description": "ID of a category at the selected location. Read list_product_categories first; use create_product_category when the intended section does not exist. Never send a category name in place of this ID.",
             "type": "string"
           },
           "description": {
@@ -5665,7 +5667,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Localized scalar values. Allowed fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
                 "type": "object"
               }
             },
@@ -10462,7 +10464,7 @@
           },
           "values": {
             "additionalProperties": true,
-            "description": "Localized scalar values. Allowed fields depend on resource_type.",
+            "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
             "type": "object"
           }
         },
@@ -10513,7 +10515,7 @@
               },
               "values": {
                 "additionalProperties": true,
-                "description": "Localized scalar values. Allowed fields depend on resource_type.",
+                "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
                 "type": "object"
               }
             },
@@ -12862,7 +12864,7 @@
                 },
                 "values": {
                   "additionalProperties": true,
-                  "description": "Localized scalar values. Allowed fields depend on resource_type.",
+                  "description": "Localized scalar values. Allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.",
                   "type": "object"
                 }
               },
@@ -12933,6 +12935,7 @@
                   ]
                 },
                 "category_id": {
+                  "description": "ID of a category at the selected location. Read list_product_categories first; use create_product_category when the intended section does not exist. Never send a category name in place of this ID.",
                   "type": "string"
                 },
                 "description": {

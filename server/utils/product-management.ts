@@ -3,6 +3,7 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { d1JsonArray, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import type {
   CreateProductInput,
+  ExtractedProductCandidate,
   Product,
   ProductDetail,
   ProductSource,
@@ -561,7 +562,7 @@ export async function createProductsBatch(
   organizationId: string,
   siteId: string,
   locationId: string,
-  inputs: CreateProductInput[],
+  inputs: CreateProductInput[] | ExtractedProductCandidate[],
   attribution: ProductWriteAttribution,
 ): Promise<Product[]> {
   const { actorId: actor, priceProvenance = 'manual' } = attribution
@@ -574,9 +575,17 @@ export async function createProductsBatch(
   const now = new Date().toISOString()
   const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
   const categories = await categoryLookup({ db, organizationId, siteId, locationId })
+  // Imported section names are planned without writes. Categories, Products,
+  // and Prices must all commit or roll back in the same D1 batch.
+  const categoryPlan = await planProductCategories({
+    db, organizationId, siteId, locationId, actor,
+    names: priceProvenance === 'ai-import' ? inputs.map(input => 'category' in input ? input.category : '') : [],
+  })
   const ids: string[] = []
   const inserts: BatchQuery[] = inputs.flatMap((input, index) => {
-    const category = resolveCategory(categories, input.category_id, `products[${index}].category_id`)
+    const category = priceProvenance === 'ai-import' && 'category' in input
+      ? categoryPlan.resolved.get(input.category)!
+      : resolveCategory(categories, 'category_id' in input ? input.category_id : undefined, `products[${index}].category_id`)
     const name = requireTrimmedProductString(input.name, `products[${index}].name`, PRODUCT_LIMITS.name)
     if (input.description !== undefined && typeof input.description !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description must be a string` })
     const description = input.description?.trim() ?? ''
@@ -601,7 +610,8 @@ export async function createProductsBatch(
         is_visible, available, featured, featured_sort_order, sort_order, tags_json,
         details_json, seo_title, seo_description, canonical_url, robots, source,
         created_at, updated_at, created_by, updated_by
-      ) VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM products WHERE category_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
         id, organizationId, siteId, locationId, category.id, name, slug, description,
         validateProductOrderUrl(input.order_url),
@@ -609,7 +619,7 @@ export async function createProductsBatch(
         validateOptionalBoolean(input.available, `products[${index}].available`, true),
         validateOptionalBoolean(input.featured, `products[${index}].featured`, false),
         input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
-        existing.length + index, JSON.stringify(validateProductTags(input.tags)), JSON.stringify(details),
+        category.id, JSON.stringify(validateProductTags(input.tags)), JSON.stringify(details),
         normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
         normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
         validateProductCanonicalUrl(input.canonical_url), validateProductRobots(input.robots), validateSource(input.source),
@@ -623,7 +633,7 @@ export async function createProductsBatch(
       params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
     }]
   })
-  await executeBatch(db, [...inserts, publicResourceCacheInvalidationQuery(siteId, 'product.batch_created')], { operation: 'batch create Products' })
+  await executeBatch(db, [...categoryPlan.inserts, ...inserts, publicResourceCacheInvalidationQuery(siteId, 'product.batch_created')], { operation: 'batch create Products' })
   await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, metadata: { product_count: ids.length } })
   const created = await queryAll<ProductRow>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p ${ACTIVE_PRICE_JOIN} ${CATEGORY_JOIN} WHERE p.site_id = ? AND p.location_id = ? AND p.product_type = 'standard' AND p.id IN (SELECT value FROM json_each(?)) ORDER BY pc.sort_order, p.sort_order, p.id`, [siteId, locationId, JSON.stringify(ids)])
   return hydrateProductMedia(db, siteId, created.map(mapProduct))
@@ -1040,20 +1050,6 @@ export async function requireProductCategory(
   return category
 }
 
-async function createLocationCategorySlug(db: DbClient, siteId: string, locationId: string, name: string): Promise<string> {
-  const base = slugifyProductName(name)
-  if (!base) throw new HTTPError({ statusCode: 400, statusMessage: 'name must produce a non-empty ASCII slug' })
-  for (let suffix = 1; suffix <= MAX_SLUG_SUFFIX_ATTEMPTS; suffix += 1) {
-    const suffixText = suffix === 1 ? '' : `-${suffix}`
-    const candidate = `${base.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
-    const existing = await queryFirst(db, `
-      SELECT id FROM product_categories WHERE site_id = ? AND location_id = ? AND product_type = 'standard' AND slug = ? LIMIT 1
-    `, [siteId, locationId, candidate])
-    if (!existing) return candidate
-  }
-  throw new HTTPError({ statusCode: 409, statusMessage: 'Unable to create a unique Product category slug in this location' })
-}
-
 async function assertCategoryNameAvailable(
   db: DbClient,
   organizationId: string,
@@ -1075,22 +1071,12 @@ async function assertCategoryNameAvailable(
 export async function createProductCategory({ db, organizationId, siteId, locationId, name, actor }: ProductOrderScope & {
   name: string
 }): Promise<ProductCategory> {
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
   const categoryName = requireTrimmedProductString(name, 'name', PRODUCT_LIMITS.category)
-  await assertCategoryNameAvailable(db, organizationId, siteId, locationId, categoryName, null)
-  const slug = await createLocationCategorySlug(db, siteId, locationId, categoryName)
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  const next = await queryFirst<{ next_sort_order: number }>(db, `
-    SELECT COALESCE(MAX(sort_order) + 1, 0) AS next_sort_order FROM product_categories
-     WHERE organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'
-  `, [organizationId, siteId, locationId])
+  const { resolved, inserts } = await planProductCategories({ db, organizationId, siteId, locationId, names: [categoryName], actor })
+  if (!inserts.length) throw new HTTPError({ statusCode: 409, statusMessage: `A Product category named "${categoryName}" already exists at this location` })
+  const { id } = resolved.get(categoryName)!
   await executeBatch(db, [
-    {
-      query: `INSERT INTO product_categories (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
-              VALUES (?,?,?,?, 'standard', ?,?,?,?,?,?,?)`,
-      params: [id, organizationId, siteId, locationId, categoryName, slug, Number(next?.next_sort_order ?? 0), now, now, actor, actor],
-    },
+    ...inserts,
     publicResourceCacheInvalidationQuery(siteId, 'product.category_created'),
   ], { operation: 'create Product category' })
   await productEvent(db, 'product.category_created', { organizationId, siteId, locationId, actor, metadata: { category_id: id, name: categoryName } })
@@ -1126,31 +1112,51 @@ export async function ensureExperienceCategory(
 }
 
 /**
- * Resolves category names to categories, creating the ones that do not exist
- * yet, and returns them keyed by the name that was asked for. Only the AI import
- * path uses this: it reads a printed menu and knows section names, not IDs.
- * Every other writer references an existing category by ID.
+ * Plans category creation without persisting it. The caller includes these
+ * inserts in its own atomic batch, so failed imports cannot leave categories
+ * behind or require a compensating delete of shared data.
  */
-export async function resolveProductCategoriesByName({ db, organizationId, siteId, locationId, names, actor }: ProductOrderScope & {
+async function planProductCategories({ db, organizationId, siteId, locationId, names, actor }: ProductOrderScope & {
   names: string[]
-}): Promise<{ resolved: Map<string, ProductCategory>; createdIds: string[] }> {
+}): Promise<{ resolved: Map<string, ProductCategory>; inserts: BatchQuery[] }> {
+  const resolved = new Map<string, ProductCategory>()
+  const inserts: BatchQuery[] = []
+  if (!names.length) return { resolved, inserts }
   await assertLocationOwnership(db, organizationId, siteId, locationId)
   const existing = await listProductCategories({ db, organizationId, siteId, locationId })
   const byName = new Map(existing.map(category => [category.name, category]))
-  const resolved = new Map<string, ProductCategory>()
-  // Reported so a caller whose own write then fails can remove the categories
-  // this call brought into existence, rather than leaving empty sections behind.
-  const createdIds: string[] = []
+  const usedSlugs = new Set(existing.map(category => category.slug))
+  const now = new Date().toISOString()
   for (const rawName of names) {
     const name = requireTrimmedProductString(rawName, 'category', PRODUCT_LIMITS.category)
     if (resolved.has(rawName)) continue
-    const found = byName.get(name)
-    const category = found ?? await createProductCategory({ db, organizationId, siteId, locationId, name, actor })
-    if (!found) createdIds.push(category.id)
+    let category = byName.get(name)
+    if (!category) {
+      const base = slugifyProductName(name)
+      if (!base) throw new HTTPError({ statusCode: 400, statusMessage: 'name must produce a non-empty ASCII slug' })
+      let slug = ''
+      for (let suffix = 1; suffix <= MAX_SLUG_SUFFIX_ATTEMPTS; suffix += 1) {
+        const suffixText = suffix === 1 ? '' : `-${suffix}`
+        const candidate = `${base.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
+        if (!usedSlugs.has(candidate)) { slug = candidate; break }
+      }
+      if (!slug) throw new HTTPError({ statusCode: 409, statusMessage: 'Unable to create a unique Product category slug in this location' })
+      usedSlugs.add(slug)
+      category = {
+        id: crypto.randomUUID(), location_id: locationId, name, slug,
+        sort_order: Math.max(-1, ...[...byName.values()].map(row => row.sort_order)) + 1,
+        created_at: now, updated_at: now, created_by: actor, updated_by: actor,
+      }
+      inserts.push({
+        query: `INSERT INTO product_categories (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
+                VALUES (?,?,?,?, 'standard', ?,?,?,?,?,?,?)`,
+        params: [category.id, organizationId, siteId, locationId, name, slug, category.sort_order, now, now, actor, actor],
+      })
+    }
     byName.set(name, category)
     resolved.set(rawName, category)
   }
-  return { resolved, createdIds }
+  return { resolved, inserts }
 }
 
 export async function renameProductCategory(

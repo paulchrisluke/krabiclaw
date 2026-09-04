@@ -163,12 +163,16 @@ async function createLocation(headers, siteId) {
 }
 
 async function createProduct(headers, siteId, locationId) {
+  const category = await mcp(headers, 'create_product_category', { site_id: siteId, location_id: locationId, name: 'Main' })
+  expectStatus('create_product_category succeeds', category)
+  const categoryId = data(category.body)?.category?.id
+  expectValue('create_product_category returns category id', Boolean(categoryId), category.body)
   const product = await mcp(headers, 'create_product', {
     site_id: siteId,
     location_id: locationId,
     name: 'MCP Image Dish',
     description: 'Used for image tool coverage',
-    category: 'Main',
+    category_id: categoryId,
     price: { amount_minor: 1200, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
   })
   expectStatus('create_product succeeds', product)

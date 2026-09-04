@@ -121,10 +121,19 @@ async function main() {
   const locationId = data(location.body)?.id
   expectValue('create_location returns location id', Boolean(locationId), location.body)
 
+  const categoryIds = new Map()
+  for (const name of ['Mains', 'Shots']) {
+    const category = await mcp(headers, 'create_product_category', { site_id: siteId, location_id: locationId, name })
+    expectStatus(`create_product_category ${name} succeeds`, category)
+    const categoryId = data(category.body)?.category?.id
+    expectValue('create_product_category returns category id', Boolean(categoryId), category.body)
+    categoryIds.set(name, categoryId)
+  }
+
   const product = await mcp(headers, 'create_product', {
     site_id: siteId,
     location_id: locationId,
-    category: 'Mains',
+    category_id: categoryIds.get('Mains'),
     name: 'MCP Ops Curry',
     price: { amount_minor: 1250, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
   })
@@ -140,8 +149,8 @@ async function main() {
     site_id: siteId,
     location_id: locationId,
     products: [
-      { category: 'Shots', name: 'B-52', price: { amount_minor: 700, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
-      { category: 'Shots', name: 'Lemon Drop', price: { amount_minor: 800, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
+      { category_id: categoryIds.get('Shots'), name: 'B-52', price: { amount_minor: 700, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
+      { category_id: categoryIds.get('Shots'), name: 'Lemon Drop', price: { amount_minor: 800, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' } },
     ],
   })
   expectStatus('batch_create_products succeeds', batch)

@@ -4,6 +4,7 @@ import test from 'node:test'
 import { Miniflare } from 'miniflare'
 
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
+import { englishManifestHash, getProductCatalogLocalization } from '../../server/utils/localization.ts'
 import {
   createProduct,
   createProductsBatch,
@@ -59,13 +60,15 @@ const CATEGORY_FOR_LOCATION: Record<string, string> = {
 async function seedProduct(db: D1Database, id: string, locationId = 'secondary', withPrice = false) {
   await db.prepare(`
     INSERT INTO products (id, organization_id, site_id, location_id, category_id, name, slug, sort_order, created_by, updated_by, created_at, updated_at)
-    VALUES (?, 'org', 'site', ?, ?, ?, ?, 0, 'actor', 'actor', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
-  `).bind(id, locationId, CATEGORY_FOR_LOCATION[locationId], id, id).run()
+    SELECT ?, organization_id, site_id, location_id, id, ?, ?, 0, 'actor', 'actor', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'
+      FROM product_categories WHERE id = ?
+  `).bind(id, id, id, CATEGORY_FOR_LOCATION[locationId]).run()
   if (withPrice) {
     await db.prepare(`
       INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, valid_from, provenance, created_by)
-      VALUES (?, 'org', 'site', ?, ?, 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'manual', 'actor')
-    `).bind(`${id}-price`, locationId, id).run()
+      SELECT ?, organization_id, site_id, location_id, id, 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'manual', 'actor'
+        FROM products WHERE id = ?
+    `).bind(`${id}-price`, id).run()
   }
 }
 
@@ -202,6 +205,12 @@ test('location-scoped Product writes never fall back to the primary location', a
   const { miniflare, db } = await migratedD1()
   try {
     await seedProduct(db, 'secondary-owned')
+    await seedProduct(db, 'other-site-owned', 'other-site-location', true)
+    assert.equal((await db.prepare("SELECT site_id FROM prices WHERE product_id = 'other-site-owned'").first<{ site_id: string }>())?.site_id, 'other-site')
+    await assert.rejects(
+      syncProducts(db, 'org', 'site', 'secondary', [{ product_id: 'other-site-owned', category_id: 'cat-secondary', name: 'Wrong site', price: null }], { actorId: 'actor' }),
+      /not found at this location/i,
+    )
     await assert.rejects(
       syncProducts(db, 'org', 'site', 'primary', [{ product_id: 'secondary-owned', category_id: 'cat-secondary', name: 'Wrong target', price: null }], { actorId: 'actor' }),
       /not found at this location/i,
@@ -284,6 +293,62 @@ test('Product writes preserve nullable Price semantics through D1', async () => 
     assert.equal(unchanged.price?.amount_minor, 500)
     const removed = await updateProduct(db, 'org', 'site', 'secondary', fixedProduct.id, { price: null }, attribution, env)
     assert.equal(removed.price, null)
+  } finally {
+    await Promise.race([miniflare.dispose(), new Promise(resolve => setTimeout(resolve, 2_000))])
+  }
+})
+
+test('Product imports commit categories and Products atomically, including concurrent conflicts', async () => {
+  const { miniflare, db } = await migratedD1()
+  const attribution = { actorId: 'actor', priceProvenance: 'ai-import' as const }
+  try {
+    for (const rejected of [
+      [{ category: 'New section', name: 'Valid', price: null }, { category: 'x'.repeat(201), name: 'Invalid category', price: null }],
+      [{ category: 'New section', name: 'x'.repeat(241), price: null }],
+    ]) {
+      await assert.rejects(createProductsBatch(db, 'org', 'site', 'secondary', rejected, attribution))
+      assert.equal((await db.prepare("SELECT COUNT(*) count FROM product_categories WHERE location_id = 'secondary'").first<{ count: number }>())?.count, 1)
+      assert.equal((await db.prepare('SELECT COUNT(*) count FROM products').first<{ count: number }>())?.count, 0)
+    }
+
+    const imported = await createProductsBatch(db, 'org', 'site', 'secondary', [
+      { category: 'Small Plates', name: 'One', price: { amount_minor: 100, valid_from: '2026-01-01T00:00:00.000Z' } },
+      { category: 'small-plates', name: 'Two', price: null },
+      { category: 'Small Plates', name: 'Three', price: null },
+    ], attribution)
+    assert.deepEqual(imported.map(product => [product.category.slug, product.sort_order]), [['small-plates', 0], ['small-plates', 1], ['small-plates-2', 0]])
+    assert.equal(imported[0]?.price?.amount_minor, 100)
+
+    const racers = batchBarrierDatabases(db)
+    const outcomes = await Promise.allSettled(racers.map((connection, index) => createProductsBatch(connection, 'org', 'site', 'secondary', [
+      { category: `Import ${index}`, name: `Private ${index}`, price: null },
+      { category: 'Shared section', name: `Shared ${index}`, price: null },
+    ], attribution)))
+    assert.equal(outcomes.filter(outcome => outcome.status === 'fulfilled').length, 1)
+    const winner = outcomes.findIndex(outcome => outcome.status === 'fulfilled')
+    const names = (await db.prepare("SELECT name FROM product_categories WHERE name LIKE 'Import %' OR name = 'Shared section' ORDER BY name").all<{ name: string }>()).results.map(row => row.name)
+    assert.deepEqual(names, [`Import ${winner}`, 'Shared section'])
+    assert.equal((await db.prepare('SELECT COUNT(*) count FROM products').first<{ count: number }>())?.count, 5)
+    assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, [])
+  } finally {
+    await Promise.race([miniflare.dispose(), new Promise(resolve => setTimeout(resolve, 2_000))])
+  }
+})
+
+test('Product catalog localization reads category records from the current schema', async () => {
+  const { miniflare, db } = await migratedD1()
+  try {
+    await seedProduct(db, 'localized-product')
+    await db.prepare("INSERT INTO organization_billing (organization_id, access_plan) VALUES ('org', 'growth')").run()
+    await db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES ('en', 'org', 'site', 'en', 1, 'published'), ('th', 'org', 'site', 'th', 0, 'published')").run()
+    await db.prepare("INSERT INTO platform_locale_catalogs (locale, label, direction, status, source_manifest_hash, created_by_user_id, updated_by_user_id) VALUES ('th', 'Thai', 'ltr', 'available', ?, 'actor', 'actor')").bind(await englishManifestHash()).run()
+    await db.prepare("INSERT INTO site_language_licenses (id, organization_id, site_id, locale, status) VALUES ('license', 'org', 'site', 'th', 'active')").run()
+    const catalog = await getProductCatalogLocalization(db, 'org', 'site', 'th')
+    assert.deepEqual(catalog.products, [{
+      id: 'localized-product', location_id: 'secondary', category_id: 'cat-secondary',
+      category: { id: 'cat-secondary', name: 'Food', slug: 'food', sort_order: 0 },
+      source: { name: 'localized-product', description: '' }, localization: null,
+    }])
   } finally {
     await Promise.race([miniflare.dispose(), new Promise(resolve => setTimeout(resolve, 2_000))])
   }
