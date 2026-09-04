@@ -6076,18 +6076,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vue/language-core@npm:3.2.9":
-  version: 3.2.9
-  resolution: "@vue/language-core@npm:3.2.9"
+"@vue/language-core@npm:3.3.11":
+  version: 3.3.11
+  resolution: "@vue/language-core@npm:3.3.11"
   dependencies:
     "@volar/language-core": "npm:2.4.28"
     "@vue/compiler-dom": "npm:^3.5.0"
     "@vue/shared": "npm:^3.5.0"
-    alien-signals: "npm:^3.2.0"
+    alien-signals: "npm:^3.2.1"
     muggle-string: "npm:^0.4.1"
     path-browserify: "npm:^1.0.1"
     picomatch: "npm:^4.0.4"
-  checksum: 10c0/a96275d143c9b400a4ae934dab553bd05df09f8af55eb30761c736b8a925bcbca456ea14bfc806aedfea8ea56d1a4a384ac73efe558de15444a2e681d3433a65
+  checksum: 10c0/d05c0a9983cb92f03e283729450d21da81848eecf4328020c2047b7cf1318b74597455b21740a32f56552d267d8b14fb834ae7939c4f5ff24bd4dc7a3a2fbbc7
   languageName: node
   linkType: hard
 
@@ -6419,10 +6419,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"alien-signals@npm:^3.2.0":
-  version: 3.2.0
-  resolution: "alien-signals@npm:3.2.0"
-  checksum: 10c0/a86ed07bb14f8473f87c444806ea1dcb6be02dae850f6da86921144218883a9731a7a907de6d18dd4f34ee8b48b8c0d7fcf188775291d6896c937b01936f6418
+"alien-signals@npm:^3.2.1":
+  version: 3.2.1
+  resolution: "alien-signals@npm:3.2.1"
+  checksum: 10c0/4c4064faa208126177224d1ed6a2310687d452dec0771994e276d9af4c72e853fcb969ae4a7fcd034b1d1b9accb9500f4941178326eeea1cb8f64ec612853ef8
   languageName: node
   linkType: hard
 
@@ -11198,7 +11198,7 @@ __metadata:
     vue: "npm:^3.5.40"
     vue-i18n: "npm:11.4.8"
     vue-router: "npm:^5.3.0"
-    vue-tsc: "npm:^3.2.9"
+    vue-tsc: "npm:^3.3.11"
     wrangler: "npm:4.113.0"
   dependenciesMeta:
     better-sqlite3:
@@ -14850,17 +14850,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vue-tsc@npm:^3.2.9":
-  version: 3.2.9
-  resolution: "vue-tsc@npm:3.2.9"
+"vue-tsc@npm:^3.3.11":
+  version: 3.3.11
+  resolution: "vue-tsc@npm:3.3.11"
   dependencies:
     "@volar/typescript": "npm:2.4.28"
-    "@vue/language-core": "npm:3.2.9"
+    "@vue/language-core": "npm:3.3.11"
   peerDependencies:
     typescript: ">=5.0.0"
   bin:
     vue-tsc: bin/vue-tsc.js
-  checksum: 10c0/22c13198672fd7caaf744fce9f6437b5b12c1d984e9a67c49d45ec422cfa84859ef8eac4632c8a9e742422dce98c7fb23a87c868014092ed36f90de7c0dd1416
+  checksum: 10c0/b1995cf9519754e9974d051668d1b6d4e3bb3bd1adc507350689bf2e128cc57c0c21c58952c247a97f12cf008c1b5235f4bcf5882f6784d6a8286019f439d3cf
   languageName: node
   linkType: hard
 
