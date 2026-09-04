@@ -93,12 +93,13 @@ function customerIdValue(customer: Stripe.Subscription['customer'] | Stripe.Invo
 function billingIntervalLabel(price: Stripe.Price | null): string | null {
   const recurring = price?.recurring
   if (!recurring?.interval) return null
-  const label = {
+  const labels: Record<string, string> = {
     day: 'daily',
     week: 'weekly',
     month: 'monthly',
     year: 'annual',
-  }[recurring.interval] ?? recurring.interval
+  }
+  const label = labels[recurring.interval] ?? recurring.interval
   const count = recurring.interval_count ?? 1
   return count === 1 ? label : `${count}_${label}`
 }

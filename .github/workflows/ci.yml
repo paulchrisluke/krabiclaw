@@ -22,10 +22,10 @@ jobs:
       || !(github.base_ref == 'main' && github.head_ref == 'staging')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
       - run: corepack enable
@@ -41,6 +41,10 @@ jobs:
         run: |
           corepack yarn install --immutable
           corepack yarn --cwd workers/email-inbound install --immutable
+      - name: Check inbound email Worker
+        run: |
+          corepack yarn --cwd workers/email-inbound tsc --noEmit
+          corepack yarn --cwd workers/email-inbound wrangler deploy --dry-run
       - run: yarn quality
       - run: yarn test:unit
       - run: yarn test:d1
@@ -62,7 +66,7 @@ jobs:
       groups: ${{ steps.plan.outputs.groups }}
       specs: ${{ steps.plan.outputs.specs }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -93,11 +97,11 @@ jobs:
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: https://preview.krabiclaw.com
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
       - run: corepack enable
@@ -109,7 +113,7 @@ jobs:
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
       - run: yarn build
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: preview-worker-${{ github.event.pull_request.head.sha }}
           path: .output
@@ -150,10 +154,10 @@ jobs:
       E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
       E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
       - run: corepack enable
@@ -165,7 +169,7 @@ jobs:
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
       - run: corepack yarn playwright install chromium
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: preview-worker-${{ github.event.pull_request.head.sha }}
           path: .output
@@ -232,7 +236,7 @@ jobs:
         run: yarn test:e2e:preview:selected
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-preview
           path: |
@@ -265,11 +269,11 @@ jobs:
       PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
       PLAYWRIGHT_WORKERS: "2"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
       - run: corepack enable
@@ -311,7 +315,7 @@ jobs:
         run: yarn test:e2e:tenant-rendering
       - name: Upload staging Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-staging
           path: |
@@ -344,10 +348,10 @@ jobs:
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: https://krabiclaw.com
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
       - run: corepack enable
@@ -401,11 +405,11 @@ jobs:
       PLAYWRIGHT_WORKERS: "1"
       EXPECTED_NUXT_BUILD_ID: ${{ needs.deploy-production.outputs.nuxt_build_id }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
       - run: corepack enable
@@ -427,7 +431,7 @@ jobs:
         run: yarn test:e2e:tenant-rendering
       - name: Upload production Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-production
           path: |

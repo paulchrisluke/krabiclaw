@@ -1,4 +1,4 @@
-export const STRIPE_API_VERSION = '2026-04-22.dahlia' as const
+export const STRIPE_API_VERSION = '2026-08-26.dahlia' as const
 // Stripe lets webhook destinations pin the event-rendering schema separately
 // from the outbound client API version. Keep this endpoint contract explicit;
 // changing the client version must not silently upgrade inbound webhook events.
