@@ -12,6 +12,15 @@ yarn seed:local     # load the demo, Kikuzuki, Pottery House, and NCLS fixtures
 yarn dev            # http://localhost:3000
 ```
 
+`yarn install` runs `patch-package` through `postinstall`. If it is skipped —
+Yarn does not always re-run `postinstall` when nothing else changed — the
+patches in `patches/` silently do not apply, and `yarn test:migrations` fails
+while everything else looks fine. Re-apply them directly:
+
+```sh
+npx patch-package --error-on-fail
+```
+
 ## Signing in
 
 ```sh
@@ -52,6 +61,25 @@ yarn schema:local && yarn seed:local && yarn dev:login
 
 Local D1 is disposable. Never hand-edit it to work around an application bug —
 see [operations/release-and-outage-prevention.md](operations/release-and-outage-prevention.md).
+
+## Before pushing
+
+```sh
+yarn quality && yarn test:unit && yarn test:d1 && yarn test:migrations && yarn test:mcp
+yarn chatgpt:submission:check && yarn lint:migrations && yarn lint:schema-drift && yarn lint:seeds
+```
+
+That is every CI check that runs without a deployed environment. `yarn test:unit`
+alone is not enough — `test:d1` and `test:migrations` cover schema and
+persistence behaviour that typecheck and unit tests cannot see.
+
+Changing the MCP tool surface makes two generated artifacts stale. Regenerate
+and commit both:
+
+```sh
+yarn mcp:catalog:write
+yarn chatgpt:submission:write
+```
 
 ## Which credential belongs to which job
 

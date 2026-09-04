@@ -16,7 +16,7 @@
     "ai-search:sync:prod": "node --experimental-strip-types scripts/ai-search-sync.ts --base-url https://krabiclaw.com",
     "ai-search:status:prod": "node --experimental-strip-types scripts/ai-search-status.ts --base-url https://krabiclaw.com",
     "typecheck": "nuxi typecheck",
-    "lint": "eslint . --ignore-pattern .agents/ --ignore-pattern .tmp/ --ignore-pattern '**/.tmp/' --max-warnings=0",
+    "lint": "eslint . --ignore-pattern .agents/ --ignore-pattern .tmp/ --ignore-pattern '**/.tmp/' --ignore-pattern .claude/ --ignore-pattern '**/.claude/' --max-warnings=0",
     "lint:better-auth-boundaries": "node scripts/check-better-auth-boundaries.mjs",
     "lint:product-model": "node scripts/check-product-model-guard.mjs",
     "lint:product-domain": "node scripts/check-product-domain-guard.mjs",
