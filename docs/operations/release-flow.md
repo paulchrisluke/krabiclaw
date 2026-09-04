@@ -11,6 +11,14 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 
 Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. Staging applies migrations but never sweeps, resets, reseeds customers, provisions E2E identities, or performs guest/MCP writes. Production is never seeded, reset, or mutated by test automation.
 
+Preview must keep persistent Workers Logs and traces enabled in `wrangler.toml`,
+with invocation logs and 100% sampling. This is permanent environment
+configuration, not a temporary debugging toggle. After an E2E failure, inspect
+the Playwright trace and the preview Worker's Cloudflare Observability records
+for the failing request's timestamp and request ID before deciding whether to
+retry. Preserve relevant evidence before Cloudflare's retention window expires;
+enabling logging cannot recover requests from an earlier unlogged deployment.
+
 A database-epoch cutover additionally uses the temporary maintenance deployment
 defined in [release-and-outage-prevention.md](release-and-outage-prevention.md).
 It is not part of an ordinary schema migration or application release.
