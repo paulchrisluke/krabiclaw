@@ -157,16 +157,12 @@
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <article v-for="product in group.products" :key="product.id">
             <NuxtLink :to="localePath(presentation.productPath(locationSlug(product.location_id), product.slug))" class="group block text-default no-underline">
-              <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+              <div v-if="product.image?.public_url" class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
                 <img
-                  v-if="product.image?.public_url"
                   :src="product.image.public_url"
                   :alt="product.image.alt_text || product.name"
                   class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                 >
-                <div v-else class="flex h-full items-center justify-center" aria-hidden="true">
-                  <SayaIcon name="sparkles" class="size-12 text-dimmed" />
-                </div>
                 <SayaBadgeUnavailable
                   v-if="!product.available"
                   overlay

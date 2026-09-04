@@ -437,7 +437,6 @@ const featuredProductItems = computed(() => {
         ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })
         : null,
       image: product.image?.public_url || null,
-      imageKind: 'image',
       alt: product.image?.alt_text || product.name,
       href: localePath(presentation.productPath(slug.value, product.slug)),
       unavailable: !product.available,
@@ -455,7 +454,6 @@ const featuredExperienceItems = computed(() => {
       ? formatProductMoney({ ...experience.price, amount_minor: experience.price.compare_at_amount_minor, compare_at_amount_minor: null })
       : null,
     image: experienceCoverImage(experience),
-    imageKind: 'image',
     alt: experience.title || '',
     href: experience.slug ? localePath(`/experiences/${experience.slug}`) : locationExperienceHref.value ? localePath(locationExperienceHref.value) : undefined,
     unavailable: Boolean(activeClosureMessage.value),

@@ -565,7 +565,6 @@ const featuredProductCards = computed(() => {
         ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
         : null,
       image: item.image?.public_url || null,
-      imageKind: 'image',
       alt: item.image?.alt_text || item.name,
       href: presentation.productPath(locationSlug, item.slug),
       unavailable: !item.available,
@@ -580,7 +579,6 @@ const featuredExperienceCards = computed(() => featuredExperiences.value.slice(0
     ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
     : '',
   image: experienceCoverImage(item),
-  imageKind: 'image',
   alt: item.title ? `${item.title} experience` : 'Featured experience image',
   href: item.slug ? `/experiences/${item.slug}` : '',
   unavailable: item.location_id ? closedLocationIds.value.has(item.location_id) : false,

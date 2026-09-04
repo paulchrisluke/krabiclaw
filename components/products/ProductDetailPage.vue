@@ -2,10 +2,9 @@
   <div class="min-h-screen bg-default text-default">
     <AppBreadcrumb :crumbs="breadcrumbs" />
     <article class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-      <div class="grid gap-10 lg:grid-cols-2">
+      <div v-if="product.image?.public_url" class="grid gap-10 lg:grid-cols-2">
         <div>
           <img
-            v-if="product.image?.public_url"
             :src="product.image.public_url"
             :alt="product.image.alt_text || product.name"
             class="aspect-square w-full rounded-2xl object-cover"
@@ -36,6 +35,31 @@
             </div>
           </dl>
         </div>
+      </div>
+      <div v-else class="max-w-3xl py-4">
+        <p class="saya-kicker">{{ product.category }}</p>
+        <h1 class="saya-display-md mt-3">{{ product.name }}</h1>
+        <p class="mt-2 text-sm text-muted">{{ location.title }}</p>
+        <div v-if="formatProductPriceLabel(product)" class="mt-6 flex items-baseline gap-3 text-xl">
+          <span v-if="product.price?.compare_at_amount_minor" class="text-muted line-through">{{ formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null }) }}</span>
+          <span class="font-semibold">{{ formatProductPriceLabel(product) }}</span>
+        </div>
+        <p v-if="product.description" class="mt-8 leading-7 text-muted">{{ product.description }}</p>
+        <p v-if="!product.available" class="mt-8 font-semibold text-muted">{{ t('saya.common.temporarily_unavailable') }}</p>
+        <SayaButton
+          v-if="product.available && product.order_url"
+          :href="product.order_url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mt-8"
+          @click="recordExternalOrderClick"
+        >{{ t('saya.cta.order_now') }}</SayaButton>
+        <dl v-if="visibleDetails.length" class="mt-10 divide-y divide-default border-y border-default">
+          <div v-for="detail in visibleDetails" :key="detail.key" class="py-4">
+            <dt class="font-medium">{{ detail.label }}</dt>
+            <dd class="mt-1 text-sm text-muted">{{ detail.values.join(', ') }}</dd>
+          </div>
+        </dl>
       </div>
 
       <section v-if="product.gallery.length" class="mt-16">
