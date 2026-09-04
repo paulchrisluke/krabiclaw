@@ -50,7 +50,9 @@ access by itself does not grant tenant access.
 
 The publisher uses the normal Better Auth OAuth authorization-code flow with
 PKCE. It requests tenant access only, never platform-admin scope. The metadata
-file must be served as JSON: raw GitHub text URLs are rejected by the provider.
+document must be served as JSON and contain its exact URL as `client_id`.
+The public metadata route derives that URL from the requested environment;
+raw GitHub text URLs are rejected by the provider.
 
 After this change deploys to the target environment:
 
