@@ -1,65 +1,38 @@
+// Which location the current route addresses.
+//
+// This used to also export `routeLocationSlug`, `inLocationWorkspace`,
+// `routeLocation` (a pure alias of `currentLocation`), `buildLocationWorkspacePath`
+// and `selectLocation`. Nothing consumed any of them — every caller takes the
+// composable whole and reads only the three below. The path builder among them
+// fell back to `?? locationIdOrSlug` when a lookup missed, so an unknown id
+// produced a real-looking URL to a location that does not exist, while
+// `selectLocation` right beside it fast-failed on the same lookup. Two answers to
+// one question, neither reachable.
 export function useDashboardLocation() {
   const dashboard = useDashboardSite()
   const route = useRoute()
-  const router = useRouter()
 
   const routeLocationSlug = computed(() => {
     const slug = route.params.locationSlug
     return typeof slug === 'string' ? slug : null
   })
 
-  const inLocationWorkspace = computed(() => Boolean(routeLocationSlug.value))
-
-  const routeLocation = computed(() => {
+  const currentLocation = computed(() => {
     if (!routeLocationSlug.value) return null
     return dashboard.locations.value.find(location => location.slug === routeLocationSlug.value) ?? null
   })
 
-  const currentLocation = computed(() => routeLocation.value)
-
   const currentLocationId = computed(() => currentLocation.value?.id ?? null)
+
+  // Falls back to the route's own slug because the URL is what names the
+  // location, whether or not the site's locations have loaded yet. This is not
+  // standing in for a missing record: an unknown slug yields no `currentLocation`
+  // and no `currentLocationId`, which is what callers check before acting.
   const currentLocationSlug = computed(() => currentLocation.value?.slug ?? routeLocationSlug.value ?? null)
 
-  function buildLocationWorkspacePath(locationIdOrSlug: string) {
-    const target = dashboard.locations.value.find((location) =>
-      location.id === locationIdOrSlug || location.slug === locationIdOrSlug
-    )
-    const targetSlug = target?.slug ?? locationIdOrSlug
-    const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-    const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
-
-    if (inLocationWorkspace.value && typeof route.name === 'string') {
-      const { locationId: _legacyLocationId, ...query } = route.query
-      return router.resolve({
-        name: route.name,
-        params: { ...route.params, locationSlug: targetSlug },
-        query,
-      }).fullPath
-    }
-
-    if (orgSlug && siteSlug) return `/dashboard/${orgSlug}/sites/${siteSlug}/locations/${targetSlug}`
-    return '/dashboard'
-  }
-
-  async function selectLocation(locationIdOrSlug: string, options: { replace?: boolean } = {}) {
-    const target = dashboard.locations.value.find((location) =>
-      location.id === locationIdOrSlug || location.slug === locationIdOrSlug
-    )
-    if (!target) return
-
-    const to = buildLocationWorkspacePath(target.slug)
-    if (options.replace) await router.replace(to)
-    else await router.push(to)
-  }
-
   return {
-    routeLocationSlug,
-    inLocationWorkspace,
-    routeLocation,
     currentLocation,
     currentLocationId,
     currentLocationSlug,
-    buildLocationWorkspacePath,
-    selectLocation,
   }
 }
