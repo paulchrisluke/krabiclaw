@@ -23,16 +23,15 @@ export function useDashboardSiteLinks(sitePublicUrl?: MaybeRef<string | null | u
     const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
     const locationSlug = dashboardLocation.currentLocationSlug.value
     const orgBase = slug ? `${base}/${slug}` : base
-    const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : orgBase
-    const locationsBase = `${siteBase}/locations`
-    const locationBase = siteSlug && locationSlug ? `${siteBase}/locations/${locationSlug}` : siteBase
+    const siteBase = slug && siteSlug ? `${orgBase}/sites/${siteSlug}` : ''
+    const locationsBase = siteBase ? `${siteBase}/locations` : ''
+    const locationBase = siteBase && locationSlug ? `${siteBase}/locations/${locationSlug}` : siteBase
     const orgSettingsBase = `${orgBase}/settings`
     return {
       base,
       org: orgBase,
       site: siteBase,
       project: locationBase,
-      conversations: `${siteBase}/conversations`,
       pages: `${siteBase}/pages`,
       products: `${locationBase}/products`,
       posts: `${locationBase}/posts`,

@@ -98,7 +98,7 @@
         />
       </div>
 
-      <ChowBotConversation
+      <ConversationShell
         v-model:input="textInput"
         :messages="conversationMessages"
         :placeholder="inputPlaceholder"
@@ -285,7 +285,7 @@
           <UButton size="xs" variant="link" color="error" @click="retryImport">Try again</UButton>
         </div>
       </template>
-      </ChowBotConversation>
+      </ConversationShell>
     </div>
   </div>
 </template>
@@ -294,7 +294,7 @@
 import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
 import { DEFAULT_CURRENCY } from '~/shared/currencies'
-import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
+import ConversationShell from '~/components/conversation/ConversationShell.vue'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 import type { SiteVertical } from '~/utils/vertical-copy'

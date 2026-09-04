@@ -12,14 +12,6 @@ type McpToolLike = ToolLike & {
   inputSchema?: Record<string, unknown>
 }
 
-type ChowBotToolLike = ToolLike & {
-  input_schema?: {
-    type: 'object'
-    properties: Record<string, unknown>
-    required?: string[]
-  }
-}
-
 export type ConversationalToolSurfaceGroup =
   | 'social_publishing'
   | 'domains'
@@ -117,20 +109,6 @@ export function normalizeMcpToolForConversationalSurface<T extends McpToolLike>(
       ...inputSchema,
       properties: stripExternalChannelsFromProperties(properties as Record<string, unknown>),
     },
-  }
-}
-
-export function normalizeChowBotToolForConversationalSurface<T extends ChowBotToolLike>(
-  tool: T,
-  env?: ApiRecord,
-): T {
-  if (tool.name !== 'publish_post' || isConversationalToolGroupEnabled(env, 'social_publishing')) {
-    return tool
-  }
-
-  return {
-    ...tool,
-    description: 'Publish a post to the site. Social publishing is currently managed from the dashboard.',
   }
 }
 

@@ -1,11 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { compareWhatsAppDeliveryStatus, fetchWhatsAppMedia, sendWhatsAppText } from '~/server/utils/whatsapp'
+import { compareWhatsAppDeliveryStatus, sendWhatsAppText } from '~/server/utils/whatsapp'
 import { parseMetaMsisdn } from '~/utils/phone'
-import { chargeFlatCredits } from '~/server/utils/ai-credits'
-import { saveInboundMediaAsset } from '~/server/utils/chowbot-media'
-import { runChowBot, type JsonSerializable } from '~/server/utils/chowbot-agent'
 import {
-  createMessage, getChannelState, getConversation, getOrCreateConversation, getRecentAgentMessages, getSiteForMember, listSitesForMember, metaMessageExists, upsertChannelState, type ChowBotConversation, } from '~/server/utils/chowbot-conversations'
+  getChannelState, metaMessageExists, upsertChannelState, type JsonSerializable, } from '~/server/utils/chowbot-conversations'
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { ensureGuestThread, getGuestThreadById, getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
@@ -18,7 +15,7 @@ import { findSubmissionByPhone } from '~/server/utils/submission-messages'
 import { isAuthorizedWhatsAppRecipient, listAccessibleLocationIds, resolveMemberId, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { findVerifiedAuthUserByPhone } from '~/server/utils/auth'
 import {
-  ASK_CHOWBOT_OR_QUOTE_MESSAGE, REPLY_SENT_CONFIRMATION, buildCollectReplyPrompt, buildConfirmSendPrompt, buildDisambiguationPrompt, buildReplyFailedMessage, decideWhatsAppReplyRouting, isChowBotDirective, maskEmailForDisplay, stripChowBotPrefix, type DisambiguationCandidate, type PendingWhatsAppReplyState, } from '~/server/utils/whatsapp-reply-routing'
+  PROMPT_QUOTE_NOTIFICATION_MESSAGE, REPLY_SENT_CONFIRMATION, buildCollectReplyPrompt, buildConfirmSendPrompt, buildDisambiguationPrompt, buildReplyFailedMessage, decideWhatsAppReplyRouting, maskEmailForDisplay, type DisambiguationCandidate, type PendingWhatsAppReplyState, } from '~/server/utils/whatsapp-reply-routing'
 
 interface WhatsAppMessage {
   id: string
@@ -96,81 +93,13 @@ function messageText(message: WhatsAppMessage): string {
   return ''
 }
 
-function siteListReply(sites: Array<{ id: string; brand_name: string | null }>): string {
-  return [
-    'Which site should ChowBot use?', ...sites.map((site, index) => `${index + 1}. ${site.brand_name ?? site.id}`), 'Reply with the number.', ].join('\n')
-}
-
-async function reply(
-  db: D1Database | null, env: ApiRecord, toPhone: string, text: string, opts?: {
-    conversation?: ChowBotConversation
-    userId?: string
-    channel?: 'whatsapp'
-    toolCalls?: Array<{ name: string; input: ApiValue; result: ApiValue }>
-    status?: 'sent' | 'failed'
-    error?: string | null
-  }
-) {
-  const result = await sendWhatsAppText(env, toPhone, text)
-  if (db && opts?.conversation) {
-    const message = await createMessage(db, {
-      conversationId: opts.conversation.id, organizationId: opts.conversation.organization_id, siteId: opts.conversation.site_id, userId: opts.userId ?? opts.conversation.user_id, role: 'assistant', channel: 'whatsapp', content: text, metaMessageId: result.messageId ?? null, toolCalls: opts.toolCalls ?? null, status: result.success ? (opts.status ?? 'sent') : 'failed', error: result.success ? (opts.error ?? null) : (result.error ?? 'WhatsApp send failed'), }, opts.userId ?? opts.conversation.user_id)
-
-    if (result.success) {
-      // An exhausted balance is intentionally recorded as `charged: false`
-      // and does not block a reply that already left Meta. Accounting or
-      // query failures must remain visible on the durable sent message and
-      // propagate so the webhook cannot claim an unqualified success.
-      try {
-        await chargeFlatCredits(db, opts.conversation.organization_id, {
-          siteId: opts.conversation.site_id, action: 'whatsapp_free_text', idempotencyKey: result.messageId
-            ? `whatsapp-provider:${result.messageId}`
-            : `whatsapp-message:${message.id}`, })
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error)
-        const accountingError = `WhatsApp reply sent but credit accounting failed: ${reason}`
-        try {
-          await execute(
-            db, `UPDATE chowbot_messages SET error = ? WHERE id = ?`, [accountingError, message.id], )
-        } catch (recordError) {
-          const recordReason = recordError instanceof Error ? recordError.message : String(recordError)
-          throw new Error(`${accountingError}; durable message update failed: ${recordReason}`)
-        }
-        throw new Error(accountingError)
-      }
-    }
-  }
+async function reply(env: ApiRecord, toPhone: string, text: string) {
+  return await sendWhatsAppText(env, toPhone, text)
 }
 
 async function resolveUser(env: ApiRecord, from: string): Promise<UserRow | null> {
   const normalized = parseMetaMsisdn(from)
   return await findVerifiedAuthUserByPhone(env as CloudflareEnv, normalized)
-}
-
-async function runChowBotAndReply(
-  db: D1Database, env: ApiRecord, opts: {
-    toPhone: string
-    conversation: ChowBotConversation
-    organizationId: string
-    siteId: string
-    userId: string
-    memberId: string
-    userRole?: string
-    siteName: string
-    pendingMedia: { assetId: string; siteId: string } | null
-  }
-) {
-  const site = await queryFirst<{ default_currency: string | null }>(db, `SELECT default_currency FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`, [opts.siteId, opts.organizationId]
-  )
-  const messages = await getRecentAgentMessages(db, opts.conversation.id, opts.siteId, opts.userId)
-  let assistantText = ''
-  const result = await runChowBot({
-    db, env, orgId: opts.organizationId, siteId: opts.siteId, userId: opts.userId, memberId: opts.memberId, userRole: opts.userRole, siteName: opts.siteName, defaultCurrency: site?.default_currency || 'USD', messages, currentPage: 'whatsapp', channel: 'whatsapp', sessionId: opts.conversation.id, pendingMedia: opts.pendingMedia ?? undefined, onEvent: (ev) => {
-      if (ev.type === 'text') assistantText = ev.content ?? ''
-    }, })
-
-  await reply(db, env, opts.toPhone, assistantText || result.responseText, {
-    conversation: opts.conversation, userId: opts.userId, toolCalls: result.toolCalls, })
 }
 
 function parsePendingReplyState(raw: string | null | undefined): PendingWhatsAppReplyState | null {
@@ -281,42 +210,40 @@ async function listRecentGuestNotificationCandidates(db: D1Database, env: ApiRec
     threadId: r.threadId, siteId: r.siteId, organizationId: r.organizationId, locationId: r.locationId, label: `${submissionTypeLabel(r.submissionType)} from ${r.guestName}`, }))
 }
 
-// Issue #293 Section C's four-tier routing contract, applied only to messages from a
-// resolveUser-verified platform user (managers). Handles all I/O (lookups, // authorization, sends, channel-state persistence) around the pure decision function in
-// server/utils/whatsapp-reply-routing.ts. Returns `{ handled: false }` only when the
-// message should continue into the existing (unchanged) ChowBot dispatch flow — either
-// because it was explicitly ChowBot-directed, or because the manager hasn't finished the
-// pre-existing multi-site selection step yet (which also uses bare numeric replies, and
-// must keep first claim on them so it isn't shadowed by tier 3's disambiguation picker).
+// Issue #293 Section C direct-reply routing contract, applied only to messages from a
+// resolveUser-verified platform user (managers). Handles all I/O (lookups,
+// authorization, sends, channel-state persistence) around the pure decision function in
+// server/utils/whatsapp-reply-routing.ts.
 async function routeManagerWhatsAppMessage(
-  db: D1Database, env: ApiRecord, opts: {
+  db: D1Database,
+  env: ApiRecord,
+  opts: {
     message: WhatsAppMessage
     toPhone: string
     userId: string
     existingState: Awaited<ReturnType<typeof getChannelState>>
     messageId: string
-    sites: Array<{ id: string }>
-  }, ): Promise<{ handled: true } | { handled: false; effectiveText: string }> {
+  },
+): Promise<void> {
   const rawText = messageText(opts.message)
   const pendingState = parsePendingReplyState(opts.existingState?.pending_confirmation)
   const contextId = opts.message.context?.id ?? null
   const hasQuotedContext = Boolean(contextId)
-  const needsSiteSelection = !opts.existingState?.selected_site_id && opts.sites.length > 1
 
-  const clearPending = () => upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: null, lastInboundId: opts.messageId })
+  const clearPending = () =>
+    upsertChannelState(db, {
+      userId: opts.userId,
+      channel: 'whatsapp',
+      pendingConfirmation: null,
+      lastInboundId: opts.messageId,
+    })
 
-  async function resolveFreshDispatch(): Promise<
-    | { bypassToChowBotSiteSelection: true }
-    | {
-        bypassToChowBotSiteSelection: false
-        quotedMatch: 'authorized_thread_found' | 'unmatched' | null
-        quotedResolved: QuotedNotificationMatch | null
-        isChowBotDirected: boolean
-        recentNotificationCount: number
-        recentCandidates: DisambiguationCandidate[]
-      }
-  > {
-    const isChowBotDirected = isChowBotDirective(rawText)
+  async function resolveFreshDispatch(): Promise<{
+    quotedMatch: 'authorized_thread_found' | 'unmatched' | null
+    quotedResolved: QuotedNotificationMatch | null
+    recentNotificationCount: number
+    recentCandidates: DisambiguationCandidate[]
+  }> {
     let quotedResolved: QuotedNotificationMatch | null = null
     let quotedMatch: 'authorized_thread_found' | 'unmatched' | null = null
     if (hasQuotedContext) {
@@ -324,29 +251,29 @@ async function routeManagerWhatsAppMessage(
       quotedMatch = quotedResolved ? 'authorized_thread_found' : 'unmatched'
     }
 
-    if (!quotedResolved && !isChowBotDirected && needsSiteSelection) {
-      // Neither a correlated quoted reply nor an explicit ChowBot directive — this bare
-      // text is ambiguous between "pick a site" (pre-existing flow) and tier 3's
-      // guest-notification disambiguation. Site selection is a one-time bootstrap step
-      // that must not be shadowed by a same-shaped numeric picker.
-      return { bypassToChowBotSiteSelection: true }
-    }
-
     let recentCandidates: DisambiguationCandidate[] = []
-    if (!quotedResolved && !isChowBotDirected) {
+    if (!quotedResolved) {
       recentCandidates = await listRecentGuestNotificationCandidates(db, env, opts.userId)
     }
 
     return {
-      bypassToChowBotSiteSelection: false, quotedMatch, quotedResolved, isChowBotDirected, recentNotificationCount: recentCandidates.length, recentCandidates, }
+      quotedMatch,
+      quotedResolved,
+      recentNotificationCount: recentCandidates.length,
+      recentCandidates,
+    }
   }
 
   if (!pendingState) {
     const fresh = await resolveFreshDispatch()
-    if (fresh.bypassToChowBotSiteSelection) return { handled: false, effectiveText: rawText }
 
     const decision = decideWhatsAppReplyRouting({
-      hasQuotedContext, quotedMatch: fresh.quotedMatch, isChowBotDirected: fresh.isChowBotDirected, pendingState: null, recentNotificationCount: fresh.recentNotificationCount, text: rawText, })
+      hasQuotedContext,
+      quotedMatch: fresh.quotedMatch,
+      pendingState: null,
+      recentNotificationCount: fresh.recentNotificationCount,
+      text: rawText,
+    })
 
     switch (decision.action) {
       case 'start_confirm_send': {
@@ -356,18 +283,30 @@ async function routeManagerWhatsAppMessage(
           const match = fresh.quotedResolved!
           const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
           await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
-          return { handled: true }
+          return
         }
         const match = fresh.quotedResolved!
         const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
         const newState: PendingWhatsAppReplyState = {
-          kind: 'confirm_send', threadId: match.threadId, siteId: match.siteId, organizationId: match.organizationId, locationId: match.locationId, replyBody: trimmedText, guestEmailMasked, }
+          kind: 'confirm_send',
+          threadId: match.threadId,
+          siteId: match.siteId,
+          organizationId: match.organizationId,
+          locationId: match.locationId,
+          replyBody: trimmedText,
+          guestEmailMasked,
+        }
         const sendResult = await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
         if (!sendResult.success) {
           throw new Error(sendResult.error || 'Failed to send WhatsApp confirmation prompt')
         }
-        await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
-        return { handled: true }
+        await upsertChannelState(db, {
+          userId: opts.userId,
+          channel: 'whatsapp',
+          pendingConfirmation: newState,
+          lastInboundId: opts.messageId,
+        })
+        return
       }
       case 'start_disambiguation': {
         const newState: PendingWhatsAppReplyState = { kind: 'disambiguate', candidates: fresh.recentCandidates }
@@ -375,44 +314,70 @@ async function routeManagerWhatsAppMessage(
         if (!sendResult.success) {
           throw new Error(sendResult.error || 'Failed to send WhatsApp disambiguation prompt')
         }
-        await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState as unknown as JsonSerializable, lastInboundId: opts.messageId })
-        return { handled: true }
+        await upsertChannelState(db, {
+          userId: opts.userId,
+          channel: 'whatsapp',
+          pendingConfirmation: newState as unknown as JsonSerializable,
+          lastInboundId: opts.messageId,
+        })
+        return
       }
-      case 'ask_chowbot_or_quote': {
-        const sendResult = await sendWhatsAppText(env, opts.toPhone, ASK_CHOWBOT_OR_QUOTE_MESSAGE)
+      case 'prompt_quote_notification':
+      default: {
+        const sendResult = await sendWhatsAppText(env, opts.toPhone, PROMPT_QUOTE_NOTIFICATION_MESSAGE)
         if (!sendResult.success) {
           throw new Error(sendResult.error || 'Failed to send WhatsApp routing prompt')
         }
-        await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: null, lastInboundId: opts.messageId })
-        return { handled: true }
+        await upsertChannelState(db, {
+          userId: opts.userId,
+          channel: 'whatsapp',
+          pendingConfirmation: null,
+          lastInboundId: opts.messageId,
+        })
+        return
       }
-      case 'chowbot':
-        await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: null, lastInboundId: opts.messageId })
-        return { handled: false, effectiveText: stripChowBotPrefix(rawText) }
-      default:
-        // Unreachable when pendingState is null (the pending-state resume actions are
-        // only ever returned when pendingState is non-null) — kept for exhaustiveness.
-        return { handled: false, effectiveText: rawText }
     }
   }
 
   // A pending confirm_send / disambiguate / collect_reply state exists — resume it.
   if (pendingState.kind === 'confirm_send') {
-    const decision = decideWhatsAppReplyRouting({ hasQuotedContext: false, quotedMatch: null, isChowBotDirected: false, pendingState, recentNotificationCount: 0, text: rawText })
+    const decision = decideWhatsAppReplyRouting({
+      hasQuotedContext: false,
+      quotedMatch: null,
+      pendingState,
+      recentNotificationCount: 0,
+      text: rawText,
+    })
     if (decision.action === 'confirm_send_execute') {
       // Reauthorize before executing the reply to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
         env: env as CloudflareEnv,
-        phone: opts.toPhone, organizationId: pendingState.organizationId, siteId: pendingState.siteId, locationId: pendingState.locationId, })
+        phone: opts.toPhone,
+        organizationId: pendingState.organizationId,
+        siteId: pendingState.siteId,
+        locationId: pendingState.locationId,
+      })
       if (!authorized) {
         await clearPending()
         await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
-        return { handled: true }
+        return
       }
-      const actorMemberId = await resolveMemberId({ organizationId: pendingState.organizationId, userId: opts.userId, env })
+      const actorMemberId = await resolveMemberId({
+        organizationId: pendingState.organizationId,
+        userId: opts.userId,
+        env,
+      })
       const result = actorMemberId
         ? await executeGuestThreadOperation(db, {
-            threadId: pendingState.threadId, siteId: pendingState.siteId, action: 'reply', actorUserId: opts.userId, actorMemberId, body: pendingState.replyBody, env, idempotencyKey: `whatsapp:${opts.messageId}:reply`, })
+            threadId: pendingState.threadId,
+            siteId: pendingState.siteId,
+            action: 'reply',
+            actorUserId: opts.userId,
+            actorMemberId,
+            body: pendingState.replyBody,
+            env,
+            idempotencyKey: `whatsapp:${opts.messageId}:reply`,
+          })
         : { ok: false as const, status: 404 as const, reason: 'thread_not_found' as const }
       await clearPending()
       if (result.ok) {
@@ -421,25 +386,35 @@ async function routeManagerWhatsAppMessage(
       } else {
         await sendWhatsAppText(env, opts.toPhone, buildReplyFailedMessage(result.reason))
       }
-      return { handled: true }
+      return
     }
     // Non-affirmative reply: drop the pending confirmation without sending, then treat
     // this message as an independent fresh dispatch (issue #293: "clear the pending
     // state... let normal routing resume for that message").
     await clearPending()
   } else if (pendingState.kind === 'disambiguate') {
-    const decision = decideWhatsAppReplyRouting({ hasQuotedContext: false, quotedMatch: null, isChowBotDirected: false, pendingState, recentNotificationCount: 0, text: rawText })
+    const decision = decideWhatsAppReplyRouting({
+      hasQuotedContext: false,
+      quotedMatch: null,
+      pendingState,
+      recentNotificationCount: 0,
+      text: rawText,
+    })
     if (decision.action === 'disambiguation_pick') {
       const chosen = pendingState.candidates[decision.index - 1]!
 
       // Reauthorize before disambiguation transition to ensure the member still has access
       const authorized = await isAuthorizedWhatsAppRecipient(db, {
         env: env as CloudflareEnv,
-        phone: opts.toPhone, organizationId: chosen.organizationId, siteId: chosen.siteId, locationId: chosen.locationId, })
+        phone: opts.toPhone,
+        organizationId: chosen.organizationId,
+        siteId: chosen.siteId,
+        locationId: chosen.locationId,
+      })
       if (!authorized) {
         await clearPending()
         await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
-        return { handled: true }
+        return
       }
 
       const chosenThread = await getGuestThreadById(db, chosen.threadId, chosen.siteId)
@@ -449,176 +424,99 @@ async function routeManagerWhatsAppMessage(
       if (!chosenGuestEmail) {
         await clearPending()
         await sendWhatsAppText(env, opts.toPhone, 'That guest has no email on file, so a reply cannot be sent.')
-        return { handled: true }
+        return
       }
       const guestEmailMasked = maskEmailForDisplay(chosenGuestEmail)
-      const newState: PendingWhatsAppReplyState = { kind: 'collect_reply', threadId: chosen.threadId, siteId: chosen.siteId, organizationId: chosen.organizationId, locationId: chosen.locationId, guestEmailMasked }
+      const newState: PendingWhatsAppReplyState = {
+        kind: 'collect_reply',
+        threadId: chosen.threadId,
+        siteId: chosen.siteId,
+        organizationId: chosen.organizationId,
+        locationId: chosen.locationId,
+        guestEmailMasked,
+      }
       const sendResult = await sendWhatsAppText(env, opts.toPhone, buildCollectReplyPrompt(guestEmailMasked))
       if (!sendResult.success) throw new Error(sendResult.error || 'Failed to send WhatsApp reply prompt')
-      await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
-      return { handled: true }
+      await upsertChannelState(db, {
+        userId: opts.userId,
+        channel: 'whatsapp',
+        pendingConfirmation: newState,
+        lastInboundId: opts.messageId,
+      })
+      return
     }
     await clearPending()
   } else {
     // collect_reply: any non-empty text becomes the reply body, moving to confirm_send.
     const newState: PendingWhatsAppReplyState = {
-      kind: 'confirm_send', threadId: pendingState.threadId, siteId: pendingState.siteId, organizationId: pendingState.organizationId, locationId: pendingState.locationId, replyBody: rawText, guestEmailMasked: pendingState.guestEmailMasked, }
+      kind: 'confirm_send',
+      threadId: pendingState.threadId,
+      siteId: pendingState.siteId,
+      organizationId: pendingState.organizationId,
+      locationId: pendingState.locationId,
+      replyBody: rawText,
+      guestEmailMasked: pendingState.guestEmailMasked,
+    }
     const sendResult = await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(pendingState.guestEmailMasked))
     if (!sendResult.success) throw new Error(sendResult.error || 'Failed to send WhatsApp confirmation prompt')
-    await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
-    return { handled: true }
+    await upsertChannelState(db, {
+      userId: opts.userId,
+      channel: 'whatsapp',
+      pendingConfirmation: newState,
+      lastInboundId: opts.messageId,
+    })
+    return
   }
 
   // Cancelled confirm_send/disambiguate above — redispatch this same message fresh.
   const fresh = await resolveFreshDispatch()
-  if (fresh.bypassToChowBotSiteSelection) return { handled: false, effectiveText: rawText }
 
   const decision = decideWhatsAppReplyRouting({
-    hasQuotedContext, quotedMatch: fresh.quotedMatch, isChowBotDirected: fresh.isChowBotDirected, pendingState: null, recentNotificationCount: fresh.recentNotificationCount, text: rawText, })
+    hasQuotedContext,
+    quotedMatch: fresh.quotedMatch,
+    pendingState: null,
+    recentNotificationCount: fresh.recentNotificationCount,
+    text: rawText,
+  })
 
   switch (decision.action) {
     case 'start_confirm_send': {
       const match = fresh.quotedResolved!
       const guestEmailMasked = maskEmailForDisplay(match.guestEmail)
       const newState: PendingWhatsAppReplyState = {
-        kind: 'confirm_send', threadId: match.threadId, siteId: match.siteId, organizationId: match.organizationId, locationId: match.locationId, replyBody: rawText, guestEmailMasked, }
-      await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState, lastInboundId: opts.messageId })
+        kind: 'confirm_send',
+        threadId: match.threadId,
+        siteId: match.siteId,
+        organizationId: match.organizationId,
+        locationId: match.locationId,
+        replyBody: rawText,
+        guestEmailMasked,
+      }
+      await upsertChannelState(db, {
+        userId: opts.userId,
+        channel: 'whatsapp',
+        pendingConfirmation: newState,
+        lastInboundId: opts.messageId,
+      })
       await sendWhatsAppText(env, opts.toPhone, buildConfirmSendPrompt(guestEmailMasked))
-      return { handled: true }
+      return
     }
     case 'start_disambiguation': {
       const newState: PendingWhatsAppReplyState = { kind: 'disambiguate', candidates: fresh.recentCandidates }
-      await upsertChannelState(db, { userId: opts.userId, channel: 'whatsapp', pendingConfirmation: newState as unknown as JsonSerializable, lastInboundId: opts.messageId })
+      await upsertChannelState(db, {
+        userId: opts.userId,
+        channel: 'whatsapp',
+        pendingConfirmation: newState as unknown as JsonSerializable,
+        lastInboundId: opts.messageId,
+      })
       await sendWhatsAppText(env, opts.toPhone, buildDisambiguationPrompt(fresh.recentCandidates))
-      return { handled: true }
-    }
-    case 'chowbot':
-      return { handled: false, effectiveText: stripChowBotPrefix(rawText) }
-    default:
-      await sendWhatsAppText(env, opts.toPhone, ASK_CHOWBOT_OR_QUOTE_MESSAGE)
-      return { handled: true }
-  }
-}
-
-async function handleManagerChowBotMessage(
-  db: D1Database, env: ApiRecord, opts: {
-    user: UserRow
-    message: WhatsAppMessage
-    toPhone: string
-    existingState: Awaited<ReturnType<typeof getChannelState>>
-    sites: Array<{ id: string; organization_id: string; brand_name: string | null; default_currency: string | null; role: string }>
-    text: string
-  }, ): Promise<void> {
-  const { user, message, existingState, sites, toPhone } = opts
-  if (!sites.length) {
-    await reply(null, env, toPhone, 'No KrabiClaw sites are available for this account.')
-    return
-  }
-
-  let selectedSiteId = existingState?.selected_site_id ?? null
-  let activeConversationId = existingState?.active_conversation_id ?? null
-  const text = opts.text
-  let selectedSiteFromList = false
-
-  const pendingMedia = existingState?.pending_asset_id && existingState.pending_asset_site_id
-    ? { assetId: existingState.pending_asset_id, siteId: existingState.pending_asset_site_id }
-    : null
-
-  if (!selectedSiteId && sites.length > 1) {
-    const selectedIndex = /^\d+$/.test(text) ? Number(text) - 1 : -1
-    const selected = sites[selectedIndex]
-    if (!selected) {
-      await upsertChannelState(db, {
-        userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
-      await reply(null, env, toPhone, siteListReply(sites))
       return
     }
-    selectedSiteId = selected.id
-    selectedSiteFromList = true
-  }
-
-  if (!selectedSiteId && sites.length === 1) {
-    selectedSiteId = sites[0]!.id
-  }
-  if (!selectedSiteId) {
-    await reply(null, env, toPhone, 'Choose a site before using ChowBot.')
-    return
-  }
-
-  const site = await getSiteForMember(db, env, selectedSiteId, user.id)
-  if (!site) {
-    await upsertChannelState(db, {
-      userId: user.id, channel: 'whatsapp', selectedSiteId: null, activeConversationId: null, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
-    await reply(null, env, toPhone, 'That site is no longer available. Reply again to choose a site.')
-    return
-  }
-  const siteName = site.brand_name?.trim()
-  if (!siteName) {
-    await reply(null, env, toPhone, 'This site is missing its configured brand name. Update the site identity before using ChowBot.')
-    return
-  }
-
-  if (selectedSiteFromList && message.type === 'text' && /^\d+$/.test(text)) {
-    await upsertChannelState(db, {
-      userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId: null, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
-    await reply(null, env, toPhone, `ChowBot is now connected to ${siteName}. What should we work on?`)
-    return
-  }
-
-  const firstText = text || `WhatsApp ${message.type} message`
-  let conversation = activeConversationId
-    ? await getConversation(db, activeConversationId, site.id, user.id)
-    : null
-  if (!conversation) {
-    conversation = await getOrCreateConversation(db, {
-      organizationId: site.organization_id, siteId: site.id, userId: user.id, firstMessage: firstText, activeChannel: 'whatsapp', })
-    activeConversationId = conversation.id
-  }
-
-  if (message.type === 'image' || message.type === 'document') {
-    const mediaId = message.type === 'image' ? message.image?.id : message.document?.id
-    if (!mediaId) {
-      await reply(db, env, toPhone, 'WhatsApp did not include a media ID for that file.', { conversation, userId: user.id, status: 'failed', error: 'Missing media ID' })
+    case 'prompt_quote_notification':
+    default: {
+      await sendWhatsAppText(env, opts.toPhone, PROMPT_QUOTE_NOTIFICATION_MESSAGE)
       return
     }
-
-    try {
-      const media = await fetchWhatsAppMedia(env, mediaId)
-      const asset = await saveInboundMediaAsset(db, env, {
-        organizationId: site.organization_id, siteId: site.id, userId: user.id, bytes: media.bytes, mimeType: media.mimeType, fileSize: media.fileSize, filename: message.type === 'document' ? message.document?.filename : undefined, })
-
-      const mediaMessage = await createMessage(db, {
-        conversationId: conversation.id, organizationId: site.organization_id, siteId: site.id, userId: user.id, role: 'user', channel: 'whatsapp', content: text || `Uploaded ${message.type}`, mediaAssetId: asset.id, metaMessageId: message.id, }, user.id)
-
-      await upsertChannelState(db, {
-        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: mediaMessage.id, pendingConfirmation: { intent: 'pending_media' }, lastInboundId: message.id, })
-
-      await runChowBotAndReply(db, env, {
-        toPhone, conversation, organizationId: site.organization_id, siteId: site.id, userId: user.id, memberId: site.member_id, userRole: site.role, siteName, pendingMedia: { assetId: asset.id, siteId: site.id }, })
-
-      await upsertChannelState(db, {
-        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
-      return
-    } catch (err) {
-      await upsertChannelState(db, {
-        userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
-      await reply(db, env, toPhone, 'Failed to process the media file. Please try again.', { conversation, userId: user.id, status: 'failed', error: String(err) })
-      return
-    }
-  }
-
-  try {
-    await createMessage(db, {
-      conversationId: conversation.id, organizationId: site.organization_id, siteId: site.id, userId: user.id, role: 'user', channel: 'whatsapp', content: text || firstText, metaMessageId: message.id, }, user.id)
-
-    await runChowBotAndReply(db, env, {
-      toPhone, conversation, userId: user.id, memberId: site.member_id, organizationId: site.organization_id, siteId: site.id, userRole: site.role, siteName, pendingMedia, })
-
-    await upsertChannelState(db, {
-      userId: user.id, channel: 'whatsapp', selectedSiteId: site.id, activeConversationId, pendingMessageId: null, pendingConfirmation: null, lastInboundId: message.id, })
-  } catch (err) {
-    await reply(db, env, toPhone, 'Sorry, something went wrong. Please try again.', {
-      conversation, userId: user.id, status: 'failed', error: String(err), })
   }
 }
 
@@ -638,7 +536,15 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
           const adapter = getAdapter(match.submissionType)
           const thread = await ensureGuestThread(db, adapter, match.submissionId)
           const entry = await appendEntry(db, {
-            threadId: thread.id, organizationId: match.organizationId, siteId: match.siteId, kind: 'message', actorKind: 'guest', channel: 'whatsapp', body: text, externalId: message.id, })
+            threadId: thread.id,
+            organizationId: match.organizationId,
+            siteId: match.siteId,
+            kind: 'message',
+            actorKind: 'guest',
+            channel: 'whatsapp',
+            body: text,
+            externalId: message.id,
+          })
           if (entry.created) {
             const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
             await updateThreadProjection(db, thread.id, { conversationState })
@@ -648,7 +554,18 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             if (source) {
               const summary = adapter.summarize(source)
               await notifyGuestThreadReply(env, db, {
-                organizationId: match.organizationId, siteId: match.siteId, locationId: summary.locationId, threadId: thread.id, submissionType: match.submissionType, submissionId: match.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'whatsapp', messagePreview: text, })
+                organizationId: match.organizationId,
+                siteId: match.siteId,
+                locationId: summary.locationId,
+                threadId: thread.id,
+                submissionType: match.submissionType,
+                submissionId: match.submissionId,
+                guestName: summary.guestName,
+                guestEmail: summary.guestEmail,
+                guestPhone: summary.guestPhone,
+                inboundChannel: 'whatsapp',
+                messagePreview: text,
+              })
             }
           }
         } catch (err) {
@@ -657,13 +574,13 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
       }
       return
     }
-    await reply(null, env, toPhone, `To continue, open KrabiClaw: ${platformLoginUrl(env)}`)
+    await reply(env, toPhone, `To continue, open KrabiClaw: ${platformLoginUrl(env)}`)
     return
   }
 
   // Idempotency check: skip if this message was already processed. Checked before the
-  // new manager-routing tiers (not just the ChowBot tail) since those tiers also send
-  // replies and mutate channel state — a webhook retry must not run them twice either.
+  // manager-routing tiers since those tiers also send replies and mutate channel state —
+  // a webhook retry must not run them twice either.
   const messageId = message.id || message.message_id
   const existingState = await getChannelState(db, user.id, 'whatsapp')
   if (existingState?.last_inbound_id === messageId) {
@@ -671,18 +588,14 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
     return
   }
 
-  const sites = await listSitesForMember(db, env, user.id)
-
-  // Issue #293 Section C: quoted-notification replies, ChowBot directives, and
-  // guest-notification disambiguation take priority over the default "always ChowBot"
-  // behavior. Only messages this returns `{ handled: false }` for continue into the
-  // pre-existing ChowBot dispatch flow below, unchanged.
-  const routed = await routeManagerWhatsAppMessage(db, env, {
-    message, toPhone, userId: user.id, existingState, messageId: messageId ?? message.id, sites, })
-  if (routed.handled) return
-
-  await handleManagerChowBotMessage(db, env, {
-    user, message, toPhone, existingState, sites, text: routed.effectiveText, })
+  // Issue #293 Section C: quoted-notification replies and guest-notification disambiguation.
+  await routeManagerWhatsAppMessage(db, env, {
+    message,
+    toPhone,
+    userId: user.id,
+    existingState,
+    messageId: messageId ?? message.id,
+  })
 }
 
 function formatStatusError(errors: WhatsAppStatusError[] | undefined): string | null {
