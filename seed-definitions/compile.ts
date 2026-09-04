@@ -193,6 +193,8 @@ export function compileCuratedSiteFixture(
       available: product.available,
       sortOrder: product.sortOrder,
       featured: product.featured ?? false,
+      // Non-featured products default to 0; they're filtered out before any
+      // sort-by-featuredSortOrder pass so the value is never used in practice.
       featuredSortOrder: product.featuredSortOrder ?? 0,
     }
   })

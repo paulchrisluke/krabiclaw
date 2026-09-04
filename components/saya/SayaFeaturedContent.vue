@@ -22,6 +22,7 @@
         v-for="(item, i) in items"
         :key="i"
         :to="localePath(item.href || '')"
+        data-carousel-item
         class="group relative flex w-[85vw] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-2xl bg-elevated no-underline text-default transition hover:opacity-90 sm:w-[45vw] lg:w-[30vw]"
       >
         <!-- Image (when present) -->
@@ -141,11 +142,14 @@ const linkTarget = computed(() => props.data?.linkTarget || '')
 const trackRef = ref<HTMLElement | null>(null)
 const activeIndex = ref(0)
 
+function cards(): HTMLElement[] {
+  return Array.from(trackRef.value?.querySelectorAll<HTMLElement>('[data-carousel-item]') ?? [])
+}
+
 function scrollToIndex(index: number) {
+  const card = cards()[index]
   const track = trackRef.value
-  if (!track) return
-  const card = track.children[index] as HTMLElement | undefined
-  if (!card) return
+  if (!card || !track) return
   track.scrollTo({ left: card.offsetLeft - track.offsetLeft, behavior: 'smooth' })
 }
 
@@ -153,7 +157,9 @@ function scroll(direction: -1 | 1) {
   scrollToIndex(Math.max(0, Math.min(items.value.length - 1, activeIndex.value + direction)))
 }
 
-// Track active index via IntersectionObserver so dots reflect scroll position.
+// IntersectionObserver drives active dash state.
+// Pick the entry with the highest intersectionRatio so fast swipes
+// don't clobber activeIndex with an intermediate card.
 let observer: IntersectionObserver | null = null
 
 function setupObserver() {
@@ -162,18 +168,20 @@ function setupObserver() {
   if (!track) return
   observer = new IntersectionObserver(
     (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          const idx = Array.from(track.children).indexOf(entry.target as HTMLElement)
-          if (idx !== -1) activeIndex.value = idx
-        }
-      }
+      const best = entries
+        .filter(e => e.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+      if (!best) return
+      const idx = cards().indexOf(best.target as HTMLElement)
+      if (idx !== -1) activeIndex.value = idx
     },
     { root: track, threshold: 0.5 }
   )
-  Array.from(track.children).forEach(child => observer!.observe(child))
+  cards().forEach(card => observer!.observe(card))
 }
 
+// Re-run when items list changes (e.g. parent swaps location data).
+watch(items, () => nextTick(setupObserver))
 onMounted(setupObserver)
 onBeforeUnmount(() => observer?.disconnect())
 </script>
