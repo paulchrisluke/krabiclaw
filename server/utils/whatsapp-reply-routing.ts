@@ -1,5 +1,5 @@
 // Pure decision logic for issue #293 Section C's "direct-WhatsApp-reply routing
-// contract" — deliberately free of D1/network I/O so the four-tier priority order
+// contract" — deliberately free of D1/network I/O so the three-tier priority order
 // (and the pending-state resume paths layered on top of it) can be unit tested without
 // a live webhook or database. server/api/whatsapp/webhook.post.ts is the only caller;
 // it resolves the I/O inputs below (notification/thread lookups, authorization,
@@ -10,10 +10,9 @@
 // the pre-existing findSubmissionByPhone path elsewhere in the webhook:
 //   1. Quoted operational notification (message.context.id) that resolves to an
 //      authorized, correlated guest thread.
-//   2. Explicit "ChowBot: " prefix (or bare "ChowBot").
-//   3. Unquoted text while recent (24h) guest notifications exist for the manager's
+//   2. Unquoted text while recent (24h) guest notifications exist for the manager's
 //      authorized sites — numbered disambiguation.
-//   4. Unquoted text with no relevant guest context — ask if they meant ChowBot.
+//   3. Unquoted text with no relevant guest context — prompt to quote notification.
 // A pending confirm-send or disambiguation/collect-reply state (stored via the existing
 // chowbot_channel_state.pending_confirmation column) takes priority over all of the
 // above until it resolves or is explicitly abandoned.
@@ -61,8 +60,6 @@ export interface RoutingDecisionInput {
    * yet, treat as unmatched rather than erroring").
    */
   quotedMatch: 'authorized_thread_found' | 'unmatched' | null
-  /** Message text starts with the "ChowBot" directive (case-insensitive, optional colon). */
-  isChowBotDirected: boolean
   /** Existing multi-turn state for this user's whatsapp channel, if any. */
   pendingState: PendingWhatsAppReplyState | null
   /** Count of candidate recent (24h) guest notifications for tier 3, scoped to the manager's authorized sites. */
@@ -72,11 +69,10 @@ export interface RoutingDecisionInput {
 }
 
 export type RoutingDecision =
-  // Fresh dispatch (no pending state), tiers 1-4:
+  // Fresh dispatch (no pending state), tiers 1-3:
   | { action: 'start_confirm_send' }
-  | { action: 'chowbot' }
   | { action: 'start_disambiguation' }
-  | { action: 'ask_chowbot_or_quote' }
+  | { action: 'prompt_quote_notification' }
   // Resuming a pending confirm_send:
   | { action: 'confirm_send_execute' }
   | { action: 'confirm_send_cancel_and_redispatch' }
@@ -104,16 +100,6 @@ export function isAffirmativeReply(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
   if (!normalized) return false
   return AFFIRMATIVE_PHRASES.has(normalized)
-}
-
-/** True when `text` is (only) the "ChowBot" directive, with or without a trailing colon/message. */
-export function isChowBotDirective(text: string): boolean {
-  return /^chowbot\b/i.test(text.trim())
-}
-
-/** Strips a leading "ChowBot" / "ChowBot: " prefix, leaving the rest of the message for the assistant. */
-export function stripChowBotPrefix(text: string): string {
-  return text.trim().replace(/^chowbot\s*:?\s*/i, '').trim()
 }
 
 /**
@@ -148,7 +134,7 @@ export function buildDisambiguationPrompt(candidates: DisambiguationCandidate[])
   return [
     'Reply to which?',
     ...lines,
-    `Or reply "ChowBot" to talk to the assistant instead.`,
+    'Reply with a number to select, or quote a notification to reply directly.',
   ].join('\n')
 }
 
@@ -162,15 +148,15 @@ export function buildReplyFailedMessage(error: string): string {
   return `Reply failed to send by email: ${error}`
 }
 
-export const ASK_CHOWBOT_OR_QUOTE_MESSAGE =
-  'Did you want to talk to ChowBot? Reply "ChowBot" to start, or quote a notification to reply to a guest.'
+export const PROMPT_QUOTE_NOTIFICATION_MESSAGE =
+  'To reply to a guest, please quote their notification message. To manage your site, please open your KrabiClaw dashboard.'
 
 export function buildCollectReplyPrompt(guestEmailMasked: string): string {
   return `Type your reply now — it will be emailed to ${guestEmailMasked}.`
 }
 
 /**
- * The pure four-tier + pending-state decision tree. All I/O (notification/thread
+ * The pure three-tier + pending-state decision tree. All I/O (notification/thread
  * lookups, authorization, sends, state persistence) happens in the caller; this
  * function only decides *what should happen* given the resolved inputs.
  */
@@ -198,17 +184,11 @@ export function decideWhatsAppReplyRouting(input: RoutingDecisionInput): Routing
     return { action: 'start_confirm_send' }
   }
 
-  // Tier 2: explicit ChowBot directive (including a quoted message that didn't match
-  // anything in tier 1 but is otherwise ChowBot-directed).
-  if (input.isChowBotDirected) {
-    return { action: 'chowbot' }
-  }
-
-  // Tier 3: unquoted text with recent guest notifications in scope.
+  // Tier 2: unquoted text with recent guest notifications in scope.
   if (input.recentNotificationCount > 0) {
     return { action: 'start_disambiguation' }
   }
 
-  // Tier 4: unquoted text, no relevant guest context — never silently assume ChowBot.
-  return { action: 'ask_chowbot_or_quote' }
+  // Tier 3: unquoted text, no relevant guest context.
+  return { action: 'prompt_quote_notification' }
 }

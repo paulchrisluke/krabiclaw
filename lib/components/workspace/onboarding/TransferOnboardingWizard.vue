@@ -41,8 +41,8 @@
       </div>
     </div>
 
-    <!-- Chat transcript uses the same scroll and message layout as every ChowBot surface. -->
-    <ChowBotConversation
+    <!-- Chat transcript uses the same scroll and message layout as every conversation surface. -->
+    <ConversationShell
       v-else
       :messages="messages"
       input=""
@@ -189,13 +189,13 @@
                 </div>
         </div>
       </template>
-    </ChowBotConversation>
+    </ConversationShell>
   </div>
 </template>
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
-import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
+import ConversationShell from '~/components/conversation/ConversationShell.vue'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 const dashboardApi = useDashboardApi()
