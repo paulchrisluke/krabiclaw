@@ -83,10 +83,7 @@
         @remove="removeEditing"
       >
         <UFormField v-if="editingId && translationLocales.length" label="Language">
-          <select v-model="locale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
-            <option value="en">en</option>
-            <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
-          </select>
+          <USelect v-model="locale" :items="localeItems" class="w-full" aria-label="Field language" />
         </UFormField>
 
         <template v-if="locale === 'en'">
@@ -96,46 +93,15 @@
             dish by, so it is the thing you see first and largest.
           -->
           <UFormField v-if="editingId && locationId">
-            <MediaPicker
+            <DashboardCoverPhotoField
               :site-id="siteId"
               :location-id="locationId"
               :model-value="form.image_asset_id"
-              accept="image"
+              :preview-url="editingImage?.public_url ?? null"
+              :preview-alt="editingImage?.alt_text || form.name"
               title="Dish photo"
+              testid="product-photo"
               @update:model-value="setPrimaryImage"
-            >
-              <div class="group relative overflow-hidden rounded-xl" data-testid="product-photo">
-                <img
-                  v-if="editingImage"
-                  :src="editingImage.public_url"
-                  :alt="editingImage.alt_text || form.name"
-                  class="aspect-[4/3] w-full bg-elevated object-cover"
-                >
-                <div
-                  v-else
-                  class="grid aspect-[4/3] w-full place-items-center rounded-xl border border-dashed border-default bg-elevated text-center"
-                >
-                  <div>
-                    <UIcon name="i-lucide-images" class="mx-auto size-8 text-muted" />
-                    <p class="mt-2 text-sm font-medium text-highlighted">Add a photo</p>
-                    <p class="mt-1 text-xs text-muted">Browse your media library</p>
-                  </div>
-                </div>
-                <span
-                  v-if="editingImage"
-                  class="absolute bottom-3 right-3 rounded-full bg-default/90 px-3 py-1.5 text-xs font-medium text-highlighted shadow-sm"
-                >Change</span>
-              </div>
-            </MediaPicker>
-            <UButton
-              v-if="editingImage"
-              label="Remove photo"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              class="mt-2"
-              data-testid="product-photo-remove"
-              @click="setPrimaryImage(null)"
             />
           </UFormField>
 
@@ -185,7 +151,74 @@
             <UInput v-model="form.order_url" type="url" placeholder="https://…" class="w-full" />
           </UFormField>
           <UFormField label="Tags">
-            <UInput v-model="form.tags_text" placeholder="tag one, tag two" class="w-full" />
+            <UInputTags
+              v-model="form.tags"
+              placeholder="Add a tag"
+              :max="PRODUCT_LIMITS.tags"
+              :max-length="PRODUCT_LIMITS.tag"
+              delimiter=","
+              add-on-blur
+              add-on-paste
+              class="w-full"
+            />
+          </UFormField>
+
+          <!--
+            Details are the labelled facts under the dish on the public page —
+            allergens, ingredients, spice level. They arrive from the menu
+            import and they publish, so the tenant has to be able to reach them.
+            The stored kebab-case key is derived from the label rather than
+            typed: it is an identifier no customer ever sees.
+          -->
+          <UFormField
+            label="Details"
+            description="Extra facts shown under this item on your site."
+          >
+            <div class="space-y-3">
+              <div
+                v-for="(group, index) in form.details"
+                :key="index"
+                class="space-y-2 rounded-lg border border-default p-3"
+                :data-testid="`product-detail-${index}`"
+              >
+                <div class="flex items-center gap-2">
+                  <UInput
+                    v-model="group.label"
+                    placeholder="Allergens"
+                    :maxlength="PRODUCT_LIMITS.detailLabel"
+                    class="flex-1"
+                    aria-label="Detail name"
+                  />
+                  <UButton
+                    icon="i-lucide-trash-2"
+                    color="neutral"
+                    variant="ghost"
+                    :aria-label="`Remove ${group.label || 'detail'}`"
+                    :data-testid="`product-detail-remove-${index}`"
+                    @click="form.details.splice(index, 1)"
+                  />
+                </div>
+                <UInputTags
+                  v-model="group.values"
+                  placeholder="Add a value"
+                  :max="PRODUCT_LIMITS.detailValues"
+                  :max-length="PRODUCT_LIMITS.detailValue"
+                  delimiter=","
+                  add-on-blur
+                  add-on-paste
+                  class="w-full"
+                />
+              </div>
+              <UButton
+                v-if="form.details.length < PRODUCT_LIMITS.detailGroups"
+                label="Add a detail"
+                icon="i-lucide-plus"
+                color="neutral"
+                variant="soft"
+                data-testid="product-detail-add"
+                @click="form.details.push({ key: null, label: '', values: [] })"
+              />
+            </div>
           </UFormField>
 
           <div class="grid grid-cols-3 gap-3">
@@ -219,8 +252,11 @@
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
-import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
+import DashboardCoverPhotoField from '~/components/dashboard/DashboardCoverPhotoField.vue'
 import type { Product, ProductCategory } from '~/server/types/products'
+import type { ProductDetailDraft } from '~/utils/product-fields'
+import { fromProductDetailDrafts, normalizeProductTags, toProductDetailDrafts } from '~/utils/product-fields'
+import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
 import { getErrorMessage } from '~/utils/errors'
@@ -380,6 +416,7 @@ const saving = ref(false)
 const removing = ref(false)
 const locale = ref('en')
 const translationLocales = ref<string[]>([])
+const localeItems = computed(() => ['en', ...translationLocales.value])
 const localizedFields = ref({ name: '', description: '', seo_title: '', seo_description: '' })
 /** The three states the server accepts; nothing else is representable. */
 type PriceMode = 'amount' | 'wording' | 'none'
@@ -396,7 +433,8 @@ const form = reactive({
   price_note: '',
   description: '',
   order_url: '',
-  tags_text: '',
+  tags: [] as string[],
+  details: [] as ProductDetailDraft[],
   is_visible: true,
   available: true,
   featured: false,
@@ -410,7 +448,8 @@ function resetForm() {
   form.price_note = ''
   form.description = ''
   form.order_url = ''
-  form.tags_text = ''
+  form.tags = []
+  form.details = []
   form.is_visible = true
   form.available = true
   form.featured = false
@@ -434,7 +473,8 @@ function openExisting(item: { row: Product }) {
   form.price_mode = product.price !== null ? 'amount' : (form.price_note ? 'wording' : 'none')
   form.description = product.description
   form.order_url = product.order_url ?? ''
-  form.tags_text = product.tags.join(', ')
+  form.tags = [...product.tags]
+  form.details = toProductDetailDrafts(product.details)
   form.is_visible = product.is_visible
   form.available = product.available
   form.featured = product.featured
@@ -446,8 +486,7 @@ function payload() {
   const price = form.price_mode === 'amount'
     ? { amount_minor: majorAmountToMinor(form.price_major, currency), currency, unit: 'item' as const, tax_behavior: 'unspecified' as const }
     : null
-  const existing = products.value.find(row => row.id === editingId.value)
-  const details = (existing?.details ?? []).filter(detail => detail.key !== 'price-note')
+  const details = fromProductDetailDrafts(form.details)
   // Wording is dropped unless it is the chosen mode, so switching to an amount
   // cannot leave a stale note behind for the server to reject.
   const priceNote = form.price_mode === 'wording' ? form.price_note.trim() : ''
@@ -456,7 +495,7 @@ function payload() {
     description: form.description,
     price,
     order_url: form.order_url || null,
-    tags: form.tags_text.split(',').map(tag => tag.trim()).filter(Boolean),
+    tags: normalizeProductTags(form.tags),
     details: priceNote ? [...details, { key: 'price-note', label: 'Price', values: [priceNote] }] : details,
     is_visible: form.is_visible,
     available: form.available,

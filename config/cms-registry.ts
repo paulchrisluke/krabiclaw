@@ -210,7 +210,13 @@ export const ALWAYS_ON_FEATURES: readonly ProductFeature[] = [
 // Real business-module defaults only — content managers are handled uniformly via
 // ALWAYS_ON_FEATURES above, not per-vertical here.
 const verticalDefaultFeatures: Record<SiteVertical, readonly ProductFeature[]> = {
-  restaurant: ['products', 'reservations', 'ordering'],
+  // A restaurant that also runs experiences — a tasting menu, a chef's table, a
+  // cooking class — is an ordinary restaurant, not a hybrid needing configuration.
+  // Both verticals share the same Saya template and the same products table; the
+  // real difference between them is vocabulary (menu vs products), not which
+  // modules exist. Leaving experiences out here left live restaurants with
+  // experience rows and no CMS route to reach them.
+  restaurant: ['products', 'reservations', 'ordering', 'experiences'],
   experience: ['experiences', 'reservations'],
   professional_service: ['services'],
 }
