@@ -3,7 +3,7 @@
 // Client content belongs in ignored client-imports/, never in the public repository.
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
-import { chmod, readFile, writeFile } from 'node:fs/promises'
+import { open, readFile, rename, rm } from 'node:fs/promises'
 import { isDeepStrictEqual, parseArgs } from 'node:util'
 import { normalizeTenantPageBlocks } from '../utils/tenant-page-blocks.ts'
 
@@ -52,9 +52,15 @@ async function authorize() {
         if (!response.ok) throw new Error(`OAuth token exchange returned HTTP ${response.status}`)
         const token = await response.json()
         if (!token.access_token || !Number.isFinite(token.expires_in)) throw new Error('OAuth response omitted access_token or expires_in')
-        await writeFile(options['token-file'], JSON.stringify({ origin: base.origin,
-          access_token: token.access_token, expires_at: Date.now() + token.expires_in * 1000 }), { mode: 0o600 })
-        await chmod(options['token-file'], 0o600)
+        const temporaryPath = `${options['token-file']}.${randomBytes(16).toString('hex')}.tmp`
+        const file = await open(temporaryPath, 'wx', 0o600)
+        try {
+          try {
+            await file.writeFile(JSON.stringify({ origin: base.origin,
+              access_token: token.access_token, expires_at: Date.now() + token.expires_in * 1000 }))
+          } finally { await file.close() }
+          await rename(temporaryPath, options['token-file'])
+        } finally { await rm(temporaryPath, { force: true }) }
         res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' }).end('Authorization saved locally. You can close this tab.')
         server.close(); clearTimeout(timeout); resolve()
       } catch (error) {
@@ -124,8 +130,8 @@ async function publish() {
     return normalizeTenantPageBlocks(blocks).map(({ id, ...block }) => block)
   }
   async function verifyPage(actual, intended) {
-    if (actual.path !== intended.path || actual.title !== intended.title) throw new Error(`Page metadata differs: ${intended.path}`)
     const { page } = await call('get_tenant_page', { variant_id: actual.id })
+    if (page.page_id !== intended.page_id || page.path !== intended.path || page.title !== intended.title) throw new Error(`Page metadata differs: ${intended.path}`)
     if (!isDeepStrictEqual(comparableBlocks(page.blocks), comparableBlocks(intended.blocks))) throw new Error(`Page content differs: ${intended.path}; edit the existing translation through the concurrency-aware page editor`)
     for (const [field, key] of [['summary', 'summary'], ['seo_title', 'seoTitle'], ['seo_description', 'seoDescription']]) {
       if (page[field] !== (intended[key] ?? null)) throw new Error(`Page ${field} differs: ${intended.path}`)
@@ -148,7 +154,8 @@ async function publish() {
     }
     for (const page of bundle.pages) {
       if (existingPages.has(page.page_id)) continue
-      await call('create_tenant_page', { ...page, locale: bundle.locale })
+      const { page: created } = await call('create_tenant_page', { ...page, locale: bundle.locale })
+      existingPages.set(page.page_id, created)
       console.log(`Created Thai page ${page.path}`)
     }
   }
@@ -162,8 +169,7 @@ async function publish() {
     if (!isDeepStrictEqual(localization.values, intended.values) || localization.route_path !== (intended.route_path ?? null)) throw new Error(`Verification failed: ${intended.resource_type} ${intended.resource_id}`)
   }
   for (const intended of bundle.pages) {
-    const response = await call('list_tenant_pages', { locale: bundle.locale, limit: 100 })
-    const actual = response.pages.find(page => page.page_id === intended.page_id)
+    const actual = existingPages.get(intended.page_id)
     if (!actual) throw new Error(`Verification failed: page ${intended.path}`)
     await verifyPage(actual, intended)
   }
