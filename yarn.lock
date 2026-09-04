@@ -7677,7 +7677,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"drizzle-kit@npm:^0.31.10":
+"drizzle-kit@npm:0.31.10":
   version: 0.31.10
   resolution: "drizzle-kit@npm:0.31.10"
   dependencies:
@@ -11173,7 +11173,7 @@ __metadata:
     better-auth: "npm:1.7.0-beta.10"
     better-sqlite3: "npm:^12.11.1"
     cross-env: "npm:^10.1.0"
-    drizzle-kit: "npm:^0.31.10"
+    drizzle-kit: "npm:0.31.10"
     drizzle-orm: "npm:^0.45.2"
     eslint: "npm:^10.3.0"
     h3: "npm:2.0.1-rc.22"
