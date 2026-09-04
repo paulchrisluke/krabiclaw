@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Photos">
         <template #leading>
-          <DashboardNavbarLeading />
+          <DashboardNavbarLeading :to="paths.project" label="Location" />
         </template>
         <template #trailing>
           <USelect v-model="categoryFilter" :items="categoryItems" value-key="id" label-key="label" class="w-44" />
@@ -23,7 +23,7 @@
         </UButton>
       </div>
 
-      <div v-if="loading" class="grid grid-cols-3 gap-3 md:grid-cols-5 xl:grid-cols-7">
+      <div v-if="loading" class="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-7">
         <USkeleton v-for="i in 14" :key="i" class="aspect-square rounded-lg" />
       </div>
 
@@ -45,7 +45,7 @@
         </div>
       </div>
 
-      <div v-else class="grid grid-cols-3 gap-3 md:grid-cols-5 xl:grid-cols-7">
+      <div v-else class="grid grid-cols-3 gap-3 sm:grid-cols-5 xl:grid-cols-7">
         <div v-for="asset in filteredAssets" :key="asset.id" class="group relative aspect-square overflow-hidden rounded-lg border border-default bg-elevated">
           <img
             v-if="asset.thumbnail_url || asset.public_url"
@@ -80,10 +80,10 @@
               </div>
               <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="attachLoading" @click="loadAttachableMedia" />
             </div>
-            <div v-if="attachLoading" class="mt-5 grid grid-cols-3 gap-3 md:grid-cols-5">
+            <div v-if="attachLoading" class="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-5">
               <USkeleton v-for="i in 10" :key="i" class="aspect-square rounded-lg" />
             </div>
-            <div v-else class="mt-5 grid max-h-[60vh] grid-cols-3 gap-3 overflow-y-auto md:grid-cols-5">
+            <div v-else class="mt-5 grid max-h-[60vh] grid-cols-3 gap-3 overflow-y-auto sm:grid-cols-5">
               <button
                 v-for="asset in attachableAssets"
                 :key="asset.id"
@@ -115,6 +115,8 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
+
+const { paths } = useDashboardSiteLinks()
 
 
 interface MediaAsset {

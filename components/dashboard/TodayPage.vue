@@ -2,9 +2,6 @@
   <UDashboardPanel id="org-today">
     <template #header>
       <UDashboardNavbar title="Today">
-        <template #leading>
-          <DashboardNavbarLeading :detail-to="orgBase" :detail-label="organizationName" />
-        </template>
       </UDashboardNavbar>
     </template>
 
@@ -86,7 +83,6 @@ const dashboardApi = useDashboardApi()
 const requestEvent = useRequestEvent()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const orgBase = computed(() => `/dashboard/${encodeURIComponent(orgSlug.value)}`)
-const organizationName = computed(() => dashboard.organization.value?.name ?? 'Organization')
 const todayKey = computed(() => `dashboard-today-${orgSlug.value}`)
 
 const isAgendaItem = (value: unknown): value is AgendaItem =>

@@ -6,11 +6,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading
-            :action-icon="hasDetail ? 'i-lucide-x' : 'i-lucide-arrow-left'"
-            :action-label="hasDetail ? 'Close editor' : 'Back to site'"
-            @action="navigateFromNavbar"
-          />
+          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -217,6 +213,11 @@ const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const locationPath = computed(() => `${sitePath.value}/locations/${String(route.params.locationSlug)}`)
 const settingsPath = computed(() => `${locationPath.value}/settings`)
+
+// Up one level: out of a section back to the settings index, out of the index
+// back to the location overview.
+const backTo = computed(() => hasDetail.value ? settingsPath.value : locationPath.value)
+const backLabel = computed(() => hasDetail.value ? 'Location settings' : 'Location')
 const routeSegments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.map(String)
@@ -661,13 +662,11 @@ function cancelEditor() {
   resetDraft()
   router.push(settingsPath.value)
 }
-function navigateFromNavbar() {
-  if (hasDetail.value) {
-    cancelEditor()
-    return
-  }
-  router.push(sitePath.value)
-}
+// Leaving a section resets its editor. This used to hang off the back button's
+// click handler, which left browser back with stale editor state.
+watch(() => route.path, (next, previous) => {
+  if (previous && previous !== next) resetDraft()
+})
 
 async function patchLocation(body: Record<string, unknown>, successMessage: string) {
   const requestedLocationId = locationId.value

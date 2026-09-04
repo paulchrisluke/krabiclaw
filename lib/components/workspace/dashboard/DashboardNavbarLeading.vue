@@ -1,64 +1,31 @@
 <template>
   <UButton
-    v-if="actionIcon"
+    :to="to"
+    icon="i-lucide-arrow-left"
+    :aria-label="`Back to ${label}`"
+    color="neutral"
+    variant="ghost"
+    size="sm"
+    square
     class="min-w-0 shrink-0"
-    color="neutral"
-    variant="ghost"
-    size="sm"
-    square
-    :icon="actionIcon"
-    :aria-label="actionLabel"
-    @click="$emit('action')"
-  />
-  <UButton
-    v-else-if="detailParent"
-    class="min-w-0 shrink-0 lg:hidden"
-    color="neutral"
-    variant="ghost"
-    size="sm"
-    square
-    icon="i-lucide-chevron-left"
-    :aria-label="`Back to ${detailParent.label}`"
-    :to="detailParent.to"
-  />
-  <UButton
-    v-else-if="scopeParent"
-    class="min-w-0 shrink-0 lg:hidden"
-    color="neutral"
-    variant="ghost"
-    size="sm"
-    square
-    icon="i-lucide-chevron-left"
-    :aria-label="`Back to ${scopeParent.label}`"
-    :to="scopeParent.to"
+    data-testid="dashboard-navbar-back"
   />
 </template>
 
 <script setup lang="ts">
-import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from './dashboardScopeHeaderContext'
-
-type DashboardRoute = string | { path: string; query?: Record<string, string> }
-
-const props = withDefaults(defineProps<{
-  detailTo?: DashboardRoute | null
-  detailLabel?: string
-  backToOrganization?: boolean
-  actionIcon?: string | null
-  actionLabel?: string
-}>(), {
-  detailTo: null,
-  detailLabel: 'Back',
-  backToOrganization: false,
-  actionIcon: null,
-  actionLabel: 'Navigation action',
-})
-
-defineEmits<{ action: [] }>()
-
-const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
-const organizationParent = inject(dashboardOrganizationParentKey, null)
-const detailParent = computed(() => props.detailTo
-  ? { label: props.detailLabel, to: props.detailTo }
-  : props.backToOrganization ? organizationParent?.value ?? null : null)
-const scopeParent = computed(() => scopeHeaderModel?.value.parent ?? null)
+// One control, one meaning: go up one level to `to`.
+//
+// This component used to choose between three branches — an explicit action, an
+// injected detail parent, an injected scope parent — and render nothing when all
+// three missed. That inference is why the organization root rendered a back
+// arrow pointing at itself: nothing declared a parent, so the chain guessed one.
+//
+// A page that sits at the root of a navigation stack renders no leading control
+// at all. It does not render this component with an empty target.
+defineProps<{
+  /** Where "up one level" goes. Required: a back control with nowhere to go is a bug, not a default. */
+  to: string | { path: string, query?: Record<string, string> }
+  /** Names the destination for screen readers. */
+  label: string
+}>()
 </script>

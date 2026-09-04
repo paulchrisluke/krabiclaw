@@ -1,4 +1,5 @@
-import { HTTPError } from 'nitro';
+import { HTTPError } from 'nitro'
+import { resolveSocialImageFromMedia } from '~/utils/social-metadata';
 import { getQuery } from 'nitro/h3';
 
 import type { H3Event } from 'nitro'
@@ -37,6 +38,42 @@ export interface DashboardOrganizationRow {
   memberId: string
 }
 
+// One loader for site-level social media, used by both the sites list and the
+// single-site context so the two cannot report different images for the same
+// site. Slots and resolution order match the public surfaces exactly.
+async function loadSiteSocialMedia(db: DbClient, organizationId: string) {
+  const rows = await queryAll<{
+    site_id: string
+    asset_id: string
+    slot: string
+    public_url: string
+    thumbnail_url: string | null
+    kind: string | null
+  }>(db, `
+    SELECT mp.site_id, ma.id AS asset_id, mp.slot,
+           ma.public_url, ma.thumbnail_url, ma.kind
+      FROM media_placements mp
+      JOIN media_assets ma
+        ON ma.id = mp.asset_id
+       AND ma.status = 'active'
+       AND ma.organization_id = mp.organization_id
+       AND ma.site_id = mp.site_id
+     WHERE mp.organization_id = ?
+       AND mp.owner_type = 'site'
+       AND mp.status = 'active'
+       AND mp.slot IN ('social_card', 'social_share', 'logo')
+     ORDER BY mp.site_id, mp.sort_order ASC
+  `, [organizationId])
+
+  const bySite = new Map<string, Array<Omit<(typeof rows)[number], 'site_id'>>>()
+  for (const { site_id: siteId, ...item } of rows) {
+    const existing = bySite.get(siteId)
+    if (existing) existing.push(item)
+    else bySite.set(siteId, [item])
+  }
+  return bySite
+}
+
 export interface DashboardSiteRow {
   id: string
   organization_id: string
@@ -57,6 +94,8 @@ export interface DashboardSiteRow {
   status: string
   onboarding_status: string
   effective_plan: string
+  media: Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
+  social_image: { url: string, width?: number, height?: number, type?: string } | null
   primary_location_id: string | null
   default_currency: string | null
   // JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts),
@@ -342,8 +381,14 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id)
         : null
 
+  const siteSocialMedia = rawSite ? (await loadSiteSocialMedia(db, organization.id)).get(rawSite.id) ?? [] : []
   const site = rawSite
-    ? { ...rawSite, effective_plan: (await getOrganizationBillingProjection(db, organization.id)).effectivePlan }
+    ? {
+        ...rawSite,
+        effective_plan: (await getOrganizationBillingProjection(db, organization.id)).effectivePlan,
+        media: siteSocialMedia,
+        social_image: resolveSocialImageFromMedia(siteSocialMedia, siteSocialMedia),
+      }
     : null
 
   if (!site && options.requireSite !== false) {
@@ -400,45 +445,19 @@ export async function listOrganizationSites(
   `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
   const effectivePlan = (await getOrganizationBillingProjection(db, organizationId)).effectivePlan
 
-  const homeRows = await queryAll<{
-    site_id: string
-    asset_id: string | null
-    hero_kind: string | null
-    hero_media_public_url: string | null
-    hero_media_thumbnail_url: string | null
-  }>(db, `
-    SELECT v.site_id, ma.id AS asset_id, ma.kind AS hero_kind,
-           ma.public_url AS hero_media_public_url, ma.thumbnail_url AS hero_media_thumbnail_url
-      FROM tenant_page_variants v
-      JOIN site_locales sl
-        ON sl.site_id = v.site_id
-       AND sl.organization_id = v.organization_id
-       AND sl.locale = v.locale
-       AND sl.is_source = 1
-      LEFT JOIN content_blocks cb
-        ON cb.document_id = v.document_id
-       AND cb.type = 'hero'
-      LEFT JOIN media_placements hero_placement
-        ON hero_placement.owner_type = 'content_block' AND hero_placement.owner_id = cb.id AND hero_placement.slot = 'media' AND hero_placement.status = 'active'
-      LEFT JOIN media_assets ma
-        ON ma.id = hero_placement.asset_id
-       AND ma.organization_id = v.organization_id
-       AND ma.site_id = v.site_id
-       AND ma.status = 'active'
-     WHERE v.organization_id = ? AND v.path = '/'
-     ORDER BY v.site_id, cb.position ASC
-  `, [organizationId])
-  const homeBySite = new Map<string, (typeof homeRows)[number]>()
-  for (const home of homeRows) if (!homeBySite.has(home.site_id)) homeBySite.set(home.site_id, home)
+  // Site cards render the same image the public pages do. This used to run its
+  // own query against the home page hero block's social_card — a different
+  // owner from the one public reads — which is why the dashboard showed nothing
+  // while the public site rendered fine.
+  const mediaBySite = await loadSiteSocialMedia(db, organizationId)
 
   return rows.map(row => {
-    const home = homeBySite.get(row.id)
+    const media = mediaBySite.get(row.id) ?? []
     return {
       ...row,
       effective_plan: effectivePlan,
-      media: home?.asset_id && home.hero_media_public_url
-        ? [{ asset_id: home.asset_id, slot: 'media' as const, public_url: home.hero_media_public_url, thumbnail_url: home.hero_media_thumbnail_url, kind: home.hero_kind }]
-        : [],
+      media,
+      social_image: resolveSocialImageFromMedia(media, media),
     }
   })
 }
@@ -517,6 +536,10 @@ export async function listDashboardLocations(
     hero_kind: string | null
     hero_media_public_url: string | null
     hero_media_thumbnail_url: string | null
+    social_asset_id: string | null
+    social_kind: string | null
+    social_public_url: string | null
+    social_thumbnail_url: string | null
   }>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
            business_locations.is_primary, business_locations.status,
@@ -524,19 +547,50 @@ export async function listDashboardLocations(
            ma_hero.id AS hero_asset_id,
            ma_hero.kind AS hero_kind,
            ma_hero.public_url AS hero_media_public_url,
-           ma_hero.thumbnail_url AS hero_media_thumbnail_url
+           ma_hero.thumbnail_url AS hero_media_thumbnail_url,
+           ma_social.id AS social_asset_id,
+           ma_social.kind AS social_kind,
+           ma_social.public_url AS social_public_url,
+           ma_social.thumbnail_url AS social_thumbnail_url
     FROM business_locations
     JOIN sites ON sites.id = business_locations.site_id AND sites.organization_id = business_locations.organization_id
     LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = business_locations.id AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
     LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id
       AND ma_hero.organization_id = business_locations.organization_id AND ma_hero.site_id = business_locations.site_id AND ma_hero.status = 'active'
+    LEFT JOIN media_placements mp_social ON mp_social.owner_type = 'business_location' AND mp_social.owner_id = business_locations.id AND mp_social.slot = 'social_card' AND mp_social.sort_order = 0 AND mp_social.status = 'active'
+    LEFT JOIN media_assets ma_social ON ma_social.id = mp_social.asset_id
+      AND ma_social.organization_id = business_locations.organization_id AND ma_social.site_id = business_locations.site_id AND ma_social.status = 'active'
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
       ${scopedTeamIds ? `AND (sites.team_id IN (SELECT value FROM json_each(?)) OR business_locations.team_id IN (SELECT value FROM json_each(?)))` : ''}
     ORDER BY is_primary DESC, title ASC
   `, scopedTeamIdsJson ? [organizationId, siteId, scopedTeamIdsJson, scopedTeamIdsJson] : [organizationId, siteId])
 
+  // Locations resolve their card image the same way public location pages do:
+  // the location's own social_card first, then the site's. Same resolver, so a
+  // location card in the CMS and its public page never disagree.
+  const siteMedia = await queryAll<{ slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>(db, `
+    SELECT mp.slot, ma.public_url, ma.thumbnail_url, ma.kind
+      FROM media_placements mp
+      JOIN media_assets ma
+        ON ma.id = mp.asset_id AND ma.status = 'active'
+       AND ma.organization_id = mp.organization_id AND ma.site_id = mp.site_id
+     WHERE mp.organization_id = ? AND mp.site_id = ?
+       AND mp.owner_type = 'site' AND mp.status = 'active'
+       AND mp.slot IN ('social_card', 'social_share', 'logo')
+     ORDER BY mp.sort_order ASC
+  `, [organizationId, siteId])
+
   return locations.map((location) => {
-    const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url, ...fields } = location
+    const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url,
+      social_asset_id, social_kind, social_public_url, social_thumbnail_url, ...fields } = location
+    const ownerMedia = [
+      ...(social_asset_id && social_public_url
+        ? [{ asset_id: social_asset_id, slot: 'social_card' as const, public_url: social_public_url, thumbnail_url: social_thumbnail_url, kind: social_kind }]
+        : []),
+      ...(hero_asset_id && hero_media_public_url
+        ? [{ asset_id: hero_asset_id, slot: 'hero' as const, public_url: hero_media_public_url, thumbnail_url: hero_media_thumbnail_url, kind: hero_kind }]
+        : []),
+    ]
     return {
       ...fields,
       id: location.id,
@@ -547,9 +601,8 @@ export async function listDashboardLocations(
       city: location.city,
       address: parseLocationAddress(location.address),
       feature_overrides: location.feature_overrides,
-      media: hero_asset_id && hero_media_public_url
-        ? [{ asset_id: hero_asset_id, slot: 'hero' as const, public_url: hero_media_public_url, thumbnail_url: hero_media_thumbnail_url, kind: hero_kind }]
-        : [],
+      media: ownerMedia,
+      social_image: resolveSocialImageFromMedia(ownerMedia, siteMedia),
     }
   })
 }

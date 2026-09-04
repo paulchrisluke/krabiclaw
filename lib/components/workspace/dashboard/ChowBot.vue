@@ -217,7 +217,7 @@ const setupMode = computed(() => Boolean(props.setupMode))
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
-const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
+const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks()
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 const { periodRemaining, unlimited, reconciliationRequired, isLow, isDepleted, isBlocked, fetch: fetchCredits } = useAiCredits(siteId)

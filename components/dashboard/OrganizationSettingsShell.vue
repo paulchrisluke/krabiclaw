@@ -6,11 +6,7 @@
     <template #header>
       <UDashboardNavbar :title="detailTitle || 'Organization Settings'" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading
-            :action-icon="detailTitle ? 'i-lucide-x' : 'i-lucide-arrow-left'"
-            :action-label="detailTitle ? 'Close editor' : 'Back to dashboard'"
-            @action="navigateBack"
-          />
+          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -54,35 +50,23 @@ const router = useRouter()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
-const organization = dashboard.organization
-const orgSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings`)
-function navigateBack() {
-  if (props.detailTitle) {
-    closeDetail()
-    return
-  }
-  router.push(`/dashboard/${String(route.params.orgSlug)}`)
-}
+const { settingsPath: orgSettingsPath, groups, activeItem } = useOrganizationSettingsNavigation()
+const { paths } = useDashboardSiteLinks()
+
+// Up one level: out of a section back to the settings index, out of the index
+// back to the menu that opened it.
+const backTo = computed(() => props.detailTitle ? orgSettingsPath.value : `${paths.value.org}/menu`)
+const backLabel = computed(() => props.detailTitle ? 'Organization Settings' : 'Menu')
+
+// Leaving a section resets the form. This used to hang off the back button's
+// click handler, which meant browser back left the previous section's edits in
+// the shared component instance. Watching the route covers every way out.
+watch(() => route.path, (next, previous) => {
+  if (previous && previous !== next) emit('cancel')
+})
+
 function closeDetail() {
   emit('cancel')
   router.push(orgSettingsPath.value)
 }
-const activeItem = computed(() => {
-  const segment = route.path.slice(`${orgSettingsPath.value}/`.length).split('/')[0]
-  return route.path === orgSettingsPath.value ? null : segment
-})
-const { preference } = usePlatformTheme()
-
-const items = computed(() => [
-  { id: 'general', label: 'General', summary: organization.value?.name || 'Organization details', to: `${orgSettingsPath.value}/general` },
-  { id: 'appearance', label: 'Appearance', summary: `${preference.value.charAt(0).toUpperCase()}${preference.value.slice(1)} theme`, to: `${orgSettingsPath.value}/appearance` },
-  { id: 'members', label: 'Members', summary: 'People and organization access', to: `${orgSettingsPath.value}/members` },
-  { id: 'billing', label: 'Billing', summary: 'Plans, payments, and credits', to: `${orgSettingsPath.value}/billing` },
-  { id: 'analytics', label: 'Analytics', summary: 'Google Analytics and Search Console', to: `${orgSettingsPath.value}/analytics` },
-  { id: 'chatgpt', label: 'ChatGPT', summary: 'Organization ChatGPT connection', to: `${orgSettingsPath.value}/chatgpt` },
-])
-const groups = computed(() => [
-  { id: 'organization', label: 'Organization', items: items.value.slice(0, 3) },
-  { id: 'account', label: 'Account and connections', items: items.value.slice(3) },
-])
 </script>

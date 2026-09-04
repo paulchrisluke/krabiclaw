@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Edit Documentation">
         <template #leading>
-          <DashboardNavbarLeading detail-to="/admin/docs" detail-label="Docs" />
+          <DashboardNavbarLeading to="/admin/docs" label="Docs" />
         </template>
       </UDashboardNavbar>
     </template>

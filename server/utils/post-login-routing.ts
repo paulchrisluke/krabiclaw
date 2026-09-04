@@ -2,7 +2,7 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { listUserOrganizations } from '~/server/utils/member-access'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 
-export type PostLoginDestination = '/admin' | '/dashboard/account' | `/dashboard/${string}`
+export type PostLoginDestination = '/admin' | '/dashboard/account/profile' | `/dashboard/${string}`
 
 export interface PostLoginUser {
   id: string
@@ -22,5 +22,5 @@ export async function resolvePostLoginDestination(
 
   if (organization) return `/dashboard/${encodeURIComponent(organization.slug)}`
 
-  return '/dashboard/account'
+  return '/dashboard/account/profile'
 }
