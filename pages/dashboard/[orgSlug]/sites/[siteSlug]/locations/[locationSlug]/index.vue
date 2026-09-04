@@ -246,13 +246,6 @@ const contentGroups = computed(() => {
       visible: hasFeature('products'),
     },
     {
-      id: 'services',
-      label: 'Services',
-      summary: 'Manage services available at this location',
-      to: `${sitePath.value}/professional-services`,
-      visible: hasFeature('services'),
-    },
-    {
       id: 'experiences',
       label: 'Experiences',
       summary: 'Manage bookable experiences',

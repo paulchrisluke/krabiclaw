@@ -47,7 +47,7 @@ export function useDashboardSiteLinks(sitePublicUrl?: MaybeRef<string | null | u
       order: `${siteBase}/orders`,
       media: `${siteBase}/media`,
       locations: locationsBase,
-      domains: `${siteBase}/domains`,
+      domains: `${siteBase}/settings/domains`,
       settings: `${siteBase}/settings`,
       siteSettings: `${siteBase}/settings`,
       locationSettings: `${locationBase}/settings`,
