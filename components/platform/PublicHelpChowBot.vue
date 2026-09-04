@@ -1,5 +1,5 @@
 <template>
-  <ChowBotConversation
+  <ConversationShell
     v-model:input="input"
     :messages="messages"
     placeholder="Ask ChowBot anything..."
@@ -75,12 +75,12 @@
         Ask about docs, billing, setup, domains, or send it to support.
       </p>
     </template>
-  </ChowBotConversation>
+  </ConversationShell>
 </template>
 
 <script setup lang="ts">
 import { $fetch } from 'ofetch'
-import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
+import ConversationShell from '~/components/conversation/ConversationShell.vue'
 import { marked } from 'marked'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
