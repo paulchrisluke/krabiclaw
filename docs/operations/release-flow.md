@@ -46,7 +46,7 @@ that will run after deployment. This override does not permit bypassing a known
 reproducible first-party failure, database-epoch safeguards, migration safety,
 or production data and write restrictions.
 
-Production deployment and verification are separate jobs in the same workflow. The deploy job builds once, performs the single Wrangler deployment, then applies forward-compatible migrations and refreshes search. The verification job waits until all three custom domains expose that exact Nuxt build and its referenced assets, then runs read-only browser coverage. Retrying a failed verification job never redeploys production.
+Production deployment and verification are separate jobs in the same workflow. The deploy job builds once, performs the single Wrangler deployment, then applies forward-compatible migrations and refreshes search only when indexed content definitions or document-generation code changed. The verification job waits until all three custom domains expose that exact Nuxt build and its referenced assets, then runs read-only browser coverage. Retrying a failed verification job never redeploys production.
 
 For migration safety, preview reset behavior, database epoch transitions, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md). For the canonical migration workflow, see [docs/database/migrations.md](../database/migrations.md).
 
@@ -74,3 +74,25 @@ merging to staging. Close superseded bot PRs only after the integration lands.
 An auth update that changes schema or network-security contracts requires that
 work to be designed and qualified explicitly; never upgrade one auth plugin in
 isolation or suppress its incompatible peer requirements.
+
+## Search indexing
+
+Staging and production deploys compare the push's before/after commits in the
+existing `ai-search-sync.ts` command. Full refreshes run only for changes to its
+explicit indexed-input list: the knowledge catalog, index builder, content-block
+renderer/storage reader, platform scope, and blog/doc path mappings. Dependency,
+logging, styling, and unrelated application changes skip refresh. The staging
+read-only search smoke still runs on every deployment.
+
+Content-edit handlers retain their existing indexing triggers. They currently
+request a full rebuild; this deployment gate does not introduce a second index
+or an incremental indexing implementation.
+
+Provision `PLATFORM_SEARCH_REINDEX_SECRET` once through the existing environment
+secret setup, rather than rewriting it on every deployment. When provisioning a
+new search instance, changing search bindings, importing indexed content outside
+the application, or applying a data migration that changes indexed records, run
+`yarn ai-search:sync:staging` (or the production command during an authorized
+production release) explicitly. Omitting `--changed-since` requests a full refresh.
+Update the indexed-input list whenever the index builder gains a new source.
+`--dry-run` reports the decision without contacting Cloudflare.
