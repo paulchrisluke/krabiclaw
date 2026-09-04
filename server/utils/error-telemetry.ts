@@ -10,14 +10,14 @@ const MAX_ERROR_MESSAGE_LENGTH = 1000
 const MAX_ERROR_STACK_LENGTH = 4000
 
 function redactErrorMessage(value: string): string {
-  const redacted = value.replace(/\nparams:[\s\S]*$/i, '\nparams: [redacted]')
+  const redacted = value.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]').replace(/\nparams:[\s\S]*$/i, '\nparams: [redacted]')
   return redacted.length <= MAX_ERROR_MESSAGE_LENGTH
     ? redacted
     : `${redacted.slice(0, MAX_ERROR_MESSAGE_LENGTH)}…[truncated]`
 }
 
 function redactErrorStack(value: string): string {
-  const redacted = value.replace(
+  const redacted = value.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]').replace(
     /\nparams:[\s\S]*?(?=\n\s*at\s|$)/gi,
     '\nparams: [redacted]',
   )

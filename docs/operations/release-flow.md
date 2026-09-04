@@ -19,6 +19,14 @@ for the failing request's timestamp and request ID before deciding whether to
 retry. Preserve relevant evidence before Cloudflare's retention window expires;
 enabling logging cannot recover requests from an earlier unlogged deployment.
 
+For media failures, correlate `mcp_tool_failed` (tool, request ID, Ray ID,
+duration, error chain) with the same invocation's `media_attachment_failed`,
+`media_upload_failed`, and `media_cleanup_failed` records. Upload records identify
+the provider, asset, failed stage, byte count, and stage timings; completion
+records distinguish successful storage/persistence from cleanup. Attachment URLs
+are redacted from error messages and stacks; diagnostic records omit tool
+arguments, credentials, and file contents.
+
 A database-epoch cutover additionally uses the temporary maintenance deployment
 defined in [release-and-outage-prevention.md](release-and-outage-prevention.md).
 It is not part of an ordinary schema migration or application release.
