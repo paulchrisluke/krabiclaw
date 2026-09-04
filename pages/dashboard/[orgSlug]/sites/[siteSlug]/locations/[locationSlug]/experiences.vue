@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Experiences">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.project" label="Location" />
+          <DashboardNavbarLeading v-if="locationPaths" :to="locationPaths.location" label="Location" />
         </template>
         <template #trailing>
           <UButton v-if="!loading" icon="i-lucide-plus" size="sm" @click="openCreate">Add experience</UButton>
@@ -401,7 +401,7 @@ const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'S
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' })
 
-const { paths } = useDashboardSiteLinks()
+const { locationPaths } = useDashboardSiteLinks()
 
 type ApiRecord = Experience
 

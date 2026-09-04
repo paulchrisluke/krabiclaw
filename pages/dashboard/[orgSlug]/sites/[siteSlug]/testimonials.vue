@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Site" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
+          <DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -71,7 +71,7 @@ import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDia
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
 
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 const requestEvent = useRequestEvent()
 

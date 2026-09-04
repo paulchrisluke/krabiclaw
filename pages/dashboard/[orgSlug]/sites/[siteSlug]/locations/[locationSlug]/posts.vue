@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Posts">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.project" label="Location" />
+          <DashboardNavbarLeading v-if="locationPaths" :to="locationPaths.location" label="Location" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -215,7 +215,7 @@ import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.posts' })
 
-const { paths } = useDashboardSiteLinks()
+const { locationPaths } = useDashboardSiteLinks()
 
 const siteId = await useDashboardSiteId()
 const toast = useToast()

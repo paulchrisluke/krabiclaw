@@ -2,9 +2,9 @@
   <UDashboardPanel id="tenant-pages-manager">
     <template #header>
       <UDashboardNavbar title="Pages">
-        <template #leading><DashboardNavbarLeading :to="paths.site" label="Site overview" /></template>
+        <template #leading><DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site overview" /></template>
         <template #right>
-          <UButton :to="`${pagesPath}/new`" icon="i-lucide-plus" label="New page" />
+          <UButton v-if="sitePaths" :to="`${sitePaths.pages}/new`" icon="i-lucide-plus" label="New page" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -19,11 +19,11 @@
         <div v-else-if="loading" class="space-y-2">
           <USkeleton v-for="index in 5" :key="index" class="h-16 rounded-xl" />
         </div>
-        <div v-else-if="visiblePages.length" class="overflow-hidden rounded-2xl border border-default bg-default">
+        <div v-else-if="sitePaths && visiblePages.length" class="overflow-hidden rounded-2xl border border-default bg-default">
           <NuxtLink
             v-for="page in visiblePages"
             :key="page.id"
-            :to="`${pagesPath}/${page.id}`"
+            :to="`${sitePaths.pages}/${page.id}`"
             class="flex min-h-16 items-center gap-4 border-b border-default px-4 last:border-0 hover:bg-elevated"
           >
             <div class="min-w-0 flex-1">
@@ -37,7 +37,7 @@
           <div class="py-12 text-center">
             <UIcon name="i-lucide-file-plus-2" class="mx-auto size-9 text-muted" />
             <h2 class="mt-4 font-semibold text-highlighted">Create your first page</h2>
-            <UButton :to="`${pagesPath}/new`" class="mt-5" icon="i-lucide-plus" label="New page" />
+            <UButton v-if="sitePaths" :to="`${sitePaths.pages}/new`" class="mt-5" icon="i-lucide-plus" label="New page" />
           </div>
         </UCard>
       </div>
@@ -65,10 +65,8 @@ if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 503, statusMessage: 'Dashboard site context unavailable' })
 
-const route = useRoute()
 const dashboardApi = useDashboardApi()
-const pagesPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/pages`)
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 const locale = ref('en')
 const locales = ref<string[]>([locale.value])
 const pages = ref<PageSummary[]>([])
