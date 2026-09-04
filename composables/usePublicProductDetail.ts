@@ -1,8 +1,8 @@
 import type { Product } from '~/server/types/products'
 import type { PublicProductReview } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
-import { publicApiRequest } from '~/utils/api-clients'
-import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicProductDetailPayload {
   product: Product
@@ -14,30 +14,9 @@ export interface PublicProductDetailPayload {
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isProduct(value: unknown): value is Product {
-  return isRecord(value)
-    && typeof value.id === 'string'
-    && typeof value.site_id === 'string'
-    && typeof value.location_id === 'string'
-    && typeof value.category === 'string'
-    && typeof value.name === 'string'
-    && typeof value.slug === 'string'
-    && (value.price === null || isRecord(value.price))
-    && typeof value.is_visible === 'boolean'
-    && typeof value.available === 'boolean'
-    && Array.isArray(value.tags)
-    && Array.isArray(value.details)
-    && (value.image === null || isRecord(value.image))
-    && Array.isArray(value.gallery)
-}
-
 function isPublicProductDetailPayload(value: unknown): value is PublicProductDetailPayload {
   return isRecord(value)
-    && isProduct(value.product)
+    && isPublicProduct(value.product)
     && isRecord(value.location)
     && typeof value.location.id === 'string'
     && typeof value.location.slug === 'string'

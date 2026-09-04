@@ -104,6 +104,29 @@ export interface PublicLocaleRepresentation {
   source: 'source' | 'localized'
 }
 
+export function isPublicProduct(value: unknown): value is Product {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.site_id === 'string'
+    && typeof value.location_id === 'string'
+    && typeof value.category_id === 'string'
+    && isRecord(value.category)
+    && value.category.id === value.category_id
+    && typeof value.category.name === 'string'
+    && typeof value.category.slug === 'string'
+    && Number.isInteger(value.category.sort_order)
+    && Number(value.category.sort_order) >= 0
+    && typeof value.name === 'string'
+    && typeof value.slug === 'string'
+    && (value.price === null || isRecord(value.price))
+    && typeof value.is_visible === 'boolean'
+    && typeof value.available === 'boolean'
+    && Array.isArray(value.tags)
+    && Array.isArray(value.details)
+    && (value.image === null || isRecord(value.image))
+    && Array.isArray(value.gallery)
+}
+
 export const isPublicPagePayload = (
   value: unknown,
   expectedKind?: string | null,
@@ -141,9 +164,7 @@ export const isPublicPagePayload = (
   && Array.isArray(value.experiencesList)
   && value.experiencesList.every(item => isRecord(item) && typeof item.id === 'string')
   && Array.isArray(value.products)
-  && value.products.every(item => isRecord(item) && typeof item.id === 'string'
-    && typeof item.location_id === 'string' && typeof item.category === 'string'
-    && typeof item.slug === 'string' && (item.price === null || isRecord(item.price)))
+  && value.products.every(isPublicProduct)
   && Array.isArray(value.localeRepresentations)
   && value.localeRepresentations.every(item => isRecord(item)
     && typeof item.locale === 'string'
