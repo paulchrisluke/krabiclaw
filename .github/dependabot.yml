@@ -5,24 +5,29 @@ updates:
       - /
       - /workers/email-inbound
     schedule:
-      interval: weekly
+      interval: cron
+      # Dependabot uses Fugit: every other Monday, rather than day-of-month steps.
+      cronjob: "0 2 * * mon%2"
     cooldown:
-      default-days: 7
+      default-days: 30
 
     groups:
       better-auth:
         patterns: ["better-auth", "@better-auth/*"]
-      compatible-dependencies:
+      typescript:
+        patterns: ["typescript"]
+      routine-dependencies:
         patterns: ["*"]
-        exclude-patterns: ["better-auth", "@better-auth/*", "typescript", "nuxt", "nuxt-nightly", "h3", "drizzle-kit", "sharp", "satori"]
-        update-types: ["minor", "patch"]
+        exclude-patterns: ["better-auth", "@better-auth/*", "typescript"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: cron
+      # Dependabot uses Fugit: every other Monday, rather than day-of-month steps.
+      cronjob: "0 2 * * mon%2"
     cooldown:
-      default-days: 7
+      default-days: 30
     groups:
       github-actions:
         patterns: ["*"]

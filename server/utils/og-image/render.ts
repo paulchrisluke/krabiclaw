@@ -59,11 +59,9 @@ async function loadBundledPngEncoderWasm(): Promise<WebAssembly.Module> {
   return mod.default
 }
 
-// Satori 0.26's image decoder throws for WebP data URIs — see the acceptedContentTypes
-// comment below. Tenant media (background photos, logos, favicons) is sometimes imported
-// as WebP unchanged from its original source file, so any of the three image slots below
-// can hit this. Re-encode to PNG rather than reject outright, so imported WebP photos
-// remain valid card sources.
+// Satori preserves WebP images in its SVG output, but the pinned Resvg rasterizer
+// cannot render those embedded images. Convert to PNG before building the SVG so
+// backgrounds and logos remain visible in the final social-card PNG.
 async function resolveWebpSafeDataUri(
   dataUri: string | null,
   deps: Pick<RenderOgImageDeps, 'webpDecoderWasmModule' | 'pngEncoderWasmModule'>,
@@ -116,8 +114,7 @@ export async function renderOgImagePng(
   ])
 
   const [rawBackgroundImageDataUri, rawLogoDataUri] = await Promise.all([
-    // WebP is accepted here (unlike before) and converted to PNG below via
-    // resolveWebpSafeDataUri — Satori itself still can't decode WebP directly.
+    // Convert accepted WebP media below for the final Resvg rasterization.
     fetchImageAsDataUri(payload.backgroundImageUrl, {
       timeoutMs: 4000,
       acceptedContentTypes: ['image/png', 'image/jpeg', 'image/webp'],
