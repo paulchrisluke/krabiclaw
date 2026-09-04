@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 // @ts-expect-error - the migration script is plain JS tooling, not typed source.
-import { planCategories } from '../../scripts/product-category-data.mjs'
+import { planCategories } from '../../scripts/product-category-plan.mjs'
 
 interface LegacyProduct {
   id: string
@@ -112,4 +112,43 @@ test('every Product is assigned exactly once', () => {
   const { assignments } = planCategories(products)
   assert.equal(assignments.length, products.length)
   assert.equal(new Set(assignments.map((row: { product_id: string }) => row.product_id)).size, products.length)
+})
+
+test('the rendered order is identical before and after the migration', () => {
+  // This mirrors what scripts/epoch4-data.mjs verify asserts against real client
+  // data: same sections in the same order, same items in the same order within
+  // them. If this ever fails, customers would see their menu rearrange.
+  const legacy = [
+    product({ id: 'p1', category: 'Starters', sort_order: 0 }),
+    product({ id: 'p2', category: 'Mains', sort_order: 1 }),
+    product({ id: 'p3', category: 'Starters', sort_order: 2 }),
+    product({ id: 'p4', category: 'Desserts', sort_order: 3 }),
+    product({ id: 'p5', category: 'Mains', sort_order: 4 }),
+  ]
+
+  // Before: group by category in first-appearance order over the flat stream.
+  const before: string[] = []
+  const seen = new Set<string>()
+  for (const row of legacy) {
+    if (seen.has(row.category)) continue
+    seen.add(row.category)
+    before.push(`category:${row.category}`)
+    for (const member of legacy.filter(candidate => candidate.category === row.category)) {
+      before.push(`product:${row.category}:${member.id}`)
+    }
+  }
+
+  // After: categories by sort_order, products by sort_order within each.
+  const { categories, assignments } = planCategories(legacy)
+  const nameById = new Map(categories.map((category: { id: string; name: string }) => [category.id, category.name]))
+  const after: string[] = []
+  for (const category of [...categories].sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)) {
+    after.push(`category:${category.name}`)
+    const members = assignments
+      .filter((row: { category_id: string }) => row.category_id === category.id)
+      .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
+    for (const member of members) after.push(`product:${nameById.get(member.category_id)}:${member.product_id}`)
+  }
+
+  assert.deepEqual(after, before)
 })
