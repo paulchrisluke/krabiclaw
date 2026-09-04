@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
   const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['organizations'] })
   if (permissionDenied) return permissionDenied
 
-  let body: { organizationId?: string } = {}
+  let body: { organizationId?: string }
   try {
     body = (await readBody(event)) ?? {}
   } catch {

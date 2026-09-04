@@ -68,7 +68,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     const siteSlug = typeof to.params.siteSlug === 'string' ? to.params.siteSlug : ''
     const locationSlug = typeof to.params.locationSlug === 'string' ? to.params.locationSlug : null
 
-    let capabilityAllowed = false
+    let capabilityAllowed: boolean
     if (import.meta.server) {
       const event = requireDashboardRequestEvent()
       const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([

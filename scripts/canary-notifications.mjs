@@ -79,7 +79,7 @@ async function postJson(url, data, label) {
     throw new Error(`${label} fetch failed for ${url}`, { cause: error })
   }
   const text = await res.text()
-  let body = null
+  let body
   try { body = text ? JSON.parse(text) : null } catch { body = null }
   return { res, body, text }
 }

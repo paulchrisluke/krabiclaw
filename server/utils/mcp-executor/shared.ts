@@ -1,3 +1,4 @@
+import { errorChainForTelemetry } from "~/server/utils/error-telemetry";
 import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';
 import { queryFirst } from "~/server/db";
@@ -506,56 +507,73 @@ export async function resolveUserUploadedMediaFile(
   file: ToolFileReference,
   maxBytes = MAX_VIDEO_BYTES,
 ): Promise<ResolvedMediaFile> {
-  const response = await fetchToolFile(file, 30_000);
-  if (!response.ok) {
-    throw new HTTPError({
-      statusCode: 400,
-      statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
-    });
-  }
+  const startedAt = Date.now();
+  let stage = 'attachment_download';
+  let byteLength: number | undefined;
+  let status = 'success';
+  try {
+    const response = await fetchToolFile(file, 30_000);
+    if (!response.ok) {
+      throw new HTTPError({
+        statusCode: 400,
+        statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
+      });
+    }
 
-  const buffer = await readMediaBufferWithLimit(
-    response,
-    `Attachment ${file.file_id}`,
-    maxBytes,
-  );
-  const bytes = buffer;
-  const markdownType = resolveMarkdownMimeType(file.mime_type, file.file_name);
-  if (markdownType) {
-    assertMarkdownSize(bytes.byteLength);
-    decodeMarkdownText(buffer);
-    return {
-      buffer,
-      contentType: markdownType,
-      filename: safeAttachmentFilename(file, markdownType),
-      kind: "file",
-    };
-  }
-  if (bytes.byteLength < 64) {
-    throw new HTTPError({
-      statusCode: 400,
-      statusMessage: `Invalid media payload from attachment ${file.file_id}: payload too small.`,
-    });
-  }
-
-  const sniffedContentType = sniffMediaMimeType(bytes);
-  const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
-  const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
-  if (!isVideo && !isImage) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `Attachment ${file.file_id} is not a supported image or video type.`,
+    stage = 'attachment_read';
+    const buffer = await readMediaBufferWithLimit(
+      response,
+      `Attachment ${file.file_id}`,
+      maxBytes,
     );
-  }
-  if (isImage && bytes.byteLength > Math.min(MAX_IMAGE_BYTES, maxBytes)) {
-    throw new HTTPError({
-      statusCode: 413,
-      statusMessage: `Invalid image payload from attachment ${file.file_id}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
-    });
-  }
+    byteLength = buffer.byteLength;
+    stage = 'attachment_validate';
+    const bytes = buffer;
+    const markdownType = resolveMarkdownMimeType(file.mime_type, file.file_name);
+    if (markdownType) {
+      assertMarkdownSize(bytes.byteLength);
+      decodeMarkdownText(buffer);
+      return {
+        buffer,
+        contentType: markdownType,
+        filename: safeAttachmentFilename(file, markdownType),
+        kind: "file",
+      };
+    }
+    if (bytes.byteLength < 64) {
+      throw new HTTPError({
+        statusCode: 400,
+        statusMessage: `Invalid media payload from attachment ${file.file_id}: payload too small.`,
+      });
+    }
 
-  const filename = safeAttachmentFilename(file, sniffedContentType);
-  return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
+    const sniffedContentType = sniffMediaMimeType(bytes);
+    const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
+    const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
+    if (!isVideo && !isImage) {
+      throw mcpProtocolError(
+        MCP_ERROR.invalidParams,
+        `Attachment ${file.file_id} is not a supported image or video type.`,
+      );
+    }
+    if (isImage && bytes.byteLength > Math.min(MAX_IMAGE_BYTES, maxBytes)) {
+      throw new HTTPError({
+        statusCode: 413,
+        statusMessage: `Invalid image payload from attachment ${file.file_id}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
+      });
+    }
+
+    const filename = safeAttachmentFilename(file, sniffedContentType);
+    return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
+  } catch (error) {
+    status = 'error';
+    console.error({ event: 'media_attachment_failed', stage,
+      duration_ms: Date.now() - startedAt, errors: errorChainForTelemetry(error) });
+    throw error;
+  } finally {
+    console.info({ event: 'media_attachment_completed', status, stage,
+      bytes: byteLength, duration_ms: Date.now() - startedAt });
+  }
 }
 
 export interface GoogleMapsSignals {

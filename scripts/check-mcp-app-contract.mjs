@@ -57,7 +57,7 @@ async function request(method, params = {}, authHeaders = {}, options = {}) {
     body: JSON.stringify(payload),
   })
   const text = await res.text()
-  let body = null
+  let body
   try {
     body = text ? JSON.parse(text) : null
   } catch {

@@ -155,7 +155,7 @@ export async function getGuestThreadOperationSummary(
   opts: ListGuestThreadsOptions,
 ): Promise<OperationSummary> {
   const params: Array<string | number> = []
-  let where = ''
+  let where: string
 
   if (siteId) {
     params.push(siteId)

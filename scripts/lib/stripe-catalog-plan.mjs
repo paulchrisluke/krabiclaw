@@ -812,7 +812,7 @@ function readApplyJournal(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf8'))
   } catch (error) {
-    throw new Error(`Unable to read Stripe catalog apply journal ${path}: ${error?.message ?? String(error)}`)
+    throw new Error(`Unable to read Stripe catalog apply journal ${path}: ${error?.message ?? String(error)}`, { cause: error })
   }
 }
 

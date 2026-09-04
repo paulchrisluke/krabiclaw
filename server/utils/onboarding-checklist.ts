@@ -56,7 +56,7 @@ export async function loadOnboardingChecklist(
   if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
 
   let siteId: string
-  let brandName: string | null = null
+  let brandName: string | null
   if (querySiteId) {
     const { site } = await requireSiteAccess(event, querySiteId, 'site-wide')
     siteId = site.id

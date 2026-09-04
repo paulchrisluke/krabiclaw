@@ -511,9 +511,9 @@ export async function sendWhatsAppNotification(
         )
       } catch (recordError) {
         const recordReason = recordError instanceof Error ? recordError.message : String(recordError)
-        throw new Error(`${accountingError}; durable notification update failed: ${recordReason}`)
+        throw new Error(`${accountingError}; durable notification update failed: ${recordReason}`, { cause: recordError })
       }
-      throw new Error(accountingError)
+      throw new Error(accountingError, { cause: error })
     }
   }
 

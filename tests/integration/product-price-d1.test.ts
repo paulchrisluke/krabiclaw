@@ -16,9 +16,23 @@ import {
 
 async function migratedD1() {
   const miniflare = new Miniflare({
-    modules: true,
-    script: 'export default { fetch() { return new Response("ok") } }',
-    d1Databases: ['DB'],
+    workers: [{
+      config: {
+        name: 'product-price-test',
+        type: 'worker',
+        compatibilityDate: '2024-11-01',
+        manifest: {
+          mainModule: 'index.mjs',
+          modules: {
+            'index.mjs': {
+              type: 'esm',
+              contents: 'export default { fetch() { return new Response("ok") } }',
+            },
+          },
+        },
+        env: { DB: { type: 'd1' } },
+      },
+    }],
   })
   const db = await miniflare.getD1Database('DB')
   for (const filename of readdirSync('migrations').filter(name => /^\d+.*\.sql$/.test(name)).sort()) {

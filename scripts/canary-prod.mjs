@@ -39,7 +39,7 @@ function d1Exec(sql) {
 async function fetchJson(request, url, options = {}) {
   const res = await request.fetch(url, options)
   const text = await res.text()
-  let body = null
+  let body
   try { body = text ? JSON.parse(text) : null } catch { body = null }
   return { res, body, text }
 }

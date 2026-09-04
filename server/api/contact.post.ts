@@ -138,8 +138,8 @@ export default defineHandler(async (event) => {
   const dateKey = `rate:email:${emailHash}:${new Date().toISOString().split('T')[0]}`
 
   if (db) {
-    let ipIncremented = true
-    let emailIncremented = true
+    let ipIncremented: boolean
+    let emailIncremented: boolean
 
     try {
       ipIncremented = await incrementRateLimit(db, hourKey, IP_HOURLY_LIMIT, 3600000)

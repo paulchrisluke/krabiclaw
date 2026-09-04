@@ -46,16 +46,14 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
   }
 
-  let imageId = ''
-  let publicUrl = ''
-  let thumbnailUrl = ''
-  let cfLogId: string | null = null
-  let generatedImage = { inputTokens: 0, outputTokens: 0 }
+  let imageId: string
+  let publicUrl: string
+  let thumbnailUrl: string
+  let generatedImage: Awaited<ReturnType<typeof generateImageViaGateway>>
 
   try {
     const result = await generateImageViaGateway(env, prompt)
-    cfLogId = result.cfLogId
-    generatedImage = { inputTokens: result.inputTokens, outputTokens: result.outputTokens }
+    generatedImage = result
     const image = result.images[0]
     if (!image) throw new Error('Image generation returned no images')
 
@@ -102,7 +100,7 @@ export default defineHandler(async (event) => {
   if (!isDev) {
     try {
       await chargeCredits(db, orgId, {
-        siteId, sessionId: session.session.id, action: 'generate_image', model: IMAGE_MODEL, inputTokens: generatedImage.inputTokens, outputTokens: generatedImage.outputTokens, cfGatewayLogId: cfLogId, })
+        siteId, sessionId: session.session.id, action: 'generate_image', model: IMAGE_MODEL, inputTokens: generatedImage.inputTokens, outputTokens: generatedImage.outputTokens, cfGatewayLogId: generatedImage.cfLogId, })
     } catch (error) {
       const normalizedError = error instanceof Error ? error : new Error('Unknown error')
       console.error('chargeCredits_failed', { siteId, model: IMAGE_MODEL, error: normalizedError.message })

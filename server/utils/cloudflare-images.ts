@@ -67,7 +67,7 @@ export async function uploadImageBuffer(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
-    throw new Error(`CF Images upload request failed for account ${accountId(env) || 'missing'}: ${message}`)
+    throw new Error(`CF Images upload request failed for account ${accountId(env) || 'missing'}: ${message}`, { cause: error })
   }
   if (!res.ok) {
     const body = await res.text()
@@ -97,7 +97,7 @@ export async function deleteImage(env: CloudflareImagesEnv, imageId: string): Pr
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
-    throw new Error(`CF Images delete request failed for ${imageId}: ${message}`)
+    throw new Error(`CF Images delete request failed for ${imageId}: ${message}`, { cause: error })
   }
 
   if (!res.ok && res.status !== 404) {

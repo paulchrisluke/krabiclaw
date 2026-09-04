@@ -1293,7 +1293,7 @@ console.log(
 
 console.log("\n→ Scanning for forbidden copy...");
 const copyHits = scanForbiddenCopy(seedSql, VERTICAL);
-let copyReport = "";
+let copyReport;
 
 if (copyHits.length === 0) {
   console.log("  ✓ No forbidden copy found in proposed seed");

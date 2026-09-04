@@ -21,7 +21,7 @@ import {
   dispatchStandardMcpMethod, respondToMcpError, resolveMissingMcpCredential, unsupportedMcpMethodError, type McpToolMeta, } from "~/server/utils/mcp-runtime";
 import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
 import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
-import { describeErrorForTelemetry } from "~/server/utils/error-telemetry";
+import { describeErrorForTelemetry, errorChainForTelemetry } from "~/server/utils/error-telemetry";
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
 // Fires a telemetry write without ever blocking or failing the MCP response.
@@ -293,6 +293,11 @@ Common workflows: manage location-scoped Products, create and publish site posts
         assertConversationalToolEnabled(toolName, cfEnv as ApiRecord);
         result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
       } catch (toolError) {
+        console.error({
+          event: "mcp_tool_failed", tool: toolName, request_id: request.id,
+          ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
+          errors: errorChainForTelemetry(toolError),
+        });
         const mcpErr = asMcpError(toolError);
         if (mcpErr.kind === "protocol") {
           const telemetryErrorMessage = describeErrorForTelemetry(toolError);

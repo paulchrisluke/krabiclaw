@@ -60,10 +60,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cloudflare/workers-types@npm:5.20260827.1":
-  version: 5.20260827.1
-  resolution: "@cloudflare/workers-types@npm:5.20260827.1"
-  checksum: 10c0/65044c2b764cc75fd2738c338dc7b5f8536fcd73dcde35bc6e7cc730d70d89201700a721386b7354cfa89b25be3085844a56ac020666e72c70a20dd661bae340
+"@cloudflare/workers-types@npm:5.20260828.1":
+  version: 5.20260828.1
+  resolution: "@cloudflare/workers-types@npm:5.20260828.1"
+  checksum: 10c0/6fedf7f9622fa3f68fe9bbe2bf3178bf93f90d18c3d8a20cf1af47609523901b94125224f74d07019e91901604434bee545905a1538a82aa963d82b38b145c09
   languageName: node
   linkType: hard
 
@@ -927,7 +927,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "krabiclaw-email-inbound@workspace:."
   dependencies:
-    "@cloudflare/workers-types": "npm:5.20260827.1"
+    "@cloudflare/workers-types": "npm:5.20260828.1"
     postal-mime: "npm:^3.0.0"
     typescript: "npm:^7.0.2"
     wrangler: "npm:^4.127.0"

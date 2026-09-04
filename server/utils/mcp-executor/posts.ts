@@ -164,8 +164,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const pageToken = facebookConnection!.encrypted_page_token!;
         const pageId = facebookConnection!.facebook_page_id!;
 
-        let imageUrl: string | null = null;
-        imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url ?? null;
+        const imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url ?? null;
 
         if (wantsFacebook) {
           try {
