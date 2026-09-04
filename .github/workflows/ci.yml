@@ -109,7 +109,7 @@ jobs:
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
       - run: yarn build
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: preview-worker-${{ github.event.pull_request.head.sha }}
           path: .output
@@ -232,7 +232,7 @@ jobs:
         run: yarn test:e2e:preview:selected
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-preview
           path: |
@@ -311,7 +311,7 @@ jobs:
         run: yarn test:e2e:tenant-rendering
       - name: Upload staging Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-staging
           path: |
@@ -427,7 +427,7 @@ jobs:
         run: yarn test:e2e:tenant-rendering
       - name: Upload production Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-production
           path: |
