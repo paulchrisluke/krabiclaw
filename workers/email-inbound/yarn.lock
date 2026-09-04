@@ -780,7 +780,7 @@ __metadata:
   resolution: "krabiclaw-email-inbound@workspace:."
   dependencies:
     "@cloudflare/workers-types": "npm:^4.20241004.0"
-    postal-mime: "npm:^2.2.7"
+    postal-mime: "npm:^3.0.0"
     typescript: "npm:^5.6.0"
     wrangler: "npm:^3.80.0"
   languageName: unknown
@@ -909,10 +909,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"postal-mime@npm:^2.2.7":
-  version: 2.7.5
-  resolution: "postal-mime@npm:2.7.5"
-  checksum: 10c0/cb258498d67529fed3fa69af98eabf6c53cbc4dd060db0a550af9952e65ffe93046a384765e2ee0269d090564ef2c66a00aec02418036bbf6aa14390d0af1955
+"postal-mime@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "postal-mime@npm:3.0.0"
+  checksum: 10c0/e7385b3ceccba9e14a0c81d46961ab5198d8bf12ce7a43925349deb7d38d647d319555379c70d1bfc437bb0e765cae062cac3105a7092d5b676223749d0d9010
   languageName: node
   linkType: hard
 

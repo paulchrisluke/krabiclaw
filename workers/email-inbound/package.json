@@ -11,7 +11,7 @@
     "dev": "wrangler dev"
   },
   "dependencies": {
-    "postal-mime": "^2.2.7"
+    "postal-mime": "^3.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241004.0",
