@@ -1,107 +1,86 @@
 <template>
   <UDashboardPanel id="location-qa">
     <template #header>
-      <UDashboardNavbar title="Q&A">
+      <UDashboardNavbar title="Location" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="paths.project" label="Location" />
-        </template>
-        <template #trailing>
-          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <div class="space-y-3">
-          <div v-if="loading" class="space-y-3">
-            <USkeleton v-for="i in 4" :key="i" class="h-28 rounded-lg" />
+      <DashboardListEditor
+        v-model:editing="editing"
+        title="Q&A"
+        description="Add common guest questions, then answer them once."
+        :items="listItems"
+        :pending="loading"
+        :error="loadError"
+        empty-title="No Q&A yet"
+        empty-icon="i-lucide-circle-help"
+        add-label="Add a question"
+        reorderable
+        :removing-id="removingId"
+        @add="openNew"
+        @open="openExisting"
+        @remove="removeItem"
+        @move="moveQa"
+      >
+        <template #item="{ item }">
+          <div class="flex flex-wrap items-center gap-2">
+            <UBadge :color="item.row.status === 'published' ? 'success' : 'neutral'" variant="soft">{{ item.row.status }}</UBadge>
+            <span class="text-xs text-muted">{{ item.row.upvote_count }} upvotes</span>
           </div>
+          <p class="mt-2 text-sm font-semibold text-highlighted">{{ item.row.question }}</p>
+          <p class="mt-1 line-clamp-2 text-sm text-muted" :class="item.row.answer ? '' : 'italic'">{{ item.row.answer || 'No answer yet.' }}</p>
+        </template>
+      </DashboardListEditor>
 
-          <div v-else-if="loadError" class="space-y-3">
-            <UAlert color="error" variant="soft" title="Q&A unavailable" :description="loadError" />
-            <UButton color="neutral" variant="soft" @click="loadQa">Try again</UButton>
-          </div>
+      <DashboardListItemDialog
+        v-model:open="dialogOpen"
+        :title="editingId ? 'Edit question' : 'Add a question'"
+        :removable="Boolean(editingId)"
+        :saving="saving"
+        :removing="removingId === editingId"
+        :save-disabled="!locationId || (translationLocale === 'en' ? !form.question.trim() : false)"
+        @save="translationLocale === 'en' ? saveQa() : saveTranslation()"
+        @remove="removeEditing"
+      >
+        <UFormField v-if="editingId && translationLocales.length" label="Language">
+          <select v-model="translationLocale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
+            <option value="en">en</option>
+            <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
+          </select>
+        </UFormField>
 
-          <div v-else-if="qaRows.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
-            <UIcon name="i-lucide-circle-help" class="mx-auto size-9 text-muted" />
-            <p class="mt-3 text-sm font-medium text-highlighted">No Q&A yet</p>
-            <p class="mt-1 text-sm text-muted">Add common guest questions, then answer them once.</p>
-          </div>
-
-          <div v-else v-for="item in qaRows" :key="item.id" class="rounded-lg border border-default bg-default p-4">
-            <div class="flex items-start justify-between gap-4">
-              <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <UBadge :color="item.status === 'published' ? 'success' : 'neutral'" variant="soft">{{ item.status }}</UBadge>
-                  <span class="text-xs text-muted">{{ item.upvote_count }} upvotes</span>
-                </div>
-                <p class="mt-3 text-sm font-semibold text-highlighted">{{ item.question }}</p>
-                <p v-if="item.answer" class="mt-2 text-sm text-muted">{{ item.answer }}</p>
-                <p v-else class="mt-2 text-sm italic text-muted">No answer yet.</p>
-              </div>
-              <div class="flex shrink-0 gap-1">
-                <UButton icon="i-lucide-arrow-up" size="sm" color="neutral" variant="ghost" @click="moveQa(item, -1)" />
-                <UButton icon="i-lucide-arrow-down" size="sm" color="neutral" variant="ghost" @click="moveQa(item, 1)" />
-                <UButton icon="i-lucide-square-pen" size="sm" color="neutral" variant="ghost" @click="startEdit(item)" />
-                <UButton
-                  :icon="item.status === 'published' ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                  size="sm"
-                  color="neutral"
-                  variant="ghost"
-                  @click="toggleStatus(item)"
-                />
-                <UButton icon="i-lucide-trash-2" size="sm" color="error" variant="ghost" :loading="deletingId === item.id" @click="deleteQa(item)" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <UCard>
-          <template #header>
-            <h2 class="font-semibold text-highlighted">Add Q&A</h2>
-          </template>
-
-          <div class="space-y-4">
-            <UFormField v-if="editingId && translationLocales.length" label="Language">
-              <select v-model="translationLocale" aria-label="Field language" class="rounded-lg border border-default bg-default px-2 py-1 text-sm">
-                <option value="en">en</option>
-                <option v-for="option in translationLocales" :key="option" :value="option">{{ option }}</option>
-              </select>
-            </UFormField>
-            <template v-if="translationLocale === 'en'">
-              <UFormField label="Question">
-                <UTextarea v-model="form.question" :rows="3" placeholder="Do you accept walk-ins?" />
-              </UFormField>
-              <UFormField label="Answer">
-                <UTextarea v-model="form.answer" :rows="4" placeholder="Yes, walk-ins are welcome when seats are available." />
-              </UFormField>
-            </template>
-            <template v-else>
-              <p class="text-xs text-muted">Source (English): {{ form.question }}</p>
-              <UFormField :label="`Question (${translationLocale})`">
-                <UTextarea v-model="translationFields.question" :rows="3" />
-              </UFormField>
-              <UFormField :label="`Answer (${translationLocale})`">
-                <UTextarea v-model="translationFields.answer" :rows="4" />
-              </UFormField>
-              <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
-              <UButton block :loading="translationSaving" label="Save translation" @click="saveTranslation" />
-            </template>
-            <div v-if="translationLocale === 'en'" class="flex gap-2">
-              <UButton v-if="editingId" block color="neutral" variant="ghost" @click="resetForm">Cancel</UButton>
-              <UButton block :loading="saving" :disabled="!locationId || !form.question.trim()" @click="saveQa">
-                {{ editingId ? 'Save changes' : 'Add question' }}
-              </UButton>
-            </div>
-          </div>
-        </UCard>
-      </div>
+        <template v-if="translationLocale === 'en'">
+          <UFormField label="Question">
+            <UTextarea v-model="form.question" :rows="3" placeholder="Do you accept walk-ins?" autofocus class="w-full" />
+          </UFormField>
+          <UFormField label="Answer">
+            <UTextarea v-model="form.answer" :rows="4" placeholder="Yes, walk-ins are welcome when seats are available." class="w-full" />
+          </UFormField>
+          <UCheckbox v-if="editingId" v-model="form.published" label="Published" />
+        </template>
+        <template v-else>
+          <p class="text-xs text-muted">Source (English): {{ form.question }}</p>
+          <UFormField :label="`Question (${translationLocale})`">
+            <UTextarea v-model="translationFields.question" :rows="3" class="w-full" />
+          </UFormField>
+          <UFormField :label="`Answer (${translationLocale})`">
+            <UTextarea v-model="translationFields.answer" :rows="4" class="w-full" />
+          </UFormField>
+          <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
+        </template>
+      </DashboardListItemDialog>
     </template>
   </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
+import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
+import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.qa' })
 
@@ -125,9 +104,37 @@ const qaRows = ref<QaRow[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
-const deletingId = ref<string | null>(null)
-const editingId = ref<string | null>(null)
-const form = reactive({ question: '', answer: '' })
+const form = reactive({ question: '', answer: '', published: true })
+
+const listItems = computed(() => qaRows.value.map(row => ({ id: row.id, title: row.question, row })))
+
+const { editing, dialogOpen, editingId, removingId, openNew, openExisting, close, removeItem, removeEditing } = useListEditor<QaRow>({
+  find: id => qaRows.value.find(row => row.id === id) ?? null,
+  fill: (row) => {
+    translationLocale.value = 'en'
+    form.question = row.question
+    form.answer = row.answer ?? ''
+    form.published = row.status === 'published'
+  },
+  clear: () => {
+    translationLocale.value = 'en'
+    form.question = ''
+    form.answer = ''
+    form.published = true
+  },
+  destroy: async (id) => {
+    if (!locationId.value) return
+    try {
+      await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${id}`, {
+        method: 'DELETE',
+        validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
+      })
+      await loadQa()
+    } catch (error) {
+      toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+    }
+  },
+})
 const requestEvent = useRequestEvent()
 const {
   data: qaResource,
@@ -182,11 +189,6 @@ async function loadQa() {
   }
 }
 
-function resetForm() {
-  editingId.value = null
-  form.question = ''
-  form.answer = ''
-}
 
 // ── Translations (resource_localizations, same API as the editor CRUD) ──
 const translationLocale = ref('en')
@@ -252,12 +254,6 @@ async function saveTranslation() {
 }
 void loadTranslationLocales()
 
-function startEdit(item: QaRow) {
-  translationLocale.value = 'en'
-  editingId.value = item.id
-  form.question = item.question
-  form.answer = item.answer ?? ''
-}
 
 async function saveQa() {
   if (!locationId.value) return
@@ -266,7 +262,7 @@ async function saveQa() {
     if (editingId.value) {
       await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${editingId.value}`, {
         method: 'PATCH',
-        body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 },
+        body: { question: form.question, answer: form.answer || null, is_owner_answer: 1, status: form.published ? 'published' : 'hidden' },
         validate: (value): value is { updated: true; qa_id: string } =>
           isRecord(value) && value.updated === true && typeof value.qa_id === 'string',
       })
@@ -283,7 +279,7 @@ async function saveQa() {
       })
       toast.add({ description: 'Q&A added', color: 'success' })
     }
-    resetForm()
+    close()
     await loadQa()
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to save Q&A', color: 'error' })
@@ -292,30 +288,14 @@ async function saveQa() {
   }
 }
 
-async function updateQa(item: QaRow, body: ApiRecord, successMessage: string) {
-  if (!locationId.value) return
-  try {
-    await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, {
-      method: 'PATCH',
-      body,
-      validate: (value): value is { updated: true; qa_id: string } =>
-        isRecord(value) && value.updated === true && typeof value.qa_id === 'string',
-    })
-    toast.add({ description: successMessage, color: 'success' })
-    await loadQa()
-  } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update Q&A', color: 'error' })
-  }
-}
 
-async function toggleStatus(item: QaRow) {
-  await updateQa(item, { status: item.status === 'published' ? 'hidden' : 'published' }, item.status === 'published' ? 'Q&A hidden' : 'Q&A published')
-}
 
-async function moveQa(item: QaRow, direction: -1 | 1) {
+async function moveQa(item: { id: string }, direction: -1 | 1) {
   if (!locationId.value) return
   const currentIndex = qaRows.value.findIndex(row => row.id === item.id)
   if (currentIndex === -1) return
+  const current = qaRows.value[currentIndex]
+  if (!current) return
   const targetIndex = currentIndex + direction
   if (targetIndex < 0 || targetIndex >= qaRows.value.length) return
   const target = qaRows.value[targetIndex]
@@ -325,8 +305,8 @@ async function moveQa(item: QaRow, direction: -1 | 1) {
       method: 'POST',
       body: {
         updates: [
-          { id: item.id, sort_order: target.sort_order },
-          { id: target.id, sort_order: item.sort_order }
+          { id: current.id, sort_order: target.sort_order },
+          { id: target.id, sort_order: current.sort_order }
         ]
       },
       validate: (value): value is { updated: number } =>
@@ -339,24 +319,6 @@ async function moveQa(item: QaRow, direction: -1 | 1) {
   }
 }
 
-async function deleteQa(item: QaRow) {
-  if (!locationId.value) return
-  if (!confirm(`Delete this question?\n\n${item.question}`)) return
-  deletingId.value = item.id
-  try {
-    await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, {
-      method: 'DELETE',
-      validate: (value): value is { qa_id: string; deleted: true } =>
-        isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
-    })
-    qaRows.value = qaRows.value.filter(row => row.id !== item.id)
-    toast.add({ description: 'Q&A deleted', color: 'neutral' })
-  } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to delete Q&A', color: 'error' })
-  } finally {
-    deletingId.value = null
-  }
-}
 
 watch(locationId, () => {
   editingId.value = null
