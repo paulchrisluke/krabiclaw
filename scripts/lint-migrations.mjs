@@ -20,6 +20,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { DatabaseSync, constants } from 'node:sqlite'
 
 const ROOT = process.cwd()
 const MIGRATIONS_DIR = join(ROOT, 'migrations')
@@ -86,6 +87,54 @@ function lintDuplicateMigrationNumbers(presentFiles) {
     }))
 }
 
+// Let SQLite parse the SQL and inspect its actual foreign keys. Snapshot metadata
+// alone cannot establish whether a DROP is safe at this point in the chain.
+async function lintReferencedParentDrops(files) {
+  const db = new DatabaseSync(':memory:')
+  let parents = new Set()
+  let blockedTable
+  db.setAuthorizer((action, table) => {
+    if (action === constants.SQLITE_ATTACH) return constants.SQLITE_DENY
+    if (action === constants.SQLITE_DROP_TABLE && parents.has(table.toLowerCase())) {
+      blockedTable = table
+      return constants.SQLITE_DENY
+    }
+    return constants.SQLITE_OK
+  })
+  try {
+    for (const file of files) {
+      let remaining = await readFile(file, 'utf8')
+      try {
+        while (true) {
+          // Strip only leading whitespace, delimiters and comments; SQLite finds
+          // statement boundaries, including quoted text and trigger bodies.
+          remaining = remaining.replace(/^(?:\s|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, '')
+          if (!remaining) break
+          parents = new Set(db.prepare(`
+            SELECT DISTINCT lower(f."table") AS name
+            FROM sqlite_schema AS s, pragma_foreign_key_list(s.name) AS f
+            WHERE s.type = 'table'
+          `).all().map(row => row.name))
+          const statement = db.prepare(remaining)
+          const length = statement.sourceSQL.length
+          statement.run()
+          remaining = remaining.slice(length)
+        }
+      } catch (error) {
+        return [{
+          file: relative(ROOT, file),
+          message: blockedTable
+            ? `Cannot DROP referenced parent table "${blockedTable}". D1 may execute foreign-key actions during a rebuild; follow docs/database/migrations.md.`
+            : `Migration chain cannot be validated: ${error.message}`,
+        }]
+      }
+    }
+    return []
+  } finally {
+    db.close()
+  }
+}
+
 let totalViolations = 0
 
 const sqlFiles = await collectSqlFiles()
@@ -111,6 +160,13 @@ for (const file of sqlFiles) {
 
   for (const violation of violations) {
     console.error(`  ✗ ${violation.file}:${violation.line} — ${violation.message}`)
+    totalViolations++
+  }
+}
+
+if (totalViolations === 0) {
+  for (const violation of await lintReferencedParentDrops(sqlFiles)) {
+    console.error(`  ✗ ${violation.file} — ${violation.message}`)
     totalViolations++
   }
 }
