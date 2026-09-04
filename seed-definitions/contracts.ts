@@ -513,10 +513,13 @@ export interface CompiledSeedProductCategory {
  */
 export function buildSeedProductCategories(
   products: Pick<CompiledSeedProduct, 'id' | 'organizationId' | 'siteId' | 'locationId' | 'category' | 'sortOrder'>[],
-): { categories: CompiledSeedProductCategory[]; categoryIdByProductId: Map<string, string> } {
+): { categories: CompiledSeedProductCategory[]; categoryIdByProductId: Map<string, string>; sortOrderByProductId: Map<string, number> } {
   const categories: CompiledSeedProductCategory[] = []
   const byKey = new Map<string, CompiledSeedProductCategory>()
   const categoryIdByProductId = new Map<string, string>()
+  // sort_order is per category now, so it restarts at zero inside each one.
+  const sortOrderByProductId = new Map<string, number>()
+  const positionByCategory = new Map<string, number>()
   const sortOrderByLocation = new Map<string, number>()
   for (const product of [...products].sort((a, b) => a.locationId.localeCompare(b.locationId) || a.sortOrder - b.sortOrder)) {
     const key = `${product.locationId}::${product.category}`
@@ -536,6 +539,44 @@ export function buildSeedProductCategories(
       categories.push(category)
     }
     categoryIdByProductId.set(product.id, category.id)
+    const position = positionByCategory.get(category.id) ?? 0
+    positionByCategory.set(category.id, position + 1)
+    sortOrderByProductId.set(product.id, position)
   }
-  return { categories, categoryIdByProductId }
+  return { categories, categoryIdByProductId, sortOrderByProductId }
+}
+
+/**
+ * Experiences all sit in one category per location, scoped to
+ * product_type 'experience' so it never collides with a menu section of the
+ * same name. IDs are derived, so re-running a seed produces the same rows.
+ */
+export function buildSeedExperienceCategories(
+  experiences: { locationId: string; id: string }[],
+  identity: { organizationId: string; siteId: string },
+): { categories: CompiledSeedProductCategory[]; categoryIdForLocation: (_locationId: string) => string; sortOrderFor: (_id: string) => number } {
+  const categoryIdForLocation = (locationId: string) => `category-${locationId}-experience-experiences`
+  const seen = new Set<string>()
+  const categories: CompiledSeedProductCategory[] = []
+  for (const experience of experiences) {
+    if (seen.has(experience.locationId)) continue
+    seen.add(experience.locationId)
+    categories.push({
+      id: categoryIdForLocation(experience.locationId),
+      organizationId: identity.organizationId,
+      siteId: identity.siteId,
+      locationId: experience.locationId,
+      name: 'Experiences',
+      slug: 'experiences',
+      sortOrder: 0,
+    })
+  }
+  const positionByLocation = new Map<string, number>()
+  const sortOrderById = new Map<string, number>()
+  for (const experience of experiences as { locationId: string; id: string }[]) {
+    const position = positionByLocation.get(experience.locationId) ?? 0
+    positionByLocation.set(experience.locationId, position + 1)
+    sortOrderById.set(experience.id, position)
+  }
+  return { categories, categoryIdForLocation, sortOrderFor: (id: string) => sortOrderById.get(id) ?? 0 }
 }

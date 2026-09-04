@@ -1306,13 +1306,40 @@ CREATE TABLE `prices` (
 --> statement-breakpoint
 CREATE INDEX `prices_product_validity_idx` ON `prices` (`organization_id`,`site_id`,`product_id`,`valid_from`,`valid_until`);--> statement-breakpoint
 CREATE INDEX `prices_site_location_validity_idx` ON `prices` (`site_id`,`location_id`,`valid_from`,`valid_until`);--> statement-breakpoint
+CREATE TABLE `product_categories` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`site_id` text NOT NULL,
+	`location_id` text NOT NULL,
+	`product_type` text DEFAULT 'standard' NOT NULL,
+	`name` text NOT NULL,
+	`slug` text NOT NULL,
+	`sort_order` integer NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_categories_name_not_blank_check" CHECK(trim("product_categories"."name") <> ''),
+	CONSTRAINT "product_categories_slug_check" CHECK("product_categories"."slug" <> '' AND "product_categories"."slug" = lower("product_categories"."slug") AND "product_categories"."slug" NOT GLOB '*[^a-z0-9-]*' AND "product_categories"."slug" NOT LIKE '-%' AND "product_categories"."slug" NOT LIKE '%-' AND "product_categories"."slug" NOT LIKE '%--%'),
+	CONSTRAINT "product_categories_sort_order_check" CHECK("product_categories"."sort_order" >= 0),
+	CONSTRAINT "product_categories_type_check" CHECK("product_categories"."product_type" IN ('standard', 'experience'))
+);
+--> statement-breakpoint
+CREATE INDEX `product_categories_location_type_sort_idx` ON `product_categories` (`site_id`,`location_id`,`product_type`,`sort_order`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_categories_scope_id_unique` ON `product_categories` (`organization_id`,`site_id`,`location_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_categories_location_type_slug_unique` ON `product_categories` (`site_id`,`location_id`,`product_type`,`slug`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_categories_location_type_name_unique` ON `product_categories` (`site_id`,`location_id`,`product_type`,`name`);--> statement-breakpoint
 CREATE TABLE `products` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`site_id` text NOT NULL,
 	`location_id` text NOT NULL,
 	`product_type` text DEFAULT 'standard' NOT NULL,
-	`category` text NOT NULL,
+	`category_id` text NOT NULL,
 	`name` text NOT NULL,
 	`slug` text NOT NULL,
 	`description` text DEFAULT '' NOT NULL,
@@ -1337,7 +1364,7 @@ CREATE TABLE `products` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "products_category_not_blank_check" CHECK(trim("products"."category") <> ''),
+	FOREIGN KEY (`organization_id`,`site_id`,`location_id`,`category_id`) REFERENCES `product_categories`(`organization_id`,`site_id`,`location_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "products_name_not_blank_check" CHECK(trim("products"."name") <> ''),
 	CONSTRAINT "products_slug_check" CHECK("products"."slug" <> '' AND "products"."slug" = lower("products"."slug") AND "products"."slug" NOT GLOB '*[^a-z0-9-]*' AND "products"."slug" NOT LIKE '-%' AND "products"."slug" NOT LIKE '%-' AND "products"."slug" NOT LIKE '%--%'),
 	CONSTRAINT "products_sort_order_check" CHECK("products"."sort_order" >= 0),
@@ -1351,12 +1378,13 @@ CREATE TABLE `products` (
 	CONSTRAINT "products_robots_check" CHECK("products"."robots" IS NULL OR "products"."robots" IN ('index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'))
 );
 --> statement-breakpoint
+CREATE INDEX `products_category_sort_order_idx` ON `products` (`category_id`,`sort_order`);--> statement-breakpoint
+CREATE INDEX `products_site_location_type_sort_order_idx` ON `products` (`site_id`,`location_id`,`product_type`,`sort_order`);--> statement-breakpoint
 CREATE INDEX `products_site_location_visible_sort_idx` ON `products` (`site_id`,`location_id`,`is_visible`,`sort_order`);--> statement-breakpoint
 CREATE INDEX `products_site_location_featured_sort_idx` ON `products` (`site_id`,`location_id`,`featured`,`featured_sort_order`);--> statement-breakpoint
 CREATE INDEX `products_organization_site_idx` ON `products` (`organization_id`,`site_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `products_scope_id_unique` ON `products` (`organization_id`,`site_id`,`location_id`,`id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `products_site_location_slug_unique` ON `products` (`site_id`,`location_id`,`slug`);--> statement-breakpoint
-CREATE UNIQUE INDEX `products_site_location_type_sort_order_unique` ON `products` (`site_id`,`location_id`,`product_type`,`sort_order`);--> statement-breakpoint
 CREATE TABLE `public_resource_cache_invalidations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`site_id` text NOT NULL,
@@ -2322,7 +2350,7 @@ CREATE TABLE `user` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`email` text NOT NULL,
-	`emailVerified` integer DEFAULT 0 NOT NULL,
+	`emailVerified` integer DEFAULT false NOT NULL,
 	`image` text,
 	`phoneNumber` text,
 	`phoneNumberVerified` integer DEFAULT 0 NOT NULL,
