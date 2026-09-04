@@ -270,77 +270,6 @@
 
           </div>
 
-          <!-- Availability -->
-          <div v-else-if="editorKey === 'availability'" class="space-y-6">
-            <p class="text-base text-muted">Close individual times or change capacity on a specific date.</p>
-            <p v-if="availabilityTimezone" class="text-xs text-muted">Times shown in {{ availabilityTimezone }}.</p>
-            <UFormField label="Date">
-              <UInput v-model="availabilityDate" type="date" class="w-full max-w-xs" @change="loadAvailability" />
-            </UFormField>
-
-            <div v-if="availabilityLoading" class="space-y-2">
-              <USkeleton class="h-12 w-full rounded-lg" />
-              <USkeleton class="h-12 w-full rounded-lg" />
-            </div>
-            <p v-else-if="!availabilitySlots.length" class="text-sm text-muted">No effective time slots on this date.</p>
-            <div v-else class="space-y-2">
-              <div
-                v-for="slot in availabilitySlots"
-                :key="slot.time_slot"
-                class="flex flex-wrap items-center gap-3 rounded-lg border border-default p-3"
-              >
-                <span class="w-16 shrink-0 font-medium text-highlighted">{{ slot.time_slot }}</span>
-                <span class="text-xs text-muted">
-                  {{ slot.booked }} booked<span v-if="slot.capacity != null"> / {{ slot.capacity }}</span>
-                </span>
-                <UBadge v-if="slot.is_closed" color="error" variant="soft" size="xs">Closed</UBadge>
-                <UBadge v-else-if="slot.is_full" color="warning" variant="soft" size="xs">Full</UBadge>
-                <UInputNumber
-                  v-model="slotCapacityOverrides[slot.time_slot]"
-                  :min="0"
-                  placeholder="Capacity"
-                  class="ml-auto w-32"
-                />
-                <UButton
-                  size="xs"
-                  :color="slot.is_closed ? 'success' : 'error'"
-                  variant="soft"
-                  :loading="savingOverride === slot.time_slot"
-                  @click="toggleSlotOverride(slot)"
-                >
-                  {{ slot.is_closed ? 'Reopen' : 'Close' }}
-                </UButton>
-              </div>
-            </div>
-
-            <div v-if="existingOverrides.length" class="border-t border-default pt-4">
-              <p class="mb-2 text-xs font-medium text-muted">Upcoming overrides</p>
-              <div class="space-y-1">
-                <div
-                  v-for="override in existingOverrides"
-                  :key="override.id"
-                  class="flex items-center gap-3 rounded-lg border border-default px-3 py-2 text-sm"
-                >
-                  <span class="text-muted">{{ override.override_date }}</span>
-                  <span class="font-medium text-highlighted">{{ override.time_slot }}</span>
-                  <UBadge :color="override.status === 'closed' ? 'error' : 'success'" variant="soft" size="xs">
-                    {{ override.status }}
-                  </UBadge>
-                  <span v-if="override.capacity_override != null" class="text-xs text-muted">cap {{ override.capacity_override }}</span>
-                  <UButton
-                    size="xs"
-                    color="neutral"
-                    variant="ghost"
-                    icon="i-lucide-trash-2"
-                    class="ml-auto"
-                    aria-label="Delete override"
-                    @click="deleteOverride(override)"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- Translations -->
           <div v-else-if="editorKey === 'translations'" class="space-y-6">
             <UFormField label="Language">
@@ -412,7 +341,7 @@ import {
   provideExperienceEditor,
   useExperienceEditor,
 } from '~/composables/useExperienceEditor'
-import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
+import type { Experience, WeekdayName } from '~/server/utils/experiences'
 import { formatMinorAmount, majorAmountToMinor } from '~/shared/prices'
 import type { CurrencyCode } from '~/shared/currencies'
 import { getErrorMessage } from '~/utils/errors'
@@ -429,6 +358,12 @@ const experienceId = computed(() => String(route.params.experienceId ?? ''))
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const experiencesPath = computed(() => locationPaths.value?.experiences ?? '')
 const experiencePath = computed(() => `${experiencesPath.value}/${experienceId.value}`)
+const calendarPath = computed(() => {
+  // The calendar cannot infer which site an experience belongs to, and guessing
+  // the first one would silently show the wrong availability.
+  const query = new URLSearchParams({ experience: experienceId.value, site: siteId })
+  return `/dashboard/${route.params.orgSlug}/calendar?${query.toString()}`
+})
 const currency = computed(() => dashboard.site.value?.default_currency || 'USD')
 
 const editor = provideExperienceEditor(useExperienceEditor(siteId, currentLocationId, currency))
@@ -445,7 +380,6 @@ const sectionLabels: Record<string, string> = {
   discounts: 'Discounts',
   included: "What's included",
   policies: 'Policies',
-  availability: 'Availability',
   translations: 'Translations',
 }
 const validSectionKeys = new Set(Object.keys(sectionLabels))
@@ -464,9 +398,8 @@ if (routeSegments.value.length > 1 || (detailKey.value && !validSectionKeys.has(
   throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 }
 
-// Photos, availability and delete each commit as you act, so they have no
-// pending draft for a footer to save.
-const showActions = computed(() => hasDetail.value && !['photos', 'availability'].includes(editorKey.value))
+// Photos commit as you act, so there is no pending draft for a footer to save.
+const showActions = computed(() => hasDetail.value && editorKey.value !== 'photos')
 const saveDisabled = computed(() => editorKey.value === 'details' && !editor.form.title.trim())
 const saving = computed(() => editor.saving.value || translationSaving.value)
 
@@ -644,8 +577,10 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
       { id: 'guests', label: 'Guests', summary: guestsSummary.value, icon: 'i-lucide-users', to: `${experiencePath.value}/guests` },
       { id: 'pricing', label: 'Pricing', summary: priceSummary.value, icon: 'i-lucide-tag', to: `${experiencePath.value}/pricing` },
       { id: 'discounts', label: 'Discounts', summary: discountSummary.value, icon: 'i-lucide-percent', to: `${experiencePath.value}/discounts` },
-      { id: 'availability', label: 'Availability', summary: 'Close times or change capacity by date', icon: 'i-lucide-calendar-days', to: `${experiencePath.value}/availability` },
       { id: 'policies', label: 'Policies', summary: policySummary.value, icon: 'i-lucide-shield-check', to: `${experiencePath.value}/policies` },
+      // Closing a time on a date is calendar work, not configuration, so this
+      // row leaves the editor rather than duplicating the calendar inside it.
+      { id: 'calendar', label: 'Dates and availability', summary: 'Close times or change capacity on the calendar', icon: 'i-lucide-calendar-days', to: calendarPath.value },
     ],
   },
   {
@@ -863,89 +798,7 @@ async function savePolicyTranslation() {
 
 void loadTranslationLocales()
 
-// ── Availability ────────────────────────────────────────
-const availabilityDate = ref(new Date().toISOString().slice(0, 10))
-const availabilityLoading = ref(false)
-const availabilitySlots = ref<SlotAvailability[]>([])
-const availabilityTimezone = ref<string | null>(null)
-const existingOverrides = ref<SlotOverride[]>([])
-const slotCapacityOverrides = reactive<Record<string, number | null>>({})
-const savingOverride = ref<string | null>(null)
-
-const isAvailabilityResponse = (value: unknown): value is { timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> } =>
-  isRecord(value)
-  && typeof value.timezone === 'string'
-  && Array.isArray(value.dates)
-  && value.dates.every(day => isRecord(day) && typeof day.date === 'string' && Array.isArray(day.slots) && day.slots.every(isRecord))
-const isOverridesResponse = (value: unknown): value is { overrides: SlotOverride[] } =>
-  isRecord(value) && Array.isArray(value.overrides) && value.overrides.every(override => isRecord(override) && typeof override.id === 'string')
-
-function clearCapacityOverrides() {
-  for (const key of Object.keys(slotCapacityOverrides)) Reflect.deleteProperty(slotCapacityOverrides, key)
-}
-
-async function loadAvailability() {
-  availabilityLoading.value = true
-  try {
-    const [availability, overrides] = await Promise.all([
-      dashboardApi(`/api/editor/sites/${siteId}/experiences/${experienceId.value}/availability`, {
-        query: { date: availabilityDate.value }, validate: isAvailabilityResponse,
-      }),
-      dashboardApi(`/api/editor/sites/${siteId}/experiences/${experienceId.value}/slot-overrides`, {
-        validate: isOverridesResponse,
-      }),
-    ])
-    availabilityTimezone.value = availability.timezone
-    availabilitySlots.value = availability.dates[0]?.slots ?? []
-    existingOverrides.value = overrides.overrides ?? []
-    clearCapacityOverrides()
-  } catch {
-    toast.add({ description: 'Failed to load availability.', color: 'error' })
-  } finally {
-    availabilityLoading.value = false
-  }
-}
-
-// Availability is fetched when its leaf opens, not on every experience view.
-watch(editorKey, key => {
-  if (key === 'availability') void loadAvailability()
-}, { immediate: true })
-
-async function toggleSlotOverride(slot: SlotAvailability) {
-  savingOverride.value = slot.time_slot
-  try {
-    const capacity = slotCapacityOverrides[slot.time_slot]
-    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${experienceId.value}/slot-overrides`, {
-      method: 'POST',
-      body: {
-        override_date: availabilityDate.value,
-        time_slot: slot.time_slot,
-        status: slot.is_closed ? 'open' : 'closed',
-        capacity_override: capacity ?? null,
-      },
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
-    })
-    await loadAvailability()
-  } catch {
-    toast.add({ description: 'Failed to update slot availability.', color: 'error' })
-  } finally {
-    savingOverride.value = null
-  }
-}
-
-async function deleteOverride(override: SlotOverride) {
-  try {
-    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${experienceId.value}/slot-overrides/${override.id}`, {
-      method: 'DELETE',
-      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
-    })
-    await loadAvailability()
-  } catch {
-    toast.add({ description: 'Failed to delete override.', color: 'error' })
-  }
-}
-
-// A save rewrites the record the hub summaries read from.
+// A save rewrites the record the hub summaries and the slug read from.
 watch(() => editor.saving.value, (isSaving, wasSaving) => {
   if (wasSaving && !isSaving) void refresh()
 })

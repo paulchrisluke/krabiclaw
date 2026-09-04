@@ -62,6 +62,37 @@
             </div>
           </div>
 
+          <!--
+            Availability for one experience on the selected day. Dates are
+            calendar work, so this is where closing a time lives rather than
+            inside the experience editor. One experience at a time until the
+            two slot-override tables become one and a whole day can be read in
+            a single query — see issue #820.
+          -->
+          <section v-if="availabilityExperienceId && availabilitySiteId" class="space-y-3 rounded-lg border border-default p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <h3 class="text-sm font-semibold text-highlighted">
+                  Availability · {{ dayLabel(selectedDay) }}
+                </h3>
+                <p v-if="availabilityExperienceLabel" class="mt-0.5 truncate text-xs text-muted">{{ availabilityExperienceLabel }}</p>
+              </div>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                label="Clear"
+                @click="setAvailabilityExperience('')"
+              />
+            </div>
+            <DashboardAvailabilityPanel
+              :site-id="availabilitySiteId"
+              :experience-id="availabilityExperienceId"
+              :date="selectedDay"
+              @changed="reloadAgenda"
+            />
+          </section>
+
           <section v-if="selectedDayItems.length" id="calendar-day-list" class="hidden scroll-mt-20 space-y-2 lg:block">
             <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDay) }}</h3>
             <div class="divide-y divide-default border-y border-default">
@@ -90,6 +121,7 @@
 </template>
 
 <script setup lang="ts">
+import DashboardAvailabilityPanel from '~/components/dashboard/DashboardAvailabilityPanel.vue'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, AgendaSite } from '~/server/utils/dashboard-agenda'
 
@@ -108,7 +140,17 @@ const filters = reactive({ siteId: FILTER_ALL, locationId: FILTER_ALL, kind: rou
 const agendaData = ref<AgendaPayload | null>(null)
 const agendaError = ref<unknown>(null)
 const loading = ref(false)
-const selectedDay = ref(new Date().toISOString().slice(0, 10))
+// The viewer's own date, not UTC. toISOString() is a day behind for anyone east
+// of Greenwich in the evening, which made the calendar open on yesterday and
+// ask the availability API about the wrong date.
+function localDayKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const selectedDay = ref(localDayKey())
 
 const monthStart = computed(() => currentMonth.value.toISOString().slice(0, 10))
 const monthEnd = computed(() => new Date(Date.UTC(currentMonth.value.getUTCFullYear(), currentMonth.value.getUTCMonth() + 1, 0)).toISOString().slice(0, 10))
@@ -176,6 +218,34 @@ watch(() => filters.kind, async kind => {
   await router.replace({ query: { ...route.query, kinds: kind === FILTER_ALL ? undefined : kind } })
 })
 
+// ── Availability for one experience ─────────────────────
+// Entered from an experience's "Dates and availability" row, which passes the
+// id. The calendar keeps it in the URL so the view is shareable and survives a
+// reload, and clearing it returns to the plain agenda.
+const availabilityExperienceId = computed(() => String(route.query.experience ?? ''))
+
+const availabilitySiteId = computed(() => String(route.query.site ?? ''))
+
+// Named only when the month's agenda happens to carry it; a filler subtitle
+// would say less than no subtitle.
+const availabilityExperienceLabel = computed(() =>
+  (agendaData.value?.items ?? []).find(entry => entry.id === availabilityExperienceId.value)?.title ?? '')
+
+function setAvailabilityExperience(id: string) {
+  const query = { ...route.query }
+  if (id) query.experience = id
+  else delete query.experience
+  void router.replace({ query })
+}
+
+async function reloadAgenda() {
+  try {
+    agendaData.value = await fetchAgenda()
+  } catch (error) {
+    agendaError.value = error
+  }
+}
+
 const siteOptions = computed(() => [{ label: 'All sites', value: FILTER_ALL }, ...(agendaData.value?.sites ?? []).map(site => ({ label: site.label, value: site.id }))])
 const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...(agendaData.value?.locations ?? []).filter(location => location.siteId === filters.siteId).map(location => ({ label: location.title, value: location.id }))])
 const kindOptions = computed(() => [{ label: 'All kinds', value: FILTER_ALL }, ...(agendaData.value?.availableKinds ?? []).map(kind => ({ label: kindLabel(kind), value: kind }))])
@@ -184,7 +254,6 @@ const itemsByDay = computed(() => {
   for (const item of agendaData.value?.items ?? []) groups.set(item.dayKey, [...(groups.get(item.dayKey) ?? []), item])
   return groups
 })
-const todayUtcKey = () => new Date().toISOString().slice(0, 10)
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const monthCells = computed(() => {
   const year = currentMonth.value.getUTCFullYear()
@@ -193,7 +262,7 @@ const monthCells = computed(() => {
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(Date.UTC(year, month, index - firstWeekday + 1))
     const dayKey = date.toISOString().slice(0, 10)
-    return { dayKey, day: date.getUTCDate(), inMonth: date.getUTCMonth() === month, isToday: dayKey === todayUtcKey(), items: itemsByDay.value.get(dayKey) ?? [] }
+    return { dayKey, day: date.getUTCDate(), inMonth: date.getUTCMonth() === month, isToday: dayKey === localDayKey(), items: itemsByDay.value.get(dayKey) ?? [] }
   })
 })
 const mobileGroups = computed(() => [...itemsByDay.value.entries()].map(([dayKey, items]) => ({ dayKey, items })))
