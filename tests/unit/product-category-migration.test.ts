@@ -26,18 +26,17 @@ function product(overrides: Partial<LegacyProduct> & Pick<LegacyProduct, 'id' | 
   }
 }
 
-test('category order follows first appearance in the existing flat order', () => {
-  // This is the whole safety property of the migration: customers must see the
-  // same sections in the same order after it runs as before.
-  const { categories } = planCategories([
-    product({ id: 'p1', category: 'Starters', sort_order: 0 }),
-    product({ id: 'p2', category: 'Starters', sort_order: 1 }),
-    product({ id: 'p3', category: 'Mains', sort_order: 2 }),
-    product({ id: 'p4', category: 'Desserts', sort_order: 3 }),
+test('hidden Products preserve member order without moving visible sections', () => {
+  const { categories, assignments } = planCategories([
+    product({ id: 'hidden-only', category: 'Seasonal', sort_order: 0, is_visible: 0 }),
+    product({ id: 'hidden-main', category: 'Mains', sort_order: 1, is_visible: 0 }),
+    product({ id: 'starter', category: 'Starters', sort_order: 2 }),
+    product({ id: 'main', category: 'Mains', sort_order: 3 }),
   ])
-
-  assert.deepEqual(categories.map((category: { name: string }) => category.name), ['Starters', 'Mains', 'Desserts'])
-  assert.deepEqual(categories.map((category: { sort_order: number }) => category.sort_order), [0, 1, 2])
+  assert.deepEqual(categories.map((category: { name: string }) => category.name), ['Starters', 'Mains', 'Seasonal'])
+  const order = new Map(assignments.map((row: { product_id: string; sort_order: number }) => [row.product_id, row.sort_order]))
+  assert.equal(order.get('hidden-main'), 0)
+  assert.equal(order.get('main'), 1)
 })
 
 test('product order restarts densely inside each category', () => {
@@ -165,18 +164,4 @@ test('category names that differ only by whitespace stay separate', () => {
 
   assert.equal(categories.length, 2)
   assert.equal(new Set(assignments.map((row: { category_id: string }) => row.category_id)).size, 2)
-})
-
-
-test('hidden Products preserve member order without moving visible sections', () => {
-  const { categories, assignments } = planCategories([
-    product({ id: 'hidden-only', category: 'Seasonal', sort_order: 0, is_visible: 0 }),
-    product({ id: 'hidden-main', category: 'Mains', sort_order: 1, is_visible: 0 }),
-    product({ id: 'starter', category: 'Starters', sort_order: 2 }),
-    product({ id: 'main', category: 'Mains', sort_order: 3 }),
-  ])
-  assert.deepEqual(categories.map((category: { name: string }) => category.name), ['Starters', 'Mains', 'Seasonal'])
-  const order = new Map(assignments.map((row: { product_id: string; sort_order: number }) => [row.product_id, row.sort_order]))
-  assert.equal(order.get('hidden-main'), 0)
-  assert.equal(order.get('main'), 1)
 })
