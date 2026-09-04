@@ -88,6 +88,8 @@ export function useExperienceEditor(
   })
 
   const bookingPolicyDraft = ref<BookingPolicyPatch>({})
+  /** The policy as loaded, so a save that never touched it does not rewrite it. */
+  const savedPolicy = ref('{}')
   const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
   const bookingPolicyId = ref<string | null>(null)
 
@@ -255,6 +257,7 @@ export function useExperienceEditor(
       bookingPolicyDraft.value = res.policy ?? {}
       bookingPolicySummary.value = res.summary ?? null
       bookingPolicyId.value = res.resolved_policy?.id || null
+      savedPolicy.value = JSON.stringify(bookingPolicyDraft.value)
     } catch {
       if (locationId.value !== scopeLocationId) return
       bookingPolicyDraft.value = {}
@@ -360,8 +363,10 @@ export function useExperienceEditor(
       }
 
       // The booking policy is saved separately — a policy failure is not an
-      // experience save failure, because the experience already saved.
-      if (saved?.id) {
+      // experience save failure, because the experience already saved. It is
+      // only written when it actually changed: every leaf shares this save, and
+      // an untouched empty policy is not a policy the server will accept.
+      if (saved?.id && JSON.stringify(bookingPolicyDraft.value) !== savedPolicy.value) {
         try {
           const policyResponse = await dashboardApi(`/api/editor/sites/${siteId}/booking-policy`, {
             method: 'PATCH',
@@ -376,6 +381,7 @@ export function useExperienceEditor(
           })
           if (locationId.value !== ownerLocationId) return saved
           bookingPolicySummary.value = policyResponse.summary ?? null
+          savedPolicy.value = JSON.stringify(bookingPolicyDraft.value)
         } catch {
           if (locationId.value !== ownerLocationId) return saved
           toast.add({ description: 'Experience saved, but the booking policy failed to save.', color: 'warning' })

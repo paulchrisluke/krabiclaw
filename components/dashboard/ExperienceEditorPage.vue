@@ -50,16 +50,19 @@
           </div>
 
           <!-- Photos -->
-          <div v-else-if="editorKey === 'photos'" class="space-y-6">
-            <p class="text-base text-muted">Order images and videos exactly as they should appear publicly. The first item is the cover.</p>
-            <DashboardMediaGalleryField
-              :items="editor.form.media"
+          <div v-else-if="editorKey === 'photos'">
+            <DashboardPhotoManager
+              :photos="managedPhotos"
               :site-id="siteId"
-              @add="editor.addMedia()"
-              @remove="(index: number) => editor.removeMedia(index)"
-              @move="(index: number, direction: -1 | 1) => editor.moveMedia(index, direction)"
-              @reorder="(from: number, to: number) => editor.reorderMedia(from, to)"
-              @asset-change="(index: number, asset) => editor.setMediaAsset(index, asset)"
+              title="Photos"
+              description="The first photo leads on your site."
+              add-label="Add photos"
+              empty-title="No photos yet"
+              accept="any"
+              :mutating="editor.saving.value"
+              @add="addPhoto"
+              @remove="removePhotos"
+              @reorder="reorderPhotos"
             />
           </div>
 
@@ -372,7 +375,7 @@
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import DashboardMediaGalleryField from '~/components/dashboard/DashboardMediaGalleryField.vue'
+import DashboardPhotoManager from '~/components/dashboard/DashboardPhotoManager.vue'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 import {
   WEEKDAY_NAMES,
@@ -430,8 +433,9 @@ if (routeSegments.value.length > 1 || (detailKey.value && !validSectionKeys.has(
   throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 }
 
-// Availability has no draft to commit, and Delete acts on its own button.
-const showActions = computed(() => hasDetail.value && !['availability', 'delete'].includes(editorKey.value))
+// Photos, availability and delete each commit as you act, so they have no
+// pending draft for a footer to save.
+const showActions = computed(() => hasDetail.value && !['photos', 'availability', 'delete'].includes(editorKey.value))
 const saveDisabled = computed(() => editorKey.value === 'details' && !editor.form.title.trim())
 const saving = computed(() => editor.saving.value || translationSaving.value)
 
@@ -466,6 +470,42 @@ watch(data, value => {
   editor.loadFrom(value.experience)
   void editor.loadPolicy(value.experience.id)
 }, { immediate: true })
+
+// ── Photos ──────────────────────────────────────────────
+// The editor holds one ordered media list; the manager speaks in asset ids, so
+// the two are mapped here rather than teaching either about the other.
+const managedPhotos = computed(() => editor.form.media
+  .filter(item => item.asset_id)
+  .map(item => ({
+    asset_id: item.asset_id!,
+    url: item.thumbnail_url ?? item.url ?? null,
+    alt: editor.form.title,
+    kind: item.kind,
+  })))
+
+function addPhoto(assetId: string) {
+  if (editor.form.media.some(item => item.asset_id === assetId)) return
+  editor.addMedia()
+  editor.setMediaAsset(editor.form.media.length - 1, {
+    asset_id: assetId, public_url: null, thumbnail_url: null, kind: 'image',
+  })
+  void editor.save(experienceId.value)
+}
+
+function removePhotos(assetIds: string[]) {
+  const drop = new Set(assetIds)
+  editor.form.media = editor.form.media.filter(item => !item.asset_id || !drop.has(item.asset_id))
+  void editor.save(experienceId.value)
+}
+
+function reorderPhotos(assetIds: string[]) {
+  const byId = new Map(editor.form.media.map(item => [item.asset_id, item]))
+  editor.form.media = assetIds.flatMap(assetId => {
+    const item = byId.get(assetId)
+    return item ? [item] : []
+  })
+  void editor.save(experienceId.value)
+}
 
 // ── Hub rows ────────────────────────────────────────────
 function listSummary(values: string[], empty: string) {
