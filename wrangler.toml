@@ -93,9 +93,8 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-[[migrations]]
-tag = "v2_delete_guest_thread_command"
-deleted_classes = ["GuestThreadCommandObject"]
+# Keep the production command namespace through the Epoch 4 rollback window.
+# Preview and staging already applied their deletion; preserve that history below.
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"

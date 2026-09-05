@@ -229,18 +229,29 @@ until the final frozen export has been transformed and verified.
 
 ## Production
 
-### Pre-freeze rollback blocker
+### Preserve the production rollback resources
 
-Do not begin the production freeze with the current candidate configuration.
-The live Epoch 3 Worker still binds `GuestThreadCommandObject`, while the
-candidate's `v2_delete_guest_thread_command` migration deletes that class.
-The maintenance deployment would apply this deletion before the final D1
-export and import have been verified. Cloudflare
-[does not allow rollback across a Durable Object class lifecycle change](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/#bindings),
-so retaining Epoch 3 D1 alone does not preserve the rollback required below.
-Resolve and qualify the Durable Object lifecycle and rollback plan through the
-normal staging release path before starting maintenance. Do not substitute an
-ad hoc production deployment or assume the deleted namespace can be restored.
+The release owner approved retaining the production `GuestThreadCommandObject`
+namespace through the Epoch 4 rollback window. Production stays at the existing
+`v1_guest_inbox_infra` lifecycle tag; preview and staging retain their already
+applied `v2_delete_guest_thread_command` history. The exported class returns HTTP
+410 and has no binding, D1 access, or command implementation in the new Worker.
+This is a scoped exception to the normal removal of replaced implementations:
+Cloudflare [does not allow rollback across a Durable Object class lifecycle
+change](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/#bindings).
+Do not delete the production namespace until the rollback window is explicitly
+closed in a later release.
+
+The legacy `krabiclaw-guest-delivery` queue and its consumer also remain rollback
+resources. Removing queue entries from Wrangler configuration does not detach an
+existing consumer. Before maintenance, pause delivery using
+`wrangler queues pause-delivery krabiclaw-guest-delivery`. The retained queue hook
+defers any straggling batch during the freeze and fails explicitly otherwise;
+it does not restore the removed delivery implementation or acknowledge messages.
+Keep this queue paused after Epoch 4 cutover. If maintenance is aborted, restore
+the prior Worker through Cloudflare deployment history, then run
+`wrangler queues resume-delivery krabiclaw-guest-delivery`. Pausing does not extend
+message retention, so complete or abort maintenance promptly.
 
 Production cutover follows the database-epoch write freeze in
 [release-and-outage-prevention.md](../operations/release-and-outage-prevention.md):
