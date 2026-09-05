@@ -20,11 +20,12 @@
         :has-detail="Boolean(detailTitle)"
         :detail-title="detailTitle"
         :dismiss-to="isChangeMode ? `${bookingPath}/change` : bookingPath"
-        :show-actions="editorKey === 'notes'"
+        :show-actions="editorKey === 'notes' || Boolean(isChangeMode && editorField)"
         :saving="noteSaving"
-        :save-disabled="!noteDraft.trim() || noteDraft === selectedNote?.body"
-        @cancel="closeEditor"
-        @save="saveNote"
+        :save-label="isChangeMode && editorField ? 'Done' : undefined"
+        :save-disabled="editorKey === 'notes' && (!noteDraft.trim() || noteDraft === selectedNote?.body)"
+        @cancel="cancelEditor"
+        @save="commitEditor"
       >
         <template #index>
           <UAlert
@@ -174,7 +175,7 @@
             In change mode the same bar carries that mode's single commit.
           -->
           <template v-if="isChangeMode">
-            <UButton label="Cancel" color="neutral" variant="ghost" :to="bookingPath" />
+            <UButton label="Cancel" color="neutral" variant="ghost" :to="bookingPath" @click="resetChangeDraft" />
             <UButton label="Send request" :loading="changeSaving" :disabled="Boolean(editorField) || !changeValid || !changeDirty" @click="sendChangeRequest" />
           </template>
           <div v-else class="flex flex-1 items-center justify-center gap-3">
@@ -273,7 +274,7 @@
         </span>
       </UButton>
       <USeparator class="my-4" />
-      <UButton :label="`Change ${noun}`" icon="i-lucide-pencil" color="neutral" variant="ghost" size="xl" block class="justify-start" :to="`${bookingPath}/change`" @click="manageOpen = false" />
+      <UButton :label="`Change ${noun}`" icon="i-lucide-pencil" color="neutral" variant="ghost" size="xl" block class="justify-start" :to="`${bookingPath}/change`" @click="beginChange" />
       <UButton
         v-for="action in availableActions"
         :key="action.value"
@@ -420,17 +421,21 @@ const manageOpen = ref(false)
 const cancelOpen = ref(false)
 const cancelNote = ref('')
 const changeSaving = ref(false)
-const changeDraft = reactive({ bookingDate: '', bookingTime: '', partySize: 1, locationId: '' })
+const changeDraft = useState(
+  `booking-change-draft:${orgSlug.value}:${props.bookingType}:${props.bookingId}`,
+  () => ({ bookingDate: '', bookingTime: '', partySize: 1, locationId: '', sourceUpdatedAt: '' }),
+)
 const changeAttemptKey = ref<string | null>(null)
 const changeAttemptDraft = ref('')
-const changeLocation = computed(() => booking.value?.locations.find(location => location.id === changeDraft.locationId))
-const changeDirty = computed(() => Boolean(booking.value) && (changeDraft.bookingDate !== booking.value?.bookingDate || changeDraft.bookingTime !== booking.value?.bookingTime.slice(0, 5) || changeDraft.partySize !== booking.value?.partySize || changeDraft.locationId !== booking.value?.locationId))
+const changeFieldOriginal = ref<string | number | null>(null)
+const changeLocation = computed(() => booking.value?.locations.find(location => location.id === changeDraft.value.locationId))
+const changeDirty = computed(() => Boolean(booking.value) && (changeDraft.value.bookingDate !== booking.value?.bookingDate || changeDraft.value.bookingTime !== booking.value?.bookingTime.slice(0, 5) || changeDraft.value.partySize !== booking.value?.partySize || changeDraft.value.locationId !== booking.value?.locationId))
 const changeFields = computed(() => [
-  { key: 'date', label: 'Date', summary: changeDraft.bookingDate ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${changeDraft.bookingDate}T12:00:00Z`)) : 'Choose a date' },
-  { key: 'time', label: 'Time', summary: changeDraft.bookingTime ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(new Date(`2000-01-01T${changeDraft.bookingTime}:00Z`)) : 'Choose a time' },
-  { key: 'guests', label: 'Guests', summary: `${changeDraft.partySize} ${changeDraft.partySize === 1 ? 'guest' : 'guests'}` },
+  { key: 'date', label: 'Date', summary: changeDraft.value.bookingDate ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${changeDraft.value.bookingDate}T12:00:00Z`)) : 'Choose a date' },
+  { key: 'time', label: 'Time', summary: changeDraft.value.bookingTime ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(new Date(`2000-01-01T${changeDraft.value.bookingTime}:00Z`)) : 'Choose a time' },
+  { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
 ])
-const changeValid = computed(() => Boolean(changeDraft.bookingDate && changeDraft.bookingTime && Number.isInteger(changeDraft.partySize) && changeDraft.partySize > 0))
+const changeValid = computed(() => Boolean(changeDraft.value.bookingDate && changeDraft.value.bookingTime && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0))
 const pendingAction = ref<string | null>(null)
 const actionAttempt = ref<{ draft: string; key: string } | null>(null)
 const noteDraft = ref('')
@@ -438,20 +443,40 @@ const noteSaving = ref(false)
 const noteAttemptKey = ref<string | null>(null)
 const noteAttemptDraft = ref<string | null>(null)
 
-watch([editorKey, editorField], ([key], previous) => {
+watch([booking, editorKey, editorField], ([currentBooking, key]) => {
   noteDraft.value = selectedNote.value?.body || ''
   noteAttemptKey.value = null
   noteAttemptDraft.value = null
-  // Entering change mode seeds the draft from the record. Moving between its
-  // field editors must not, or stepping into Date would discard a staged Time.
-  if (booking.value && (key !== 'change' || previous?.[0] !== 'change')) {
-    changeDraft.bookingDate = booking.value.bookingDate
-    changeDraft.bookingTime = booking.value.bookingTime.slice(0, 5)
-    changeDraft.partySize = booking.value.partySize
-    changeDraft.locationId = booking.value.locationId
-    changeAttemptKey.value = null
-  }
+  // A field leaf is a route, so Nuxt may recreate this component while moving
+  // between it and the change hub. Keep the one staged draft in Nuxt state and
+  // only reseed it when it belongs to an older source revision.
+  if (currentBooking && key === 'change' && changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt) resetChangeDraft()
+  if (key === 'change' && isChangeField(editorField.value)) changeFieldOriginal.value = changeDraft.value[draftKey(editorField.value)]
 }, { immediate: true })
+
+function isChangeField(value: string): value is 'date' | 'time' | 'guests' | 'location' {
+  return ['date', 'time', 'guests', 'location'].includes(value)
+}
+
+function draftKey(field: 'date' | 'time' | 'guests' | 'location') {
+  return field === 'date' ? 'bookingDate' : field === 'time' ? 'bookingTime' : field === 'guests' ? 'partySize' : 'locationId'
+}
+
+function resetChangeDraft() {
+  if (!booking.value) return
+  changeDraft.value.bookingDate = booking.value.bookingDate
+  changeDraft.value.bookingTime = booking.value.bookingTime.slice(0, 5)
+  changeDraft.value.partySize = booking.value.partySize
+  changeDraft.value.locationId = booking.value.locationId
+  changeDraft.value.sourceUpdatedAt = booking.value.updatedAt
+  changeAttemptKey.value = null
+  changeAttemptDraft.value = ''
+}
+
+function beginChange() {
+  manageOpen.value = false
+  resetChangeDraft()
+}
 
 const availableActions = computed<Array<{ value: string; label: string; icon: string; color: ActionColor }>>(() => {
   if (!booking.value || !presentation.value || !booking.value.threadId) return []
@@ -480,6 +505,19 @@ function formatCreatedAt(value: string) {
 
 function closeEditor() {
   return router.push(isChangeMode.value && editorField.value ? `${bookingPath.value}/change` : bookingPath.value)
+}
+
+function cancelEditor() {
+  if (isChangeMode.value && isChangeField(editorField.value) && changeFieldOriginal.value !== null) {
+    const key = draftKey(editorField.value)
+    if (key === 'partySize') changeDraft.value.partySize = Number(changeFieldOriginal.value)
+    else changeDraft.value[key] = String(changeFieldOriginal.value)
+  }
+  return closeEditor()
+}
+
+function commitEditor() {
+  return isChangeMode.value && editorField.value ? closeEditor() : saveNote()
 }
 
 function openCancel() {
@@ -537,22 +575,29 @@ async function saveNote() {
 
 async function sendChangeRequest() {
   if (!changeValid.value || !changeDirty.value) return
-  const draft = JSON.stringify(changeDraft)
+  const draft = JSON.stringify(changeDraft.value)
   if (!changeAttemptKey.value || changeAttemptDraft.value !== draft) {
     changeAttemptKey.value = crypto.randomUUID()
     changeAttemptDraft.value = draft
   }
   changeSaving.value = true
   try {
+    const proposal = {
+      bookingDate: changeDraft.value.bookingDate,
+      bookingTime: changeDraft.value.bookingTime,
+      partySize: changeDraft.value.partySize,
+      locationId: changeDraft.value.locationId,
+    }
     const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
       `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}/changes`,
       {
         method: 'POST',
-        body: { ...changeDraft, expectedUpdatedAt: booking.value?.updatedAt, idempotencyKey: changeAttemptKey.value },
+        body: { ...proposal, expectedUpdatedAt: booking.value?.updatedAt, idempotencyKey: changeAttemptKey.value },
         validate: isBookingResponse,
       },
     )
     resource.value = response
+    resetChangeDraft()
     await closeEditor()
     toast.add({ description: `Change request sent by email. Your ${noun.value} stays unchanged until the guest accepts.`, color: 'success' })
   } catch (cause) {

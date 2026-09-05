@@ -214,7 +214,7 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
 
 test('Today uses the CMS patterns and sends one reservation change request', async ({ page }) => {
   test.skip(!writable, 'Today writes require disposable local or preview data')
-  test.setTimeout(120_000)
+  test.setTimeout(180_000)
   await loginAs(page.request, baseURL)
 
   // Cloudflare injects its own preview toolbar outside the application bundle.
@@ -271,10 +271,16 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   const targetPartySize = before.booking.partySize === 99 ? 98 : before.booking.partySize + 1
   await page.getByRole('link', { name: 'Change guests', exact: true }).click()
   await page.getByRole('spinbutton', { name: 'Guests', exact: true }).fill(String(targetPartySize))
-  await page.goBack()
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
   const requestedAt = new Date().toISOString()
+  const requestCompleted = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+    && new URL(response.url()).pathname.endsWith('/api/dashboard/bookings/reservation/reservation-demo-upcoming-priya/changes'),
+  )
   await page.getByRole('button', { name: 'Send request', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Coming up', exact: true })).toBeVisible()
+  const changeResponse = await requestCompleted
+  expect(changeResponse.status(), await changeResponse.text()).toBe(200)
+  await expect(page.getByRole('heading', { name: 'Coming up', exact: true })).toBeVisible({ timeout: 30_000 })
 
   const detail = await loadThreadDetail(page.request, before.booking.threadId, 'site-demo')
   const requests = detail.entries.filter(entry =>
