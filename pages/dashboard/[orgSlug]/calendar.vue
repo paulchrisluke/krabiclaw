@@ -239,9 +239,13 @@ function setAvailabilityExperience(id: string) {
 }
 
 async function reloadAgenda() {
+  const requestedKey = requestKey.value
   try {
-    agendaData.value = await fetchAgenda()
+    const result = await fetchAgenda()
+    if (requestedKey !== requestKey.value) return
+    agendaData.value = result
   } catch (error) {
+    if (requestedKey !== requestKey.value) return
     agendaError.value = error
   }
 }

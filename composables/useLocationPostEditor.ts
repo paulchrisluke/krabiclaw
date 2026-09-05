@@ -126,7 +126,11 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
     if (postId) return base
     return {
       ...base,
-      media: form.media.map(item => ({ asset_id: item.asset_id, slot: item.slot, alt_text: item.alt_text })),
+      // A freshly added gallery row has no asset yet; sending it would write a
+      // placement with an empty asset_id.
+      media: form.media
+        .filter(item => item.asset_id)
+        .map(item => ({ asset_id: item.asset_id, slot: item.slot, alt_text: item.alt_text })),
     }
   }
 

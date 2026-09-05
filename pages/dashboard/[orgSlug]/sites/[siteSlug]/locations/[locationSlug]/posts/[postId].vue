@@ -148,24 +148,28 @@ const isFacebookResponse = (value: unknown): value is { connected: boolean } =>
 
 const { data, error } = await useAsyncData(
   computed(() => `dashboard-location-post:${siteId}:${postId.value}`),
-  async () => {
-    const [postResponse, facebookResponse] = await Promise.all([
-      dashboardApi<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/posts/${postId.value}`, {
-        validate: isSinglePostResponse,
-      }),
-      dashboardApi<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
-        query: { locationId: currentLocationId.value ?? '' },
-        validate: isFacebookResponse,
-      }),
-    ])
-    return { post: postResponse.post, facebookConnected: facebookResponse.connected }
-  },
+  () => dashboardApi<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/posts/${postId.value}`, {
+    validate: isSinglePostResponse,
+  }),
   { watch: [postId] },
+)
+
+// Whether Facebook is connected only decides which publish channels are
+// offered. Fetching it beside the post meant an integrations outage set the
+// page's error and hid the editor, so a tenant could not edit their own post
+// because of an unrelated service.
+const { data: facebookData } = await useAsyncData(
+  computed(() => `facebook-connection:${currentLocationId.value ?? 'missing'}`),
+  () => dashboardApi<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
+    query: { locationId: currentLocationId.value ?? '' },
+    validate: isFacebookResponse,
+  }),
+  { lazy: true, default: () => ({ connected: false }) },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load the post') : null))
 const post = computed(() => data.value?.post ?? null)
-const facebookConnected = computed(() => data.value?.facebookConnected ?? false)
+const facebookConnected = computed(() => facebookData.value?.connected ?? false)
 
 watch(post, value => { if (value) editor.loadFrom(value) }, { immediate: true })
 

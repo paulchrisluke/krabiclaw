@@ -114,6 +114,7 @@ export function useExperienceEditor(
     timeSlots.value = []
     for (const day of WEEKDAY_NAMES) recurringSlots[day] = []
     bookingPolicyDraft.value = {}
+    savedPolicy.value = '{}'
     bookingPolicySummary.value = null
     bookingPolicyId.value = null
     originalMediaIds.value = []

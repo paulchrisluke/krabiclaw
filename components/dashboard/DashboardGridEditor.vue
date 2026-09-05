@@ -37,7 +37,7 @@
       v-if="error"
       color="error"
       variant="soft"
-      :title="`${title} could not be loaded`"
+      :title="`${title || 'This list'} could not be loaded`"
       :description="error"
     />
 

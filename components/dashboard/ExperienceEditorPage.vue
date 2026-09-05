@@ -310,14 +310,6 @@
               <UFormField :label="`SEO description (${translationLocale})`">
                 <UTextarea v-model="translationFields.seo_description" :rows="2" class="w-full" />
               </UFormField>
-              <template v-if="editor.bookingPolicyId.value">
-                <UFormField :label="`Booking policy weather note (${translationLocale})`">
-                  <UTextarea v-model="policyTranslationFields.weather_policy" :rows="2" class="w-full" />
-                </UFormField>
-                <UFormField :label="`Booking policy notes (${translationLocale})`">
-                  <UTextarea v-model="policyTranslationFields.additional_notes_html" :rows="2" class="w-full" />
-                </UFormField>
-              </template>
               <p v-if="translationError" class="text-sm text-error">{{ translationError }}</p>
             </template>
           </div>
@@ -670,7 +662,6 @@ const translationFields = reactive({
 })
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
-const policyTranslationFields = reactive({ weather_policy: '', additional_notes_html: '' })
 
 const isLocalesResponse = (value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } =>
   isRecord(value) && Array.isArray(value.languages)
@@ -695,8 +686,6 @@ function resetTranslationFields() {
     included_items: [], what_to_bring: [],
     meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '',
   })
-  policyTranslationFields.weather_policy = ''
-  policyTranslationFields.additional_notes_html = ''
 }
 
 async function loadTranslationFields() {
@@ -726,7 +715,6 @@ async function loadTranslationFields() {
     if (statusCode !== 404) translationError.value = getErrorMessage(cause, 'Failed to load translation')
     resetTranslationFields()
   }
-  await loadPolicyTranslation()
 }
 
 watch(translationLocale, () => {
@@ -758,42 +746,12 @@ async function saveTranslation() {
       body: { values, route_path: `/${translationLocale.value}/experiences/${experienceSlug.value}` },
       validate: isRecord,
     })
-    await savePolicyTranslation()
     toast.add({ description: 'Translation saved', color: 'success' })
   } catch (cause) {
     translationError.value = getErrorMessage(cause, 'Failed to save translation')
   } finally {
     translationSaving.value = false
   }
-}
-
-async function loadPolicyTranslation() {
-  const policyId = editor.bookingPolicyId.value
-  if (!policyId || translationLocale.value === 'en') return
-  try {
-    const response = await dashboardApi(
-      `/api/editor/sites/${siteId}/localization/booking_policy/${policyId}/${encodeURIComponent(translationLocale.value)}`,
-      { validate: isTranslationResponse },
-    )
-    const values = response.localization.values
-    policyTranslationFields.weather_policy = typeof values.weather_policy === 'string' ? values.weather_policy : ''
-    policyTranslationFields.additional_notes_html = typeof values.additional_notes_html === 'string' ? values.additional_notes_html : ''
-  } catch {
-    policyTranslationFields.weather_policy = ''
-    policyTranslationFields.additional_notes_html = ''
-  }
-}
-
-async function savePolicyTranslation() {
-  const policyId = editor.bookingPolicyId.value
-  if (!policyId || translationLocale.value === 'en') return
-  const values: Record<string, string> = {}
-  if (policyTranslationFields.weather_policy.trim()) values.weather_policy = policyTranslationFields.weather_policy.trim()
-  if (policyTranslationFields.additional_notes_html.trim()) values.additional_notes_html = policyTranslationFields.additional_notes_html.trim()
-  if (!Object.keys(values).length) return
-  await dashboardApi(`/api/editor/sites/${siteId}/localization/booking_policy/${policyId}/${encodeURIComponent(translationLocale.value)}`, {
-    method: 'PUT', body: { values }, validate: isRecord,
-  })
 }
 
 void loadTranslationLocales()

@@ -78,7 +78,7 @@
         :removable="Boolean(editingId)"
         :saving="saving"
         :removing="removing"
-        :save-disabled="!form.name.trim() || (form.price_mode === 'amount' && !form.price_major.trim())"
+        :save-disabled="!form.name.trim() || (form.price_mode === 'amount' && !form.price_major.trim()) || incompleteDetail"
         @save="locale === 'en' ? save() : saveLocalized()"
         @remove="removeEditing"
       >
@@ -209,6 +209,9 @@
                   class="w-full"
                 />
               </div>
+              <p v-if="incompleteDetail" class="text-sm text-muted">
+                Give every detail a name and at least one value, or remove it.
+              </p>
               <UButton
                 v-if="form.details.length < PRODUCT_LIMITS.detailGroups"
                 label="Add a detail"
@@ -481,6 +484,11 @@ function openExisting(item: { row: Product }) {
   form.image_asset_id = product.image?.asset_id ?? null
   dialogOpen.value = true
 }
+
+// A half-filled group cannot be saved, and is not silently dropped either: the
+// tenant typed it, so the save waits rather than discarding their work.
+const incompleteDetail = computed(() => form.details.some(group =>
+  !group.label.trim() || !group.values.some(value => value.trim())))
 
 function payload() {
   const price = form.price_mode === 'amount'

@@ -122,6 +122,8 @@ function stateDot(slot: SlotAvailability) {
 
 async function load() {
   if (!props.experienceId || !props.date) return
+  // Switching dates quickly can land an older response last.
+  const requested = `${props.experienceId}:${props.date}`
   pending.value = true
   try {
     const [availability, overrides] = await Promise.all([
@@ -132,6 +134,7 @@ async function load() {
         validate: isOverridesResponse,
       }),
     ])
+    if (requested !== `${props.experienceId}:${props.date}`) return
     timezone.value = availability.timezone
     slots.value = availability.dates[0]?.slots ?? []
     upcoming.value = overrides.overrides ?? []
