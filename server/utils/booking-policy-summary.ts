@@ -10,6 +10,7 @@ export interface BookingPolicySummarySource {
   deposit_trigger_party_size: number | null
   minimum_guest_age: number | null
   accessibility_contact_required: boolean | null
+  additional_notes_html: string | null
 }
 
 export interface FormattedBookingPolicySummaryItem {
@@ -20,6 +21,7 @@ export interface FormattedBookingPolicySummaryItem {
 export interface FormattedBookingPolicySummary {
   heading: string
   items: FormattedBookingPolicySummaryItem[]
+  additional_notes_html: string | null
 }
 
 function isThaiLocale(locale: string) {
@@ -76,7 +78,9 @@ export function formatBookingPolicySummary(
         ? (th
             ? `กลุ่มตั้งแต่ ${policy.deposit_trigger_party_size} ท่านขึ้นไปอาจต้องวางมัดจำ`
             : `Parties of ${policy.deposit_trigger_party_size}+ guests may require a deposit.`)
-        : (th ? 'อาจต้องวางมัดจำก่อนยืนยันการจอง' : 'A deposit may be required before confirmation.'),
+        : (th
+            ? 'อาจต้องวางมัดจำก่อนยืนยันการจอง'
+            : 'A deposit may be required before confirmation.'),
     })
   }
 
@@ -103,5 +107,6 @@ export function formatBookingPolicySummary(
       ? (policy.policy_type === 'experience' ? 'นโยบายประสบการณ์' : 'นโยบายการจอง')
       : (policy.policy_type === 'experience' ? 'Experience policies' : 'Reservation policies'),
     items,
+    additional_notes_html: policy.additional_notes_html,
   }
 }

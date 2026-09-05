@@ -58,10 +58,12 @@
             :aria-label="`${owner.label}, ${day.date}, ${dayState(day)}`"
             @pointerdown.prevent="beginSelection(owner, day.date)"
             @pointerenter="extendSelection(owner, day.date)"
+            @keydown.enter.prevent="beginSelection(owner, day.date); finishSelection()"
+            @keydown.space.prevent="beginSelection(owner, day.date); finishSelection()"
           >
             <p class="text-xs font-medium">{{ dayState(day) }}</p>
-            <p v-if="day.bookings.length" class="mt-1 text-[11px] text-violet-700 dark:text-violet-300">
-              {{ day.bookings.length }} {{ day.bookings.length === 1 ? 'booking' : 'bookings' }}
+            <p v-for="booking in day.bookings" :key="booking.id" class="mt-1 rounded bg-violet-500/15 px-1 py-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+              {{ booking.time_slot }} · {{ booking.label }} · {{ booking.party_size }} guests
             </p>
             <p v-if="dayNote(day)" class="mt-1 max-w-24 truncate text-[10px] text-muted" :title="dayNote(day) ?? undefined">
               {{ dayNote(day) }}
@@ -202,13 +204,14 @@ const selectionLabel = computed(() => {
   return `${selectedDates.value[0]} to ${selectedDates.value.at(-1)}`
 })
 const selectionSummary = computed(() => {
-  const total = selectedSlots.value.length
-  if (!total) return 'No scheduled slots in this selection'
-  const blocked = selectedSlots.value.filter(slot => slot.is_closed).length
-  const open = total - blocked
-  return blocked > 0 && open > 0
-    ? `Mixed availability — ${open} open, ${blocked} blocked`
-    : blocked === total ? `${blocked} blocked` : `${open} open`
+  const days = selectedDays.value.filter(day => day.slots.length > 0)
+  if (!days.length) return 'No scheduled slots in this selection'
+  const blocked = days.filter(day => day.slots.every(slot => slot.is_closed)).length
+  const mixed = days.filter(day => day.slots.some(slot => slot.is_closed) && day.slots.some(slot => !slot.is_closed)).length
+  const open = days.length - blocked - mixed
+  if (!open && !mixed) return `${blocked} blocked ${blocked === 1 ? 'day' : 'days'}`
+  if (!blocked && !mixed) return `${open} open ${open === 1 ? 'day' : 'days'}`
+  return `Mixed availability: ${open} open days, ${blocked} blocked days${mixed ? `, ${mixed} partly blocked days` : ''}`
 })
 const fullSummary = computed(() => {
   const full = selectedSlots.value.filter(slot => slot.is_full).length
@@ -231,8 +234,12 @@ function finishSelection() {
   if (!dragging.value) return
   dragging.value = false
   edit.timeSlots = ''
-  edit.capacity = null
-  edit.note = ''
+  const first = selectedSlots.value[0]
+  edit.directive = first?.is_closed ? 'closed' : 'open'
+  edit.capacity = selectedSlots.value.every(slot => slot.override?.capacity_override === first?.override?.capacity_override)
+    ? first?.override?.capacity_override ?? null : null
+  edit.note = selectedSlots.value.every(slot => slot.override?.note === first?.override?.note)
+    ? first?.override?.note ?? '' : ''
   panelOpen.value = true
 }
 

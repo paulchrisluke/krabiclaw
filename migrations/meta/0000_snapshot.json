@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "11e9b0e6-3423-410f-b789-7e811427d47c",
+  "id": "75bd52ad-18a4-4d13-8f64-f2eecffaf1ad",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -732,6 +732,13 @@
         "accessibility_contact_required": {
           "name": "accessibility_contact_required",
           "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "additional_notes_html": {
+          "name": "additional_notes_html",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

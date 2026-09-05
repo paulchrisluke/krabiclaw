@@ -957,19 +957,25 @@ async function loadPublicPageSource(
   ]);
   options.signal?.throwIfAborted();
   const policyLocale = locale ?? sourceLocale!;
+  const localizePolicy = <T extends { id: string | null; additional_notes_html: string | null }>(policy: T): T => {
+    if (!localizedLocale || !policy.id) return policy
+    const localization = publicLocalizations.find(item => item.resourceType === 'booking_policy' && item.resourceId === policy.id)
+    if (!localization) return { ...policy, additional_notes_html: null }
+    return projectExactLocalizedResource('booking_policy', { ...policy, id: policy.id }, localization)
+  }
   const reservationPolicyByLocation = Object.fromEntries(
     Array.from(reservationPolicies?.byLocation ?? [], ([locationId, policy]) => [
       locationId,
-      policy.id ? renderBookingPolicySummary(policy, policyLocale) : null,
+      policy.id ? renderBookingPolicySummary(localizePolicy(policy), policyLocale) : null,
     ]),
   );
   const experiencePolicySiteDefault = experiencePolicies?.site
-    ? renderBookingPolicySummary(experiencePolicies.site, policyLocale)
+    ? renderBookingPolicySummary(localizePolicy(experiencePolicies.site), policyLocale)
     : null;
   const experiencePolicyById = Object.fromEntries(
     Array.from(experiencePolicies?.byExperience ?? [], ([experienceId, policy]) => [
       experienceId,
-      renderBookingPolicySummary(policy, policyLocale),
+      renderBookingPolicySummary(localizePolicy(policy), policyLocale),
     ]),
   );
 

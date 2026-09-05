@@ -56,15 +56,6 @@ export interface GuestThreadEntryRow {
   created_at: string
 }
 
-export interface GuestThreadMemberStateRow {
-  thread_id: string
-  member_id: string
-  last_read_entry_id: string | null
-  last_read_sequence: number
-  created_at: string
-  updated_at: string
-}
-
 export interface GuestThreadDeliveryRow {
   id: string
   entry_id: string

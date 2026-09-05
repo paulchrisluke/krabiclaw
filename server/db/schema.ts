@@ -1073,6 +1073,7 @@ export const booking_policies = sqliteTable("booking_policies", {
 	deposit_trigger_party_size: integer(),
 	minimum_guest_age: integer(),
 	accessibility_contact_required: numeric(),
+	additional_notes_html: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [

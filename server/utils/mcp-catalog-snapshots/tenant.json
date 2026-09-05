@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:bf8f2142ea880d094ce00685d02c734a9dc65586db3ee6e147ca1dc746b426a5",
+  "fingerprint": "sha256:0ab11812cbf2bc9539e4f73822e929a40dbefa11dd39d2896b77b9dae77f501d",
   "tools": [
     {
       "name": "analyze_document",
@@ -4014,6 +4014,12 @@
                   "null"
                 ]
               },
+              "additional_notes_html": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "advance_notice_minutes": {
                 "type": [
                   "number",
@@ -4130,6 +4136,12 @@
                   "null"
                 ]
               },
+              "additional_notes_html": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "advance_notice_minutes": {
                 "type": [
                   "number",
@@ -4237,6 +4249,12 @@
           },
           "summary": {
             "properties": {
+              "additional_notes_html": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "heading": {
                 "type": "string"
               },
@@ -4261,7 +4279,8 @@
             },
             "required": [
               "heading",
-              "items"
+              "items",
+              "additional_notes_html"
             ],
             "type": [
               "object",
@@ -9611,6 +9630,12 @@
           "accessibility_contact_required": {
             "type": "boolean"
           },
+          "additional_notes_html": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "advance_notice_minutes": {
             "type": [
               "number",
@@ -9692,6 +9717,12 @@
               "accessibility_contact_required": {
                 "type": [
                   "boolean",
+                  "null"
+                ]
+              },
+              "additional_notes_html": {
+                "type": [
+                  "string",
                   "null"
                 ]
               },
@@ -9802,6 +9833,12 @@
           },
           "summary": {
             "properties": {
+              "additional_notes_html": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "heading": {
                 "type": "string"
               },
@@ -9826,7 +9863,8 @@
             },
             "required": [
               "heading",
-              "items"
+              "items",
+              "additional_notes_html"
             ],
             "type": "object"
           }
@@ -14461,6 +14499,12 @@
           "accessibility_contact_required": {
             "type": "boolean"
           },
+          "additional_notes_html": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "advance_notice_minutes": {
             "type": [
               "number",
@@ -14566,6 +14610,12 @@
           },
           "summary": {
             "properties": {
+              "additional_notes_html": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "heading": {
                 "type": "string"
               },
@@ -14590,7 +14640,8 @@
             },
             "required": [
               "heading",
-              "items"
+              "items",
+              "additional_notes_html"
             ],
             "type": "object"
           },

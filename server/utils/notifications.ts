@@ -307,31 +307,6 @@ async function getOwnerNotificationChannels(
   return uniqueChannels
 }
 
-export async function insertDashboardNotification(
-  env: NotificationEnv,
-  db: DbClient,
-  opts: Omit<SiteContext, 'siteId'> & { siteId: string | null } & {
-    locationId?: string | null
-    template: string
-    title: string
-    payload: Record<string, string>
-    guestThreadId?: string | null
-    sourceEntryId?: string | null
-  }
-): Promise<void> {
-  await createCanonicalNotification(db, {
-    publishEnv: env,
-    scope: 'site',
-    template: opts.template,
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: opts.locationId ?? null,
-    sourceEntryId: opts.sourceEntryId ?? null,
-    title: opts.title,
-    deepLink: opts.payload.deep_link || null,
-  })
-}
-
 async function sendEmailNotification(
   env: NotificationEnv,
   db: DbClient,
@@ -529,7 +504,17 @@ async function notifyOwner(
     ? await getOpeningThreadContext(db, opts.submissionType, opts.submissionId)
     : null
   const [, sitePhone, locationPhone, ownerEmail] = await Promise.all([
-    insertDashboardNotification(env, db, { ...opts, ...threadContext }),
+    createCanonicalNotification(db, {
+      publishEnv: env,
+      scope: 'site',
+      template: opts.template,
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      sourceEntryId: threadContext?.sourceEntryId ?? null,
+      title: opts.title,
+      deepLink: opts.payload.deep_link || null,
+    }),
     getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId),
     opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null,
     getOrganizationOwnerEmail(env, opts.organizationId),

@@ -1,43 +1,55 @@
 <template>
-  <div class="space-y-5">
-    <div class="grid gap-4 sm:grid-cols-2">
-      <UFormField label="Free cancellation cutoff (minutes)">
-        <UInputNumber :model-value="value.free_cancellation_until_minutes" :min="0" class="w-full" @update:model-value="updateNumber('free_cancellation_until_minutes', $event)" />
-      </UFormField>
-      <UFormField label="Advance notice (minutes)">
-        <UInputNumber :model-value="value.advance_notice_minutes" :min="0" class="w-full" @update:model-value="updateNumber('advance_notice_minutes', $event)" />
-      </UFormField>
-      <UFormField label="Deposit trigger party size">
-        <UInputNumber :model-value="value.deposit_trigger_party_size" :min="0" class="w-full" @update:model-value="updateNumber('deposit_trigger_party_size', $event)" />
-      </UFormField>
-      <UFormField label="Minimum guest age" v-if="policyType === 'experience'">
-        <UInputNumber :model-value="value.minimum_guest_age" :min="0" class="w-full" @update:model-value="updateNumber('minimum_guest_age', $event)" />
-      </UFormField>
+  <div class="space-y-4">
+    <!--
+      Every one of these renders as a sentence on the public page
+      (server/utils/booking-policy-summary.ts), switched on by having a value.
+      So the tenant picks the sentence their guests will read, and the number
+      inside it — not a field called "deposit_trigger_party_size".
+    -->
+    <div
+      v-for="rule in visibleRules"
+      :key="rule.id"
+      class="rounded-xl border border-default px-4 py-3"
+    >
+      <div class="flex items-start gap-3">
+        <UCheckbox
+          :model-value="rule.on"
+          :aria-label="rule.aria"
+          class="mt-0.5"
+          @update:model-value="rule.toggle(Boolean($event))"
+        />
+        <div class="min-w-0 flex-1">
+          <p class="text-sm" :class="rule.on ? 'text-highlighted' : 'text-muted'">{{ rule.sentence }}</p>
+          <div v-if="rule.on && rule.choices" class="mt-2">
+            <USelect
+              :model-value="rule.value"
+              :items="rule.choices"
+              class="w-48"
+              :aria-label="rule.aria"
+              @update:model-value="rule.set(Number($event))"
+            />
+          </div>
+          <div v-else-if="rule.on && rule.numeric" class="mt-2">
+            <UInputNumber
+              :model-value="rule.value"
+              :min="rule.min ?? 1"
+              class="w-32"
+              :aria-label="rule.aria"
+              @update:model-value="rule.set($event as number | null)"
+            />
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="space-y-3">
-      <UCheckbox :model-value="Boolean(value.reschedule_allowed)" label="Allow rescheduling" @update:model-value="updateBoolean('reschedule_allowed', $event)" />
-      <UFormField v-if="value.reschedule_allowed" label="Reschedule cutoff (minutes)">
-        <UInputNumber :model-value="value.reschedule_cutoff_minutes" :min="0" class="w-full" @update:model-value="updateNumber('reschedule_cutoff_minutes', $event)" />
-      </UFormField>
-      <UCheckbox :model-value="Boolean(value.deposit_required)" label="Deposit may be required" @update:model-value="updateBoolean('deposit_required', $event)" />
-      <UCheckbox
-        v-if="policyType === 'experience'"
-        :model-value="Boolean(value.accessibility_contact_required)"
-        label="Require contact for accessibility arrangements"
-        @update:model-value="updateBoolean('accessibility_contact_required', $event)"
+    <UFormField v-if="shows('notes')" label="Anything else" help="Shown at the end of the list on your public page.">
+      <UTextarea
+        :model-value="value.additional_notes_html ?? ''"
+        :rows="3"
+        class="w-full"
+        @update:model-value="updateString('additional_notes_html', $event)"
       />
-    </div>
-
-    <div v-if="summary" class="rounded-lg border border-default bg-muted p-4">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{{ summary.heading }}</p>
-      <ol class="mt-3 space-y-3">
-        <li v-for="(item, index) in summary.items" :key="item.id" class="flex gap-3 text-sm text-default">
-          <span class="flex size-6 shrink-0 items-center justify-center rounded-full border border-default bg-default text-xs">{{ index + 1 }}</span>
-          <span>{{ item.text }}</span>
-        </li>
-      </ol>
-    </div>
+    </UFormField>
   </div>
 </template>
 
@@ -48,6 +60,13 @@ const props = defineProps<{
   modelValue: BookingPolicyPatch
   policyType: 'reservation' | 'experience'
   summary?: RenderedBookingPolicySummary | null
+  /**
+   * Which notes this surface owns. The policy is one row, but its sentences
+   * belong to different parts of the editor — a deposit is a pricing fact, a
+   * minimum age is a guest fact — so each leaf renders its own subset and the
+   * wording still lives in one place.
+   */
+  only?: readonly string[]
 }>()
 
 const emit = defineEmits<{
@@ -60,16 +79,71 @@ function patch(next: Partial<BookingPolicyPatch>) {
   emit('update:modelValue', { ...props.modelValue, ...next })
 }
 
-function updateNumber(field: keyof BookingPolicyPatch, next: number | null | undefined) {
-  if (next == null || (next as unknown) === '') {
-    patch({ [field]: null })
-  } else if (Number.isFinite(next)) {
-    patch({ [field]: Math.max(0, Math.trunc(next)) })
+function updateString(field: keyof BookingPolicyPatch, next: string | number | null | undefined) {
+  const normalized = typeof next === 'string' ? next.trim() : ''
+  patch({ [field]: normalized || null })
+}
+
+
+/** Each rule owns the sentence it produces, so the two cannot drift apart. */
+interface PolicyRule {
+  id: string
+  aria: string
+  on: boolean
+  sentence: string
+  value?: number
+  choices?: Array<{ label: string; value: number }>
+  numeric?: boolean
+  min?: number
+  toggle: (on: boolean) => void
+  set: (next: number | null) => void
+}
+
+const rules = computed(() => {
+  const list: PolicyRule[] = [
+    {
+      id: 'deposit',
+      aria: 'Party size that needs a deposit',
+      on: Boolean(value.value.deposit_required),
+      value: value.value.deposit_trigger_party_size ?? 6,
+      numeric: true,
+      min: 1,
+      sentence: value.value.deposit_trigger_party_size
+        ? `Parties of ${value.value.deposit_trigger_party_size}+ guests may require a deposit.`
+        : 'A deposit may be required before confirmation.',
+      toggle: (on: boolean) => patch({ deposit_required: on, deposit_trigger_party_size: on ? (value.value.deposit_trigger_party_size ?? 6) : null }),
+      set: (next: number | null) => patch({ deposit_trigger_party_size: next }),
+    },
+  ]
+
+  if (props.policyType === 'experience') {
+    list.push({
+      id: 'minimum_guest_age',
+      aria: 'Minimum guest age',
+      on: Boolean(value.value.minimum_guest_age),
+      value: value.value.minimum_guest_age ?? 18,
+      numeric: true,
+      min: 1,
+      sentence: `The minimum guest age is ${value.value.minimum_guest_age ?? 18}.`,
+      toggle: (on: boolean) => patch({ minimum_guest_age: on ? 18 : null }),
+      set: (next: number | null) => patch({ minimum_guest_age: next }),
+    })
+    list.push({
+      id: 'accessibility',
+      aria: 'Ask guests to get in touch about accessibility',
+      on: Boolean(value.value.accessibility_contact_required),
+      sentence: 'Please contact us before booking if you need accessibility arrangements.',
+      toggle: (on: boolean) => patch({ accessibility_contact_required: on }),
+      set: () => {},
+    })
   }
+
+  return list
+})
+
+function shows(id: string) {
+  return !props.only || props.only.includes(id)
 }
 
-function updateBoolean(field: keyof BookingPolicyPatch, next: boolean | 'indeterminate') {
-  patch({ [field]: next === true })
-}
-
+const visibleRules = computed(() => rules.value.filter(rule => shows(rule.id)))
 </script>

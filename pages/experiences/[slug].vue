@@ -101,39 +101,25 @@
               <!-- eslint-enable vue/no-v-html -->
             </div>
 
-            <div v-if="experience.included_items?.length" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.included') }}</h2>
-              <ul class="space-y-3 text-default">
-                <li v-for="item in experience.included_items" :key="item" class="flex items-start gap-3">
-                  <SayaIcon name="check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>{{ item }}</span>
-                </li>
-              </ul>
-            </div>
-
-            <div v-if="experience.what_to_bring?.length" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.what_to_bring') }}</h2>
-              <ul class="space-y-3 text-default">
-                <li v-for="item in experience.what_to_bring" :key="item" class="flex items-start gap-3">
-                  <SayaIcon name="briefcase" class="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>{{ item }}</span>
-                </li>
-              </ul>
-            </div>
-
-            <div v-if="experience.meeting_point" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-5">{{ t('saya.experience_detail.meeting_point') }}</h2>
-              <p class="whitespace-pre-line text-default leading-7">{{ experience.meeting_point }}</p>
-            </div>
-
-            <div v-if="experiencePolicySummary" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-5">{{ experiencePolicySummary.heading }}</h2>
-              <ol class="space-y-4">
-                <li v-for="(item, index) in experiencePolicySummary.items" :key="item.id" class="flex gap-4 text-default">
-                  <span class="flex size-7 shrink-0 items-center justify-center rounded-full border border-default bg-elevated text-sm">{{ index + 1 }}</span>
-                  <span class="leading-7">{{ item.text }}</span>
-                </li>
-              </ol>
+            <!--
+              One block instead of four stacked sections. Included items, what
+              to bring and the policy lines are all the same kind of thing —
+              short practical facts — and giving each its own full-width heading
+              made boilerplate look like the main event.
+            -->
+            <div v-if="thingsToKnow.length" class="mt-10 border-t border-default pt-10">
+              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.things_to_know') }}</h2>
+              <div class="grid gap-x-10 gap-y-8 sm:grid-cols-2">
+                <div v-for="group in thingsToKnow" :key="group.id">
+                  <div class="flex items-center gap-2">
+                    <SayaIcon :name="group.icon" class="size-4 shrink-0 text-primary" />
+                    <h3 class="text-sm font-semibold text-default">{{ group.title }}</h3>
+                  </div>
+                  <ul class="mt-2 space-y-1.5">
+                    <li v-for="line in group.lines" :key="line" class="text-sm leading-6 text-muted">{{ line }}</li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
             <!-- Where you'll meet -->
@@ -147,6 +133,9 @@
                     <p v-if="locationAddress" class="mt-1 text-sm text-muted">{{ locationAddress }}</p>
                     <p v-if="(experienceLocation as ApiRecord).phone" class="mt-1 text-sm text-muted">
                       {{ (experienceLocation as ApiRecord).phone }}
+                    </p>
+                    <p v-if="experience.meeting_point" class="mt-3 whitespace-pre-line text-sm leading-6 text-default">
+                      {{ experience.meeting_point }}
                     </p>
                     <p v-if="(experienceLocation as ApiRecord).email" class="mt-0.5 text-sm text-muted">
                       {{ (experienceLocation as ApiRecord).email }}
@@ -404,6 +393,46 @@ const sanitizedBody = computed(() => {
   const raw = experience.value?.body
   if (!raw) return ''
   return DOMPurify.sanitize(raw)
+})
+
+/**
+ * The practical facts, as one set of small groups rather than four stacked
+ * sections. Empty groups are omitted — an experience that lists nothing to
+ * bring says nothing about it, instead of showing an empty heading.
+ */
+const thingsToKnow = computed(() => {
+  const exp = experience.value
+  if (!exp) return []
+  const groups: Array<{ id: string; title: string; icon: string; lines: string[] }> = []
+
+  if (exp.included_items?.length) {
+    groups.push({
+      id: 'included',
+      title: t('saya.experience_detail.included'),
+      icon: 'check-circle',
+      lines: [...exp.included_items],
+    })
+  }
+  if (exp.what_to_bring?.length) {
+    groups.push({
+      id: 'bring',
+      title: t('saya.experience_detail.what_to_bring'),
+      icon: 'briefcase',
+      lines: [...exp.what_to_bring],
+    })
+  }
+  // The summary builder now emits only what a tenant can author, so there is
+  // nothing left to filter out here.
+  const policyLines = (experiencePolicySummary.value?.items ?? []).map(item => item.text)
+  if (policyLines.length) {
+    groups.push({
+      id: 'policies',
+      title: experiencePolicySummary.value?.heading ?? '',
+      icon: 'clock',
+      lines: policyLines,
+    })
+  }
+  return groups
 })
 
 const mediaItems = computed(() => {

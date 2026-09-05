@@ -77,6 +77,7 @@ export function useDashboardSiteLinks() {
     return {
       location,
       products: `${location}/products`,
+      experiences: `${location}/experiences`,
       posts: `${location}/posts`,
       photos: `${location}/photos`,
       qa: `${location}/qa`,

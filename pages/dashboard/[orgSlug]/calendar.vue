@@ -148,7 +148,17 @@ const filters = reactive({ siteId: routeSiteId, locationId: routeLocationId, kin
 const agendaData = ref<AgendaPayload | null>(null)
 const agendaError = ref<unknown>(null)
 const loading = ref(false)
-const selectedDay = ref(new Date().toISOString().slice(0, 10))
+// The viewer's own date, not UTC. toISOString() is a day behind for anyone east
+// of Greenwich in the evening, which made the calendar open on yesterday and
+// ask the availability API about the wrong date.
+function localDayKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const selectedDay = ref(localDayKey())
 
 const monthStart = computed(() => currentMonth.value.toISOString().slice(0, 10))
 const monthEnd = computed(() => new Date(Date.UTC(currentMonth.value.getUTCFullYear(), currentMonth.value.getUTCMonth() + 1, 0)).toISOString().slice(0, 10))
@@ -240,7 +250,6 @@ const itemsByDay = computed(() => {
   for (const item of agendaData.value?.items ?? []) groups.set(item.dayKey, [...(groups.get(item.dayKey) ?? []), item])
   return groups
 })
-const todayUtcKey = () => new Date().toISOString().slice(0, 10)
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const monthCells = computed(() => {
   const year = currentMonth.value.getUTCFullYear()
@@ -249,7 +258,7 @@ const monthCells = computed(() => {
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(Date.UTC(year, month, index - firstWeekday + 1))
     const dayKey = date.toISOString().slice(0, 10)
-    return { dayKey, day: date.getUTCDate(), inMonth: date.getUTCMonth() === month, isToday: dayKey === todayUtcKey(), items: itemsByDay.value.get(dayKey) ?? [] }
+    return { dayKey, day: date.getUTCDate(), inMonth: date.getUTCMonth() === month, isToday: dayKey === localDayKey(), items: itemsByDay.value.get(dayKey) ?? [] }
   })
 })
 const mobileGroups = computed(() => [...itemsByDay.value.entries()].map(([dayKey, items]) => ({ dayKey, items })))

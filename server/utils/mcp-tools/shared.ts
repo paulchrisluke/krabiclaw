@@ -679,8 +679,9 @@ export const renderedBookingPolicySummaryObject = {
         required: ['id', 'text'],
       },
     },
+    additional_notes_html: { type: ['string', 'null'] },
   },
-  required: ['heading', 'items'],
+  required: ['heading', 'items', 'additional_notes_html'],
 }
 
 export const bookingPolicyObject = {
@@ -701,6 +702,7 @@ export const bookingPolicyObject = {
     deposit_trigger_party_size: { type: ['number', 'null'] },
     minimum_guest_age: { type: ['number', 'null'] },
     accessibility_contact_required: { type: ['boolean', 'null'] },
+    additional_notes_html: { type: ['string', 'null'] },
     source_scope: { type: ['string', 'null'] },
     created_at: { type: ['string', 'null'] },
     updated_at: { type: ['string', 'null'] },
@@ -720,6 +722,7 @@ export const bookingPolicyWriteSchema = {
   deposit_trigger_party_size: { type: ['number', 'null'] },
   minimum_guest_age: { type: ['number', 'null'] },
   accessibility_contact_required: { type: 'boolean' },
+  additional_notes_html: { type: ['string', 'null'] },
   locale: { type: 'string', description: 'Optional locale code for the rendered preview copy. Defaults to en.' },
 } as const
 

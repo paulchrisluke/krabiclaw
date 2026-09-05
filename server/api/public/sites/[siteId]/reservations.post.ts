@@ -5,7 +5,7 @@ import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
-import { isStructuredOpeningHours } from '~/shared/reservation-hours'
+import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
@@ -147,6 +147,8 @@ export default defineHandler(async (event) => {
      AND ao.override_date = ?
      AND ao.time_slot = ?
     WHERE l.id = ? AND l.site_id = ?
+      AND l.opening_hours IS ?
+      AND (? = 1 OR ao.status = 'open')
       AND COALESCE(ao.status, 'open') != 'closed'
       AND (
         COALESCE(ao.capacity_override, l.max_capacity) IS NULL
@@ -160,6 +162,7 @@ export default defineHandler(async (event) => {
     id, site.organization_id, siteId, customer.id, name, email, phone, date, time, guests,
     requests || null, ipHash, cancellationTokenHash, cancellation.expiresAt, resolvedLocationId,
     date, time, resolvedLocationId, siteId,
+    location.opening_hours, generateReservationTimes(parsedHours, date).includes(time) ? 1 : 0,
     resolvedLocationId, date, time, partySize,
   ])
 

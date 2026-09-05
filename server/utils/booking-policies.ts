@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro';
+import { sanitizeUrl } from '~/utils/sanitize'
 import { execute, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 export { formatBookingPolicySummary as renderBookingPolicySummary } from './booking-policy-summary.ts'
 export type {
@@ -25,6 +26,7 @@ export interface BookingPolicy {
   deposit_trigger_party_size: number | null
   minimum_guest_age: number | null
   accessibility_contact_required: boolean | null
+  additional_notes_html: string | null
   created_at: string
   updated_at: string
 }
@@ -38,6 +40,7 @@ export interface BookingPolicyPatch {
   deposit_trigger_party_size?: number | null
   minimum_guest_age?: number | null
   accessibility_contact_required?: boolean
+  additional_notes_html?: string | null
 }
 
 export interface ResolveBookingPolicyInput {
@@ -72,6 +75,7 @@ type BooleanBookingPolicyField =
 type OverlayBookingPolicyField =
   | NumericBookingPolicyField
   | BooleanBookingPolicyField
+  | 'additional_notes_html'
 
 interface BookingPolicyRow {
   id: string
@@ -89,6 +93,7 @@ interface BookingPolicyRow {
   deposit_trigger_party_size: number | null
   minimum_guest_age: number | null
   accessibility_contact_required: number | null
+  additional_notes_html: string | null
   created_at: string
   updated_at: string
 }
@@ -110,7 +115,7 @@ const BOOKING_POLICY_SELECT = `
   SELECT id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
          advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
          reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-         minimum_guest_age, accessibility_contact_required, created_at, updated_at
+         minimum_guest_age, accessibility_contact_required, additional_notes_html, created_at, updated_at
   FROM booking_policies
 `
 
@@ -128,6 +133,7 @@ const EMPTY_RESERVATION_POLICY: Omit<ResolvedBookingPolicy, 'id' | 'organization
   deposit_trigger_party_size: null,
   minimum_guest_age: null,
   accessibility_contact_required: null,
+  additional_notes_html: null,
 }
 
 const EXPERIENCE_DEFAULTS: Omit<ResolvedBookingPolicy, 'id' | 'organization_id' | 'created_at' | 'updated_at' | 'source_scope'> = {
@@ -144,6 +150,7 @@ const EXPERIENCE_DEFAULTS: Omit<ResolvedBookingPolicy, 'id' | 'organization_id' 
   deposit_trigger_party_size: null,
   minimum_guest_age: null,
   accessibility_contact_required: false,
+  additional_notes_html: null,
 }
 
 function rowToPolicy(row: BookingPolicyRow): BookingPolicy {
@@ -215,6 +222,7 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
     'deposit_trigger_party_size',
     'minimum_guest_age',
     'accessibility_contact_required',
+    'additional_notes_html',
   ]
 
   for (const key of overlayKeys) {
@@ -244,6 +252,9 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
           break
         case 'accessibility_contact_required':
           merged.accessibility_contact_required = value as boolean
+          break
+        case 'additional_notes_html':
+          merged.additional_notes_html = value as string
           break
       }
     }
@@ -296,6 +307,55 @@ function normalizeBoolean(value: unknown, field: string) {
   return value
 }
 
+function normalizeString(value: unknown, field: string) {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'string') {
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a string or null` })
+  }
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+const ALLOWED_NOTES_TAGS = new Set(['p', 'br', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'a'])
+const ALLOWED_NOTES_ATTRS: Record<string, Set<string>> = { a: new Set(['href', 'target', 'rel']) }
+
+// Uses the Workers runtime's native HTMLRewriter rather than a DOM-based sanitizer
+// (e.g. DOMPurify/jsdom) — those depend on Node's `vm`/native bindings and crash the
+// whole Worker at module load if imported anywhere in the server bundle, since jsdom
+// has no Workers-compatible build. See utils/sanitize.ts's server-side fallback for
+// the same constraint on the client/shared sanitize path.
+async function sanitizeAdditionalNotesHtml(value: string | null): Promise<string | null> {
+  if (!value) return null
+  const rewriter = new HTMLRewriter().on('*', {
+    element(el) {
+      const tag = el.tagName.toLowerCase()
+      if (!ALLOWED_NOTES_TAGS.has(tag)) {
+        el.removeAndKeepContent()
+        return
+      }
+      const allowedAttrs = ALLOWED_NOTES_ATTRS[tag] ?? new Set<string>()
+      // Workers' HTMLRewriter Element.attributes is IterableIterator<string[]> (name/value
+      // pairs), but @cloudflare/workers-types' global `Element` collides with lib.dom's
+      // `Element` in this project's tsconfig (both declare a same-named global interface),
+      // so TS resolves .attributes to the DOM NamedNodeMap shape here. Cast back to the
+      // actual runtime shape rather than touching the shared tsconfig lib/types config.
+      const attrPairs = el.attributes as unknown as IterableIterator<[string, string]>
+      for (const [name] of [...attrPairs]) {
+        if (!allowedAttrs.has(name)) el.removeAttribute(name)
+      }
+      if (tag === 'a') {
+        el.setAttribute('href', sanitizeUrl(el.getAttribute('href')))
+        el.setAttribute('rel', 'noopener noreferrer')
+      }
+    },
+  })
+  const response = rewriter.transform(new Response(`<div>${value}</div>`, { headers: { 'content-type': 'text/html' } }))
+  const rewritten = await response.text()
+  const sanitized = rewritten.replace(/^<div>/, '').replace(/<\/div>$/, '').trim()
+  return sanitized || null
+}
+
 export async function validateBookingPolicyPatch(input: Record<string, unknown>, policyType: BookingPolicyType): Promise<BookingPolicyPatch> {
   const patch: BookingPolicyPatch = {}
   const numericFields: NumericBookingPolicyField[] = [
@@ -319,6 +379,9 @@ export async function validateBookingPolicyPatch(input: Record<string, unknown>,
     const normalized = normalizeBoolean(input[field], field)
     if (normalized !== undefined) patch[field] = normalized
   }
+
+  const notes = normalizeString(input.additional_notes_html, 'additional_notes_html')
+  if (notes !== undefined) patch.additional_notes_html = await sanitizeAdditionalNotesHtml(notes)
 
   void policyType
 
@@ -513,6 +576,9 @@ export function applyBookingPolicyPatch(
       case 'minimum_guest_age':
         next.minimum_guest_age = value as number | null
         break
+      case 'additional_notes_html':
+        next.additional_notes_html = value as string | null
+        break
       case 'reschedule_allowed':
       case 'deposit_required':
       case 'accessibility_contact_required':
@@ -573,8 +639,8 @@ export async function upsertBookingPolicy(
       id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
       advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
       reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-      minimum_guest_age, accessibility_contact_required, created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      minimum_guest_age, accessibility_contact_required, additional_notes_html, created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       input.organizationId,
@@ -591,6 +657,7 @@ export async function upsertBookingPolicy(
       seeded.deposit_trigger_party_size,
       seeded.minimum_guest_age,
       insertableBoolean('accessibility_contact_required'),
+      seeded.additional_notes_html,
       now,
       now,
     ],

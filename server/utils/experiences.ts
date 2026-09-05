@@ -802,6 +802,15 @@ export async function createExperienceBookingClaimingCapacity(
      WHERE e.id = ? AND e.site_id = ?
        AND COALESCE(ao.status, 'open') != 'closed'
        AND (
+         ao.status = 'open'
+         OR EXISTS (
+           SELECT 1 FROM json_each(
+             CASE WHEN e.recurring_slots IS NULL THEN e.time_slots
+               ELSE json_extract(e.recurring_slots, '$.' || ?) END
+           ) scheduled WHERE scheduled.value = ?
+         )
+       )
+       AND (
          COALESCE(ao.capacity_override, e.max_capacity) IS NULL
          OR (
        SELECT COALESCE(SUM(party_size), 0) FROM experience_bookings
@@ -818,6 +827,7 @@ export async function createExperienceBookingClaimingCapacity(
       input.cancellation_token_hash ?? null, input.cancellation_token_expires_at ?? null,
       now, now,
       input.booking_date, input.time_slot, input.experience_id, input.site_id,
+      WEEKDAY_NAMES[(new Date(`${input.booking_date}T00:00:00Z`).getUTCDay() + 6) % 7], input.time_slot,
       input.site_id, input.experience_id, input.booking_date, input.time_slot,
       input.party_size,
     ],

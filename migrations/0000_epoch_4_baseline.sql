@@ -101,6 +101,7 @@ CREATE TABLE `booking_policies` (
 	`deposit_trigger_party_size` integer,
 	`minimum_guest_age` integer,
 	`accessibility_contact_required` numeric,
+	`additional_notes_html` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,

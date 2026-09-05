@@ -11,12 +11,7 @@
       @click="fileInput?.inputRef?.click()"
     >
       <UIcon name="i-lucide-upload" class="size-6 text-muted" />
-      <div class="flex items-center gap-2">
-        <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.inputRef?.click()">+ Add files</UButton>
-        <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-sparkles" @click.stop="emit('generate')">
-          Generate image
-        </UButton>
-      </div>
+      <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.inputRef?.click()">+ Add files</UButton>
       <p class="text-xs text-muted">Drag and drop images or videos</p>
       <UInput
         ref="fileInput"
@@ -63,7 +58,7 @@
 
     <div v-else-if="!loadError && filteredAssets.length === 0" class="py-10 text-center">
       <UIcon name="i-lucide-image" class="mx-auto size-8 text-muted" />
-      <p class="mt-3 text-sm text-muted">No media yet. Upload or generate your first image.</p>
+      <p class="mt-3 text-sm text-muted">No media yet. Upload your first file.</p>
     </div>
 
     <div v-else class="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-6 overflow-y-auto max-h-80">
@@ -161,7 +156,6 @@ const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
 
 const emit = defineEmits<{
   select: [asset: MediaAsset]
-  generate: []
   uploaded: [asset: MediaAsset]
 }>()
 

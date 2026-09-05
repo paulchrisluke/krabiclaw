@@ -97,6 +97,7 @@ export default {
       "special_requests": "Special requests",
       "today_date": "Today, {date}",
       "tomorrow_date": "Tomorrow, {date}",
+      "things_to_know": "Things to know",
       "what_to_bring": "What to bring",
       "what_youll_do": "What you'll do",
       "where_youll_meet": "Where you'll meet",

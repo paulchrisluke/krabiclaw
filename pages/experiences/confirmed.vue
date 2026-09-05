@@ -7,6 +7,7 @@
       :receipt-rows="receiptRows"
       :next-steps-kicker="resolvedPolicySummary?.heading ?? 'Experience policies'"
       :next-steps="policyLines"
+      :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
       :cta-label="confirmation.locationSlug ? 'Browse the menu' : 'Browse more experiences'"
       :cta-to="confirmation.locationSlug ? `/locations/${confirmation.locationSlug}/menu` : '/experiences'"
     >
