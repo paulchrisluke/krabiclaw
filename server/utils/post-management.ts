@@ -669,11 +669,7 @@ export async function publishPost(
 
   const socialCapability = socialPublish
   for (const channel of socialChannels) {
-    const insert = await execute(db, `
-      INSERT OR IGNORE INTO post_channel_jobs (id, post_id, channel, status, created_at)
-      VALUES (?, ?, ?, 'pending', ?)
-    `, [crypto.randomUUID(), postId, channel, now])
-    if (Number(insert.meta?.changes ?? 0) !== 1) continue
+    if (!(await claimPostChannelJob(db, postId, channel, now))) continue
 
     if (socialCapability?.kind === 'unavailable') {
       await settlePostChannelJob(db, postId, channel, { kind: 'skipped', reason: socialCapability.reason })
@@ -685,6 +681,26 @@ export async function publishPost(
   }
 
   return await getPost(db, organizationId, siteId, postId, env)
+}
+
+async function claimPostChannelJob(
+  db: DbClient,
+  postId: string,
+  channel: PostChannelJob['channel'],
+  now: string,
+): Promise<boolean> {
+  const inserted = await execute(db, `
+    INSERT OR IGNORE INTO post_channel_jobs (id, post_id, channel, status, created_at)
+    VALUES (?, ?, ?, 'pending', ?)
+  `, [crypto.randomUUID(), postId, channel, now])
+  if (Number(inserted.meta?.changes ?? 0) === 1) return true
+
+  const reclaimed = await execute(db, `
+    UPDATE post_channel_jobs
+       SET status = 'pending', provider_post_id = NULL, error = NULL, published_at = NULL
+     WHERE post_id = ? AND channel = ? AND status = 'skipped'
+  `, [postId, channel])
+  return Number(reclaimed.meta?.changes ?? 0) === 1
 }
 
 type PostChannelJobOutcome =
@@ -800,12 +816,10 @@ export async function publishDuePosts(db: DbClient, now = new Date()) {
      LIMIT 100
   `, [nowIso])
   let published = 0
-  for (const post of due ?? []) {
+  for (const post of due) {
     const previousUpdatedAt = Date.parse(post.updated_at)
-    const updatedAt = new Date(Math.max(
-      now.getTime(),
-      Number.isFinite(previousUpdatedAt) ? previousUpdatedAt + 1 : 0,
-    )).toISOString()
+    if (!Number.isFinite(previousUpdatedAt)) throw new Error(`Scheduled post ${post.id} has an invalid updated_at`)
+    const updatedAt = new Date(Math.max(now.getTime(), previousUpdatedAt + 1)).toISOString()
     const results = await executeBatch(db, [
       {
         query: `
