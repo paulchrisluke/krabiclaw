@@ -18,6 +18,8 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
 
 const CACHE_INVALIDATION_RETRY_AFTER_MS = 5 * 60 * 1000
+const CACHE_INVALIDATION_MAX_ATTEMPTS = 5
+const CACHE_INVALIDATION_TERMINAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 export function publicResourceCacheInvalidationQuery(
   siteId: string,
@@ -35,27 +37,43 @@ export function publicResourceCacheInvalidationQuery(
 export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
   kv: KVNamespace,
-  options: { limit?: number; now?: Date; freeSiteDomain?: string | null } = {},
+  options: { limit?: number; now?: Date; freeSiteDomain: string | null | undefined },
 ): Promise<number> {
+  const freeSiteDomain = normalizeHost(options.freeSiteDomain)
+  if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
   const now = options.now ?? new Date()
   const nowIso = now.toISOString()
   const staleClaimCutoff = new Date(now.getTime() - CACHE_INVALIDATION_RETRY_AFTER_MS).toISOString()
+  const terminalRetentionCutoff = new Date(now.getTime() - CACHE_INVALIDATION_TERMINAL_RETENTION_MS).toISOString()
+  await execute(db, `
+    DELETE FROM public_resource_cache_invalidations
+     WHERE status IN ('processed', 'failed') AND processed_at < ?
+  `, [terminalRetentionCutoff])
+  await execute(db, `
+    UPDATE public_resource_cache_invalidations
+       SET status = 'failed', claimed_at = NULL, processed_at = ?,
+           last_error = COALESCE(last_error, 'Retry limit reached')
+     WHERE attempt_count >= ?
+       AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
+  `, [nowIso, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff])
   const rows = await queryAll<{ id: string; site_id: string; attempt_count: number }>(db, `
     SELECT id, site_id, attempt_count
       FROM public_resource_cache_invalidations
-     WHERE status = 'pending'
-        OR (status = 'processing' AND claimed_at < ?)
+     WHERE attempt_count < ?
+       AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
      ORDER BY created_at ASC
      LIMIT ?
-  `, [staleClaimCutoff, options.limit ?? 50])
+  `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, options.limit ?? 50])
   let processed = 0
   for (const row of rows) {
     const claim = await execute(db, `
       UPDATE public_resource_cache_invalidations
          SET status = 'processing', claimed_at = ?, attempt_count = attempt_count + 1
-       WHERE id = ? AND (status = 'pending' OR (status = 'processing' AND claimed_at < ?))
-    `, [nowIso, row.id, staleClaimCutoff])
+       WHERE id = ? AND attempt_count = ? AND attempt_count < ?
+         AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
+    `, [nowIso, row.id, row.attempt_count, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff])
     if (Number(claim.meta?.changes ?? 0) !== 1) continue
+    const claimedAttemptCount = row.attempt_count + 1
     try {
       await purgePublicResourceCache(kv, row.site_id)
       const domains = await queryAll<{ domain: string }>(db, `
@@ -65,25 +83,24 @@ export async function drainPublicResourceCacheInvalidations(
         SELECT subdomain, custom_domain FROM sites WHERE id = ? LIMIT 1
       `, [row.site_id])
       const site = sites[0]
-      const freeSiteDomain = normalizeHost(options.freeSiteDomain)
-      if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
       const hostnames = new Set<string>(domains.map(domain => domain.domain))
       if (site?.subdomain) hostnames.add(`${site.subdomain}.${freeSiteDomain}`)
       if (site?.custom_domain) hostnames.add(site.custom_domain)
       await purgeSiteKvCache(kv, [...hostnames])
-      await execute(db, `
+      const finalized = await execute(db, `
         UPDATE public_resource_cache_invalidations
            SET status = 'processed', processed_at = ?, last_error = NULL
-         WHERE id = ? AND status = 'processing' AND claimed_at = ?
-      `, [nowIso, row.id, nowIso])
-      processed += 1
+         WHERE id = ? AND status = 'processing' AND claimed_at = ? AND attempt_count = ?
+      `, [nowIso, row.id, nowIso, claimedAttemptCount])
+      if (Number(finalized.meta?.changes ?? 0) === 1) processed += 1
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      const failed = claimedAttemptCount >= CACHE_INVALIDATION_MAX_ATTEMPTS
       await execute(db, `
         UPDATE public_resource_cache_invalidations
-           SET status = 'pending', claimed_at = NULL, last_error = ?
-         WHERE id = ? AND status = 'processing' AND claimed_at = ?
-      `, [message.slice(0, 2000), row.id, nowIso])
+           SET status = ?, claimed_at = NULL, processed_at = ?, last_error = ?
+         WHERE id = ? AND status = 'processing' AND claimed_at = ? AND attempt_count = ?
+      `, [failed ? 'failed' : 'pending', failed ? nowIso : null, message.slice(0, 2000), row.id, nowIso, claimedAttemptCount])
       console.warn('[public-resource-cache] durable purge failed:', message)
     }
   }
@@ -198,11 +215,8 @@ export async function purgePublicResourceCacheSafe(
 
   const purgePromise = maybeEnv.DB
     ? (async () => {
-        await execute(maybeEnv.DB!, `
-          INSERT INTO public_resource_cache_invalidations
-            (id, site_id, reason, status, attempt_count, created_at)
-          VALUES (?, ?, 'legacy-safe-wrapper', 'pending', 0, ?)
-        `, [crypto.randomUUID(), siteId, new Date().toISOString()])
+        const invalidation = publicResourceCacheInvalidationQuery(siteId, 'legacy-safe-wrapper')
+        await execute(maybeEnv.DB!, invalidation.query, invalidation.params)
         await drainPublicResourceCacheInvalidations(maybeEnv.DB!, kv, {
           limit: 1,
           freeSiteDomain: maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN,
