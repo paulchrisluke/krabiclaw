@@ -22,6 +22,7 @@ import {
 import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
 import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
 import { describeErrorForTelemetry, errorChainForTelemetry } from "~/server/utils/error-telemetry";
+import { getRequestDataMetrics, recordRequestPhase } from "~/server/utils/request-metrics";
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
 // Fires a telemetry write without ever blocking or failing the MCP response.
@@ -103,12 +104,11 @@ export default defineHandler(async (event) => {
       ? request.params.name
       : undefined;
 
-    if (import.meta.dev) {
-      event.runtime?.node?.res?.once("finish", () => {
-        console.info("[MCP_REQUEST]", JSON.stringify({
-          method: requestMethod ?? null, request_id: requestId ?? null, status: event.runtime?.node?.res?.statusCode, duration_ms: Date.now() - requestStartedAt, content_length: event.runtime?.node?.res?.getHeader("content-length") ?? null, ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, }));
-      });
-    }
+    console.info('[MCP_REQUEST]', JSON.stringify({
+      event: 'mcp_request_started', request_id: getRequestDataMetrics(event).requestId,
+      rpc_id: requestId ?? null, method: requestMethod, tool: requestToolName ?? null,
+      ray_id: event.req.headers.get('cf-ray'),
+    }));
 
     // MCP protocol handshake — required before any tools/list or tools/call
     if (request.method === "initialize") {
@@ -285,7 +285,10 @@ Common workflows: manage location-scoped Products, create and publish site posts
       const toolDef = MCP_TOOLS.find((t) => t.name === toolName);
       const toolStartedAt = Date.now();
 
+      const authStartedAt = performance.now();
       const mcpUser = await requireMcpUser(event, tenantAuthOptions);
+      recordRequestPhase(event, 'mcp_auth', authStartedAt);
+      const executionStartedAt = performance.now();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let result: any;
@@ -293,6 +296,7 @@ Common workflows: manage location-scoped Products, create and publish site posts
         assertConversationalToolEnabled(toolName, cfEnv as ApiRecord);
         result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
       } catch (toolError) {
+        recordRequestPhase(event, 'mcp_execute', executionStartedAt);
         console.error({
           event: "mcp_tool_failed", tool: toolName, request_id: request.id,
           ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
@@ -318,6 +322,7 @@ Common workflows: manage location-scoped Products, create and publish site posts
           isError: true, content: [{ type: "text", text: mcpErr.message }], });
       }
 
+      recordRequestPhase(event, 'mcp_execute', executionStartedAt);
       const isRender = isMcpRenderResponse(result);
       const structuredContent = isRender ? result.structuredContent : result;
       const modelText = isRender && result.modelText
@@ -361,6 +366,7 @@ Common workflows: manage location-scoped Products, create and publish site posts
             // before the stale public resource entry is cleared — otherwise a client
             // that reads public resources immediately after this mutation could still
             // see stale data.
+            const cacheStartedAt = performance.now();
             try {
               await purgePublicResourceCacheSafe({
                 DB: env.db,
@@ -369,6 +375,8 @@ Common workflows: manage location-scoped Products, create and publish site posts
               }, siteId)
             } catch (err: unknown) {
               console.warn("[mcp-cache-purge] public resource purge failed:", String(err))
+            } finally {
+              recordRequestPhase(event, 'mcp_cache_purge', cacheStartedAt);
             }
           }
           if (kv && db) {
@@ -419,5 +427,11 @@ Common workflows: manage location-scoped Products, create and publish site posts
     if (mappedStatus >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
     return respondToMcpError(event, error, {
       requestId, requestMethod, requestToolName, requestToolArgs, baseUrl, ...runtimeDeps, });
+  } finally {
+    console.info('[MCP_REQUEST]', JSON.stringify({
+      event: 'mcp_request_finished', request_id: getRequestDataMetrics(event).requestId,
+      rpc_id: requestId ?? null, method: requestMethod ?? null, tool: requestToolName ?? null,
+      ray_id: event.req.headers.get('cf-ray'), duration_ms: Date.now() - requestStartedAt,
+    }));
   }
 });

@@ -10,6 +10,9 @@ export interface RequestDataMetrics {
   rowsRead: number
   rowsWritten: number
   d1DurationMs: number
+  d1SqlDurationMs: number
+  d1MetaCount: number
+  d1Colos: Set<string>
   startedAt: number
   phases: Record<string, number>
   resources: Map<string, number>
@@ -43,6 +46,9 @@ export function getRequestDataMetrics(event: H3Event): RequestDataMetrics {
       rowsRead: 0,
       rowsWritten: 0,
       d1DurationMs: 0,
+      d1SqlDurationMs: 0,
+      d1MetaCount: 0,
+      d1Colos: new Set(),
       startedAt: performance.now(),
       phases: {},
       resources: new Map(),
@@ -76,7 +82,12 @@ function recordResult(metrics: RequestDataMetrics, value: unknown): D1MetaSummar
     const meta = (result as { meta?: D1MetaSummary }).meta
     metrics.rowsRead += Number(meta?.rows_read) || 0
     metrics.rowsWritten += Number(meta?.rows_written) || 0
-    if (meta) summaries.push(meta)
+    if (meta) {
+      summaries.push(meta)
+      metrics.d1MetaCount += 1
+      metrics.d1SqlDurationMs += Number(meta.timings?.sql_duration_ms ?? meta.duration) || 0
+      if (meta.served_by_colo) metrics.d1Colos.add(meta.served_by_colo)
+    }
   }
   return summaries
 }
@@ -335,6 +346,11 @@ export async function flushRequestMetrics(event: HTTPEvent, response: Response) 
   const totalDuration = performance.now() - metrics.startedAt
   console.info('[data-request]', JSON.stringify({
     requestId: metrics.requestId,
+    rayId: event.req.headers.get('cf-ray'),
+    phases: Object.fromEntries(Object.entries(metrics.phases).map(([name, duration]) => [name, Number(duration.toFixed(2))])),
+    d1SqlDurationMs: Number(metrics.d1SqlDurationMs.toFixed(2)),
+    d1MetaCount: metrics.d1MetaCount,
+    d1Colos: [...metrics.d1Colos],
     resource: [...metrics.resources.keys()].join(',') || new URL(event.req.url).pathname,
     cacheStatus,
     attemptCount: 1,
