@@ -183,7 +183,7 @@ For a verified local candidate, SQLite's standard data-only export provides the
 import payload without schema or migration-history writes:
 
 ```sh
-sqlite3 /absolute/path/epoch4.sqlite '.dump --data-only --nosys --newlines' > /absolute/path/epoch4-data.sql
+sqlite3 --escape off /absolute/path/epoch4.sqlite '.dump --data-only --nosys --newlines' > /absolute/path/epoch4-data.sql
 ```
 
 Wrap that payload with `PRAGMA foreign_keys = OFF;` and
@@ -192,8 +192,13 @@ import through `wrangler d1 execute --remote --file`, which runs outside one SQL
 transaction and rolls back failed imports using a saved bookmark. Transaction-
 scoped `defer_foreign_keys` is insufficient for this path; see the
 [Cloudflare maintainer's import explanation](https://github.com/cloudflare/workers-sdk/discussions/13499).
-The `--newlines` option avoids SQLite's newer `unistr()` dump expressions,
-which D1 does not support. A fresh export must pass full logical parity and
+The global `--escape off` option prevents the `unistr()` expressions introduced
+by [SQLite 3.50](https://www.sqlite.org/releaselog/3_50_0.html), which D1 does not
+support. `--newlines` alone is insufficient. If the local candidate contains
+`d1_migrations`, append the explicit application-table names from the committed
+baseline to `.dump`; `--nosys` does not exclude Wrangler's migration ledger.
+Reject any payload with schema statements, system or migration-history inserts,
+or unsupported `unistr()` expressions. A fresh export must pass full logical parity and
 `foreign_key_check` before the candidate can be bound.
 
 The production transformer creates no `d1_migrations` table. Apply the committed
