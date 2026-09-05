@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { AvailabilityCalendar } from '../../server/utils/availability'
 import { loginAs } from './helpers/auth'
+import { openTenantPage } from './helpers'
 import { devLoginHeaders, testBaseUrl } from './test-env'
 
 const baseURL = testBaseUrl()
@@ -8,10 +9,9 @@ const writable = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(ne
 
 test('calendar range edits persist and public availability excludes private notes', async ({ page, request }) => {
   test.skip(!writable, 'Calendar writes require disposable local or preview data')
-  await page.context().setExtraHTTPHeaders(devLoginHeaders() ?? {})
   await loginAs(page.request, baseURL)
   const calendarResponse = page.waitForResponse(response => response.request().method() === 'GET' && response.url().includes('/site-demo/availability'))
-  await page.goto(`${baseURL}/dashboard/ember-slice-demo/calendar?view=availability&siteId=site-demo&locationId=loc-demo`)
+  await openTenantPage(page, `${baseURL}/dashboard/ember-slice-demo/calendar?view=availability&siteId=site-demo&locationId=loc-demo`, devLoginHeaders() ?? {})
   const initialResponse = await calendarResponse
   expect(initialResponse.status(), await initialResponse.text()).toBe(200)
   const nextMonth = page.waitForResponse(response => response.request().method() === 'GET' && response.url().includes('/site-demo/availability'))

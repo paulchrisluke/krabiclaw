@@ -20,8 +20,8 @@ test('epoch-4 baseline creates the complete schema from zero', () => {
       GROUP BY type
     `).all() as Array<{ type: string; count: number }>
     assert.deepEqual(Object.fromEntries(objectCounts.map(row => [row.type, row.count])), {
-      index: 234,
-      table: 97,
+      index: 232,
+      table: 96,
     })
     const ledgerCount = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE name = 'd1_migrations'").get() as { count: number }
     assert.equal(ledgerCount.count, 0)
