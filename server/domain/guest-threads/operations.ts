@@ -4,7 +4,7 @@ import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getAdapter } from './adapters/registry'
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
-import { getGuestThreadById } from './repository'
+import { getGuestThreadById, updateThreadProjectionIfLatestEntry } from './repository'
 import type {
   AnyGuestThreadSourceAdapter,
   GuestThreadDeliveryProvider,
@@ -464,19 +464,7 @@ async function executeReply(
   })
 
   if (outcome.status === 'sent' || outcome.status === 'accepted' || outcome.status === 'delivered' || outcome.status === 'read') {
-    const now = new Date().toISOString()
-    await executeBatch(db, [{
-      query: `
-        UPDATE guest_threads
-        SET conversation_state = 'waiting_on_guest', resolved_at = NULL, updated_at = ?
-        WHERE id = ?
-          AND EXISTS (
-            SELECT 1 FROM guest_thread_deliveries
-            WHERE id = ? AND status IN ('accepted', 'sent', 'delivered', 'read')
-          )
-      `,
-      params: [now, context.thread.id, outcome.id],
-    }], { operation: 'guest thread reply acceptance' })
+    await updateThreadProjectionIfLatestEntry(db, context.thread.id, entry.id, { conversationState: 'waiting_on_guest' })
     return await successfulOutcome(db, context)
   }
   if (isDeliveryClaimInFlight(outcome)) return await successfulOutcome(db, context, 202)
@@ -529,17 +517,7 @@ async function retryDelivery(
     submissionId: context.thread.submission_id,
   })
   if (delivery.purpose === 'member_reply' && (retried.status === 'sent' || retried.status === 'accepted')) {
-    const now = new Date().toISOString()
-    await executeBatch(db, [{
-      query: `
-        UPDATE guest_threads
-        SET conversation_state = 'waiting_on_guest', resolved_at = NULL, updated_at = ?
-        WHERE id = ? AND EXISTS (
-          SELECT 1 FROM guest_thread_deliveries WHERE id = ? AND status IN ('accepted', 'sent', 'delivered', 'read')
-        )
-      `,
-      params: [now, context.thread.id, retried.id],
-    }], { operation: 'guest thread reply retry acceptance' })
+    await updateThreadProjectionIfLatestEntry(db, context.thread.id, entry.id, { conversationState: 'waiting_on_guest' })
   }
   if (retried.status === 'failed') {
     return { ok: false, status: 502, reason: 'delivery_failed', message: retried.error ?? 'Email provider rejected the retry' }
