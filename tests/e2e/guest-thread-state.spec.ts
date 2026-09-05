@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto'
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
 import type {
   GuestThreadDetailViewModel,
@@ -22,6 +23,7 @@ interface DeliveryView {
   thread_id: string
   entry_id: string
   purpose: string
+  status: string
 }
 
 interface DeliveryList {
@@ -34,6 +36,7 @@ const ownerId = 'user-e2e-pottery-owner'
 const secondOwnerId = 'user-e2e-pottery-location-owner'
 const foreignOwnerId = 'user-e2e-kikuzuki-owner'
 const writable = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(new URL(baseURL).hostname)
+const local = ['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)
 
 async function expectStatus(response: APIResponse, status: number) {
   expect(response.status(), await response.text()).toBe(status)
@@ -47,8 +50,12 @@ async function loadThreadList(request: APIRequestContext, search: string) {
   return await response.json() as { threads: GuestThreadListItemViewModel[] }
 }
 
-async function loadThreadDetail(request: APIRequestContext, threadId: string) {
-  const response = await request.get(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`)
+async function loadThreadDetail(
+  request: APIRequestContext,
+  threadId: string,
+  targetSiteId = siteId,
+) {
+  const response = await request.get(`/api/dashboard/sites/${targetSiteId}/guest-threads/${threadId}`)
   await expectStatus(response, 200)
   return (await response.json() as { thread: GuestThreadDetailViewModel }).thread
 }
@@ -202,5 +209,99 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
     expect(contactNotification(ownerNotificationsAfterReply, guestName).read_at).toEqual(expect.any(String))
   } finally {
     await Promise.all([owner.dispose(), secondOwner.dispose(), foreignOwner.dispose()])
+  }
+})
+
+test('Today uses the CMS patterns and sends one reservation change request', async ({ page }) => {
+  test.skip(!writable, 'Today writes require disposable local or preview data')
+  test.setTimeout(120_000)
+  await loginAs(page.request, baseURL)
+
+  await page.goto(`${baseURL}/dashboard/ember-slice-demo`)
+  const heading = page.getByRole('heading', { name: /^You have \d+ (?:bookings|reservations)$/ })
+  await expect(heading).toBeVisible()
+  expect(await heading.evaluate(element => getComputedStyle(element).textAlign)).toBe('center')
+  await expect(page.getByRole('tab', { name: 'Today', exact: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Upcoming', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Filter bookings', exact: true })).toBeVisible()
+
+  await page.getByRole('link', { name: /Maya arrives today/i }).click()
+  await expect(page.getByRole('heading', { name: 'Currently hosting', exact: true })).toBeVisible()
+  await expect(page.getByText('Maya Chen', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('maya.today@example.test', { exact: true })).toHaveCount(0)
+  await page.getByRole('link', { name: /Maya Chen/ }).last().click()
+  await expect(page.getByText('maya.today@example.test', { exact: true })).toBeVisible()
+  await page.goBack()
+
+  const note = `Today page note ${Date.now()}`
+  await page.getByRole('link', { name: 'Add a note to yourself', exact: true }).click()
+  await page.getByLabel('Note', { exact: true }).fill(note)
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByText(note, { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: `Edit note: ${note}` }).click()
+  await expect(page.getByLabel('Note', { exact: true })).toHaveValue(note)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  await page.getByRole('button', { name: 'Manage reservation', exact: true }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('link', { name: 'Change reservation', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'What do you want to change?', exact: true })).toBeVisible()
+  await expect(page.getByText(/send a request to your guest, Maya, to confirm the alterations to your reservation/i)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reservation details', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send request', exact: true })).toBeVisible()
+
+  await page.goto(`${baseURL}/dashboard/ember-slice-demo/bookings/reservation/reservation-demo-upcoming-priya/change`)
+  const beforeResponse = await page.request.get(
+    '/api/dashboard/bookings/reservation/reservation-demo-upcoming-priya',
+    { params: { org: 'ember-slice-demo' } },
+  )
+  await expectStatus(beforeResponse, 200)
+  const before = await beforeResponse.json() as { booking: { partySize: number; threadId: string } }
+  const targetPartySize = before.booking.partySize === 99 ? 98 : before.booking.partySize + 1
+  await page.getByRole('link', { name: 'Change guests', exact: true }).click()
+  await page.getByRole('spinbutton', { name: 'Guests', exact: true }).fill(String(targetPartySize))
+  await page.goBack()
+  const requestedAt = new Date().toISOString()
+  await page.getByRole('button', { name: 'Send request', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Coming up', exact: true })).toBeVisible()
+
+  const detail = await loadThreadDetail(page.request, before.booking.threadId, 'site-demo')
+  const requests = detail.entries.filter(entry =>
+    entry.eventName === 'booking_change.requested' && entry.occurredAt >= requestedAt,
+  )
+  expect(requests).toHaveLength(1)
+  expect(requests[0]!.payload).toMatchObject({ after: { partySize: targetPartySize } })
+  const deliveryResponse = await page.request.get('/api/dev/notifications', {
+    headers: devLoginHeaders(),
+    params: { site_id: 'site-demo', since: requestedAt },
+  })
+  await expectStatus(deliveryResponse, 200)
+  const deliveries = (await deliveryResponse.json() as DeliveryList).deliveries.filter(row => row.entry_id === requests[0]!.id)
+  expect(deliveries.some(row => row.purpose === 'status_update' && row.status === 'sent')).toBe(true)
+  expect(deliveries.some(row => row.purpose === 'owner_alert' && row.status === 'sent')).toBe(true)
+
+  if (local) {
+    const request = requests[0]!
+    const token = createHmac('sha256', 'local-playwright-email-reply-secret')
+      .update(`booking-change:v1:${before.booking.threadId}:${request.id}`)
+      .digest('hex')
+    const accepted = await page.request.post(
+      `/api/public/booking-changes/${before.booking.threadId}/${request.id}`,
+      { headers: { authorization: `Bearer ${token}` }, data: { decision: 'accept' } },
+    )
+    await expectStatus(accepted, 200)
+    expect(await accepted.json()).toMatchObject({ status: 'accepted' })
+
+    const afterResponse = await page.request.get(
+      '/api/dashboard/bookings/reservation/reservation-demo-upcoming-priya',
+      { params: { org: 'ember-slice-demo' } },
+    )
+    await expectStatus(afterResponse, 200)
+    expect(await afterResponse.json()).toMatchObject({ booking: { partySize: targetPartySize } })
+    const afterDetail = await loadThreadDetail(page.request, before.booking.threadId, 'site-demo')
+    expect(afterDetail.entries.filter(entry =>
+      entry.eventName === 'booking_change.accepted'
+      && entry.payload?.requestId === request.id,
+    )).toHaveLength(1)
   }
 })

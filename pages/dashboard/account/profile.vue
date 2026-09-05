@@ -11,7 +11,7 @@
     <template #body>
       <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
         <section class="flex items-center gap-4 pb-[22px] max-sm:pb-[18px]" :class="rowTone('avatar')">
-          <UAvatar :src="sessionData?.user?.image ?? undefined" :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)" alt="User avatar" class="size-14" />
+          <UAvatar :src="sessionData?.user?.image ?? undefined" alt="User avatar" class="size-14" :ui="{ icon: 'size-7' }" />
           <span class="account-action text-muted" title="Avatar is managed by your sign-in provider">Change photo</span>
         </section>
 
@@ -166,7 +166,6 @@
 </template>
 
 <script setup lang="ts">
-import { getInitials } from '~/utils/formatters'
 // -nocheck
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'

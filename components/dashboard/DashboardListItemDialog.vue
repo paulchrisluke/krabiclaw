@@ -44,7 +44,7 @@
       </div>
     </template>
 
-    <template #footer>
+    <template v-if="showActions" #footer>
       <!--
         Remove sits opposite Save rather than among the row controls: deleting is
         a decision you make while looking at the item, not while scanning the list.
@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+withDefaults(defineProps<{
   /** Centred in the bar. Names the row being edited, or the thing being added. */
   title: string
   /** Adding has nothing to remove yet, so the control is absent rather than inert. */
@@ -79,9 +79,11 @@ defineProps<{
   saving?: boolean
   removing?: boolean
   saveDisabled?: boolean
+  /** Read-only details and action menus use the same chrome without a commit bar. */
+  showActions?: boolean
   /** Names the commit for a sheet that does something other than save an edit. */
   saveLabel?: string
-}>()
+}>(), { showActions: true })
 
 defineEmits<{
   save: []

@@ -22,6 +22,11 @@
               <slot name="index" />
             </div>
           </div>
+          <footer v-if="$slots['index-footer']" class="shrink-0 border-t border-default bg-default px-5 py-4 sm:px-8">
+            <div class="mx-auto flex w-full items-center justify-between gap-4" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
+              <slot name="index-footer" />
+            </div>
+          </footer>
         </section>
 
         <!--
@@ -55,6 +60,7 @@
               size="sm"
               square
               :to="dismissTo"
+              @click="$emit('cancel')"
               data-testid="editor-detail-dismiss"
             />
             <h2 class="truncate text-center text-base font-semibold text-highlighted">{{ detailTitle }}</h2>
@@ -79,7 +85,7 @@
           >
             <div class="mx-auto flex w-full items-center justify-between gap-4" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
               <UButton color="neutral" variant="ghost" label="Cancel" @click="$emit('cancel')" />
-              <UButton label="Save" :loading="saving" :disabled="saveDisabled" @click="$emit('save')" />
+              <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="$emit('save')" />
             </div>
           </footer>
         </section>
@@ -95,6 +101,7 @@ defineProps<{
   showActions?: boolean
   saving?: boolean
   saveDisabled?: boolean
+  saveLabel?: string
   wideDetail?: boolean
   /** Names the open node. Centred in the sheet's bar, a heading in the pane. */
   detailTitle?: string

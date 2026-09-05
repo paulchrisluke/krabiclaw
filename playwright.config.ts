@@ -22,7 +22,7 @@ if (!previewUrl) {
 const localWorkerEnvironment = [
   'EMAIL_DELIVERY_MODE=log_only',
   'WHATSAPP_DELIVERY_MODE=log_only',
-  'DISCORD_DELIVERY_MODE=log_only',
+  'EMAIL_REPLY_SECRET=local-playwright-email-reply-secret',
   `BETTER_AUTH_URL=http://localhost:${port}`,
   `NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:${port}`,
   `NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:${port}`,
@@ -41,7 +41,7 @@ const localWorkerCommand = [
   `--var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`,
   '--var EMAIL_DELIVERY_MODE:log_only',
   '--var WHATSAPP_DELIVERY_MODE:log_only',
-  '--var DISCORD_DELIVERY_MODE:log_only',
+  '--var EMAIL_REPLY_SECRET:local-playwright-email-reply-secret',
   `--var BETTER_AUTH_URL:http://localhost:${port}`,
   `--var NUXT_PUBLIC_PLATFORM_DOMAIN:http://localhost:${port}`,
   `--var NUXT_PUBLIC_FREE_SITE_DOMAIN:http://localhost:${port}`,

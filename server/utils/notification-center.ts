@@ -21,6 +21,8 @@ export interface CreateNotificationInput {
   title: string
   message?: string | null
   deepLink?: string | null
+  /** Stable event identity. Replays reuse the notification instead of adding a second alert. */
+  idempotencyKey?: string
 }
 
 export interface CanonicalNotificationInsert {
@@ -43,7 +45,7 @@ export function redactNotificationPayload(value: unknown): unknown {
 
 export function buildCanonicalNotificationInsert(
   input: CreateNotificationInput,
-  id = crypto.randomUUID(),
+  id: string = crypto.randomUUID(),
   now = new Date().toISOString(),
 ): CanonicalNotificationInsert {
   if (input.scope === 'platform' && (input.organizationId || input.siteId)) {
@@ -83,7 +85,7 @@ export function buildCanonicalNotificationInsert(
 }
 
 export async function createCanonicalNotification(db: DbClient, input: CreateNotificationInput): Promise<string> {
-  const statement = buildCanonicalNotificationInsert(input)
+  const statement = buildCanonicalNotificationInsert(input, input.idempotencyKey)
   const result = await execute(db, statement.query, statement.params)
   if (Number(result.meta.changes ?? 0) > 0 && input.publishEnv && input.organizationId) {
     await publishNotificationInvalidation(input.publishEnv, {

@@ -176,8 +176,6 @@ export interface CloudflareEnv {
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
-  DISCORD_DELIVERY_MODE?: string
-  DISCORD_WEBHOOK_URL?: string
   MEDIA_BUCKET?: R2Bucket
   SITE_CACHE?: KVNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
