@@ -37,7 +37,7 @@ export function publicResourceCacheInvalidationQuery(
 export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
   kv: KVNamespace,
-  options: { limit?: number; now?: Date; freeSiteDomain: string | null | undefined },
+  options: { limit?: number; now?: Date; siteId?: string; freeSiteDomain: string | null | undefined },
 ): Promise<number> {
   const freeSiteDomain = normalizeHost(options.freeSiteDomain)
   if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
@@ -48,22 +48,25 @@ export async function drainPublicResourceCacheInvalidations(
   await execute(db, `
     DELETE FROM public_resource_cache_invalidations
      WHERE status IN ('processed', 'failed') AND processed_at < ?
-  `, [terminalRetentionCutoff])
+       ${options.siteId ? 'AND site_id = ?' : ''}
+  `, [terminalRetentionCutoff, ...(options.siteId ? [options.siteId] : [])])
   await execute(db, `
     UPDATE public_resource_cache_invalidations
        SET status = 'failed', claimed_at = NULL, processed_at = ?,
            last_error = COALESCE(last_error, 'Retry limit reached')
      WHERE attempt_count >= ?
        AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
-  `, [nowIso, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff])
+       ${options.siteId ? 'AND site_id = ?' : ''}
+  `, [nowIso, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.siteId ? [options.siteId] : [])])
   const rows = await queryAll<{ id: string; site_id: string; attempt_count: number }>(db, `
     SELECT id, site_id, attempt_count
       FROM public_resource_cache_invalidations
      WHERE attempt_count < ?
        AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
+       ${options.siteId ? 'AND site_id = ?' : ''}
      ORDER BY created_at ASC
      LIMIT ?
-  `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, options.limit ?? 50])
+  `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.siteId ? [options.siteId] : []), options.limit ?? 50])
   let processed = 0
   for (const row of rows) {
     const claim = await execute(db, `
@@ -219,6 +222,7 @@ export async function purgePublicResourceCacheSafe(
         await execute(maybeEnv.DB!, invalidation.query, invalidation.params)
         await drainPublicResourceCacheInvalidations(maybeEnv.DB!, kv, {
           limit: 1,
+          siteId,
           freeSiteDomain: maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN,
         })
       })()

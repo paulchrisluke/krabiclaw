@@ -2,7 +2,7 @@ import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/serv
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getAdapter } from './adapters/registry'
-import { deliverGuestThreadEmail, getDeliveryById, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
+import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
 import { getGuestThreadById, updateThreadProjectionIfLatestEntry } from './repository'
 import type {
@@ -140,13 +140,14 @@ function operationEntryQuery(
   entryId: string,
   dedupeKey: string,
   now: string,
+  subject: string | null,
 ): BatchQuery {
   const sourceTable = plan.kind === 'reservation' ? 'reservation_submissions' : 'experience_bookings'
   return {
     query: `
       INSERT INTO guest_thread_entries
         (id, thread_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-      SELECT ?, gt.id, 'operation', 'member', ?, NULL, NULL, ?, ?, ?,
+      SELECT ?, gt.id, 'operation', 'member', ?, NULL, ?, ?, ?, ?,
              COALESCE((SELECT MAX(sequence) FROM guest_thread_entries WHERE thread_id = gt.id), 0) + 1,
              ?, ?
       FROM guest_threads gt
@@ -157,8 +158,9 @@ function operationEntryQuery(
     params: [
       entryId,
       input.actorUserId,
+      plan.requiresNotification ? operationBody(plan.action, context.adapter, context.source) : null,
       `${plan.kind}.${plan.action}`,
-      JSON.stringify({ action: plan.action, beforeStatus: plan.beforeStatus, afterStatus: plan.afterStatus }),
+      JSON.stringify({ action: plan.action, beforeStatus: plan.beforeStatus, afterStatus: plan.afterStatus, subject }),
       dedupeKey,
       now,
       now,
@@ -288,20 +290,27 @@ async function sendStatusUpdate(
   db: DbClient,
   context: ThreadContext,
   input: ExecuteOperationInput,
-  action: string,
-): Promise<GuestThreadDeliveryRow> {
+  entry: GuestThreadEntryRow,
+  delivery: GuestThreadDeliveryRow,
+): Promise<GuestThreadDeliveryRow | OperationOutcome> {
+  if (getDeliveryClaimEligibility(delivery) !== 'claimable') return delivery
+  const subject = recordedEmailSubject(entry)
+  if (!entry.body || !subject) return conflict('Status update has no recorded email content')
+  const payload = JSON.parse(entry.payload_json!) as { action?: string; afterStatus?: string }
+  if (payload.action && (
+    payload.afterStatus !== context.adapter.getOperationalStatus(context.source)
+    || entry.body !== operationBody(payload.action, context.adapter, context.source)
+  )) return conflict('Status update was superseded by a booking change')
   const summary = context.adapter.summarize(context.source)
-  if (!summary.guestEmail) throw new Error('Status update has no guest email')
-  const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
-  if (!delivery) throw new Error('Status update delivery receipt was not created')
+  if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
   const fromName = await getSiteBrandName(db, context.thread.site_id)
   return await deliverGuestThreadEmail(db, {
     delivery,
     env: input.env,
     to: summary.guestEmail,
     fromName,
-    subject: operationSubject(action, fromName),
-    body: operationBody(action, context.adapter, context.source),
+    subject,
+    body: entry.body,
     submissionType: context.thread.submission_type,
     submissionId: context.thread.submission_id,
   })
@@ -317,7 +326,12 @@ async function executeSourceMutation(
   const existing = await findEntryByDedupeKey(db, dedupeKey)
   if (existing) {
     if (!entryMatchesRequest(existing, eventName)) return conflict()
-    if (input.action !== 'complete') await sendStatusUpdate(db, context, input, input.action)
+    if (input.action !== 'complete') {
+      const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
+      if (!delivery) throw new Error('Status update delivery receipt was not created')
+      const outcome = await sendStatusUpdate(db, context, input, existing, delivery)
+      if ('ok' in outcome) return outcome
+    }
     return await successfulOutcome(db, context)
   }
 
@@ -331,8 +345,11 @@ async function executeSourceMutation(
   const entryId = crypto.randomUUID()
   const deliveryId = deliveryDedupeKey(input)
   const now = new Date().toISOString()
+  const subject = plan.requiresNotification
+    ? operationSubject(plan.action, await getSiteBrandName(db, context.thread.site_id))
+    : null
   const queries = [
-    operationEntryQuery(context, plan, input, entryId, dedupeKey, now),
+    operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject),
     sourceUpdateQuery(context, plan, entryId, now),
     resolveThreadQuery(context.thread.id, entryId, now),
   ]
@@ -346,7 +363,14 @@ async function executeSourceMutation(
   const applied = await findEntryByDedupeKey(db, dedupeKey)
   if (!applied) return conflict(`"${input.action}" is not a valid action for the current state`)
   if (!entryMatchesRequest(applied, eventName)) return conflict()
-  if (plan.requiresNotification) await sendStatusUpdate(db, context, input, plan.action)
+  if (plan.requiresNotification) {
+    const delivery = await getDeliveryById(db, deliveryId)
+    if (!delivery) throw new Error('Status update delivery receipt was not created')
+    const refreshed = await loadThreadContext(db, input.threadId, input.siteId)
+    if ('ok' in refreshed) return refreshed
+    const outcome = await sendStatusUpdate(db, refreshed, input, applied, delivery)
+    if ('ok' in outcome) return outcome
+  }
   return await successfulOutcome(db, context)
 }
 
@@ -498,24 +522,20 @@ async function retryDelivery(
   const summary = context.adapter.summarize(context.source)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
   const fromName = await getSiteBrandName(db, context.thread.site_id)
-  const action = entry.event_name?.split('.').at(-1) ?? ''
-  const recordedSubject = recordedEmailSubject(entry)
-  const recordedBody = delivery.purpose === 'member_reply' || recordedSubject ? entry.body : null
-  const body = recordedBody ?? operationBody(action, context.adapter, context.source)
-  if (!body) return conflict('Delivery entry has no email body')
-
-  const retried = await deliverGuestThreadEmail(db, {
-    delivery,
-    env: input.env,
-    to: summary.guestEmail,
-    fromName,
-    subject: delivery.purpose === 'member_reply'
-      ? replySubject(context.thread.submission_type, fromName)
-      : recordedSubject ?? operationSubject(action, fromName),
-    body,
-    submissionType: context.thread.submission_type,
-    submissionId: context.thread.submission_id,
-  })
+  if (!entry.body) return conflict('Delivery entry has no email body')
+  const retried = delivery.purpose === 'status_update'
+    ? await sendStatusUpdate(db, context, input, entry, delivery)
+    : await deliverGuestThreadEmail(db, {
+        delivery,
+        env: input.env,
+        to: summary.guestEmail,
+        fromName,
+        subject: replySubject(context.thread.submission_type, fromName),
+        body: entry.body,
+        submissionType: context.thread.submission_type,
+        submissionId: context.thread.submission_id,
+      })
+  if ('ok' in retried) return retried
   if (delivery.purpose === 'member_reply' && (retried.status === 'sent' || retried.status === 'accepted')) {
     await updateThreadProjectionIfLatestEntry(db, context.thread.id, entry.id, { conversationState: 'waiting_on_guest' })
   }

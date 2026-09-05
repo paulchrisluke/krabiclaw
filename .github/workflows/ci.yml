@@ -229,15 +229,6 @@ jobs:
         run: yarn fixtures:verify:preview
       - name: Run tenant public and affected preview coverage
         run: yarn test:e2e:preview:selected
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: playwright-report-preview
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
 
   e2e-staging:
     name: Deploy and test staging
