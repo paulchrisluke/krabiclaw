@@ -495,7 +495,7 @@ async function retryDelivery(
     return conflict('Only guest-facing email deliveries can be retried here')
   }
   if (retryEligibility === 'settled') {
-    return conflict('Only failed or unknown email deliveries can be retried')
+    return conflict('This email delivery is not currently eligible for retry')
   }
 
   const summary = context.adapter.summarize(context.source)
@@ -508,7 +508,7 @@ async function retryDelivery(
   if (!body) return conflict('Delivery entry has no email body')
 
   const retried = await deliverGuestThreadEmail(db, {
-    delivery: { ...delivery, status: 'unknown' },
+    delivery,
     env: input.env,
     to: summary.guestEmail,
     fromName,

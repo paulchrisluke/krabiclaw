@@ -27,7 +27,7 @@ or reservation change-request behavior.
 | Member-facing attention | `notifications` | Keep and narrow | It stores audience scope, presentation, optional source entry, and timestamp. Thread derives through `source_entry_id`; `template` is the single discriminator. Duplicate `guest_thread_id`, `event_type`, actor, and payload fields are deleted. |
 | Per-user acknowledgement | `notification_reads` | Keep | This is a normalized many-to-many fact. Folding it into notifications or threads would reintroduce per-user columns/cursors and lose multi-member semantics. |
 | General organization activity feed | `organization_events` | Keep for unrelated activity | Existing readers cover domain, content, billing, member, and work-request history. Guest submission/status writers are removed so it is not a second guest fact store. |
-| Queue/outbox/command/retry leases | none | Delete | Direct provider orchestration records the delivery receipt before send and its outcome after send. There is no background retry engine. |
+| Queue/outbox/command/retry engine | none | Delete | Direct provider orchestration claims the existing delivery receipt before send and records its outcome after send. There is no background retry engine. |
 | Notification audit and transport delivery | canonical entry/delivery/notification rows | Merge then delete | `notification_events` and `notification_deliveries` duplicated facts now owned by the three narrow tables above. |
 
 No historical inbox or notification rows are backfilled at the Epoch 4 cutover.
@@ -54,12 +54,29 @@ An outbound reply has three explicit stages:
 
 1. A D1 batch inserts the message entry and a `pending` delivery whose ID is the
    stable provider idempotency key.
-2. The provider adapter sends using that ID.
+2. A conditional update claims the receipt as `unknown` before the provider
+   adapter sends. Concurrent callers cannot both claim the initial send.
 3. D1 records `accepted`, `sent`, `delivered`, `read`, `failed`, or `unknown` and
    moves the thread only after provider acceptance.
 
-A definitive failure remains visible. A timeout becomes `unknown`. Meta
-`unknown` is never retried blindly. Resend may retry with the same delivery ID.
+A definitive failure remains visible. A timeout stays `unknown`. Completion
+updates are fenced by the receipt's claim timestamp and cannot overwrite a newer
+attempt or a settled provider webhook result.
+
+Meta `failed` and `unknown` receipts are not reclaimed. This prevents duplicate
+alerts but accepts possible non-delivery if the Worker stops between claiming
+the receipt and calling Meta.
+
+Resend retries reuse the delivery ID only within 24 hours of receipt creation,
+conservatively matching [Resend's idempotency-key lifetime](https://resend.com/docs/dashboard/emails/idempotency-keys).
+An ambiguous email attempt must also outlive the provider timeout before it can
+be reclaimed. Expired receipts remain visible without a Retry action.
+
+Manual email retry supports member replies and status updates. Owner alerts and
+guest acknowledgements may resume only when the original trigger replays with
+its rendering inputs, within the same bounded window. Their rendered requests
+are not stored in another payload ledger, and there is no manual reconstruction
+dispatcher or guarantee of eventual delivery.
 
 ## Acknowledgement and realtime
 

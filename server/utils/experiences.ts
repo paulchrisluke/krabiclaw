@@ -803,12 +803,14 @@ export async function createExperienceBookingClaimingCapacity(
         cancellation_token_hash, cancellation_token_expires_at, created_at, updated_at)
      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
      FROM experiences e
+     JOIN products product ON product.id = e.id AND product.site_id = e.site_id
      LEFT JOIN availability_overrides ao
        ON ao.owner_type = 'experience'
       AND ao.experience_id = e.id
       AND ao.override_date = ?
       AND ao.time_slot = ?
      WHERE e.id = ? AND e.site_id = ?
+       AND product.is_visible = 1 AND product.available = 1
        AND COALESCE(ao.status, 'open') != 'closed'
        AND (
          ao.status = 'open'
@@ -1131,11 +1133,7 @@ export async function getSlotAvailabilityRange(
   }))
 }
 
-// ── Booking windows ──────────────────────────────────────────────────────────
-// Canonical windows so public and dashboard availability endpoints agree on how
-// far ahead a guest can book vs. how far ahead an owner can manage slots.
 export const PUBLIC_BOOKING_WINDOW_DAYS = 31
-export const DASHBOARD_MANAGEMENT_WINDOW_DAYS = 31
 // Shorter window used only for the cheap "is this bookable soon" card summary below.
 const AVAILABILITY_SUMMARY_WINDOW_DAYS = 14
 const LIMITED_REMAINING_THRESHOLD = 2

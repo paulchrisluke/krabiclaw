@@ -22,6 +22,19 @@ Verify a guest submission through the real Worker boundary:
 
 For inbound replies, use the development inbound email or WhatsApp route. Repeating the same provider message ID must return the existing entry instead of appending another one.
 
+The development email route does not prove the native MIME entrypoint. Also send
+a raw multipart email through Wrangler's `/cdn-cgi/local/email` endpoint, using a
+reply address signed with the disposable local `EMAIL_REPLY_SECRET`. Verify
+Unicode text decoding, concurrent replay of its `Message-ID`, one persisted
+guest entry, and rejection of an invalid reply token. This endpoint is supplied
+by [Wrangler's local email runtime](https://developers.cloudflare.com/email-service/local-development/routing/),
+not by an application forwarding route.
+
+`yarn test:d1` exercises the committed baseline and delivery claim functions
+against real local D1. It proves one concurrent claim, no ambiguous Meta retry,
+bounded Resend retry, and protection from stale completion writes. It does not
+contact either provider or prove their live webhook configuration.
+
 ## Production canary
 
 Production delivery checks are an authorized release operation. Follow [release-flow.md](operations/release-flow.md) and use `yarn canary:notifications` only with the documented production credentials and approval. The canary reads `guest_thread_deliveries` for provider outcomes and writes its result to `canary_runs`.

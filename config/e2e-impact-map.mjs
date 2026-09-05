@@ -53,8 +53,11 @@ export const IMPACT_GROUPS = [
       'server/api/public/sites/**/experiences/**', 'server/emails/**',
       'server/utils/booking-*.ts', 'server/utils/notifications.ts',
       'server/utils/whatsapp.ts',
+      'server/domain/guest-threads/**',
+      'server/api/dashboard/**/guest-threads/**',
+      'server/utils/notification-*.ts',
     ],
-    specs: ['tests/e2e/tenant-guest-journeys.spec.ts'],
+    specs: ['tests/e2e/tenant-guest-journeys.spec.ts', 'tests/e2e/guest-thread-state.spec.ts'],
   },
   {
     id: 'tenant-calendar',

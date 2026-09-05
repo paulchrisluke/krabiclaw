@@ -23,7 +23,7 @@ import BookingReviewReminder from '~/server/emails/templates/BookingReviewRemind
 import OrganizationInvite from '~/server/emails/templates/OrganizationInvite'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
-import { createDeliveryReceipt, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
+import { claimDelivery, createDeliveryReceipt, getDeliveryClaimEligibility, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
 import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
@@ -334,8 +334,14 @@ async function sendEmailNotification(
         idempotencyKey: deliveryContext.idempotencyKey,
       })
     : null
-  if (delivery && delivery.status !== 'pending') {
-    return delivery.status === 'sent' || delivery.status === 'delivered' || delivery.status === 'read'
+  const claim = delivery ? await claimDelivery(db, delivery.id) : null
+  if (claim && !claim.claimed) {
+    const succeeded = claim.delivery.status === 'sent' || claim.delivery.status === 'delivered' || claim.delivery.status === 'read'
+    const eligibility = getDeliveryClaimEligibility(claim.delivery)
+    if (!succeeded && claim.delivery.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')) {
+      throw new Error('Email delivery remains eligible for webhook retry')
+    }
+    return succeeded
   }
 
   const result = await sendEmail(env, {
@@ -346,14 +352,17 @@ async function sendEmailNotification(
     text: opts.email.text,
     idempotencyKey: delivery?.id,
   })
-  if (delivery && deliveryContext) {
-    await recordDeliveryOutcome(db, {
-      deliveryId: delivery.id,
+  let requestWebhookRetry = false
+  if (claim?.claimed && deliveryContext) {
+    const outcome = await recordDeliveryOutcome(db, {
+      claim,
       status: result.status,
       providerMessageId: result.status === 'sent' ? result.messageId : null,
       error: result.status === 'sent' ? null : result.error,
     })
     await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
+    const eligibility = getDeliveryClaimEligibility(outcome)
+    requestWebhookRetry = outcome.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')
   }
   if (result.status === 'sent') {
     console.info(provider === 'log_only' ? 'email_delivery_log_only' : 'email_delivery_sent', {
@@ -373,6 +382,7 @@ async function sendEmailNotification(
     status: result.status,
     error: result.error,
   })
+  if (requestWebhookRetry) throw new Error('Email delivery remains eligible for webhook retry')
   return false
 }
 
@@ -396,14 +406,15 @@ async function sendWhatsAppThreadNotification(
     purpose: opts.delivery.purpose,
     idempotencyKey: opts.delivery.idempotencyKey,
   })
-  if (delivery.status !== 'pending') {
-    return delivery.status === 'sent' || delivery.status === 'delivered' || delivery.status === 'read'
+  const claim = await claimDelivery(db, delivery.id)
+  if (!claim.claimed) {
+    return claim.delivery.status === 'sent' || claim.delivery.status === 'delivered' || claim.delivery.status === 'read'
   }
 
   try {
     const result = await sendWhatsAppNotification(env, db, opts)
     await recordDeliveryOutcome(db, {
-      deliveryId: delivery.id,
+      claim,
       status: result.status,
       providerMessageId: result.success ? result.messageId ?? null : null,
       error: result.success ? null : result.error,
@@ -412,7 +423,7 @@ async function sendWhatsAppThreadNotification(
     return result.success
   } catch (error) {
     await recordDeliveryOutcome(db, {
-      deliveryId: delivery.id,
+      claim,
       status: 'unknown',
       error: error instanceof Error ? error.message : String(error),
     })
@@ -1340,8 +1351,8 @@ async function notifyGuestThreadReplyInner(
     siteName: opts.siteName ?? null,
   }, phones.length > 0)
 
-  if (channels.includes('email') && emails.length > 0) {
-    await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
+  const emailResults = channels.includes('email') && emails.length > 0
+    ? await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       siteName: opts.siteName ?? null,
@@ -1353,7 +1364,7 @@ async function notifyGuestThreadReplyInner(
       email,
       delivery: threadDelivery(threadContext, 'owner_alert', 'email', 'guest_thread_reply_email', to),
     })))
-  }
+    : []
 
   if (channels.includes('whatsapp') && phones.length > 0) {
     await Promise.allSettled(phones.map(async (toPhone) => {
@@ -1375,6 +1386,10 @@ async function notifyGuestThreadReplyInner(
         delivery,
       })
     }))
+  }
+
+  if (emailResults.some(result => result.status === 'rejected')) {
+    throw new Error('Guest thread owner email notification was not delivered')
   }
 
 }

@@ -46,6 +46,7 @@ test('calendar range edits persist and public availability excludes private note
   expect(savedResponse.status(), await savedResponse.text()).toBe(200)
   await expect(panel).not.toBeVisible()
   await page.reload()
+  await page.getByRole('button', { name: 'Next month', exact: true }).click()
   for (const day of days) {
     const cell = page.getByRole('button', { name: `Pizza Making Class, ${day.date}, Blocked`, exact: true })
     await expect(cell).toContainText(note)
@@ -66,4 +67,44 @@ test('calendar range edits persist and public availability excludes private note
 
   await page.getByRole('button', { name: /load next month/i }).click()
   await expect(page.getByTestId('availability-calendar')).toHaveCount(2)
+})
+
+test('concurrent guests cannot claim the same final seat in an open override', async ({ page, request }) => {
+  test.skip(!writable, 'Booking writes require disposable local or preview data')
+  await loginAs(page.request, baseURL)
+  const today = new Date()
+  const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 20)).toISOString().slice(0, 10)
+  const availabilityUrl = `${baseURL}/api/editor/sites/site-demo/availability?org=ember-slice-demo`
+  const configured = await page.request.put(availabilityUrl, {
+    data: {
+      owner: { kind: 'experience', experienceId: 'exp-demo-pizza-class' },
+      changes: [{ override_date: date, time_slot: '23:30', directive: 'set', status: 'open', capacity_override: 1, note: null }],
+    },
+  })
+  expect(configured.status(), await configured.text()).toBe(200)
+  const attempt = Date.now()
+  const results = await Promise.all([1, 2].map(guest => request.post(
+    `${baseURL}/api/public/sites/site-demo/experiences/pizza-making-class/book`,
+    {
+      data: {
+        guest_name: `Last seat guest ${guest}`,
+        guest_email: `last-seat-${attempt}-${guest}@playwright.example`,
+        guest_phone: '+66812345678',
+        booking_date: date,
+        time_slot: '23:30',
+        party_size: 1,
+      },
+    },
+  )))
+  expect(results.map(result => result.status()).sort()).toEqual([201, 409])
+  const read = await page.request.get(availabilityUrl, {
+    params: { location_id: 'loc-demo', from: date, to: date, owner_type: 'experience', owner_id: 'exp-demo-pizza-class' },
+  })
+  expect(read.status(), await read.text()).toBe(200)
+  const { calendar }: { calendar: AvailabilityCalendar } = await read.json()
+  const day = calendar.owners[0]!.days[0]!
+  expect(day.bookings.filter(booking => booking.time_slot === '23:30')).toHaveLength(1)
+  expect(day.slots.find(slot => slot.time_slot === '23:30')).toMatchObject({
+    booked: 1, remaining: 0, is_full: true, is_closed: false,
+  })
 })
