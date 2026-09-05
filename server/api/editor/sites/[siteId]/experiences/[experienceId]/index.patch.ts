@@ -39,11 +39,10 @@ export default defineHandler(async (event) => {
   if ('tagline' in body) updates.tagline = body.tagline ? String(body.tagline).trim() : null
   if ('body' in body) updates.body = body.body ? String(body.body).trim() : null
   try {
-    if ('highlights' in body) updates.highlights = stringArrayOrNull(body.highlights)
     if ('included_items' in body) updates.included_items = stringArrayOrNull(body.included_items)
     if ('what_to_bring' in body) updates.what_to_bring = stringArrayOrNull(body.what_to_bring)
   } catch (err) {
-    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
+    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'included_items and what_to_bring must be arrays' }, { status: 400 })
     throw err
   }
   if ('meeting_point' in body) updates.meeting_point = body.meeting_point ? String(body.meeting_point).trim() : null
@@ -57,7 +56,8 @@ export default defineHandler(async (event) => {
       ? (body.recurring_slots as Record<string, string[]>)
       : null
   }
-  if ('available_note' in body) updates.available_note = body.available_note ? String(body.available_note).trim() : null
+  if ('tags' in body) updates.tags = body.tags
+  if ('details' in body) updates.details = body.details
   if ('status' in body && ['active', 'inactive', 'sold_out'].includes(String(body.status))) updates.status = String(body.status)
   if ('sort_order' in body) {
     const sortOrder = optionalInteger(body.sort_order)

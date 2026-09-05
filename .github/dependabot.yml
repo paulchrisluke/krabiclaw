@@ -1,9 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directories:
-      - /
-      - /workers/email-inbound
+    directory: /
     schedule:
       interval: cron
       # Dependabot uses Fugit: every other Monday, rather than day-of-month steps.

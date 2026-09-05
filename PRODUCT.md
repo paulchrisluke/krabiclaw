@@ -203,7 +203,8 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 
 - All backend-originated AI calls route through Cloudflare AI Gateway — never call model APIs directly from server code (exception: ChatGPT native `image_generation` is initiated by the OpenAI runtime, not by KrabiClaw server code, and bypasses the gateway by design)
 - MCP server is the canonical creation surface; dashboard CMS and ChowBot are secondary
-- Posts are the content primitive — channels are adapters on top of `post_channel_jobs`
+- Short updates use `posts`; long-form articles use `blog_posts` with canonical content documents and blocks.
+- `posts` owns website publication. `post_channel_jobs` records only Facebook and Instagram delivery outcomes.
 - All location data is CRUD-available in D1; Google Places import is additive and read-only with respect to Google
 - Notification delivery is channel-agnostic — `notifications.channel` column means email/push can be added with no schema change
 - WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both

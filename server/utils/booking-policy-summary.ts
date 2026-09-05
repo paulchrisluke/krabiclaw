@@ -2,17 +2,12 @@ export type BookingPolicySummaryType = 'reservation' | 'experience'
 
 export interface BookingPolicySummarySource {
   policy_type: BookingPolicySummaryType
-  booking_window_days: number | null
   advance_notice_minutes: number | null
   free_cancellation_until_minutes: number | null
-  late_arrival_grace_minutes: number | null
-  host_confirmation_sla_minutes: number | null
   reschedule_allowed: boolean | null
   reschedule_cutoff_minutes: number | null
   deposit_required: boolean | null
   deposit_trigger_party_size: number | null
-  special_requests_allowed: boolean | null
-  weather_policy: string | null
   minimum_guest_age: number | null
   accessibility_contact_required: boolean | null
   additional_notes_html: string | null

@@ -1,10 +1,11 @@
 import { defineHandler } from 'nitro'
+import { readBody } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import {
   buildReplyToAddress, getSubmissionOrgSite, type SubmissionType, } from '~/server/utils/submission-messages'
 import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
-import { ensureGuestThread, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { ensureGuestThread, updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threads/repository'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
@@ -42,20 +43,17 @@ export default defineHandler(async (event) => {
   const adapter = getAdapter(body.submissionType)
   const thread = await ensureGuestThread(db, adapter, body.submissionId)
   const entry = await appendEntry(db, {
-    threadId: thread.id, organizationId: orgSite.organizationId, siteId: orgSite.siteId, kind: 'message', actorKind: 'guest', channel: 'email', body: body.body.trim(), externalId: messageId, })
-  if (entry.created) {
-    const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
-    await updateThreadProjection(db, thread.id, { conversationState })
-    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
+    threadId: thread.id, kind: 'message', actorKind: 'guest', channel: 'email', body: body.body.trim(), dedupeKey: `email:${messageId}`, })
+  const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
+  await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState })
 
-    const source = await adapter.loadSource({ db }, body.submissionId)
-    if (source) {
-      const summary = adapter.summarize(source)
-      await notifyGuestThreadReply(env, db, {
-        organizationId: orgSite.organizationId, siteId: orgSite.siteId, locationId: summary.locationId, threadId: thread.id, submissionType: body.submissionType, submissionId: body.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'email', messagePreview: body.body.trim(), })
-    }
+  const source = await adapter.loadSource({ db }, body.submissionId)
+  if (source) {
+    const summary = adapter.summarize(source)
+    await notifyGuestThreadReply(env, db, {
+      organizationId: orgSite.organizationId, siteId: orgSite.siteId, locationId: summary.locationId, threadId: thread.id, sourceEntryId: entry.id, submissionType: body.submissionType, submissionId: body.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'email', messagePreview: body.body.trim(), })
   }
+  await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
 
   return jsonResponse({ received: true, replyTo, messageId })
 })
-import {  readBody  } from 'nitro/h3';

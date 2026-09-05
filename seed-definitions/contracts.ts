@@ -160,7 +160,12 @@ export interface CuratedExperienceDefinition {
   tagline: string
   body: string
   media: CuratedMediaPlacement<'gallery'>[]
-  highlights?: string[] | null
+  tags?: string[]
+  details?: Array<{
+    key: string
+    label: string
+    values: string[]
+  }>
   includedItems?: string[] | null
   whatToBring?: string[] | null
   meetingPoint?: string | null
@@ -170,7 +175,6 @@ export interface CuratedExperienceDefinition {
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]
-  availableNote: string
   status: 'active' | 'inactive' | 'sold_out'
   sortOrder: number
   featured: boolean
@@ -222,24 +226,23 @@ export interface CuratedLocationQaDefinition {
   sortOrder: number
 }
 
-export interface CuratedPostChannelJobDefinition {
-  id: string
-  channel: string
-  status: 'published' | 'pending' | 'failed'
-  publishedAt: string
-}
-
 export interface CuratedPostDefinition {
   id: string
   locationId: string | null
-  postType: 'update' | 'standard' | 'offer'
+  postType: 'update' | 'standard' | 'offer' | 'event'
   title: string | null
   body: string
+  ctaType?: string | null
+  ctaUrl?: string | null
+  eventTitle?: string | null
+  eventStartAt?: string | null
+  eventEndAt?: string | null
+  offerCoupon?: string | null
+  offerTerms?: string | null
   media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: 'published' | 'scheduled'
   publishedAt: string
   createdBy: string
-  channelJobs: CuratedPostChannelJobDefinition[]
 }
 
 export interface CuratedTenantPageLocaleFieldDefinition {
@@ -322,7 +325,12 @@ export interface CompiledSeedExperience {
   tagline: string
   body: string
   media: CuratedMediaPlacement<'gallery'>[]
-  highlights: string[] | null
+  tags: string[]
+  details: Array<{
+    key: string
+    label: string
+    values: string[]
+  }>
   includedItems: string[] | null
   whatToBring: string[] | null
   meetingPoint: string | null
@@ -332,7 +340,6 @@ export interface CompiledSeedExperience {
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]
-  availableNote: string
   status: CuratedExperienceDefinition['status']
   sortOrder: number
   featured: boolean
@@ -390,15 +397,6 @@ export interface CompiledSeedLocationQa {
   sortOrder: number
 }
 
-export interface CompiledSeedPostChannelJob {
-  id: string
-  postId: string
-  organizationId: string
-  channel: string
-  status: CuratedPostChannelJobDefinition['status']
-  publishedAt: string
-}
-
 export interface CompiledSeedPost {
   id: string
   organizationId: string
@@ -407,11 +405,17 @@ export interface CompiledSeedPost {
   postType: CuratedPostDefinition['postType']
   title: string | null
   body: string
+  ctaType: string | null
+  ctaUrl: string | null
+  eventTitle: string | null
+  eventStartAt: string | null
+  eventEndAt: string | null
+  offerCoupon: string | null
+  offerTerms: string | null
   media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: CuratedPostDefinition['status']
   publishedAt: string
   createdBy: string
-  channelJobs: CompiledSeedPostChannelJob[]
 }
 
 export interface CompiledSeedTenantPageLocaleField {

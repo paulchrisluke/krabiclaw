@@ -1,18 +1,19 @@
-# Database epoch 4 Product category cutover
+# Database epoch 4 cutover
 
 **Status: Release candidate runbook**
-**Issue:** #788 (Products)
+**Issues:** #788 (Products), #820 (messaging and CMS schema correction)
 
-Epoch 4 provisions new staging and production D1 resources, resets disposable
-preview in place, and begins
+Epoch 4 provisions a new production D1 resource, rebuilds the standalone
+staging qualification database as the unreleased schema changes, resets
+disposable preview in place, and begins
 from `migrations/0000_epoch_4_baseline.sql`. The baseline must never be applied
 to an Epoch 3 resource. The Epoch 3 production D1 remains untouched rollback
 state until post-production verification is complete and it is explicitly
 retired.
 
 Normal schema work still follows [migrations.md](migrations.md). This document is
-the exceptional database-epoch procedure authorized for the Product category
-model change.
+the exceptional database-epoch procedure for the Product category model and the
+final pre-production Epoch 4 schema correction.
 
 ## Why this is an epoch and not a migration
 
@@ -29,6 +30,9 @@ Neither half can be done by a generated migration on a live resource:
   is referenced by `reviews`, `prices`, and two composite foreign keys.
 
 Creating the new schema from a baseline and loading transformed data avoids both.
+The same corrected baseline removes the superseded messaging tables and
+duplicate fact columns audited in #820, plus the approved dead CMS fields. No
+historical inbox or notification rows are backfilled.
 
 ## Canonical ownership after cutover
 
@@ -41,6 +45,30 @@ Creating the new schema from a baseline and loading transformed data avoids both
   location never appears in the menu sections the CMS manages.
 - Category names are localized once on the category row
   (`resource_localizations` type `product_category`), not once per Product.
+- `availability_overrides` owns manual availability for both reservations and
+  experiences. Its owner discriminator requires exactly one location or
+  experience. The split legacy override tables do not exist in Epoch 4.
+- An `open` or `closed` override is a tenant decision. A slot that is full from
+  bookings is derived runtime state and does not rewrite that decision.
+- `tenant_page_variants` owns each page's localized title, path, summary, SEO,
+  and document. `tenant_pages` retains only identity, scope, configuration,
+  provenance, and audit fields. Its unused legacy slug is discarded, not used
+  to rewrite any variant route.
+- The unused `platform_content` store and editor are removed. Platform docs,
+  their documents and blocks, media, and redirects remain unchanged.
+- `resource_localizations` remains the active non-page translation store, separate
+  from page variants. `site_link_pages` and `site_link_items` retain the site-links
+  product. Their empty production state is valid and is checked by the same
+  count and logical-hash comparison as populated tables.
+- `posts` owns website publication. Its `scheduled` state requires a timestamp
+  and is consumed by the existing five-minute scheduler. External Facebook and
+  Instagram delivery outcomes live in `post_channel_jobs`, with tenant scope
+  derived from the parent post. There is no website channel job.
+- Cache invalidations get at most five claims. Missing domain configuration
+  fails before any claim. Completed and failed rows are retained for seven days;
+  `processed_at` records completion of either outcome. The epoch transfer discards
+  terminal history and exhausted retries, preserving healthy pending work and
+  releasing old processing claims.
 
 ## The customer-visible invariant
 
@@ -74,9 +102,27 @@ category translation, or any foreign-key violation.
 `verify` proves:
 
 - The application table and column census changes only as declared;
-- all 103 existing application tables retain their row counts and typed logical
-  hashes, including Prices, Better Auth identity/session state, bookings, media,
-  and every Product content, SEO, metadata, and audit field;
+- every unrelated application table retains its row count and typed logical
+  hash, including Prices, Better Auth identity/session state, bookings, media,
+  and every retained Product content, SEO, metadata, and audit field;
+- booking policy, experience, tenant page, post, availability, and social-channel rows preserve every
+  retained field through explicit projections;
+- every tenant page has a source-locale variant whose presentation fields match
+  the removed parent copies, all variant rows retain their logical hashes, and
+  `platform_content` is empty before it can be discarded;
+- legacy offers with neither coupon nor terms become `standard`,
+  published posts have a publication timestamp (falling back to their creation
+  timestamp), and invalid scheduled states fail verification;
+- Facebook and Instagram provider IDs move from `posts.google_post_id` to
+  `post_channel_jobs.provider_post_id`; unknown or conflicting provider IDs fail
+  the transform, while duplicated website channel rows are discarded;
+- the cache queue preserves only pending or processing rows below five attempts,
+  releases their obsolete claims, and records retained and discarded counts;
+- historical thread, entry, delivery, notification, and read rows remain empty
+  in the target, with discarded source counts recorded in the manifest;
+- every reservation and experience override appears once in the consolidated
+  table with the same identity, scope, date, time, decision, capacity, note,
+  and audit fields, with its count and logical hash recorded in the manifest;
 - Product category membership, category scope/name/slug/order, and the relative
   order of all Products match the planned transformation;
 - the customer-visible rendered order is identical, excluding hidden Products;
@@ -102,12 +148,15 @@ yarn db:reset:preview   # drops application objects, replays the chain, reseeds
 ```
 
 The rule that a baseline must never be applied to a prior-epoch resource exists
-to protect **rollback state**. Staging and production hold the only copy of data
-that a failed cutover has to fall back to, so they are reprovisioned and the old
-resource is retained. Preview holds fixtures, is rebuilt from seeds on demand,
+to protect production rollback state. Preview holds fixtures, is rebuilt from
+seeds on demand,
 and is declared disposable in [migrations.md](migrations.md) — there is nothing
 to roll back to and nothing to protect. Reprovisioning it every epoch would
 strand resources and force a binding change for no benefit.
+
+The standalone staging database qualifies an unreleased epoch and may be reset
+or replaced while that epoch is still under review. Preview and staging are not
+production rollback state.
 
 After the reset, the preview database is structurally a fresh Epoch 4 database.
 There is no Epoch 3 data to transform, because preview data comes from seeds.
@@ -117,18 +166,24 @@ for Kikuzuki. Confirm the sections and their order match the pre-cutover site.
 
 ## Staging
 
-Create a fresh APAC staging D1 and apply the committed baseline with
-`wrangler d1 migrations apply DB --env staging --remote`, targeting the new
-binding. Export the existing staging database, transform it locally, and verify
-all retained data. Import only transformed data into the new baselined resource;
-then re-export it and run the verifier against the original source again.
-Do not reset or reseed the existing staging resource.
+Staging is a standalone qualification database, not production rollback state.
+While Epoch 4 remains unreleased, reset the bound staging resource or provision
+a replacement APAC staging D1, then apply the corrected committed baseline with
+`wrangler d1 migrations apply DB --env staging --remote`. Recreate staging data
+through the canonical staging provisioning path. Do not transform or preserve a
+superseded staging candidate merely because an earlier Epoch 4 baseline was
+applied to it, and never edit `d1_migrations` or patch its schema in place.
+
+Before a reset or replacement, verify the exact Worker binding and database ID,
+confirm production still points to the retained Epoch 3 database, and retain no
+claim that staging data is customer rollback state. If a replacement resource is
+used, commit its verified staging binding before merging the feature PR.
 
 For a verified local candidate, SQLite's standard data-only export provides the
 import payload without schema or migration-history writes:
 
 ```sh
-sqlite3 /absolute/path/epoch4.sqlite '.dump --data-only --nosys --newlines' > /absolute/path/epoch4-data.sql
+sqlite3 --escape off /absolute/path/epoch4.sqlite '.dump --data-only --nosys --newlines' > /absolute/path/epoch4-data.sql
 ```
 
 Wrap that payload with `PRAGMA foreign_keys = OFF;` and
@@ -137,15 +192,20 @@ import through `wrangler d1 execute --remote --file`, which runs outside one SQL
 transaction and rolls back failed imports using a saved bookmark. Transaction-
 scoped `defer_foreign_keys` is insufficient for this path; see the
 [Cloudflare maintainer's import explanation](https://github.com/cloudflare/workers-sdk/discussions/13499).
-The `--newlines` option avoids SQLite's newer `unistr()` dump expressions,
-which D1 does not support. A fresh export must pass full logical parity and
+The global `--escape off` option prevents the `unistr()` expressions introduced
+by [SQLite 3.50](https://www.sqlite.org/releaselog/3_50_0.html), which D1 does not
+support. `--newlines` alone is insufficient. If the local candidate contains
+`d1_migrations`, append the explicit application-table names from the committed
+baseline to `.dump`; `--nosys` does not exclude Wrangler's migration ledger.
+Reject any payload with schema statements, system or migration-history inserts,
+or unsupported `unistr()` expressions. A fresh export must pass full logical parity and
 `foreign_key_check` before the candidate can be bound.
 
-The transformer creates no
-`d1_migrations` table. Apply the committed baseline through Wrangler first;
-never import schema or prior-resource migration history. Confirm the destination
-has zero application rows before importing. After the import, export the complete
-destination with `wrangler d1 export` and verify that export against the source.
+The production transformer creates no `d1_migrations` table. Apply the committed
+baseline through Wrangler first; never import schema or prior-resource migration
+history. Confirm the production candidate has zero application rows before
+importing. After the import, export the complete destination with
+`wrangler d1 export` and verify that export against the source.
 
 Commit the verified staging binding before merging the feature PR. The ordinary
 staging deployment then finds its baseline already applied. Staging validation
@@ -155,7 +215,7 @@ Prepared resources (the old resources remain available for rollback):
 
 | Environment | Epoch 4 D1 | Retained Epoch 3 D1 |
 | --- | --- | --- |
-| Staging | `3b5f3f59-0800-407a-837d-c9c306396c68` | `61af16e5-0873-49b9-90ce-aea2ff1991e4` |
+| Staging | Rebuild the verified standalone Epoch 4 resource before merge | Not production rollback state |
 | Production | `73d8e172-b7a0-45b3-b200-ae052de52e57` | `4a02e2ec-6fb0-4bed-96ab-925ec1e508df` |
 
 The production binding in the candidate configuration does not change the running

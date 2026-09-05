@@ -5,7 +5,7 @@ import { markBookingCompleted, type ReviewBookingType } from '~/server/utils/rev
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 import { collectScheduledPaidRows } from '~/server/utils/scheduled-billing-access'
-import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 interface ReviewRequestTaskContext {
@@ -100,7 +100,6 @@ async function autoCompleteReservations(db: D1Database, env: ApiRecord): Promise
         completed += 1
         const thread = await getGuestThreadBySubmission(db, 'reservation', row.id)
         if (thread) {
-          await updateThreadProjection(db, thread.id, {})
           await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
         }
       }
@@ -136,7 +135,6 @@ async function autoCompleteExperienceBookings(db: D1Database, env: ApiRecord): P
         completed += 1
         const thread = await getGuestThreadBySubmission(db, 'experience_booking', row.id)
         if (thread) {
-          await updateThreadProjection(db, thread.id, {})
           await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
         }
       }

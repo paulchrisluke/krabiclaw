@@ -186,14 +186,17 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
     if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }] = await Promise.all([
+    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { getAuthSession }] = await Promise.all([
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-home'),
       import('~/server/utils/member-access'),
+      import('~/server/utils/auth'),
     ])
     const environment = cloudflareEnv(requestEvent)
     const db = environment.db
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    const session = await getAuthSession(requestEvent, environment)
+    if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
     await assertSiteWideAccess(db, {
       env: environment,
       memberId: organization.memberId,
@@ -204,6 +207,7 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     return await getDashboardHomeData(db, organization.id, siteId, {
       env: environment,
       memberId: organization.memberId,
+      userId: session.user.id,
       role: organization.role,
     })
   }

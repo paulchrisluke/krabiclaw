@@ -1,10 +1,11 @@
 import { renderEmail } from '~/server/emails/vue-email'
-import { execute } from '~/server/db'
-import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import type { DbClient } from '~/server/db'
+import { sendEmail } from '~/server/utils/email-delivery'
+import { createCanonicalNotification } from '~/server/utils/notification-center'
+import type { GuestInboxPublicationEnv } from '~/server/cloudflare/guest-inbox-events'
 import SiteTransferReminder from '~/server/emails/templates/SiteTransferReminder'
-import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
 
-interface SiteTransferNotificationEnv {
+interface SiteTransferNotificationEnv extends GuestInboxPublicationEnv {
   PLATFORM_OWNER_EMAILS?: string
   RESEND_API_KEY?: string
   EMAIL_DELIVERY_MODE?: string
@@ -26,202 +27,53 @@ interface ReminderInput {
 function supportEmails(env: SiteTransferNotificationEnv): string[] {
   return String(env.PLATFORM_OWNER_EMAILS || '')
     .split(',')
-    .map((email) => email.trim())
+    .map(email => email.trim())
     .filter(Boolean)
-}
-
-async function logEmailNotification(
-  db: D1Database,
-  opts: {
-    organizationId: string
-    siteId: string
-    recipient: string
-    title: string
-    payload: Record<string, unknown>
-    status?: 'pending' | 'failed' | 'sent'
-    error?: string | null
-  },
-) {
-  const now = new Date().toISOString()
-  const id = crypto.randomUUID()
-  await execute(db, `
-    INSERT INTO notifications
-    (id, organization_id, site_id, channel, template, recipient, title, payload, status, error, sent_at, created_at)
-    VALUES (?, ?, ?, 'email', 'site_transfer_reminder', ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    id,
-    opts.organizationId,
-    opts.siteId,
-    opts.recipient,
-    opts.title,
-    JSON.stringify(opts.payload),
-    opts.status ?? 'pending',
-    opts.error ?? null,
-    opts.status === 'failed' || opts.status === 'sent' ? now : null,
-    now,
-  ])
-  return id
-}
-
-async function sendReminderEmail(
-  env: SiteTransferNotificationEnv,
-  db: D1Database,
-  opts: {
-    organizationId: string
-    siteId: string
-    recipient: string
-    title: string
-    html: string
-    text: string
-    payload: Record<string, unknown>
-  },
-) {
-  const notificationId = await logEmailNotification(db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    recipient: opts.recipient,
-    title: opts.title,
-    payload: opts.payload,
-    status: shouldSendRealEmail(env)
-      ? (env.RESEND_API_KEY ? 'pending' : 'failed')
-      : 'pending',
-    error: shouldSendRealEmail(env)
-      ? (env.RESEND_API_KEY ? null : 'RESEND_API_KEY not configured')
-      : null,
-  })
-
-  if (!shouldSendRealEmail(env)) {
-    await execute(db, `
-      UPDATE notifications
-      SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL
-      WHERE id = ?
-    `, [logOnlyEmailProviderId('site-transfer'), new Date().toISOString(), notificationId])
-    console.info('email_delivery_log_only', {
-      notificationId,
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      recipient: hashEmail(opts.recipient),
-      title: opts.title,
-      template: 'site_transfer_reminder',
-    })
-    return
-  }
-
-  if (!env.RESEND_API_KEY) return
-
-  try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'KrabiClaw <hello@krabiclaw.com>',
-        to: [opts.recipient],
-        subject: opts.title,
-        html: opts.html,
-        text: opts.text,
-      }),
-    })
-
-    if (!response.ok) {
-      const error = await response.text().catch(() => 'Failed to send email')
-      await execute(db, `
-        UPDATE notifications
-        SET status = 'failed', error = ?, sent_at = ?
-        WHERE id = ?
-      `, [error, new Date().toISOString(), notificationId])
-      return
-    }
-
-    const data = await response.json().catch(() => null) as { id?: string } | null
-    await execute(db, `
-      UPDATE notifications
-      SET status = 'sent', provider_message_id = ?, sent_at = ?
-      WHERE id = ?
-    `, [data?.id ?? null, new Date().toISOString(), notificationId])
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to send email'
-    await execute(db, `
-      UPDATE notifications
-      SET status = 'failed', error = ?, sent_at = ?
-      WHERE id = ?
-    `, [message, new Date().toISOString(), notificationId])
-  }
 }
 
 export async function notifySiteTransferReminder(
   env: SiteTransferNotificationEnv,
-  db: D1Database,
+  db: DbClient,
   opts: ReminderInput,
 ) {
   const title = opts.customDomainsPaused
     ? `Action needed: Finishing touches for ${opts.siteName}`
     : `Reminder: ${opts.siteName} is ready for you!`
   const body = opts.customDomainsPaused
-    ? `Your website is ready to go, but we just need to wrap up the payment setup to get your custom domain live and kicking.`
-    : `Good news—your new website is ready and waiting for you to take the reins. Click below to review and claim it whenever you're ready.`
-
-  const payload = {
-    site_name: opts.siteName,
-    transfer_url: opts.transferUrl,
-    invited_plan: opts.invitedPlan,
-    invited_domain: opts.invitedDomain,
-    days_pending: opts.daysPending,
-    custom_domains_paused: opts.customDomainsPaused,
-  }
-
+    ? 'Your website is ready, but payment setup must be completed before its custom domain can go live.'
+    : 'Your new website is ready. Review and claim it when you are ready.'
   await createCanonicalNotification(db, {
+    publishEnv: env,
     scope: 'site',
-    eventType: NOTIFICATION_EVENT_TYPES.SITE_TRANSFER_REMINDER,
     severity: opts.customDomainsPaused ? 'warning' : 'info',
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     title,
     message: body,
     deepLink: opts.transferUrl,
-    payload,
     template: 'site_transfer_reminder',
   })
 
-  const planLabel: Record<string, string> = {
-    growth: 'Growth ($49/mo)',
-  }
-
+  const planLabel: Record<string, string> = { growth: 'Growth ($49/mo)' }
   const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
   if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  const { html, text } = await renderEmail(SiteTransferReminder, {
+  const rendered = await renderEmail(SiteTransferReminder, {
     siteName: opts.siteName,
     transferUrl: opts.transferUrl,
-    domain: opts.invitedDomain ?? null,
+    domain: opts.invitedDomain,
     planLabel: opts.invitedPlan ? (planLabel[opts.invitedPlan] ?? 'Unsupported plan') : null,
     customDomainsPaused: opts.customDomainsPaused,
     platformDomain,
   })
-
-  await sendReminderEmail(env, db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    recipient: opts.toEmail,
-    title,
-    html,
-    text,
-    payload: { ...payload, audience: 'recipient' },
+  const recipients = [...new Set([opts.toEmail, ...supportEmails(env)])]
+  const results = await Promise.all(recipients.map(recipient => sendEmail(env, {
+    to: recipient,
+    subject: recipient === opts.toEmail ? title : `[Admin] ${title}`,
+    html: rendered.html,
+    text: rendered.text,
+  })))
+  results.forEach((result) => {
+    if (result.status !== 'sent') console.error('site_transfer_reminder_email_failed', { siteId: opts.siteId, error: result.error })
   })
-
-  await Promise.all(
-    supportEmails(env).map((recipient) =>
-      sendReminderEmail(env, db, {
-        organizationId: opts.organizationId,
-        siteId: opts.siteId,
-        recipient,
-        title: `[Admin] ${title}`,
-        html,
-        text,
-        payload: { ...payload, audience: 'support' },
-      }),
-    ),
-  )
 }

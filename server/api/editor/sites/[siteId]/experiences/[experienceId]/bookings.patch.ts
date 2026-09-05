@@ -2,7 +2,7 @@ import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { updateBookingStatus } from '~/server/utils/experiences'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
-import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
@@ -30,7 +30,6 @@ export default defineHandler(async (event) => {
   if (!ok) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
   const thread = await getGuestThreadBySubmission(db, 'experience_booking', body.booking_id)
   if (thread) {
-    await updateThreadProjection(db, thread.id, {})
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   }
   return jsonResponse({ updated: true })

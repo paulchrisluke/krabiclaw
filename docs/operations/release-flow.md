@@ -9,7 +9,7 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 | `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | Read-only rendering/navigation on all three customer custom domains |
 
-Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. Staging applies migrations but never sweeps, resets, reseeds customers, provisions E2E identities, or performs guest/MCP writes. Production is never seeded, reset, or mutated by test automation.
+Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its database epoch remains unreleased, using the controlled epoch procedure in [database migrations](../database/migrations.md); that exception never applies after the epoch reaches production. Production is never seeded, reset, or mutated by test automation.
 
 Preview must keep persistent Workers Logs and traces enabled in `wrangler.toml`,
 with invocation logs and 100% sampling. This is permanent environment
@@ -53,8 +53,8 @@ For migration safety, preview reset behavior, database epoch transitions, incide
 ## Dependency batches
 
 Open Dependabot PRs are a bounded queue, not a complete inventory of outdated
-dependencies. Before assembling a batch, inspect both application and inbound
-email Worker manifests and lockfiles against registry release metadata. Respect
+dependencies. Before assembling a batch, inspect the application manifest and
+lockfile against registry release metadata. Respect
 the 30-day release-age gate, pinned toolchain versions, dependency patches,
 and peer requirements. Record the exact included versions and every deferred
 upgrade with its reason in the integration PR.
@@ -65,7 +65,7 @@ required build steps in the command CI actually invokes.
 
 Dependabot checks every other Monday at 02:00 UTC using its supported Fugit
 cron expression (`0 2 * * mon%2`). Routine npm updates, including majors, form
-one group across both manifests. Better Auth and TypeScript remain separate
+one group. Better Auth and TypeScript remain separate
 because their documented blockers require independent qualification. GitHub
 Actions updates form one group on the same schedule.
 
@@ -77,8 +77,8 @@ when the corresponding toolchain or auth upgrade is qualified. Group exclusions
 alone do not hold a dependency: they allow it to return as an individual PR.
 
 Routine releases must be at least 30 days old. Dependabot's cooldown and the
-root Yarn configuration enforce the same window; the email package inherits
-that Yarn configuration. Existing locked versions are retained, not downgraded
+root Yarn configuration enforce the same window. Existing locked versions are
+retained, not downgraded
 merely because this policy became stricter. Preserve pinned runtime versions,
 reviewed dependency patches, and their peer requirements when selecting a batch.
 

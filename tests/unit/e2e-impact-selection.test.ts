@@ -47,7 +47,10 @@ test('guest API changes select only guest journey coverage', () => {
 
   assert.equal(plan.scope, 'affected')
   assert.ok(plan.groups.includes('guest-journeys'))
-  assert.deepEqual(plan.specs, ['tests/e2e/tenant-guest-journeys.spec.ts'])
+  assert.deepEqual(plan.specs, [
+    'tests/e2e/guest-thread-state.spec.ts',
+    'tests/e2e/tenant-guest-journeys.spec.ts'
+  ])
 })
 
 test('changing an E2E spec always selects that exact deployed-preview spec', () => {

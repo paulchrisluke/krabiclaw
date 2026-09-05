@@ -11,7 +11,7 @@ import { queryFirst } from '~/server/db'
 import { experienceBookingAdapter } from '~/server/domain/guest-threads/adapters/experience-booking'
 import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
-import { publishGuestInboxEvent } from '~/server/cloudflare/guest-inbox-events'
+import { publishDashboardInvalidation } from '~/server/cloudflare/guest-inbox-events'
 
 const STATUS_TO_ACTION = {
   confirmed: 'confirm', cancelled: 'cancel', } as const
@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
   const thread = await ensureGuestThread(db, experienceBookingAdapter, bookingId)
 
   const outcome = await executeGuestThreadOperation(db, {
-    threadId: thread.id, siteId, action, actorUserId: session.user.id, actorMemberId: site.member_id, env, idempotencyKey: `editor:experience-booking:${bookingId}:${booking.status}:${booking.updated_at}:${action}`, })
+    threadId: thread.id, siteId, action, actorUserId: session.user.id, env, idempotencyKey: `editor:experience-booking:${bookingId}:${booking.status}:${booking.updated_at}:${action}`, })
 
   if (!outcome.ok) {
     if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found') {
@@ -60,8 +60,8 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Booking update failed' }, { status: 400 })
   }
 
-  await publishGuestInboxEvent(env, {
-    eventId: crypto.randomUUID(), type: 'thread.changed', siteId, locationId: outcome.thread.location_id, threadId: outcome.thread.id, threadVersion: outcome.thread.version, occurredAt: new Date().toISOString(), })
+  await publishDashboardInvalidation(env, {
+    eventId: crypto.randomUUID(), type: 'thread.changed', organizationId: outcome.thread.organization_id, siteId, locationId: outcome.thread.location_id, threadId: outcome.thread.id, occurredAt: new Date().toISOString(), })
 
   return jsonResponse({ updated: true })
 })

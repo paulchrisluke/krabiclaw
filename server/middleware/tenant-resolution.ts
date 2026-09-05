@@ -159,6 +159,7 @@ export default defineHandler(async (event) => {
 
   const url = event.url;
   const tenantPath = normalizedPath(url.pathname);
+  if (tenantPath === "/api/auth" || tenantPath.startsWith("/api/auth/")) return;
   // Public site APIs carry an explicit site ID and resolve that site through
   // their canonical service. Host-based tenant resolution would duplicate the
   // same database lookup without adding an authorization boundary.

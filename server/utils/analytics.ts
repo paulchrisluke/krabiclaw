@@ -22,9 +22,9 @@ export async function getPlatformAnalyticsSummary(db: DbClient, startDate: strin
     queryAll<Record<string, unknown>>(db, `SELECT page_path, COUNT(*) views FROM site_pageview_events
       WHERE site_id = ? AND created_at >= ? AND created_at < ? GROUP BY page_path ORDER BY views DESC LIMIT 10`, [PLATFORM_SITE_ID, start, end]),
     queryFirst<{ count: number }>(db, `SELECT COUNT(*) count FROM notifications WHERE scope = 'platform'
-      AND event_type = 'platform.user_signup' AND created_at >= ? AND created_at < ?`, [start, end]),
+      AND template = 'platform.user_signup' AND created_at >= ? AND created_at < ?`, [start, end]),
     queryAll<Record<string, unknown>>(db, `SELECT substr(created_at, 1, 10) date, COUNT(*) count FROM notifications
-      WHERE scope = 'platform' AND event_type = 'platform.user_signup' AND created_at >= ? AND created_at < ? GROUP BY 1`, [start, end]),
+      WHERE scope = 'platform' AND template = 'platform.user_signup' AND created_at >= ? AND created_at < ? GROUP BY 1`, [start, end]),
   ])
   const pageViews = n(totals?.page_views)
   const signupByDate = new Map(dailySignups.map(row => [String(row.date), n(row.count)]))

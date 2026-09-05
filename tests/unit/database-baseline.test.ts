@@ -20,11 +20,13 @@ test('epoch-4 baseline creates the complete schema from zero', () => {
       GROUP BY type
     `).all() as Array<{ type: string; count: number }>
     assert.deepEqual(Object.fromEntries(objectCounts.map(row => [row.type, row.count])), {
-      index: 249,
-      table: 104,
+      index: 232,
+      table: 96,
     })
     const ledgerCount = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE name = 'd1_migrations'").get() as { count: number }
     assert.equal(ledgerCount.count, 0)
+    const splitAvailabilityTables = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE type = 'table' AND name IN ('experience_slot_overrides', 'reservation_slot_overrides')").get() as { count: number }
+    assert.equal(splitAvailabilityTables.count, 0)
     assert.deepEqual(
       database.pragma('table_info(chowbot_channel_state)').filter(column => column.pk > 0).sort((a, b) => a.pk - b.pk).map(column => column.name),
       ['user_id', 'channel'],
@@ -73,6 +75,34 @@ test('epoch-4 baseline enforces canonical cross-scope and value constraints', ()
     )
     database.prepare(`INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, valid_from, provenance, created_by)
       VALUES ('price', 'org', 'site', 'location', 'product', 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'test', 'user')`).run()
+    database.prepare("INSERT INTO experiences (id, organization_id, site_id, location_id) VALUES ('product', 'org', 'site', 'location')").run()
+
+    database.prepare(`
+      INSERT INTO availability_overrides (
+        id, organization_id, site_id, owner_type, experience_id, override_date, time_slot, status
+      ) VALUES ('experience-open', 'org', 'site', 'experience', 'product', '2026-01-10', '14:00', 'open')
+    `).run()
+    database.prepare(`
+      INSERT INTO availability_overrides (
+        id, organization_id, site_id, owner_type, location_id, override_date, time_slot, status
+      ) VALUES ('location-closed', 'org', 'site', 'location', 'location', '2026-01-10', '18:00', 'closed')
+    `).run()
+    assert.throws(
+      () => database.prepare(`
+        INSERT INTO availability_overrides (
+          id, organization_id, site_id, owner_type, location_id, experience_id, override_date, time_slot, status
+        ) VALUES ('two-owners', 'org', 'site', 'experience', 'location', 'product', '2026-01-10', '15:00', 'open')
+      `).run(),
+      /availability_overrides_owner_check/,
+    )
+    assert.throws(
+      () => database.prepare(`
+        INSERT INTO availability_overrides (
+          id, organization_id, site_id, owner_type, location_id, override_date, time_slot, status, capacity_override
+        ) VALUES ('negative-capacity', 'org', 'site', 'location', 'location', '2026-01-10', '19:00', 'open', -1)
+      `).run(),
+      /availability_overrides_capacity_check/,
+    )
 
     assert.throws(
       () => database.prepare("INSERT INTO organization (id, name, slug) VALUES ('blank', 'Blank', '   ')").run(),
@@ -85,6 +115,10 @@ test('epoch-4 baseline enforces canonical cross-scope and value constraints', ()
     assert.throws(
       () => database.prepare("INSERT INTO media_assets (id, organization_id, site_id, kind, provider, source) VALUES ('video', 'org', 'site', 'video', 'cloudflare_r2', 'uploaded')").run(),
       /media_assets_video_thumbnail_check/,
+    )
+    assert.throws(
+      () => database.prepare("INSERT INTO posts (id, organization_id, site_id, post_type, body, status, published_at, created_by) VALUES ('bad-post', 'org', 'site', 'promotion', 'Body', 'published', '2026-01-01T00:00:00.000Z', 'user')").run(),
+      /posts_post_type_check/,
     )
     assert.throws(
       () => database.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES ('bad-en', 'org', 'site', 'en', 0, 'disabled')").run(),

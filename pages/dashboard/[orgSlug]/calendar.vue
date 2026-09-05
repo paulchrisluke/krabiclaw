@@ -8,11 +8,27 @@
     <template #body>
       <div class="mx-auto w-full max-w-[var(--ws-page-wide,90rem)] space-y-6 pb-24">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div class="flex items-center gap-1">
-            <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous month" @click="moveMonth(-1)" />
-            <UButton label="Today" color="neutral" variant="soft" @click="goToday" />
-            <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
-            <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
+          <div class="space-y-3">
+            <div class="flex items-center gap-1">
+              <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous month" @click="moveMonth(-1)" />
+              <UButton label="Today" color="neutral" variant="soft" @click="goToday" />
+              <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
+              <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
+            </div>
+            <div class="flex gap-2" aria-label="Calendar view">
+              <UButton
+                label="Agenda"
+                :variant="calendarView === 'agenda' ? 'solid' : 'soft'"
+                :color="calendarView === 'agenda' ? 'primary' : 'neutral'"
+                @click="calendarView = 'agenda'"
+              />
+              <UButton
+                label="Availability"
+                :variant="calendarView === 'availability' ? 'solid' : 'soft'"
+                :color="calendarView === 'availability' ? 'primary' : 'neutral'"
+                @click="calendarView = 'availability'"
+              />
+            </div>
           </div>
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[38rem]">
             <UFormField label="Site">
@@ -21,22 +37,42 @@
             <UFormField label="Location">
               <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
             </UFormField>
-            <UFormField label="Kind">
+            <UFormField v-if="calendarView === 'agenda'" label="Kind">
               <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
             </UFormField>
           </div>
         </div>
 
-        <UAlert
-          v-if="agendaError"
-          color="error"
-          variant="soft"
-          title="Calendar could not be loaded"
-          :description="getErrorMessage(agendaError, 'Calendar request failed')"
-        />
-        <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
+        <template v-if="calendarView === 'availability'">
+          <UAlert
+            v-if="filters.siteId === FILTER_ALL || filters.locationId === FILTER_ALL"
+            color="neutral"
+            variant="soft"
+            title="Choose a site and location"
+            description="Availability is managed for one location at a time."
+          />
+          <DashboardAvailabilityCalendar
+            v-else
+            :site-id="filters.siteId"
+            :location-id="filters.locationId"
+            :from="monthStart"
+            :to="monthEnd"
+            :owner-type="availabilityOwnerType"
+            :owner-id="availabilityOwnerId"
+          />
+        </template>
 
-        <template v-else-if="agendaData && !agendaError">
+        <template v-else>
+          <UAlert
+            v-if="agendaError"
+            color="error"
+            variant="soft"
+            title="Calendar could not be loaded"
+            :description="getErrorMessage(agendaError, 'Calendar request failed')"
+          />
+          <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
+
+          <template v-else-if="agendaData && !agendaError">
           <div data-testid="calendar-month-grid" class="hidden overflow-hidden rounded-lg border border-default lg:block">
             <div class="grid grid-cols-7 border-b border-default bg-muted/30">
               <div v-for="day in weekdayLabels" :key="day" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day }}</div>
@@ -62,37 +98,6 @@
             </div>
           </div>
 
-          <!--
-            Availability for one experience on the selected day. Dates are
-            calendar work, so this is where closing a time lives rather than
-            inside the experience editor. One experience at a time until the
-            two slot-override tables become one and a whole day can be read in
-            a single query — see issue #820.
-          -->
-          <section v-if="availabilityExperienceId && availabilitySiteId" class="space-y-3 rounded-lg border border-default p-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="min-w-0">
-                <h3 class="text-sm font-semibold text-highlighted">
-                  Availability · {{ dayLabel(selectedDay) }}
-                </h3>
-                <p v-if="availabilityExperienceLabel" class="mt-0.5 truncate text-xs text-muted">{{ availabilityExperienceLabel }}</p>
-              </div>
-              <UButton
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                label="Clear"
-                @click="setAvailabilityExperience('')"
-              />
-            </div>
-            <DashboardAvailabilityPanel
-              :site-id="availabilitySiteId"
-              :experience-id="availabilityExperienceId"
-              :date="selectedDay"
-              @changed="reloadAgenda"
-            />
-          </section>
-
           <section v-if="selectedDayItems.length" id="calendar-day-list" class="hidden scroll-mt-20 space-y-2 lg:block">
             <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDay) }}</h3>
             <div class="divide-y divide-default border-y border-default">
@@ -114,6 +119,7 @@
             <p class="font-medium text-highlighted">Nothing scheduled this month</p>
             <p class="mt-1 text-sm text-muted">Try another month or adjust the filters.</p>
           </div>
+          </template>
         </template>
       </div>
     </template>
@@ -121,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import DashboardAvailabilityPanel from '~/components/dashboard/DashboardAvailabilityPanel.vue'
+import DashboardAvailabilityCalendar from '~/components/dashboard/AvailabilityCalendar.vue'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, AgendaSite } from '~/server/utils/dashboard-agenda'
 
@@ -136,7 +142,10 @@ const requestEvent = useRequestEvent()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'experience_booking', 'post', 'thread'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
-const filters = reactive({ siteId: FILTER_ALL, locationId: FILTER_ALL, kind: routeKind })
+const routeSiteId = typeof route.query.siteId === 'string' ? route.query.siteId : FILTER_ALL
+const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
+const calendarView = ref(route.query.view === 'availability' ? 'availability' : 'agenda')
+const filters = reactive({ siteId: routeSiteId, locationId: routeLocationId, kind: routeKind })
 const agendaData = ref<AgendaPayload | null>(null)
 const agendaError = ref<unknown>(null)
 const loading = ref(false)
@@ -162,6 +171,8 @@ const query = computed(() => ({
   kinds: filters.kind !== FILTER_ALL ? [filters.kind as AgendaKind] : undefined,
 }))
 const requestKey = computed(() => `dashboard-calendar-${orgSlug.value}-${JSON.stringify(query.value)}`)
+const availabilityOwnerType = computed(() => route.query.ownerType === 'location' || route.query.ownerType === 'experience' ? route.query.ownerType : undefined)
+const availabilityOwnerId = computed(() => typeof route.query.ownerId === 'string' ? route.query.ownerId : undefined)
 
 const isAgendaItem = (value: unknown): value is AgendaItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.kind === 'string'
@@ -213,42 +224,24 @@ watch(requestKey, async (key) => {
   }
 })
 
-watch(() => filters.siteId, () => { filters.locationId = FILTER_ALL })
+watch(() => filters.siteId, (_, previousSiteId) => {
+  if (previousSiteId !== undefined) filters.locationId = FILTER_ALL
+})
+watch([() => filters.siteId, () => filters.locationId, calendarView], ([siteId, locationId, view]) => {
+  void router.replace({
+    query: {
+      ...route.query,
+      view: view === 'availability' ? view : undefined,
+      siteId: siteId === FILTER_ALL ? undefined : siteId,
+      locationId: locationId === FILTER_ALL ? undefined : locationId,
+      ownerType: undefined,
+      ownerId: undefined,
+    },
+  })
+})
 watch(() => filters.kind, async kind => {
   await router.replace({ query: { ...route.query, kinds: kind === FILTER_ALL ? undefined : kind } })
 })
-
-// ── Availability for one experience ─────────────────────
-// Entered from an experience's "Dates and availability" row, which passes the
-// id. The calendar keeps it in the URL so the view is shareable and survives a
-// reload, and clearing it returns to the plain agenda.
-const availabilityExperienceId = computed(() => String(route.query.experience ?? ''))
-
-const availabilitySiteId = computed(() => String(route.query.site ?? ''))
-
-// Named only when the month's agenda happens to carry it; a filler subtitle
-// would say less than no subtitle.
-const availabilityExperienceLabel = computed(() =>
-  (agendaData.value?.items ?? []).find(entry => entry.id === availabilityExperienceId.value)?.title ?? '')
-
-function setAvailabilityExperience(id: string) {
-  const query = { ...route.query }
-  if (id) query.experience = id
-  else delete query.experience
-  void router.replace({ query })
-}
-
-async function reloadAgenda() {
-  const requestedKey = requestKey.value
-  try {
-    const result = await fetchAgenda()
-    if (requestedKey !== requestKey.value) return
-    agendaData.value = result
-  } catch (error) {
-    if (requestedKey !== requestKey.value) return
-    agendaError.value = error
-  }
-}
 
 const siteOptions = computed(() => [{ label: 'All sites', value: FILTER_ALL }, ...(agendaData.value?.sites ?? []).map(site => ({ label: site.label, value: site.id }))])
 const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...(agendaData.value?.locations ?? []).filter(location => location.siteId === filters.siteId).map(location => ({ label: location.title, value: location.id }))])

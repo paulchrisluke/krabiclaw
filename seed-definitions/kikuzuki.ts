@@ -533,12 +533,6 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       title: 'Teppanyaki Experience',
       slug: 'teppanyaki-experience',
       tagline: 'Live Japanese teppanyaki with premium ingredients, chef flair, and an unforgettable dining show.',
-      highlights: [
-        'Live teppanyaki counter with direct chef interaction and tableside cooking',
-        'Premium Japanese wagyu, fresh seafood, and seasonal vegetables prepared to order',
-        'Flames, knife work, and playful chef theatrics for a true dining show',
-        'Intimate seating ideal for celebrations, date nights, and special occasions',
-      ],
       includedItems: [
         'Chef-selected wagyu beef and premium seafood course',
         'Seasonal vegetables, rice, sauces, and teppanyaki accompaniments',
@@ -560,7 +554,6 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       durationMinutes: 90,
       maxCapacity: 6,
       timeSlots: ['15:00', '17:00', '19:00', '21:00'],
-      availableNote: 'Available on multiple dates. Reserve online or contact the restaurant directly.',
       status: 'active',
       sortOrder: 1,
       featured: true,
@@ -925,7 +918,7 @@ export function renderKikuzukiExperienceBlock(): string {
       sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
       sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
       sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(sortOrderFor(experience.id)),
-      sqlValue('[]'), sqlValue('[]'), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
+      sqlJson(experience.tags), sqlJson(experience.details), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
       sqlValue('template'), sqlValue('seed:kikuzuki'), sqlValue('seed:kikuzuki'),
     ].join(', ')})`)
     .join(',\n')
@@ -941,8 +934,6 @@ export function renderKikuzukiExperienceBlock(): string {
       sqlValue(experience.maxCapacity),
       experience.timeSlots.length > 0 ? sqlJson(experience.timeSlots) : 'NULL',
       'NULL',
-      sqlValue(experience.availableNote),
-      (experience.highlights?.length ?? 0) > 0 ? sqlJson(experience.highlights) : 'NULL',
       (experience.includedItems?.length ?? 0) > 0 ? sqlJson(experience.includedItems) : 'NULL',
       (experience.whatToBring?.length ?? 0) > 0 ? sqlJson(experience.whatToBring) : 'NULL',
       sqlValue(experience.meetingPoint),
@@ -995,7 +986,7 @@ ${experienceProductRows};
 
 INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id, tagline, pricing_note, duration_minutes, max_capacity,
-   time_slots, recurring_slots, available_note, highlights, included_items, what_to_bring, meeting_point, cancellation_policy)
+   time_slots, recurring_slots, included_items, what_to_bring, meeting_point, cancellation_policy)
 VALUES
 ${experienceRows};
 

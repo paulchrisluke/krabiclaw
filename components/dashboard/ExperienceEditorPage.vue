@@ -351,9 +351,13 @@ const currentLocationId = computed(() => dashboardLocation.currentLocationId.val
 const experiencesPath = computed(() => locationPaths.value?.experiences ?? '')
 const experiencePath = computed(() => `${experiencesPath.value}/${experienceId.value}`)
 const calendarPath = computed(() => {
-  // The calendar cannot infer which site an experience belongs to, and guessing
-  // the first one would silently show the wrong availability.
-  const query = new URLSearchParams({ experience: experienceId.value, site: siteId })
+  const query = new URLSearchParams({
+    view: 'availability',
+    ownerType: 'experience',
+    ownerId: experienceId.value,
+    siteId,
+    locationId: currentLocationId.value ?? '',
+  })
   return `/dashboard/${route.params.orgSlug}/calendar?${query.toString()}`
 })
 const currency = computed(() => dashboard.site.value?.default_currency || 'USD')

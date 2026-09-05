@@ -10939,6 +10939,7 @@ __metadata:
     nuxt: "npm:nuxt-nightly@5.0.0-29778575.262cc544"
     nuxt-schema-org: "npm:^6.0.4"
     patch-package: "npm:^8.0.1"
+    postal-mime: "npm:3.0.0"
     postcss: "npm:^8.5.26"
     react: "npm:^19.2.8"
     rollup-plugin-visualizer: "npm:^7.1.1"
@@ -11727,6 +11728,13 @@ __metadata:
   version: 8.0.0
   resolution: "pluralize@npm:8.0.0"
   checksum: 10c0/2044cfc34b2e8c88b73379ea4a36fc577db04f651c2909041b054c981cd863dd5373ebd030123ab058d194ae615d3a97cfdac653991e499d10caf592e8b3dc33
+  languageName: node
+  linkType: hard
+
+"postal-mime@npm:3.0.0":
+  version: 3.0.0
+  resolution: "postal-mime@npm:3.0.0"
+  checksum: 10c0/e7385b3ceccba9e14a0c81d46961ab5198d8bf12ce7a43925349deb7d38d647d319555379c70d1bfc437bb0e765cae062cac3105a7092d5b676223749d0d9010
   languageName: node
   linkType: hard
 

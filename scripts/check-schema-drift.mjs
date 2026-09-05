@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const root = process.cwd()
-const temporaryRoot = mkdtempSync(join(tmpdir(), 'krabiclaw-schema-drift-'))
+const temporaryParent = join(root, '.tmp')
+mkdirSync(temporaryParent, { recursive: true })
+const temporaryRoot = mkdtempSync(join(temporaryParent, 'schema-drift-'))
 const temporaryMigrations = join(temporaryRoot, 'migrations')
 
 function manifest(directory) {
@@ -29,8 +30,8 @@ try {
   // Kit 0.31 prefixes snapshot paths with './'; an absolute out path fails.
   // Reuse the normal config so this check exercises the same schema contract.
   writeFileSync(temporaryConfig, `import config from ${JSON.stringify(join(root, 'drizzle.config.ts'))}; export default { ...config, out: ${JSON.stringify(relative(root, temporaryMigrations))}, dbCredentials: { url: ${JSON.stringify(join(temporaryRoot, 'drift.sqlite'))} } }\n`)
-  const result = spawnSync(join(root, 'node_modules/.bin/drizzle-kit'), [
-    'generate', '--config', temporaryConfig,
+  const result = spawnSync(process.execPath, [
+    join(root, 'node_modules', 'drizzle-kit', 'bin.cjs'), 'generate', '--config', temporaryConfig,
   ], {
     cwd: root,
     encoding: 'utf8',

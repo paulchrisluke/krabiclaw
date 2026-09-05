@@ -20,6 +20,14 @@ import { ensureExperienceCategory } from '~/server/utils/product-management'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import type { SocialImageSource } from '~/utils/social-metadata'
+import type { ProductDetail } from '~/server/types/products'
+import { validateProductDetails, validateProductTags } from '~/server/utils/product-validation'
+import {
+  assertAvailabilityDate,
+  materializeAvailabilitySlots,
+  resolveExperienceScheduleSlots,
+  type PublicAvailabilitySlot,
+} from '~/server/utils/availability'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -48,8 +56,8 @@ export interface Experience {
   max_capacity: number | null
   time_slots: string[] | null
   recurring_slots: RecurringSlots | null
-  available_note: string | null
-  highlights: string[]
+  tags: string[]
+  details: ProductDetail[]
   included_items: string[]
   what_to_bring: string[]
   meeting_point: string | null
@@ -98,8 +106,8 @@ interface ExperienceRow {
   max_capacity: number | null
   time_slots: string | null
   recurring_slots: string | null
-  available_note: string | null
-  highlights: string | null
+  tags_json: string
+  details_json: string
   included_items: string | null
   what_to_bring: string | null
   meeting_point: string | null
@@ -145,7 +153,8 @@ function parseRow(row: ExperienceRow): Experience {
       created_by: price_created_by!, created_at: price_created_at!,
     } : null,
     status: row.status as Experience['status'],
-    highlights: parseStringArray(row.highlights),
+    tags: validateProductTags(JSON.parse(row.tags_json)),
+    details: validateProductDetails(JSON.parse(row.details_json)),
     included_items: parseStringArray(row.included_items),
     what_to_bring: parseStringArray(row.what_to_bring),
     meeting_point: row.meeting_point ?? null,
@@ -173,7 +182,7 @@ const SELECT = `
          pr.tax_behavior, pr.compare_at_amount_minor, pr.valid_from, pr.valid_until,
          pr.provenance, pr.created_by AS price_created_by, pr.created_at AS price_created_at,
          e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
+         p.tags_json, p.details_json, e.included_items, e.what_to_bring, e.meeting_point,
          CASE WHEN p.is_visible = 0 THEN 'inactive' WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
          p.sort_order, p.featured, p.featured_sort_order,
          p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
@@ -296,8 +305,8 @@ export interface CreateExperienceInput {
   max_capacity?: number | null
   time_slots?: string[] | null
   recurring_slots?: RecurringSlots | null
-  available_note?: string | null
-  highlights?: string[] | null
+  tags?: string[] | null
+  details?: ProductDetail[] | null
   included_items?: string[] | null
   what_to_bring?: string[] | null
   meeting_point?: string | null
@@ -395,17 +404,6 @@ function assertRecurringSlots(value: RecurringSlots | null | undefined): Recurri
  * otherwise falls back to the legacy flat `time_slots` list, applying every day — unchanged behavior
  * for experiences created before recurring patterns existed.
  */
-export function resolveEffectiveTimeSlots(experience: Experience, dateStr: string): string[] {
-  if (experience.recurring_slots) {
-    // new Date('YYYY-MM-DD') parses as UTC midnight; using UTC day index keeps this a pure
-    // calendar-date lookup independent of wall-clock time or the experience's timezone.
-    const weekdayIndex = new Date(`${dateStr}T00:00:00Z`).getUTCDay()
-    const weekday = WEEKDAY_NAMES[(weekdayIndex + 6) % 7]!
-    return experience.recurring_slots[weekday] ?? []
-  }
-  return experience.time_slots ?? []
-}
-
 /**
  * Generates a list of "HH:MM" slots from start to end (inclusive) at a fixed interval.
  * Pure helper used by CMS/MCP auto-generation — not a persisted shape on its own.
@@ -483,7 +481,8 @@ export async function createExperience(
   const slotsJson = input.time_slots?.length ? JSON.stringify(input.time_slots) : null
   const validRecurringSlots = assertRecurringSlots(input.recurring_slots)
   const recurringSlotsJson = validRecurringSlots ? JSON.stringify(validRecurringSlots) : null
-  const highlightsJson = input.highlights?.length ? JSON.stringify(input.highlights) : null
+  const tags = validateProductTags(input.tags ?? [])
+  const details = validateProductDetails(input.details ?? [])
   const includedItemsJson = input.included_items?.length ? JSON.stringify(input.included_items) : null
   const whatToBringJson = input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null
   const status = input.status !== undefined ? assertExperienceStatus(input.status, 'status') : 'active'
@@ -496,11 +495,12 @@ export async function createExperience(
         description, order_url, is_visible, available, featured, featured_sort_order,
         sort_order, tags_json, details_json, seo_title, seo_description, canonical_url,
         robots, source, created_at, updated_at, created_by, updated_by)
-       VALUES (?,?,?,?, 'experience', ?, ?,?,?, NULL,?,?,?,?,?,'[]','[]',?,?,?,?, 'manual',?,?,?,?)`,
+        VALUES (?,?,?,?, 'experience', ?, ?,?,?, NULL,?,?,?,?,?,?,?,?,?,?,?, 'manual',?,?,?,?)`,
       params: [
         id, organizationId, siteId, input.location_id, experienceCategoryId, input.title, slug, input.body ?? '',
         status === 'inactive' ? 0 : 1, status === 'sold_out' ? 0 : 1,
         input.featured ? 1 : 0, input.featured_sort_order ?? 0, input.sort_order ?? 0,
+        JSON.stringify(tags), JSON.stringify(details),
         input.seo_title ?? null, input.seo_description ?? null, input.canonical_url ?? null, input.robots ?? null,
         now, now, userId, userId,
       ],
@@ -508,9 +508,9 @@ export async function createExperience(
     {
       query: `INSERT INTO experiences
        (id, organization_id, site_id, location_id, tagline, pricing_note,
-        duration_minutes, max_capacity, time_slots, recurring_slots, available_note,
-        highlights, included_items, what_to_bring, meeting_point, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        duration_minutes, max_capacity, time_slots, recurring_slots,
+        included_items, what_to_bring, meeting_point, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       params: [
         id, organizationId, siteId, input.location_id,
         input.tagline ?? null,
@@ -519,8 +519,6 @@ export async function createExperience(
         input.max_capacity ?? null,
         slotsJson,
         recurringSlotsJson,
-        input.available_note ?? null,
-        highlightsJson,
         includedItemsJson,
         whatToBringJson,
         input.meeting_point ?? null, now, now,
@@ -632,8 +630,8 @@ export async function updateExperience(
     experienceSets.push('recurring_slots = ?')
     experienceParams.push(validRecurringSlots ? JSON.stringify(validRecurringSlots) : null)
   }
-  if (input.available_note !== undefined) { experienceSets.push('available_note = ?'); experienceParams.push(input.available_note ?? null) }
-  if (input.highlights !== undefined) { experienceSets.push('highlights = ?'); experienceParams.push(input.highlights?.length ? JSON.stringify(input.highlights) : null) }
+  if (input.tags !== undefined) { productSets.push('tags_json = ?'); productParams.push(JSON.stringify(validateProductTags(input.tags ?? []))) }
+  if (input.details !== undefined) { productSets.push('details_json = ?'); productParams.push(JSON.stringify(validateProductDetails(input.details ?? []))) }
   if (input.included_items !== undefined) { experienceSets.push('included_items = ?'); experienceParams.push(input.included_items?.length ? JSON.stringify(input.included_items) : null) }
   if (input.what_to_bring !== undefined) { experienceSets.push('what_to_bring = ?'); experienceParams.push(input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null) }
   if (input.meeting_point !== undefined) { experienceSets.push('meeting_point = ?'); experienceParams.push(input.meeting_point ?? null) }
@@ -697,12 +695,21 @@ export async function deleteExperience(
     where += ` AND location_id = ?`
     params.push(opts.locationId)
   }
-  const [, deleteResult] = await executeBatch(db, [
+  const [, , deleteResult] = await executeBatch(db, [
     {
       // Scoped by the same where clause as the experiences DELETE below, so an
       // idOrSlug that resolves to an out-of-scope experience id (wrong site/location)
       // never has its placements cleared while the experience itself survives.
       query: `DELETE FROM media_placements WHERE owner_type = 'experience' AND owner_id IN (SELECT id FROM experiences WHERE ${where})`,
+      params,
+    },
+    {
+      query: `DELETE FROM guest_threads
+        WHERE submission_type = 'experience_booking'
+          AND submission_id IN (
+            SELECT id FROM experience_bookings
+            WHERE experience_id IN (SELECT id FROM experiences WHERE ${where})
+          )`,
       params,
     },
     { query: `DELETE FROM products WHERE id IN (SELECT id FROM experiences WHERE ${where})`, params },
@@ -784,12 +791,8 @@ export async function createExperienceBooking(
  */
 export async function createExperienceBookingClaimingCapacity(
   db: DbClient,
-  input: Omit<ExperienceBooking, 'id' | 'created_at' | 'updated_at'> & { ip_hash?: string; capacity: number | null },
+  input: Omit<ExperienceBooking, 'id' | 'created_at' | 'updated_at'> & { ip_hash?: string },
 ): Promise<ExperienceBooking | null> {
-  if (input.capacity == null) {
-    return createExperienceBooking(db, input)
-  }
-
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const result = await execute(
@@ -799,10 +802,32 @@ export async function createExperienceBookingClaimingCapacity(
         party_size, booking_date, time_slot, status, notes, ip_hash,
         cancellation_token_hash, cancellation_token_expires_at, created_at, updated_at)
      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
-     WHERE (
+     FROM experiences e
+     JOIN products product ON product.id = e.id AND product.site_id = e.site_id
+     LEFT JOIN availability_overrides ao
+       ON ao.owner_type = 'experience'
+      AND ao.experience_id = e.id
+      AND ao.override_date = ?
+      AND ao.time_slot = ?
+     WHERE e.id = ? AND e.site_id = ?
+       AND product.is_visible = 1 AND product.available = 1
+       AND COALESCE(ao.status, 'open') != 'closed'
+       AND (
+         ao.status = 'open'
+         OR EXISTS (
+           SELECT 1 FROM json_each(
+             CASE WHEN e.recurring_slots IS NULL THEN e.time_slots
+               ELSE json_extract(e.recurring_slots, '$.' || ?) END
+           ) scheduled WHERE scheduled.value = ?
+         )
+       )
+       AND (
+         COALESCE(ao.capacity_override, e.max_capacity) IS NULL
+         OR (
        SELECT COALESCE(SUM(party_size), 0) FROM experience_bookings
        WHERE site_id = ? AND experience_id = ? AND booking_date = ? AND time_slot = ? AND status IN ('pending', 'confirmed')
-     ) + ? <= ?`,
+         ) + ? <= COALESCE(ao.capacity_override, e.max_capacity)
+       )`,
     [
       id, input.experience_id, input.organization_id, input.site_id,
       input.customer_id ?? null,
@@ -812,8 +837,10 @@ export async function createExperienceBookingClaimingCapacity(
       input.status ?? 'pending', input.notes ?? null, input.ip_hash ?? null,
       input.cancellation_token_hash ?? null, input.cancellation_token_expires_at ?? null,
       now, now,
+      input.booking_date, input.time_slot, input.experience_id, input.site_id,
+      WEEKDAY_NAMES[(new Date(`${input.booking_date}T00:00:00Z`).getUTCDay() + 6) % 7], input.time_slot,
       input.site_id, input.experience_id, input.booking_date, input.time_slot,
-      input.party_size, input.capacity,
+      input.party_size,
     ],
   )
 
@@ -1018,164 +1045,7 @@ export async function updateBookingStatusForSite(
 
 // ── Slot overrides & availability ───────────────────────────────────────────
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-
-export interface SlotOverride {
-  id: string
-  experience_id: string
-  organization_id: string
-  site_id: string
-  override_date: string
-  time_slot: string
-  status: 'closed' | 'open'
-  capacity_override: number | null
-  note: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface SlotAvailability {
-  time_slot: string
-  capacity: number | null
-  booked: number
-  remaining: number | null
-  is_closed: boolean
-  is_full: boolean
-}
-
-function assertDateStr(value: string, field: string): void {
-  if (!DATE_PATTERN.test(value)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be in "YYYY-MM-DD" format` })
-  }
-  // Parse and validate the actual date values
-  const parts = value.split('-')
-  const yearStr = parts[0]!
-  const monthStr = parts[1]!
-  const dayStr = parts[2]!
-  const year = parseInt(yearStr, 10)
-  const month = parseInt(monthStr, 10)
-  const day = parseInt(dayStr, 10)
-
-  if (month < 1 || month > 12) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field} has invalid month: must be between 1 and 12` })
-  }
-
-  // Check if the day is valid for the given month and year
-  const daysInMonth = new Date(year, month, 0).getDate()
-  if (day < 1 || day > daysInMonth) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field} has invalid day: must be between 1 and ${daysInMonth} for the given month and year` })
-  }
-
-  // Verify the date is actually valid by constructing it and checking if components match
-  const date = new Date(year, month - 1, day)
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field} is not a valid date` })
-  }
-}
-
-export async function listSlotOverrides(
-  db: DbClient,
-  siteId: string,
-  experienceId: string,
-  opts: { fromDate?: string; toDate?: string } = {},
-): Promise<SlotOverride[]> {
-  let sql = `SELECT id, experience_id, organization_id, site_id, override_date, time_slot,
-                    status, capacity_override, note, created_at, updated_at
-             FROM experience_slot_overrides
-             WHERE site_id = ? AND experience_id = ?`
-  const params: (string)[] = [siteId, experienceId]
-  if (opts.fromDate) {
-    assertDateStr(opts.fromDate, 'from')
-    sql += ` AND override_date >= ?`
-    params.push(opts.fromDate)
-  }
-  if (opts.toDate) {
-    assertDateStr(opts.toDate, 'to')
-    sql += ` AND override_date <= ?`
-    params.push(opts.toDate)
-  }
-  sql += ` ORDER BY override_date ASC, time_slot ASC`
-  const results = await queryAll<SlotOverride>(db, sql, params)
-  return results ?? []
-}
-
-export async function upsertSlotOverride(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  experienceId: string,
-  input: {
-    override_date: string
-    time_slot: string
-    status: 'closed' | 'open'
-    capacity_override?: number | null
-    note?: string | null
-  },
-  userId: string,
-): Promise<SlotOverride> {
-  assertDateStr(input.override_date, 'override_date')
-  if (!TIME_SLOT_PATTERN.test(input.time_slot)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'time_slot must be in "HH:MM" format' })
-  }
-  if (input.status !== 'closed' && input.status !== 'open') {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'status must be "closed" or "open"' })
-  }
-  assertFiniteNonNegative(input.capacity_override, 'capacity_override')
-
-  // Verify that the experience belongs to the provided site
-  const experience = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`, [experienceId, siteId])
-  if (!experience) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Experience not found or does not belong to this site' })
-  }
-
-  const now = new Date().toISOString()
-  const existing = await queryFirst<{ id: string }>(
-    db,
-    `SELECT id FROM experience_slot_overrides WHERE experience_id = ? AND override_date = ? AND time_slot = ? LIMIT 1`,
-    [experienceId, input.override_date, input.time_slot],
-  )
-
-  const id = existing?.id ?? crypto.randomUUID()
-
-  await execute(
-    db,
-    `INSERT INTO experience_slot_overrides
-       (id, experience_id, organization_id, site_id, override_date, time_slot, status, capacity_override, note, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(experience_id, override_date, time_slot) DO UPDATE SET
-         status = excluded.status,
-         capacity_override = excluded.capacity_override,
-         note = excluded.note,
-         updated_at = excluded.updated_at`,
-    [
-      id, experienceId, organizationId, siteId,
-      input.override_date, input.time_slot, input.status,
-      input.capacity_override ?? null, input.note ?? null,
-      now, now, userId,
-    ],
-  )
-
-  const row = await queryFirst<SlotOverride>(
-    db,
-    `SELECT id, experience_id, organization_id, site_id, override_date, time_slot,
-              status, capacity_override, note, created_at, updated_at
-       FROM experience_slot_overrides
-       WHERE experience_id = ? AND override_date = ? AND time_slot = ?`,
-    [experienceId, input.override_date, input.time_slot],
-  )
-  if (!row) throw new Error('Failed to read back slot override after upsert.')
-  return row
-}
-
-export async function deleteSlotOverride(
-  db: DbClient,
-  siteId: string,
-  experienceId: string,
-  overrideId: string,
-): Promise<boolean> {
-  const result = await execute(db, `DELETE FROM experience_slot_overrides WHERE site_id = ? AND experience_id = ? AND id = ?`, [siteId, experienceId, overrideId])
-  return Boolean(result.meta.changes)
-}
+export type SlotAvailability = PublicAvailabilitySlot
 
 /**
  * Computes remaining capacity per effective time slot for an experience on a given date,
@@ -1210,14 +1080,15 @@ export async function getSlotAvailabilityRange(
   timezone: string,
 ): Promise<Record<string, SlotAvailability[]>> {
   const dates = [...new Set(dateStrs)]
-  dates.forEach(date => assertDateStr(date, 'date'))
+  dates.forEach(date => assertAvailabilityDate(date))
   if (dates.length === 0) return {}
 
   const rows = await queryAll<SlotAvailabilityDataRow>(db, `
     WITH requested_dates(date) AS (SELECT value FROM json_each(?))
     SELECT 'override' AS kind, override_date AS date, time_slot, status, capacity_override, NULL AS booked
-    FROM experience_slot_overrides
-    WHERE site_id = ? AND experience_id = ? AND override_date IN (SELECT date FROM requested_dates)
+    FROM availability_overrides
+    WHERE site_id = ? AND owner_type = 'experience' AND experience_id = ?
+      AND override_date IN (SELECT date FROM requested_dates)
     UNION ALL
     SELECT 'booking' AS kind, booking_date AS date, time_slot, NULL AS status, NULL AS capacity_override, SUM(party_size) AS booked
     FROM experience_bookings
@@ -1244,30 +1115,25 @@ export async function getSlotAvailabilityRange(
   return Object.fromEntries(dates.map((dateStr) => {
     const overrideMap = overridesByDate.get(dateStr) ?? new Map<string, SlotAvailabilityDataRow>()
     const bookedMap = bookingsByDate.get(dateStr) ?? new Map<string, number>()
-    const scheduledSlots = resolveEffectiveTimeSlots(experience, dateStr)
+    const scheduledSlots = resolveExperienceScheduleSlots(experience, dateStr)
       .filter(slot => !isTimeSlotInPast(dateStr, slot, timezone))
-    const oneOffOpenSlots = [...overrideMap.values()]
-      .filter(row => row.status === 'open' && !scheduledSlots.includes(row.time_slot) && !isTimeSlotInPast(dateStr, row.time_slot, timezone))
-      .map(row => row.time_slot)
-    const effectiveSlots = [...scheduledSlots, ...oneOffOpenSlots].sort()
-
-    return [dateStr, effectiveSlots.map((slot) => {
-      const override = overrideMap.get(slot)
-      const capacity = override?.capacity_override ?? experience.max_capacity ?? null
-      const booked = bookedMap.get(slot) ?? 0
-      const remaining = capacity == null ? null : capacity - booked
-      const is_closed = override?.status === 'closed'
-      const is_full = remaining !== null && remaining <= 0
-      return { time_slot: slot, capacity, booked, remaining, is_closed, is_full }
+    const overrides = [...overrideMap.values()]
+      .filter(row => row.status !== null && !isTimeSlotInPast(dateStr, row.time_slot, timezone))
+      .map(row => ({
+        time_slot: row.time_slot,
+        status: row.status as 'open' | 'closed',
+        capacity_override: row.capacity_override,
+      }))
+    return [dateStr, materializeAvailabilitySlots({
+      scheduledSlots,
+      overrides,
+      bookedBySlot: bookedMap,
+      defaultCapacity: experience.max_capacity ?? null,
     })]
   }))
 }
 
-// ── Booking windows ──────────────────────────────────────────────────────────
-// Canonical windows so public and dashboard availability endpoints agree on how
-// far ahead a guest can book vs. how far ahead an owner can manage slots.
 export const PUBLIC_BOOKING_WINDOW_DAYS = 31
-export const DASHBOARD_MANAGEMENT_WINDOW_DAYS = 31
 // Shorter window used only for the cheap "is this bookable soon" card summary below.
 const AVAILABILITY_SUMMARY_WINDOW_DAYS = 14
 const LIMITED_REMAINING_THRESHOLD = 2
@@ -1344,7 +1210,7 @@ function calculateAvailabilitySummary(
   const cursor = new Date()
   for (let i = 0; i < AVAILABILITY_SUMMARY_WINDOW_DAYS; i++) {
     const dateStr = cursor.toISOString().slice(0, 10)
-    const scheduled = resolveEffectiveTimeSlots(experience, dateStr).filter(slot => !isTimeSlotInPast(dateStr, slot, timezone))
+    const scheduled = resolveExperienceScheduleSlots(experience, dateStr).filter(slot => !isTimeSlotInPast(dateStr, slot, timezone))
     const oneOffOpen = overrideRows
       .filter(row => row.override_date === dateStr && row.status === 'open' && !scheduled.includes(row.time_slot) && !isTimeSlotInPast(dateStr, row.time_slot, timezone))
       .map(row => row.time_slot)
@@ -1374,7 +1240,7 @@ function calculateAvailabilitySummary(
 /**
  * Derives a single availability_state for an experience card/detail view by
  * looking at real slots/bookings/overrides over the next AVAILABILITY_SUMMARY_WINDOW_DAYS,
- * rather than relying on manual status or free-text available_note alone.
+ * rather than relying on manual status alone.
  * Two DB round trips regardless of window size — see getSlotAvailability for the
  * per-day equivalent used when a guest picks a specific date to book.
  */
@@ -1412,8 +1278,9 @@ export async function computeExperienceAvailabilitySummary(
     queryAll<{ override_date: string; time_slot: string; status: 'closed' | 'open'; capacity_override: number | null }>(
       db,
       `SELECT override_date, time_slot, status, capacity_override
-         FROM experience_slot_overrides
-         WHERE site_id = ? AND experience_id = ? AND override_date BETWEEN ? AND ?`,
+         FROM availability_overrides
+         WHERE site_id = ? AND owner_type = 'experience' AND experience_id = ?
+           AND override_date BETWEEN ? AND ?`,
       [siteId, experience.id, fromDate, toDate],
     ),
   ])
@@ -1481,8 +1348,9 @@ export async function attachAvailabilitySummaries<T extends Experience>(
          UNION ALL
          SELECT 'override' AS row_kind, experience_id, override_date AS event_date,
                 time_slot, NULL AS booked, status, capacity_override
-           FROM experience_slot_overrides
-          WHERE site_id = ? AND experience_id IN (SELECT value FROM json_each(?))
+           FROM availability_overrides
+          WHERE site_id = ? AND owner_type = 'experience'
+            AND experience_id IN (SELECT value FROM json_each(?))
             AND override_date BETWEEN ? AND ?`,
         [
           siteId,

@@ -261,6 +261,8 @@ const impersonatedBy = computed(() => {
 })
 
 const orgSlug = computed(() => organization.value?.slug ?? null)
+const realtimeOrganizationSlug = computed(() => typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null)
+provideDashboardInvalidations(realtimeOrganizationSlug)
 const orgBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}` : null)
 
 const siteSlugFromRoute = computed(() => {

@@ -1,18 +1,21 @@
-import { execute } from '~/server/db'
+import { defineHandler } from 'nitro'
 import { jsonResponse } from '~/server/utils/api-response'
+import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
+import { acknowledgeAllNotifications } from '~/server/utils/notification-acknowledgement'
 import { getNotificationAccess } from '~/server/utils/notification-access'
 
 export default defineHandler(async (event) => {
   const access = await getNotificationAccess(event)
-  const now = new Date().toISOString()
-  await execute(access.db, `
-    INSERT INTO notification_reads (notification_id, user_id, read_at)
-    SELECT n.id, ?, ?
-    FROM notifications n
-    WHERE ${access.whereSql}
-    ON CONFLICT(notification_id, user_id) DO UPDATE SET read_at = excluded.read_at
-  `, [access.userId, now, ...access.whereParams])
+  const acknowledged = await acknowledgeAllNotifications(access.db, access)
+  if (acknowledged > 0 && access.organization) {
+    await publishNotificationInvalidation(access.env, {
+      type: 'notification.read',
+      organizationId: access.organization.id,
+      siteId: null,
+      locationId: null,
+      targetUserId: access.userId,
+    })
+  }
 
   return jsonResponse({ success: true, unread_count: 0 })
 })
-import { defineHandler } from 'nitro';

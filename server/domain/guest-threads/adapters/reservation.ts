@@ -1,10 +1,7 @@
 import { queryFirst } from '~/server/db'
-import { updateReservationSubmissionStatus } from '~/server/utils/mcp-workflows'
 import type {
   AdapterLoadContext,
   GuestThreadSourceAdapter,
-  OperationExecutionContext,
-  OperationExecutionResult,
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
@@ -27,25 +24,8 @@ export interface ReservationSource {
   location_title: string | null
 }
 
-export interface ReservationOpeningSnapshot {
-  schemaVersion: 1
-  submissionType: 'reservation'
-  submissionId: string
-  guestName: string
-  guestEmail: string
-  guestPhone: string | null
-  locationTitle: string | null
-  date: string
-  time: string
-  guests: string
-  requests: string | null
-  submittedAt: string
-}
-
 export type ReservationAction = 'confirm' | 'cancel' | 'complete'
 
-// Locked Decision #7: fixed transition matrix. Terminal states (completed/cancelled)
-// expose no actions.
 const RESERVATION_TRANSITIONS: Record<string, ReservationAction[]> = {
   new: ['confirm', 'cancel'],
   confirmed: ['complete', 'cancel'],
@@ -53,17 +33,11 @@ const RESERVATION_TRANSITIONS: Record<string, ReservationAction[]> = {
   cancelled: [],
 }
 
-const RESERVATION_ACTION_TARGET_STATUS: Record<ReservationAction, string> = {
-  confirm: 'confirmed',
-  cancel: 'cancelled',
-  complete: 'completed',
-}
-
 function normalizePreview(text: string | null | undefined, maxLength = 160): string {
   return String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
 }
 
-export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, ReservationOpeningSnapshot, ReservationAction> = {
+export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, ReservationAction> = {
   type: 'reservation',
 
   async loadSource(ctx: AdapterLoadContext, submissionId: string): Promise<ReservationSource | null> {
@@ -88,23 +62,6 @@ export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, Res
       WHERE rs.id = ?
       LIMIT 1
     `, [submissionId])
-  },
-
-  createOpeningSnapshot(source: ReservationSource): ReservationOpeningSnapshot {
-    return {
-      schemaVersion: 1,
-      submissionType: 'reservation',
-      submissionId: source.id,
-      guestName: source.name,
-      guestEmail: source.email,
-      guestPhone: source.phone,
-      locationTitle: source.location_title,
-      date: source.date,
-      time: source.time,
-      guests: source.guests,
-      requests: source.requests,
-      submittedAt: source.created_at,
-    }
   },
 
   summarize(source: ReservationSource): ThreadSummaryProjection {
@@ -132,27 +89,6 @@ export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, Res
 
   listAvailableActions(source: ReservationSource): ReservationAction[] {
     return RESERVATION_TRANSITIONS[source.status] ?? []
-  },
-
-  async executeAction(ctx: OperationExecutionContext, source: ReservationSource, action: ReservationAction): Promise<OperationExecutionResult> {
-    const allowed = RESERVATION_TRANSITIONS[source.status] ?? []
-    if (!allowed.includes(action)) {
-      return { ok: false, reason: 'invalid_transition', message: `Cannot ${action} a reservation in status "${source.status}"` }
-    }
-
-    const targetStatus = RESERVATION_ACTION_TARGET_STATUS[action]
-    await updateReservationSubmissionStatus(ctx.db, source.site_id, source.id, targetStatus, { locationId: source.location_id })
-
-    // Confirm/cancel trigger a guest-facing transactional notification; complete does not.
-    const requiresNotification = action === 'confirm' || action === 'cancel'
-
-    return {
-      ok: true,
-      beforeStatus: source.status,
-      afterStatus: targetStatus,
-      requiresNotification,
-      notifyChannel: requiresNotification ? 'email' : null,
-    }
   },
 
   buildCurrentDetail(source: ReservationSource): ThreadDetailSourceModel {
