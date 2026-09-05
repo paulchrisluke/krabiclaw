@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a616747b-505d-45ec-b41a-4b95d37aba0e",
+  "id": "15bc3ce6-73af-4241-9f87-e91966e13b5b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -7879,13 +7879,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "channel": {
           "name": "channel",
           "type": "text",
@@ -7940,19 +7933,11 @@
           ],
           "isUnique": true
         },
-        "post_channel_jobs_provider_post_unique": {
-          "name": "post_channel_jobs_provider_post_unique",
+        "post_channel_jobs_provider_post_idx": {
+          "name": "post_channel_jobs_provider_post_idx",
           "columns": [
-            "organization_id",
             "channel",
             "provider_post_id"
-          ],
-          "isUnique": true
-        },
-        "post_channel_jobs_post_id_idx": {
-          "name": "post_channel_jobs_post_id_idx",
-          "columns": [
-            "post_id"
           ],
           "isUnique": false
         }
@@ -7970,24 +7955,24 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "post_channel_jobs_organization_id_organization_id_fk": {
-          "name": "post_channel_jobs_organization_id_organization_id_fk",
-          "tableFrom": "post_channel_jobs",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "post_channel_jobs_channel_check": {
+          "name": "post_channel_jobs_channel_check",
+          "value": "channel IN ('facebook', 'instagram')"
+        },
+        "post_channel_jobs_status_check": {
+          "name": "post_channel_jobs_status_check",
+          "value": "status IN ('pending', 'published', 'failed', 'skipped')"
+        },
+        "post_channel_jobs_outcome_check": {
+          "name": "post_channel_jobs_outcome_check",
+          "value": "(status = 'pending' AND provider_post_id IS NULL AND published_at IS NULL AND error IS NULL) OR (status = 'published' AND provider_post_id IS NOT NULL AND published_at IS NOT NULL AND error IS NULL) OR (status IN ('failed', 'skipped') AND provider_post_id IS NULL AND published_at IS NULL AND error IS NOT NULL)"
+        }
+      }
     },
     "posts": {
       "name": "posts",
@@ -8232,6 +8217,10 @@
           "name": "posts_status_check",
           "value": "status IN ('published', 'scheduled')"
         },
+        "posts_publication_check": {
+          "name": "posts_publication_check",
+          "value": "(status = 'scheduled' AND scheduled_for IS NOT NULL AND published_at IS NULL) OR (status = 'published' AND scheduled_for IS NULL AND published_at IS NOT NULL)"
+        },
         "posts_source_check": {
           "name": "posts_source_check",
           "value": "source IN ('manual', 'template')"
@@ -8239,6 +8228,14 @@
         "posts_post_type_check": {
           "name": "posts_post_type_check",
           "value": "post_type IN ('standard', 'offer', 'event', 'update')"
+        },
+        "posts_offer_shape_check": {
+          "name": "posts_offer_shape_check",
+          "value": "post_type != 'offer' OR length(trim(COALESCE(offer_coupon, ''))) > 0 OR length(trim(COALESCE(offer_terms, ''))) > 0"
+        },
+        "posts_event_shape_check": {
+          "name": "posts_event_shape_check",
+          "value": "post_type != 'event' OR (datetime(event_start) IS NOT NULL AND (event_end IS NULL OR (datetime(event_end) IS NOT NULL AND julianday(event_end) > julianday(event_start))))"
         }
       }
     },
@@ -9189,7 +9186,16 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "public_resource_cache_invalidations_status_check": {
+          "name": "public_resource_cache_invalidations_status_check",
+          "value": "status IN ('pending', 'processing', 'processed', 'failed')"
+        },
+        "public_resource_cache_invalidations_attempt_count_check": {
+          "name": "public_resource_cache_invalidations_attempt_count_check",
+          "value": "attempt_count >= 0"
+        }
+      }
     },
     "rate_limits": {
       "name": "rate_limits",

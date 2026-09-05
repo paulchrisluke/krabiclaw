@@ -955,7 +955,6 @@ export const platform_docs = sqliteTable("platform_docs", {
 export const post_channel_jobs = sqliteTable("post_channel_jobs", {
 	id: text().primaryKey(),
 	post_id: text().notNull().references(() => posts.id, { onDelete: "cascade" } ),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	channel: text().notNull(),
 	status: text().default("pending").notNull(),
 	provider_post_id: text(),
@@ -964,9 +963,10 @@ export const post_channel_jobs = sqliteTable("post_channel_jobs", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	uniqueIndex("post_channel_jobs_post_channel_unique").on(table.post_id, table.channel),
-	uniqueIndex("post_channel_jobs_provider_post_unique").on(table.organization_id, table.channel, table.provider_post_id),
-	// WHERE post_id = ? in post-management.ts and mcp-executor/posts.ts (publish status checks).
-	index("post_channel_jobs_post_id_idx").on(table.post_id),
+	index("post_channel_jobs_provider_post_idx").on(table.channel, table.provider_post_id),
+	check("post_channel_jobs_channel_check", sql`channel IN ('facebook', 'instagram')`),
+	check("post_channel_jobs_status_check", sql`status IN ('pending', 'published', 'failed', 'skipped')`),
+	check("post_channel_jobs_outcome_check", sql`(status = 'pending' AND provider_post_id IS NULL AND published_at IS NULL AND error IS NULL) OR (status = 'published' AND provider_post_id IS NOT NULL AND published_at IS NOT NULL AND error IS NULL) OR (status IN ('failed', 'skipped') AND provider_post_id IS NULL AND published_at IS NULL AND error IS NOT NULL)`),
 ]);
 
 export const posts = sqliteTable("posts", {
@@ -997,8 +997,11 @@ export const posts = sqliteTable("posts", {
 }, (table) => [
 	uniqueIndex("posts_site_slug_idx").on(table.site_id, table.slug),
 	check("posts_status_check", sql`status IN ('published', 'scheduled')`),
+	check("posts_publication_check", sql`(status = 'scheduled' AND scheduled_for IS NOT NULL AND published_at IS NULL) OR (status = 'published' AND scheduled_for IS NULL AND published_at IS NOT NULL)`),
 	check("posts_source_check", sql`source IN ('manual', 'template')`),
 	check("posts_post_type_check", sql`post_type IN ('standard', 'offer', 'event', 'update')`),
+	check("posts_offer_shape_check", sql`post_type != 'offer' OR length(trim(COALESCE(offer_coupon, ''))) > 0 OR length(trim(COALESCE(offer_terms, ''))) > 0`),
+	check("posts_event_shape_check", sql`post_type != 'event' OR (datetime(event_start) IS NOT NULL AND (event_end IS NULL OR (datetime(event_end) IS NOT NULL AND julianday(event_end) > julianday(event_start))))`),
 	index("posts_org_site_idx").on(table.organization_id, table.site_id),
 ]);
 
@@ -2208,4 +2211,6 @@ export const public_resource_cache_invalidations = sqliteTable("public_resource_
 }, (table) => [
 	index("public_resource_cache_invalidations_status_idx").on(table.status, table.created_at),
 	index("public_resource_cache_invalidations_site_idx").on(table.site_id, table.status),
+	check("public_resource_cache_invalidations_status_check", sql`status IN ('pending', 'processing', 'processed', 'failed')`),
+	check("public_resource_cache_invalidations_attempt_count_check", sql`attempt_count >= 0`),
 ]);

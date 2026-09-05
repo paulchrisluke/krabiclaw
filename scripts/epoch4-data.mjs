@@ -36,9 +36,18 @@ const CONSOLIDATED_AVAILABILITY_TABLES = new Set([
 /** Tables this transform rewrites rather than copies. */
 const TRANSFORMED_TABLES = new Set([
   'products', 'product_categories', 'booking_policies', 'experiences', 'posts',
-  'post_channel_jobs', 'availability_overrides', 'tenant_pages',
+  'post_channel_jobs', 'availability_overrides', 'tenant_pages', 'public_resource_cache_invalidations',
   ...CONSOLIDATED_AVAILABILITY_TABLES, ...RESET_TABLES,
 ])
+
+const REMOVED_COLUMNS = {
+  products: ['category'],
+  booking_policies: ['booking_window_days', 'host_confirmation_sla_minutes', 'weather_policy', 'late_arrival_grace_minutes', 'special_requests_allowed'],
+  experiences: ['highlights', 'available_note'],
+  posts: ['google_post_id'],
+  post_channel_jobs: ['organization_id'],
+  tenant_pages: ['title', 'slug', 'summary', 'seo_title', 'seo_description', 'canonical_url', 'robots'],
+}
 
 function qi(value) { return `"${String(value).replaceAll('"', '""')}"` }
 function tableExists(db, table) { return Boolean(db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)) }
@@ -89,8 +98,9 @@ function assertSchemaParity(source, target) {
   ].sort()
   assert(JSON.stringify(expectedTargetTables) === JSON.stringify(tables(target)), 'Application table census changed outside the declared Epoch 4 correction')
   for (const table of sourceTables) {
-    if (DELETED_TABLES.has(table) || TRANSFORMED_TABLES.has(table)) continue
-    const before = columns(source, table).map(column => column.name).filter(name => table !== 'products' || name !== 'category').sort()
+    if (DELETED_TABLES.has(table) || RESET_TABLES.has(table) || CONSOLIDATED_AVAILABILITY_TABLES.has(table)) continue
+    const removed = REMOVED_COLUMNS[table] ?? []
+    const before = columns(source, table).map(column => column.name).filter(name => !removed.includes(name)).sort()
     const after = columns(target, table).map(column => column.name).filter(name => table !== 'products' || name !== 'category_id').sort()
     assert(JSON.stringify(before) === JSON.stringify(after), `${table}: unexpected source/destination columns`)
   }
@@ -144,43 +154,54 @@ function projectCommonRows(source, target, table) {
 function normalizedPosts(source, target) {
   const sourceNames = new Set(columns(source, 'posts').map(column => column.name))
   const targetNames = columns(target, 'posts').map(column => column.name)
-  return rows(source, 'posts').map((post) => Object.fromEntries(targetNames.map((name) => {
-    if (name === 'post_type' && post.post_type === 'offer' && !post.offer_coupon && !post.offer_terms) {
-      return [name, 'standard']
-    }
-    return [name, sourceNames.has(name) ? post[name] : null]
-  })))
+  return rows(source, 'posts').map((post) => {
+    assert(['published', 'scheduled'].includes(post.status), 'Post has unsupported publication state')
+    assert(post.status !== 'scheduled' || (post.scheduled_for && Number.isFinite(Date.parse(post.scheduled_for))), 'Scheduled post has no valid publication time')
+    return Object.fromEntries(targetNames.map((name) => {
+      if (name === 'post_type' && post.post_type === 'offer' && !post.offer_coupon?.trim() && !post.offer_terms?.trim()) {
+        return [name, 'standard']
+      }
+      if (name === 'scheduled_for') return [name, post.status === 'scheduled' ? post.scheduled_for : null]
+      if (name === 'published_at') return [name, post.status === 'published' ? post.published_at ?? post.created_at : null]
+      return [name, sourceNames.has(name) ? post[name] : null]
+    }))
+  })
 }
 
 function normalizedPostChannelJobs(source, target) {
   const targetNames = columns(target, 'post_channel_jobs').map(column => column.name)
   const sourceNames = new Set(columns(source, 'post_channel_jobs').map(column => column.name))
-  const jobs = rows(source, 'post_channel_jobs').map(job => Object.fromEntries(
+  const jobs = rows(source, 'post_channel_jobs').filter(job => job.channel !== 'site').map(job => Object.fromEntries(
     targetNames.map(name => [name, sourceNames.has(name) ? job[name] : null]),
   ))
   const jobByPostChannel = new Map(jobs.map(job => [`${job.post_id}:${job.channel}`, job]))
   const postsById = new Map(rows(source, 'posts').map(post => [post.id, post]))
 
   for (const post of postsById.values()) {
-    if (!post.google_post_id) continue
+    if (post.google_post_id === null) continue
     const raw = String(post.google_post_id)
-    const channel = raw.startsWith('ig-') ? 'instagram' : raw.startsWith('fb-') ? 'facebook' : 'google'
+    assert(raw.startsWith('ig-') || raw.startsWith('fb-'), 'Unmapped legacy post provider identifier')
+    const channel = raw.startsWith('ig-') ? 'instagram' : 'facebook'
     const providerPostId = raw.replace(/^(?:ig|fb)-/u, '')
+    assert(providerPostId.length > 0, 'Empty legacy post provider identifier')
     const key = `${post.id}:${channel}`
     const existing = jobByPostChannel.get(key)
     if (existing) {
+      assert(!existing.provider_post_id || existing.provider_post_id === providerPostId, 'Conflicting legacy post provider identifiers')
       existing.provider_post_id = providerPostId
+      existing.status = 'published'
+      existing.published_at ??= post.published_at ?? post.created_at
+      existing.error = null
       continue
     }
     const values = {
       id: `epoch4-${channel}-${post.id}`,
       post_id: post.id,
-      organization_id: post.organization_id,
       channel,
-      status: post.status === 'published' ? 'published' : 'pending',
+      status: 'published',
       provider_post_id: providerPostId,
       error: null,
-      published_at: post.published_at ?? null,
+      published_at: post.published_at ?? post.created_at,
       created_at: post.created_at,
     }
     const job = Object.fromEntries(targetNames.map(name => [name, values[name] ?? null]))
@@ -211,6 +232,14 @@ function normalizedAvailabilityOverrides(source, target) {
     }
   }
   return records
+}
+
+function retainedCacheInvalidations(source) {
+  return rows(source, 'public_resource_cache_invalidations').filter(row => {
+    assert(['pending', 'processing', 'processed', 'failed'].includes(row.status), 'Unknown cache invalidation status')
+    assert(Number.isInteger(row.attempt_count) && row.attempt_count >= 0, 'Invalid cache invalidation attempt count')
+    return ['pending', 'processing'].includes(row.status) && row.attempt_count < 5
+  }).map(row => ({ ...row, status: 'pending', claimed_at: null }))
 }
 
 /**
@@ -320,6 +349,10 @@ function verifyDatabases(source, target) {
   assert(hashRows(normalizedPosts(source, target), postNames) === hashRows(rows(target, 'posts'), postNames), 'posts: canonical projection changed')
   const jobNames = columns(target, 'post_channel_jobs').map(column => column.name)
   assert(hashRows(normalizedPostChannelJobs(source, target), jobNames) === hashRows(rows(target, 'post_channel_jobs'), jobNames), 'post_channel_jobs: provider identity projection changed')
+  const cacheNames = columns(target, 'public_resource_cache_invalidations').map(column => column.name)
+  const retainedInvalidations = retainedCacheInvalidations(source)
+  const actualInvalidations = rows(target, 'public_resource_cache_invalidations')
+  assert(hashRows(retainedInvalidations, cacheNames) === hashRows(actualInvalidations, cacheNames), 'public_resource_cache_invalidations: retained work changed')
   const availabilityNames = columns(target, 'availability_overrides').map(column => column.name)
   const normalizedAvailability = normalizedAvailabilityOverrides(source, target)
   const actualAvailability = rows(target, 'availability_overrides')
@@ -343,6 +376,26 @@ function verifyDatabases(source, target) {
     baseline: baselineSql.map(migration => ({ name: migration.name, sha256: createHash('sha256').update(migration.sql).digest('hex') })),
     tables: parity,
     projected_tables: projections,
+    removed_columns: REMOVED_COLUMNS,
+    posts: {
+      source: count(source, 'posts'),
+      target: count(target, 'posts'),
+      reclassified_offers: rows(source, 'posts').filter(post => post.post_type === 'offer' && !post.offer_coupon?.trim() && !post.offer_terms?.trim()).length,
+      hash: hashRows(rows(target, 'posts'), postNames),
+    },
+    post_channel_jobs: {
+      source: count(source, 'post_channel_jobs'),
+      target: count(target, 'post_channel_jobs'),
+      discarded_site_rows: source.prepare("SELECT count(*) count FROM post_channel_jobs WHERE channel = 'site'").get().count,
+      merged_provider_identifiers: source.prepare('SELECT count(*) count FROM posts WHERE google_post_id IS NOT NULL').get().count,
+      hash: hashRows(rows(target, 'post_channel_jobs'), jobNames),
+    },
+    cache_invalidations: {
+      source: count(source, 'public_resource_cache_invalidations'),
+      retained: actualInvalidations.length,
+      discarded: count(source, 'public_resource_cache_invalidations') - actualInvalidations.length,
+      hash: hashRows(actualInvalidations, cacheNames),
+    },
     products: { source: count(source, 'products'), target: count(target, 'products') },
     product_categories: actualCategories.length,
     availability_overrides: {
@@ -385,6 +438,7 @@ function transform(sourcePath, targetPath) {
   insertRows(target, 'posts', normalizedPosts(source, target))
   insertRows(target, 'post_channel_jobs', normalizedPostChannelJobs(source, target))
   insertRows(target, 'availability_overrides', normalizedAvailabilityOverrides(source, target))
+  insertRows(target, 'public_resource_cache_invalidations', retainedCacheInvalidations(source))
 
   target.pragma('foreign_keys = ON')
   const violations = target.pragma('foreign_key_check')
@@ -404,7 +458,7 @@ function verify(sourcePath, targetPath) {
   try {
     const manifest = verifyDatabases(source, target)
     writeFileSync(`${targetPath}.verification.json`, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
-    console.log(`Epoch 4 verification passed: ${manifest.tables.length} tables, ${manifest.products.target} Products, all content and visible ordering preserved.`)
+    console.log(`Epoch 4 verification passed: ${manifest.tables.length} copied tables, ${manifest.products.target} Products, retained content and visible ordering preserved.`)
   } finally {
     source.close()
     target.close()

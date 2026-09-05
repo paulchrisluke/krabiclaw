@@ -56,6 +56,19 @@ historical inbox or notification rows are backfilled.
   to rewrite any variant route.
 - The unused `platform_content` store and editor are removed. Platform docs,
   their documents and blocks, media, and redirects remain unchanged.
+- `resource_localizations` remains the active non-page translation store, separate
+  from page variants. `site_link_pages` and `site_link_items` retain the site-links
+  product. Their empty production state is valid and is checked by the same
+  count and logical-hash comparison as populated tables.
+- `posts` owns website publication. Its `scheduled` state requires a timestamp
+  and is consumed by the existing five-minute scheduler. External Facebook and
+  Instagram delivery outcomes live in `post_channel_jobs`, with tenant scope
+  derived from the parent post. There is no website channel job.
+- Cache invalidations get at most five claims. Missing domain configuration
+  fails before any claim. Completed and failed rows are retained for seven days;
+  `processed_at` records completion of either outcome. The epoch transfer discards
+  terminal history and exhausted retries, preserving healthy pending work and
+  releasing old processing claims.
 
 ## The customer-visible invariant
 
@@ -97,9 +110,14 @@ category translation, or any foreign-key violation.
 - every tenant page has a source-locale variant whose presentation fields match
   the removed parent copies, all variant rows retain their logical hashes, and
   `platform_content` is empty before it can be discarded;
-- the invalid legacy offer with neither coupon nor terms becomes `standard`,
-  and social provider IDs move from `posts.google_post_id` to
-  `post_channel_jobs.provider_post_id`;
+- legacy offers with neither coupon nor terms become `standard`,
+  published posts have a publication timestamp (falling back to their creation
+  timestamp), and invalid scheduled states fail verification;
+- Facebook and Instagram provider IDs move from `posts.google_post_id` to
+  `post_channel_jobs.provider_post_id`; unknown or conflicting provider IDs fail
+  the transform, while duplicated website channel rows are discarded;
+- the cache queue preserves only pending or processing rows below five attempts,
+  releases their obsolete claims, and records retained and discarded counts;
 - historical thread, entry, delivery, notification, and read rows remain empty
   in the target, with discarded source counts recorded in the manifest;
 - every reservation and experience override appears once in the consolidated

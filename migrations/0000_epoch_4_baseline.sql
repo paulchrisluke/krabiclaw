@@ -1070,7 +1070,6 @@ CREATE TABLE `platform_locale_messages` (
 CREATE TABLE `post_channel_jobs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`post_id` text NOT NULL,
-	`organization_id` text NOT NULL,
 	`channel` text NOT NULL,
 	`status` text DEFAULT 'pending' NOT NULL,
 	`provider_post_id` text,
@@ -1078,12 +1077,13 @@ CREATE TABLE `post_channel_jobs` (
 	`published_at` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade
+	CONSTRAINT "post_channel_jobs_channel_check" CHECK(channel IN ('facebook', 'instagram')),
+	CONSTRAINT "post_channel_jobs_status_check" CHECK(status IN ('pending', 'published', 'failed', 'skipped')),
+	CONSTRAINT "post_channel_jobs_outcome_check" CHECK((status = 'pending' AND provider_post_id IS NULL AND published_at IS NULL AND error IS NULL) OR (status = 'published' AND provider_post_id IS NOT NULL AND published_at IS NOT NULL AND error IS NULL) OR (status IN ('failed', 'skipped') AND provider_post_id IS NULL AND published_at IS NULL AND error IS NOT NULL))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `post_channel_jobs_post_channel_unique` ON `post_channel_jobs` (`post_id`,`channel`);--> statement-breakpoint
-CREATE UNIQUE INDEX `post_channel_jobs_provider_post_unique` ON `post_channel_jobs` (`organization_id`,`channel`,`provider_post_id`);--> statement-breakpoint
-CREATE INDEX `post_channel_jobs_post_id_idx` ON `post_channel_jobs` (`post_id`);--> statement-breakpoint
+CREATE INDEX `post_channel_jobs_provider_post_idx` ON `post_channel_jobs` (`channel`,`provider_post_id`);--> statement-breakpoint
 CREATE TABLE `posts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1113,8 +1113,11 @@ CREATE TABLE `posts` (
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "posts_status_check" CHECK(status IN ('published', 'scheduled')),
+	CONSTRAINT "posts_publication_check" CHECK((status = 'scheduled' AND scheduled_for IS NOT NULL AND published_at IS NULL) OR (status = 'published' AND scheduled_for IS NULL AND published_at IS NOT NULL)),
 	CONSTRAINT "posts_source_check" CHECK(source IN ('manual', 'template')),
-	CONSTRAINT "posts_post_type_check" CHECK(post_type IN ('standard', 'offer', 'event', 'update'))
+	CONSTRAINT "posts_post_type_check" CHECK(post_type IN ('standard', 'offer', 'event', 'update')),
+	CONSTRAINT "posts_offer_shape_check" CHECK(post_type != 'offer' OR length(trim(COALESCE(offer_coupon, ''))) > 0 OR length(trim(COALESCE(offer_terms, ''))) > 0),
+	CONSTRAINT "posts_event_shape_check" CHECK(post_type != 'event' OR (datetime(event_start) IS NOT NULL AND (event_end IS NULL OR (datetime(event_end) IS NOT NULL AND julianday(event_end) > julianday(event_start)))))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `posts_site_slug_idx` ON `posts` (`site_id`,`slug`);--> statement-breakpoint
@@ -1239,7 +1242,9 @@ CREATE TABLE `public_resource_cache_invalidations` (
 	`processed_at` text,
 	`last_error` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "public_resource_cache_invalidations_status_check" CHECK(status IN ('pending', 'processing', 'processed', 'failed')),
+	CONSTRAINT "public_resource_cache_invalidations_attempt_count_check" CHECK(attempt_count >= 0)
 );
 --> statement-breakpoint
 CREATE INDEX `public_resource_cache_invalidations_status_idx` ON `public_resource_cache_invalidations` (`status`,`created_at`);--> statement-breakpoint
