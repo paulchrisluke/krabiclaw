@@ -411,16 +411,9 @@ async function sendWhatsAppThreadNotification(
     return claim.delivery.status === 'sent' || claim.delivery.status === 'delivered' || claim.delivery.status === 'read'
   }
 
+  let result: Awaited<ReturnType<typeof sendWhatsAppNotification>>
   try {
-    const result = await sendWhatsAppNotification(env, db, opts)
-    await recordDeliveryOutcome(db, {
-      claim,
-      status: result.status,
-      providerMessageId: result.success ? result.messageId ?? null : null,
-      error: result.success ? null : result.error,
-    })
-    await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
-    return result.success
+    result = await sendWhatsAppNotification(env, db, opts)
   } catch (error) {
     await recordDeliveryOutcome(db, {
       claim,
@@ -430,6 +423,23 @@ async function sendWhatsAppThreadNotification(
     await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
     throw error
   }
+
+  await recordDeliveryOutcome(db, {
+    claim,
+    status: result.status,
+    providerMessageId: result.status === 'sent' ? result.messageId ?? null : null,
+    error: result.success ? null : result.error,
+  })
+  await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
+  if (!result.success && result.status === 'sent') {
+    console.error('whatsapp_delivery_accounting_failed', {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      error: result.error,
+    })
+    throw new Error(result.error)
+  }
+  return result.success
 }
 
 async function getOpeningThreadContext(
@@ -589,7 +599,15 @@ async function notifyOwner(
       if (delivery) {
         await sendWhatsAppThreadNotification(env, db, { ...sendOptions, delivery })
       } else {
-        await sendWhatsAppNotification(env, db, sendOptions)
+        const result = await sendWhatsAppNotification(env, db, sendOptions)
+        if (!result.success && result.status === 'sent') {
+          console.error('whatsapp_delivery_accounting_failed', {
+            organizationId: opts.organizationId,
+            siteId: opts.siteId,
+            error: result.error,
+          })
+          throw new Error(result.error)
+        }
       }
     }))
   }

@@ -366,6 +366,10 @@ export type SendWhatsAppResult =
   | { success: true; status: 'sent'; messageId: string | undefined }
   | { success: false; status: 'failed' | 'unknown'; error: string }
 
+export type SendWhatsAppNotificationResult =
+  | SendWhatsAppResult
+  | { success: false; status: 'sent'; messageId: string | undefined; error: string }
+
 export async function sendWhatsAppNotification(
   env: WhatsAppEnv,
   db: DbClient,
@@ -377,7 +381,7 @@ export async function sendWhatsAppNotification(
     template: WhatsAppTemplate
     vars?: Record<string, string>
   }
-): Promise<SendWhatsAppResult> {
+): Promise<SendWhatsAppNotificationResult> {
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
@@ -397,7 +401,7 @@ export async function sendWhatsAppNotification(
 
   const templatePayload = buildWhatsAppTemplatePayload(opts.template, vars)
 
-  let result: SendWhatsAppResult
+  let result: SendWhatsAppNotificationResult
   try {
     const response = await fetch(
       `${GRAPH_BASE}/${phoneNumberId}/messages`,
@@ -442,7 +446,7 @@ export async function sendWhatsAppNotification(
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       const accountingError = `WhatsApp delivery sent but credit accounting failed: ${reason}`
-      throw new Error(accountingError, { cause: error })
+      return { success: false, status: 'sent', messageId: result.messageId, error: accountingError }
     }
   }
 
