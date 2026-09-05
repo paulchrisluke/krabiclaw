@@ -421,16 +421,9 @@ const thingsToKnow = computed(() => {
       lines: [...exp.what_to_bring],
     })
   }
-  // Only the lines a tenant can still edit. The stored policy can carry more
-  // (a weather note, a late-arrival grace) from before those controls were
-  // removed, and rendering what nobody can change is the bug this whole pass
-  // exists to fix. Drops here until the columns go — see issue #788.
-  const EDITABLE_POLICY_LINES = new Set([
-    'cancellation', 'reschedule', 'deposit', 'minimum_guest_age', 'accessibility',
-  ])
-  const policyLines = (experiencePolicySummary.value?.items ?? [])
-    .filter(item => EDITABLE_POLICY_LINES.has(item.id))
-    .map(item => item.text)
+  // The summary builder now emits only what a tenant can author, so there is
+  // nothing left to filter out here.
+  const policyLines = (experiencePolicySummary.value?.items ?? []).map(item => item.text)
   if (policyLines.length) {
     groups.push({
       id: 'policies',

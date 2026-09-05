@@ -4,7 +4,7 @@
       Every one of these renders as a sentence on the public page
       (server/utils/booking-policy-summary.ts), switched on by having a value.
       So the tenant picks the sentence their guests will read, and the number
-      inside it — not a field called "late_arrival_grace_minutes".
+      inside it — not a field called "deposit_trigger_party_size".
     -->
     <div
       v-for="rule in visibleRules"
@@ -41,20 +41,6 @@
         </div>
       </div>
     </div>
-
-    <UFormField
-      v-if="shows('weather') && policyType === 'experience'"
-      label="Weather"
-      help="Shown to guests as “Weather: …”. Say what happens if it rains."
-    >
-      <UTextarea
-        :model-value="value.weather_policy ?? ''"
-        :rows="2"
-        placeholder="We run rain or shine — we'll move indoors if the weather turns."
-        class="w-full"
-        @update:model-value="updateString('weather_policy', $event)"
-      />
-    </UFormField>
 
     <UFormField v-if="shows('notes')" label="Anything else" help="Shown at the end of the list on your public page.">
       <UTextarea
@@ -98,26 +84,23 @@ function updateString(field: keyof BookingPolicyPatch, next: string | number | n
   patch({ [field]: normalized || null })
 }
 
-function minutes(count: number) {
-  return { label: `${count} minutes`, value: count }
-}
-
-const spotWord = computed(() => (props.policyType === 'experience' ? 'your spot' : 'the table'))
-const startWord = computed(() => (props.policyType === 'experience' ? 'the scheduled start' : 'the booked time'))
 
 /** Each rule owns the sentence it produces, so the two cannot drift apart. */
+interface PolicyRule {
+  id: string
+  aria: string
+  on: boolean
+  sentence: string
+  value?: number
+  choices?: Array<{ label: string; value: number }>
+  numeric?: boolean
+  min?: number
+  toggle: (on: boolean) => void
+  set: (next: number | null) => void
+}
+
 const rules = computed(() => {
-  const list = [
-    {
-      id: 'late_arrival',
-      aria: 'How long the booking is held',
-      on: Boolean(value.value.late_arrival_grace_minutes),
-      value: value.value.late_arrival_grace_minutes ?? 15,
-      choices: [minutes(10), minutes(15), minutes(20), minutes(30)],
-      sentence: `We hold ${spotWord.value} for ${formatDuration(value.value.late_arrival_grace_minutes ?? 15)} after ${startWord.value}.`,
-      toggle: (on: boolean) => patch({ late_arrival_grace_minutes: on ? 15 : null }),
-      set: (next: number | null) => patch({ late_arrival_grace_minutes: next }),
-    },
+  const list: PolicyRule[] = [
     {
       id: 'deposit',
       aria: 'Party size that needs a deposit',
@@ -130,14 +113,6 @@ const rules = computed(() => {
         : 'A deposit may be required before confirmation.',
       toggle: (on: boolean) => patch({ deposit_required: on, deposit_trigger_party_size: on ? (value.value.deposit_trigger_party_size ?? 6) : null }),
       set: (next: number | null) => patch({ deposit_trigger_party_size: next }),
-    },
-    {
-      id: 'special_requests',
-      aria: 'Accept special requests',
-      on: Boolean(value.value.special_requests_allowed),
-      sentence: 'Special requests can be shared in advance and are confirmed subject to availability.',
-      toggle: (on: boolean) => patch({ special_requests_allowed: on }),
-      set: () => {},
     },
   ]
 
@@ -171,12 +146,4 @@ function shows(id: string) {
 }
 
 const visibleRules = computed(() => rules.value.filter(rule => shows(rule.id)))
-
-function formatDuration(totalMinutes: number): string {
-  if (totalMinutes % 60 === 0) {
-    const value = totalMinutes / 60
-    return value === 1 ? '1 hour' : `${value} hours`
-  }
-  return `${totalMinutes} minutes`
-}
 </script>
