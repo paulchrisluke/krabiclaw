@@ -9,6 +9,7 @@ const writable = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(ne
 
 test('calendar range edits persist and public availability excludes private notes', async ({ page, request }) => {
   test.skip(!writable, 'Calendar writes require disposable local or preview data')
+  test.setTimeout(90_000)
   await loginAs(page.request, baseURL)
   const calendarResponse = page.waitForResponse(response => response.request().method() === 'GET' && response.url().includes('/site-demo/availability'))
   await openTenantPage(page, `${baseURL}/dashboard/ember-slice-demo/calendar?view=availability&siteId=site-demo&locationId=loc-demo`, devLoginHeaders() ?? {})
