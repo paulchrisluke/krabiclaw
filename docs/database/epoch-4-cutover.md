@@ -216,13 +216,31 @@ Prepared resources (the old resources remain available for rollback):
 | Environment | Epoch 4 D1 | Retained Epoch 3 D1 |
 | --- | --- | --- |
 | Staging | Rebuild the verified standalone Epoch 4 resource before merge | Not production rollback state |
-| Production | `73d8e172-b7a0-45b3-b200-ae052de52e57` | `4a02e2ec-6fb0-4bed-96ab-925ec1e508df` |
+| Production | `krabiclaw-db-epoch4-final` (`736830db-4922-4594-bca6-731df2450a23`) | `4a02e2ec-6fb0-4bed-96ab-925ec1e508df` |
+
+The earlier production candidate `73d8e172-b7a0-45b3-b200-ae052de52e57`
+contains a superseded baseline and must not be used for cutover. Its replacement
+is a fresh APAC resource provisioned from the committed generated baseline;
+the stale candidate's schema and migration ledger are not patched in place.
 
 The production binding in the candidate configuration does not change the running
 Worker. Keep the new production database empty apart from its Wrangler baseline
 until the final frozen export has been transformed and verified.
 
 ## Production
+
+### Pre-freeze rollback blocker
+
+Do not begin the production freeze with the current candidate configuration.
+The live Epoch 3 Worker still binds `GuestThreadCommandObject`, while the
+candidate's `v2_delete_guest_thread_command` migration deletes that class.
+The maintenance deployment would apply this deletion before the final D1
+export and import have been verified. Cloudflare
+[does not allow rollback across a Durable Object class lifecycle change](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/#bindings),
+so retaining Epoch 3 D1 alone does not preserve the rollback required below.
+Resolve and qualify the Durable Object lifecycle and rollback plan through the
+normal staging release path before starting maintenance. Do not substitute an
+ad hoc production deployment or assume the deleted namespace can be restored.
 
 Production cutover follows the database-epoch write freeze in
 [release-and-outage-prevention.md](../operations/release-and-outage-prevention.md):
