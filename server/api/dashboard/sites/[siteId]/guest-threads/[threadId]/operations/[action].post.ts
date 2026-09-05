@@ -104,5 +104,5 @@ export default defineHandler(async (event) => {
   }
 
   const detail = await getGuestThreadDetail(db, threadId, siteId)
-  return jsonResponse({ thread: detail, availableActions: outcome.availableActions })
+  return jsonResponse({ thread: detail, availableActions: outcome.availableActions }, { status: outcome.status })
 })

@@ -2,7 +2,7 @@ import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/serv
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getAdapter } from './adapters/registry'
-import { deliverGuestThreadEmail, getDeliveryById, getDeliveryRetryEligibility } from './deliveries'
+import { deliverGuestThreadEmail, getDeliveryById, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
 import { getGuestThreadById } from './repository'
 import type {
@@ -16,8 +16,10 @@ import type {
 
 export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'cancel', 'complete', 'resolve', 'reopen', 'reply', 'retry_delivery'])
 
+type SuccessfulOperationOutcome = { ok: true; status: 200 | 202; thread: GuestThreadRow; availableActions: string[] }
+
 export type OperationOutcome =
-  | { ok: true; thread: GuestThreadRow; availableActions: string[] }
+  | SuccessfulOperationOutcome
   | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' | 'delivery_not_found' }
   | { ok: false; status: 409; reason: 'invalid_transition'; message: string }
   | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' | 'missing_delivery_id' }
@@ -91,11 +93,16 @@ function conflict(message = 'Idempotency key was reused with a different request
   return { ok: false, status: 409, reason: 'invalid_transition', message }
 }
 
-async function successfulOutcome(db: DbClient, context: ThreadContext): Promise<OperationOutcome> {
+async function successfulOutcome(
+  db: DbClient,
+  context: ThreadContext,
+  status: SuccessfulOperationOutcome['status'] = 200,
+): Promise<SuccessfulOperationOutcome> {
   const thread = await getGuestThreadById(db, context.thread.id, context.thread.site_id)
   const source = await context.adapter.loadSource({ db }, context.thread.submission_id)
   return {
     ok: true,
+    status,
     thread: thread ?? context.thread,
     availableActions: source ? context.adapter.listAvailableActions(source) : [],
   }
@@ -472,6 +479,7 @@ async function executeReply(
     }], { operation: 'guest thread reply acceptance' })
     return await successfulOutcome(db, context)
   }
+  if (isDeliveryClaimInFlight(outcome)) return await successfulOutcome(db, context, 202)
   if (outcome.status === 'failed') {
     return { ok: false, status: 502, reason: 'delivery_failed', message: outcome.error ?? 'Email provider rejected the reply' }
   }
@@ -490,6 +498,7 @@ async function retryDelivery(
   }
   const entry = await getEntryById(db, delivery.entry_id)
   if (!entry || entry.thread_id !== context.thread.id) return { ok: false, status: 404, reason: 'delivery_not_found' }
+  if (isDeliveryClaimInFlight(delivery)) return await successfulOutcome(db, context, 202)
   const retryEligibility = getDeliveryRetryEligibility(delivery)
   if (retryEligibility === 'unsupported') {
     return conflict('Only guest-facing email deliveries can be retried here')
@@ -535,6 +544,7 @@ async function retryDelivery(
   if (retried.status === 'failed') {
     return { ok: false, status: 502, reason: 'delivery_failed', message: retried.error ?? 'Email provider rejected the retry' }
   }
+  if (isDeliveryClaimInFlight(retried)) return await successfulOutcome(db, context, 202)
   if (retried.status === 'unknown') {
     return { ok: false, status: 504, reason: 'delivery_unknown', message: retried.error ?? 'Email retry outcome is unknown' }
   }

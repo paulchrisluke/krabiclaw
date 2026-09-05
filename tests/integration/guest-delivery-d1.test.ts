@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
-import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, listDeliveryFailures, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 
 test('D1 claims fence concurrent sends and bound ambiguous provider retries', async () => {
@@ -65,6 +65,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     const retry = await claimDelivery(db, failedReceipt.id, Date.parse(failure.updated_at))
     assert(retry.claimed)
     assert(retry.claimVersion > failure.updated_at)
+    assert.equal(retry.delivery.error, null)
     await recordDeliveryOutcome(db, { claim: firstAttempt, status: 'sent' })
     assert.equal((await getDeliveryById(db, failedReceipt.id))!.status, 'unknown')
     const sent = await recordDeliveryOutcome(db, { claim: retry, status: 'sent' })
@@ -87,6 +88,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     })
     const heldClaim = await claimDelivery(db, heldReceipt.id)
     assert.equal(heldClaim.claimed, true)
+    assert.equal((await listDeliveryFailures(db, 'thread-proof')).some(delivery => delivery.id === deliveryId), false)
 
     const accepted = await executeGuestThreadOperation(db, {
       threadId: 'thread-proof',
@@ -99,8 +101,17 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     })
     assert.deepEqual({ ok: accepted.ok, status: accepted.status }, { ok: true, status: 202 })
 
-    assert.equal(heldClaim.claimed, true)
-    if (!heldClaim.claimed) throw new Error('Delivery claim was not held')
+    const acceptedRetry = await executeGuestThreadOperation(db, {
+      threadId: 'thread-proof',
+      siteId: 'site-proof',
+      action: 'retry_delivery',
+      actorUserId: 'user-proof',
+      deliveryId,
+      idempotencyKey: 'held-retry-proof',
+      env: { EMAIL_DELIVERY_MODE: 'provider' },
+    })
+    assert.deepEqual({ ok: acceptedRetry.ok, status: acceptedRetry.status }, { ok: true, status: 202 })
+
     await recordDeliveryOutcome(db, { claim: heldClaim, status: 'sent', providerMessageId: 'provider-proof' })
     const replay = await executeGuestThreadOperation(db, {
       threadId: 'thread-proof',

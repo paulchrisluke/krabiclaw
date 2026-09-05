@@ -375,7 +375,7 @@ async function routeManagerWhatsAppMessage(
       await clearPending()
       if (result.ok) {
         await publishGuestInboxThreadEvent(env, db, { threadId: result.thread.id, type: 'thread.changed' })
-        await sendWhatsAppText(env, opts.toPhone, REPLY_SENT_CONFIRMATION)
+        await sendWhatsAppText(env, opts.toPhone, result.status === 202 ? 'Reply delivery is in progress.' : REPLY_SENT_CONFIRMATION)
       } else {
         await sendWhatsAppText(env, opts.toPhone, buildReplyFailedMessage(result.reason))
       }

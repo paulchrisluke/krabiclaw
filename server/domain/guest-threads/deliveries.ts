@@ -61,6 +61,15 @@ export function getDeliveryRetryEligibility(
   return getDeliveryClaimEligibility(delivery, nowMs) === 'claimable' ? 'retryable' : 'settled'
 }
 
+export function isDeliveryClaimInFlight(
+  delivery: GuestThreadDeliveryRow,
+  nowMs = Date.now(),
+): boolean {
+  return delivery.status === 'unknown'
+    && delivery.error === null
+    && getDeliveryClaimEligibility(delivery, nowMs) === 'in_flight'
+}
+
 export async function createDeliveryReceipt(
   db: DbClient,
   input: {
@@ -135,7 +144,7 @@ export async function claimDelivery(
   const claimVersion = nextTimestamp(delivery.updated_at, nowMs)
   const claimed = await execute(db, `
     UPDATE guest_thread_deliveries
-    SET status = 'unknown', updated_at = ?
+    SET status = 'unknown', error = NULL, updated_at = ?
     WHERE id = ? AND status = ? AND updated_at = ?
   `, [claimVersion, delivery.id, delivery.status, delivery.updated_at])
   const current = await getDeliveryById(db, delivery.id)
@@ -218,10 +227,12 @@ export async function deliverGuestThreadEmail(
 }
 
 export async function listDeliveryFailures(db: DbClient, threadId: string): Promise<GuestThreadDeliveryRow[]> {
-  return await queryAll<GuestThreadDeliveryRow>(db, `
+  const deliveries = await queryAll<GuestThreadDeliveryRow>(db, `
     SELECT d.* FROM guest_thread_deliveries d
     JOIN guest_thread_entries e ON e.id = d.entry_id
     WHERE e.thread_id = ? AND d.status IN ('failed', 'unknown')
     ORDER BY d.created_at DESC
   `, [threadId])
+  const nowMs = Date.now()
+  return deliveries.filter(delivery => !isDeliveryClaimInFlight(delivery, nowMs))
 }

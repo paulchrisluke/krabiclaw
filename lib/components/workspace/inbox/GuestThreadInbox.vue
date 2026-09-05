@@ -601,17 +601,19 @@ async function sendReply() {
   const idempotencyKey = activeReplyAttemptKey()
   replySaving.value = true
   try {
+    let accepted = false
     await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId.value}/guest-threads/${props.threadId}/operations/reply`,
       {
       method: 'POST',
       body: { body: replyDraft.value, idempotencyKey },
       validate: isThreadOperationResponse,
+      onResponse: ({ response }) => { accepted = response.status === 202 },
       },
     )
     replyAttemptKey.value = null
     replyAttemptDraft.value = null
-    toast.add({ description: 'Reply sent', color: 'success' })
+    toast.add({ description: accepted ? 'Reply delivery is in progress' : 'Reply sent', color: accepted ? 'info' : 'success' })
     await refreshThread(props.threadId)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to send reply', color: 'error' })
@@ -661,16 +663,18 @@ async function retryDelivery(deliveryId: string) {
   const idempotencyKey = activeAttemptMapKey(retryAttemptKeys, attemptName)
   retryingDeliveryId.value = deliveryId
   try {
+    let accepted = false
     await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId.value}/guest-threads/${threadId}/operations/retry_delivery`,
       {
       method: 'POST',
       body: { deliveryId, idempotencyKey },
       validate: isThreadOperationResponse,
+      onResponse: ({ response }) => { accepted = response.status === 202 },
       },
     )
     clearAttemptMapKey(retryAttemptKeys, attemptName)
-    toast.add({ description: 'Delivery retried', color: 'success' })
+    toast.add({ description: accepted ? 'Delivery retry is in progress' : 'Delivery retried', color: accepted ? 'info' : 'success' })
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Retry failed', color: 'error' })
   } finally {
