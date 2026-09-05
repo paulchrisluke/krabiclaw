@@ -14,10 +14,14 @@ Each environment receives one normal `wrangler deploy`. Preview uses one fixed, 
 Preview must keep persistent Workers Logs and traces enabled in `wrangler.toml`,
 with invocation logs and 100% sampling. This is permanent environment
 configuration, not a temporary debugging toggle. After an E2E failure, inspect
-the Playwright trace and the preview Worker's Cloudflare Observability records
-for the failing request's timestamp and request ID before deciding whether to
-retry. Preserve relevant evidence before Cloudflare's retention window expires;
+the CI output and the preview Worker's Cloudflare Observability records for the
+failing request's timestamp and request ID before deciding whether to retry. Preserve relevant evidence before Cloudflare's retention window expires;
 enabling logging cannot recover requests from an earlier unlogged deployment.
+
+Preview CI does not upload raw Playwright reports or test results: traces can
+contain persistent dev-route credentials in request headers, which GitHub's
+log masking does not redact. Use the masked CI output and Worker Observability
+for remote failures; reproduce locally to inspect a Playwright trace.
 
 For media failures, correlate `mcp_tool_failed` (tool, request ID, Ray ID,
 duration, error chain) with the same invocation's `media_attachment_failed`,

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
 
-import { drainPublicResourceCacheInvalidations } from '../../server/utils/public-resource-cache.ts'
+import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheSafe } from '../../server/utils/public-resource-cache.ts'
 
 async function migratedCacheD1() {
   const miniflare = new Miniflare({
@@ -141,6 +141,37 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
         },
       ])
     })
+  } finally {
+    await miniflare.dispose()
+  }
+})
+
+
+test('a site write purges that site despite an older invalidation for another site', async () => {
+  const { miniflare, db, kv } = await migratedCacheD1()
+  try {
+    await db.prepare("INSERT INTO sites (id, organization_id, slug, subdomain) VALUES ('changed', 'org', 'changed', 'changed')").run()
+    await insertInvalidation(db, {
+      id: 'older-other-site', status: 'pending', attemptCount: 0, createdAt: '2026-01-01T00:00:00.000Z',
+    })
+    for (const site of ['site', 'changed']) {
+      await kv.put(`public~${site}~v3~page`, 'cached public resource')
+      await kv.put(`html:${site}.krabiclaw.com:/`, 'cached HTML')
+    }
+    await purgePublicResourceCacheSafe({ DB: db, SITE_CACHE: kv, NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, 'changed')
+    assert.equal(await kv.get('public~changed~v3~page'), null)
+    assert.equal(await kv.get('html:changed.krabiclaw.com:/'), null)
+    assert.equal(await kv.get('public~site~v3~page'), 'cached public resource')
+    assert.equal(await kv.get('html:site.krabiclaw.com:/'), 'cached HTML')
+    const rows = await db.prepare('SELECT site_id, status, attempt_count FROM public_resource_cache_invalidations ORDER BY site_id')
+      .all<{ site_id: string; status: string; attempt_count: number }>()
+    assert.deepEqual(rows.results, [
+      { site_id: 'changed', status: 'processed', attempt_count: 1 },
+      { site_id: 'site', status: 'pending', attempt_count: 0 },
+    ])
+    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { freeSiteDomain: 'https://krabiclaw.com' }), 1)
+    assert.equal(await kv.get('public~site~v3~page'), null)
+    assert.equal(await kv.get('html:site.krabiclaw.com:/'), null)
   } finally {
     await miniflare.dispose()
   }

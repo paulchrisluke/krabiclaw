@@ -244,3 +244,68 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await runtime.dispose()
   }
 })
+
+test('D1 status-email retries preserve recorded content and reject superseded bookings', async (t) => {
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'status-retry-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
+    env: { DB: { type: 'd1' } },
+  } }] })
+  const requests: { subject: string; text: string }[] = []
+  let reject = true
+  t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    assert.equal(url, 'https://api.resend.com/emails')
+    requests.push(JSON.parse(String(init.body)))
+    return reject ? new Response('Provider rejected', { status: 503 }) : Response.json({ id: 'status-proof' })
+  })
+  try {
+    const db = await runtime.getD1Database('DB')
+    for (const statement of readFileSync('migrations/0000_epoch_4_baseline.sql', 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean)) {
+      await db.prepare(statement).run()
+    }
+    for (const statement of [
+      "INSERT INTO themes (id, name, slug) VALUES ('saya-theme-v1', 'Saya', 'saya')",
+      "INSERT INTO organization (id, name, slug) VALUES ('org-status', 'Proof', 'proof')",
+      "INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES ('site-status', 'org-status', 'proof', 'proof', 'Proof')",
+      "INSERT INTO user (id, name, email) VALUES ('user-status', 'Proof Owner', 'owner@proof.example')",
+      "INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('location-status', 'org-status', 'site-status', 'proof', 'Proof')",
+      "INSERT INTO reservation_submissions (id, organization_id, site_id, location_id, name, email, phone, date, time, guests) VALUES ('booking-status', 'org-status', 'site-status', 'location-status', 'Guest', 'guest@provider-proof.com', '123', '2026-10-01', '18:00', '2')",
+      "INSERT INTO guest_threads (id, organization_id, site_id, submission_type, submission_id) VALUES ('thread-status', 'org-status', 'site-status', 'reservation', 'booking-status')",
+    ]) await db.prepare(statement).run()
+    const input = {
+      threadId: 'thread-status', siteId: 'site-status', actorUserId: 'user-status',
+      env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only' },
+    }
+    const confirm = { ...input, action: 'confirm', idempotencyKey: 'confirm-status' }
+    assert.equal((await executeGuestThreadOperation(db, confirm)).ok, true)
+    assert.equal(requests.length, 1)
+    const deliveryId = 'guest-thread-email:thread-status:confirm-status'
+    assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
+    const original = requests[0]!
+    assert.equal(original.text, 'Your reservation is confirmed: 2026-10-01 at 18:00 for 2 guests.')
+    assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
+    assert.deepEqual(requests[1], original)
+
+    await db.prepare("UPDATE reservation_submissions SET date = '2026-10-02' WHERE id = 'booking-status'").run()
+    const attemptsBefore = requests.length
+    for (const request of [confirm, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
+      assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
+    }
+    assert.equal(requests.length, attemptsBefore)
+    reject = false
+    assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'cancel', idempotencyKey: 'cancel-status' })).ok, true)
+    assert.match(requests.at(-1)!.text, /2026-10-02.*cancelled/)
+    const afterCancellation = requests.length
+    for (const request of [confirm, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-cancelled' }]) {
+      assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
+    }
+    assert.equal(requests.length, afterCancellation)
+    assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
+    const entry = await db.prepare('SELECT body, payload_json FROM guest_thread_entries WHERE id = ?')
+      .bind((await getDeliveryById(db, deliveryId))!.entry_id).first<{ body: string; payload_json: string }>()
+    assert.equal(entry!.body, original.text)
+    assert.equal(JSON.parse(entry!.payload_json).subject, original.subject)
+  } finally {
+    await runtime.dispose()
+  }
+})
