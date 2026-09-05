@@ -27,10 +27,23 @@ function reservationPolicy(overrides: Partial<BookingPolicySummarySource> = {}):
 test('renderBookingPolicySummary returns ordered reservation policy items', () => {
   const summary = formatBookingPolicySummary(reservationPolicy(), 'en')
   assert.equal(summary.heading, 'Reservation policies')
-  assert.equal(summary.items[0]?.id, 'host_confirmation_sla')
+  assert.equal(summary.items[0]?.id, 'cancellation')
   assert(summary.items.some((item) => item.text.includes('2 hours')))
   assert(summary.items.some((item) => item.text.includes('6+')))
   assert.equal(summary.additional_notes_html, '<p>Call us if you are running late.</p>')
+})
+
+test('a summary publishes only what a tenant can author', () => {
+  // The confirmation SLA, the late-arrival grace, special requests and the
+  // weather note were removed from the editor, so their stored values must stop
+  // reaching guests — publishing what nobody can change is the bug this pass
+  // exists to fix. The fixture still carries all four.
+  const summary = formatBookingPolicySummary(reservationPolicy(), 'en')
+  const ids = summary.items.map((item) => item.id)
+  for (const retired of ['host_confirmation_sla', 'late_arrival', 'special_requests', 'weather_policy']) {
+    assert(!ids.includes(retired), `${retired} should no longer be rendered`)
+  }
+  assert.deepEqual(ids, ['cancellation', 'reschedule', 'deposit'])
 })
 
 test('renderBookingPolicySummary localizes Thai summaries', () => {

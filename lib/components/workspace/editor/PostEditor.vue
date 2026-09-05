@@ -30,11 +30,11 @@
     <div class="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
       <div class="space-y-4 p-4">
         <UFormField label="Title">
-          <UInput v-model="title" :placeholder="titlePlaceholder" size="lg" />
+          <UInput v-model="title" :placeholder="titlePlaceholder" size="lg" class="w-full" />
         </UFormField>
 
-        <UFormField label="Slug">
-          <UInput v-model="slug" placeholder="auto-generated-from-title" />
+        <UFormField v-if="showSlug" label="Slug">
+          <UInput v-model="slug" placeholder="auto-generated-from-title" class="w-full" />
         </UFormField>
 
         <UFormField v-if="locationOptions.length > 0" label="Location">
@@ -48,7 +48,7 @@
 
         <div v-if="showExcerpt || showCategory" class="grid gap-4 sm:grid-cols-2">
           <UFormField v-if="showExcerpt" label="Excerpt">
-            <UTextarea v-model="excerpt" :rows="3" placeholder="One or two sentences that summarize the post." />
+            <UTextarea v-model="excerpt" :rows="3" placeholder="One or two sentences that summarize the post." class="w-full" />
           </UFormField>
           <UFormField v-if="showCategory" label="Category">
             <USelect
@@ -66,87 +66,44 @@
             v-model="body"
             :rows="bodyRows"
             :placeholder="bodyPlaceholder"
+            class="w-full"
             :class="markdown ? 'font-mono text-sm' : ''"
           />
         </UFormField>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div v-if="showSeo" class="grid gap-4 sm:grid-cols-2">
           <UFormField label="SEO title">
-            <UInput v-model="seoTitle" placeholder="Optional search title" />
+            <UInput v-model="seoTitle" placeholder="Optional search title" class="w-full" />
           </UFormField>
           <UFormField label="SEO description">
-            <UTextarea v-model="seoDescription" :rows="2" placeholder="Optional search summary" />
+            <UTextarea v-model="seoDescription" :rows="2" placeholder="Optional search summary" class="w-full" />
           </UFormField>
         </div>
 
         <UFormField v-if="showImage" label="Cover image">
-          <MediaPicker
-            v-model="coverMediaId"
+          <DashboardCoverPhotoField
             :site-id="siteId"
-            accept="image"
+            :model-value="coverMediaId"
+            :preview-url="coverPreviewUrl"
+            :preview-alt="title || 'Post image'"
             title="Select post image"
+            @update:model-value="coverMediaId = $event"
             @change="handleImageChange"
           />
         </UFormField>
 
-        <div v-if="showImage" class="space-y-2">
-          <UFormField label="Gallery">
-            <MediaPicker
-              v-model="galleryPickerAssetId"
-              :site-id="siteId"
-              accept="any"
-              title="Add gallery media"
-              @change="handleGalleryChange"
-            />
-          </UFormField>
-          <div v-if="galleryMedia.length > 0" class="space-y-2">
-            <div
-              v-for="(item, index) in galleryMedia"
-              :key="item.asset_id"
-              class="grid gap-2 rounded-md border border-default p-2 sm:grid-cols-[3rem_minmax(0,1fr)_auto]"
-            >
-              <div class="size-12 overflow-hidden rounded bg-muted">
-                <img
-                  v-if="item.thumbnail_url || item.public_url"
-                  :src="item.thumbnail_url || item.public_url!"
-                  :alt="item.alt_text || 'Gallery media'"
-                  class="h-full w-full object-cover"
-                />
-                <div v-else class="flex h-full w-full items-center justify-center">
-                  <UIcon :name="item.kind === 'video' ? 'i-lucide-film' : 'i-lucide-image'" class="size-4 text-muted" />
-                </div>
-              </div>
-              <UButton
-                icon="i-lucide-trash-2"
-                size="xs"
-                color="error"
-                variant="ghost"
-                aria-label="Remove gallery media"
-                @click="removeGalleryItem(index)"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div v-if="showChannels" class="border-t border-default pt-4">
-          <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Publish to</p>
-          <div class="grid gap-2 sm:grid-cols-2">
-            <label
-              v-for="channel in channelOptions"
-              :key="channel.value"
-              class="flex items-center gap-2 rounded-md border border-default px-3 py-2 text-sm"
-              :class="channel.disabled ? 'text-muted' : 'text-default'"
-            >
-              <UCheckbox
-                :model-value="selectedChannels.includes(channel.value)"
-                :disabled="channel.disabled"
-                @update:model-value="toggleChannel(channel.value, Boolean($event))"
-              />
-              <span class="min-w-0 flex-1 truncate">{{ channel.label }}</span>
-              <UBadge v-if="channel.disabled" size="xs" color="neutral" variant="soft">Not connected</UBadge>
-            </label>
-          </div>
-        </div>
+        <UFormField v-if="showImage" label="Gallery">
+          <DashboardMediaGalleryField
+            :items="galleryItems"
+            :site-id="siteId"
+            :cover-first="false"
+            @add="addGalleryItem"
+            @remove="(index: number) => removeGalleryItem(index)"
+            @move="(index: number, direction: -1 | 1) => moveGalleryItem(index, direction)"
+            @reorder="(from: number, to: number) => reorderGalleryItem(from, to)"
+            @asset-change="(index: number, asset) => setGalleryAsset(index, asset)"
+          />
+        </UFormField>
 
         <div v-if="errorMessage || successMessage" class="space-y-2">
           <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
@@ -197,11 +154,8 @@
 </template>
 
 <script setup lang="ts">
-interface ChannelOption {
-  value: string
-  label: string
-  disabled?: boolean
-}
+import DashboardCoverPhotoField from '~/components/dashboard/DashboardCoverPhotoField.vue'
+import DashboardMediaGalleryField from '~/components/dashboard/DashboardMediaGalleryField.vue'
 
 interface PostMediaItem {
   asset_id: string
@@ -220,9 +174,7 @@ const seoDescription = defineModel<string>('seoDescription', { default: '' })
 const excerpt = defineModel<string>('excerpt', { default: '' })
 const category = defineModel<string>('category', { default: '' })
 const media = defineModel<PostMediaItem[]>('media', { default: () => [] })
-const selectedChannels = defineModel<string[]>('selectedChannels', { default: () => [] })
 const locationId = defineModel<string>('locationId', { default: '' })
-const galleryPickerAssetId = ref<string | null>(null)
 const coverMedia = computed(() => media.value.find(item => item.slot === 'cover') ?? null)
 const coverMediaId = computed({
   get: () => coverMedia.value?.asset_id ?? null,
@@ -232,6 +184,8 @@ const coverMediaId = computed({
   },
 })
 const imagePreviewUrl = computed(() => coverMedia.value?.thumbnail_url ?? coverMedia.value?.public_url ?? null)
+// The cover field renders large, so it prefers the full asset over the thumbnail.
+const coverPreviewUrl = computed(() => coverMedia.value?.public_url ?? coverMedia.value?.thumbnail_url ?? null)
 const imageKind = computed(() => coverMedia.value?.kind ?? 'image')
 const galleryMedia = computed({
   get: () => media.value.filter(item => item.slot === 'gallery'),
@@ -242,6 +196,16 @@ const galleryMedia = computed({
     ]
   },
 })
+
+// The shared gallery field keys rows by a stable `_key`; gallery membership here
+// is keyed by asset, and a freshly added empty row has no asset yet.
+const galleryItems = computed(() => galleryMedia.value.map((item, index) => ({
+  _key: item.asset_id || `gallery-${index}`,
+  asset_id: item.asset_id || null,
+  url: item.public_url ?? null,
+  thumbnail_url: item.thumbnail_url ?? null,
+  kind: item.kind ?? 'image',
+})))
 
 interface LocationOption {
   value: string
@@ -254,12 +218,14 @@ const props = withDefaults(defineProps<{
   publishedAt?: string | null
   siteId?: string
   categories?: string[]
-  channelOptions?: ChannelOption[]
   locationOptions?: LocationOption[]
   showExcerpt?: boolean
   showCategory?: boolean
   showImage?: boolean
-  showChannels?: boolean
+  /** Off where the slug is derived from the title and must not be hand-edited. */
+  showSlug?: boolean
+  /** Off where SEO fields are generated rather than authored. */
+  showSeo?: boolean
   showPreview?: boolean
   showUnpublish?: boolean
   canDelete?: boolean
@@ -280,12 +246,12 @@ const props = withDefaults(defineProps<{
   publishedAt: null,
   siteId: '',
   categories: () => [],
-  channelOptions: () => [],
   locationOptions: () => [],
   showExcerpt: false,
   showCategory: false,
   showImage: false,
-  showChannels: false,
+  showSlug: true,
+  showSeo: true,
   showPreview: true,
   showUnpublish: false,
   canDelete: false,
@@ -319,11 +285,7 @@ onMounted(() => {
 
 const categoryItems = computed(() => props.categories.map((item) => ({ label: item, value: item })))
 const canSave = computed(() => Boolean(title.value.trim() || body.value.trim()))
-const canPublish = computed(() => {
-  if (!body.value.trim()) return false
-  if (!props.showChannels) return true
-  return selectedChannels.value.length > 0
-})
+const canPublish = computed(() => Boolean(body.value.trim()))
 const formattedPublishedAt = computed(() => {
   if (!props.publishedAt) return ''
   const publishedAt = new Date(props.publishedAt)
@@ -348,37 +310,44 @@ function handleImageChange(asset: { asset_id: string; public_url: string | null;
   emit('imageChange', asset)
 }
 
-function handleGalleryChange(asset: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind?: string | null } | null) {
-  if (!asset) return
-  const exists = galleryMedia.value.some((item) => item.asset_id === asset.asset_id)
-  if (!exists) {
-    galleryMedia.value = [
-      ...galleryMedia.value,
-      {
-        asset_id: asset.asset_id,
-        slot: 'gallery',
-        alt_text: '',
-        public_url: asset.public_url,
-        thumbnail_url: asset.thumbnail_url,
-        kind: asset.kind ?? 'image',
-      },
-    ]
-  }
-  galleryPickerAssetId.value = null
+function addGalleryItem() {
+  galleryMedia.value = [
+    ...galleryMedia.value,
+    { asset_id: '', slot: 'gallery', alt_text: '', public_url: null, thumbnail_url: null, kind: 'image' },
+  ]
 }
 
 function removeGalleryItem(index: number) {
   galleryMedia.value = galleryMedia.value.filter((_, itemIndex) => itemIndex !== index)
 }
 
-function toggleChannel(value: string, checked: boolean) {
-  if (checked) {
-    selectedChannels.value = selectedChannels.value.includes(value)
-      ? selectedChannels.value
-      : [...selectedChannels.value, value]
-    return
-  }
+function moveGalleryItem(index: number, direction: -1 | 1) {
+  reorderGalleryItem(index, index + direction)
+}
 
-  selectedChannels.value = selectedChannels.value.filter((channel) => channel !== value)
+function reorderGalleryItem(sourceIndex: number, targetIndex: number) {
+  const items = [...galleryMedia.value]
+  if (targetIndex < 0 || targetIndex >= items.length) return
+  const [item] = items.splice(sourceIndex, 1)
+  if (!item) return
+  items.splice(targetIndex, 0, item)
+  galleryMedia.value = items
+}
+
+function setGalleryAsset(
+  index: number,
+  asset: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind?: string | null } | null,
+) {
+  const items = [...galleryMedia.value]
+  const existing = items[index]
+  if (!existing) return
+  items[index] = {
+    ...existing,
+    asset_id: asset?.asset_id ?? '',
+    public_url: asset?.public_url ?? null,
+    thumbnail_url: asset?.thumbnail_url ?? null,
+    kind: asset?.kind ?? 'image',
+  }
+  galleryMedia.value = items
 }
 </script>

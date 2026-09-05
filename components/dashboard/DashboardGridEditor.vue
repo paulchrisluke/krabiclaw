@@ -2,7 +2,9 @@
   <section class="space-y-6">
     <header>
       <div class="flex items-center justify-between gap-4">
-        <h1 class="min-w-0 truncate text-2xl font-semibold text-highlighted">{{ title }}</h1>
+        <!-- Omitted where the surface around it already names the grid. -->
+        <h1 v-if="title" class="min-w-0 truncate text-2xl font-semibold text-highlighted">{{ title }}</h1>
+        <span v-else />
 
         <div class="flex shrink-0 items-center gap-2">
           <slot name="actions" />
@@ -35,7 +37,7 @@
       v-if="error"
       color="error"
       variant="soft"
-      :title="`${title} could not be loaded`"
+      :title="`${title || 'This list'} could not be loaded`"
       :description="error"
     />
 
