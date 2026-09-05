@@ -23,8 +23,8 @@ export default defineHandler(async (event) => {
   if (since) { filters.push('d.created_at >= ?'); binds.push(since) }
 
   const notifications = await queryAll(db, `
-    SELECT id, organization_id, site_id, location_id, guest_thread_id, source_entry_id,
-           scope, event_type, severity, template, title, payload, created_at
+    SELECT id, organization_id, site_id, location_id, source_entry_id,
+           scope, severity, template, title, created_at
     FROM notifications
     WHERE (? IS NULL OR site_id = ?)
       AND (? IS NULL OR organization_id = ?)
@@ -34,10 +34,11 @@ export default defineHandler(async (event) => {
     LIMIT ?
   `, [siteId, siteId, organizationId, organizationId, locationId, locationId, since, since, limit])
   const deliveries = await queryAll(db, `
-    SELECT d.id, d.thread_id, d.entry_id, d.channel, d.provider, d.purpose,
-           d.idempotency_key, d.status, d.provider_message_id, d.error, d.created_at, d.updated_at
+    SELECT d.id, e.thread_id, d.entry_id, d.channel, d.provider, d.purpose,
+           d.status, d.provider_message_id, d.error, d.created_at, d.updated_at
     FROM guest_thread_deliveries d
-    JOIN guest_threads gt ON gt.id = d.thread_id
+    JOIN guest_thread_entries e ON e.id = d.entry_id
+    JOIN guest_threads gt ON gt.id = e.thread_id
     ${filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : ''}
     ORDER BY d.created_at DESC
     LIMIT ?

@@ -3,7 +3,7 @@ import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { sendEmail } from '~/server/utils/email-delivery'
 import { getOrganizationOwnerEmail } from '~/server/utils/member-access'
-import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
+import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
 import DomainUpdate from '~/server/emails/templates/DomainUpdate'
 
@@ -50,14 +50,12 @@ export async function notifyDomainLifecycle(
   await createCanonicalNotification(db, {
     publishEnv: env,
     scope: 'site',
-    eventType: NOTIFICATION_EVENT_TYPES.DOMAIN_UPDATED,
     severity: opts.status === 'active' ? 'success' : 'warning',
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     title: opts.title,
     message: opts.message,
     deepLink: dashboardUrl,
-    payload: { domain: opts.domain, status: opts.status, dashboard_url: dashboardUrl },
     template: 'domain_update',
   })
 

@@ -4,8 +4,6 @@ import type { GuestThreadActorKind, GuestThreadChannel, GuestThreadEntryKind, Gu
 
 export interface AppendEntryInput {
   threadId: string
-  organizationId: string
-  siteId: string
   kind: GuestThreadEntryKind
   actorKind: GuestThreadActorKind
   actorUserId?: string | null
@@ -28,8 +26,6 @@ function matchingDedupeEntry(
   payloadJson: string | null,
 ): GuestThreadEntryRow {
   const matches = entry.thread_id === input.threadId
-    && entry.organization_id === input.organizationId
-    && entry.site_id === input.siteId
     && entry.kind === input.kind
     && entry.actor_kind === input.actorKind
     && entry.actor_user_id === (input.actorUserId ?? null)
@@ -68,16 +64,14 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
   try {
     const result = await execute(db, `
       INSERT INTO guest_thread_entries
-        (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sequence), 0) + 1, ?, ?
+        (id, thread_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sequence), 0) + 1, ?, ?
       FROM guest_thread_entries
       WHERE thread_id = ?
       ON CONFLICT DO NOTHING
     `, [
       id,
       input.threadId,
-      input.organizationId,
-      input.siteId,
       input.kind,
       input.actorKind,
       input.actorUserId ?? null,

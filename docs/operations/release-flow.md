@@ -9,7 +9,7 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 | `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | Read-only rendering/navigation on all three customer custom domains |
 
-Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. Staging applies migrations but never sweeps, resets, reseeds customers, provisions E2E identities, or performs guest/MCP writes. Production is never seeded, reset, or mutated by test automation.
+Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its database epoch remains unreleased, using the controlled epoch procedure in [database migrations](../database/migrations.md); that exception never applies after the epoch reaches production. Production is never seeded, reset, or mutated by test automation.
 
 Preview must keep persistent Workers Logs and traces enabled in `wrangler.toml`,
 with invocation logs and 100% sampling. This is permanent environment

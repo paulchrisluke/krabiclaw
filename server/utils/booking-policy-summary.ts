@@ -2,20 +2,14 @@ export type BookingPolicySummaryType = 'reservation' | 'experience'
 
 export interface BookingPolicySummarySource {
   policy_type: BookingPolicySummaryType
-  booking_window_days: number | null
   advance_notice_minutes: number | null
   free_cancellation_until_minutes: number | null
-  late_arrival_grace_minutes: number | null
-  host_confirmation_sla_minutes: number | null
   reschedule_allowed: boolean | null
   reschedule_cutoff_minutes: number | null
   deposit_required: boolean | null
   deposit_trigger_party_size: number | null
-  special_requests_allowed: boolean | null
-  weather_policy: string | null
   minimum_guest_age: number | null
   accessibility_contact_required: boolean | null
-  additional_notes_html: string | null
 }
 
 export interface FormattedBookingPolicySummaryItem {
@@ -26,7 +20,6 @@ export interface FormattedBookingPolicySummaryItem {
 export interface FormattedBookingPolicySummary {
   heading: string
   items: FormattedBookingPolicySummaryItem[]
-  additional_notes_html: string | null
 }
 
 function isThaiLocale(locale: string) {
@@ -54,15 +47,6 @@ export function formatBookingPolicySummary(
   const th = isThaiLocale(locale)
   const items: FormattedBookingPolicySummaryItem[] = []
 
-  if (policy.host_confirmation_sla_minutes) {
-    items.push({
-      id: 'host_confirmation_sla',
-      text: th
-        ? `ทีมงานยืนยันการจองภายใน ${formatMinutes(policy.host_confirmation_sla_minutes, locale)} โดยปกติภายในวันเดียวกัน`
-        : `Our team confirms by email, usually within ${formatMinutes(policy.host_confirmation_sla_minutes, locale)}, always the same day.`,
-    })
-  }
-
   if (policy.free_cancellation_until_minutes) {
     items.push({
       id: 'cancellation',
@@ -85,19 +69,6 @@ export function formatBookingPolicySummary(
     })
   }
 
-  if (policy.late_arrival_grace_minutes) {
-    items.push({
-      id: 'late_arrival',
-      text: policy.policy_type === 'experience'
-        ? (th
-            ? `เราถือสิทธิ์การจองไว้ ${formatMinutes(policy.late_arrival_grace_minutes, locale)} หลังเวลาเริ่ม กรุณาติดต่อหากมาช้า`
-            : `We hold your spot for ${formatMinutes(policy.late_arrival_grace_minutes, locale)} after the scheduled start. Running late? Just call.`)
-        : (th
-            ? `เราถือโต๊ะไว้ ${formatMinutes(policy.late_arrival_grace_minutes, locale)} หลังเวลาจอง กรุณาติดต่อหากมาช้า`
-            : `We hold the table for ${formatMinutes(policy.late_arrival_grace_minutes, locale)} past the booked time. Running late? Just call.`),
-    })
-  }
-
   if (policy.deposit_required) {
     items.push({
       id: 'deposit',
@@ -105,18 +76,7 @@ export function formatBookingPolicySummary(
         ? (th
             ? `กลุ่มตั้งแต่ ${policy.deposit_trigger_party_size} ท่านขึ้นไปอาจต้องวางมัดจำ`
             : `Parties of ${policy.deposit_trigger_party_size}+ guests may require a deposit.`)
-        : (th
-            ? 'อาจต้องวางมัดจำก่อนยืนยันการจอง'
-            : 'A deposit may be required before confirmation.'),
-    })
-  }
-
-  if (policy.special_requests_allowed) {
-    items.push({
-      id: 'special_requests',
-      text: th
-        ? 'สามารถแจ้งคำขอพิเศษได้ล่วงหน้า แล้วทีมงานจะยืนยันให้ตามความพร้อม'
-        : 'Special requests can be shared in advance and are confirmed subject to availability.',
+        : (th ? 'อาจต้องวางมัดจำก่อนยืนยันการจอง' : 'A deposit may be required before confirmation.'),
     })
   }
 
@@ -138,20 +98,10 @@ export function formatBookingPolicySummary(
     })
   }
 
-  if (policy.policy_type === 'experience' && policy.weather_policy) {
-    items.push({
-      id: 'weather_policy',
-      text: th
-        ? `สภาพอากาศ: ${policy.weather_policy}`
-        : `Weather: ${policy.weather_policy}`,
-    })
-  }
-
   return {
     heading: th
       ? (policy.policy_type === 'experience' ? 'นโยบายประสบการณ์' : 'นโยบายการจอง')
       : (policy.policy_type === 'experience' ? 'Experience policies' : 'Reservation policies'),
     items,
-    additional_notes_html: policy.additional_notes_html,
   }
 }

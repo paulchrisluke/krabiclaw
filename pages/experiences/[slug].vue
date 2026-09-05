@@ -90,13 +90,6 @@
                   <SayaIcon name="user-group" class="size-3.5" />
                   {{ t('saya.experience_detail.capacity', { count: experience.max_capacity }) }}
                 </span>
-                <span
-                  v-if="experience.available_note"
-                  class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
-                >
-                  <SayaIcon name="calendar-days" class="size-3.5" />
-                  {{ experience.available_note }}
-                </span>
               </div>
             </div>
 
@@ -106,16 +99,6 @@
               <!-- eslint-disable vue/no-v-html -->
               <div class="prose prose-lg max-w-none text-default" v-html="sanitizedBody" />
               <!-- eslint-enable vue/no-v-html -->
-            </div>
-
-            <div v-if="experience.highlights?.length" class="mt-10 border-t border-default pt-10">
-              <h2 class="text-xl font-semibold text-default mb-6">{{ t('saya.experience_detail.highlights') }}</h2>
-              <ul class="space-y-3 text-default">
-                <li v-for="item in experience.highlights" :key="item" class="flex items-start gap-3">
-                  <SayaIcon name="sparkles" class="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>{{ item }}</span>
-                </li>
-              </ul>
             </div>
 
             <div v-if="experience.included_items?.length" class="mt-10 border-t border-default pt-10">
@@ -151,10 +134,6 @@
                   <span class="leading-7">{{ item.text }}</span>
                 </li>
               </ol>
-              <div v-if="experiencePolicySummary.additional_notes_html" class="mt-5 text-sm leading-7 text-muted">
-                <!-- eslint-disable-next-line vue/no-v-html -->
-                <div v-html="experiencePolicySummary.additional_notes_html" />
-              </div>
             </div>
 
             <!-- Where you'll meet -->
@@ -235,13 +214,6 @@
                 >
                   <SayaIcon name="user-group" class="size-3.5" />
                   {{ t('saya.experience_detail.capacity', { count: experience.max_capacity }) }}
-                </span>
-                <span
-                  v-if="experience.available_note"
-                  class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
-                >
-                  <SayaIcon name="calendar-days" class="size-3.5" />
-                  {{ experience.available_note }}
                 </span>
               </div>
 

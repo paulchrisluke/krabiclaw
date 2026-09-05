@@ -420,18 +420,14 @@ async function copyLocationPolicies(
       query: `
         INSERT INTO booking_policies (
           id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
-          booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
-          late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+          advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
           reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-          special_requests_allowed, weather_policy, minimum_guest_age,
-          accessibility_contact_required, additional_notes_html, created_at, updated_at
+          minimum_guest_age, accessibility_contact_required, created_at, updated_at
         )
         SELECT lower(hex(randomblob(16))), organization_id, site_id, policy_type, scope_type, ?, NULL,
-               booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
-               late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+               advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
                reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-               special_requests_allowed, weather_policy, minimum_guest_age,
-               accessibility_contact_required, additional_notes_html, ?, ?
+               minimum_guest_age, accessibility_contact_required, ?, ?
         FROM booking_policies
         WHERE organization_id = ? AND site_id = ? AND scope_type = 'location' AND location_id = ? AND policy_type = ?
           AND NOT EXISTS (
@@ -570,8 +566,8 @@ async function copyExperiences(
     })
     statements.push({
       query: `
-        INSERT INTO experiences (id, organization_id, site_id, location_id, tagline, pricing_note, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, created_at, updated_at, highlights, included_items, what_to_bring, meeting_point, cancellation_policy)
-        SELECT ?, organization_id, site_id, ?, tagline, pricing_note, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, ?, updated_at, highlights, included_items, what_to_bring, meeting_point, cancellation_policy
+        INSERT INTO experiences (id, organization_id, site_id, location_id, tagline, pricing_note, duration_minutes, max_capacity, time_slots, recurring_slots, created_at, updated_at, included_items, what_to_bring, meeting_point, cancellation_policy)
+        SELECT ?, organization_id, site_id, ?, tagline, pricing_note, duration_minutes, max_capacity, time_slots, recurring_slots, ?, updated_at, included_items, what_to_bring, meeting_point, cancellation_policy
         FROM experiences WHERE id = ?
       `,
       params: [newId, targetLocationId, now, exp.id],
@@ -603,18 +599,14 @@ async function copyExperiences(
       query: `
         INSERT INTO booking_policies (
           id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
-          booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
-          late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+          advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
           reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-          special_requests_allowed, weather_policy, minimum_guest_age,
-          accessibility_contact_required, additional_notes_html, created_at, updated_at
+          minimum_guest_age, accessibility_contact_required, created_at, updated_at
         )
         SELECT lower(hex(randomblob(16))), organization_id, site_id, policy_type, scope_type, ?, ?,
-               booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
-               late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+               advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
                reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-               special_requests_allowed, weather_policy, minimum_guest_age,
-               accessibility_contact_required, additional_notes_html, ?, ?
+               minimum_guest_age, accessibility_contact_required, ?, ?
         FROM booking_policies
         WHERE organization_id = ? AND site_id = ? AND scope_type = 'experience' AND experience_id = ?
       `,

@@ -141,7 +141,8 @@ async function resolveQuotedDelivery(
   }>(db, `
     SELECT gt.id AS thread_id, gt.organization_id, gt.site_id, gt.location_id, gt.guest_email
     FROM guest_thread_deliveries d
-    JOIN guest_threads gt ON gt.id = d.thread_id
+    JOIN guest_thread_entries e ON e.id = d.entry_id
+    JOIN guest_threads gt ON gt.id = e.thread_id
     WHERE d.provider = 'meta' AND d.provider_message_id = ?
     LIMIT 1
   `, [providerMessageId])
@@ -167,7 +168,8 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
   }>(db, `
     SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId, gt.location_id AS locationId, gt.guest_name AS guestName, gt.submission_type AS submissionType, MAX(d.created_at) AS createdAt
     FROM guest_thread_deliveries d
-    JOIN guest_threads gt ON gt.id = d.thread_id
+    JOIN guest_thread_entries e ON e.id = d.entry_id
+    JOIN guest_threads gt ON gt.id = e.thread_id
     WHERE d.channel = 'whatsapp' AND d.created_at > ?
     GROUP BY gt.id
     ORDER BY createdAt DESC
@@ -530,8 +532,6 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
           const thread = await ensureGuestThread(db, adapter, match.submissionId)
           const entry = await appendEntry(db, {
             threadId: thread.id,
-            organizationId: match.organizationId,
-            siteId: match.siteId,
             kind: 'message',
             actorKind: 'guest',
             channel: 'whatsapp',
@@ -606,9 +606,10 @@ async function handleStatus(db: D1Database, env: ApiRecord, status: WhatsAppStat
   if (!['sent', 'delivered', 'read', 'failed'].includes(incomingStatus)) return
 
   const delivery = await queryFirst<{ id: string; thread_id: string; status: string }>(db, `
-    SELECT id, thread_id, status
-    FROM guest_thread_deliveries
-    WHERE provider = 'meta' AND provider_message_id = ?
+    SELECT d.id, e.thread_id, d.status
+    FROM guest_thread_deliveries d
+    JOIN guest_thread_entries e ON e.id = d.entry_id
+    WHERE d.provider = 'meta' AND d.provider_message_id = ?
     LIMIT 1
   `, [providerMessageId])
   if (!delivery) return

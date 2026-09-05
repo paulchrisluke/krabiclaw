@@ -57,13 +57,13 @@
               </div>
               <p v-if="exp.tagline" class="mt-0.5 truncate text-sm text-muted">{{ exp.tagline }}</p>
               <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                <span v-if="exp.price">{{ exp.price }}</span>
+                <span v-if="exp.price">{{ formatProductMoney(exp.price) }}</span>
                 <span v-if="exp.duration_minutes">{{ exp.duration_minutes }} min</span>
                 <span v-if="exp.max_capacity">{{ exp.max_capacity }} max guests</span>
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
-              <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-calendar-days" aria-label="Manage availability" @click="openAvailability(exp)" />
+              <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-calendar-days" aria-label="Manage availability" @click="manageAvailability(exp)" />
               <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-square-pen" aria-label="Edit experience" @click="openEdit(exp)" />
               <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-trash-2" aria-label="Delete experience" @click="confirmDelete(exp)" />
             </div>
@@ -107,12 +107,6 @@
             </UFormField>
             <UFormField :label="`Price note (${translationLocale})`">
               <UInput v-model="translationFields.price" class="w-full" />
-            </UFormField>
-            <UFormField :label="`Availability note (${translationLocale})`">
-              <UInput v-model="translationFields.available_note" class="w-full" />
-            </UFormField>
-            <UFormField :label="`Highlights (${translationLocale}, one per line)`">
-              <UTextarea v-model="translationFields.highlights_text" :rows="3" class="w-full" />
             </UFormField>
             <UFormField :label="`Included items (${translationLocale}, one per line)`">
               <UTextarea v-model="translationFields.included_items_text" :rows="3" class="w-full" />
@@ -271,11 +265,8 @@
               </div>
             </div>
           </UFormField>
-          <UFormField label="Availability note" help="Stable note shown on the listing, e.g. 'Runs weekends' or 'Seasonal class'. Avoid claims like 'Last 2 spots' — remaining capacity is now shown automatically from real bookings.">
-            <UInput v-model="form.available_note" class="w-full" />
-          </UFormField>
-          <UFormField label="Highlights" help="One highlight per line.">
-            <UTextarea v-model="form.highlights_input" :rows="4" placeholder="Hands-on clay shaping&#10;Small-group instruction&#10;Tea and snacks included" class="w-full" />
+          <UFormField label="Tags" help="One searchable tag per line.">
+            <UTextarea v-model="form.tags_input" :rows="3" placeholder="Hands-on&#10;Small group" class="w-full" />
           </UFormField>
           <UFormField label="What's included" help="One included item per line.">
             <UTextarea v-model="form.included_items_input" :rows="4" placeholder="Materials and tools&#10;Apron&#10;Welcome drink" class="w-full" />
@@ -292,14 +283,6 @@
               policy-type="experience"
               :summary="bookingPolicySummary"
             />
-          </UFormField>
-          <UFormField v-if="bookingPolicyId && translationLocales.length" :label="`Booking policy (${translationLocale})`" help="Translated weather policy and additional notes for the saved booking policy above.">
-            <div class="space-y-2">
-              <UTextarea v-model="policyTranslationFields.weather_policy" :rows="2" :placeholder="`Weather policy (${translationLocale})`" class="w-full" />
-              <UTextarea v-model="policyTranslationFields.additional_notes_html" :rows="2" :placeholder="`Additional notes (${translationLocale})`" class="w-full" />
-              <p v-if="policyTranslationError" class="text-sm text-error">{{ policyTranslationError }}</p>
-              <UButton size="sm" variant="soft" :loading="policyTranslationSaving" label="Save policy translation" @click="savePolicyTranslation" />
-            </div>
           </UFormField>
         </div>
       </template>
@@ -326,74 +309,16 @@
       </template>
     </UModal>
 
-    <!-- Manage availability -->
-    <UModal v-model:open="availabilityOpen" :title="`Manage availability — ${availabilityExp?.title ?? ''}`" :ui="{ content: 'max-w-2xl' }">
-      <template #body>
-        <div class="space-y-4 px-6 py-4">
-          <p v-if="availabilityTimezone" class="text-xs text-muted">Times shown in {{ availabilityTimezone }}.</p>
-          <UFormField label="Date">
-            <UInput v-model="availabilityDate" type="date" class="w-full max-w-xs" @change="loadAvailability" />
-          </UFormField>
-
-          <div v-if="availabilityLoading" class="space-y-2">
-            <USkeleton class="h-10 w-full rounded-lg" />
-            <USkeleton class="h-10 w-full rounded-lg" />
-          </div>
-          <p v-else-if="availabilitySlots.length === 0" class="text-sm text-muted">No effective time slots on this date.</p>
-          <div v-else class="space-y-2">
-            <div v-for="slot in availabilitySlots" :key="slot.time_slot" class="flex items-center gap-3 rounded-lg border border-default p-3">
-              <span class="w-16 shrink-0 font-medium text-highlighted">{{ slot.time_slot }}</span>
-              <span class="text-xs text-muted">
-                {{ slot.booked }} booked<span v-if="slot.capacity != null"> / {{ slot.capacity }}</span>
-              </span>
-              <UBadge v-if="slot.is_closed" color="error" variant="soft" size="xs">Closed</UBadge>
-              <UBadge v-else-if="slot.is_full" color="warning" variant="soft" size="xs">Full</UBadge>
-              <UInputNumber
-                v-model="slotCapacityOverrides[slot.time_slot]"
-                :min="0"
-                placeholder="Capacity override"
-                class="ml-auto w-36"
-              />
-              <UButton
-                size="xs"
-                :color="slot.is_closed ? 'success' : 'error'"
-                variant="soft"
-                :loading="savingOverride === slot.time_slot"
-                @click="toggleSlotOverride(slot)"
-              >
-                {{ slot.is_closed ? 'Reopen' : 'Close' }}
-              </UButton>
-            </div>
-          </div>
-
-          <div v-if="existingOverrides.length" class="pt-2">
-            <p class="text-xs font-medium text-muted mb-2">Upcoming overrides</p>
-            <div class="space-y-1">
-              <div v-for="ov in existingOverrides" :key="ov.id" class="flex items-center gap-3 rounded-lg border border-default px-3 py-2 text-sm">
-                <span class="text-muted">{{ ov.override_date }}</span>
-                <span class="font-medium text-highlighted">{{ ov.time_slot }}</span>
-                <UBadge :color="ov.status === 'closed' ? 'error' : 'success'" variant="soft" size="xs">{{ ov.status }}</UBadge>
-                <span v-if="ov.capacity_override != null" class="text-xs text-muted">cap {{ ov.capacity_override }}</span>
-                <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-trash-2" class="ml-auto" aria-label="Delete override" @click="deleteOverride(ov)" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-3 px-6 py-4">
-          <UButton color="neutral" variant="ghost" @click="availabilityOpen = false">Close</UButton>
-        </div>
-      </template>
-    </UModal>
 </template>
 
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
-import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
+const route = useRoute()
+import type { Experience, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
 import { getErrorMessage } from '~/utils/errors'
+import { formatProductMoney } from '~/utils/product-money'
 import { majorAmountToMinor, minorAmountToMajor } from '~/shared/prices'
 import type { CurrencyCode } from '~/shared/currencies'
 
@@ -424,23 +349,6 @@ const isPolicySummaryResponse = (
   value: unknown,
 ): value is { summary: RenderedBookingPolicySummary | null } =>
   isRecord(value) && (value.summary === null || isRecord(value.summary))
-const isAvailabilityResponse = (
-  value: unknown,
-): value is { timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> } =>
-  isRecord(value)
-  && typeof value.timezone === 'string'
-  && Array.isArray(value.dates)
-  && value.dates.every(day =>
-    isRecord(day)
-    && typeof day.date === 'string'
-    && Array.isArray(day.slots)
-    && day.slots.every(isRecord),
-  )
-const isOverridesResponse = (value: unknown): value is { overrides: SlotOverride[] } =>
-  isRecord(value)
-  && Array.isArray(value.overrides)
-  && value.overrides.every(override => isRecord(override) && typeof override.id === 'string')
-
 const toast = useToast()
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
@@ -515,7 +423,7 @@ async function loadExperiences() {
 // ── Translations (resource_localizations, same API as the editor CRUD) ──
 const translationLocale = ref('en')
 const translationLocales = ref<string[]>([])
-const translationFields = reactive({ title: '', tagline: '', body: '', price: '', available_note: '', highlights_text: '', included_items_text: '', what_to_bring_text: '', meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '' })
+const translationFields = reactive({ title: '', tagline: '', body: '', price: '', included_items_text: '', what_to_bring_text: '', meeting_point: '', cancellation_policy: '', seo_title: '', seo_description: '' })
 const translationError = ref<string | null>(null)
 const translationSaving = ref(false)
 function isExperienceLocalesResponse(value: unknown): value is { languages: Array<{ locale: string; locale_status: string; is_source: boolean | number }> } {
@@ -548,8 +456,6 @@ async function loadTranslationFields(experienceId: string) {
     translationFields.tagline = typeof values.tagline === 'string' ? values.tagline : ''
     translationFields.body = typeof values.body === 'string' ? values.body : ''
     translationFields.price = typeof values.price === 'string' ? values.price : ''
-    translationFields.available_note = typeof values.available_note === 'string' ? values.available_note : ''
-    translationFields.highlights_text = Array.isArray(values.highlights_json) ? values.highlights_json.join('\n') : ''
     translationFields.included_items_text = Array.isArray(values.included_items_json) ? values.included_items_json.join('\n') : ''
     translationFields.what_to_bring_text = Array.isArray(values.what_to_bring) ? values.what_to_bring.join('\n') : ''
     translationFields.meeting_point = typeof values.meeting_point === 'string' ? values.meeting_point : ''
@@ -560,14 +466,13 @@ async function loadTranslationFields(experienceId: string) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
     if (statusCode !== 404) translationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
     translationFields.title = ''; translationFields.tagline = ''; translationFields.body = ''
-    translationFields.price = ''; translationFields.available_note = ''; translationFields.highlights_text = ''
+    translationFields.price = ''
     translationFields.included_items_text = ''; translationFields.what_to_bring_text = ''; translationFields.meeting_point = ''
     translationFields.cancellation_policy = ''; translationFields.seo_title = ''; translationFields.seo_description = ''
   }
 }
 watch(translationLocale, () => {
   if (editing.value?.id && translationLocale.value !== 'en') void loadTranslationFields(String(editing.value.id))
-  void loadPolicyTranslation()
 })
 async function saveTranslation() {
   if (!editing.value?.id || translationLocale.value === 'en') return
@@ -578,12 +483,10 @@ async function saveTranslation() {
     if (translationFields.tagline.trim()) values.tagline = translationFields.tagline.trim()
     if (translationFields.body.trim()) values.body = translationFields.body.trim()
     if (translationFields.price.trim()) values.price = translationFields.price.trim()
-    if (translationFields.available_note.trim()) values.available_note = translationFields.available_note.trim()
     if (translationFields.meeting_point.trim()) values.meeting_point = translationFields.meeting_point.trim()
     if (translationFields.cancellation_policy.trim()) values.cancellation_policy = translationFields.cancellation_policy.trim()
     if (translationFields.seo_title.trim()) values.seo_title = translationFields.seo_title.trim()
     if (translationFields.seo_description.trim()) values.seo_description = translationFields.seo_description.trim()
-    const highlights_json = translationFields.highlights_text.split('\n').map(line => line.trim()).filter(Boolean)
     const included_items_json = translationFields.included_items_text.split('\n').map(line => line.trim()).filter(Boolean)
     const what_to_bring = translationFields.what_to_bring_text.split('\n').map(line => line.trim()).filter(Boolean)
     const slug = String(editing.value.slug ?? '')
@@ -592,7 +495,6 @@ async function saveTranslation() {
       body: {
         values: {
           ...values,
-          ...(highlights_json.length ? { highlights_json } : {}),
           ...(included_items_json.length ? { included_items_json } : {}),
           ...(what_to_bring.length ? { what_to_bring } : {}),
         },
@@ -683,8 +585,7 @@ const emptyForm = () => ({
   valid_until: '',
   duration_minutes: null as number | null,
   max_capacity: null as number | null,
-  available_note: '',
-  highlights_input: '',
+  tags_input: '',
   included_items_input: '',
   what_to_bring_input: '',
   meeting_point: '',
@@ -705,10 +606,6 @@ const originalExperienceMediaIds = ref<string[]>([])
 const originalExperiencePrice = ref<{ price_major: number | null; compare_at_major: number | null; valid_from: string; valid_until: string; pricing_note: string } | null>(null)
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
-const bookingPolicyId = ref<string | null>(null)
-const policyTranslationFields = reactive({ weather_policy: '', additional_notes_html: '' })
-const policyTranslationError = ref<string | null>(null)
-const policyTranslationSaving = ref(false)
 
 watch(currentLocationId, () => {
   sliderOpen.value = false
@@ -792,8 +689,7 @@ function openEdit(exp: ApiRecord) {
     valid_until: exp.price?.valid_until ? String(exp.price.valid_until).slice(0, 10) : '',
     duration_minutes: exp.duration_minutes ?? null,
     max_capacity: exp.max_capacity ?? null,
-    available_note: exp.available_note ?? '',
-    highlights_input: arrayToLines(exp.highlights),
+    tags_input: arrayToLines(exp.tags),
     included_items_input: arrayToLines(exp.included_items),
     what_to_bring_input: arrayToLines(exp.what_to_bring),
     meeting_point: exp.meeting_point ?? '',
@@ -830,53 +726,10 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = res.policy ?? {}
     bookingPolicySummary.value = res.summary ?? null
-    bookingPolicyId.value = res.resolved_policy?.id || null
-    void loadPolicyTranslation()
   } catch {
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = {}
     bookingPolicySummary.value = null
-    bookingPolicyId.value = null
-  }
-}
-
-async function loadPolicyTranslation() {
-  policyTranslationError.value = null
-  policyTranslationFields.weather_policy = ''
-  policyTranslationFields.additional_notes_html = ''
-  if (!bookingPolicyId.value || !translationLocale.value || translationLocale.value === 'en') return
-  try {
-    const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
-      `/api/editor/sites/${siteId}/localization/booking_policy/${bookingPolicyId.value}/${encodeURIComponent(translationLocale.value)}`,
-      { validate: (value): value is { localization: { values: Record<string, unknown> } } => isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values) },
-    )
-    const values = response.localization.values
-    policyTranslationFields.weather_policy = typeof values.weather_policy === 'string' ? values.weather_policy : ''
-    policyTranslationFields.additional_notes_html = typeof values.additional_notes_html === 'string' ? values.additional_notes_html : ''
-  } catch (cause) {
-    const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
-    if (statusCode !== 404) policyTranslationError.value = cause instanceof Error ? cause.message : 'Failed to load translation'
-  }
-}
-
-async function savePolicyTranslation() {
-  if (!bookingPolicyId.value || !translationLocale.value || translationLocale.value === 'en') return
-  policyTranslationSaving.value = true
-  policyTranslationError.value = null
-  try {
-    const values: Record<string, string> = {}
-    if (policyTranslationFields.weather_policy.trim()) values.weather_policy = policyTranslationFields.weather_policy.trim()
-    if (policyTranslationFields.additional_notes_html.trim()) values.additional_notes_html = policyTranslationFields.additional_notes_html.trim()
-    await dashboardApi(`/api/editor/sites/${siteId}/localization/booking_policy/${bookingPolicyId.value}/${encodeURIComponent(translationLocale.value)}`, {
-      method: 'PUT',
-      body: { values },
-      validate: isRecord,
-    })
-    toast.add({ title: 'Translation saved', color: 'success' })
-  } catch (cause) {
-    policyTranslationError.value = cause instanceof Error ? cause.message : 'Failed to save translation'
-  } finally {
-    policyTranslationSaving.value = false
   }
 }
 
@@ -984,7 +837,7 @@ async function save() {
               .filter(([, slots]) => (slots as string[]).length > 0),
           )
         : null,
-      highlights: linesToArray(form.highlights_input),
+      tags: linesToArray(form.tags_input),
       included_items: linesToArray(form.included_items_input),
       what_to_bring: linesToArray(form.what_to_bring_input),
       ...(!editing.value ? { media: mediaIds.map(asset_id => ({ asset_id })) } : {}),
@@ -1075,88 +928,17 @@ async function doDelete() {
   }
 }
 
-// ── Manage availability ──────────────────────────────────────
-const availabilityOpen = ref(false)
-const availabilityExp = ref<ApiRecord | null>(null)
-const availabilityDate = ref(new Date().toISOString().slice(0, 10))
-const availabilityLoading = ref(false)
-const availabilitySlots = ref<SlotAvailability[]>([])
-const availabilityTimezone = ref<string | null>(null)
-const existingOverrides = ref<SlotOverride[]>([])
-const slotCapacityOverrides = reactive<Record<string, number | null>>({})
-const savingOverride = ref<string | null>(null)
-
-function openAvailability(exp: ApiRecord) {
-  availabilityExp.value = exp
-  availabilityDate.value = new Date().toISOString().slice(0, 10)
-  Object.keys(slotCapacityOverrides).forEach((key) => {
-    Reflect.deleteProperty(slotCapacityOverrides, key)
+async function manageAvailability(experience: ApiRecord) {
+  if (!currentLocationId.value) return
+  await navigateTo({
+    path: `/dashboard/${String(route.params.orgSlug)}/calendar`,
+    query: {
+      view: 'availability',
+      siteId,
+      locationId: currentLocationId.value,
+      ownerType: 'experience',
+      ownerId: experience.id,
+    },
   })
-  availabilityOpen.value = true
-  loadAvailability()
-}
-
-async function loadAvailability() {
-  if (!availabilityExp.value) return
-  availabilityLoading.value = true
-  try {
-    const [avail, overrides] = await Promise.all([
-      dashboardApi<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> }>(
-        `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/availability`,
-        { query: { date: availabilityDate.value }, validate: isAvailabilityResponse },
-      ),
-      dashboardApi<{ overrides: SlotOverride[] }>(
-        `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`,
-        { validate: isOverridesResponse },
-      ),
-    ])
-    availabilityTimezone.value = avail.timezone
-    availabilitySlots.value = avail.dates[0]?.slots ?? []
-    existingOverrides.value = overrides.overrides ?? []
-    Object.keys(slotCapacityOverrides).forEach((key) => {
-      Reflect.deleteProperty(slotCapacityOverrides, key)
-    })
-  } catch {
-    toast.add({ description: 'Failed to load availability.', color: 'error' })
-  } finally {
-    availabilityLoading.value = false
-  }
-}
-
-async function toggleSlotOverride(slot: SlotAvailability) {
-  if (!availabilityExp.value) return
-  savingOverride.value = slot.time_slot
-  try {
-    const capacityInput = slotCapacityOverrides[slot.time_slot]
-    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`, {
-      method: 'POST',
-      body: {
-        override_date: availabilityDate.value,
-        time_slot: slot.time_slot,
-        status: slot.is_closed ? 'open' : 'closed',
-        capacity_override: capacityInput != null ? capacityInput : null,
-      },
-      validate: (value): value is { success: true; override: ApiRecord } =>
-        isRecord(value) && value.success === true && isRecord(value.override),
-    })
-    await loadAvailability()
-  } catch {
-    toast.add({ description: 'Failed to update slot availability.', color: 'error' })
-  } finally {
-    savingOverride.value = null
-  }
-}
-
-async function deleteOverride(override: SlotOverride) {
-  if (!availabilityExp.value) return
-  try {
-    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, {
-      method: 'DELETE',
-      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
-    })
-    await loadAvailability()
-  } catch {
-    toast.add({ description: 'Failed to delete override.', color: 'error' })
-  }
 }
 </script>

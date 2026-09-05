@@ -22,18 +22,6 @@ import { spawnYarn } from './utils/spawn-yarn.mjs'
 //    generate-demo-seed.ts's org reset), so deleting the organization row is sufficient for most
 //    child tables.
 //
-// 2. Guest-submitted rows against persistent customer fixtures (bookings,
-//    contact forms, reservations) - these specs already mark every guest email
-//    '...@playwright.example', so they're swept by that marker instead, since there's no
-//    throwaway org/site to cascade from. Every one of these queries scopes to known
-//    fixture site/org IDs FIRST, before the LIKE pattern - contact_submissions,
-//    experience_bookings, and reservation_submissions all already carry a site_id-leading index
-//    (idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site)
-//    and notifications an organization_id-leading one (notifications_organization_created_at_idx) - but a bare
-//    `email LIKE '%@playwright.example'` with no site/org filter can't use any of them (leading
-//    wildcard forces a full scan regardless), which is what still exceeded D1's CPU budget on
-//    preview even after category 1 was fixed to be cheap.
-//
 // Age-guarded (default 2 hours) as a practical safety margin, not a hard guarantee: rows created
 // by an in-flight run are always fresher than the cutoff, so a run has to be stuck for the full
 // window before its own data becomes sweepable by a concurrent run against the same shared
@@ -259,22 +247,15 @@ WHERE site_id IN (${eligibleE2eFixtureSiteIds});
 DELETE FROM sites
 WHERE id IN (${eligibleE2eFixtureSiteIds});
 
--- Category 2: guest-submitted rows on persistent customer fixtures, marked by
--- email. Every query below filters by the known fixture site_id/organization_id FIRST - via
--- idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site,
--- and notifications_organization_created_at_idx (see comment above) - so the
--- unindexable 'LIKE %@playwright.example' only has to scan a handful of fixture-scoped rows,
--- not a full table scan. guest_thread_entries/guest_thread_deliveries have real FKs to guest_threads
--- (ON DELETE CASCADE), but they're deleted explicitly here too rather than relied on
--- implicitly, so this block's correctness doesn't depend on the guest_threads delete below
--- succeeding first.
 -- Each branch is LIMIT-bounded too, as its own derived table - SQLite rejects a bare
 -- parenthesized SELECT as a compound-query operand inside IN(...) ("near UNION: syntax error"),
 -- so each branch is wrapped as SELECT id FROM (SELECT ... LIMIT n) instead. Defensive: category 2
 -- is already site/org-scoped down to 2 fixtures, so its result sets should be small regardless,
 -- but every fix so far in this script underestimated backlog scale.
-DELETE FROM guest_thread_deliveries WHERE thread_id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+DELETE FROM guest_thread_deliveries WHERE entry_id IN (
+  SELECT id FROM guest_thread_entries WHERE thread_id IN (
+    SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+  )
 );
 
 DELETE FROM guest_thread_entries WHERE thread_id IN (

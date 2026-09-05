@@ -32,8 +32,6 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
   const thread = await ensureGuestThread(db, adapter, email.submissionId)
   const entry = await appendEntry(db, {
     threadId: thread.id,
-    organizationId: orgSite.organizationId,
-    siteId: orgSite.siteId,
     kind: 'message',
     actorKind: 'guest',
     channel: 'email',

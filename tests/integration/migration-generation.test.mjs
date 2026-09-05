@@ -31,7 +31,7 @@ function fixture(t) {
   writeFileSync(join(directory, 'schema.ts'), schema())
   // Tracks the current epoch: lint-migrations requires the chain to start with
   // the epoch baseline it is pinned to, so the fixture is named for that epoch.
-  const result = generate(directory, 'epoch_5_baseline')
+  const result = generate(directory, 'epoch_4_baseline')
   assert.equal(result.status, 0, result.stderr + result.stdout)
   return directory
 }

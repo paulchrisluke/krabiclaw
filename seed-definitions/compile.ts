@@ -134,7 +134,11 @@ export function compileCuratedSiteFixture(
       tagline: experience.tagline,
       body: experience.body,
       media,
-      highlights: experience.highlights ?? null,
+      tags: [...(experience.tags ?? [])],
+      details: (experience.details ?? []).map(detail => ({
+        ...detail,
+        values: [...detail.values],
+      })),
       includedItems: experience.includedItems ?? null,
       whatToBring: experience.whatToBring ?? null,
       meetingPoint: experience.meetingPoint ?? null,
@@ -144,7 +148,6 @@ export function compileCuratedSiteFixture(
       durationMinutes: experience.durationMinutes,
       maxCapacity: experience.maxCapacity,
       timeSlots: [...experience.timeSlots],
-      availableNote: experience.availableNote,
       status: experience.status,
       sortOrder: experience.sortOrder,
       featured: experience.featured,
@@ -225,6 +228,12 @@ export function compileCuratedSiteFixture(
       throw new Error(`Post "${post.id}" references unknown location "${post.locationId}"`)
     }
     const media = validateMedia(post.media, mediaIds, `Post "${post.id}"`)
+    if (post.postType === 'offer' && !post.offerCoupon?.trim() && !post.offerTerms?.trim()) {
+      throw new Error(`Offer post "${post.id}" requires offerCoupon or offerTerms`)
+    }
+    if (post.postType === 'event' && !post.eventStartAt?.trim()) {
+      throw new Error(`Event post "${post.id}" requires eventStartAt`)
+    }
     const channelJobs: CompiledSeedPostChannelJob[] = post.channelJobs.map((job) => ({
       id: job.id,
       postId: post.id,
@@ -241,6 +250,13 @@ export function compileCuratedSiteFixture(
       postType: post.postType,
       title: post.title,
       body: post.body,
+      ctaType: post.ctaType ?? null,
+      ctaUrl: post.ctaUrl ?? null,
+      eventTitle: post.eventTitle ?? null,
+      eventStartAt: post.eventStartAt ?? null,
+      eventEndAt: post.eventEndAt ?? null,
+      offerCoupon: post.offerCoupon ?? null,
+      offerTerms: post.offerTerms ?? null,
       media,
       status: post.status,
       publishedAt: post.publishedAt,

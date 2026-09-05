@@ -21,7 +21,7 @@ import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancell
 import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
 import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
 import OrganizationInvite from '~/server/emails/templates/OrganizationInvite'
-import { createCanonicalNotification, tenantEventTypeForTemplate } from '~/server/utils/notification-center'
+import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
 import { createDeliveryReceipt, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
@@ -322,16 +322,13 @@ export async function insertDashboardNotification(
   await createCanonicalNotification(db, {
     publishEnv: env,
     scope: 'site',
-    eventType: tenantEventTypeForTemplate(opts.template, opts.payload),
+    template: opts.template,
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     locationId: opts.locationId ?? null,
-    guestThreadId: opts.guestThreadId ?? null,
     sourceEntryId: opts.sourceEntryId ?? null,
     title: opts.title,
     deepLink: opts.payload.deep_link || null,
-    payload: opts.payload,
-    template: opts.template,
   })
 }
 
@@ -352,14 +349,14 @@ async function sendEmailNotification(
   const provider = getEmailDeliveryMode(env) === 'provider' && !isReservedTestDomain(opts.to)
     ? 'resend'
     : 'log_only'
-  const delivery = opts.delivery
+  const deliveryContext = opts.delivery
+  const delivery = deliveryContext
     ? await createDeliveryReceipt(db, {
-        threadId: opts.delivery.threadId,
-        entryId: opts.delivery.entryId,
+        entryId: deliveryContext.entryId,
         channel: 'email',
         provider,
-        purpose: opts.delivery.purpose,
-        idempotencyKey: opts.delivery.idempotencyKey,
+        purpose: deliveryContext.purpose,
+        idempotencyKey: deliveryContext.idempotencyKey,
       })
     : null
   if (delivery && delivery.status !== 'pending') {
@@ -372,16 +369,16 @@ async function sendEmailNotification(
     subject: opts.email.subject,
     html: opts.email.html,
     text: opts.email.text,
-    idempotencyKey: delivery?.idempotency_key,
+    idempotencyKey: delivery?.id,
   })
-  if (delivery) {
+  if (delivery && deliveryContext) {
     await recordDeliveryOutcome(db, {
       deliveryId: delivery.id,
       status: result.status,
       providerMessageId: result.status === 'sent' ? result.messageId : null,
       error: result.status === 'sent' ? null : result.error,
     })
-    await publishGuestInboxThreadEvent(env, db, { threadId: delivery.thread_id, type: 'delivery.changed' })
+    await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
   }
   if (result.status === 'sent') {
     console.info(provider === 'log_only' ? 'email_delivery_log_only' : 'email_delivery_sent', {
@@ -418,7 +415,6 @@ async function sendWhatsAppThreadNotification(
   },
 ): Promise<boolean> {
   const delivery = await createDeliveryReceipt(db, {
-    threadId: opts.delivery.threadId,
     entryId: opts.delivery.entryId,
     channel: 'whatsapp',
     provider: getWhatsAppDeliveryMode(env) === 'provider' ? 'meta' : 'log_only',
@@ -437,7 +433,7 @@ async function sendWhatsAppThreadNotification(
       providerMessageId: result.success ? result.messageId ?? null : null,
       error: result.success ? null : result.error,
     })
-    await publishGuestInboxThreadEvent(env, db, { threadId: delivery.thread_id, type: 'delivery.changed' })
+    await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
     return result.success
   } catch (error) {
     await recordDeliveryOutcome(db, {
@@ -445,7 +441,7 @@ async function sendWhatsAppThreadNotification(
       status: 'unknown',
       error: error instanceof Error ? error.message : String(error),
     })
-    await publishGuestInboxThreadEvent(env, db, { threadId: delivery.thread_id, type: 'delivery.changed' })
+    await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
     throw error
   }
 }
@@ -494,8 +490,6 @@ async function recordGuestCancellation(
   if (!thread) return null
   const entry = await appendEntry(db, {
     threadId: thread.id,
-    organizationId: input.organizationId,
-    siteId: input.siteId,
     kind: 'operation',
     actorKind: 'guest',
     channel: 'web',
@@ -1341,16 +1335,13 @@ async function notifyGuestThreadReplyInner(
   await createCanonicalNotification(db, {
     publishEnv: env,
     scope: 'site',
-    eventType: tenantEventTypeForTemplate(template, payload),
+    template,
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     locationId: opts.locationId ?? null,
-    guestThreadId: opts.threadId,
     sourceEntryId: opts.sourceEntryId,
     title,
     deepLink: payload.deep_link || null,
-    payload,
-    template,
   })
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)

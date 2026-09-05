@@ -45,7 +45,6 @@ export interface Post {
   organization_id: string
   site_id: string
   location_id: string | null
-  google_post_id: string | null
   slug: string | null
   post_type: 'standard' | 'offer' | 'event' | 'update'
   title: string | null

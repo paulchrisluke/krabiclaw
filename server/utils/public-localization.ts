@@ -54,7 +54,6 @@ const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Reco
     details_json: 'details',
   },
   experience: {
-    highlights_json: 'highlights',
     included_items_json: 'included_items',
   },
   tenant_blog_post: {

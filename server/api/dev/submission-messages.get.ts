@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
   // guest_threads so specs that only know the source submission type/id (not the
   // thread id) can still filter, the same way the old submission_messages table did.
   let sql = `
-    SELECT e.id, gt.submission_type, gt.submission_id, e.organization_id, e.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
+    SELECT e.id, gt.submission_type, gt.submission_id, gt.organization_id, gt.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
     FROM guest_thread_entries e
     JOIN guest_threads gt ON gt.id = e.thread_id
     WHERE e.kind = 'message'
@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
 
   if (submissionType) { sql += ' AND gt.submission_type = ?'; binds.push(submissionType) }
   if (submissionId) { sql += ' AND gt.submission_id = ?'; binds.push(submissionId) }
-  if (siteId) { sql += ' AND e.site_id = ?'; binds.push(siteId) }
+  if (siteId) { sql += ' AND gt.site_id = ?'; binds.push(siteId) }
   if (direction) {
     // Legacy 'in'/'out' direction maps onto actor_kind: guest-authored messages are
     // inbound, member-authored messages are outbound.

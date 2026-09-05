@@ -106,14 +106,12 @@ export async function ensureGuestThread(
       {
         query: `
           INSERT INTO guest_thread_entries
-            (id, thread_id, organization_id, site_id, kind, actor_kind, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-          VALUES (?, ?, ?, ?, 'submission', 'guest', 'system', ?, ?, ?, ?, 1, ?, ?)
+            (id, thread_id, kind, actor_kind, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+          VALUES (?, ?, 'submission', 'guest', 'system', ?, ?, ?, ?, 1, ?, ?)
         `,
         params: [
           entryId,
           threadId,
-          summary.organizationId,
-          summary.siteId,
           summary.contextLabel,
           `${adapter.type}_submitted`,
           JSON.stringify(openingSnapshot),
@@ -231,8 +229,9 @@ async function countUnreadThreadIds(
     WHERE ${where}
       AND EXISTS (
         SELECT 1 FROM notifications n
+        JOIN guest_thread_entries notification_entry ON notification_entry.id = n.source_entry_id
         LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
-        WHERE n.guest_thread_id = gt.id
+        WHERE notification_entry.thread_id = gt.id
           AND (n.target_user_id IS NULL OR n.target_user_id = ?)
           AND nr.notification_id IS NULL
       )
@@ -295,8 +294,9 @@ export async function listGuestThreads(
     ? `
       AND EXISTS (
         SELECT 1 FROM notifications n
+        JOIN guest_thread_entries notification_entry ON notification_entry.id = n.source_entry_id
         LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
-        WHERE n.guest_thread_id = gt.id
+        WHERE notification_entry.thread_id = gt.id
           AND (n.target_user_id IS NULL OR n.target_user_id = ?)
           AND nr.notification_id IS NULL
       )
@@ -418,8 +418,9 @@ export async function listOrganizationGuestThreads(
     ? `
       AND EXISTS (
         SELECT 1 FROM notifications n
+        JOIN guest_thread_entries notification_entry ON notification_entry.id = n.source_entry_id
         LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
-        WHERE n.guest_thread_id = gt.id
+        WHERE notification_entry.thread_id = gt.id
           AND (n.target_user_id IS NULL OR n.target_user_id = ?)
           AND nr.notification_id IS NULL
       )
@@ -507,8 +508,9 @@ async function listUnreadThreadIds(db: DbClient, threadIds: string[], userId: st
     WHERE gt.id IN (SELECT value FROM json_each(?))
       AND EXISTS (
         SELECT 1 FROM notifications n
+        JOIN guest_thread_entries notification_entry ON notification_entry.id = n.source_entry_id
         LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
-        WHERE n.guest_thread_id = gt.id
+        WHERE notification_entry.thread_id = gt.id
           AND (n.target_user_id IS NULL OR n.target_user_id = ?)
           AND nr.notification_id IS NULL
       )

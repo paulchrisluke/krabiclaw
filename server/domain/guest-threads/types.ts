@@ -43,8 +43,6 @@ export interface GuestThreadRow {
 export interface GuestThreadEntryRow {
   id: string
   thread_id: string
-  organization_id: string
-  site_id: string
   kind: GuestThreadEntryKind
   actor_kind: GuestThreadActorKind
   actor_user_id: string | null
@@ -69,12 +67,10 @@ export interface GuestThreadMemberStateRow {
 
 export interface GuestThreadDeliveryRow {
   id: string
-  thread_id: string
   entry_id: string
   channel: GuestThreadDeliveryChannel
   provider: GuestThreadDeliveryProvider
   purpose: GuestThreadDeliveryPurpose
-  idempotency_key: string
   status: GuestThreadDeliveryStatus
   provider_message_id: string | null
   error: string | null

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a78a21e4-4c7e-4261-88bf-91a5d03f0315",
+  "id": "11e9b0e6-3423-410f-b789-7e811427d47c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -135,6 +135,220 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
+    },
+    "availability_overrides": {
+      "name": "availability_overrides",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_type": {
+          "name": "owner_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "experience_id": {
+          "name": "experience_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "override_date": {
+          "name": "override_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "time_slot": {
+          "name": "time_slot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'closed'"
+        },
+        "capacity_override": {
+          "name": "capacity_override",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "availability_overrides_location_slot_unique": {
+          "name": "availability_overrides_location_slot_unique",
+          "columns": [
+            "location_id",
+            "override_date",
+            "time_slot"
+          ],
+          "isUnique": true,
+          "where": "owner_type = 'location'"
+        },
+        "availability_overrides_experience_slot_unique": {
+          "name": "availability_overrides_experience_slot_unique",
+          "columns": [
+            "experience_id",
+            "override_date",
+            "time_slot"
+          ],
+          "isUnique": true,
+          "where": "owner_type = 'experience'"
+        },
+        "availability_overrides_site_month_idx": {
+          "name": "availability_overrides_site_month_idx",
+          "columns": [
+            "site_id",
+            "override_date"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "availability_overrides_organization_id_organization_id_fk": {
+          "name": "availability_overrides_organization_id_organization_id_fk",
+          "tableFrom": "availability_overrides",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "availability_overrides_site_id_sites_id_fk": {
+          "name": "availability_overrides_site_id_sites_id_fk",
+          "tableFrom": "availability_overrides",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "availability_overrides_location_scope_fk": {
+          "name": "availability_overrides_location_scope_fk",
+          "tableFrom": "availability_overrides",
+          "tableTo": "business_locations",
+          "columnsFrom": [
+            "organization_id",
+            "site_id",
+            "location_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "site_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "availability_overrides_experience_scope_fk": {
+          "name": "availability_overrides_experience_scope_fk",
+          "tableFrom": "availability_overrides",
+          "tableTo": "experiences",
+          "columnsFrom": [
+            "organization_id",
+            "site_id",
+            "experience_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "site_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "availability_overrides_owner_check": {
+          "name": "availability_overrides_owner_check",
+          "value": "\n\t\t(owner_type = 'location' AND location_id IS NOT NULL AND experience_id IS NULL)\n\t\tOR (owner_type = 'experience' AND location_id IS NULL AND experience_id IS NOT NULL)\n\t"
+        },
+        "availability_overrides_status_check": {
+          "name": "availability_overrides_status_check",
+          "value": "status IN ('open', 'closed')"
+        },
+        "availability_overrides_capacity_check": {
+          "name": "availability_overrides_capacity_check",
+          "value": "capacity_override IS NULL OR capacity_override >= 0"
+        }
+      }
     },
     "blog_posts": {
       "name": "blog_posts",
@@ -466,13 +680,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "booking_window_days": {
-          "name": "booking_window_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "advance_notice_minutes": {
           "name": "advance_notice_minutes",
           "type": "integer",
@@ -482,20 +689,6 @@
         },
         "free_cancellation_until_minutes": {
           "name": "free_cancellation_until_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "late_arrival_grace_minutes": {
-          "name": "late_arrival_grace_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "host_confirmation_sla_minutes": {
-          "name": "host_confirmation_sla_minutes",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -529,20 +722,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "special_requests_allowed": {
-          "name": "special_requests_allowed",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "weather_policy": {
-          "name": "weather_policy",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "minimum_guest_age": {
           "name": "minimum_guest_age",
           "type": "integer",
@@ -553,13 +732,6 @@
         "accessibility_contact_required": {
           "name": "accessibility_contact_required",
           "type": "numeric",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "additional_notes_html": {
-          "name": "additional_notes_html",
-          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -2794,6 +2966,17 @@
           ],
           "isUnique": false
         },
+        "experience_bookings_site_date_owner_slot_idx": {
+          "name": "experience_bookings_site_date_owner_slot_idx",
+          "columns": [
+            "site_id",
+            "booking_date",
+            "experience_id",
+            "time_slot",
+            "status"
+          ],
+          "isUnique": false
+        },
         "experience_bookings_organization_id_idx": {
           "name": "experience_bookings_organization_id_idx",
           "columns": [
@@ -2891,169 +3074,6 @@
         }
       }
     },
-    "experience_slot_overrides": {
-      "name": "experience_slot_overrides",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "experience_id": {
-          "name": "experience_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "override_date": {
-          "name": "override_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "time_slot": {
-          "name": "time_slot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'closed'"
-        },
-        "capacity_override": {
-          "name": "capacity_override",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "experience_slot_overrides_org_site_idx": {
-          "name": "experience_slot_overrides_org_site_idx",
-          "columns": [
-            "organization_id",
-            "site_id"
-          ],
-          "isUnique": false
-        },
-        "idx_experience_slot_overrides_date": {
-          "name": "idx_experience_slot_overrides_date",
-          "columns": [
-            "experience_id",
-            "override_date"
-          ],
-          "isUnique": false
-        },
-        "idx_experience_slot_overrides_unique": {
-          "name": "idx_experience_slot_overrides_unique",
-          "columns": [
-            "experience_id",
-            "override_date",
-            "time_slot"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "experience_slot_overrides_experience_id_experiences_id_fk": {
-          "name": "experience_slot_overrides_experience_id_experiences_id_fk",
-          "tableFrom": "experience_slot_overrides",
-          "tableTo": "experiences",
-          "columnsFrom": [
-            "experience_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "experience_slot_overrides_organization_id_organization_id_fk": {
-          "name": "experience_slot_overrides_organization_id_organization_id_fk",
-          "tableFrom": "experience_slot_overrides",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "experience_slot_overrides_site_id_sites_id_fk": {
-          "name": "experience_slot_overrides_site_id_sites_id_fk",
-          "tableFrom": "experience_slot_overrides",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "experiences": {
       "name": "experiences",
       "columns": {
@@ -3127,13 +3147,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "available_note": {
-          "name": "available_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -3149,13 +3162,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "highlights": {
-          "name": "highlights",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "included_items": {
           "name": "included_items",
@@ -3626,13 +3632,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "entry_id": {
           "name": "entry_id",
           "type": "text",
@@ -3656,13 +3655,6 @@
         },
         "purpose": {
           "name": "purpose",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -3708,13 +3700,6 @@
         }
       },
       "indexes": {
-        "guest_thread_deliveries_idempotency_key_unique": {
-          "name": "guest_thread_deliveries_idempotency_key_unique",
-          "columns": [
-            "idempotency_key"
-          ],
-          "isUnique": true
-        },
         "guest_thread_deliveries_provider_message_unique": {
           "name": "guest_thread_deliveries_provider_message_unique",
           "columns": [
@@ -3724,40 +3709,25 @@
           "isUnique": true,
           "where": "provider_message_id IS NOT NULL"
         },
-        "guest_thread_deliveries_thread_status_idx": {
-          "name": "guest_thread_deliveries_thread_status_idx",
+        "guest_thread_deliveries_entry_status_idx": {
+          "name": "guest_thread_deliveries_entry_status_idx",
           "columns": [
-            "thread_id",
+            "entry_id",
             "status"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "guest_thread_deliveries_thread_id_guest_threads_id_fk": {
-          "name": "guest_thread_deliveries_thread_id_guest_threads_id_fk",
-          "tableFrom": "guest_thread_deliveries",
-          "tableTo": "guest_threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_deliveries_entry_thread_fk": {
-          "name": "guest_thread_deliveries_entry_thread_fk",
+        "guest_thread_deliveries_entry_id_guest_thread_entries_id_fk": {
+          "name": "guest_thread_deliveries_entry_id_guest_thread_entries_id_fk",
           "tableFrom": "guest_thread_deliveries",
           "tableTo": "guest_thread_entries",
           "columnsFrom": [
-            "entry_id",
-            "thread_id"
+            "entry_id"
           ],
           "columnsTo": [
-            "id",
-            "thread_id"
+            "id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -3796,20 +3766,6 @@
         },
         "thread_id": {
           "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -3910,30 +3866,6 @@
           ],
           "isUnique": true
         },
-        "guest_thread_entries_site_kind_occurred_idx": {
-          "name": "guest_thread_entries_site_kind_occurred_idx",
-          "columns": [
-            "site_id",
-            "kind",
-            "occurred_at"
-          ],
-          "isUnique": false
-        },
-        "guest_thread_entries_organization_id_idx": {
-          "name": "guest_thread_entries_organization_id_idx",
-          "columns": [
-            "organization_id"
-          ],
-          "isUnique": false
-        },
-        "guest_thread_entries_id_thread_unique": {
-          "name": "guest_thread_entries_id_thread_unique",
-          "columns": [
-            "id",
-            "thread_id"
-          ],
-          "isUnique": true
-        },
         "guest_thread_entries_thread_sequence_unique": {
           "name": "guest_thread_entries_thread_sequence_unique",
           "columns": [
@@ -3950,32 +3882,6 @@
           "tableTo": "guest_threads",
           "columnsFrom": [
             "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_entries_organization_id_organization_id_fk": {
-          "name": "guest_thread_entries_organization_id_organization_id_fk",
-          "tableFrom": "guest_thread_entries",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "guest_thread_entries_site_id_sites_id_fk": {
-          "name": "guest_thread_entries_site_id_sites_id_fk",
-          "tableFrom": "guest_thread_entries",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
           ],
           "columnsTo": [
             "id"
@@ -5683,13 +5589,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "guest_thread_id": {
-          "name": "guest_thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "source_entry_id": {
           "name": "source_entry_id",
           "type": "text",
@@ -5705,13 +5604,6 @@
           "autoincrement": false,
           "default": "'organization'"
         },
-        "event_type": {
-          "name": "event_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "severity": {
           "name": "severity",
           "type": "text",
@@ -5719,13 +5611,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'info'"
-        },
-        "actor_user_id": {
-          "name": "actor_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "target_user_id": {
           "name": "target_user_id",
@@ -5757,13 +5642,6 @@
         },
         "title": {
           "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "payload": {
-          "name": "payload",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -5807,14 +5685,6 @@
           "name": "notifications_target_user_created_at_idx",
           "columns": [
             "target_user_id",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "notifications_guest_thread_created_at_idx": {
-          "name": "notifications_guest_thread_created_at_idx",
-          "columns": [
-            "guest_thread_id",
             "created_at"
           ],
           "isUnique": false
@@ -5868,30 +5738,17 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "notifications_guest_thread_id_guest_threads_id_fk": {
-          "name": "notifications_guest_thread_id_guest_threads_id_fk",
+        "notifications_source_entry_id_guest_thread_entries_id_fk": {
+          "name": "notifications_source_entry_id_guest_thread_entries_id_fk",
           "tableFrom": "notifications",
-          "tableTo": "guest_threads",
+          "tableTo": "guest_thread_entries",
           "columnsFrom": [
-            "guest_thread_id"
+            "source_entry_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "notifications_actor_user_id_user_id_fk": {
-          "name": "notifications_actor_user_id_user_id_fk",
-          "tableFrom": "notifications",
-          "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "notifications_target_user_id_user_id_fk": {
@@ -5906,31 +5763,11 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
-        },
-        "notifications_source_entry_thread_fk": {
-          "name": "notifications_source_entry_thread_fk",
-          "tableFrom": "notifications",
-          "tableTo": "guest_thread_entries",
-          "columnsFrom": [
-            "source_entry_id",
-            "guest_thread_id"
-          ],
-          "columnsTo": [
-            "id",
-            "thread_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "notifications_thread_source_check": {
-          "name": "notifications_thread_source_check",
-          "value": "(guest_thread_id IS NULL AND source_entry_id IS NULL) OR (guest_thread_id IS NOT NULL AND source_entry_id IS NOT NULL)"
-        }
-      }
+      "checkConstraints": {}
     },
     "oauthAccessToken": {
       "name": "oauthAccessToken",
@@ -8185,6 +8022,15 @@
           ],
           "isUnique": true
         },
+        "post_channel_jobs_provider_post_unique": {
+          "name": "post_channel_jobs_provider_post_unique",
+          "columns": [
+            "organization_id",
+            "channel",
+            "provider_post_id"
+          ],
+          "isUnique": true
+        },
         "post_channel_jobs_post_id_idx": {
           "name": "post_channel_jobs_post_id_idx",
           "columns": [
@@ -8251,13 +8097,6 @@
         },
         "location_id": {
           "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "google_post_id": {
-          "name": "google_post_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -8464,7 +8303,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -8478,6 +8317,10 @@
         "posts_source_check": {
           "name": "posts_source_check",
           "value": "source IN ('manual', 'template')"
+        },
+        "posts_post_type_check": {
+          "name": "posts_post_type_check",
+          "value": "post_type IN ('standard', 'offer', 'event', 'update')"
         }
       }
     },
@@ -9478,174 +9321,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "reservation_slot_overrides": {
-      "name": "reservation_slot_overrides",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "override_date": {
-          "name": "override_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "time_slot": {
-          "name": "time_slot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'closed'"
-        },
-        "capacity_override": {
-          "name": "capacity_override",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "idx_reservation_slot_overrides_unique": {
-          "name": "idx_reservation_slot_overrides_unique",
-          "columns": [
-            "location_id",
-            "override_date",
-            "time_slot"
-          ],
-          "isUnique": true
-        },
-        "idx_reservation_slot_overrides_date": {
-          "name": "idx_reservation_slot_overrides_date",
-          "columns": [
-            "location_id",
-            "override_date"
-          ],
-          "isUnique": false
-        },
-        "reservation_slot_overrides_org_site_idx": {
-          "name": "reservation_slot_overrides_org_site_idx",
-          "columns": [
-            "organization_id",
-            "site_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "reservation_slot_overrides_location_id_business_locations_id_fk": {
-          "name": "reservation_slot_overrides_location_id_business_locations_id_fk",
-          "tableFrom": "reservation_slot_overrides",
-          "tableTo": "business_locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reservation_slot_overrides_organization_id_organization_id_fk": {
-          "name": "reservation_slot_overrides_organization_id_organization_id_fk",
-          "tableFrom": "reservation_slot_overrides",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reservation_slot_overrides_site_id_sites_id_fk": {
-          "name": "reservation_slot_overrides_site_id_sites_id_fk",
-          "tableFrom": "reservation_slot_overrides",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "reservation_slot_overrides_status_check": {
-          "name": "reservation_slot_overrides_status_check",
-          "value": "status IN ('closed', 'open')"
-        }
-      }
-    },
     "reservation_submissions": {
       "name": "reservation_submissions",
       "columns": {
@@ -9853,6 +9528,17 @@
             "review_request_sent_at",
             "review_reminder_sent_at",
             "review_submitted_at"
+          ],
+          "isUnique": false
+        },
+        "reservation_submissions_site_date_owner_slot_idx": {
+          "name": "reservation_submissions_site_date_owner_slot_idx",
+          "columns": [
+            "site_id",
+            "date",
+            "location_id",
+            "time",
+            "status"
           ],
           "isUnique": false
         },

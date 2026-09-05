@@ -130,7 +130,8 @@ async function main() {
       SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
              gt.submission_type, gt.submission_id
       FROM guest_thread_deliveries d
-      JOIN guest_threads gt ON gt.id = d.thread_id
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
         AND gt.site_id = '${sqlEscape(siteId)}'
         AND d.purpose = 'owner_alert'
@@ -154,7 +155,8 @@ async function main() {
       SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
              gt.submission_type, gt.submission_id
       FROM guest_thread_deliveries d
-      JOIN guest_threads gt ON gt.id = d.thread_id
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
         AND gt.site_id = '${sqlEscape(siteId)}'
         AND d.purpose = 'owner_alert'
@@ -195,7 +197,8 @@ async function main() {
       SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
              gt.submission_type, gt.submission_id
       FROM guest_thread_deliveries d
-      JOIN guest_threads gt ON gt.id = d.thread_id
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
         AND gt.site_id = '${sqlEscape(siteId)}'
         AND gt.submission_type = 'reservation'
@@ -265,7 +268,8 @@ async function main() {
       SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
              gt.submission_type, gt.submission_id
       FROM guest_thread_deliveries d
-      JOIN guest_threads gt ON gt.id = d.thread_id
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
         AND gt.site_id = '${sqlEscape(siteId)}'
         AND gt.submission_type = 'reservation'

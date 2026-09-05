@@ -160,7 +160,12 @@ export interface CuratedExperienceDefinition {
   tagline: string
   body: string
   media: CuratedMediaPlacement<'gallery'>[]
-  highlights?: string[] | null
+  tags?: string[]
+  details?: Array<{
+    key: string
+    label: string
+    values: string[]
+  }>
   includedItems?: string[] | null
   whatToBring?: string[] | null
   meetingPoint?: string | null
@@ -170,7 +175,6 @@ export interface CuratedExperienceDefinition {
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]
-  availableNote: string
   status: 'active' | 'inactive' | 'sold_out'
   sortOrder: number
   featured: boolean
@@ -232,9 +236,16 @@ export interface CuratedPostChannelJobDefinition {
 export interface CuratedPostDefinition {
   id: string
   locationId: string | null
-  postType: 'update' | 'standard' | 'offer'
+  postType: 'update' | 'standard' | 'offer' | 'event'
   title: string | null
   body: string
+  ctaType?: string | null
+  ctaUrl?: string | null
+  eventTitle?: string | null
+  eventStartAt?: string | null
+  eventEndAt?: string | null
+  offerCoupon?: string | null
+  offerTerms?: string | null
   media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: 'published' | 'scheduled'
   publishedAt: string
@@ -322,7 +333,12 @@ export interface CompiledSeedExperience {
   tagline: string
   body: string
   media: CuratedMediaPlacement<'gallery'>[]
-  highlights: string[] | null
+  tags: string[]
+  details: Array<{
+    key: string
+    label: string
+    values: string[]
+  }>
   includedItems: string[] | null
   whatToBring: string[] | null
   meetingPoint: string | null
@@ -332,7 +348,6 @@ export interface CompiledSeedExperience {
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]
-  availableNote: string
   status: CuratedExperienceDefinition['status']
   sortOrder: number
   featured: boolean
@@ -407,6 +422,13 @@ export interface CompiledSeedPost {
   postType: CuratedPostDefinition['postType']
   title: string | null
   body: string
+  ctaType: string | null
+  ctaUrl: string | null
+  eventTitle: string | null
+  eventStartAt: string | null
+  eventEndAt: string | null
+  offerCoupon: string | null
+  offerTerms: string | null
   media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: CuratedPostDefinition['status']
   publishedAt: string

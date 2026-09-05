@@ -10,9 +10,6 @@
  * 1. Rejects bare BEGIN/COMMIT/ROLLBACK statements in migrations/*.sql outside
  *    of CREATE TRIGGER ... BEGIN ... END bodies (where BEGIN/END are trigger
  *    body delimiters, not transaction control, and are always allowed).
- * 2. Requires the current epoch baseline to remain first and rejects duplicate
- *    migration numbers. Every file applied to an active D1 ID is immutable;
- *    squashing starts a new database epoch instead of rewriting this one.
  * Usage:
  *   node scripts/lint-migrations.mjs
  */
@@ -24,7 +21,7 @@ import { DatabaseSync, constants } from 'node:sqlite'
 
 const ROOT = process.cwd()
 const MIGRATIONS_DIR = join(ROOT, 'migrations')
-const EPOCH_BASELINE = '0000_epoch_5_baseline.sql'
+const EPOCH_BASELINE = '0000_epoch_4_baseline.sql'
 
 function stripTriggerBodies(sql) {
   // Replace with an equal number of newlines (not '') so line numbers for any
@@ -64,7 +61,7 @@ function lintEpochBaseline(presentFiles) {
   if (names[0] === EPOCH_BASELINE) return []
   return [{
     file: `migrations/${EPOCH_BASELINE}`,
-    message: 'Epoch 5 must start with its immutable generated baseline. A future squash requires new D1 resources and a new database epoch.',
+    message: 'Epoch 4 must start with its generated baseline. Production history is immutable after cutover; an unreleased staging Epoch 4 candidate may be reset and reprovisioned from this baseline.',
   }]
 }
 

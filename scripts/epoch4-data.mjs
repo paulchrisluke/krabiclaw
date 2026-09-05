@@ -1,16 +1,5 @@
 #!/usr/bin/env node
 /**
- * Epoch 4 data transform: Product categories become records.
- *
- * Epoch 4 begins from `migrations/0000_epoch_4_baseline.sql` and must never be
- * applied to an Epoch 3 resource. This transforms an Epoch 3 export into an
- * empty Epoch 4 candidate, and verifies the result against the source.
- *
- * The only model change is Product categories. Every other table is copied
- * column-for-column, and the verifier rejects every unexpected table/column, so
- * an unnoticed schema change fails the transform rather than silently dropping
- * data.
- *
  * Usage:
  *   node scripts/epoch4-data.mjs transform /abs/epoch3.sqlite /abs/epoch4.sqlite
  *   node scripts/epoch4-data.mjs verify    /abs/epoch3.sqlite /abs/epoch4.sqlite
@@ -29,8 +18,26 @@ const baselineSql = readdirSync(migrationsDirectory)
   .sort()
   .map(name => ({ name, sql: readFileSync(join(migrationsDirectory, name), 'utf8') }))
 
+const RESET_TABLES = new Set([
+  'guest_thread_deliveries', 'guest_thread_entries', 'guest_threads',
+  'notification_reads', 'notifications',
+])
+
+const DELETED_TABLES = new Set([
+  'guest_thread_commands', 'guest_thread_member_state', 'guest_thread_outbox',
+  'guest_thread_sequence_counters', 'notification_deliveries', 'notification_events',
+])
+
+const CONSOLIDATED_AVAILABILITY_TABLES = new Set([
+  'experience_slot_overrides', 'reservation_slot_overrides',
+])
+
 /** Tables this transform rewrites rather than copies. */
-const TRANSFORMED_TABLES = new Set(['products', 'product_categories'])
+const TRANSFORMED_TABLES = new Set([
+  'products', 'product_categories', 'booking_policies', 'experiences', 'posts',
+  'post_channel_jobs', 'availability_overrides',
+  ...CONSOLIDATED_AVAILABILITY_TABLES, ...RESET_TABLES,
+])
 
 function qi(value) { return `"${String(value).replaceAll('"', '""')}"` }
 function tableExists(db, table) { return Boolean(db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)) }
@@ -64,14 +71,25 @@ function assertSchemaParity(source, target) {
   assert(tableExists(source, 'products') && columns(source, 'products').some(column => column.name === 'category'), 'Source must be Epoch 3 with products.category')
   assert(!tableExists(source, 'product_categories'), 'Source already contains product_categories')
   const sourceTables = tables(source)
-  const targetTables = tables(target).filter(table => table !== 'product_categories')
-  assert(JSON.stringify(sourceTables) === JSON.stringify(targetTables), 'Application table census changed outside product_categories')
+  const expectedTargetTables = [
+    ...sourceTables.filter(table => !DELETED_TABLES.has(table) && !CONSOLIDATED_AVAILABILITY_TABLES.has(table)),
+    'availability_overrides', 'product_categories',
+  ].sort()
+  assert(JSON.stringify(expectedTargetTables) === JSON.stringify(tables(target)), 'Application table census changed outside the declared Epoch 4 correction')
   for (const table of sourceTables) {
+    if (DELETED_TABLES.has(table) || TRANSFORMED_TABLES.has(table)) continue
     const before = columns(source, table).map(column => column.name).filter(name => table !== 'products' || name !== 'category').sort()
     const after = columns(target, table).map(column => column.name).filter(name => table !== 'products' || name !== 'category_id').sort()
     assert(JSON.stringify(before) === JSON.stringify(after), `${table}: unexpected source/destination columns`)
   }
   assert(columns(target, 'products').some(column => column.name === 'category_id'), 'Target must be Epoch 4 with products.category_id')
+  assert(!columns(target, 'posts').some(column => column.name === 'google_post_id'), 'Target posts still contains google_post_id')
+  assert(columns(target, 'post_channel_jobs').some(column => column.name === 'provider_post_id'), 'Target channel jobs lack provider_post_id')
+  assert(!columns(target, 'guest_thread_entries').some(column => ['organization_id', 'site_id'].includes(column.name)), 'Target entries duplicate tenant ownership')
+  assert(!columns(target, 'guest_thread_deliveries').some(column => ['thread_id', 'idempotency_key'].includes(column.name)), 'Target deliveries duplicate thread or idempotency identity')
+  assert(!columns(target, 'notifications').some(column => ['guest_thread_id', 'event_type', 'actor_user_id', 'payload'].includes(column.name)), 'Target notifications retain overlapping fact fields')
+  assert(tableExists(target, 'availability_overrides'), 'Target lacks canonical availability overrides')
+  assert(!tableExists(target, 'experience_slot_overrides') && !tableExists(target, 'reservation_slot_overrides'), 'Target retains split availability override tables')
   // Category translations need an explicit, reviewed mapping; silently retaining
   // the retired Product field would create invalid canonical localization data.
   const legacyTranslations = source.prepare("SELECT count(*) count FROM resource_localizations WHERE resource_type = 'product' AND json_type(values_json, '$.category') IS NOT NULL").get().count
@@ -79,7 +97,7 @@ function assertSchemaParity(source, target) {
 }
 
 function tableParity(source, target) {
-  return tables(source).map((table) => {
+  return tables(source).filter(table => !DELETED_TABLES.has(table) && !TRANSFORMED_TABLES.has(table)).map((table) => {
     const names = columns(source, table).map(column => column.name)
       .filter(name => table !== 'products' || !['category', 'sort_order'].includes(name)).sort()
     const sourceRows = rows(source, table)
@@ -99,6 +117,88 @@ function insertRows(db, table, values) {
     for (const record of records) statement.run(names.map(name => record[name] ?? null))
   })
   insertAll(values)
+}
+
+function projectCommonRows(source, target, table) {
+  const sourceNames = new Set(columns(source, table).map(column => column.name))
+  const targetNames = columns(target, table).map(column => column.name)
+  const projected = rows(source, table).map((row) => Object.fromEntries(
+    targetNames.map(name => [name, sourceNames.has(name) ? row[name] : null]),
+  ))
+  insertRows(target, table, projected)
+  return projected
+}
+
+function normalizedPosts(source, target) {
+  const sourceNames = new Set(columns(source, 'posts').map(column => column.name))
+  const targetNames = columns(target, 'posts').map(column => column.name)
+  return rows(source, 'posts').map((post) => Object.fromEntries(targetNames.map((name) => {
+    if (name === 'post_type' && post.post_type === 'offer' && !post.offer_coupon && !post.offer_terms) {
+      return [name, 'standard']
+    }
+    return [name, sourceNames.has(name) ? post[name] : null]
+  })))
+}
+
+function normalizedPostChannelJobs(source, target) {
+  const targetNames = columns(target, 'post_channel_jobs').map(column => column.name)
+  const sourceNames = new Set(columns(source, 'post_channel_jobs').map(column => column.name))
+  const jobs = rows(source, 'post_channel_jobs').map(job => Object.fromEntries(
+    targetNames.map(name => [name, sourceNames.has(name) ? job[name] : null]),
+  ))
+  const jobByPostChannel = new Map(jobs.map(job => [`${job.post_id}:${job.channel}`, job]))
+  const postsById = new Map(rows(source, 'posts').map(post => [post.id, post]))
+
+  for (const post of postsById.values()) {
+    if (!post.google_post_id) continue
+    const raw = String(post.google_post_id)
+    const channel = raw.startsWith('ig-') ? 'instagram' : raw.startsWith('fb-') ? 'facebook' : 'google'
+    const providerPostId = raw.replace(/^(?:ig|fb)-/u, '')
+    const key = `${post.id}:${channel}`
+    const existing = jobByPostChannel.get(key)
+    if (existing) {
+      existing.provider_post_id = providerPostId
+      continue
+    }
+    const values = {
+      id: `epoch4-${channel}-${post.id}`,
+      post_id: post.id,
+      organization_id: post.organization_id,
+      channel,
+      status: post.status === 'published' ? 'published' : 'pending',
+      provider_post_id: providerPostId,
+      error: null,
+      published_at: post.published_at ?? null,
+      created_at: post.created_at,
+    }
+    const job = Object.fromEntries(targetNames.map(name => [name, values[name] ?? null]))
+    jobs.push(job)
+    jobByPostChannel.set(key, job)
+  }
+  return jobs
+}
+
+function normalizedAvailabilityOverrides(source, target) {
+  const targetNames = columns(target, 'availability_overrides').map(column => column.name)
+  const records = []
+  const ids = new Set()
+  for (const [table, ownerType, ownerColumn] of [
+    ['reservation_slot_overrides', 'location', 'location_id'],
+    ['experience_slot_overrides', 'experience', 'experience_id'],
+  ]) {
+    for (const row of rows(source, table)) {
+      assert(!ids.has(row.id), `Availability override id ${row.id} is duplicated across legacy tables`)
+      ids.add(row.id)
+      const values = {
+        ...row,
+        owner_type: ownerType,
+        location_id: ownerType === 'location' ? row[ownerColumn] : null,
+        experience_id: ownerType === 'experience' ? row[ownerColumn] : null,
+      }
+      records.push(Object.fromEntries(targetNames.map(name => [name, values[name] ?? null])))
+    }
+  }
+  return records
 }
 
 /**
@@ -197,6 +297,20 @@ function transformProducts(source, target, now) {
 function verifyDatabases(source, target) {
   assertSchemaParity(source, target)
   const parity = tableParity(source, target)
+  for (const table of RESET_TABLES) assert(count(target, table) === 0, `${table}: historical messaging rows were backfilled`)
+  for (const table of ['booking_policies', 'experiences']) {
+    const names = columns(target, table).map(column => column.name)
+    const projected = rows(source, table).map(row => Object.fromEntries(names.map(name => [name, row[name] ?? null])))
+    assert(hashRows(projected, names) === hashRows(rows(target, table), names), `${table}: retained fields changed`)
+  }
+  const postNames = columns(target, 'posts').map(column => column.name)
+  assert(hashRows(normalizedPosts(source, target), postNames) === hashRows(rows(target, 'posts'), postNames), 'posts: canonical projection changed')
+  const jobNames = columns(target, 'post_channel_jobs').map(column => column.name)
+  assert(hashRows(normalizedPostChannelJobs(source, target), jobNames) === hashRows(rows(target, 'post_channel_jobs'), jobNames), 'post_channel_jobs: provider identity projection changed')
+  const availabilityNames = columns(target, 'availability_overrides').map(column => column.name)
+  const normalizedAvailability = normalizedAvailabilityOverrides(source, target)
+  const actualAvailability = rows(target, 'availability_overrides')
+  assert(hashRows(normalizedAvailability, availabilityNames) === hashRows(actualAvailability, availabilityNames), 'availability_overrides: consolidated rows changed')
   const planned = planCategories(rows(source, 'products'))
   const actualCategories = rows(target, 'product_categories')
   const categoryColumns = ['id', 'organization_id', 'site_id', 'location_id', 'product_type', 'name', 'slug', 'sort_order']
@@ -217,8 +331,19 @@ function verifyDatabases(source, target) {
     tables: parity,
     products: { source: count(source, 'products'), target: count(target, 'products') },
     product_categories: actualCategories.length,
+    availability_overrides: {
+      source: normalizedAvailability.length,
+      target: actualAvailability.length,
+      hash: hashRows(actualAvailability, availabilityNames),
+    },
     category_hash: hashRows(actualCategories, categoryColumns),
     assignment_hash: hashRows(actualAssignments, assignmentColumns),
+    discarded_messaging_rows: Object.fromEntries(
+      [...RESET_TABLES, ...DELETED_TABLES]
+        .filter(table => tableExists(source, table))
+        .sort()
+        .map(table => [table, count(source, table)]),
+    ),
   }
 }
 
@@ -242,6 +367,10 @@ function transform(sourcePath, targetPath) {
   }
 
   transformProducts(source, target, now)
+  for (const table of ['booking_policies', 'experiences']) projectCommonRows(source, target, table)
+  insertRows(target, 'posts', normalizedPosts(source, target))
+  insertRows(target, 'post_channel_jobs', normalizedPostChannelJobs(source, target))
+  insertRows(target, 'availability_overrides', normalizedAvailabilityOverrides(source, target))
 
   target.pragma('foreign_keys = ON')
   const violations = target.pragma('foreign_key_check')

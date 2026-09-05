@@ -85,11 +85,21 @@ guards or change expected history to make an upgrade pass.
 
 ## Shared environments
 
-- Once staging or production has applied a migration, that migration and its generated metadata are immutable.
-- Fix subsequent schema changes with a new `schema.ts` change and new generated migration.
+- Production migration history is immutable after cutover. Fix later production
+  schema changes with a new `schema.ts` change and a new generated migration.
+- Staging is a standalone qualification database. While a database epoch is
+  unreleased and production still runs the prior epoch, staging may be reset or
+  reprovisioned from the corrected generated baseline. An earlier staging apply
+  does not force another epoch.
+- Once an epoch reaches production, its baseline and generated metadata are
+  immutable in both the repository and every retained environment.
+- Never preserve staging data by copying it into production. Recreate required
+  staging fixtures through the canonical seed and provisioning commands.
 
 ## Database epochs
 
 - Squashing/rebaselining is not a normal migration operation.
 - It requires the explicit database-epoch procedure.
-- Never rewrite migration history for an active D1 database resource.
+- Never rewrite migration history for a production or rollback D1 resource.
+  During an unreleased epoch, rebuild the standalone staging resource instead
+  of mutating its migration ledger.

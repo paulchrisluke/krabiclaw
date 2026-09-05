@@ -645,7 +645,7 @@ test.describe('stateless MCP server', () => {
       const experienceUpdate = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'update_experience',
-        args: { site_id: siteId, experience_id: experienceId, tagline: 'Updated through MCP', available_note: 'Call ahead to confirm.' },
+        args: { site_id: siteId, experience_id: experienceId, tagline: 'Updated through MCP', tags: ['small group'] },
       })
       expect(experienceUpdate.status()).toBe(200)
 

@@ -42,5 +42,10 @@ export async function acknowledgeThreadNotifications(
   visibility: NotificationVisibility,
   threadId: string,
 ): Promise<number> {
-  return await acknowledgeVisibleNotifications(db, visibility, 'n.guest_thread_id = ?', [threadId])
+  return await acknowledgeVisibleNotifications(
+    db,
+    visibility,
+    'n.source_entry_id IN (SELECT id FROM guest_thread_entries WHERE thread_id = ?)',
+    [threadId],
+  )
 }

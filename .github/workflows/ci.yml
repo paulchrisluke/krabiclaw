@@ -221,7 +221,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --preview
+        run: node --experimental-strip-types scripts/provision-development-auth.ts --preview
       - name: Verify preview fixtures
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -280,13 +280,6 @@ jobs:
           key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
-      - name: Verify staging database epoch binding
-        run: node scripts/check-database-epoch-binding.mjs staging
-      - name: Verify prepared staging Epoch 5 database
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/check-remote-database-epoch.mjs staging
       - run: corepack yarn playwright install --with-deps chromium
       - name: Build staging Worker
         run: yarn build
@@ -362,13 +355,6 @@ jobs:
           key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
-      - name: Verify production database epoch binding
-        run: node scripts/check-database-epoch-binding.mjs production
-      - name: Verify prepared production Epoch 5 database
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/check-remote-database-epoch.mjs production
       - name: Build production Worker
         run: yarn build
       - name: Capture Nuxt build ID

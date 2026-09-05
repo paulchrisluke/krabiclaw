@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { DASHBOARD_MANAGEMENT_WINDOW_DAYS, getExperienceById, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { DASHBOARD_MANAGEMENT_WINDOW_DAYS, getExperienceById, getSlotAvailabilityRange, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
@@ -27,14 +27,14 @@ export default defineHandler(async (event) => {
 
   const timezone = await resolveExperienceTimezone(db, site.organization_id, siteId, experience)
 
-  const dates: Array<{ date: string; slots: Awaited<ReturnType<typeof getSlotAvailability>> }> = []
+  const dateKeys: string[] = []
   const cursor = new Date(`${date}T00:00:00Z`)
   for (let i = 0; i < days; i++) {
-    const dateStr = cursor.toISOString().slice(0, 10)
-    const slots = await getSlotAvailability(db, siteId, experience, dateStr, timezone)
-    dates.push({ date: dateStr, slots })
+    dateKeys.push(cursor.toISOString().slice(0, 10))
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
+  const availability = await getSlotAvailabilityRange(db, siteId, experience, dateKeys, timezone)
+  const dates = dateKeys.map(dateKey => ({ date: dateKey, slots: availability[dateKey] ?? [] }))
 
   return jsonResponse({ timezone, dates })
 })

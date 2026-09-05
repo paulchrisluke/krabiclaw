@@ -4,6 +4,7 @@ import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
+import { PRODUCT_DETAILS_INPUT_SCHEMA } from '~/server/utils/product-validation'
 
 export interface McpToolDefinition {
   name: string
@@ -578,8 +579,8 @@ export const experienceObject = {
         items: { type: 'string' },
       },
     },
-    available_note: { type: ['string', 'null'] },
-    highlights: { type: 'array', items: { type: 'string' } },
+    tags: { type: 'array', items: { type: 'string' } },
+    details: PRODUCT_DETAILS_INPUT_SCHEMA,
     included_items: { type: 'array', items: { type: 'string' } },
     what_to_bring: { type: 'array', items: { type: 'string' } },
     meeting_point: { type: ['string', 'null'] },
@@ -647,8 +648,8 @@ export const experienceWriteSchema = {
   slot_end: { type: 'string', description: 'Convenience: auto-generate slots up to and including this "HH:MM" end time.' },
   slot_interval_minutes: { type: 'number', description: 'Convenience: interval in minutes between generated slots, e.g. 30.' },
   slot_weekday: { type: 'string', enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], description: 'If set alongside slot_start/slot_end/slot_interval_minutes, the generated slots are assigned to recurring_slots for this weekday instead of the flat time_slots list.' },
-  available_note: { type: ['string', 'null'], description: 'Short urgency or availability note, e.g. "Last 2 spots".' },
-  highlights: { type: ['array', 'null'], items: { type: 'string' }, description: 'Short bullet-point highlights for the experience. Use one concise string per highlight.' },
+  tags: { type: ['array', 'null'], items: { type: 'string' }, description: 'Searchable labels shared with the canonical Product model.' },
+  details: { ...PRODUCT_DETAILS_INPUT_SCHEMA, type: ['array', 'null'], description: 'Structured detail groups shared with the canonical Product model.' },
   included_items: { type: ['array', 'null'], items: { type: 'string' }, description: 'Explicit list of what is included. Use one concise string per included item.' },
   what_to_bring: { type: ['array', 'null'], items: { type: 'string' }, description: 'Explicit list of what guests should bring or prepare. Use one concise string per item.' },
   meeting_point: { type: ['string', 'null'], description: 'Specific arrival or check-in instruction for guests.' },
@@ -678,9 +679,8 @@ export const renderedBookingPolicySummaryObject = {
         required: ['id', 'text'],
       },
     },
-    additional_notes_html: { type: ['string', 'null'] },
   },
-  required: ['heading', 'items', 'additional_notes_html'],
+  required: ['heading', 'items'],
 }
 
 export const bookingPolicyObject = {
@@ -693,20 +693,14 @@ export const bookingPolicyObject = {
     scope_type: { type: 'string', enum: ['site', 'location', 'experience'] },
     location_id: { type: ['string', 'null'] },
     experience_id: { type: ['string', 'null'] },
-    booking_window_days: { type: ['number', 'null'] },
     advance_notice_minutes: { type: ['number', 'null'] },
     free_cancellation_until_minutes: { type: ['number', 'null'] },
-    late_arrival_grace_minutes: { type: ['number', 'null'] },
-    host_confirmation_sla_minutes: { type: ['number', 'null'] },
     reschedule_allowed: { type: ['boolean', 'null'] },
     reschedule_cutoff_minutes: { type: ['number', 'null'] },
     deposit_required: { type: ['boolean', 'null'] },
     deposit_trigger_party_size: { type: ['number', 'null'] },
-    special_requests_allowed: { type: ['boolean', 'null'] },
-    weather_policy: { type: ['string', 'null'] },
     minimum_guest_age: { type: ['number', 'null'] },
     accessibility_contact_required: { type: ['boolean', 'null'] },
-    additional_notes_html: { type: ['string', 'null'] },
     source_scope: { type: ['string', 'null'] },
     created_at: { type: ['string', 'null'] },
     updated_at: { type: ['string', 'null'] },
@@ -718,20 +712,14 @@ export const bookingPolicyWriteSchema = {
   scope_type: { type: 'string', enum: ['site', 'location', 'experience'], description: 'Reservation policies must use location scope. Experience policies may use site, location, or experience scope.' },
   location_id: { type: 'string', description: 'Required for reservation policies and location-scoped experience policies.' },
   experience_id: { type: 'string', description: 'Optional experience id when editing an experience-specific policy override.' },
-  booking_window_days: { type: ['number', 'null'] },
   advance_notice_minutes: { type: ['number', 'null'] },
   free_cancellation_until_minutes: { type: ['number', 'null'] },
-  late_arrival_grace_minutes: { type: ['number', 'null'] },
-  host_confirmation_sla_minutes: { type: ['number', 'null'] },
   reschedule_allowed: { type: 'boolean' },
   reschedule_cutoff_minutes: { type: ['number', 'null'] },
   deposit_required: { type: 'boolean' },
   deposit_trigger_party_size: { type: ['number', 'null'] },
-  special_requests_allowed: { type: 'boolean' },
-  weather_policy: { type: ['string', 'null'] },
   minimum_guest_age: { type: ['number', 'null'] },
   accessibility_contact_required: { type: 'boolean' },
-  additional_notes_html: { type: ['string', 'null'] },
   locale: { type: 'string', description: 'Optional locale code for the rendered preview copy. Defaults to en.' },
 } as const
 

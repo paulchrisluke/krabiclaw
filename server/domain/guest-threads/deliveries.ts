@@ -21,7 +21,6 @@ export function getDeliveryRetryEligibility(delivery: GuestThreadDeliveryRow): D
 export async function createDeliveryReceipt(
   db: DbClient,
   input: {
-    threadId: string
     entryId: string
     channel: GuestThreadDeliveryChannel
     provider: GuestThreadDeliveryProvider
@@ -29,30 +28,28 @@ export async function createDeliveryReceipt(
     idempotencyKey: string
   },
 ): Promise<GuestThreadDeliveryRow> {
-  const existing = await getDeliveryByIdempotencyKey(db, input.idempotencyKey)
+  const existing = await getDeliveryById(db, input.idempotencyKey)
   if (existing) return existing
 
-  const id = crypto.randomUUID()
+  const id = input.idempotencyKey
   const now = new Date().toISOString()
   try {
     await execute(db, `
       INSERT INTO guest_thread_deliveries
-        (id, thread_id, entry_id, channel, provider, purpose, idempotency_key, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        (id, entry_id, channel, provider, purpose, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
     `, [
       id,
-      input.threadId,
       input.entryId,
       input.channel,
       input.provider,
       input.purpose,
-      input.idempotencyKey,
       now,
       now,
     ])
   } catch (error) {
     if (/UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error))) {
-      const concurrent = await getDeliveryByIdempotencyKey(db, input.idempotencyKey)
+      const concurrent = await getDeliveryById(db, input.idempotencyKey)
       if (concurrent) return concurrent
     }
     throw error
@@ -61,15 +58,6 @@ export async function createDeliveryReceipt(
   const created = await getDeliveryById(db, id)
   if (!created) throw new Error('Failed to load created guest thread delivery')
   return created
-}
-
-export async function getDeliveryByIdempotencyKey(
-  db: DbClient,
-  idempotencyKey: string,
-): Promise<GuestThreadDeliveryRow | null> {
-  return await queryFirst<GuestThreadDeliveryRow>(db, `
-    SELECT * FROM guest_thread_deliveries WHERE idempotency_key = ? LIMIT 1
-  `, [idempotencyKey])
 }
 
 export async function getDeliveryById(db: DbClient, id: string): Promise<GuestThreadDeliveryRow | null> {
@@ -135,7 +123,7 @@ export async function deliverGuestThreadEmail(
       body: input.body,
       submissionType: input.submissionType as SubmissionType,
       submissionId: input.submissionId,
-      idempotencyKey: input.delivery.idempotency_key,
+      idempotencyKey: input.delivery.id,
     })
 
     return await recordDeliveryOutcome(db, {
@@ -155,8 +143,9 @@ export async function deliverGuestThreadEmail(
 
 export async function listDeliveryFailures(db: DbClient, threadId: string): Promise<GuestThreadDeliveryRow[]> {
   return await queryAll<GuestThreadDeliveryRow>(db, `
-    SELECT * FROM guest_thread_deliveries
-    WHERE thread_id = ? AND status IN ('failed', 'unknown')
-    ORDER BY created_at DESC
+    SELECT d.* FROM guest_thread_deliveries d
+    JOIN guest_thread_entries e ON e.id = d.entry_id
+    WHERE e.thread_id = ? AND d.status IN ('failed', 'unknown')
+    ORDER BY d.created_at DESC
   `, [threadId])
 }

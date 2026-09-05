@@ -82,13 +82,6 @@
               <p class="text-sm leading-relaxed text-muted">{{ item.text }}</p>
             </div>
           </div>
-          <div
-            v-if="activeReservationPolicySummary.additional_notes_html"
-            class="mt-8 max-w-2xl text-sm leading-relaxed text-muted"
-          >
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div v-html="activeReservationPolicySummary.additional_notes_html" />
-          </div>
         </div>
       </section>
 

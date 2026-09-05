@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:73a898c0a98294b3b85d6e1a42030dd0d101ea0496f67057d1fc2e21023fb2a3",
+  "fingerprint": "sha256:bf8f2142ea880d094ce00685d02c734a9dc65586db3ee6e147ca1dc746b426a5",
   "tools": [
     {
       "name": "analyze_document",
@@ -1504,13 +1504,6 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "available_note": {
-            "description": "Short urgency or availability note, e.g. \"Last 2 spots\".",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "body": {
             "description": "Main long-form description for the experience. Use this for the full narrative, inclusions, what guests can expect, and important details that do not have a dedicated field.",
             "type": [
@@ -1522,6 +1515,46 @@
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "details": {
+            "description": "Structured detail groups shared with the canonical Product model.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "type": "string"
+                },
+                "label": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "values": {
+                  "items": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 32,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "values"
+              ],
+              "type": "object"
+            },
+            "maxItems": 24,
+            "type": [
+              "array",
               "null"
             ]
           },
@@ -1539,16 +1572,6 @@
           "featured_sort_order": {
             "description": "Lower numbers sort earlier among featured experiences.",
             "type": "number"
-          },
-          "highlights": {
-            "description": "Short bullet-point highlights for the experience. Use one concise string per highlight.",
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
           },
           "included_items": {
             "description": "Explicit list of what is included. Use one concise string per included item.",
@@ -1741,6 +1764,16 @@
             "description": "Short one-line hook shown in cards and summaries. Keep this concise; do not dump the full description here.",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "description": "Searchable labels shared with the canonical Product model.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
               "null"
             ]
           },
@@ -3981,19 +4014,7 @@
                   "null"
                 ]
               },
-              "additional_notes_html": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "advance_notice_minutes": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "booking_window_days": {
                 "type": [
                   "number",
                   "null"
@@ -4029,21 +4050,9 @@
                   "null"
                 ]
               },
-              "host_confirmation_sla_minutes": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
               "id": {
                 "type": [
                   "string",
-                  "null"
-                ]
-              },
-              "late_arrival_grace_minutes": {
-                "type": [
-                  "number",
                   "null"
                 ]
               },
@@ -4101,19 +4110,7 @@
                   "null"
                 ]
               },
-              "special_requests_allowed": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
               "updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "weather_policy": {
                 "type": [
                   "string",
                   "null"
@@ -4133,19 +4130,7 @@
                   "null"
                 ]
               },
-              "additional_notes_html": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "advance_notice_minutes": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "booking_window_days": {
                 "type": [
                   "number",
                   "null"
@@ -4181,21 +4166,9 @@
                   "null"
                 ]
               },
-              "host_confirmation_sla_minutes": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
               "id": {
                 "type": [
                   "string",
-                  "null"
-                ]
-              },
-              "late_arrival_grace_minutes": {
-                "type": [
-                  "number",
                   "null"
                 ]
               },
@@ -4253,19 +4226,7 @@
                   "null"
                 ]
               },
-              "special_requests_allowed": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
               "updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "weather_policy": {
                 "type": [
                   "string",
                   "null"
@@ -4276,12 +4237,6 @@
           },
           "summary": {
             "properties": {
-              "additional_notes_html": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "heading": {
                 "type": "string"
               },
@@ -4306,8 +4261,7 @@
             },
             "required": [
               "heading",
-              "items",
-              "additional_notes_html"
+              "items"
             ],
             "type": [
               "object",
@@ -7891,12 +7845,6 @@
           "experiences": {
             "items": {
               "properties": {
-                "available_note": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "body": {
                   "type": [
                     "string",
@@ -7912,6 +7860,42 @@
                 "created_at": {
                   "type": "string"
                 },
+                "details": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "maxLength": 80,
+                        "minLength": 1,
+                        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                        "type": "string"
+                      },
+                      "label": {
+                        "maxLength": 120,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "values": {
+                        "items": {
+                          "maxLength": 500,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "maxItems": 32,
+                        "minItems": 1,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "values"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
                 "duration_minutes": {
                   "type": [
                     "number",
@@ -7923,12 +7907,6 @@
                 },
                 "featured_sort_order": {
                   "type": "number"
-                },
-                "highlights": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
                 },
                 "id": {
                   "type": "string"
@@ -8224,6 +8202,12 @@
                     "string",
                     "null"
                   ]
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 "time_slots": {
                   "items": {
@@ -9627,19 +9611,7 @@
           "accessibility_contact_required": {
             "type": "boolean"
           },
-          "additional_notes_html": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "advance_notice_minutes": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "booking_window_days": {
             "type": [
               "number",
               "null"
@@ -9659,18 +9631,6 @@
             "type": "string"
           },
           "free_cancellation_until_minutes": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "host_confirmation_sla_minutes": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "late_arrival_grace_minutes": {
             "type": [
               "number",
               "null"
@@ -9718,15 +9678,6 @@
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
-          },
-          "special_requests_allowed": {
-            "type": "boolean"
-          },
-          "weather_policy": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         },
         "required": [
@@ -9744,19 +9695,7 @@
                   "null"
                 ]
               },
-              "additional_notes_html": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "advance_notice_minutes": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "booking_window_days": {
                 "type": [
                   "number",
                   "null"
@@ -9792,21 +9731,9 @@
                   "null"
                 ]
               },
-              "host_confirmation_sla_minutes": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
               "id": {
                 "type": [
                   "string",
-                  "null"
-                ]
-              },
-              "late_arrival_grace_minutes": {
-                "type": [
-                  "number",
                   "null"
                 ]
               },
@@ -9864,19 +9791,7 @@
                   "null"
                 ]
               },
-              "special_requests_allowed": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
               "updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "weather_policy": {
                 "type": [
                   "string",
                   "null"
@@ -9887,12 +9802,6 @@
           },
           "summary": {
             "properties": {
-              "additional_notes_html": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "heading": {
                 "type": "string"
               },
@@ -9917,8 +9826,7 @@
             },
             "required": [
               "heading",
-              "items",
-              "additional_notes_html"
+              "items"
             ],
             "type": "object"
           }
@@ -14553,19 +14461,7 @@
           "accessibility_contact_required": {
             "type": "boolean"
           },
-          "additional_notes_html": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "advance_notice_minutes": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "booking_window_days": {
             "type": [
               "number",
               "null"
@@ -14585,18 +14481,6 @@
             "type": "string"
           },
           "free_cancellation_until_minutes": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "host_confirmation_sla_minutes": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "late_arrival_grace_minutes": {
             "type": [
               "number",
               "null"
@@ -14644,15 +14528,6 @@
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
-          },
-          "special_requests_allowed": {
-            "type": "boolean"
-          },
-          "weather_policy": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         },
         "required": [
@@ -14691,12 +14566,6 @@
           },
           "summary": {
             "properties": {
-              "additional_notes_html": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "heading": {
                 "type": "string"
               },
@@ -14721,8 +14590,7 @@
             },
             "required": [
               "heading",
-              "items",
-              "additional_notes_html"
+              "items"
             ],
             "type": "object"
           },
@@ -14743,13 +14611,6 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "available_note": {
-            "description": "Short urgency or availability note, e.g. \"Last 2 spots\".",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "body": {
             "description": "Main long-form description for the experience. Use this for the full narrative, inclusions, what guests can expect, and important details that do not have a dedicated field.",
             "type": [
@@ -14761,6 +14622,46 @@
             "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "details": {
+            "description": "Structured detail groups shared with the canonical Product model.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "type": "string"
+                },
+                "label": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "values": {
+                  "items": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 32,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "values"
+              ],
+              "type": "object"
+            },
+            "maxItems": 24,
+            "type": [
+              "array",
               "null"
             ]
           },
@@ -14782,16 +14683,6 @@
           "featured_sort_order": {
             "description": "Lower numbers sort earlier among featured experiences.",
             "type": "number"
-          },
-          "highlights": {
-            "description": "Short bullet-point highlights for the experience. Use one concise string per highlight.",
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
           },
           "included_items": {
             "description": "Explicit list of what is included. Use one concise string per included item.",
@@ -14968,6 +14859,16 @@
             "description": "Short one-line hook shown in cards and summaries. Keep this concise; do not dump the full description here.",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "description": "Searchable labels shared with the canonical Product model.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
               "null"
             ]
           },

@@ -1,17 +1,11 @@
 <template>
   <div class="space-y-5">
     <div class="grid gap-4 sm:grid-cols-2">
-      <UFormField label="Confirmation SLA (minutes)">
-        <UInputNumber :model-value="value.host_confirmation_sla_minutes" :min="0" class="w-full" @update:model-value="updateNumber('host_confirmation_sla_minutes', $event)" />
-      </UFormField>
       <UFormField label="Free cancellation cutoff (minutes)">
         <UInputNumber :model-value="value.free_cancellation_until_minutes" :min="0" class="w-full" @update:model-value="updateNumber('free_cancellation_until_minutes', $event)" />
       </UFormField>
       <UFormField label="Advance notice (minutes)">
         <UInputNumber :model-value="value.advance_notice_minutes" :min="0" class="w-full" @update:model-value="updateNumber('advance_notice_minutes', $event)" />
-      </UFormField>
-      <UFormField label="Late arrival grace (minutes)">
-        <UInputNumber :model-value="value.late_arrival_grace_minutes" :min="0" class="w-full" @update:model-value="updateNumber('late_arrival_grace_minutes', $event)" />
       </UFormField>
       <UFormField label="Deposit trigger party size">
         <UInputNumber :model-value="value.deposit_trigger_party_size" :min="0" class="w-full" @update:model-value="updateNumber('deposit_trigger_party_size', $event)" />
@@ -27,7 +21,6 @@
         <UInputNumber :model-value="value.reschedule_cutoff_minutes" :min="0" class="w-full" @update:model-value="updateNumber('reschedule_cutoff_minutes', $event)" />
       </UFormField>
       <UCheckbox :model-value="Boolean(value.deposit_required)" label="Deposit may be required" @update:model-value="updateBoolean('deposit_required', $event)" />
-      <UCheckbox :model-value="Boolean(value.special_requests_allowed)" label="Allow special requests" @update:model-value="updateBoolean('special_requests_allowed', $event)" />
       <UCheckbox
         v-if="policyType === 'experience'"
         :model-value="Boolean(value.accessibility_contact_required)"
@@ -35,20 +28,6 @@
         @update:model-value="updateBoolean('accessibility_contact_required', $event)"
       />
     </div>
-
-    <UFormField v-if="policyType === 'experience'" label="Weather policy">
-      <UTextarea :model-value="value.weather_policy ?? ''" :rows="3" autoresize @update:model-value="updateString('weather_policy', $event)" />
-    </UFormField>
-
-    <UFormField label="Additional notes">
-      <UTextarea
-        :model-value="value.additional_notes_html ?? ''"
-        :rows="4"
-        autoresize
-        placeholder="Optional extra notes that appear after the generated policy summary."
-        @update:model-value="updateString('additional_notes_html', $event)"
-      />
-    </UFormField>
 
     <div v-if="summary" class="rounded-lg border border-default bg-muted p-4">
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{{ summary.heading }}</p>
@@ -58,10 +37,6 @@
           <span>{{ item.text }}</span>
         </li>
       </ol>
-      <div v-if="summary.additional_notes_html" class="mt-4 border-t border-default pt-4 text-sm text-muted">
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div v-html="summary.additional_notes_html" />
-      </div>
     </div>
   </div>
 </template>
@@ -97,8 +72,4 @@ function updateBoolean(field: keyof BookingPolicyPatch, next: boolean | 'indeter
   patch({ [field]: next === true })
 }
 
-function updateString(field: keyof BookingPolicyPatch, next: string | number | null | undefined) {
-  const normalized = typeof next === 'string' ? next.trim() : ''
-  patch({ [field]: normalized || null })
-}
 </script>

@@ -1,7 +1,7 @@
 import { renderEmail } from '~/server/emails/vue-email'
 import type { DbClient } from '~/server/db'
 import { sendEmail } from '~/server/utils/email-delivery'
-import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
+import { createCanonicalNotification } from '~/server/utils/notification-center'
 import type { GuestInboxPublicationEnv } from '~/server/cloudflare/guest-inbox-events'
 import SiteTransferReminder from '~/server/emails/templates/SiteTransferReminder'
 
@@ -42,26 +42,15 @@ export async function notifySiteTransferReminder(
   const body = opts.customDomainsPaused
     ? 'Your website is ready, but payment setup must be completed before its custom domain can go live.'
     : 'Your new website is ready. Review and claim it when you are ready.'
-  const payload = {
-    site_name: opts.siteName,
-    transfer_url: opts.transferUrl,
-    invited_plan: opts.invitedPlan,
-    invited_domain: opts.invitedDomain,
-    days_pending: opts.daysPending,
-    custom_domains_paused: opts.customDomainsPaused,
-  }
-
   await createCanonicalNotification(db, {
     publishEnv: env,
     scope: 'site',
-    eventType: NOTIFICATION_EVENT_TYPES.SITE_TRANSFER_REMINDER,
     severity: opts.customDomainsPaused ? 'warning' : 'info',
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     title,
     message: body,
     deepLink: opts.transferUrl,
-    payload,
     template: 'site_transfer_reminder',
   })
 

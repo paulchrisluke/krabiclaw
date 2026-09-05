@@ -41,7 +41,7 @@ export default defineHandler(async (event) => {
   const adapter = getAdapter(match.submissionType)
   const thread = await ensureGuestThread(db, adapter, match.submissionId)
   const entry = await appendEntry(db, {
-    threadId: thread.id, organizationId: match.organizationId, siteId: match.siteId, kind: 'message', actorKind: 'guest', channel: 'whatsapp', body: text, dedupeKey: `whatsapp:${messageId}`, })
+    threadId: thread.id, kind: 'message', actorKind: 'guest', channel: 'whatsapp', body: text, dedupeKey: `whatsapp:${messageId}`, })
   const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
   await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState })
 

@@ -434,8 +434,10 @@ export const syncInstagramPosts = async (
     try {
       // Check if post already exists
       const existing = await queryFirst(env.DB,
-        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`,
-        [`ig-${item.id}`, siteId]
+        `SELECT p.id FROM post_channel_jobs j
+         JOIN posts p ON p.id = j.post_id
+         WHERE j.channel = 'instagram' AND j.provider_post_id = ? AND p.site_id = ? LIMIT 1`,
+        [item.id, siteId]
       )
 
       if (existing) {
@@ -489,17 +491,16 @@ export const syncInstagramPosts = async (
         {
           query: `
           INSERT INTO posts (
-            id, organization_id, site_id, location_id, google_post_id, post_type,
+            id, organization_id, site_id, location_id, post_type,
             title, body, cta_url, status, published_at,
             created_by, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
           params: [
             postId,
             organizationId,
             siteId,
             null,
-            `ig-${item.id}`,
             'standard',
             title,
             body,
@@ -512,6 +513,12 @@ export const syncInstagramPosts = async (
           ]
         },
         buildMediaPlacementInsertQuery({ organizationId, siteId, ownerType: 'post', ownerId: postId, slot: 'cover', assetId, sortOrder: 0, createdAt: now, updatedAt: now }),
+        {
+          query: `INSERT INTO post_channel_jobs
+            (id, post_id, organization_id, channel, status, provider_post_id, published_at, created_at)
+            VALUES (?, ?, ?, 'instagram', 'published', ?, ?, ?)`,
+          params: [`ig-job-${item.id}`, postId, organizationId, item.id, item.timestamp, now],
+        },
       ])
 
       success++
@@ -544,8 +551,10 @@ export const syncFacebookPosts = async (
     try {
       // Check if post already exists
       const existing = await queryFirst(env.DB,
-        `SELECT id FROM posts WHERE google_post_id = ? AND site_id = ? LIMIT 1`,
-        [`fb-${item.id}`, siteId]
+        `SELECT p.id FROM post_channel_jobs j
+         JOIN posts p ON p.id = j.post_id
+         WHERE j.channel = 'facebook' AND j.provider_post_id = ? AND p.site_id = ? LIMIT 1`,
+        [item.id, siteId]
       )
 
       if (existing) {
@@ -600,17 +609,16 @@ export const syncFacebookPosts = async (
         {
           query: `
           INSERT INTO posts (
-            id, organization_id, site_id, location_id, google_post_id, post_type,
+            id, organization_id, site_id, location_id, post_type,
             title, body, cta_url, status, published_at,
             created_by, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
           params: [
             postId,
             organizationId,
             siteId,
             null,
-            `fb-${item.id}`,
             'standard',
             title,
             body,
@@ -623,6 +631,12 @@ export const syncFacebookPosts = async (
           ]
         },
         buildMediaPlacementInsertQuery({ organizationId, siteId, ownerType: 'post', ownerId: postId, slot: 'cover', assetId, sortOrder: 0, createdAt: now, updatedAt: now }),
+        {
+          query: `INSERT INTO post_channel_jobs
+            (id, post_id, organization_id, channel, status, provider_post_id, published_at, created_at)
+            VALUES (?, ?, ?, 'facebook', 'published', ?, ?, ?)`,
+          params: [`fb-job-${item.id}`, postId, organizationId, item.id, item.created_time, now],
+        },
       ])
 
       success++

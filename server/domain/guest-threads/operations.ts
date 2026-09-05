@@ -2,7 +2,7 @@ import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/serv
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getAdapter } from './adapters/registry'
-import { deliverGuestThreadEmail, getDeliveryById, getDeliveryByIdempotencyKey, getDeliveryRetryEligibility } from './deliveries'
+import { deliverGuestThreadEmail, getDeliveryById, getDeliveryRetryEligibility } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
 import { getGuestThreadById } from './repository'
 import type {
@@ -138,8 +138,8 @@ function operationEntryQuery(
   return {
     query: `
       INSERT INTO guest_thread_entries
-        (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-      SELECT ?, gt.id, gt.organization_id, gt.site_id, 'operation', 'member', ?, NULL, NULL, ?, ?, ?,
+        (id, thread_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+      SELECT ?, gt.id, 'operation', 'member', ?, NULL, NULL, ?, ?, ?,
              COALESCE((SELECT MAX(sequence) FROM guest_thread_entries WHERE thread_id = gt.id), 0) + 1,
              ?, ?
       FROM guest_threads gt
@@ -217,17 +217,15 @@ function deliveryReceiptQuery(
   return {
     query: `
       INSERT INTO guest_thread_deliveries
-        (id, thread_id, entry_id, channel, provider, purpose, idempotency_key, status, created_at, updated_at)
-      SELECT ?, ?, id, 'email', ?, 'status_update', ?, 'pending', ?, ?
+        (id, entry_id, channel, provider, purpose, status, created_at, updated_at)
+      SELECT ?, id, 'email', ?, 'status_update', 'pending', ?, ?
       FROM guest_thread_entries
       WHERE id = ? AND thread_id = ?
-      ON CONFLICT(idempotency_key) DO NOTHING
+      ON CONFLICT(id) DO NOTHING
     `,
     params: [
       deliveryId,
-      context.thread.id,
       emailProvider(input.env, recipient),
-      deliveryDedupeKey(input),
       now,
       now,
       entryId,
@@ -287,7 +285,7 @@ async function sendStatusUpdate(
 ): Promise<GuestThreadDeliveryRow> {
   const summary = context.adapter.summarize(context.source)
   if (!summary.guestEmail) throw new Error('Status update has no guest email')
-  const delivery = await getDeliveryByIdempotencyKey(db, deliveryDedupeKey(input))
+  const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
   if (!delivery) throw new Error('Status update delivery receipt was not created')
   const fromName = await getSiteBrandName(db, context.thread.site_id)
   return await deliverGuestThreadEmail(db, {
@@ -324,7 +322,7 @@ async function executeSourceMutation(
   }
 
   const entryId = crypto.randomUUID()
-  const deliveryId = crypto.randomUUID()
+  const deliveryId = deliveryDedupeKey(input)
   const now = new Date().toISOString()
   const queries = [
     operationEntryQuery(context, plan, input, entryId, dedupeKey, now),
@@ -367,8 +365,8 @@ async function executeManualTransition(
     {
       query: `
         INSERT INTO guest_thread_entries
-          (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-        SELECT ?, id, organization_id, site_id, 'resolution', 'member', ?, NULL, NULL, ?, NULL, ?,
+          (id, thread_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+        SELECT ?, id, 'resolution', 'member', ?, NULL, NULL, ?, NULL, ?,
                COALESCE((SELECT MAX(sequence) FROM guest_thread_entries WHERE thread_id = guest_threads.id), 0) + 1,
                ?, ?
         FROM guest_threads
@@ -410,14 +408,14 @@ async function executeReply(
 
   if (!entry) {
     const entryId = crypto.randomUUID()
-    const deliveryId = crypto.randomUUID()
+    const deliveryId = deliveryKey
     const now = new Date().toISOString()
     await executeBatch(db, [
       {
         query: `
           INSERT INTO guest_thread_entries
-            (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-          SELECT ?, id, organization_id, site_id, 'message', 'member', ?, 'email', ?, 'thread.member_reply', NULL, ?,
+            (id, thread_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+          SELECT ?, id, 'message', 'member', ?, 'email', ?, 'thread.member_reply', NULL, ?,
                  COALESCE((SELECT MAX(sequence) FROM guest_thread_entries WHERE thread_id = guest_threads.id), 0) + 1,
                  ?, ?
           FROM guest_threads
@@ -429,13 +427,13 @@ async function executeReply(
       {
         query: `
           INSERT INTO guest_thread_deliveries
-            (id, thread_id, entry_id, channel, provider, purpose, idempotency_key, status, created_at, updated_at)
-          SELECT ?, ?, id, 'email', ?, 'member_reply', ?, 'pending', ?, ?
+            (id, entry_id, channel, provider, purpose, status, created_at, updated_at)
+          SELECT ?, id, 'email', ?, 'member_reply', 'pending', ?, ?
           FROM guest_thread_entries
           WHERE id = ? AND thread_id = ?
-          ON CONFLICT(idempotency_key) DO NOTHING
+          ON CONFLICT(id) DO NOTHING
         `,
-        params: [deliveryId, context.thread.id, emailProvider(input.env, summary.guestEmail), deliveryKey, now, now, entryId, context.thread.id],
+        params: [deliveryId, emailProvider(input.env, summary.guestEmail), now, now, entryId, context.thread.id],
       },
     ], { operation: 'guest thread reply receipt' })
     entry = await findEntryByDedupeKey(db, dedupeKey)
@@ -443,7 +441,7 @@ async function executeReply(
 
   if (!entry) return { ok: false, status: 404, reason: 'thread_not_found' }
   if (!entryMatchesRequest(entry, 'thread.member_reply', body)) return conflict()
-  const delivery = await getDeliveryByIdempotencyKey(db, deliveryKey)
+  const delivery = await getDeliveryById(db, deliveryKey)
   if (!delivery || delivery.entry_id !== entry.id) throw new Error('Reply delivery receipt does not match its ledger entry')
 
   const fromName = await getSiteBrandName(db, context.thread.site_id)
@@ -487,9 +485,11 @@ async function retryDelivery(
 ): Promise<OperationOutcome> {
   if (!input.deliveryId) return { ok: false, status: 400, reason: 'missing_delivery_id' }
   const delivery = await getDeliveryById(db, input.deliveryId)
-  if (!delivery || delivery.thread_id !== context.thread.id) {
+  if (!delivery) {
     return { ok: false, status: 404, reason: 'delivery_not_found' }
   }
+  const entry = await getEntryById(db, delivery.entry_id)
+  if (!entry || entry.thread_id !== context.thread.id) return { ok: false, status: 404, reason: 'delivery_not_found' }
   const retryEligibility = getDeliveryRetryEligibility(delivery)
   if (retryEligibility === 'unsupported') {
     return conflict('Only guest-facing email deliveries can be retried here')
@@ -498,8 +498,6 @@ async function retryDelivery(
     return conflict('Only failed or unknown email deliveries can be retried')
   }
 
-  const entry = await getEntryById(db, delivery.entry_id)
-  if (!entry) throw new Error('Delivery ledger entry was not found')
   const summary = context.adapter.summarize(context.source)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
   const fromName = await getSiteBrandName(db, context.thread.site_id)

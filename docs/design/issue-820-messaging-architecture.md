@@ -2,244 +2,122 @@
 
 ## Decision
 
-KrabiClaw will use four durable concepts for guest messaging.
+D1 is authoritative. Source tables own reservation, experience-booking, and
+contact state. `guest_threads` identifies the conversation;
+`guest_thread_entries` records its ordered facts; `guest_thread_deliveries`
+records provider outcomes; `notifications` presents member attention; and
+`notification_reads` records per-user acknowledgement.
 
-1. Source tables own reservation, experience booking, and contact state.
-2. `guest_thread_entries` owns ordered conversation facts and message content.
-3. `notifications` and `notification_reads` own member attention and acknowledgement.
-4. A narrow `guest_thread_deliveries` table owns external send outcomes and WhatsApp reply correlation.
+The dashboard Durable Object only fans out authorized invalidations. It owns no
+domain state. Queue delivery, the outbox, the generic command object, sequence
+counters, independent thread cursors, the notification audit/delivery pair,
+Discord delivery, and the separate inbound-email Worker are deleted.
 
-D1 remains authoritative. The dashboard Durable Object remains only as an authorized WebSocket fanout adapter. The guest delivery Queue, outbox, generic command Durable Object, independent thread read cursors, notification audit log, and Discord delivery path are removed.
+This is the prerequisite for PR #796. It does not duplicate that PR's Today UI
+or reservation change-request behavior.
 
-This prerequisite does not add the Today UI or reservation change-request feature from PR 796. It leaves a simple conditional mutation boundary for that work.
+## Keep, delete, and merge audit
 
-## Caller usage
+| Fact | Canonical owner | Disposition | Evidence and invariant |
+| --- | --- | --- | --- |
+| Submission status and guest details | Source submission table | Keep | A thread references the source; it does not copy mutable source status. |
+| Conversation identity and workflow state | `guest_threads` | Keep and narrow | One row per `(submission_type, submission_id)`; organization, site, and location live here once. |
+| Ordered message/operation fact | `guest_thread_entries` | Keep and narrow | It contains `thread_id`, sequence, actor, content, semantic dedupe key, and timestamps. Organization/site are derived through the thread. |
+| External send outcome and quoted-reply correlation | `guest_thread_deliveries` | Keep and narrow | It references only `entry_id`; thread and tenant derive through the entry. The stable primary key is also the provider idempotency key, so separate `thread_id` and `idempotency_key` columns are deleted. |
+| Member-facing attention | `notifications` | Keep and narrow | It stores audience scope, presentation, optional source entry, and timestamp. Thread derives through `source_entry_id`; `template` is the single discriminator. Duplicate `guest_thread_id`, `event_type`, actor, and payload fields are deleted. |
+| Per-user acknowledgement | `notification_reads` | Keep | This is a normalized many-to-many fact. Folding it into notifications or threads would reintroduce per-user columns/cursors and lose multi-member semantics. |
+| General organization activity feed | `organization_events` | Keep for unrelated activity | Existing readers cover domain, content, billing, member, and work-request history. Guest submission/status writers are removed so it is not a second guest fact store. |
+| Queue/outbox/command/retry leases | none | Delete | Direct provider orchestration records the delivery receipt before send and its outcome after send. There is no background retry engine. |
+| Notification audit and transport delivery | canonical entry/delivery/notification rows | Merge then delete | `notification_events` and `notification_deliveries` duplicated facts now owned by the three narrow tables above. |
 
-Public submission routes perform the existing capacity-safe source insert, open the thread, and dispatch the existing external messages.
+No historical inbox or notification rows are backfilled at the Epoch 4 cutover.
+The transformer reports discarded counts and preserves every unrelated table by
+typed logical hash.
 
-```ts
-const reservation = await createReservation(db, input)
-const thread = await openGuestThread(db, {
-  source: { kind: 'reservation', id: reservation.id },
-})
+## Write boundaries
 
-await notifyReservationCreated(env, db, {
-  reservation,
-  threadId: thread.id,
-  openingEntryId: thread.openingEntryId,
-})
-```
+Public submission routes perform the capacity-safe source insert, open one
+thread, append its submission entry, create one dashboard notification pointing
+to that entry, and send through the existing provider adapters.
 
-Restaurant reservations are created as `confirmed`. They do not wait for a tenant confirmation. The existing capacity predicate remains part of the source insert.
+Dashboard routes perform Better Auth organization and Teams authorization, then
+call ordinary domain functions. They do not invoke a command Durable Object.
+Opening a thread acknowledges only visible notifications whose source entries
+belong to that thread.
 
-The main Worker receives raw Email Routing messages. MIME parsing and address validation happen at the transport boundary. The handler calls the same inbound guest-message use case as other channels.
+Every entry append allocates `MAX(sequence) + 1` and inserts in one D1 statement.
+The unique `(thread_id, sequence)` constraint remains the concurrency backstop.
+A fresh row ID and stable semantic `dedupe_key` gate dependent updates in the
+same batch, so retries cannot repeat source mutations.
 
-```ts
-export default definePlugin((nitroApp) => {
-  nitroApp.hooks.hook('cloudflare:email', async ({ message, env }) => {
-    await receiveGuestEmail(env as CloudflareEnv, message)
-  })
-})
-```
+An outbound reply has three explicit stages:
 
-Dashboard routes perform Better Auth organization and Teams checks, then call ordinary domain functions. They do not call a command Durable Object.
+1. A D1 batch inserts the message entry and a `pending` delivery whose ID is the
+   stable provider idempotency key.
+2. The provider adapter sends using that ID.
+3. D1 records `accepted`, `sent`, `delivered`, `read`, `failed`, or `unknown` and
+   moves the thread only after provider acceptance.
 
-```ts
-const result = await actOnGuestThread(db, env, {
-  threadId,
-  siteId,
-  actorUserId: session.user.id,
-  operation: { kind: 'reply', body, idempotencyKey },
-})
-```
-
-Opening a thread acknowledges its visible mapped notifications for that user.
-
-```ts
-await acknowledgeThreadNotifications(db, {
-  threadId,
-  userId: session.user.id,
-  visibility,
-})
-```
-
-## Domain shape
-
-```ts
-type SubmissionRef =
-  | { kind: 'contact'; id: string }
-  | { kind: 'reservation'; id: string }
-  | { kind: 'experience_booking'; id: string }
-
-type ConversationState = 'needs_attention' | 'waiting_on_guest' | 'resolved'
-
-type EntryKind = 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
-type EntryActor = 'guest' | 'member' | 'system'
-type EntryChannel = 'web' | 'email' | 'whatsapp' | 'system'
-
-interface AppendEntryInput {
-  threadId: string
-  kind: EntryKind
-  actor: EntryActor
-  actorUserId: string | null
-  channel: EntryChannel | null
-  body: string | null
-  eventName: string | null
-  payload: Record<string, unknown> | null
-  dedupeKey: string
-  occurredAt: string
-}
-
-type DeliveryPurpose =
-  | 'owner_alert'
-  | 'guest_acknowledgement'
-  | 'member_reply'
-  | 'status_update'
-
-type DeliveryStatus =
-  | 'pending'
-  | 'accepted'
-  | 'sent'
-  | 'delivered'
-  | 'read'
-  | 'failed'
-  | 'unknown'
-
-interface GuestThreadDelivery {
-  id: string
-  threadId: string
-  entryId: string
-  channel: 'email' | 'whatsapp'
-  provider: 'resend' | 'meta' | 'log_only'
-  purpose: DeliveryPurpose
-  idempotencyKey: string
-  status: DeliveryStatus
-  providerMessageId: string | null
-  error: string | null
-  createdAt: string
-  updatedAt: string
-}
-```
-
-The delivery row stores no recipient, message body, template variables, source snapshot, organization, site, location, retry lease, or attempt counter. The entry and thread provide its ownership. The row exists because external sends cross a transactional boundary, email failures must remain visible, Meta receipts arrive later, and quoted WhatsApp replies need a provider ID to thread mapping.
-
-Non-thread email and WhatsApp functions use the same provider adapters but do not create an unrelated guest-thread delivery row.
-
-## Atomic persistence
-
-Every append uses one D1 statement to allocate `MAX(sequence) + 1` and insert the entry. The unique `(thread_id, sequence)` constraint remains the integrity backstop. This removes the sequence counter.
-
-Every attempt uses a fresh random entry ID and a stable semantic deduplication key. Dependent statements in the same D1 batch are gated by the fresh entry ID. A retry loses the deduplication conflict and cannot update the source or bump the thread because its fresh entry ID does not exist.
-
-```sql
-INSERT INTO guest_thread_entries (..., id, dedupe_key, sequence, ...)
-SELECT ..., :fresh_entry_id, :stable_dedupe_key,
-       COALESCE(MAX(sequence), 0) + 1, ...
-FROM guest_thread_entries
-WHERE thread_id = :thread_id
-ON CONFLICT(dedupe_key) DO NOTHING;
-
-UPDATE guest_threads
-SET conversation_state = :next_state, updated_at = :now
-WHERE id = :thread_id
-  AND EXISTS (
-    SELECT 1 FROM guest_thread_entries WHERE id = :fresh_entry_id
-  );
-```
-
-The implementation must prove the exact SQLite statement shape. The example expresses the gating rule, not migration SQL.
-
-Source mutations, their operation entry, and their thread-state change execute in one D1 batch. The entry insert selects only an eligible source row. The source update and thread update both require the fresh entry ID. Concurrent batches therefore serialize through D1, and a retry cannot replay the mutation.
-
-An outbound member reply crosses the provider boundary in three explicit stages.
-
-1. One D1 batch inserts the message entry and `pending` delivery receipt.
-2. The provider adapter sends with the receipt's stable idempotency key.
-3. One D1 batch records the result and moves the thread to `waiting_on_guest` only after provider acceptance.
-
-A definitive failure remains visible on the delivery. A timeout becomes `unknown`. Meta `unknown` is never retried blindly. A Resend retry may reuse its provider idempotency key. There is no background retry, Queue, or outbox.
+A definitive failure remains visible. A timeout becomes `unknown`. Meta
+`unknown` is never retried blindly. Resend may retry with the same delivery ID.
 
 ## Acknowledgement and realtime
 
-A thread is unread for a user when at least one visible notification mapped to that thread lacks a `(notification_id, user_id)` row in `notification_reads`.
+A thread is unread for a user when a visible notification points to one of its
+entries and lacks that user's `(notification_id, user_id)` row. Only opening
+submissions and inbound guest messages create unread attention. Member replies,
+operations, resolutions, and delivery receipts do not.
 
-Only opening submissions and inbound guest messages create thread notifications. Member messages, operations, resolution entries, and provider delivery changes do not create unread attention. This prevents self-sent messages and delivery receipts from producing phantom unread state.
+Visibility is applied before counting or acknowledgement and includes
+organization membership, Teams location access, and `target_user_id`. Reading a
+thread does not resolve it or mutate its source submission.
 
-Visibility is always applied before acknowledgement or counting. It includes organization membership, Teams location access, and `target_user_id` filtering. Acknowledgement does not resolve the conversation and does not change a reservation.
-
-The organization-scoped dashboard WebSocket publishes small invalidations for thread and notification changes. Clients refetch authoritative HTTP data after an invalidation or reconnect. They expose a connection failure and an explicit refresh action. They do not poll on an interval.
-
-## Schema disposition
-
-Keep and narrow:
-
-- `guest_threads` for conversation identity and `conversation_state`
-- `guest_thread_entries` for ordered facts and message content
-- `guest_thread_deliveries` for thread-owned external send outcomes
-- `notifications` for dashboard audience and presentation
-- `notification_reads` as the only acknowledgement state
-- `organization_events` for its unrelated activity-feed readers and writers
-
-Delete:
-
-- `guest_thread_sequence_counters`
-- `guest_thread_member_state`
-- `guest_thread_commands`
-- `guest_thread_outbox`
-- `notification_events`
-- `notification_deliveries`
-- copied source status, unread counters, cursors, preview fields, and never-maintained timestamps
-- transport fields from `notifications`
-- delivery facts from `guest_thread_entries`
-- guest-source duplicate writes to `organization_events`
-
-`notifications` gains a nullable `guest_thread_id` and `source_entry_id`. The latter is unique when present, so one inbound fact cannot create two dashboard attention records.
-
-`guest_thread_deliveries` has a composite foreign key that proves its entry belongs to its thread. Provider and channel combinations are constrained. Provider message IDs are unique within a provider. Its idempotency key is globally unique.
+The organization-scoped WebSocket carries only invalidations. Clients refetch
+authoritative HTTP data after invalidation or reconnect and expose connection
+failure plus an explicit refresh action; they do not interval-poll.
 
 ## Module boundaries
 
 | Module | Responsibility |
 | --- | --- |
-| `server/domain/guest-threads/repository.ts` | Open and query a thread. Derive source state and latest entry data instead of copying them. |
-| `server/domain/guest-threads/entries.ts` | Append one sequenced, deduplicated fact. No notification, socket, or provider side effects. |
-| `server/domain/guest-threads/operations.ts` | Run conditional source and conversation mutations. Coordinate direct replies. |
-| `server/domain/guest-threads/deliveries.ts` | Persist the narrow receipt and apply provider outcomes. No queue or retry engine. |
-| `server/utils/notification-center.ts` | Create dashboard notifications and acknowledgements. |
-| `server/utils/notifications.ts` | Build event-specific copy, select recipients, and call the canonical dashboard and provider functions. |
-| `server/utils/email-delivery.ts` | Own Resend and log-only email transport. |
-| `server/utils/whatsapp.ts` | Own Meta templates, transport, receipt parsing, and post-success credit charging. |
-| `server/plugins/cloudflare-email.ts` | Parse raw MIME and call the inbound email use case. |
-| `server/cloudflare/durable-objects/guest-inbox-hub.ts` | Fan out authorized organization invalidations. No domain state. |
+| `server/domain/guest-threads/repository.ts` | Open/query threads and derive source and entry projections. |
+| `server/domain/guest-threads/entries.ts` | Append one sequenced, deduplicated fact. |
+| `server/domain/guest-threads/operations.ts` | Coordinate conditional source mutations and direct replies. |
+| `server/domain/guest-threads/deliveries.ts` | Persist the narrow receipt and provider outcome. |
+| `server/utils/notification-center.ts` | Create dashboard attention records. |
+| `server/utils/notification-acknowledgement.ts` | Record visible per-user reads. |
+| `server/utils/notifications.ts` | Build event copy, choose recipients, and call canonical dashboard/provider functions. |
+| `server/utils/email-delivery.ts` | Resend and log-only transport. |
+| `server/utils/whatsapp.ts` | Meta templates and transport. |
+| `server/plugins/cloudflare-email.ts` | Parse raw MIME and call the shared inbound-email use case. |
+| `server/cloudflare/durable-objects/guest-inbox-hub.ts` | Fan out authorized invalidations only. |
 
-The separate email Worker, internal HTTP forwarding endpoint, shared inbound secret, Queue consumer, outbox publisher, command object, and their bindings are deleted after their callers move.
+## Epoch and release boundary
 
-## Database epoch and release boundary
+These changes correct Epoch 4 before it reaches production. Staging is a
+standalone qualification database and may be reset or reprovisioned during an
+unreleased epoch using the canonical Epoch 4 runbook. That does not make an
+applied migration ledger mutable. Once Epoch 4 reaches production, its baseline
+and migration history are immutable and production retains Epoch 3 as rollback
+state through the cutover window.
 
-The target schema rebuilds referenced parent tables. Epoch 4 staging has already applied its committed baseline, so its migration and metadata are immutable. An ordinary migration cannot safely reach this shape. The cleanup therefore requires the next explicit database epoch.
-
-The implementation may prepare the generated baseline, transformer, verifier, and cutover runbook in Git. It must not provision resources, change bindings, change Email Routing, import shared data, deploy, or perform a cutover without the release gates and explicit authorization in the canonical operations documents.
-
-The owner has already specified no inbox or notification backfill. The epoch verifier must still report the omitted source table counts and must copy every unrelated table exactly. It must preserve `organization_events` rows even after guest-specific duplicate writers are removed.
-
-Inbound email uses one hard routing cutover after the main Worker hook passes a raw-MIME runtime check. The old Worker and HTTP endpoint do not remain as a fallback.
+The pull request may prepare schema, generated baseline, transformer, verifier,
+and runbook. It must not reset staging, provision resources, change bindings,
+import shared data, deploy, or cut over production without the target checks and
+authorization required by the operations documents.
 
 ## Verification contract
 
-The change is complete only when all of these checks pass.
+- Schema drift, migration lint/tests, typecheck, lint, and build pass.
+- The Epoch 3-to-4 transform proves unrelated-table hashes, declared field
+  projections, discarded messaging counts, foreign keys, and integrity.
+- Contact, reservation, experience-booking, inbound email, WhatsApp, member
+  reply, acknowledgement, and realtime journeys pass through the real Worker.
+- Provider success, failure, timeout, replay, and out-of-order receipts preserve
+  the delivery state machine.
+- Repository searches find no runtime caller for deleted tables, bindings,
+  secrets, endpoint, Worker, or duplicate columns.
+- Tenant/public browser coverage runs on the exact candidate SHA.
 
-- Schema drift, migration lint, migration tests, typecheck, lint, and build
-- A source-to-target epoch transform with non-empty omitted tables, logical hashes, foreign-key checks, and integrity checks
-- Contact, restaurant reservation, and experience booking submission through the local Worker and D1
-- Automatic restaurant confirmation with the existing capacity race still admitting only valid capacity
-- Duplicate raw MIME delivery producing one entry and one notification
-- Email and WhatsApp success, definitive failure, and ambiguous timeout receipts
-- WhatsApp receipt reordering without status regression
-- Quoted WhatsApp reply correlation with Better Auth and Teams authorization
-- One member acknowledging a thread without changing another member's unread state
-- Self-sent messages and receipt updates producing no unread notification
-- Organization WebSocket isolation, reconnect refetch, visible failure, and no interval polling
-- Repository searches proving deleted tables, bindings, secrets, endpoints, and workers have no runtime callers
-- A net decrease in handwritten production code
-
-Production provider sends and shared-environment writes remain prohibited without their existing explicit canary and release authorization.
+Production provider sends and shared-environment writes remain prohibited
+without their existing explicit canary and release authorization.

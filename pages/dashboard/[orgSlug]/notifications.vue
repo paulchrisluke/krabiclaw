@@ -82,7 +82,7 @@ const { formatExactDateTime } = useHumanTime()
 interface DashboardNotification {
   id: string
   scope: 'platform' | 'organization' | 'site'
-  event_type: string
+  template: string
   severity: 'info' | 'success' | 'warning' | 'error'
   title: string | null
   message: string | null
